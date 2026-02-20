@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  # Бот (Бэкенд)
+  bot:
+    build: ./bot
+    restart: always
+    # Переменные берутся из настроек хостинга Bothost
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - ADMIN_ID=${ADMIN_ID}
+      - PAYMENT_WALLET=${PAYMENT_WALLET}
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+    volumes:
+      - ./data:/app/data
+
+  # База данных кликов
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: redis-server --save 60 1 --loglevel warning
+
+  # Веб-интерфейс (Фронтенд)
+  frontend:
+    image: nginx:alpine
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
