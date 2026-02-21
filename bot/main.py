@@ -11,7 +11,7 @@ from aiogram.enums import ParseMode
 logging.basicConfig(level=logging.INFO)
 
 # --- ДАННЫЕ УСТАНОВЛЕНЫ ---
-TOKEN = "8257287930:AAH131SzwdmsZjA4CVbvXw7ZnAbvrdyHIDA"
+TOKEN = "8257287930:AAHunzQOMoGHBlL_L5VVnwrkU3F24uzpJe8"
 ADMIN_ID = "476014374"
 WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
 
