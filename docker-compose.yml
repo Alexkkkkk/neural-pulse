@@ -1,24 +1,43 @@
 version: '3.8'
 
 services:
+  # Основной сервис бота
   bot:
     build: ./bot
+    container_name: tg_bot
     restart: always
+    env_file: .env
     environment:
-      - BOT_TOKEN=${BOT_TOKEN}
-      - ADMIN_ID=${ADMIN_ID}
-      - PAYMENT_WALLET=${PAYMENT_WALLET}
-      - WEBAPP_URL=${WEBAPP_URL}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
       - redis
+    networks:
+      - bot_net
 
+  # База данных Redis для FSM (состояний)
   redis:
     image: redis:7-alpine
+    container_name: bot_redis
     restart: always
+    volumes:
+      - redis_data:/data
+    networks:
+      - bot_net
 
+  # Веб-интерфейс (Mini App / Landing)
   frontend:
     image: nginx:alpine
+    container_name: bot_frontend
     ports:
       - "80:80"
     volumes:
-      - ./frontend:/usr/share/nginx/html
+      - ./frontend:/usr/share/nginx/html:ro
+    networks:
+      - bot_net
+
+networks:
+  bot_net:
+
+volumes:
+  redis_data:
