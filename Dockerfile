@@ -1,10 +1,10 @@
-# 1. Используем легкий образ Python
+# 1. Используем легкий образ
 FROM python:3.11-slim
 
-# 2. Устанавливаем рабочую директорию /bot
+# 2. Рабочая папка (внутри контейнера)
 WORKDIR /bot
 
-# 3. Устанавливаем системные зависимости
+# 3. Установка системных утилит
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
@@ -13,13 +13,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. Копируем всё содержимое твоей папки в /bot
-# Теперь файлы main.py, http_wrapper.py и .env лежат прямо в /bot/
+# 5. Копируем ВСЕ файлы твоего проекта
+# Теперь main.py и http_wrapper.py лежат прямо в /bot/
 COPY . .
 
-# 6. Создаем папку для данных прямо внутри /bot
+# 6. Права доступа
 RUN mkdir -p /bot/data && chmod 777 /bot/data
 
-# 7. Запуск через обертку
-# Важно: запускаем http_wrapper.py, так как мы уже находимся в /bot
+# 7. САМОЕ ВАЖНОЕ: Запуск
+# Мы запускаем http_wrapper.py, потому что он откроет порт 3000 для Bothost
 CMD ["python", "http_wrapper.py"]
