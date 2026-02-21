@@ -11,3 +11,7 @@ EXPOSE 3000
 
 # 13. Запуск
 CMD ["python", "http_wrapper.py"]
+# ... продолжение после твоего последнего echo ...
+    echo '    threading.Thread(target=run_bot, daemon=True).start()' >> /app/http_wrapper.py && \
+    echo '    logger.info(f"HTTP сервер запущен на порту {port}")' >> /app/http_wrapper.py && \
+    echo '    uvicorn.run(app, host="0.0.0.0", port=port, log_level=\"info\")' >> /app/http_wrapper.py
