@@ -2,6 +2,7 @@ import os
 import asyncio
 import logging
 import sys
+import sqlite3  # Добавили для работы с БД
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton, WebAppInfo, CallbackQuery
@@ -13,21 +14,37 @@ from aiogram.exceptions import TelegramConflictError
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    stream=sys.stdout # Важно для Docker логов
+    stream=sys.stdout
 )
 logger = logging.getLogger(__name__)
 
 # --- КОНФИГУРАЦИЯ ---
-# Приоритет отдаем переменным окружения из Docker/Hosting
-TOKEN = os.getenv("BOT_TOKEN") or os.getenv("API_TOKEN") or "8257287930:AAEV1sQMIIrPdcBeInwvmh7FD3xnp3b9DRI"
+TOKEN = os.getenv("BOT_TOKEN") or "8257287930:AAEV1sQMIIrPdcBeInwvmh7FD3xnp3b9DRI"
 ADMIN_ID = os.getenv("ADMIN_ID", "476014374")
 WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
-WEBAPP_URL = "https://ai.bothost.ru/webhook" 
+WEBAPP_URL = "https://ai.bothost.ru/" # Ссылка на корень, где теперь лежит index.html
 
-# Проверка токена перед запуском
-if not TOKEN or ":" not in TOKEN:
-    logger.error("❌ Критическая ошибка: Токен бота не задан или имеет неверный формат!")
-    sys.exit(1)
+# ПУТЬ К БАЗЕ ДАННЫХ (в папку /app/data из Docker)
+DB_PATH = os.path.join("data", "database.db")
+
+# --- ИНИЦИАЛИЗАЦИЯ БД ---
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    # Создаем таблицу пользователей, если её нет
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            level INTEGER DEFAULT 1,
+            balance REAL DEFAULT 0.0
+        )
+    ''')
+    conn.commit()
+    conn.close()
+    logger.info(f"✅ База данных инициализирована по пути: {DB_PATH}")
+
+init_db()
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -44,6 +61,14 @@ UPGRADES = {
 
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
+    # Сохраняем пользователя в БД при старте
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('INSERT OR IGNORE INTO users (user_id, username) VALUES (?, ?)', 
+                   (message.from_user.id, message.from_user.username))
+    conn.commit()
+    conn.close()
+
     welcome_text = (
         "💎 **NeuralPulse AI**\n\n"
         "Добро пожаловать! Зарабатывай токены, улучшай нейросеть и выводи прибыль.\n\n"
@@ -59,11 +84,7 @@ async def start_command(message: types.Message):
         text="📈 Таблица уровней", callback_data="show_levels"
     ))
 
-    await message.answer(
-        welcome_text, 
-        reply_markup=builder.as_markup(), 
-        parse_mode=ParseMode.MARKDOWN
-    )
+    await message.answer(welcome_text, reply_markup=builder.as_markup(), parse_mode=ParseMode.MARKDOWN)
 
 @dp.callback_query(F.data == "show_levels")
 async def show_levels(callback: CallbackQuery):
@@ -73,33 +94,14 @@ async def show_levels(callback: CallbackQuery):
     await callback.answer()
     await callback.message.answer(text, parse_mode=ParseMode.MARKDOWN)
 
-@dp.message(Command("admin"))
-async def admin_command(message: types.Message):
-    if str(message.from_user.id) == str(ADMIN_ID):
-        await message.answer("🛠 **Панель администратора**\n\nСистемы работают в штатном режиме.")
-    else:
-        await message.answer(f"❌ Доступ ограничен.")
-
-# --- ГЛАВНАЯ ФУНКЦИЯ ЗАПУСКА ---
+# --- ЗАПУСК ---
 async def main():
-    logger.info("=" * 30)
-    logger.info("🚀 ЗАПУСК БОТА NEURALPULSE")
-    logger.info(f"Активный ID Админа: {ADMIN_ID}")
-    logger.info("=" * 30)
-    
+    logger.info("🚀 ЗАПУСК БОТА NEURALPULSE С ПОДДЕРЖКОЙ БД")
     try:
-        # Удаляем старый вебхук и все накопленные сообщения (drop_pending_updates)
-        # Это предотвращает "спам" от бота после его долгого отключения
         await bot.delete_webhook(drop_pending_updates=True)
-        
-        # Запуск Polling
         await dp.start_polling(bot)
-        
     except TelegramConflictError:
-        logger.error("❌ ОШИБКА: Обнаружена вторая запущенная копия бота!")
-        logger.error("Завершите другие процессы или дождитесь перезапуска контейнера.")
-    except Exception as e:
-        logger.error(f"❌ Непредвиденная ошибка: {e}", exc_info=True)
+        logger.error("❌ Конфликт: Бот запущен в другом месте!")
     finally:
         await bot.session.close()
 
@@ -107,4 +109,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
-        logger.info("👋 Бот остановлен вручную")
+        logger.info("Бот остановлен")
