@@ -1,5 +1,6 @@
-aiogram==3.4.1
-pydantic>=2.4.1,<2.6
+aiogram>=3.10.0
 fastapi
 uvicorn
 python-dotenv
+pydantic>=2.0
+[здесь пустая строка]
