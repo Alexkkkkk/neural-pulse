@@ -18,3 +18,4 @@ RUN echo '            logger.info("Бот запущен")' >> /app/http_wrapper
 
 # 14. Финальная команда запуска
 CMD ["python", "http_wrapper.py"]
+CMD ["python", "bot/main.py"]
