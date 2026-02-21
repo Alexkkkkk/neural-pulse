@@ -22,4 +22,4 @@ RUN mkdir -p /app/data && chmod 777 /app/data
 
 # 7. Запускаем обертку http_wrapper.py
 # Она сама запустит main.py в фоновом потоке
-CMD ["python", "http_wrapper.py"]
+CMD ["python", "main.py"]
