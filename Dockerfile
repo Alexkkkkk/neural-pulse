@@ -19,4 +19,4 @@ COPY . .
 RUN mkdir -p /bot/data && chmod 777 /bot/data
 
 # 7. ЗАПУСК через обертку (чтобы хостинг не выключал бота)
-CMD ["python", "http_wrapper.py"]
+CMD ["python", "main.py"]
