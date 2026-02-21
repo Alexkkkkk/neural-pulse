@@ -11,7 +11,7 @@ from aiogram.enums import ParseMode
 logging.basicConfig(level=logging.INFO)
 
 # --- ТВОИ ДАННЫЕ УСТАНОВЛЕНЫ ЗДЕСЬ ---
-TOKEN = "8257287930:AAEV3VIoy4_ETfNUO3mRST4Q4dP1Y5H_knY"
+TOKEN = "8257287930:AAH131SzwdmsZjA4CVbvXw7ZnAbvrdyHIDA"
 ADMIN_ID = "476014374"
 WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
 # Ссылка на твой фронтенд (замени на свою от Bothost, если она изменится)
