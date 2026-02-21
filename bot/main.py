@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 TOKEN = "8257287930:AAHafmTb2ou_Pp4b0BpEukkOZH4WCldD_Eg"
 ADMIN_ID = "476014374"
 WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
-# Твой специальный URL для Bothost
 WEBAPP_URL = "https://ai.bothost.ru/webhook" 
 
 bot = Bot(token=TOKEN)
@@ -72,21 +71,27 @@ async def admin_command(message: types.Message):
     else:
         await message.answer(f"❌ Доступ ограничен.")
 
+# --- ГЛАВНАЯ ФУНКЦИЯ ЗАПУСКА ---
 async def main():
-    logger.info("Бот NeuralPulse запускается...")
+    # Печатаем пустые строки в консоль для визуального разделения логов
+    print("\n" * 5)
+    logger.info("=" * 30)
+    logger.info("ЗАПУСК БОТА NEURALPULSE")
+    logger.info("=" * 30)
     
     try:
-        # Принудительная очистка перед стартом
+        # ПРИНУДИТЕЛЬНО удаляем вебхук и старые сообщения (drop_pending_updates)
+        # Это самое важное для предотвращения зависания
         await bot.delete_webhook(drop_pending_updates=True)
-        logger.info("Вебхуки удалены, сессия очищена.")
+        logger.info("Очередь сообщений очищена. Начинаю Polling...")
         
-        # Запуск с пропуском старых сообщений
+        # Запускаем бота, пропуская всё, что ему написали, пока он был офлайн
         await dp.start_polling(bot, skip_updates=True)
         
     except TelegramConflictError:
-        logger.error("ОШИБКА: Конфликт! Похоже, бот запущен где-то еще.")
+        logger.error("ОШИБКА КОНФЛИКТА: Бот запущен в другом месте!")
     except Exception as e:
-        logger.error(f"Ошибка при работе: {e}")
+        logger.error(f"Ошибка: {e}")
     finally:
         await bot.session.close()
 
@@ -95,3 +100,5 @@ if __name__ == "__main__":
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         logger.info("Бот остановлен")
+
+# В конце файла тоже добавлена пустая строка для Git
