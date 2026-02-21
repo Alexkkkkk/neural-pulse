@@ -7,24 +7,22 @@ import sys
 
 app = FastAPI()
 
-@app.get("/")
-async def root():
-    return {"status": "ok", "message": "Neural Pulse Bot is running"}
+# Ответ для хостинга, чтобы он видел, что "сайт" работает
+@app.get("/{path:path}")
+async def health_check(path: str = ""):
+    return {"status": "ok", "bot": "Neural Pulse Active", "path": path}
 
 def run_bot():
-    print("--- Запуск основного процесса бота ---")
-    try:
-        # Запускает ваш main.py из папки bot
-        subprocess.check_call([sys.executable, "bot/main.py"])
-    except Exception as e:
-        print(f"Ошибка в работе бота: {e}")
+    print("--- [PROCESS] Запуск Telegram бота ---")
+    # Запускаем основной файл бота
+    subprocess.check_call([sys.executable, "main.py"])
 
 if __name__ == "__main__":
-    # 1. Запускаем бота в фоне
+    # 1. Запуск бота в отдельном потоке
     bot_thread = threading.Thread(target=run_bot, daemon=True)
     bot_thread.start()
     
-    # 2. Запускаем веб-сервер, который требует хостинг
+    # 2. Запуск веб-сервера на порту 3000 (стандарт Bothost)
     port = int(os.environ.get("PORT", 3000))
-    print(f"--- Запуск веб-сервера на порту {port} ---")
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    print(f"--- [SERVER] Старт веб-интерфейса на порту {port} ---")
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
