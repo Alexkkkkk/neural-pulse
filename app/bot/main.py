@@ -7,23 +7,19 @@ from aiogram.types import InlineKeyboardButton, WebAppInfo, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.enums import ParseMode
 
-# Настройка логов
+# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
-# --- ДАННЫЕ УСТАНОВЛЕНЫ ---
-TOKEN = "Token for the bot AI @UltraMind_AI_bot has been revoked. New token is:
-
-8257287930:AAEqrRF5l-PfIlLx-1p-807OazigqJcMRY8"
+# --- КОНФИГУРАЦИЯ ---
+TOKEN = "8257287930:AAEqrRF5l-PfIlLx-1p-807OazigqJcMRY8"
 ADMIN_ID = "476014374"
 WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
-
-# Ссылка на твой интерфейс (убедись, что она верная)
 WEBAPP_URL = "https://alexkkkkk.github.io/neural-pulse/"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# Экономика: 20 уровней (Чистые отступы)
+# Таблица уровней
 UPGRADES = {
     1: 0.5, 2: 1.0, 3: 1.5, 4: 2.0, 5: 3.0,
     6: 5.0, 7: 7.5, 8: 10.0, 9: 15.0, 10: 20.0,
@@ -40,12 +36,12 @@ async def start_command(message: types.Message):
     )
     
     builder = InlineKeyboardBuilder()
-    
+    # Главная кнопка Mini App
     builder.row(InlineKeyboardButton(
         text="🎮 Запустить NeuralPulse App", 
         web_app=WebAppInfo(url=WEBAPP_URL)
     ))
-
+    # Кнопка инфо
     builder.row(InlineKeyboardButton(
         text="📈 Таблица уровней", callback_data="show_levels"
     ))
@@ -61,22 +57,25 @@ async def show_levels(callback: CallbackQuery):
     text = "📊 **Стоимость улучшений (TON):**\n\n"
     for lvl, price in UPGRADES.items():
         text += f"Уровень {lvl} — {price} TON\n"
-    
     await callback.answer()
     await callback.message.answer(text, parse_mode=ParseMode.MARKDOWN)
 
 @dp.message(Command("admin"))
 async def admin_command(message: types.Message):
     if str(message.from_user.id) == ADMIN_ID:
-        await message.answer("🛠 **Панель администратора NeuralPulse**\n\nВсе системы работают в штатном режиме.")
+        await message.answer("🛠 **Панель администратора**\n\nСистемы работают в штатном режиме.")
     else:
-        await message.answer(f"❌ Доступ ограничен. Твой ID: `{message.from_user.id}`")
+        await message.answer(f"❌ Доступ ограничен.")
 
 async def main():
     logging.info("Бот NeuralPulse запускается...")
+    # Очистка очереди обновлений
     await bot.delete_webhook(drop_pending_updates=True)
-    logging.info("Бот готов к работе!")
+    logging.info("Бот авторизован и готов к работе!")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logging.info("Бот остановлен")
