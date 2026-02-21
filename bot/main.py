@@ -11,7 +11,9 @@ from aiogram.enums import ParseMode
 logging.basicConfig(level=logging.INFO)
 
 # --- ДАННЫЕ УСТАНОВЛЕНЫ ---
-TOKEN = "8257287930:AAHunzQOMoGHBlL_L5VVnwrkU3F24uzpJe8"
+TOKEN = "Token for the bot AI @UltraMind_AI_bot has been revoked. New token is:
+
+8257287930:AAEqrRF5l-PfIlLx-1p-807OazigqJcMRY8"
 ADMIN_ID = "476014374"
 WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
 
