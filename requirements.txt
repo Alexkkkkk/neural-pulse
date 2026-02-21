@@ -1,5 +1,5 @@
 aiogram==3.4.1
-pydantic<2.6
+pydantic>=2.4.1,<2.6
 fastapi
 uvicorn
 python-dotenv
