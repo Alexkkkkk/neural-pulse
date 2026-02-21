@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # --- КОНФИГУРАЦИЯ ---
 # Используем токены из переменных окружения (маппинг мы сделали в wrapper)
-TOKEN = os.getenv("API_TOKEN") or "8257287930:AAF4vr7Cr1fAs_D-2Mf41xyijABkhEE-mwc"
+TOKEN = os.getenv("API_TOKEN") or "8257287930:AAEHbV8293ytnKQAFkc5kNzQCJCJzAnGsSg"
 ADMIN_ID = os.getenv("ADMIN_ID") or "476014374"
 WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
 WEBAPP_URL = "https://ai.bothost.ru/" 
