@@ -10,7 +10,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramConflictError
 
-# Настройка логирования (вывод в консоль хостинга)
+# --- ЛОГИРОВАНИЕ ---
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -19,16 +19,17 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # --- КОНФИГУРАЦИЯ ---
-# Берем данные из .env или настроек Bothost
+# Токен берется из переменных окружения Bothost (BOT_TOKEN) или используется запасной
 TOKEN = os.getenv("BOT_TOKEN") or "8257287930:AAFb7BvbLCRncS80ZQX3frzafGlsLcwO0QQ"
 ADMIN_ID = os.getenv("ADMIN_ID") or "476014374"
 WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
 WEBAPP_URL = "https://ai.bothost.ru/" 
 
-# Путь к базе данных в папку /bot/data
+# Путь к базе данных (внутри папки /bot/data в контейнере)
 DB_PATH = "data/bot_database.db"
 
 def init_db():
+    """Инициализация базы данных и создание папки, если её нет"""
     os.makedirs("data", exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -44,14 +45,18 @@ def init_db():
     conn.close()
     logger.info("✅ База данных инициализирована успешно")
 
+# Инициализируем БД перед запуском бота
 init_db()
 
+# Создаем объекты бота и диспетчера
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# Обработчик команды /start
+# --- ОБРАБОТЧИКИ ---
+
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
+    """Регистрация пользователя и приветствие"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('INSERT OR IGNORE INTO users (user_id, username) VALUES (?, ?)', 
@@ -70,16 +75,44 @@ async def start_command(message: types.Message):
     
     await message.answer(welcome_text, reply_markup=builder.as_markup(), parse_mode=ParseMode.MARKDOWN)
 
-# Запуск
+@dp.message(Command("admin"))
+async def admin_command(message: types.Message):
+    """Простая админ-панель"""
+    if str(message.from_user.id) == str(ADMIN_ID):
+        conn = sqlite3.connect(DB_PATH)
+        count = conn.execute('SELECT COUNT(*) FROM users').fetchone()[0]
+        conn.close()
+        await message.answer(f"🛠 **Панель управления**\n\nИгроков в базе: {count}\nСистема: OK")
+    else:
+        await message.answer("❌ Доступ закрыт.")
+
+# --- ЗАПУСК ---
+
 async def main():
+    """Основная функция запуска с защитой от конфликтов"""
     try:
+        # Принудительно удаляем вебхук и старые обновления перед началом
+        logger.info("Удаление старых вебхуков и обновлений...")
         await bot.delete_webhook(drop_pending_updates=True)
+        
         logger.info("🚀 Бот запущен и готов к работе!")
+        
+        # Запуск polling (опроса серверов)
         await dp.start_polling(bot)
+        
     except TelegramConflictError:
-        logger.error("❌ Ошибка: Бот уже запущен в другом процессе!")
+        logger.error("❌ КОНФЛИКТ: Бот запущен в другом месте!")
+        logger.info("РЕШЕНИЕ: Остановите все копии бота в панели Bothost, подождите 1 минуту и запустите снова.")
+        # Завершаем процесс, чтобы не создавать лишнюю нагрузку при конфликте
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"⚠️ Произошла ошибка: {e}")
     finally:
+        # Закрываем сессию при выключении
         await bot.session.close()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Бот выключен вручную")
