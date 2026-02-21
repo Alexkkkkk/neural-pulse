@@ -10,7 +10,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramConflictError
 
-# --- НАСТРОЙКА ЛОГИРОВАНИЯ ---
+# --- ЛОГИРОВАНИЕ ---
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -19,16 +19,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # --- КОНФИГУРАЦИЯ ---
-# Авто-подхват токена из переменных окружения
-TOKEN = os.getenv("BOT_TOKEN") or os.getenv("API_TOKEN") or "8257287930:AAEV1sQMIIrPdcBeInwvmh7FD3xnp3b9DRI"
+# Используем токены из переменных окружения (маппинг мы сделали в wrapper)
+TOKEN = os.getenv("API_TOKEN") or "8257287930:AAEV1sQMIIrPdcBeInwvmh7FD3xnp3b9DRI"
 ADMIN_ID = os.getenv("ADMIN_ID") or "476014374"
 WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
-WEBAPP_URL = "https://ai.bothost.ru/" # Твой домен
+WEBAPP_URL = "https://ai.bothost.ru/" 
 
-# Путь к БД в защищенную папку Docker
-DB_PATH = "/app/data/neuralpulse.db"
+# Путь к БД в созданную Docker-папку
+DB_PATH = "/app/data/bot_database.db"
 
-# --- ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ ---
+# --- БД ИНИЦИАЛИЗАЦИЯ ---
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -37,13 +37,12 @@ def init_db():
             user_id INTEGER PRIMARY KEY,
             username TEXT,
             level INTEGER DEFAULT 1,
-            balance REAL DEFAULT 0.0,
-            reg_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            balance REAL DEFAULT 0.0
         )
     ''')
     conn.commit()
     conn.close()
-    logger.info("✅ База данных готова к работе")
+    logger.info("✅ База данных инициализирована в /app/data/")
 
 init_db()
 
@@ -58,11 +57,11 @@ UPGRADES = {
     16: 100.0, 17: 115.0, 18: 125.0, 19: 135.0, 20: 150.0
 }
 
-# --- ХЕНДЛЕРЫ ---
+# --- ОБРАБОТЧИКИ ---
 
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
-    # Регистрация пользователя в БД
+    # Сохраняем игрока
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('INSERT OR IGNORE INTO users (user_id, username) VALUES (?, ?)', 
@@ -72,13 +71,13 @@ async def start_command(message: types.Message):
 
     welcome_text = (
         "💎 **NeuralPulse AI**\n\n"
-        "Добро пожаловать! Зарабатывай токены, улучшай нейросеть и выводи прибыль.\n\n"
-        f"💳 **Кошелек для активации:**\n`{WALLET}`"
+        "Зарабатывай токены, улучшай нейросеть и выводи прибыль.\n\n"
+        f"💳 **Кошелек активации:**\n`{WALLET}`"
     )
     
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="🎮 Запустить App", web_app=WebAppInfo(url=WEBAPP_URL)))
-    builder.row(InlineKeyboardButton(text="📈 Уровни", callback_data="show_levels"))
+    builder.row(InlineKeyboardButton(text="📊 Уровни", callback_data="show_levels"))
 
     await message.answer(welcome_text, reply_markup=builder.as_markup(), parse_mode=ParseMode.MARKDOWN)
 
@@ -91,23 +90,23 @@ async def show_levels(callback: CallbackQuery):
     await callback.message.answer(text, parse_mode=ParseMode.MARKDOWN)
 
 @dp.message(Command("admin"))
-async def admin_panel(message: types.Message):
+async def admin_command(message: types.Message):
     if str(message.from_user.id) == str(ADMIN_ID):
         conn = sqlite3.connect(DB_PATH)
         count = conn.execute('SELECT COUNT(*) FROM users').fetchone()[0]
         conn.close()
-        await message.answer(f"🛠 **Админ-панель**\n\nВсего игроков: {count}\nСтатус: Online")
+        await message.answer(f"🛠 **Панель управления**\n\nИгроков в базе: {count}\nСистема: OK")
     else:
-        await message.answer("❌ Нет доступа")
+        await message.answer("❌ Доступ закрыт.")
 
 # --- ЗАПУСК ---
 async def main():
-    logger.info("🚀 Бот NeuralPulse запущен!")
     try:
         await bot.delete_webhook(drop_pending_updates=True)
+        logger.info("🚀 Бот запущен и готов к работе!")
         await dp.start_polling(bot)
     except TelegramConflictError:
-        logger.error("❌ Конфликт сессий! Бот уже запущен в другом месте.")
+        logger.error("❌ Ошибка: Бот запущен в другом месте!")
     finally:
         await bot.session.close()
 
@@ -115,4 +114,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
-        logger.info("Бот остановлен")
+        logger.info("Бот выключен")
