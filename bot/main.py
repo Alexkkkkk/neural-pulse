@@ -10,7 +10,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramConflictError
 
-# --- ЛОГИРОВАНИЕ ---
+# Настройка логирования (вывод в консоль хостинга)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -19,17 +19,17 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # --- КОНФИГУРАЦИЯ ---
-# Используем токены из переменных окружения (маппинг мы сделали в wrapper)
-TOKEN = os.getenv("API_TOKEN") or "8257287930:AAFb7BvbLCRncS80ZQX3frzafGlsLcwO0QQ"
+# Берем данные из .env или настроек Bothost
+TOKEN = os.getenv("BOT_TOKEN") or "8257287930:AAFb7BvbLCRncS80ZQX3frzafGlsLcwO0QQ"
 ADMIN_ID = os.getenv("ADMIN_ID") or "476014374"
 WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
 WEBAPP_URL = "https://ai.bothost.ru/" 
 
-# Путь к БД в созданную Docker-папку
-DB_PATH = "/app/data/bot_database.db"
+# Путь к базе данных в папку /bot/data
+DB_PATH = "data/bot_database.db"
 
-# --- БД ИНИЦИАЛИЗАЦИЯ ---
 def init_db():
+    os.makedirs("data", exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
@@ -42,26 +42,16 @@ def init_db():
     ''')
     conn.commit()
     conn.close()
-    logger.info("✅ База данных инициализирована в /app/data/")
+    logger.info("✅ База данных инициализирована успешно")
 
 init_db()
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# Таблица уровней
-UPGRADES = {
-    1: 0.5, 2: 1.0, 3: 1.5, 4: 2.0, 5: 3.0,
-    6: 5.0, 7: 7.5, 8: 10.0, 9: 15.0, 10: 20.0,
-    11: 30.0, 12: 40.0, 13: 50.0, 14: 65.0, 15: 80.0,
-    16: 100.0, 17: 115.0, 18: 125.0, 19: 135.0, 20: 150.0
-}
-
-# --- ОБРАБОТЧИКИ ---
-
+# Обработчик команды /start
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
-    # Сохраняем игрока
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('INSERT OR IGNORE INTO users (user_id, username) VALUES (?, ?)', 
@@ -77,41 +67,19 @@ async def start_command(message: types.Message):
     
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="🎮 Запустить App", web_app=WebAppInfo(url=WEBAPP_URL)))
-    builder.row(InlineKeyboardButton(text="📊 Уровни", callback_data="show_levels"))
-
+    
     await message.answer(welcome_text, reply_markup=builder.as_markup(), parse_mode=ParseMode.MARKDOWN)
 
-@dp.callback_query(F.data == "show_levels")
-async def show_levels(callback: CallbackQuery):
-    text = "📊 **Стоимость улучшений (TON):**\n\n"
-    for lvl, price in UPGRADES.items():
-        text += f"Уровень {lvl} — {price} TON\n"
-    await callback.answer()
-    await callback.message.answer(text, parse_mode=ParseMode.MARKDOWN)
-
-@dp.message(Command("admin"))
-async def admin_command(message: types.Message):
-    if str(message.from_user.id) == str(ADMIN_ID):
-        conn = sqlite3.connect(DB_PATH)
-        count = conn.execute('SELECT COUNT(*) FROM users').fetchone()[0]
-        conn.close()
-        await message.answer(f"🛠 **Панель управления**\n\nИгроков в базе: {count}\nСистема: OK")
-    else:
-        await message.answer("❌ Доступ закрыт.")
-
-# --- ЗАПУСК ---
+# Запуск
 async def main():
     try:
         await bot.delete_webhook(drop_pending_updates=True)
         logger.info("🚀 Бот запущен и готов к работе!")
         await dp.start_polling(bot)
     except TelegramConflictError:
-        logger.error("❌ Ошибка: Бот запущен в другом месте!")
+        logger.error("❌ Ошибка: Бот уже запущен в другом процессе!")
     finally:
         await bot.session.close()
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        logger.info("Бот выключен")
+    asyncio.run(main())
