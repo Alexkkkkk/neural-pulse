@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NeuralPulse AI</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body, html { 
+            margin: 0; padding: 0; height: 100vh; overflow: hidden; 
+            background-color: #050a18; color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none; /* Чтобы нельзя было случайно выделить текст при тапе */
+        }
+
+        /* Фоновая микросхема */
+        .bot-interface { 
+            background: linear-gradient(rgba(5, 10, 24, 0.8), rgba(5, 10, 24, 0.8)), 
+                        url('images/images.jpeg') center/cover no-repeat; 
+            height: 100vh; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between;
+        }
+
+        .header { padding: 20px; text-align: center; }
+        
+        /* Логотип сверху */
+        .blinking-logo { 
+            width: 80px; 
+            border-radius: 50%;
+            animation: pulse-glow 2s infinite ease-in-out; 
+        }
+
+        @keyframes pulse-glow { 
+            0%, 100% { filter: drop-shadow(0 0 5px #ff00ea); transform: scale(1); } 
+            50% { filter: drop-shadow(0 0 15px #00d4ff); transform: scale(1.05); } 
+        }
+
+        #score-container { font-size: 42px; font-weight: bold; text-shadow: 0 0 20px #bf00ff; margin-top: 10px; }
+        .currency { font-size: 18px; color: #00d4ff; vertical-align: middle; }
+
+        /* Центральная тапалка */
+        .game-area { flex-grow: 1; display: flex; align-items: center; justify-content: center; }
+        .core-slot { 
+            width: 260px; height: 260px; 
+            position: relative;
+            display: flex; align-items: center; justify-content: center; 
+            background: radial-gradient(circle, rgba(191,0,255,0.2) 0%, rgba(0,0,0,0) 70%);
+        }
+
+        .tap-target { 
+            width: 100%; height: auto; border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.05s cubic-bezier(0.1, 0.7, 1.0, 0.1); 
+            -webkit-tap-highlight-color: transparent;
+            box-shadow: 0 0 40px rgba(191, 0, 255, 0.4);
+        }
+        
+        .tap-target:active { transform: scale(0.90); filter: brightness(1.2); }
+
+        /* Нижнее меню */
+        .footer-nav { width: 100%; text-align: center; padding-bottom: 20px; }
+        .bottom-nav-image { 
+            width: 90%; max-width: 400px; 
+            border-radius: 20px; 
+            box-shadow: 0 -5px 20px rgba(0, 212, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+
+<div class="bot-interface">
+    <header class="header">
+        <img src="images/unnamed (4).jpg" class="blinking-logo" alt="NP Logo">
+        <div id="score-container"><span id="score">0</span> <span class="currency">NP</span></div>
+    </header>
+
+    <main class="game-area">
+        <div class="core-slot">
+            <img src="images/unnamed (3).jpg" class="tap-target" id="core-btn">
+        </div>
+    </main>
+
+    <footer class="footer-nav">
+        <img src="images/unnamed (2).jpg" class="bottom-nav-image" alt="Navigation">
+    </footer>
+</div>
+
+<script>
+    const tg = window.Telegram.WebApp;
+    const scoreElement = document.getElementById('score');
+    const coreBtn = document.getElementById('core-btn');
+    
+    // Загружаем сохраненный прогресс
+    let clicks = parseInt(localStorage.getItem('np_score')) || 0;
+    scoreElement.innerText = clicks;
+
+    tg.expand(); // Развернуть на весь экран
+    tg.ready();
+
+    // Обработка клика
+    coreBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault(); // Убирает задержку клика на мобильных
+        
+        clicks++;
+        scoreElement.innerText = clicks;
+        
+        // Сохраняем прогресс
+        localStorage.setItem('np_score', clicks);
+        
+        // Вибрация
+        if (tg.HapticFeedback) {
+            tg.HapticFeedback.impactOccurred('medium');
+        }
+    });
+
+    // Настройка цветов под тему Telegram
+    document.body.style.backgroundColor = tg.backgroundColor || "#050a18";
+</script>
+
+</body>
+</html>
