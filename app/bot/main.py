@@ -9,18 +9,25 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramConflictError
 
-# Настройка логирования
+# --- НАСТРОЙКА ЛОГИРОВАНИЯ ---
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    stream=sys.stdout # Важно для Docker логов
 )
 logger = logging.getLogger(__name__)
 
 # --- КОНФИГУРАЦИЯ ---
-TOKEN = "8257287930:AAEV1sQMIIrPdcBeInwvmh7FD3xnp3b9DRI"
-ADMIN_ID = "476014374"
+# Приоритет отдаем переменным окружения из Docker/Hosting
+TOKEN = os.getenv("BOT_TOKEN") or os.getenv("API_TOKEN") or "8257287930:AAEV1sQMIIrPdcBeInwvmh7FD3xnp3b9DRI"
+ADMIN_ID = os.getenv("ADMIN_ID", "476014374")
 WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
 WEBAPP_URL = "https://ai.bothost.ru/webhook" 
+
+# Проверка токена перед запуском
+if not TOKEN or ":" not in TOKEN:
+    logger.error("❌ Критическая ошибка: Токен бота не задан или имеет неверный формат!")
+    sys.exit(1)
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -32,6 +39,8 @@ UPGRADES = {
     11: 30.0, 12: 40.0, 13: 50.0, 14: 65.0, 15: 80.0,
     16: 100.0, 17: 115.0, 18: 125.0, 19: 135.0, 20: 150.0
 }
+
+# --- ХЕНДЛЕРЫ ---
 
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
@@ -66,32 +75,31 @@ async def show_levels(callback: CallbackQuery):
 
 @dp.message(Command("admin"))
 async def admin_command(message: types.Message):
-    if str(message.from_user.id) == ADMIN_ID:
+    if str(message.from_user.id) == str(ADMIN_ID):
         await message.answer("🛠 **Панель администратора**\n\nСистемы работают в штатном режиме.")
     else:
         await message.answer(f"❌ Доступ ограничен.")
 
 # --- ГЛАВНАЯ ФУНКЦИЯ ЗАПУСКА ---
 async def main():
-    # Печатаем пустые строки в консоль для визуального разделения логов
-    print("\n" * 5)
     logger.info("=" * 30)
-    logger.info("ЗАПУСК БОТА NEURALPULSE")
+    logger.info("🚀 ЗАПУСК БОТА NEURALPULSE")
+    logger.info(f"Активный ID Админа: {ADMIN_ID}")
     logger.info("=" * 30)
     
     try:
-        # ПРИНУДИТЕЛЬНО удаляем вебхук и старые сообщения (drop_pending_updates)
-        # Это самое важное для предотвращения зависания
+        # Удаляем старый вебхук и все накопленные сообщения (drop_pending_updates)
+        # Это предотвращает "спам" от бота после его долгого отключения
         await bot.delete_webhook(drop_pending_updates=True)
-        logger.info("Очередь сообщений очищена. Начинаю Polling...")
         
-        # Запускаем бота, пропуская всё, что ему написали, пока он был офлайн
-        await dp.start_polling(bot, skip_updates=True)
+        # Запуск Polling
+        await dp.start_polling(bot)
         
     except TelegramConflictError:
-        logger.error("ОШИБКА КОНФЛИКТА: Бот запущен в другом месте!")
+        logger.error("❌ ОШИБКА: Обнаружена вторая запущенная копия бота!")
+        logger.error("Завершите другие процессы или дождитесь перезапуска контейнера.")
     except Exception as e:
-        logger.error(f"Ошибка: {e}")
+        logger.error(f"❌ Непредвиденная ошибка: {e}", exc_info=True)
     finally:
         await bot.session.close()
 
@@ -99,6 +107,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
-        logger.info("Бот остановлен")
-
-# В конце файла тоже добавлена пустая строка для Git
+        logger.info("👋 Бот остановлен вручную")
