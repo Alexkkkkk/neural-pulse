@@ -15,13 +15,13 @@ TOKEN = "8257287930:AAH131SzwdmsZjA4CVbvXw7ZnAbvrdyHIDA"
 ADMIN_ID = "476014374"
 WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
 
-# Прямая ссылка на твой фронтенд на GitHub Pages
+# Ссылка на твой интерфейс (убедись, что она верная)
 WEBAPP_URL = "https://alexkkkkk.github.io/neural-pulse/"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# Экономика: 20 уровней (код очищен от скрытых символов)
+# Экономика: 20 уровней (Чистые отступы)
 UPGRADES = {
     1: 0.5, 2: 1.0, 3: 1.5, 4: 2.0, 5: 3.0,
     6: 5.0, 7: 7.5, 8: 10.0, 9: 15.0, 10: 20.0,
@@ -73,7 +73,7 @@ async def admin_command(message: types.Message):
 async def main():
     logging.info("Бот NeuralPulse запускается...")
     await bot.delete_webhook(drop_pending_updates=True)
-    logging.info("Старые сессии сброшены. Начинаем чистый запуск...")
+    logging.info("Бот готов к работе!")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
