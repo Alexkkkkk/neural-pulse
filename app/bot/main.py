@@ -2,7 +2,7 @@ import os
 import asyncio
 import logging
 import sys
-import sqlite3  # Добавили для работы с БД
+import sqlite3
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton, WebAppInfo, CallbackQuery
@@ -19,30 +19,31 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # --- КОНФИГУРАЦИЯ ---
-TOKEN = os.getenv("BOT_TOKEN") or "8257287930:AAEV1sQMIIrPdcBeInwvmh7FD3xnp3b9DRI"
-ADMIN_ID = os.getenv("ADMIN_ID", "476014374")
+# Авто-подхват токена из переменных окружения
+TOKEN = os.getenv("BOT_TOKEN") or os.getenv("API_TOKEN") or "8257287930:AAEV1sQMIIrPdcBeInwvmh7FD3xnp3b9DRI"
+ADMIN_ID = os.getenv("ADMIN_ID") or "476014374"
 WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
-WEBAPP_URL = "https://ai.bothost.ru/" # Ссылка на корень, где теперь лежит index.html
+WEBAPP_URL = "https://ai.bothost.ru/" # Твой домен
 
-# ПУТЬ К БАЗЕ ДАННЫХ (в папку /app/data из Docker)
-DB_PATH = os.path.join("data", "database.db")
+# Путь к БД в защищенную папку Docker
+DB_PATH = "/app/data/neuralpulse.db"
 
-# --- ИНИЦИАЛИЗАЦИЯ БД ---
+# --- ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ ---
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    # Создаем таблицу пользователей, если её нет
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
             username TEXT,
             level INTEGER DEFAULT 1,
-            balance REAL DEFAULT 0.0
+            balance REAL DEFAULT 0.0,
+            reg_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     conn.commit()
     conn.close()
-    logger.info(f"✅ База данных инициализирована по пути: {DB_PATH}")
+    logger.info("✅ База данных готова к работе")
 
 init_db()
 
@@ -61,7 +62,7 @@ UPGRADES = {
 
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
-    # Сохраняем пользователя в БД при старте
+    # Регистрация пользователя в БД
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('INSERT OR IGNORE INTO users (user_id, username) VALUES (?, ?)', 
@@ -76,13 +77,8 @@ async def start_command(message: types.Message):
     )
     
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(
-        text="🎮 Запустить NeuralPulse App", 
-        web_app=WebAppInfo(url=WEBAPP_URL)
-    ))
-    builder.row(InlineKeyboardButton(
-        text="📈 Таблица уровней", callback_data="show_levels"
-    ))
+    builder.row(InlineKeyboardButton(text="🎮 Запустить App", web_app=WebAppInfo(url=WEBAPP_URL)))
+    builder.row(InlineKeyboardButton(text="📈 Уровни", callback_data="show_levels"))
 
     await message.answer(welcome_text, reply_markup=builder.as_markup(), parse_mode=ParseMode.MARKDOWN)
 
@@ -94,14 +90,24 @@ async def show_levels(callback: CallbackQuery):
     await callback.answer()
     await callback.message.answer(text, parse_mode=ParseMode.MARKDOWN)
 
+@dp.message(Command("admin"))
+async def admin_panel(message: types.Message):
+    if str(message.from_user.id) == str(ADMIN_ID):
+        conn = sqlite3.connect(DB_PATH)
+        count = conn.execute('SELECT COUNT(*) FROM users').fetchone()[0]
+        conn.close()
+        await message.answer(f"🛠 **Админ-панель**\n\nВсего игроков: {count}\nСтатус: Online")
+    else:
+        await message.answer("❌ Нет доступа")
+
 # --- ЗАПУСК ---
 async def main():
-    logger.info("🚀 ЗАПУСК БОТА NEURALPULSE С ПОДДЕРЖКОЙ БД")
+    logger.info("🚀 Бот NeuralPulse запущен!")
     try:
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)
     except TelegramConflictError:
-        logger.error("❌ Конфликт: Бот запущен в другом месте!")
+        logger.error("❌ Конфликт сессий! Бот уже запущен в другом месте.")
     finally:
         await bot.session.close()
 
