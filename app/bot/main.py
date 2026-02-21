@@ -17,7 +17,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # --- КОНФИГУРАЦИЯ ---
-TOKEN = "8257287930:AAHafmTb2ou_Pp4b0BpEukkOZH4WCldD_Eg"
+TOKEN = "8257287930:AAEV1sQMIIrPdcBeInwvmh7FD3xnp3b9DRI"
 ADMIN_ID = "476014374"
 WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
 WEBAPP_URL = "https://ai.bothost.ru/webhook" 
