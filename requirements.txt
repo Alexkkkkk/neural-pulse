@@ -3,4 +3,4 @@ fastapi
 uvicorn
 python-dotenv
 pydantic>=2.0
-[здесь пустая строка]
+
