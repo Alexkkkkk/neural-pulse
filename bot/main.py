@@ -1,20 +1,27 @@
 import os
 import asyncio
 import logging
+import sys
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton, WebAppInfo, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramConflictError
 
 # Настройка логирования
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 # --- КОНФИГУРАЦИЯ ---
 TOKEN = "8257287930:AAHafmTb2ou_Pp4b0BpEukkOZH4WCldD_Eg"
 ADMIN_ID = "476014374"
 WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
-WEBAPP_URL = "https://ai.bothost.ru/webhook"
+# Твой специальный URL для Bothost
+WEBAPP_URL = "https://ai.bothost.ru/webhook" 
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -36,12 +43,10 @@ async def start_command(message: types.Message):
     )
     
     builder = InlineKeyboardBuilder()
-    # Главная кнопка Mini App
     builder.row(InlineKeyboardButton(
         text="🎮 Запустить NeuralPulse App", 
         web_app=WebAppInfo(url=WEBAPP_URL)
     ))
-    # Кнопка инфо
     builder.row(InlineKeyboardButton(
         text="📈 Таблица уровней", callback_data="show_levels"
     ))
@@ -68,14 +73,25 @@ async def admin_command(message: types.Message):
         await message.answer(f"❌ Доступ ограничен.")
 
 async def main():
-    logging.info("Бот NeuralPulse запускается...")
-    # Очистка очереди обновлений
-    await bot.delete_webhook(drop_pending_updates=True)
-    logging.info("Бот авторизован и готов к работе!")
-    await dp.start_polling(bot)
+    logger.info("Бот NeuralPulse запускается...")
+    
+    try:
+        # Принудительная очистка перед стартом
+        await bot.delete_webhook(drop_pending_updates=True)
+        logger.info("Вебхуки удалены, сессия очищена.")
+        
+        # Запуск с пропуском старых сообщений
+        await dp.start_polling(bot, skip_updates=True)
+        
+    except TelegramConflictError:
+        logger.error("ОШИБКА: Конфликт! Похоже, бот запущен где-то еще.")
+    except Exception as e:
+        logger.error(f"Ошибка при работе: {e}")
+    finally:
+        await bot.session.close()
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
-        logging.info("Бот остановлен")
+        logger.info("Бот остановлен")
