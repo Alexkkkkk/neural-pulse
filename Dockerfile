@@ -1,8 +1,19 @@
-# Копируем все файлы (включая новый http_wrapper.py)
+FROM python:3.11-slim
+
+# Устанавливаем рабочую директорию внутри контейнера
+WORKDIR /app
+
+# Устанавливаем системные зависимости (если нужны для сборки некоторых библиотек)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Сначала копируем только requirements, чтобы закэшировать установку библиотек
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Копируем остальной код бота
 COPY . .
 
-# Открываем порт для хостинга
-EXPOSE 3000
-
-# Запускаем только враппер (он сам включит бота)
-CMD ["python", "http_wrapper.py"]
+# Запускаем main.py (он в корне папки bot, значит будет в корне /app)
+CMD ["python", "main.py"]
