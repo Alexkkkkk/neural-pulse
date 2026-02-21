@@ -15,9 +15,8 @@ TOKEN = "8257287930:AAH131SzwdmsZjA4CVbvXw7ZnAbvrdyHIDA"
 ADMIN_ID = "476014374"
 WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
 
-# ВАЖНО: Замени эту ссылку на URL твоего GitHub Pages или Mini App из BotFather
-# Сейчас стоит заглушка, чтобы бот просто запустился
-WEBAPP_URL = "https://google.com" 
+# Прямая ссылка на твой фронтенд на GitHub Pages
+WEBAPP_URL = "https://alexkkkkk.github.io/neural-pulse/"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
