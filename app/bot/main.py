@@ -11,7 +11,7 @@ from aiogram.enums import ParseMode
 logging.basicConfig(level=logging.INFO)
 
 # --- КОНФИГУРАЦИЯ ---
-TOKEN = "8257287930:AAEqrRF5l-PfIlLx-1p-807OazigqJcMRY8"
+TOKEN = "8257287930:AAGNcybCJyGe5DMZzVg041VlEnI8y8PWA6E"
 ADMIN_ID = "476014374"
 WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
 WEBAPP_URL = "https://alexkkkkk.github.io/neural-pulse/"
