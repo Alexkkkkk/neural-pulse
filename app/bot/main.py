@@ -11,7 +11,7 @@ from aiogram.enums import ParseMode
 logging.basicConfig(level=logging.INFO)
 
 # --- КОНФИГУРАЦИЯ ---
-TOKEN = "8257287930:AAGNcybCJyGe5DMZzVg041VlEnI8y8PWA6E"
+TOKEN = "8257287930:AAHafmTb2ou_Pp4b0BpEukkOZH4WCldD_Eg"
 ADMIN_ID = "476014374"
 WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
 WEBAPP_URL = "https://bot_1771675367_4811_kanderkander.bothost.ru/webhook"
