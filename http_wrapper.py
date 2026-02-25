@@ -20,7 +20,6 @@ IMAGES_DIR = BASE_DIR / "images"
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH = BASE_DIR / "game.db"
 
-# ТВОЙ АКТУАЛЬНЫЙ ТОКЕН
 TOKEN = "8257287930:AAFhDcKz-ebfaAHzb5H4Hr1b9SCa9OrSauI"
 MY_DOMAIN = "ai.bothost.ru"
 
@@ -32,31 +31,28 @@ dp = Dispatcher()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Инициализация БД (используем абсолютный путь)
+    # 1. БД
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
             conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)")
-        logger.info(f"🗄️ [DB]: База инициализирована: {DB_PATH}")
+        logger.info(f"🗄️ [DB]: База готова: {DB_PATH}")
     except Exception as e:
         logger.error(f"❌ [DB ERROR]: {e}")
 
-    # 2. Очистка вебхуков и запуск бота
+    # 2. БОТ
     polling_task = None
     try:
-        logger.info("🤖 [BOT]: Проверка авторизации и запуск polling...")
         await bot.delete_webhook(drop_pending_updates=True)
         polling_task = asyncio.create_task(dp.start_polling(bot))
-        logger.info("✅ [BOT]: Поллинг успешно запущен!")
+        logger.info("✅ [BOT]: Поллинг запущен!")
     except Exception as e:
-        logger.error(f"❌ [BOT ERROR]: Ошибка старта бота: {e}")
+        logger.error(f"❌ [BOT ERROR]: {e}")
     
     yield
     
-    # 3. Завершение работы
     if polling_task:
         polling_task.cancel()
     await bot.session.close()
-    logger.info("🛑 [SYSTEM]: Сервис остановлен.")
 
 app = FastAPI(lifespan=lifespan)
 
@@ -67,32 +63,60 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- МОНТИРОВАНИЕ ФАЙЛОВ ---
-# Это позволяет открывать картинки по пути /static/images/...
+# МОНТИРОВАНИЕ
 if IMAGES_DIR.exists():
     app.mount("/static/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
-
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-# Указываем несколько папок для поиска index.html, чтобы избежать TemplateNotFound
 templates = Jinja2Templates(directory=[str(BASE_DIR), str(STATIC_DIR)])
 
 # --- API ---
 
 @app.get("/")
 async def serve_game(request: Request):
-    """Отдает главную страницу игры с проверкой ошибок"""
     try:
         return templates.TemplateResponse("index.html", {"request": request})
-    except Exception as e:
-        logger.error(f"❌ [RENDER ERROR]: {e}")
-        # Если шаблон не найден через Jinja, пробуем отправить файл напрямую
-        for alt_path in [BASE_DIR / "index.html", STATIC_DIR / "index.html"]:
-            if alt_path.exists():
+    except Exception:
+        for p in [BASE_DIR / "index.html", STATIC_DIR / "index.html"]:
+            if p.exists():
                 from fastapi.responses import FileResponse
-                return FileResponse(alt_path)
-        return Response(content="Error: index.html not found. Check GitHub root folder.", status_code=404)
+                return FileResponse(p)
+        return Response(content="index.html not found", status_code=404)
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
+    return Response(status_code=204)
+
+@app.get("/api/balance/{user_id}")
+async def get_balance(user_id: str):
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        c = conn.cursor()
+        c.execute("SELECT balance FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+        return {"balance": row[0] if row else 0}
+
+@app.post("/api/clicks")
+async def save_clicks(data: dict = Body(...)):
+    uid = str(data.get("user_id"))
+    clicks = int(data.get("clicks", 0))
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        conn.execute(
+            "INSERT INTO users (id, balance) VALUES (?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET balance = balance + ?", 
+            (uid, clicks, clicks)
+        )
+    return {"status": "ok"}
+
+# --- БОТ ---
+
+@dp.message(F.text == "/start")
+async def start_handler(message: types.Message):
+    v = int(datetime.now().timestamp())
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/?v={v}"))
+    ]])
+    await message.answer(f"Привет! Начинай майнить кликами прямо сейчас!", reply_markup=kb)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=3000)
