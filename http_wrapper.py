@@ -16,20 +16,16 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 TOKEN = "8257287930:AAFhDcKz-ebfaAHzb5H4Hr1b9SCa9OrSauI"
 DOMAIN = "ai.bothost.ru"
 DB_PATH = "game.db"
-VERSION = "2.3.2-STABLE" 
+VERSION = "2.5.0-TOP-1" # Твоя тапалка номер один
 
 os.environ["PYTHONUNBUFFERED"] = "1"
 
-app = FastAPI()
+app = FastAPI(title="Neural Pulse AI", version=VERSION)
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# --- МИДДЛВАРЫ И FAVICON ---
-@app.get("/favicon.ico", include_in_schema=False)
-async def favicon():
-    return Response(status_code=204)
-
+# --- MIDDLEWARE (Для мгновенного обновления без кеша) ---
 @app.middleware("http")
 async def add_no_cache_headers(request: Request, call_next):
     response = await call_next(request)
@@ -43,17 +39,14 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# --- БАЗА ДАННЫХ ---
+# --- БАЗА ДАННЫХ (Тип ID изменен на TEXT для надежности Telegram ID) ---
 def init_db():
-    try:
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.execute("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, balance INTEGER DEFAULT 0)")
-            conn.commit()
-        print(f"🗄️ [DB]: База данных готова", flush=True)
-    except Exception as e:
-        print(f"❌ [DB ERROR]: {e}", flush=True)
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)")
+        conn.commit()
+    print(f"🗄️ [DB]: База данных готова")
 
-# --- МАРШРУТЫ API ---
+# --- API И РОУТИНГ ---
 @app.get("/")
 async def serve_index():
     index_path = os.path.join(BASE_DIR, "index.html")
@@ -61,44 +54,58 @@ async def serve_index():
         return FileResponse(index_path)
     return JSONResponse({"error": "index.html not found"}, status_code=404)
 
-@app.get("/api/get_balance/{user_id}")
-async def get_balance(user_id: int):
-    try:
-        with sqlite3.connect(DB_PATH) as conn:
-            res = conn.execute("SELECT balance FROM users WHERE id = ?", (user_id,)).fetchone()
-            return {"balance": res[0] if res else 0}
-    except:
-        return {"balance": 0}
+@app.get("/api/balance/{user_id}")
+async def get_balance(user_id: str):
+    with sqlite3.connect(DB_PATH) as conn:
+        row = conn.execute("SELECT balance FROM users WHERE id = ?", (user_id,)).fetchone()
+        return {"balance": row[0] if row else 0}
 
-@app.post("/api/save_clicks")
-async def save_clicks(data: dict = Body(...)):
-    user_id = data.get("user_id")
+@app.post("/api/update_balance")
+async def update_balance(data: dict = Body(...)):
+    user_id = str(data.get("user_id"))
     clicks = data.get("clicks", 0)
-    try:
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.execute("INSERT INTO users (id, balance) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET balance = balance + ?", 
-                         (user_id, clicks, clicks))
-            conn.commit()
-        return {"status": "ok"}
-    except:
-        return {"status": "error"}
+    with sqlite3.connect(DB_PATH) as conn:
+        # Сначала создаем пользователя, если его нет
+        conn.execute("INSERT OR IGNORE INTO users (id, balance) VALUES (?, 0)", (user_id,))
+        # Затем прибавляем клики
+        conn.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (clicks, user_id))
+        conn.commit()
+    return {"status": "ok"}
 
 # --- СТАТИКА ---
-static_dir = os.path.join(BASE_DIR, "static")
-if os.path.exists(static_dir):
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
-    img_path = os.path.join(static_dir, "images", "unnamed3.png")
-    if os.path.exists(img_path):
-        print(f"✅ [ASSETS]: unnamed3.png найден!", flush=True)
-    else:
-        print(f"⚠️ [ASSETS ERROR]: Файл {img_path} ОТСУТСТВУЕТ!", flush=True)
+static_path = os.path.join(BASE_DIR, "static")
+if os.path.exists(static_path):
+    app.mount("/static", StaticFiles(directory=static_path), name="static")
 
 # --- БОТ ---
 @dp.message()
 async def start_handler(message: types.Message):
     builder = InlineKeyboardBuilder()
+    # Ссылка без /api/, чтобы index.html грузился из корня
     url = f"https://{DOMAIN}/?v={int(time.time())}"
     builder.row(types.InlineKeyboardButton(text="💎 ИГРАТЬ", web_app=WebAppInfo(url=url)))
-    await message.answer(f"Neural Pulse AI v{VERSION}\nУдачной игры!", reply_markup=builder.as_markup())
+    
+    welcome_text = (
+        f"<b>Neural Pulse AI [v{VERSION}]</b>\n\n"
+        f"Добро пожаловать в лучшую тапалку!\n"
+        f"Жми на кнопку ниже, чтобы начать майнинг."
+    )
+    await message.answer(welcome_text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
-async
+async def run_bot():
+    print(f"🤖 [BOT]: Запуск...")
+    await bot.delete_webhook(drop_pending_updates=True)
+    await dp.start_polling(bot, handle_signals=False)
+
+# --- ЗАПУСК ---
+if __name__ == "__main__":
+    init_db()
+
+    # Запускаем бота в отдельном потоке
+    bot_thread = threading.Thread(target=lambda: asyncio.run(run_bot()), daemon=True)
+    bot_thread.start()
+
+    # Запускаем FastAPI сервер (Порт 8000 как в твоем примере)
+    port = int(os.getenv("PORT", 8000))
+    print(f"🚀 [SERVER]: Running on port {port}")
+    uvicorn.run(app, host="0.0.0.0", port=port)
