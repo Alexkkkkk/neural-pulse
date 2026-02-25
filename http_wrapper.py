@@ -16,9 +16,8 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 TOKEN = "8257287930:AAFhDcKz-ebfaAHzb5H4Hr1b9SCa9OrSauI"
 DOMAIN = "ai.bothost.ru"
 DB_PATH = "game.db"
-VERSION = "2.3.1-FIX" 
+VERSION = "2.3.2-STABLE" 
 
-# Принудительный вывод логов
 os.environ["PYTHONUNBUFFERED"] = "1"
 
 app = FastAPI()
@@ -88,15 +87,11 @@ async def save_clicks(data: dict = Body(...)):
 static_dir = os.path.join(BASE_DIR, "static")
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
-    
-    # Диагностика файла unnamed3.png
     img_path = os.path.join(static_dir, "images", "unnamed3.png")
     if os.path.exists(img_path):
         print(f"✅ [ASSETS]: unnamed3.png найден!", flush=True)
     else:
         print(f"⚠️ [ASSETS ERROR]: Файл {img_path} ОТСУТСТВУЕТ!", flush=True)
-else:
-    print(f"⚠️ [STATIC ERROR]: Папка static не найдена!", flush=True)
 
 # --- БОТ ---
 @dp.message()
@@ -106,27 +101,4 @@ async def start_handler(message: types.Message):
     builder.row(types.InlineKeyboardButton(text="💎 ИГРАТЬ", web_app=WebAppInfo(url=url)))
     await message.answer(f"Neural Pulse AI v{VERSION}\nУдачной игры!", reply_markup=builder.as_markup())
 
-async def run_bot():
-    try:
-        await bot.delete_webhook(drop_pending_updates=True)
-        me = await bot.get_me()
-        print(f"🤖 [BOT]: Запущен @{me.username}", flush=True)
-        await dp.start_polling(bot)
-    except Exception as e:
-        print(f"❌ [BOT ERROR]: {e}", flush=True)
-
-# --- ЗАПУСК ---
-if __name__ == "__main__":
-    print("\n" + "="*50)
-    print(f"🚀 ЗАПУСК СЕРВЕРА ВЕРСИИ {VERSION}")
-    print("="*50 + "\n", flush=True)
-    
-    init_db()
-    
-    # Бот
-    bot_thread = threading.Thread(target=lambda: asyncio.run(run_bot()), daemon=True)
-    bot_thread.start()
-    
-    # Сервер
-    port = int(os.getenv("PORT", 3000))
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+async
