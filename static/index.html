@@ -9,29 +9,13 @@
     <style>
         :root { --neon: #00d4ff; --bg: #050a1a; }
         body { margin: 0; background: var(--bg) url('/static/images/images.jpeg') no-repeat center; background-size: cover; height: 100vh; font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; user-select: none; }
-        
-        .game-container { 
-            display: flex; flex-direction: column; align-items: center; 
-            height: 90vh; padding: 20px; transition: opacity 0.5s;
-            background: url('/static/images/unnamed1.png') no-repeat center; 
-            background-size: 100% 100%; 
-        }
-
+        .game-container { display: flex; flex-direction: column; align-items: center; height: 90vh; padding: 20px; transition: opacity 0.5s; background: url('/static/images/unnamed1.png') no-repeat center; background-size: 100% 100%; }
         #score { font-size: 44px; color: #ffcc00; text-shadow: 0 0 15px rgba(255,204,0,0.6); margin: 20px 0; font-weight: bold; }
-        
         .click-area { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
-        #btn { 
-            width: 270px; height: 270px; 
-            background: url('/static/images/unnamed3.png') no-repeat center; 
-            background-size: contain; border: none; cursor: pointer; 
-            filter: drop-shadow(0 0 25px var(--neon)); 
-            transition: transform 0.05s; outline: none;
-        }
+        #btn { width: 270px; height: 270px; background: url('/static/images/unnamed3.png') no-repeat center; background-size: contain; border: none; cursor: pointer; filter: drop-shadow(0 0 25px var(--neon)); transition: transform 0.05s; outline: none; -webkit-tap-highlight-color: transparent; }
         #btn:active { transform: scale(0.94); }
-
-        .plus-animation { position: absolute; color: white; font-size: 30px; font-weight: bold; animation: float 0.6s forwards; pointer-events: none; text-shadow: 0 0 10px var(--neon); }
+        .plus-animation { position: absolute; color: white; font-size: 30px; font-weight: bold; animation: float 0.6s forwards; pointer-events: none; text-shadow: 0 0 10px var(--neon); z-index: 100; }
         @keyframes float { 0% { opacity:1; transform:translateY(0); } 100% { opacity:0; transform:translateY(-120px); } }
-        
         .header { width: 100%; display: flex; justify-content: space-between; align-items: center; }
         .logo { width: 40px; height: 40px; background: url('/static/images/unnamed4.png') no-repeat center; background-size: contain; }
     </style>
@@ -42,14 +26,11 @@
             <div class="logo"></div>
             <span id="lvl">🏆 Level 1</span>
         </div>
-        
         <div id="score">0</div>
-
         <div class="click-area">
             <button id="btn"></button>
         </div>
-
-        <div style="font-size: 10px; opacity: 0.6; margin-bottom: 20px;">SYNCING WITH NEURAL NETWORK...</div>
+        <div style="font-size: 10px; opacity: 0.6; margin-bottom: 20px; letter-spacing: 1px;">SYNCING NEURAL DATA...</div>
     </div>
 
     <script>
@@ -60,12 +41,10 @@
         let score = 0;
         let pending = 0;
 
-        // Элементы
         const scoreEl = document.getElementById('score');
         const lvlEl = document.getElementById('lvl');
         const btn = document.getElementById('btn');
 
-        // Загрузка данных
         async function loadData() {
             try {
                 const r = await fetch(`/api/balance/${userId}`);
@@ -77,7 +56,6 @@
             } catch (e) { console.error("Load Error"); }
         }
 
-        // Обработка клика (Multi-touch)
         btn.addEventListener('touchstart', (e) => {
             e.preventDefault();
             for (let t of e.changedTouches) {
@@ -99,7 +77,7 @@
             setTimeout(() => p.remove(), 600);
         }
 
-        // Отправка накопленных кликов (Delta-система)
+        // Отправка накопленной дельты раз в 1.5 сек
         setInterval(async () => {
             if (pending > 0) {
                 const toSend = pending;
@@ -111,7 +89,7 @@
                         body: JSON.stringify({ user_id: userId, clicks: toSend })
                     });
                 } catch (e) {
-                    pending += toSend; // Возврат в очередь при ошибке
+                    pending += toSend; // Возврат в очередь при сбое сети
                 }
             }
         }, 1500);
