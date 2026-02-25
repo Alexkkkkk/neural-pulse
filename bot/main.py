@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 # --- НАСТРОЙКИ ---
 DOMAIN = "ai.bothost.ru"
 DB_PATH = "game.db" 
-TOKEN = "8257287930:AAG13nP9Qgzeu-i3UU4d1sB3Kfaid2oPF-c"
+TOKEN = "8257287930:AAEh-qqN3sUtSS7cytlq9hK3_d0pbJW7-OU"
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)-8s | %(message)s')
 logger = logging.getLogger("PULSE")
