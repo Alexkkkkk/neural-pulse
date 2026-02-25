@@ -20,7 +20,7 @@ IMAGES_DIR = BASE_DIR / "images"
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH = BASE_DIR / "game.db"
 
-TOKEN = "8257287930:AAG13nP9Qgzeu-i3UU4d1sB3Kfaid2oPF-c"
+TOKEN = "88257287930:AAFhDcKz-ebfaAHzb5H4Hr1b9SCa9OrSauI"
 MY_DOMAIN = "ai.bothost.ru"
 
 logging.basicConfig(level=logging.INFO)
