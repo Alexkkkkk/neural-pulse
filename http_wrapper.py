@@ -1,107 +1,108 @@
 import os
-import sqlite3
 import asyncio
-import threading
-import time
+import sqlite3
 import uvicorn
-from fastapi import FastAPI, BackgroundTasks, Request
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
+import logging
+from pathlib import Path
+from datetime import datetime
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request, Body, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from aiogram import Bot, Dispatcher, types
-from aiogram.types import WebAppInfo
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from aiogram import Bot, Dispatcher, types, F
+from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
-# --- КОНФИГУРАЦИЯ (Environment Variables) ---
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8257287930:AAFhDcKz-ebfaAHzb5H4Hr1b9SCa9OrSauI")
-ADMIN_ID = os.getenv("ADMIN_ID", "476014374")
-DOMAIN = os.getenv("DOMAIN", "ai.bothost.ru")
-DB_PATH = os.getenv("DB_PATH", "game.db")
-VERSION = "3.1.5-FINAL"
+# --- НАСТРОЙКА ПУТЕЙ ---
+BASE_DIR = Path(__file__).resolve().parent
+IMAGES_DIR = BASE_DIR / "images"
+STATIC_DIR = BASE_DIR / "static"
+DB_PATH = BASE_DIR / "game.db"
 
-# Принудительная буферизация для Bothost
-os.environ["PYTHONUNBUFFERED"] = "1"
+TOKEN = "8257287930:AAG13nP9Qgzeu-i3UU4d1sB3Kfaid2oPF-c"
+MY_DOMAIN = "ai.bothost.ru"
 
-# --- ИНИЦИАЦИЯ FastAPI ---
-app = FastAPI(title="Neural Pulse AI", version=VERSION)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("NEURAL_PULSE")
 
-# Настройка статических файлов
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STATIC_DIR = os.path.join(BASE_DIR, "static")
-if not os.path.exists(STATIC_DIR): os.makedirs(STATIC_DIR)
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
-# --- БАЗА ДАННЫХ ---
-def init_db():
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute('''CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
-            level INTEGER DEFAULT 1, last_tap TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        conn.commit()
-    print(f"🗄️ [DB]: База инициализирована. Версия {VERSION}", flush=True)
-
-def update_db(user_id: str, clicks: int):
-    """Атомарный инкремент баланса и расчет уровня"""
-    try:
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.execute('''INSERT INTO users (id, balance, level) VALUES (?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET 
-                balance = balance + EXCLUDED.balance,
-                level = ((balance + EXCLUDED.balance) / 1000) + 1,
-                last_tap = CURRENT_TIMESTAMP''', (user_id, clicks, (clicks // 1000) + 1))
-            conn.commit()
-    except Exception as e: print(f"❌ [DB ERROR]: {e}", flush=True)
-
-class ClickData(BaseModel):
-    user_id: str
-    clicks: int
-
-# --- API ---
-@app.get("/", response_class=HTMLResponse)
-async def index():
-    path = os.path.join(STATIC_DIR, "index.html")
-    if os.path.exists(path):
-        return open(path, "r", encoding="utf-8").read()
-    return "<h1>Neural Pulse: Frontend Missing</h1>"
-
-@app.get("/api/balance/{user_id}")
-async def get_balance(user_id: str):
-    with sqlite3.connect(DB_PATH) as conn:
-        res = conn.execute("SELECT balance, level FROM users WHERE id = ?", (user_id,)).fetchone()
-        return JSONResponse({"balance": res[0], "level": res[1]} if res else {"balance": 0, "level": 1})
-
-@app.post("/api/clicks")
-async def save_clicks(data: ClickData, tasks: BackgroundTasks):
-    # Используем BackgroundTasks, чтобы API отвечало мгновенно
-    tasks.add_task(update_db, data.user_id, data.clicks)
-    return {"status": "ok"}
-
-# --- BOT ---
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-@dp.message()
-async def start_handler(m: types.Message):
-    builder = InlineKeyboardBuilder()
-    # URL с меткой времени для обхода кэша Telegram
-    web_app_url = f"https://{DOMAIN}/?v={int(time.time())}"
-    builder.row(types.InlineKeyboardButton(text="⚡ ИГРАТЬ ⚡", web_app=WebAppInfo(url=web_app_url)))
-    await m.answer(
-        "<b>Neural Pulse AI</b>\n\nТвоя энергия — твоя валюта. Начни добычу прямо сейчас!", 
-        reply_markup=builder.as_markup(), 
-        parse_mode="HTML"
-    )
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Инициализация БД
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)")
+    
+    logger.info("🗄️ [DB]: База инициализирована.")
+    
+    # Запуск бота
+    polling_task = asyncio.create_task(dp.start_polling(bot))
+    yield
+    # Остановка
+    polling_task.cancel()
+    await bot.session.close()
 
-async def run_bot():
-    await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot, handle_signals=False)
+app = FastAPI(lifespan=lifespan)
 
-# --- ЗАПУСК ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- МОНТИРОВАНИЕ СТАТИКИ ---
+if IMAGES_DIR.exists():
+    app.mount("/static/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
+
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+templates = Jinja2Templates(directory=str(BASE_DIR))
+
+# --- API ДЛЯ ИГРЫ ---
+
+@app.get("/")
+async def serve_game(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    # Заглушка, чтобы логи были чистыми
+    return Response(status_code=204)
+
+@app.get("/api/balance/{user_id}")
+async def get_balance(user_id: str):
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT balance FROM users WHERE id = ?", (user_id,))
+        row = cursor.fetchone()
+        return {"balance": row[0] if row else 0}
+
+@app.post("/api/clicks")
+async def save_clicks(data: dict = Body(...)):
+    # Твои логи показывают, что фронтенд шлет данные сюда
+    uid = str(data.get("user_id"))
+    clicks = int(data.get("clicks", 0))
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        conn.execute(
+            "INSERT INTO users (id, balance) VALUES (?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET balance = balance + ?", 
+            (uid, clicks, clicks)
+        )
+    return {"status": "ok", "new_balance": "updated"}
+
+# --- ЛОГИКА БОТА ---
+
+@dp.message(F.text == "/start")
+async def start_handler(message: types.Message):
+    v = int(datetime.now().timestamp())
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/?v={v}"))
+    ]])
+    await message.answer(f"Привет, {message.from_user.first_name}! Твоя нейросеть готова к майнингу.", reply_markup=kb)
+
 if __name__ == "__main__":
-    init_db()
-    # Бот в отдельном потоке
-    threading.Thread(target=lambda: asyncio.run(run_bot()), daemon=True).start()
-    # Сервер в основном потоке
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 3000)))
+    uvicorn.run(app, host="0.0.0.0", port=3000)
