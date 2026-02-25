@@ -15,15 +15,13 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 # --- КОНФИГУРАЦИЯ ---
 TOKEN = "8257287930:AAFhDcKz-ebfaAHzb5H4Hr1b9SCa9OrSauI"
-ADMIN_ID = "476014374"  # Твой ID для уведомлений
+ADMIN_ID = "476014374"  # Твой ID из логов
 DOMAIN = "ai.bothost.ru"
 DB_PATH = "game.db"
-VERSION = "3.1.2-NOTIFY"
+VERSION = "3.1.2-FINAL"
 
-# Принудительный вывод логов
 os.environ["PYTHONUNBUFFERED"] = "1"
 
-# Модель данных для API
 class ClickData(BaseModel):
     user_id: str
     clicks: int
@@ -52,10 +50,10 @@ def init_db():
             )
         """)
         conn.commit()
-    print(f"🗄️ [DB]: Инициализирована версия {VERSION}", flush=True)
+    print(f"🗄️ [DB]: База готова. Версия {VERSION}", flush=True)
 
 def db_update_balance(user_id: str, clicks: int):
-    if clicks < 0 or clicks > 500: return # Анти-чит
+    if clicks < 0 or clicks > 500: return # Защита от накрутки
     try:
         with sqlite3.connect(DB_PATH) as conn:
             conn.execute("""
@@ -67,12 +65,11 @@ def db_update_balance(user_id: str, clicks: int):
                     last_tap = CURRENT_TIMESTAMP
             """, (user_id, clicks))
             conn.commit()
-        print(f"⚡ [TAP]: {user_id} | +{clicks}", flush=True)
+        print(f"💎 [SCORE]: {user_id} натапал +{clicks}", flush=True)
     except Exception as e:
         print(f"❌ [DB ERROR]: {e}", flush=True)
 
 # --- API МАРШРУТЫ ---
-
 @app.get("/")
 async def serve_index():
     return FileResponse(os.path.join(BASE_DIR, "index.html"))
@@ -81,7 +78,9 @@ async def serve_index():
 async def get_balance(user_id: str):
     with sqlite3.connect(DB_PATH) as conn:
         row = conn.execute("SELECT balance, level FROM users WHERE id = ?", (user_id,)).fetchone()
-        return {"balance": row[0] if row else 0, "level": row[1] if row else 1}
+        if row:
+            return {"balance": row[0], "level": row[1]}
+        return {"balance": 0, "level": 1}
 
 @app.post("/api/save_clicks")
 async def save_clicks(tasks: BackgroundTasks, data: ClickData):
@@ -99,20 +98,18 @@ static_path = os.path.join(BASE_DIR, "static")
 if os.path.exists(static_path):
     app.mount("/static", StaticFiles(directory=static_path), name="static")
 
-# --- TELEGRAM BOT + УВЕДОМЛЕНИЕ ---
-
-async def on_startup():
-    """Отправка уведомления администратору при запуске сервера"""
+# --- УВЕДОМЛЕНИЕ О ЗАПУСКЕ ---
+async def send_startup_notify():
     try:
         await bot.send_message(
             ADMIN_ID, 
-            f"🚀 <b>Система Neural Pulse AI запущена!</b>\n\n"
-            f"✅ Версия: <code>{VERSION}</code>\n"
-            f"🌐 Домен: {DOMAIN}\n"
-            f"⏰ Время: {time.strftime('%H:%M:%S')}",
+            f"🚀 <b>Neural Pulse AI ЗАПУЩЕН!</b>\n\n"
+            f"✅ Система онлайн\n"
+            f"📦 Версия: <code>{VERSION}</code>\n"
+            f"📊 База данных: Подключена",
             parse_mode="HTML"
         )
-        print(f"🔔 [NOTIFY]: Уведомление администратору {ADMIN_ID} отправлено", flush=True)
+        print(f"🔔 [NOTIFY]: Уведомление отправлено админу", flush=True)
     except Exception as e:
         print(f"⚠️ [NOTIFY ERROR]: {e}", flush=True)
 
@@ -122,4 +119,22 @@ async def start_handler(message: types.Message):
     url = f"https://{DOMAIN}/?v={int(time.time())}"
     builder.row(types.InlineKeyboardButton(text="⚡ ИГРАТЬ ⚡", web_app=WebAppInfo(url=url)))
     await message.answer(
-        f"<b>Neural Pulse AI</b>\n\nТвой прогресс сохраняется в реальном времени. Нажимай на сферу и повышай
+        f"<b>Neural Pulse AI</b>\n\nТвоя энергия на пределе! Нажимай на сферу и качай свой уровень. 🚀",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML"
+    )
+
+async def run_bot():
+    await bot.delete_webhook(drop_pending_updates=True)
+    await send_startup_notify() # Оповещение при старте
+    await dp.start_polling(bot)
+
+# --- ЗАПУСК ---
+if __name__ == "__main__":
+    init_db()
+    bot_thread = threading.Thread(target=lambda: asyncio.run(run_bot()), daemon=True)
+    bot_thread.start()
+    
+    port = int(os.getenv("PORT", 3000))
+    print(f"🚀 [SERVER]: Запуск на порту {port}", flush=True)
+    uvicorn.run(app, host="0.0.0.0", port=port)
