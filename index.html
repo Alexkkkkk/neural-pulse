@@ -5,270 +5,113 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        :root { --neon: #00d4ff; --bg-dark: #050a1a; }
+        :root { --neon: #00d4ff; --bg: #050a1a; }
+        body { margin: 0; background: var(--bg) url('/static/images/images.jpeg') no-repeat center; background-size: cover; height: 100vh; font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; user-select: none; }
         
-        body {
-            margin: 0; padding: 0;
-            background-color: var(--bg-dark);
-            /* Фон подложки */
-            background: url('/static/images/images.jpeg') no-repeat center center;
-            background-size: cover;
-            height: 100vh; width: 100vw;
-            display: flex; justify-content: center; align-items: center;
-            font-family: 'Orbitron', sans-serif; color: white;
-            overflow: hidden;
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
+        .game-container { 
+            display: flex; flex-direction: column; align-items: center; 
+            height: 90vh; padding: 20px; transition: opacity 0.5s;
+            background: url('/static/images/unnamed1.png') no-repeat center; 
+            background-size: 100% 100%; 
         }
 
-        /* Главный контейнер (unnamed1.png подгрузится через JS) */
-        .game-container {
-            position: relative;
-            width: 95vw;
-            height: 90vh;
-            max-width: 500px;
-            background-repeat: no-repeat;
-            background-position: center;
-            background-size: 100% 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px;
-            transition: opacity 0.3s;
-        }
-
-        .header {
-            width: 100%;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 10px;
-            padding: 0 10px;
-        }
+        #score { font-size: 44px; color: #ffcc00; text-shadow: 0 0 15px rgba(255,204,0,0.6); margin: 20px 0; font-weight: bold; }
         
-        /* Логотип (unnamed4.png) */
-        .logo-small {
-            width: 35px;
-            height: 35px;
-            background-repeat: no-repeat;
-            background-position: center;
-            background-size: contain;
-            filter: drop-shadow(0 0 5px var(--neon));
+        .click-area { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
+        #btn { 
+            width: 270px; height: 270px; 
+            background: url('/static/images/unnamed3.png') no-repeat center; 
+            background-size: contain; border: none; cursor: pointer; 
+            filter: drop-shadow(0 0 25px var(--neon)); 
+            transition: transform 0.05s; outline: none;
         }
+        #btn:active { transform: scale(0.94); }
 
-        .balance-container {
-            text-align: center;
-            margin-top: 20px;
-            z-index: 5;
-        }
-        #score {
-            font-size: 42px;
-            font-weight: bold;
-            color: #ffcc00;
-            text-shadow: 0 0 15px rgba(255, 204, 0, 0.6);
-        }
-
-        .clicker-area {
-            flex-grow: 1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-            width: 100%;
-        }
-
-        /* Монетка (unnamed3.png) */
-        #btn {
-            width: 280px;
-            height: 280px;
-            background-repeat: no-repeat;
-            background-position: center;
-            background-size: contain;
-            border: none;
-            outline: none;
-            cursor: pointer;
-            z-index: 10;
-            background-color: transparent;
-            filter: drop-shadow(0 0 25px var(--neon));
-            transition: transform 0.05s;
-        }
-        #btn:active { transform: scale(0.92); }
-
-        .side-menu {
-            position: absolute;
-            right: 15px;
-            top: 22%;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            z-index: 20;
-        }
-
-        .side-btn {
-            width: 100px; height: 38px;
-            background: rgba(0, 212, 255, 0.1);
-            border: 1px solid var(--neon);
-            border-radius: 8px;
-            color: white; font-size: 9px;
-            text-transform: uppercase;
-            backdrop-filter: blur(5px);
-        }
-
-        .energy-bar {
-            width: 80%; height: 10px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 5px; margin-bottom: 20px;
-            overflow: hidden; border: 1px solid rgba(0, 255, 150, 0.5);
-        }
-        .energy-fill {
-            width: 87%; height: 100%;
-            background: linear-gradient(90deg, #00ff96, #00d4ff);
-        }
-
-        .bottom-menu {
-            width: 100%; display: grid;
-            grid-template-columns: 1fr 1fr 1fr; gap: 10px;
-            margin-bottom: 30px; z-index: 20;
-        }
-
-        .bottom-btn {
-            height: 65px; background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 12px; color: white;
-            display: flex; flex-direction: column;
-            justify-content: center; align-items: center;
-            font-size: 9px; backdrop-filter: blur(10px);
-        }
-
-        .plus-animation {
-            position: absolute; color: white;
-            font-size: 32px; font-weight: bold;
-            pointer-events: none; animation: floatUp 0.6s ease-out forwards;
-            text-shadow: 0 0 10px var(--neon);
-            z-index: 100;
-        }
-        @keyframes floatUp {
-            0% { opacity: 1; transform: translateY(0); }
-            100% { opacity: 0; transform: translateY(-120px); }
-        }
+        .plus-animation { position: absolute; color: white; font-size: 30px; font-weight: bold; animation: float 0.6s forwards; pointer-events: none; text-shadow: 0 0 10px var(--neon); }
+        @keyframes float { 0% { opacity:1; transform:translateY(0); } 100% { opacity:0; transform:translateY(-120px); } }
+        
+        .header { width: 100%; display: flex; justify-content: space-between; align-items: center; }
+        .logo { width: 40px; height: 40px; background: url('/static/images/unnamed4.png') no-repeat center; background-size: contain; }
     </style>
 </head>
 <body>
-
-    <div class="game-container" id="mainContainer" style="opacity: 0;">
+    <div class="game-container" id="game" style="opacity:0">
         <div class="header">
-            <div class="logo-small" id="logoImg"></div>
-            <span style="font-size: 12px; letter-spacing: 1px;">🏆 Level 18,550</span>
+            <div class="logo"></div>
+            <span id="lvl">🏆 Level 1</span>
         </div>
+        
+        <div id="score">0</div>
 
-        <div class="balance-container">
-            <div style="color: #aaa; font-size: 10px; letter-spacing: 2px; margin-bottom: 5px;">TOTAL AI POWER</div>
-            <div id="score">0</div>
-        </div>
-
-        <div class="side-menu">
-            <button class="side-btn">💳 Wallet</button>
-            <button class="side-btn">👥 Friends</button>
-            <button class="side-btn">⚙️ Setup</button>
-            <button class="side-btn">❓ Help</button>
-        </div>
-
-        <div class="clicker-area">
+        <div class="click-area">
             <button id="btn"></button>
         </div>
 
-        <div style="font-size: 10px; margin-bottom: 5px; opacity: 0.8;">ENERGY: 875 / 1000</div>
-        <div class="energy-bar">
-            <div class="energy-fill"></div>
-        </div>
-
-        <div class="bottom-menu">
-            <div class="bottom-btn">🚀<br>UPGRADE</div>
-            <div class="bottom-btn">💎<br>MINING</div>
-            <div class="bottom-btn">🏆<br>TASKS</div>
-        </div>
+        <div style="font-size: 10px; opacity: 0.6; margin-bottom: 20px;">SYNCING WITH NEURAL NETWORK...</div>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-
-        const v = Date.now();
-        const mainContainer = document.getElementById('mainContainer');
-        const logoImg = document.getElementById('logoImg');
-        const btn = document.getElementById('btn');
-        const scoreEl = document.getElementById('score');
-
-        // Массив для проверки загрузки всех критических ресурсов
-        const assets = [
-            { el: mainContainer, url: `/static/images/unnamed1.png?v=${v}`, type: 'bg' },
-            { el: logoImg, url: `/static/images/unnamed4.png?v=${v}`, type: 'bg' },
-            { el: btn, url: `/static/images/unnamed3.png?v=${v}`, type: 'bg' }
-        ];
-
-        // Загрузка ресурсов с отслеживанием ошибок
-        assets.forEach(asset => {
-            const img = new Image();
-            img.onload = () => {
-                if(asset.type === 'bg') asset.el.style.backgroundImage = `url('${asset.url}')`;
-                else asset.el.src = asset.url;
-            };
-            img.onerror = () => {
-                console.error("Ошибка загрузки:", asset.url);
-                // Если монетка не загрузилась, ставим временную заглушку
-                if(asset.el.id === 'btn') asset.el.style.backgroundColor = 'rgba(0,212,255,0.3)';
-            };
-            img.src = asset.url.split('?')[0]; // Проверка базового пути
-        });
-
-        // Показываем контейнер после небольшой паузы
-        setTimeout(() => { mainContainer.style.opacity = '1'; }, 300);
-
-        const userId = tg.initDataUnsafe?.user?.id || 999;
+        
+        const userId = String(tg.initDataUnsafe?.user?.id || "999");
         let score = 0;
-        let pendingClicks = 0;
+        let pending = 0;
 
+        // Элементы
+        const scoreEl = document.getElementById('score');
+        const lvlEl = document.getElementById('lvl');
+        const btn = document.getElementById('btn');
+
+        // Загрузка данных
         async function loadData() {
             try {
-                const r = await fetch(`/api/get_balance/${userId}?v=${v}`);
+                const r = await fetch(`/api/balance/${userId}`);
                 const d = await r.json();
                 score = d.balance || 0;
                 scoreEl.textContent = score.toLocaleString();
-            } catch (e) { console.error("Ошибка баланса:", e); }
+                lvlEl.textContent = `🏆 Level ${d.level || 1}`;
+                document.getElementById('game').style.opacity = '1';
+            } catch (e) { console.error("Load Error"); }
         }
 
+        // Обработка клика (Multi-touch)
         btn.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            score++;
-            pendingClicks++;
+            for (let t of e.changedTouches) {
+                score++;
+                pending++;
+                spawnPlus(t.pageX, t.pageY);
+            }
             scoreEl.textContent = score.toLocaleString();
-
-            const touch = e.touches[0];
-            const p = document.createElement('div');
-            p.className = 'plus-animation';
-            p.textContent = '+1';
-            p.style.left = `${touch.pageX - 15}px`;
-            p.style.top = `${touch.pageY - 30}px`;
-            document.body.appendChild(p);
-            setTimeout(() => p.remove(), 600);
-
             if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
         });
 
+        function spawnPlus(x, y) {
+            const p = document.createElement('div');
+            p.className = 'plus-animation';
+            p.textContent = '+1';
+            p.style.left = x + 'px';
+            p.style.top = y + 'px';
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 600);
+        }
+
+        // Отправка накопленных кликов (Delta-система)
         setInterval(async () => {
-            if (pendingClicks > 0) {
-                const s = pendingClicks;
-                pendingClicks = 0;
+            if (pending > 0) {
+                const toSend = pending;
+                pending = 0;
                 try {
-                    await fetch('/api/save_clicks', {
+                    await fetch('/api/clicks', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ user_id: userId, clicks: s })
+                        body: JSON.stringify({ user_id: userId, clicks: toSend })
                     });
-                } catch (e) { 
-                    pendingClicks += s; 
-                    console.error("Ошибка сохранения:");
+                } catch (e) {
+                    pending += toSend; // Возврат в очередь при ошибке
                 }
             }
         }, 1500);
