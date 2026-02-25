@@ -14,11 +14,10 @@ from fastapi.templating import Jinja2Templates
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
-# --- НАСТРОЙКА ПУТЕЙ ---
+# --- ПУТИ ---
 BASE_DIR = Path(__file__).resolve().parent
 IMAGES_DIR = BASE_DIR / "images"
 STATIC_DIR = BASE_DIR / "static"
-# Используем абсолютный путь к БД, чтобы не было проблем с правами доступа
 DB_PATH = BASE_DIR / "game.db"
 
 TOKEN = "8257287930:AAG13nP9Qgzeu-i3UU4d1sB3Kfaid2oPF-c"
@@ -27,32 +26,30 @@ MY_DOMAIN = "ai.bothost.ru"
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("NEURAL_PULSE")
 
+# Инициализируем бота и диспетчер
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Инициализация БД
-    try:
-        with sqlite3.connect(str(DB_PATH)) as conn:
-            conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)")
-        logger.info(f"🗄️ [DB]: База инициализирована по адресу {DB_PATH}")
-    except Exception as e:
-        logger.error(f"❌ [DB ERROR]: {e}")
+    # 1. БД
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)")
+    logger.info(f"🗄️ [DB]: База готова: {DB_PATH}")
 
-    # 2. Запуск бота в фоновом режиме
-    polling_task = asyncio.create_task(dp.start_polling(bot, skip_updates=True))
-    logger.info("🤖 [BOT]: Polling started")
+    # 2. БОТ (Запуск с защитой от вылета)
+    logger.info("🤖 [BOT]: Запуск процесса polling...")
+    # Удаляем вебхуки, если они были, чтобы не мешали поллингу
+    await bot.delete_webhook(drop_pending_updates=True)
+    
+    # Запускаем фоновую задачу
+    polling_task = asyncio.create_task(dp.start_polling(bot))
     
     yield
     
-    # 3. Остановка
-    logger.info("🛑 [SYSTEM]: Shutting down...")
+    # 3. ОСТАНОВКА
+    logger.info("🛑 [SYSTEM]: Остановка сервисов...")
     polling_task.cancel()
-    try:
-        await polling_task
-    except asyncio.CancelledError:
-        pass
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
@@ -64,17 +61,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- МОНТИРОВАНИЕ СТАТИКИ ---
+# МОНТИРОВАНИЕ (как в прошлый раз, раз оно работает)
 if IMAGES_DIR.exists():
     app.mount("/static/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
-    logger.info(f"✅ Images mounted from {IMAGES_DIR}")
-
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 templates = Jinja2Templates(directory=str(BASE_DIR))
 
-# --- API ---
+# --- API ЭНДПОИНТЫ ---
 
 @app.get("/")
 async def serve_game(request: Request):
@@ -104,7 +99,7 @@ async def save_clicks(data: dict = Body(...)):
         )
     return {"status": "ok"}
 
-# --- БОТ ---
+# --- ЛОГИКА БОТА ---
 
 @dp.message(F.text == "/start")
 async def start_handler(message: types.Message):
@@ -112,7 +107,8 @@ async def start_handler(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/?v={v}"))
     ]])
-    await message.answer(f"Привет! Нажми кнопку ниже, чтобы начать игру:", reply_markup=kb)
+    await message.answer(f"Привет, {message.from_user.first_name}! Твоя нейросеть активна.", reply_markup=kb)
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3000, log_level="info")
+    # Запуск
+    uvicorn.run(app, host="0.0.0.0", port=3000)
