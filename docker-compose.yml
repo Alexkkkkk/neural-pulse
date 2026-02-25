@@ -2,23 +2,29 @@ version: '3.8'
 
 services:
   bot:
-    build: ./bot
+    build: .
+    container_name: tg_bot
     restart: always
-    environment:
-      - BOT_TOKEN=${BOT_TOKEN}
-      - ADMIN_ID=${ADMIN_ID}
-      - PAYMENT_WALLET=${PAYMENT_WALLET}
-      - WEBAPP_URL=${WEBAPP_URL}
-    depends_on:
-      - redis
+    ports:
+      - "8080:8080"  # Внешний порт 8080 : Внутренний порт 8080
+    env_file: .env
+    volumes:
+      - ./game.db:/app/game.db
+      - ./images:/app/images
+    networks:
+      - bot_net
 
   redis:
     image: redis:7-alpine
+    container_name: bot_redis
     restart: always
-
-  frontend:
-    image: nginx:alpine
-    ports:
-      - "80:80"
     volumes:
-      - ./frontend:/usr/share/nginx/html
+      - redis_data:/data
+    networks:
+      - bot_net
+
+networks:
+  bot_net:
+
+volumes:
+  redis_data:
