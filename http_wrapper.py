@@ -18,6 +18,7 @@ from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 BASE_DIR = Path(__file__).resolve().parent
 IMAGES_DIR = BASE_DIR / "images"
 STATIC_DIR = BASE_DIR / "static"
+# Используем абсолютный путь к БД, чтобы не было проблем с правами доступа
 DB_PATH = BASE_DIR / "game.db"
 
 TOKEN = "8257287930:AAG13nP9Qgzeu-i3UU4d1sB3Kfaid2oPF-c"
@@ -31,17 +32,27 @@ dp = Dispatcher()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Инициализация БД
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)")
+    # 1. Инициализация БД
+    try:
+        with sqlite3.connect(str(DB_PATH)) as conn:
+            conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)")
+        logger.info(f"🗄️ [DB]: База инициализирована по адресу {DB_PATH}")
+    except Exception as e:
+        logger.error(f"❌ [DB ERROR]: {e}")
+
+    # 2. Запуск бота в фоновом режиме
+    polling_task = asyncio.create_task(dp.start_polling(bot, skip_updates=True))
+    logger.info("🤖 [BOT]: Polling started")
     
-    logger.info("🗄️ [DB]: База инициализирована.")
-    
-    # Запуск бота
-    polling_task = asyncio.create_task(dp.start_polling(bot))
     yield
-    # Остановка
+    
+    # 3. Остановка
+    logger.info("🛑 [SYSTEM]: Shutting down...")
     polling_task.cancel()
+    try:
+        await polling_task
+    except asyncio.CancelledError:
+        pass
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
@@ -56,13 +67,14 @@ app.add_middleware(
 # --- МОНТИРОВАНИЕ СТАТИКИ ---
 if IMAGES_DIR.exists():
     app.mount("/static/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
+    logger.info(f"✅ Images mounted from {IMAGES_DIR}")
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 templates = Jinja2Templates(directory=str(BASE_DIR))
 
-# --- API ДЛЯ ИГРЫ ---
+# --- API ---
 
 @app.get("/")
 async def serve_game(request: Request):
@@ -70,7 +82,6 @@ async def serve_game(request: Request):
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
-    # Заглушка, чтобы логи были чистыми
     return Response(status_code=204)
 
 @app.get("/api/balance/{user_id}")
@@ -83,7 +94,6 @@ async def get_balance(user_id: str):
 
 @app.post("/api/clicks")
 async def save_clicks(data: dict = Body(...)):
-    # Твои логи показывают, что фронтенд шлет данные сюда
     uid = str(data.get("user_id"))
     clicks = int(data.get("clicks", 0))
     with sqlite3.connect(str(DB_PATH)) as conn:
@@ -92,9 +102,9 @@ async def save_clicks(data: dict = Body(...)):
             "ON CONFLICT(id) DO UPDATE SET balance = balance + ?", 
             (uid, clicks, clicks)
         )
-    return {"status": "ok", "new_balance": "updated"}
+    return {"status": "ok"}
 
-# --- ЛОГИКА БОТА ---
+# --- БОТ ---
 
 @dp.message(F.text == "/start")
 async def start_handler(message: types.Message):
@@ -102,7 +112,7 @@ async def start_handler(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/?v={v}"))
     ]])
-    await message.answer(f"Привет, {message.from_user.first_name}! Твоя нейросеть готова к майнингу.", reply_markup=kb)
+    await message.answer(f"Привет! Нажми кнопку ниже, чтобы начать игру:", reply_markup=kb)
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+    uvicorn.run(app, host="0.0.0.0", port=3000, log_level="info")
