@@ -8,24 +8,37 @@
     <style>
         :root { --neon: #00d4ff; }
         body {
-            margin: 0; padding: 0; background: #000 url('/images/images.jpeg') no-repeat center center;
+            margin: 0; padding: 0; background: #000;
             background-size: cover; height: 100vh; width: 100vw; display: flex; flex-direction: column;
             align-items: center; font-family: 'Arial', sans-serif; color: white; overflow: hidden;
             user-select: none; -webkit-tap-highlight-color: transparent;
         }
+        /* Основной фон из images.jpeg */
+        .bg-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: url('/static/images/images.jpeg') no-repeat center center;
+            background-size: cover; z-index: -2;
+        }
+        /* Слой с unnamed4.jpg (если это спецэффект или доп. фон) */
+        .extra-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: url('/static/images/unnamed4.jpg') no-repeat center center;
+            background-size: cover; opacity: 0.5; z-index: -1; pointer-events: none;
+        }
         .ui-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: url('/images/unnamed1.jpg') no-repeat center center;
+            background: url('/static/images/unnamed1.jpg') no-repeat center center;
             background-size: contain; pointer-events: none; z-index: 1;
         }
         #score { font-size: 50px; font-weight: bold; text-shadow: 0 0 20px var(--neon); z-index: 10; margin-top: 50px; }
         #btn {
-            width: 230px; height: 230px; background: url('/images/unnamed3.jpg') no-repeat center center;
+            width: 230px; height: 230px; 
+            background: url('/static/images/unnamed3.jpg') no-repeat center center;
             background-size: contain; border-radius: 50%; cursor: pointer;
             transition: transform 0.05s; z-index: 10; margin-top: auto; margin-bottom: 150px;
-            border: none; outline: none;
+            border: none; outline: none; background-color: transparent;
         }
-        #btn:active { transform: scale(0.95); }
+        #btn:active { transform: scale(0.92); }
         .plus-animation {
             position: absolute; color: var(--neon); font-size: 32px; font-weight: bold;
             pointer-events: none; animation: floatUp 0.7s ease-out forwards; z-index: 100;
@@ -37,7 +50,10 @@
     </style>
 </head>
 <body>
-    <div class="ui-overlay"></div>
+    <div class="bg-layer" id="bgLayer"></div>
+    <div class="extra-layer" id="extraLayer"></div>
+    <div class="ui-overlay" id="overlay"></div>
+    
     <div id="score">0</div>
     <button id="btn"></button>
 
@@ -45,16 +61,29 @@
         const tg = window.Telegram.WebApp;
         tg.expand();
         
+        // Сброс кэша для всех изображений, включая unnamed4
+        const v = Date.now();
+        const images = {
+            'bgLayer': `/static/images/images.jpeg?v=${v}`,
+            'extraLayer': `/static/images/unnamed4.jpg?v=${v}`,
+            'overlay': `/static/images/unnamed1.jpg?v=${v}`,
+            'btn': `/static/images/unnamed3.jpg?v=${v}`
+        };
+
+        for (const [id, path] of Object.entries(images)) {
+            const el = document.getElementById(id);
+            if (el) el.style.backgroundImage = `url('${path}')`;
+        }
+
         const userId = tg.initDataUnsafe?.user?.id || 999;
         let score = 0;
         let pendingClicks = 0;
-
         const scoreEl = document.getElementById('score');
         const btn = document.getElementById('btn');
 
         async function loadData() {
             try {
-                const r = await fetch(`/api/get_balance/${userId}`);
+                const r = await fetch(`/api/get_balance/${userId}?v=${v}`);
                 const d = await r.json();
                 score = d.balance || 0;
                 scoreEl.textContent = score;
