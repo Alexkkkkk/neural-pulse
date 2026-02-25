@@ -31,20 +31,29 @@ dp = Dispatcher()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. БД
+    # 1. БД + ОЧИСТКА
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
+            # Создаем таблицу, если её нет
             conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)")
-        logger.info(f"🗄️ [DB]: База готова: {DB_PATH}")
+            
+            # --- ВОТ ОНА ОЧИСТКА ПРИ СТАРТЕ ---
+            # Эта команда удалит всех пользователей и их балансы при каждом перезапуске бота
+            conn.execute("DELETE FROM users") 
+            # ----------------------------------
+            
+            conn.commit()
+        logger.info(f"🗄️ [DB]: База очищена и готова к работе (путь: {DB_PATH})")
     except Exception as e:
         logger.error(f"❌ [DB ERROR]: {e}")
 
-    # 2. БОТ
+    # 2. БОТ (с очисткой очереди сообщений)
     polling_task = None
     try:
+        # drop_pending_updates=True — это тоже очистка, но старых сообщений от юзеров
         await bot.delete_webhook(drop_pending_updates=True)
         polling_task = asyncio.create_task(dp.start_polling(bot))
-        logger.info("✅ [BOT]: Поллинг запущен!")
+        logger.info("✅ [BOT]: Поллинг запущен (старые сообщения удалены)!")
     except Exception as e:
         logger.error(f"❌ [BOT ERROR]: {e}")
     
@@ -116,7 +125,7 @@ async def start_handler(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/?v={v}"))
     ]])
-    await message.answer(f"Привет! Начинай майнить кликами прямо сейчас!", reply_markup=kb)
+    await message.answer(f"Привет! База данных была обнулена. Начинай майнить заново!", reply_markup=kb)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
