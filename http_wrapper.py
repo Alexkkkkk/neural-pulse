@@ -13,11 +13,10 @@ from aiogram.types import WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 # --- КОНФИГУРАЦИЯ ---
-# ОБЯЗАТЕЛЬНО ПРОВЕРЬ ТОКЕН В BOTFATHER, ЕСЛИ ОШИБКА Unauthorized ОСТАНЕТСЯ
 TOKEN = "8257287930:AAG13nP9Qgzeu-i3UU4d1sB3Kfaid2oPF-c"
 DOMAIN = "ai.bothost.ru"
 DB_PATH = "game.db"
-VERSION = "2.2.0-PNG-SUPPORT" 
+VERSION = "2.3.1-FIX" 
 
 # Принудительный вывод логов
 os.environ["PYTHONUNBUFFERED"] = "1"
@@ -27,12 +26,11 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# --- МОЛЧАЛИВЫЙ FAVICON ---
+# --- МИДДЛВАРЫ И FAVICON ---
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     return Response(status_code=204)
 
-# Middleware для сброса кэша
 @app.middleware("http")
 async def add_no_cache_headers(request: Request, call_next):
     response = await call_next(request)
@@ -69,9 +67,8 @@ async def get_balance(user_id: int):
     try:
         with sqlite3.connect(DB_PATH) as conn:
             res = conn.execute("SELECT balance FROM users WHERE id = ?", (user_id,)).fetchone()
-            balance = res[0] if res else 0
-            return {"balance": balance}
-    except Exception as e:
+            return {"balance": res[0] if res else 0}
+    except:
         return {"balance": 0}
 
 @app.post("/api/save_clicks")
@@ -84,18 +81,20 @@ async def save_clicks(data: dict = Body(...)):
                          (user_id, clicks, clicks))
             conn.commit()
         return {"status": "ok"}
-    except Exception as e:
+    except:
         return {"status": "error"}
 
-# --- СТАТИКА (PNG SUPPORT) ---
+# --- СТАТИКА ---
 static_dir = os.path.join(BASE_DIR, "static")
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
-    img_dir = os.path.join(static_dir, "images")
-    if os.path.exists(img_dir):
-        # Дополнительное монтирование для быстрого доступа
-        app.mount("/images", StaticFiles(directory=img_dir), name="images")
-        print(f"✅ [STATIC]: Ресурсы PNG/JPG подключены", flush=True)
+    
+    # Диагностика файла unnamed3.png
+    img_path = os.path.join(static_dir, "images", "unnamed3.png")
+    if os.path.exists(img_path):
+        print(f"✅ [ASSETS]: unnamed3.png найден!", flush=True)
+    else:
+        print(f"⚠️ [ASSETS ERROR]: Файл {img_path} ОТСУТСТВУЕТ!", flush=True)
 else:
     print(f"⚠️ [STATIC ERROR]: Папка static не найдена!", flush=True)
 
@@ -104,8 +103,8 @@ else:
 async def start_handler(message: types.Message):
     builder = InlineKeyboardBuilder()
     url = f"https://{DOMAIN}/?v={int(time.time())}"
-    builder.row(types.InlineKeyboardButton(text="💎 ИГРАТЬ (PNG VER)", web_app=WebAppInfo(url=url)))
-    await message.answer(f"Добро пожаловать в Neural Pulse AI!\nВерсия: {VERSION}", reply_markup=builder.as_markup())
+    builder.row(types.InlineKeyboardButton(text="💎 ИГРАТЬ", web_app=WebAppInfo(url=url)))
+    await message.answer(f"Neural Pulse AI v{VERSION}\nУдачной игры!", reply_markup=builder.as_markup())
 
 async def run_bot():
     try:
@@ -115,19 +114,16 @@ async def run_bot():
         await dp.start_polling(bot)
     except Exception as e:
         print(f"❌ [BOT ERROR]: {e}", flush=True)
-        print("💡 СОВЕТ: Если написано 'Unauthorized', получи НОВЫЙ ТОКЕН у @BotFather и замени его в коде!", flush=True)
 
 # --- ЗАПУСК ---
 if __name__ == "__main__":
     print("\n" + "="*50)
-    print(f"🚀 СИСТЕМА ЗАПУЩЕНА")
-    print(f"📦 ВЕРСИЯ: {VERSION}")
-    print(f"📂 КОРНЕВАЯ ПАПКА: {BASE_DIR}")
+    print(f"🚀 ЗАПУСК СЕРВЕРА ВЕРСИИ {VERSION}")
     print("="*50 + "\n", flush=True)
     
     init_db()
     
-    # Поток для бота
+    # Бот
     bot_thread = threading.Thread(target=lambda: asyncio.run(run_bot()), daemon=True)
     bot_thread.start()
     
