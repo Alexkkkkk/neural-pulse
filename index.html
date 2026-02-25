@@ -11,6 +11,7 @@
         body {
             margin: 0; padding: 0;
             background-color: var(--bg-dark);
+            /* Фон подложки */
             background: url('/static/images/images.jpeg') no-repeat center center;
             background-size: cover;
             height: 100vh; width: 100vw;
@@ -21,21 +22,22 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* Главный контейнер-рамка (unnamed1.png) */
+        /* Главный контейнер (unnamed1.png подгрузится через JS) */
         .game-container {
             position: relative;
             width: 95vw;
             height: 90vh;
             max-width: 500px;
-            background: url('/static/images/unnamed1.png') no-repeat center center;
+            background-repeat: no-repeat;
+            background-position: center;
             background-size: 100% 100%;
             display: flex;
             flex-direction: column;
             align-items: center;
             padding: 20px;
+            transition: opacity 0.3s;
         }
 
-        /* Шапка с логотипом (unnamed4.png) */
         .header {
             width: 100%;
             display: flex;
@@ -45,15 +47,16 @@
             padding: 0 10px;
         }
         
+        /* Логотип (unnamed4.png) */
         .logo-small {
             width: 35px;
             height: 35px;
-            background: url('/static/images/unnamed4.png') no-repeat center center;
+            background-repeat: no-repeat;
+            background-position: center;
             background-size: contain;
             filter: drop-shadow(0 0 5px var(--neon));
         }
 
-        /* Баланс */
         .balance-container {
             text-align: center;
             margin-top: 20px;
@@ -66,7 +69,6 @@
             text-shadow: 0 0 15px rgba(255, 204, 0, 0.6);
         }
 
-        /* Центральная область с монеткой (unnamed3.png) */
         .clicker-area {
             flex-grow: 1;
             display: flex;
@@ -76,10 +78,12 @@
             width: 100%;
         }
 
+        /* Монетка (unnamed3.png) */
         #btn {
             width: 280px;
             height: 280px;
-            background: url('/static/images/unnamed3.png') no-repeat center center;
+            background-repeat: no-repeat;
+            background-position: center;
             background-size: contain;
             border: none;
             outline: none;
@@ -91,7 +95,6 @@
         }
         #btn:active { transform: scale(0.92); }
 
-        /* Боковое меню */
         .side-menu {
             position: absolute;
             right: 15px;
@@ -110,10 +113,8 @@
             color: white; font-size: 9px;
             text-transform: uppercase;
             backdrop-filter: blur(5px);
-            cursor: pointer;
         }
 
-        /* Энергия */
         .energy-bar {
             width: 80%; height: 10px;
             background: rgba(255,255,255,0.1);
@@ -125,7 +126,6 @@
             background: linear-gradient(90deg, #00ff96, #00d4ff);
         }
 
-        /* Нижнее меню */
         .bottom-menu {
             width: 100%; display: grid;
             grid-template-columns: 1fr 1fr 1fr; gap: 10px;
@@ -156,7 +156,7 @@
 </head>
 <body>
 
-    <div class="game-container" id="mainContainer">
+    <div class="game-container" id="mainContainer" style="opacity: 0;">
         <div class="header">
             <div class="logo-small" id="logoImg"></div>
             <span style="font-size: 12px; letter-spacing: 1px;">🏆 Level 18,550</span>
@@ -194,17 +194,40 @@
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        // Форсированное обновление картинок через версию
         const v = Date.now();
-        document.getElementById('mainContainer').style.backgroundImage = `url('/static/images/unnamed1.png?v=${v}')`;
-        document.getElementById('logoImg').style.backgroundImage = `url('/static/images/unnamed4.png?v=${v}')`;
-        document.getElementById('btn').style.backgroundImage = `url('/static/images/unnamed3.png?v=${v}')`;
+        const mainContainer = document.getElementById('mainContainer');
+        const logoImg = document.getElementById('logoImg');
+        const btn = document.getElementById('btn');
+        const scoreEl = document.getElementById('score');
+
+        // Массив для проверки загрузки всех критических ресурсов
+        const assets = [
+            { el: mainContainer, url: `/static/images/unnamed1.png?v=${v}`, type: 'bg' },
+            { el: logoImg, url: `/static/images/unnamed4.png?v=${v}`, type: 'bg' },
+            { el: btn, url: `/static/images/unnamed3.png?v=${v}`, type: 'bg' }
+        ];
+
+        // Загрузка ресурсов с отслеживанием ошибок
+        assets.forEach(asset => {
+            const img = new Image();
+            img.onload = () => {
+                if(asset.type === 'bg') asset.el.style.backgroundImage = `url('${asset.url}')`;
+                else asset.el.src = asset.url;
+            };
+            img.onerror = () => {
+                console.error("Ошибка загрузки:", asset.url);
+                // Если монетка не загрузилась, ставим временную заглушку
+                if(asset.el.id === 'btn') asset.el.style.backgroundColor = 'rgba(0,212,255,0.3)';
+            };
+            img.src = asset.url.split('?')[0]; // Проверка базового пути
+        });
+
+        // Показываем контейнер после небольшой паузы
+        setTimeout(() => { mainContainer.style.opacity = '1'; }, 300);
 
         const userId = tg.initDataUnsafe?.user?.id || 999;
         let score = 0;
         let pendingClicks = 0;
-        const scoreEl = document.getElementById('score');
-        const btn = document.getElementById('btn');
 
         async function loadData() {
             try {
@@ -212,7 +235,7 @@
                 const d = await r.json();
                 score = d.balance || 0;
                 scoreEl.textContent = score.toLocaleString();
-            } catch (e) { console.error(e); }
+            } catch (e) { console.error("Ошибка баланса:", e); }
         }
 
         btn.addEventListener('touchstart', (e) => {
@@ -243,7 +266,10 @@
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ user_id: userId, clicks: s })
                     });
-                } catch (e) { pendingClicks += s; }
+                } catch (e) { 
+                    pendingClicks += s; 
+                    console.error("Ошибка сохранения:");
+                }
             }
         }, 1500);
 
