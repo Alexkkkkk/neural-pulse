@@ -8,29 +8,207 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root { --neon: #00d4ff; --bg: #050a1a; }
-        body { margin: 0; background: var(--bg) url('/static/images/images.jpeg') no-repeat center; background-size: cover; height: 100vh; font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; user-select: none; }
-        .game-container { display: flex; flex-direction: column; align-items: center; height: 90vh; padding: 20px; transition: opacity 0.5s; background: url('/static/images/unnamed1.png') no-repeat center; background-size: 100% 100%; }
-        #score { font-size: 44px; color: #ffcc00; text-shadow: 0 0 15px rgba(255,204,0,0.6); margin: 20px 0; font-weight: bold; }
-        .click-area { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
-        #btn { width: 270px; height: 270px; background: url('/static/images/unnamed3.png') no-repeat center; background-size: contain; border: none; cursor: pointer; filter: drop-shadow(0 0 25px var(--neon)); transition: transform 0.05s; outline: none; -webkit-tap-highlight-color: transparent; }
-        #btn:active { transform: scale(0.94); }
-        .plus-animation { position: absolute; color: white; font-size: 30px; font-weight: bold; animation: float 0.6s forwards; pointer-events: none; text-shadow: 0 0 10px var(--neon); z-index: 100; }
-        @keyframes float { 0% { opacity:1; transform:translateY(0); } 100% { opacity:0; transform:translateY(-120px); } }
-        .header { width: 100%; display: flex; justify-content: space-between; align-items: center; }
-        .logo { width: 40px; height: 40px; background: url('/static/images/unnamed4.png') no-repeat center; background-size: contain; }
+        
+        body { 
+            margin: 0; 
+            background: var(--bg) url('/static/images/images.jpeg') no-repeat center; 
+            background-size: cover; 
+            height: 100vh; 
+            font-family: 'Orbitron', sans-serif; 
+            color: white; 
+            overflow: hidden; 
+            user-select: none; 
+            display: flex;
+            justify-content: center;
+        }
+
+        /* Главный контейнер с фоновой рамкой */
+        .game-container { 
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            height: 100vh;
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            padding: 20px;
+            box-sizing: border-box;
+            background: url('/static/images/unnamed1.png') no-repeat center; 
+            background-size: 100% 100%;
+            transition: opacity 0.5s;
+        }
+
+        /* Верхняя панель (Header) */
+        .header { 
+            width: 100%; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-top: 10px;
+        }
+        .logo { width: 45px; height: 45px; background: url('/static/images/unnamed4.png') no-repeat center; background-size: contain; }
+        #lvl { font-size: 14px; text-shadow: 0 0 10px var(--neon); }
+
+        /* Секция баланса */
+        .balance-container {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .balance-label { font-size: 12px; color: rgba(255,255,255,0.7); letter-spacing: 1px; }
+        #score { font-size: 42px; color: #ffcc00; text-shadow: 0 0 15px rgba(255,204,0,0.6); font-weight: bold; margin-top: 5px; }
+
+        /* Игровая зона с кнопкой и боковым меню */
+        .play-area {
+            position: relative;
+            flex-grow: 1;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Главная кнопка */
+        #btn { 
+            width: 75vw; 
+            max-width: 320px;
+            height: 75vw;
+            max-height: 320px;
+            background: url('/static/images/unnamed3.png') no-repeat center; 
+            background-size: contain; 
+            border: none; 
+            cursor: pointer; 
+            filter: drop-shadow(0 0 30px var(--neon)); 
+            transition: transform 0.05s; 
+            outline: none; 
+            z-index: 2;
+        }
+        #btn:active { transform: scale(0.95); }
+
+        /* Правое боковое меню (Connect, Referrals, etc) */
+        .side-menu {
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 3;
+        }
+        .side-item {
+            width: 110px;
+            height: 45px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 8px;
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            text-transform: uppercase;
+            text-align: center;
+        }
+
+        /* Секция энергии */
+        .energy-container {
+            width: 100%;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .energy-text { font-size: 12px; margin-bottom: 8px; opacity: 0.8; }
+        .energy-bar {
+            width: 80%;
+            height: 10px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+            margin: 0 auto;
+            border: 1px solid rgba(0, 255, 150, 0.4);
+            overflow: hidden;
+        }
+        .energy-fill {
+            width: 87.5%; /* Пример заполнения */
+            height: 100%;
+            background: linear-gradient(90deg, #00ff96, #00d4ff);
+            box-shadow: 0 0 10px #00ff96;
+        }
+
+        /* Нижнее меню (Upgrade, Mining, Achievements) */
+        .bottom-nav {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            width: 100%;
+            margin-bottom: 30px;
+        }
+        .nav-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            height: 70px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            backdrop-filter: blur(10px);
+        }
+        .nav-card i { font-size: 20px; margin-bottom: 5px; }
+
+        /* Анимация клика */
+        .plus-animation { 
+            position: absolute; 
+            color: white; 
+            font-size: 32px; 
+            font-weight: bold; 
+            animation: float 0.6s ease-out forwards; 
+            pointer-events: none; 
+            text-shadow: 0 0 15px var(--neon); 
+            z-index: 100; 
+        }
+        @keyframes float { 
+            0% { opacity:1; transform: translateY(0) scale(1); } 
+            100% { opacity:0; transform: translateY(-100px) scale(1.5); } 
+        }
     </style>
 </head>
 <body>
     <div class="game-container" id="game" style="opacity:0">
         <div class="header">
             <div class="logo"></div>
-            <span id="lvl">🏆 Level 1</span>
+            <span id="lvl">🏆 Level 10</span>
         </div>
-        <div id="score">0</div>
-        <div class="click-area">
+
+        <div class="balance-container">
+            <div class="balance-label">BALANCE VALUE</div>
+            <div id="score">0</div>
+            <div style="font-size: 12px; opacity: 0.6;">AI</div>
+        </div>
+
+        <div class="play-area">
             <button id="btn"></button>
+            
+            <div class="side-menu">
+                <div class="side-item" style="background: #2196F3; border:none;">Connect Wallet</div>
+                <div class="side-item">Referrals</div>
+                <div class="side-item">Settings</div>
+                <div class="side-item">Support</div>
+            </div>
         </div>
-        <div style="font-size: 10px; opacity: 0.6; margin-bottom: 20px; letter-spacing: 1px;">SYNCING NEURAL DATA...</div>
+
+        <div class="energy-container">
+            <div class="energy-text">ENERGY</div>
+            <div class="energy-bar">
+                <div class="energy-fill" id="energyFill"></div>
+            </div>
+            <div style="font-size: 12px; margin-top: 8px;">⚡ 875 / 1000</div>
+        </div>
+
+        <div class="bottom-nav">
+            <div class="nav-card">🚀<br>UPGRADE</div>
+            <div class="nav-card">💎<br>MINING</div>
+            <div class="nav-card">🏆<br>TASKS</div>
+        </div>
     </div>
 
     <script>
@@ -53,7 +231,11 @@
                 scoreEl.textContent = score.toLocaleString();
                 lvlEl.textContent = `🏆 Level ${d.level || 1}`;
                 document.getElementById('game').style.opacity = '1';
-            } catch (e) { console.error("Load Error"); }
+            } catch (e) { 
+                console.error("Load Error");
+                // Для теста, если API нет
+                document.getElementById('game').style.opacity = '1';
+            }
         }
 
         btn.addEventListener('touchstart', (e) => {
@@ -71,13 +253,12 @@
             const p = document.createElement('div');
             p.className = 'plus-animation';
             p.textContent = '+1';
-            p.style.left = x + 'px';
-            p.style.top = y + 'px';
+            p.style.left = (x - 20) + 'px';
+            p.style.top = (y - 40) + 'px';
             document.body.appendChild(p);
             setTimeout(() => p.remove(), 600);
         }
 
-        // Отправка накопленной дельты раз в 1.5 сек
         setInterval(async () => {
             if (pending > 0) {
                 const toSend = pending;
@@ -88,9 +269,7 @@
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ user_id: userId, clicks: toSend })
                     });
-                } catch (e) {
-                    pending += toSend; // Возврат в очередь при сбое сети
-                }
+                } catch (e) { pending += toSend; }
             }
         }, 1500);
 
