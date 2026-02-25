@@ -7,45 +7,89 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root { --neon: #00d4ff; }
+        
+        * { box-sizing: border-box; }
+
         body {
-            margin: 0; padding: 0; background: #000;
-            background-size: cover; height: 100vh; width: 100vw; display: flex; flex-direction: column;
-            align-items: center; font-family: 'Arial', sans-serif; color: white; overflow: hidden;
-            user-select: none; -webkit-tap-highlight-color: transparent;
+            margin: 0; padding: 0; 
+            background: #000;
+            height: 100vh; height: 100dvh;
+            width: 100vw; 
+            display: flex; flex-direction: column;
+            align-items: center; 
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+            color: white; 
+            overflow: hidden;
+            user-select: none; 
+            -webkit-tap-highlight-color: transparent;
         }
-        /* Основной фон из images.jpeg */
+
+        /* Фоновый слой (Космос/Сеть) */
         .bg-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: url('/static/images/images.jpeg') no-repeat center center;
-            background-size: cover; z-index: -2;
+            background-size: cover; z-index: -3;
         }
-        /* Слой с unnamed4.jpg (если это спецэффект или доп. фон) */
+
+        /* Дополнительный спецэффект */
         .extra-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: url('/static/images/unnamed4.jpg') no-repeat center center;
-            background-size: cover; opacity: 0.5; z-index: -1; pointer-events: none;
+            background-size: cover; opacity: 0.4; z-index: -2; pointer-events: none;
         }
+
+        /* Главная рамка интерфейса (как на скриншоте-образце) */
         .ui-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: url('/static/images/unnamed1.jpg') no-repeat center center;
-            background-size: contain; pointer-events: none; z-index: 1;
+            background-size: 100% 100%; /* Растягиваем точно по границам */
+            pointer-events: none; z-index: 1;
         }
-        #score { font-size: 50px; font-weight: bold; text-shadow: 0 0 20px var(--neon); z-index: 10; margin-top: 50px; }
+
+        /* Счётчик баланса */
+        #score-container {
+            margin-top: 15vh;
+            text-align: center;
+            z-index: 10;
+        }
+        
+        #score { 
+            font-size: 48px; 
+            font-weight: 800; 
+            text-shadow: 0 0 15px var(--neon), 0 0 30px rgba(0, 212, 255, 0.5); 
+            color: #fff;
+        }
+
+        /* Центральная кнопка-робот */
         #btn {
-            width: 230px; height: 230px; 
+            width: 280px; height: 280px; 
             background: url('/static/images/unnamed3.jpg') no-repeat center center;
-            background-size: contain; border-radius: 50%; cursor: pointer;
-            transition: transform 0.05s; z-index: 10; margin-top: auto; margin-bottom: 150px;
-            border: none; outline: none; background-color: transparent;
+            background-size: contain; 
+            border-radius: 50%; 
+            cursor: pointer;
+            transition: transform 0.05s ease; 
+            z-index: 10; 
+            margin-top: auto; 
+            margin-bottom: 20vh;
+            border: none; 
+            outline: none; 
+            background-color: transparent;
+            /* Свечение кнопки */
+            filter: drop-shadow(0 0 15px rgba(0, 212, 255, 0.4));
         }
-        #btn:active { transform: scale(0.92); }
+
+        #btn:active { transform: scale(0.94); }
+
+        /* Анимация +1 */
         .plus-animation {
-            position: absolute; color: var(--neon); font-size: 32px; font-weight: bold;
-            pointer-events: none; animation: floatUp 0.7s ease-out forwards; z-index: 100;
+            position: absolute; color: var(--neon); font-size: 36px; font-weight: bold;
+            pointer-events: none; animation: floatUp 0.6s ease-out forwards; z-index: 100;
+            text-shadow: 0 0 10px #000;
         }
+
         @keyframes floatUp {
-            0% { opacity: 1; transform: translateY(0); }
-            100% { opacity: 0; transform: translateY(-100px); }
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-120px) scale(1.2); }
         }
     </style>
 </head>
@@ -54,14 +98,17 @@
     <div class="extra-layer" id="extraLayer"></div>
     <div class="ui-overlay" id="overlay"></div>
     
-    <div id="score">0</div>
+    <div id="score-container">
+        <div style="font-size: 14px; opacity: 0.8; letter-spacing: 2px;">NEURAL BALANCE</div>
+        <div id="score">0</div>
+    </div>
+
     <button id="btn"></button>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
         
-        // Сброс кэша для всех изображений, включая unnamed4
         const v = Date.now();
         const images = {
             'bgLayer': `/static/images/images.jpeg?v=${v}`,
@@ -86,7 +133,7 @@
                 const r = await fetch(`/api/get_balance/${userId}?v=${v}`);
                 const d = await r.json();
                 score = d.balance || 0;
-                scoreEl.textContent = score;
+                scoreEl.textContent = score.toLocaleString(); // Форматируем число (1,000)
             } catch (e) { console.error("Load error", e); }
         }
 
@@ -94,20 +141,21 @@
             e.preventDefault();
             score++;
             pendingClicks++;
-            scoreEl.textContent = score;
+            scoreEl.textContent = score.toLocaleString();
 
             const touch = e.touches[0];
             const p = document.createElement('div');
             p.className = 'plus-animation';
             p.textContent = '+1';
-            p.style.left = `${touch.pageX}px`;
-            p.style.top = `${touch.pageY}px`;
+            p.style.left = `${touch.pageX - 10}px`;
+            p.style.top = `${touch.pageY - 40}px`;
             document.body.appendChild(p);
-            setTimeout(() => p.remove(), 700);
+            setTimeout(() => p.remove(), 600);
 
-            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
         });
 
+        // Синхронизация с сервером
         setInterval(async () => {
             if (pendingClicks > 0) {
                 const s = pendingClicks;
@@ -118,9 +166,12 @@
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ user_id: userId, clicks: s })
                     });
-                } catch (e) { pendingClicks += s; }
+                } catch (e) { 
+                    pendingClicks += s; 
+                    console.log("Saving failed, retrying...");
+                }
             }
-        }, 1000);
+        }, 1500);
 
         loadData();
         tg.ready();
