@@ -13,7 +13,7 @@ from aiogram.types import WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 # --- КОНФИГУРАЦИЯ ---
-TOKEN = "8257287930:AAG13nP9Qgzeu-i3UU4d1sB3Kfaid2oPF-c"
+TOKEN = "8257287930:AAEh-qqN3sUtSS7cytlq9hK3_d0pbJW7-OU"
 DOMAIN = "ai.bothost.ru"
 DB_PATH = "game.db"
 
