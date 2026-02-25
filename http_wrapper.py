@@ -18,32 +18,32 @@ TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8257287930:AAFhDcKz-ebfaAHzb5H4Hr1b9SCa
 ADMIN_ID = os.getenv("ADMIN_ID", "476014374")
 DOMAIN = os.getenv("DOMAIN", "ai.bothost.ru")
 DB_PATH = os.getenv("DB_PATH", "game.db")
-VERSION = "3.1.5-STABLE"
+VERSION = "3.1.5-FINAL"
 
-# Окружение для Bothost
+# Принудительная буферизация для Bothost
 os.environ["PYTHONUNBUFFERED"] = "1"
 
-# --- ИНИЦИАЛИЗАЦИЯ FastAPI ---
+# --- ИНИЦИАЦИЯ FastAPI ---
 app = FastAPI(title="Neural Pulse AI", version=VERSION)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# Пути к статике
+# Настройка статических файлов
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 if not os.path.exists(STATIC_DIR): os.makedirs(STATIC_DIR)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-# --- ЛОГИКА БАЗЫ ДАННЫХ ---
+# --- БАЗА ДАННЫХ ---
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
             level INTEGER DEFAULT 1, last_tap TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         conn.commit()
-    print("🗄️ [DB]: База данных готова.", flush=True)
+    print(f"🗄️ [DB]: База инициализирована. Версия {VERSION}", flush=True)
 
-def update_user_stats(user_id: str, clicks: int):
-    """Атомарное обновление баланса и расчет уровня (1000 кликов = +1 уровень)"""
+def update_db(user_id: str, clicks: int):
+    """Атомарный инкремент баланса и расчет уровня"""
     try:
         with sqlite3.connect(DB_PATH) as conn:
             conn.execute('''INSERT INTO users (id, balance, level) VALUES (?, ?, ?)
@@ -58,57 +58,50 @@ class ClickData(BaseModel):
     user_id: str
     clicks: int
 
-# --- API МАРШРУТЫ ---
+# --- API ---
 @app.get("/", response_class=HTMLResponse)
 async def index():
     path = os.path.join(STATIC_DIR, "index.html")
     if os.path.exists(path):
         return open(path, "r", encoding="utf-8").read()
-    return "<h1>Neural Pulse AI: Frontend files missing</h1>"
+    return "<h1>Neural Pulse: Frontend Missing</h1>"
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     with sqlite3.connect(DB_PATH) as conn:
         res = conn.execute("SELECT balance, level FROM users WHERE id = ?", (user_id,)).fetchone()
-        if res:
-            return JSONResponse({"balance": res[0], "level": res[1]})
-        return JSONResponse({"balance": 0, "level": 1})
+        return JSONResponse({"balance": res[0], "level": res[1]} if res else {"balance": 0, "level": 1})
 
 @app.post("/api/clicks")
 async def save_clicks(data: ClickData, tasks: BackgroundTasks):
-    tasks.add_task(update_user_stats, data.user_id, data.clicks)
+    # Используем BackgroundTasks, чтобы API отвечало мгновенно
+    tasks.add_task(update_db, data.user_id, data.clicks)
     return {"status": "ok"}
 
-# --- TELEGRAM BOT ---
+# --- BOT ---
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
 @dp.message()
-async def start_cmd(m: types.Message):
+async def start_handler(m: types.Message):
     builder = InlineKeyboardBuilder()
-    # Формируем URL с защитой от кэша
-    web_url = f"https://{DOMAIN}/?v={int(time.time())}"
-    builder.row(types.InlineKeyboardButton(text="⚡ ИГРАТЬ ⚡", web_app=WebAppInfo(url=web_url)))
+    # URL с меткой времени для обхода кэша Telegram
+    web_app_url = f"https://{DOMAIN}/?v={int(time.time())}"
+    builder.row(types.InlineKeyboardButton(text="⚡ ИГРАТЬ ⚡", web_app=WebAppInfo(url=web_app_url)))
     await m.answer(
-        "<b>Neural Pulse AI</b>\nТвой прогресс синхронизирован с облаком.", 
+        "<b>Neural Pulse AI</b>\n\nТвоя энергия — твоя валюта. Начни добычу прямо сейчас!", 
         reply_markup=builder.as_markup(), 
         parse_mode="HTML"
     )
 
 async def run_bot():
     await bot.delete_webhook(drop_pending_updates=True)
-    # handle_signals=False важен для работы в threading на Bothost
     await dp.start_polling(bot, handle_signals=False)
 
 # --- ЗАПУСК ---
 if __name__ == "__main__":
     init_db()
-    
-    # Запуск бота в фоне
-    bot_thread = threading.Thread(target=lambda: asyncio.run(run_bot()), daemon=True)
-    bot_thread.start()
-
-    # Запуск сервера
-    port = int(os.getenv("PORT", 3000))
-    print(f"🚀 [SERVER]: Запущен на порту {port}", flush=True)
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+    # Бот в отдельном потоке
+    threading.Thread(target=lambda: asyncio.run(run_bot()), daemon=True).start()
+    # Сервер в основном потоке
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 3000)))
