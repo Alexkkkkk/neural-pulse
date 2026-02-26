@@ -7,226 +7,337 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        :root { --neon: #00d4ff; --neon-secondary: #00ff96; --bg: #050a1a; --glass: rgba(10, 25, 47, 0.95); }
-        body { margin: 0; background: radial-gradient(circle at center, #0a192f 0%, #050a1a 100%); height: 100vh; font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; user-select: none; display: flex; justify-content: center; }
-        
-        /* Экран загрузки */
-        #loading-screen { position: fixed; top:0; left:0; width:100%; height:100%; background: var(--bg); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; transition: opacity 0.5s; }
-        .spinner { width: 40px; height: 40px; border: 4px solid rgba(0, 212, 255, 0.1); border-top: 4px solid var(--neon); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        .game-container { position: relative; width: 100%; max-width: 500px; height: 100vh; display: none; flex-direction: column; align-items: center; padding: 20px; box-sizing: border-box; }
-        
-        .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
-        /* Запасной цвет фона для лого, если картинка не найдена */
-        .logo { width: 50px; height: 50px; background: #1a2a4a url('/static/images/unnamed4.png') no-repeat center; background-size: cover; border-radius: 12px; box-shadow: 0 0 15px var(--neon); }
-        #lvl { font-size: 14px; text-shadow: 0 0 10px var(--neon); color: var(--neon); }
-        
-        .balance-container { text-align: center; margin-top: 20px; }
-        #score { font-size: 44px; color: #fff; text-shadow: 0 0 20px var(--neon); font-weight: bold; }
-        
-        .play-area { position: relative; flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; }
-        /* Запасной цвет фона для кнопки, если картинка не найдена */
-        #btn { 
-            width: 70vw; max-width: 280px; height: 70vw; max-height: 280px; 
-            background: #112244 url('/static/images/unnamed3.png') no-repeat center; 
-            background-size: contain; border-radius: 50%; border: 4px solid var(--neon); 
-            cursor: pointer; transition: transform 0.05s; outline: none; z-index: 2;
-            box-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
+        :root { 
+            --neon: #00d4ff; 
+            --neon-secondary: #00ff96;
+            --bg: #050a1a; 
+            --glass: rgba(10, 25, 47, 0.95);
         }
-        #btn:active { transform: scale(0.92); }
         
-        .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 12px; z-index: 3; }
-        .side-item { width: 85px; padding: 10px 5px; background: rgba(255,255,255,0.05); border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 8px; backdrop-filter: blur(5px); font-size: 9px; text-align: center; cursor: pointer; }
-        
-        .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; margin-bottom: 25px; }
-        .nav-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 15px 5px; text-align: center; font-size: 10px; cursor: pointer; }
-        
-        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; z-index: 999; backdrop-filter: blur(5px); }
-        .overlay.active { display: block; }
-        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 75%; background: var(--glass); border-top: 2px solid var(--neon); border-radius: 30px 30px 0 0; z-index: 1000; transition: bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1); padding: 30px; box-sizing: border-box; overflow-y: auto; }
-        .modal.active { bottom: 0; }
-        .close-btn { font-size: 30px; color: var(--neon); float: right; cursor: pointer; }
-        .btn-action { width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; color:#000; font-weight:bold; cursor:pointer; font-family:'Orbitron'; margin-top: 15px; transition: opacity 0.2s; }
-        .btn-action:active { opacity: 0.7; }
+        body { 
+            margin: 0; 
+            background: radial-gradient(circle at center, #0a192f 0%, #050a1a 100%);
+            height: 100vh; 
+            font-family: 'Orbitron', sans-serif; 
+            color: white; 
+            overflow: hidden; 
+            user-select: none; 
+            display: flex;
+            justify-content: center;
+        }
 
-        .stat-box { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; margin-bottom: 10px; text-align: center; border: 1px solid rgba(0, 212, 255, 0.1); }
-        .plus-animation { position: absolute; color: var(--neon); font-size: 32px; font-weight: bold; animation: float 0.7s ease-out forwards; pointer-events: none; z-index: 100; text-shadow: 0 0 10px var(--neon); }
-        @keyframes float { 0% { opacity:1; transform: translateY(0); } 100% { opacity:0; transform: translateY(-100px); } }
+        .game-container { 
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            height: 100vh;
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            padding: 20px;
+            box-sizing: border-box;
+            transition: opacity 0.5s;
+        }
+
+        .header { 
+            width: 100%; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-top: 10px;
+        }
+        
+        .logo { 
+            width: 50px; 
+            height: 50px; 
+            background: url('/static/images/unnamed4.png') no-repeat center;
+            background-size: cover;
+            border-radius: 12px;
+            box-shadow: 0 0 15px var(--neon);
+        }
+
+        #lvl { font-size: 14px; text-shadow: 0 0 10px var(--neon); color: var(--neon); }
+
+        .balance-container { text-align: center; margin-top: 20px; }
+        .balance-label { font-size: 12px; color: rgba(255,255,255,0.7); letter-spacing: 2px; }
+        #score { font-size: 48px; color: #fff; text-shadow: 0 0 20px var(--neon); font-weight: bold; margin-top: 5px; }
+
+        .play-area {
+            position: relative;
+            flex-grow: 1;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #btn { 
+            width: 80vw; 
+            max-width: 320px;
+            height: 80vw;
+            max-height: 320px;
+            background: url('/static/images/unnamed3.png') no-repeat center;
+            background-size: contain;
+            border-radius: 50%;
+            border: 4px solid rgba(0, 212, 255, 0.3);
+            box-shadow: 0 0 40px rgba(0, 212, 255, 0.2);
+            cursor: pointer; 
+            transition: transform 0.05s; 
+            outline: none; 
+            z-index: 2;
+        }
+        #btn:active { transform: scale(0.95); box-shadow: 0 0 60px var(--neon); }
+
+        .side-menu {
+            position: absolute;
+            right: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 3;
+        }
+        .side-item {
+            width: 90px;
+            padding: 10px 5px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 8px;
+            backdrop-filter: blur(5px);
+            font-size: 9px;
+            text-transform: uppercase;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .energy-container {
+            width: 100%;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .energy-bar {
+            width: 80%;
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            margin: 10px auto;
+            overflow: hidden;
+        }
+        .energy-fill {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--neon-secondary), var(--neon));
+            box-shadow: 0 0 10px var(--neon-secondary);
+        }
+
+        .bottom-nav {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        .nav-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 15px 5px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 10px;
+            cursor: pointer;
+        }
+        .nav-card:active { background: rgba(0, 212, 255, 0.1); }
+
+        /* MODAL SYSTEM */
+        .overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            z-index: 999;
+            backdrop-filter: blur(4px);
+        }
+        .overlay.active { display: block; }
+
+        .modal {
+            position: fixed;
+            bottom: -100%;
+            left: 0;
+            width: 100%;
+            height: 75%;
+            background: var(--glass);
+            border-top: 2px solid var(--neon);
+            border-radius: 30px 30px 0 0;
+            z-index: 1000;
+            transition: bottom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+            padding: 30px;
+            box-sizing: border-box;
+        }
+        .modal.active { bottom: 0; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .close-btn { font-size: 28px; cursor: pointer; color: var(--neon); }
+        .modal-content { font-family: sans-serif; font-size: 14px; color: rgba(255,255,255,0.8); line-height: 1.6; }
+
+        .plus-animation { 
+            position: absolute; 
+            color: var(--neon); 
+            font-size: 32px; 
+            font-weight: bold; 
+            animation: float 0.7s ease-out forwards; 
+            pointer-events: none; 
+            text-shadow: 0 0 10px var(--neon); 
+            z-index: 100; 
+        }
+        @keyframes float { 
+            0% { opacity:1; transform: translateY(0) scale(1); } 
+            100% { opacity:0; transform: translateY(-150px) scale(1.5); } 
+        }
     </style>
 </head>
 <body>
-    <div id="loading-screen">
-        <div class="spinner"></div>
-        <div style="color: var(--neon); letter-spacing: 2px; font-size: 14px;">NEURAL PULSE AI</div>
-    </div>
-
-    <div class="game-container" id="game">
+    <div class="game-container" id="game" style="opacity:0">
         <div class="header">
             <div class="logo"></div>
             <span id="lvl">🏆 Level 1</span>
         </div>
-        
+
         <div class="balance-container">
-            <div style="font-size:10px; opacity:0.6; letter-spacing: 1px;">MINED ENERGY</div>
+            <div class="balance-label">TOTAL NP POINTS</div>
             <div id="score">0</div>
         </div>
-        
+
         <div class="play-area">
             <button id="btn"></button>
             <div class="side-menu">
-                <div class="side-item" onclick="openModal('friends')">FRIENDS</div>
-                <div class="side-item" onclick="openModal('tasks')">TASKS</div>
+                <div class="side-item" style="background: #2196F3; border:none; color:white;" onclick="openModal('wallet')">Wallet</div>
+                <div class="side-item" onclick="openModal('friends')">Friends</div>
+                <div class="side-item" onclick="openModal('tasks')">Tasks</div>
             </div>
+        </div>
+
+        <div class="energy-container">
+            <div class="energy-bar">
+                <div class="energy-fill" id="energyFill"></div>
+            </div>
+            <div style="font-size: 10px; opacity: 0.7;">⚡ ENERGY RECHARGING</div>
         </div>
 
         <div class="bottom-nav">
             <div class="nav-card" onclick="openModal('boost')">🚀 BOOST</div>
             <div class="nav-card" onclick="openModal('mine')">⛏️ MINE</div>
-            <div class="nav-card" onclick="openModal('stats')">📊 STATS</div>
+            <div class="nav-card" onclick="openModal('stats')">⚙️ STATS</div>
         </div>
     </div>
 
     <div class="overlay" id="overlay" onclick="closeAllModals()"></div>
 
+    <div id="modal-wallet" class="modal">
+        <div class="modal-header"><h2>Wallet</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content">Подключите свой кошелек TON для будущих выплат. (Скоро...)</div>
+    </div>
+
+    <div id="modal-friends" class="modal">
+        <div class="modal-header"><h2>Friends</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content">Приглашайте друзей и получайте 10% от их добычи!</div>
+    </div>
+
+    <div id="modal-tasks" class="modal">
+        <div class="modal-header"><h2>Tasks</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content">Выполняйте простые задания, чтобы заработать бонусные NP.</div>
+    </div>
+
     <div id="modal-boost" class="modal">
-        <span class="close-btn" onclick="closeAllModals()">&times;</span>
-        <h2>Boost</h2>
-        <div class="stat-box">
-            <p>Текущий клик: <span id="boost-power-label" style="color:var(--neon)">1</span></p>
-            <button class="btn-action" id="buy-boost-btn" onclick="buyBoost()">
-                UPGRADE (Цена: <span id="boost-cost">500</span>)
-            </button>
-        </div>
+        <div class="modal-header"><h2>Boost</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content">Увеличьте силу клика или скорость восстановления энергии.</div>
+    </div>
+
+    <div id="modal-mine" class="modal">
+        <div class="modal-header"><h2>Mine</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content">Покупайте улучшения, чтобы добывать Neural Pulse пассивно.</div>
     </div>
 
     <div id="modal-stats" class="modal">
-        <span class="close-btn" onclick="closeAllModals()">&times;</span>
-        <h2>Stats</h2>
-        <div class="stat-box">ID: <span id="stat-uid">...</span></div>
-        <div class="stat-box">Игроков: <div id="stat-players" style="color:var(--neon-secondary)">...</div></div>
-        <div class="stat-box">Всего NP: <div id="stat-total" style="color:var(--neon-secondary)">...</div></div>
+        <div class="modal-header"><h2>Stats</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content">Здесь будет ваша детальная статистика и глобальный рейтинг.</div>
     </div>
-
-    <div id="modal-friends" class="modal"><span class="close-btn" onclick="closeAllModals()">&times;</span><h2>Friends</h2><p>+5,000 NP за друга!</p><button class="btn-action" onclick="shareInvite()">INVITE FRIEND</button></div>
-    <div id="modal-tasks" class="modal"><span class="close-btn" onclick="closeAllModals()">&times;</span><h2>Tasks</h2><p>Coming soon...</p></div>
-    <div id="modal-mine" class="modal"><span class="close-btn" onclick="closeAllModals()">&times;</span><h2>Mining</h2><p>Passive income is coming soon!</p></div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        tg.ready();
-
+        
         const userId = String(tg.initDataUnsafe?.user?.id || "999");
-        let score = 0, pending = 0, clickPower = 1;
+        let score = 0;
+        let pending = 0;
+
         const scoreEl = document.getElementById('score');
+        const btn = document.getElementById('btn');
 
-        async function loadData() {
-            // Если API не ответит за 3 секунды, всё равно покажем игру
-            const fallback = setTimeout(showGame, 3000);
-            try {
-                const r = await fetch(`/api/balance/${userId}?t=${Date.now()}`);
-                if(r.ok) {
-                    const d = await r.json();
-                    score = d.balance || 0;
-                    clickPower = d.click_lvl || 1;
-                    updateUI();
-                }
-            } catch (e) { console.error("API Error"); }
-            clearTimeout(fallback);
-            showGame();
-        }
-
-        function updateUI() {
-            scoreEl.textContent = Math.floor(score).toLocaleString();
-            document.getElementById('lvl').textContent = `🏆 Level ${clickPower}`;
-            document.getElementById('boost-power-label').textContent = clickPower;
-            document.getElementById('boost-cost').textContent = (clickPower * 500);
-        }
-
-        function showGame() {
-            document.getElementById('loading-screen').style.opacity = '0';
-            setTimeout(() => {
-                document.getElementById('loading-screen').style.display = 'none';
-                document.getElementById('game').style.display = 'flex';
-            }, 500);
-        }
-
-        async function openModal(id) {
+        // Modal Logic
+        function openModal(id) {
             document.getElementById('overlay').classList.add('active');
             document.getElementById('modal-' + id).classList.add('active');
-            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-
-            if (id === 'stats') {
-                document.getElementById('stat-uid').textContent = userId;
-                try {
-                    const r = await fetch('/api/all_stats');
-                    const d = await r.json();
-                    document.getElementById('stat-players').textContent = d.total_players;
-                    document.getElementById('stat-total').textContent = d.total_balance.toLocaleString();
-                } catch(e) { console.log("Stats error"); }
-            }
-        }
-
-        async function buyBoost() {
-            const btn = document.getElementById('buy-boost-btn');
-            btn.style.opacity = '0.5';
-            btn.disabled = true;
-            try {
-                const r = await fetch('/api/buy_boost', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ user_id: userId })
-                });
-                const d = await r.json();
-                if (d.status === 'ok') {
-                    score = d.new_balance;
-                    clickPower = d.new_lvl;
-                    updateUI();
-                    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-                } else {
-                    tg.showAlert(d.error || "Недостаточно средств");
-                }
-            } catch (e) { tg.showAlert("Ошибка сети"); }
-            btn.style.opacity = '1';
-            btn.disabled = false;
+            if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
         }
 
         function closeAllModals() {
             document.getElementById('overlay').classList.remove('active');
-            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(m => m.classList.remove('active'));
         }
 
-        function shareInvite() {
-            const botLink = `https://t.me/UltraMind_AI_bot?start=${userId}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(botLink)}&text=Заходи в Neural Pulse!`);
-        }
-
-        document.getElementById('btn').addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            for (let t of e.changedTouches) {
-                score += clickPower; pending += clickPower;
-                const p = document.createElement('div');
-                p.className = 'plus-animation'; p.textContent = '+' + clickPower;
-                p.style.left = t.pageX + 'px'; p.style.top = t.pageY + 'px';
-                document.body.appendChild(p); setTimeout(() => p.remove(), 700);
+        async function loadData() {
+            try {
+                const r = await fetch(`/api/balance/${userId}?t=${Date.now()}`);
+                const d = await r.json();
+                score = d.balance || 0;
+                scoreEl.textContent = score.toLocaleString();
+                document.getElementById('game').style.opacity = '1';
+            } catch (e) { 
+                document.getElementById('game').style.opacity = '1';
             }
-            scoreEl.textContent = Math.floor(score).toLocaleString();
+        }
+
+        btn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            // Не кликаем, если открыто модальное окно
+            if (document.getElementById('overlay').classList.contains('active')) return;
+
+            for (let t of e.changedTouches) {
+                score++;
+                pending++;
+                spawnPlus(t.pageX, t.pageY);
+            }
+            scoreEl.textContent = score.toLocaleString();
             if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
         });
 
-        setInterval(() => {
+        function spawnPlus(x, y) {
+            const p = document.createElement('div');
+            p.className = 'plus-animation';
+            p.textContent = '+1';
+            p.style.left = (x - 15) + 'px';
+            p.style.top = (y - 40) + 'px';
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 700);
+        }
+
+        setInterval(async () => {
             if (pending > 0) {
-                const s = pending; pending = 0;
-                fetch('/api/clicks', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ user_id: userId, clicks: s })
-                }).catch(() => { pending += s; });
+                const toSend = pending;
+                pending = 0;
+                try {
+                    await fetch('/api/clicks', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ user_id: userId, clicks: toSend })
+                    });
+                } catch (e) { pending += toSend; }
             }
         }, 2000);
 
         loadData();
+        tg.ready();
     </script>
 </body>
 </html>
