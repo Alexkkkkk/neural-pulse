@@ -1,206 +1,85 @@
-            align-items: center; 
-            padding: 20px;
-            box-sizing: border-box;
-            transition: opacity 0.5s;
-        }
-
-        .header { 
-            width: 100%; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            margin-top: 10px;
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Neural Pulse AI</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root { 
+            --neon: #00d4ff; 
+            --neon-secondary: #00ff96;
+            --bg: #050a1a; 
+            --glass: rgba(10, 25, 47, 0.95);
+            --card-bg: rgba(255, 255, 255, 0.03);
         }
         
-        .logo { 
-            width: 50px; 
-            height: 50px; 
-            background: url('/static/images/unnamed4.png') no-repeat center;
-            background-size: cover;
-            border-radius: 12px;
-            box-shadow: 0 0 15px var(--neon);
+        body { 
+            margin: 0; 
+            background: radial-gradient(circle at center, #0a192f 0%, #050a1a 100%);
+            height: 100vh; 
+            font-family: 'Orbitron', sans-serif; 
+            color: white; 
+            overflow: hidden; 
+            user-select: none; 
+            display: flex;
+            justify-content: center;
         }
 
+        .game-container { 
+            position: relative; width: 100%; max-width: 500px; height: 100vh;
+            display: flex; flex-direction: column; align-items: center; padding: 20px;
+            box-sizing: border-box; transition: opacity 0.5s;
+        }
+
+        .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+        .logo { width: 50px; height: 50px; background: url('/static/images/unnamed4.png') no-repeat center; background-size: cover; border-radius: 12px; box-shadow: 0 0 15px var(--neon); }
         #lvl { font-size: 14px; text-shadow: 0 0 10px var(--neon); color: var(--neon); font-weight: bold; }
 
         .balance-container { text-align: center; margin-top: 20px; }
         .balance-label { font-size: 12px; color: rgba(255,255,255,0.7); letter-spacing: 2px; }
         #score { font-size: 48px; color: #fff; text-shadow: 0 0 20px var(--neon); font-weight: bold; margin-top: 5px; }
 
-        .play-area {
-            position: relative;
-            flex-grow: 1;
-            width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
+        .play-area { position: relative; flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; }
         #btn { 
-            width: 80vw; 
-            max-width: 320px;
-            height: 80vw;
-            max-height: 320px;
-            background: url('/static/images/unnamed3.png') no-repeat center;
-            background-size: contain;
-            border-radius: 50%;
-            border: 4px solid rgba(0, 212, 255, 0.3);
-            box-shadow: 0 0 40px rgba(0, 212, 255, 0.2);
-            cursor: pointer; 
-            transition: transform 0.05s; 
-            outline: none; 
-            z-index: 2;
+            width: 80vw; max-width: 320px; height: 80vw; max-height: 320px;
+            background: url('/static/images/unnamed3.png') no-repeat center; background-size: contain;
+            border-radius: 50%; border: 4px solid rgba(0, 212, 255, 0.3);
+            box-shadow: 0 0 40px rgba(0, 212, 255, 0.2); cursor: pointer; 
+            transition: transform 0.05s; outline: none; z-index: 2;
         }
         #btn:active { transform: scale(0.95); box-shadow: 0 0 60px var(--neon); }
 
-        .side-menu {
-            position: absolute;
-            right: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            z-index: 3;
-        }
-        .side-item {
-            width: 90px;
-            padding: 10px 5px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(0, 212, 255, 0.2);
-            border-radius: 8px;
-            backdrop-filter: blur(5px);
-            font-size: 9px;
-            text-transform: uppercase;
-            text-align: center;
-            cursor: pointer;
-        }
+        .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 12px; z-index: 3; }
+        .side-item { width: 90px; padding: 10px 5px; background: rgba(255,255,255,0.05); border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 8px; backdrop-filter: blur(5px); font-size: 9px; text-transform: uppercase; text-align: center; cursor: pointer; }
 
-        .energy-container {
-            width: 100%;
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .energy-bar {
-            width: 80%;
-            height: 8px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 4px;
-            margin: 10px auto;
-            overflow: hidden;
-        }
-        .energy-fill {
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, var(--neon-secondary), var(--neon));
-            box-shadow: 0 0 10px var(--neon-secondary);
-            transition: width 0.3s;
-        }
+        .energy-container { width: 100%; text-align: center; margin-bottom: 20px; }
+        .energy-bar { width: 80%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; margin: 10px auto; overflow: hidden; }
+        .energy-fill { width: 100%; height: 100%; background: linear-gradient(90deg, var(--neon-secondary), var(--neon)); box-shadow: 0 0 10px var(--neon-secondary); transition: width 0.3s; }
 
-        /* NAVIGATION BUTTONS (FROM SCREENSHOTS) */
-        .bottom-nav {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            width: 100%;
-            margin-bottom: 20px;
-        }
-        .nav-card {
-            background: var(--card-bg);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 15px 5px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            font-size: 11px;
-            font-weight: bold;
-            letter-spacing: 1px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
+        .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; margin-bottom: 20px; }
+        .nav-card { background: var(--card-bg); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 15px 5px; display: flex; flex-direction: column; align-items: center; font-size: 11px; font-weight: bold; letter-spacing: 1px; cursor: pointer; transition: all 0.2s; }
         .nav-card:active { background: rgba(0, 212, 255, 0.1); border-color: var(--neon); }
 
-        /* MODALS */
-        .overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.7);
-            display: none;
-            z-index: 999;
-            backdrop-filter: blur(8px);
-        }
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; z-index: 999; backdrop-filter: blur(8px); }
         .overlay.active { display: block; }
-
-        .modal {
-            position: fixed;
-            bottom: -100%;
-            left: 0;
-            width: 100%;
-            height: 80%;
-            background: var(--glass);
-            border-top: 2px solid var(--neon);
-            border-radius: 30px 30px 0 0;
-            z-index: 1000;
-            transition: bottom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
-            padding: 25px;
-            box-sizing: border-box;
-            overflow-y: auto;
-        }
+        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 80%; background: var(--glass); border-top: 2px solid var(--neon); border-radius: 30px 30px 0 0; z-index: 1000; transition: bottom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1); padding: 25px; box-sizing: border-box; overflow-y: auto; }
         .modal.active { bottom: 0; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .close-btn { font-size: 28px; cursor: pointer; color: var(--neon); }
 
-        /* SHOP ITEMS STYLE */
+        /* BOT SHOP STYLES */
         .shop-grid { display: flex; flex-direction: column; gap: 12px; }
-        
-        .mine-card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(0, 212, 255, 0.1);
-            border-radius: 18px;
-            padding: 15px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            transition: transform 0.2s;
-        }
-        .mine-card:active { transform: scale(0.98); background: rgba(255,255,255,0.05); }
-
+        .mine-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(0, 212, 255, 0.1); border-radius: 18px; padding: 15px; display: flex; justify-content: space-between; align-items: center; transition: transform 0.2s; }
+        .mine-card.active-bot { border-color: var(--neon-secondary); background: rgba(0, 255, 150, 0.05); }
         .item-info h3 { margin: 0; font-size: 16px; color: var(--neon); }
         .item-info p { margin: 5px 0 0; font-size: 11px; opacity: 0.6; }
+        .buy-ton-btn { background: #0088cc; color: white; border: none; padding: 10px 18px; border-radius: 10px; font-family: 'Orbitron'; font-size: 12px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 136, 204, 0.3); }
+        .buy-ton-btn:disabled { background: #333; box-shadow: none; color: #777; cursor: default; }
 
-        .buy-ton-btn {
-            background: #0088cc;
-            color: white;
-            border: none;
-            padding: 10px 18px;
-            border-radius: 10px;
-            font-family: 'Orbitron';
-            font-size: 12px;
-            font-weight: bold;
-            cursor: pointer;
-            box-shadow: 0 4px 10px rgba(0, 136, 204, 0.3);
-        }
-
-        .buy-btn { 
-            width: 100%; padding: 18px; background: var(--neon); border: none; 
-            border-radius: 15px; color: #000; font-weight: bold; cursor: pointer; 
-            font-family: 'Orbitron'; margin-top: 15px;
-        }
-        .buy-btn:disabled { background: #333; color: #666; }
-
-        .plus-animation { 
-            position: absolute; 
-            color: var(--neon); 
-            font-size: 32px; 
-            font-weight: bold; 
-            animation: float 0.7s ease-out forwards; 
-            pointer-events: none; 
-            text-shadow: 0 0 10px var(--neon); 
-            z-index: 100; 
-        }
-        @keyframes float { 
-            0% { opacity:1; transform: translateY(0) scale(1); } 
-            100% { opacity:0; transform: translateY(-150px) scale(1.5); } 
-        }
+        .plus-animation { position: absolute; color: var(--neon); font-size: 32px; font-weight: bold; animation: float 0.7s ease-out forwards; pointer-events: none; text-shadow: 0 0 10px var(--neon); z-index: 100; }
+        @keyframes float { 0% { opacity:1; transform: translateY(0) scale(1); } 100% { opacity:0; transform: translateY(-150px) scale(1.5); } }
     </style>
 </head>
 <body>
@@ -213,6 +92,7 @@
         <div class="balance-container">
             <div class="balance-label">TOTAL NP POINTS</div>
             <div id="score">0</div>
+            <div id="bot-indicator" style="font-size: 10px; color: var(--neon-secondary); margin-top: 5px; height: 12px;"></div>
         </div>
 
         <div class="play-area">
@@ -225,81 +105,37 @@
         </div>
 
         <div class="energy-container">
-            <div class="energy-bar">
-                <div class="energy-fill" id="energyFill"></div>
-            </div>
+            <div class="energy-bar"><div class="energy-fill" id="energyFill"></div></div>
             <div style="font-size: 10px; opacity: 0.7;">⚡ ENERGY RECHARGING</div>
         </div>
 
         <div class="bottom-nav">
             <div class="nav-card" onclick="openModal('boost')">🚀 BOOST</div>
-            <div class="nav-card" onclick="openModal('mine')">⛏️ MINE</div>
+            <div class="nav-card" onclick="openModal('mine')">🤖 BOT SHOP</div>
             <div class="nav-card" onclick="openModal('stats')">⚙️ STATS</div>
         </div>
     </div>
 
     <div class="overlay" id="overlay" onclick="closeAllModals()"></div>
 
-    <div id="modal-wallet" class="modal">
-        <div class="modal-header"><h2>Wallet</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <p>Подключите кошелек TON для будущих выплат. (Скоро...)</p>
-    </div>
-
-    <div id="modal-friends" class="modal">
-        <div class="modal-header"><h2>Friends</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <p>Приглашайте друзей и получайте 10% от их добычи!</p>
-    </div>
-
-    <div id="modal-tasks" class="modal">
-        <div class="modal-header"><h2>Tasks</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <p>Выполняйте задания, чтобы заработать бонусные NP.</p>
+    <div id="modal-mine" class="modal">
+        <div class="modal-header"><h2>🤖 AUTO-BOTS</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <p style="font-size: 11px; opacity: 0.7; margin-bottom: 20px;">Улучшайте ботов для автоматической добычи очков даже когда вы не в игре!</p>
+        <div class="shop-grid" id="bot-list-container">
+            </div>
     </div>
 
     <div id="modal-boost" class="modal">
         <div class="modal-header"><h2>🚀 Boosters</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
         <div style="text-align: center;">
             <p>Текущая сила клика: <strong style="color:var(--neon-secondary);">+<span id="boost-power-label">1</span></strong></p>
-            <button id="buy-boost-btn" class="buy-btn" onclick="buyBoost()">
-                UPGRADE (Цена: <span id="boost-cost">0</span>)
-            </button>
+            <button id="buy-boost-btn" style="width:100%; padding:18px; background:var(--neon); border:none; border-radius:15px; color:#000; font-weight:bold; font-family:'Orbitron';" onclick="buyBoost()">UPGRADE</button>
         </div>
     </div>
-
-    <div id="modal-mine" class="modal">
-        <div class="modal-header"><h2>⛏️ TON SHOP</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <div class="shop-grid">
-            
-            <div class="mine-card">
-                <div class="item-info">
-                    <h3>Micro Chip</h3>
-                    <p>+500 к каждому клику</p>
-                </div>
-                <button class="buy-ton-btn" onclick="buyWithTon('Micro Chip', 0.5)">0.5 TON</button>
-            </div>
-
-            <div class="mine-card">
-                <div class="item-info">
-                    <h3>Neural Link</h3>
-                    <p>+2,500 к каждому клику</p>
-                </div>
-                <button class="buy-ton-btn" onclick="buyWithTon('Neural Link', 1.5)">1.5 TON</button>
-            </div>
-
-            <div class="mine-card">
-                <div class="item-info">
-                    <h3>Quantum Core</h3>
-                    <p>+10,000 к каждому клику</p>
-                </div>
-                <button class="buy-ton-btn" onclick="buyWithTon('Quantum Core', 5.0)">5.0 TON</button>
-            </div>
-
-        </div>
-    </div>
-
-    <div id="modal-stats" class="modal">
-        <div class="modal-header"><h2>Stats</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <div id="stats-content">Детальная статистика скоро будет доступна.</div>
-    </div>
+    <div id="modal-wallet" class="modal"><div class="modal-header"><h2>Wallet</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><p>TON Wallet (Soon...)</p></div>
+    <div id="modal-friends" class="modal"><div class="modal-header"><h2>Friends</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><p>Приглашайте друзей!</p></div>
+    <div id="modal-tasks" class="modal"><div class="modal-header"><h2>Tasks</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><p>Задания...</p></div>
+    <div id="modal-stats" class="modal"><div class="modal-header"><h2>Stats</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><div id="stats-content">Скоро...</div></div>
 
     <script>
         const tg = window.Telegram.WebApp;
@@ -309,44 +145,87 @@
         let score = 0;
         let pending = 0;
         let clickPower = 1;
+        let botLvl = 0; // Текущий уровень бота
 
-        const scoreEl = document.getElementById('score');
-        const btn = document.getElementById('btn');
+        // Твои уровни из Python
+        const BOT_LEVELS = {
+            0: { name: "Нет бота", price_ton: 0, mult: 0 },
+            1: { name: "Basic Core", price_ton: 1, mult: 1.0 },
+            2: { name: "Advanced AI", price_ton: 2, mult: 1.5 },
+            3: { name: "Neural Master", price_ton: 3, mult: 2.0 },
+            4: { name: "Quantum Mind", price_ton: 5, mult: 2.5 },
+            5: { name: "Cyber God", price_ton: 7, mult: 3.0 }
+        };
 
         const PLAYER_LEVELS = {
             1: { name: "Новичок", price: 0, tap: 1 },
             2: { name: "Стажер", price: 1000, tap: 5 },
             3: { name: "Фрилансер", price: 5000, tap: 15 },
             4: { name: "Специалист", price: 15000, tap: 40 },
-            5: { name: "Менеджер", price: 45000, tap: 100 },
-            6: { name: "Тимлид", price: 120000, tap: 250 },
-            7: { name: "Инвестор", price: 350000, tap: 600 },
-            8: { name: "Миллионер", price: 1000000, tap: 1500 },
-            9: { name: "Владелец ТГ", price: 2500000, tap: 4000 },
-            10: { name: "CEO", price: 6000000, tap: 10000 }
+            5: { name: "Менеджер", price: 45000, tap: 100 }
         };
 
         function updateUI() {
             const currentCfg = PLAYER_LEVELS[clickPower] || PLAYER_LEVELS[1];
-            const nextLvl = clickPower + 1;
-            const nextCfg = PLAYER_LEVELS[nextLvl];
-
             scoreEl.textContent = Math.floor(score).toLocaleString();
             document.getElementById('lvl').textContent = `🏆 ${currentCfg.name} (Lvl ${clickPower})`;
             
-            if (document.getElementById('boost-power-label')) {
-                document.getElementById('boost-power-label').textContent = currentCfg.tap;
+            // Обновляем индикатор бота
+            const indicator = document.getElementById('bot-indicator');
+            if (botLvl > 0) {
+                indicator.textContent = `🤖 BOT LVL ${botLvl} ACTIVE (x${BOT_LEVELS[botLvl].mult})`;
             }
-            
-            const costEl = document.getElementById('boost-cost');
-            const buyBtn = document.getElementById('buy-boost-btn');
-            
-            if (nextCfg) {
-                costEl.textContent = nextCfg.price.toLocaleString();
-                buyBtn.disabled = score < nextCfg.price;
-                buyBtn.style.opacity = score < nextCfg.price ? "0.5" : "1";
-            }
+
+            // Рендерим список в магазине
+            renderBotShop();
         }
+
+        function renderBotShop() {
+            const container = document.getElementById('bot-list-container');
+            container.innerHTML = '';
+
+            Object.entries(BOT_LEVELS).forEach(([lvl, data]) => {
+                if (lvl == 0) return;
+                const isBought = botLvl >= lvl;
+                const card = document.createElement('div');
+                card.className = `mine-card ${botLvl == lvl ? 'active-bot' : ''}`;
+                card.innerHTML = `
+                    <div class="item-info">
+                        <h3>${data.name}</h3>
+                        <p>Доход: x${data.mult} к пассиву</p>
+                    </div>
+                    ${isBought ? 
+                        '<span style="color:var(--neon-secondary); font-size:10px;">АКТИВНО</span>' : 
+                        `<button class="buy-ton-btn" onclick="buyBot(${lvl}, ${data.price_ton})">${data.price_ton} TON</button>`
+                    }
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function buyBot(lvl, price) {
+            tg.showConfirm(`Купить ${BOT_LEVELS[lvl].name} за ${price} TON?`, async (ok) => {
+                if (ok) {
+                    try {
+                        const r = await fetch('/api/buy_bot', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ user_id: userId, target_lvl: lvl })
+                        });
+                        const d = await r.json();
+                        if (d.status === 'ok') {
+                            botLvl = d.new_bot_lvl;
+                            updateUI();
+                            tg.showAlert("Бот успешно активирован!");
+                        }
+                    } catch (e) { tg.showAlert("Ошибка соединения с сервером"); }
+                }
+            });
+        }
+
+        // Остальная логика (клики, модалки)
+        const scoreEl = document.getElementById('score');
+        const btn = document.getElementById('btn');
 
         function openModal(id) {
             document.getElementById('overlay').classList.add('active');
@@ -358,35 +237,6 @@
         function closeAllModals() {
             document.getElementById('overlay').classList.remove('active');
             document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
-        }
-
-        async function buyBoost() {
-            const next = clickPower + 1;
-            if (!PLAYER_LEVELS[next] || score < PLAYER_LEVELS[next].price) return;
-            
-            try {
-                const r = await fetch('/api/buy_boost', { 
-                    method: 'POST', 
-                    headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({ user_id: userId }) 
-                });
-                const d = await r.json();
-                if (d.status === 'ok') {
-                    score = d.new_balance;
-                    clickPower = d.new_lvl;
-                    updateUI();
-                    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-                }
-            } catch (e) { tg.showAlert("Сервер недоступен"); }
-        }
-
-        function buyWithTon(item, price) {
-            tg.showConfirm(`Купить ${item} за ${price} TON?`, (ok) => {
-                if (ok) {
-                    tg.sendData(JSON.stringify({ action: "buy_ton", item, price }));
-                    closeAllModals();
-                }
-            });
         }
 
         btn.addEventListener('touchstart', (e) => {
@@ -411,6 +261,16 @@
             setTimeout(() => p.remove(), 700);
         }
 
+        // Пассивный доход от бота (визуальный)
+        setInterval(() => {
+            if (botLvl > 0) {
+                const income = BOT_LEVELS[botLvl].mult;
+                score += income / 10; // Начисляем плавно
+                updateUI();
+            }
+        }, 1000);
+
+        // Синхронизация кликов
         setInterval(async () => {
             if (pending > 0) {
                 const s = pending; pending = 0;
@@ -430,11 +290,11 @@
                 const d = await r.json();
                 score = d.balance || 0;
                 clickPower = d.click_lvl || 1;
+                botLvl = d.bot_lvl || 0; // Загружаем уровень бота из базы
                 updateUI();
                 document.getElementById('game').style.opacity = '1';
             } catch (e) { 
-                updateUI();
-                document.getElementById('game').style.opacity = '1';
+                document.getElementById('game').style.opacity = '1'; 
             }
         }
 
