@@ -22,6 +22,8 @@
         .side-item { width: 85px; padding: 10px 5px; background: rgba(255,255,255,0.05); border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 8px; backdrop-filter: blur(5px); font-size: 9px; text-align: center; cursor: pointer; }
         .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; margin-bottom: 20px; }
         .nav-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 15px 5px; text-align: center; font-size: 10px; cursor: pointer; }
+        
+        /* Modals */
         .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; z-index: 999; backdrop-filter: blur(4px); }
         .overlay.active { display: block; }
         .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 70%; background: var(--glass); border-top: 2px solid var(--neon); border-radius: 30px 30px 0 0; z-index: 1000; transition: bottom 0.4s ease; padding: 30px; box-sizing: border-box; }
@@ -38,6 +40,7 @@
     <div class="game-container" id="game" style="opacity:0">
         <div class="header"><div class="logo"></div><span id="lvl">🏆 Level 1</span></div>
         <div class="balance-container"><div style="font-size:10px; opacity:0.7">TOTAL NP POINTS</div><div id="score">0</div></div>
+        
         <div class="play-area">
             <button id="btn"></button>
             <div class="side-menu">
@@ -45,6 +48,7 @@
                 <div class="side-item" onclick="openModal('tasks')">Tasks</div>
             </div>
         </div>
+
         <div class="bottom-nav">
             <div class="nav-card" onclick="openModal('boost')">🚀 BOOST</div>
             <div class="nav-card" onclick="openModal('mine')">⛏️ MINE</div>
@@ -57,38 +61,48 @@
     <div id="modal-boost" class="modal">
         <div class="modal-header"><h2>Boosters</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
         <div class="modal-content">
-            <p style="text-align:center">Увеличьте силу клика. Текущий бонус: +<span id="boost-pwr">1</span></p>
-            <button onclick="buyBoost()" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; color:#000; font-weight:bold; cursor:pointer; font-family:'Orbitron'">
-                КУПИТЬ UPGRADE (Цена: <span id="boost-cost">500</span>)
+            <p style="text-align: center;">Уровень клика: +<span id="boost-power-val">1</span></p>
+            <button id="boost-btn-main" onclick="buyBoost()" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; color:#000; font-weight:bold; cursor:pointer; font-family:'Orbitron'">
+                КУПИТЬ UPGRADE (Цена: <span id="boost-cost-display">500</span>)
             </button>
         </div>
     </div>
 
     <div id="modal-stats" class="modal">
-        <div class="modal-header"><h2>Stats</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-header"><h2>Statistics</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
         <div class="modal-content">
-            <div class="stat-box">Игроков: <div id="s-p" class="stat-val">...</div></div>
-            <div class="stat-box">Всего NP: <div id="s-t" class="stat-val">...</div></div>
+            <div class="stat-box">Твой ID: <span id="stat-my-id">...</span></div>
+            <div class="stat-box">Игроков: <div id="stat-players" class="stat-val">...</div></div>
+            <div class="stat-box">Всего NP: <div id="stat-total-np" class="stat-val">...</div></div>
         </div>
     </div>
+
+    <div id="modal-friends" class="modal"><div class="modal-header"><h2>Friends</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div></div>
+    <div id="modal-tasks" class="modal"><div class="modal-header"><h2>Tasks</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div></div>
+    <div id="modal-mine" class="modal"><div class="modal-header"><h2>Mining</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div></div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
         const userId = String(tg.initDataUnsafe?.user?.id || "999");
         let score = 0, pending = 0, clickPower = 1;
+        const scoreEl = document.getElementById('score');
 
         async function openModal(id) {
             document.getElementById('overlay').classList.add('active');
-            document.getElementById('modal-'+id).classList.add('active');
-            if(id === 'stats') {
-                const r = await fetch('/api/all_stats'); const d = await r.json();
-                document.getElementById('s-p').textContent = d.total_players;
-                document.getElementById('s-t').textContent = d.total_balance.toLocaleString();
+            document.getElementById('modal-' + id).classList.add('active');
+            if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+
+            if (id === 'stats') {
+                document.getElementById('stat-my-id').textContent = userId;
+                const r = await fetch('/api/all_stats');
+                const d = await r.json();
+                document.getElementById('stat-players').textContent = d.total_players;
+                document.getElementById('stat-total-np').textContent = d.total_balance.toLocaleString();
             }
-            if(id === 'boost') {
-                document.getElementById('boost-pwr').textContent = clickPower;
-                document.getElementById('boost-cost').textContent = clickPower * 500;
+            if (id === 'boost') {
+                document.getElementById('boost-power-val').textContent = clickPower;
+                document.getElementById('boost-cost-display').textContent = (clickPower * 500);
             }
         }
 
@@ -98,44 +112,61 @@
         }
 
         async function buyBoost() {
-            const r = await fetch('/api/buy_boost', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user_id: userId})});
-            const d = await r.json();
-            if(d.status === 'ok') {
-                score = d.new_balance; clickPower = d.new_lvl;
-                document.getElementById('score').textContent = score.toLocaleString();
-                document.getElementById('lvl').textContent = '🏆 Level ' + clickPower;
-                closeAllModals();
-                if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-            } else { alert(d.error); }
+            const btnB = document.getElementById('boost-btn-main');
+            btnB.style.opacity = "0.5";
+            try {
+                const r = await fetch('/api/buy_boost', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ user_id: userId })
+                });
+                const d = await r.json();
+                if (d.status === 'ok') {
+                    score = d.new_balance; clickPower = d.new_lvl;
+                    scoreEl.textContent = score.toLocaleString();
+                    document.getElementById('lvl').textContent = `🏆 Level ${clickPower}`;
+                    document.getElementById('boost-power-val').textContent = clickPower;
+                    document.getElementById('boost-cost-display').textContent = d.next_cost;
+                    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+                } else { alert(d.error); }
+            } catch (e) { alert("Ошибка сети"); }
+            finally { btnB.style.opacity = "1"; }
         }
 
         async function loadData() {
-            const r = await fetch(`/api/balance/${userId}?t=${Date.now()}`);
-            const d = await r.json();
-            score = d.balance; clickPower = d.click_lvl;
-            document.getElementById('score').textContent = score.toLocaleString();
-            document.getElementById('lvl').textContent = '🏆 Level ' + clickPower;
-            document.getElementById('game').style.opacity = '1';
+            try {
+                const r = await fetch(`/api/balance/${userId}?t=${Date.now()}`);
+                const d = await r.json();
+                score = d.balance || 0;
+                clickPower = d.click_lvl || 1;
+                scoreEl.textContent = score.toLocaleString();
+                document.getElementById('lvl').textContent = `🏆 Level ${clickPower}`;
+                document.getElementById('game').style.opacity = '1';
+            } catch (e) { document.getElementById('game').style.opacity = '1'; }
         }
 
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
-            if(document.getElementById('overlay').classList.contains('active')) return;
-            for(let t of e.changedTouches) {
+            if (document.getElementById('overlay').classList.contains('active')) return;
+            for (let t of e.changedTouches) {
                 score += clickPower; pending += clickPower;
                 const p = document.createElement('div');
-                p.className = 'plus-animation'; p.textContent = '+'+clickPower;
-                p.style.left = t.pageX+'px'; p.style.top = t.pageY+'px';
+                p.className = 'plus-animation'; p.textContent = '+' + clickPower;
+                p.style.left = t.pageX + 'px'; p.style.top = t.pageY + 'px';
                 document.body.appendChild(p); setTimeout(() => p.remove(), 700);
             }
-            document.getElementById('score').textContent = score.toLocaleString();
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+            scoreEl.textContent = score.toLocaleString();
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
         });
 
         setInterval(async () => {
-            if(pending > 0) {
+            if (pending > 0) {
                 const s = pending; pending = 0;
-                await fetch('/api/clicks', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user_id: userId, clicks: s})});
+                await fetch('/api/clicks', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ user_id: userId, clicks: s })
+                });
             }
         }, 2000);
 
