@@ -10,6 +10,7 @@
         :root { --neon: #00d4ff; --neon-secondary: #00ff96; --bg: #050a1a; --glass: rgba(10, 25, 47, 0.95); }
         body { margin: 0; background: radial-gradient(circle at center, #0a192f 0%, #050a1a 100%); height: 100vh; font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; user-select: none; display: flex; justify-content: center; }
         
+        /* Экран загрузки */
         #loading-screen { position: fixed; top:0; left:0; width:100%; height:100%; background: var(--bg); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; transition: opacity 0.5s; }
         .spinner { width: 40px; height: 40px; border: 4px solid rgba(0, 212, 255, 0.1); border-top: 4px solid var(--neon); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -17,6 +18,7 @@
         .game-container { position: relative; width: 100%; max-width: 500px; height: 100vh; display: none; flex-direction: column; align-items: center; padding: 20px; box-sizing: border-box; }
         
         .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+        /* Запасной цвет фона для лого, если картинка не найдена */
         .logo { width: 50px; height: 50px; background: #1a2a4a url('/static/images/unnamed4.png') no-repeat center; background-size: cover; border-radius: 12px; box-shadow: 0 0 15px var(--neon); }
         #lvl { font-size: 14px; text-shadow: 0 0 10px var(--neon); color: var(--neon); }
         
@@ -24,6 +26,7 @@
         #score { font-size: 44px; color: #fff; text-shadow: 0 0 20px var(--neon); font-weight: bold; }
         
         .play-area { position: relative; flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; }
+        /* Запасной цвет фона для кнопки, если картинка не найдена */
         #btn { 
             width: 70vw; max-width: 280px; height: 70vw; max-height: 280px; 
             background: #112244 url('/static/images/unnamed3.png') no-repeat center; 
@@ -41,11 +44,13 @@
         
         .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; z-index: 999; backdrop-filter: blur(5px); }
         .overlay.active { display: block; }
-        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 75%; background: var(--glass); border-top: 2px solid var(--neon); border-radius: 30px 30px 0 0; z-index: 1000; transition: bottom 0.4s ease; padding: 30px; box-sizing: border-box; overflow-y: auto; }
+        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 75%; background: var(--glass); border-top: 2px solid var(--neon); border-radius: 30px 30px 0 0; z-index: 1000; transition: bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1); padding: 30px; box-sizing: border-box; overflow-y: auto; }
         .modal.active { bottom: 0; }
         .close-btn { font-size: 30px; color: var(--neon); float: right; cursor: pointer; }
-        .btn-action { width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; color:#000; font-weight:bold; cursor:pointer; font-family:'Orbitron'; margin-top: 15px; }
+        .btn-action { width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; color:#000; font-weight:bold; cursor:pointer; font-family:'Orbitron'; margin-top: 15px; transition: opacity 0.2s; }
+        .btn-action:active { opacity: 0.7; }
 
+        .stat-box { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; margin-bottom: 10px; text-align: center; border: 1px solid rgba(0, 212, 255, 0.1); }
         .plus-animation { position: absolute; color: var(--neon); font-size: 32px; font-weight: bold; animation: float 0.7s ease-out forwards; pointer-events: none; z-index: 100; text-shadow: 0 0 10px var(--neon); }
         @keyframes float { 0% { opacity:1; transform: translateY(0); } 100% { opacity:0; transform: translateY(-100px); } }
     </style>
@@ -84,9 +89,26 @@
 
     <div class="overlay" id="overlay" onclick="closeAllModals()"></div>
 
-    <div id="modal-boost" class="modal"><span class="close-btn" onclick="closeAllModals()">&times;</span><h2>Boost</h2><div id="boost-power-val">Level 1</div><button class="btn-action" onclick="alert('Soon!')">UPGRADE</button></div>
-    <div id="modal-stats" class="modal"><span class="close-btn" onclick="closeAllModals()">&times;</span><h2>Stats</h2><p id="stat-info">Loading...</p></div>
-    <div id="modal-friends" class="modal"><span class="close-btn" onclick="closeAllModals()">&times;</span><h2>Friends</h2><button class="btn-action" onclick="shareInvite()">INVITE FRIEND</button></div>
+    <div id="modal-boost" class="modal">
+        <span class="close-btn" onclick="closeAllModals()">&times;</span>
+        <h2>Boost</h2>
+        <div class="stat-box">
+            <p>Текущий клик: <span id="boost-power-label" style="color:var(--neon)">1</span></p>
+            <button class="btn-action" id="buy-boost-btn" onclick="buyBoost()">
+                UPGRADE (Цена: <span id="boost-cost">500</span>)
+            </button>
+        </div>
+    </div>
+
+    <div id="modal-stats" class="modal">
+        <span class="close-btn" onclick="closeAllModals()">&times;</span>
+        <h2>Stats</h2>
+        <div class="stat-box">ID: <span id="stat-uid">...</span></div>
+        <div class="stat-box">Игроков: <div id="stat-players" style="color:var(--neon-secondary)">...</div></div>
+        <div class="stat-box">Всего NP: <div id="stat-total" style="color:var(--neon-secondary)">...</div></div>
+    </div>
+
+    <div id="modal-friends" class="modal"><span class="close-btn" onclick="closeAllModals()">&times;</span><h2>Friends</h2><p>+5,000 NP за друга!</p><button class="btn-action" onclick="shareInvite()">INVITE FRIEND</button></div>
     <div id="modal-tasks" class="modal"><span class="close-btn" onclick="closeAllModals()">&times;</span><h2>Tasks</h2><p>Coming soon...</p></div>
     <div id="modal-mine" class="modal"><span class="close-btn" onclick="closeAllModals()">&times;</span><h2>Mining</h2><p>Passive income is coming soon!</p></div>
 
@@ -100,22 +122,26 @@
         const scoreEl = document.getElementById('score');
 
         async function loadData() {
-            // Принудительно показываем игру через 3 сек, если сервер упал
+            // Если API не ответит за 3 секунды, всё равно покажем игру
             const fallback = setTimeout(showGame, 3000);
-
             try {
                 const r = await fetch(`/api/balance/${userId}?t=${Date.now()}`);
                 if(r.ok) {
                     const d = await r.json();
                     score = d.balance || 0;
                     clickPower = d.click_lvl || 1;
-                    scoreEl.textContent = Math.floor(score).toLocaleString();
-                    document.getElementById('lvl').textContent = `🏆 Level ${clickPower}`;
+                    updateUI();
                 }
             } catch (e) { console.error("API Error"); }
-            
             clearTimeout(fallback);
             showGame();
+        }
+
+        function updateUI() {
+            scoreEl.textContent = Math.floor(score).toLocaleString();
+            document.getElementById('lvl').textContent = `🏆 Level ${clickPower}`;
+            document.getElementById('boost-power-label').textContent = clickPower;
+            document.getElementById('boost-cost').textContent = (clickPower * 500);
         }
 
         function showGame() {
@@ -126,10 +152,44 @@
             }, 500);
         }
 
-        function openModal(id) {
+        async function openModal(id) {
             document.getElementById('overlay').classList.add('active');
             document.getElementById('modal-' + id).classList.add('active');
             if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+
+            if (id === 'stats') {
+                document.getElementById('stat-uid').textContent = userId;
+                try {
+                    const r = await fetch('/api/all_stats');
+                    const d = await r.json();
+                    document.getElementById('stat-players').textContent = d.total_players;
+                    document.getElementById('stat-total').textContent = d.total_balance.toLocaleString();
+                } catch(e) { console.log("Stats error"); }
+            }
+        }
+
+        async function buyBoost() {
+            const btn = document.getElementById('buy-boost-btn');
+            btn.style.opacity = '0.5';
+            btn.disabled = true;
+            try {
+                const r = await fetch('/api/buy_boost', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ user_id: userId })
+                });
+                const d = await r.json();
+                if (d.status === 'ok') {
+                    score = d.new_balance;
+                    clickPower = d.new_lvl;
+                    updateUI();
+                    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+                } else {
+                    tg.showAlert(d.error || "Недостаточно средств");
+                }
+            } catch (e) { tg.showAlert("Ошибка сети"); }
+            btn.style.opacity = '1';
+            btn.disabled = false;
         }
 
         function closeAllModals() {
@@ -139,7 +199,7 @@
 
         function shareInvite() {
             const botLink = `https://t.me/UltraMind_AI_bot?start=${userId}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(botLink)}&text=Join Neural Pulse!`);
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(botLink)}&text=Заходи в Neural Pulse!`);
         }
 
         document.getElementById('btn').addEventListener('touchstart', (e) => {
