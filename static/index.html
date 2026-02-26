@@ -12,6 +12,7 @@
             --neon-secondary: #00ff96;
             --bg: #050a1a; 
             --glass: rgba(10, 25, 47, 0.95);
+            --card-bg: rgba(255, 255, 255, 0.03);
         }
         
         body { 
@@ -130,6 +131,7 @@
             transition: width 0.3s;
         }
 
+        /* NAVIGATION BUTTONS (FROM SCREENSHOTS) */
         .bottom-nav {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -138,17 +140,20 @@
             margin-bottom: 20px;
         }
         .nav-card {
-            background: rgba(255,255,255,0.05);
+            background: var(--card-bg);
             border: 1px solid rgba(255,255,255,0.1);
             border-radius: 12px;
             padding: 15px 5px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            font-size: 10px;
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: 1px;
             cursor: pointer;
+            transition: all 0.2s;
         }
-        .nav-card:active { background: rgba(0, 212, 255, 0.1); }
+        .nav-card:active { background: rgba(0, 212, 255, 0.1); border-color: var(--neon); }
 
         /* MODALS */
         .overlay {
@@ -157,7 +162,7 @@
             background: rgba(0,0,0,0.7);
             display: none;
             z-index: 999;
-            backdrop-filter: blur(4px);
+            backdrop-filter: blur(8px);
         }
         .overlay.active { display: block; }
 
@@ -166,13 +171,13 @@
             bottom: -100%;
             left: 0;
             width: 100%;
-            height: 75%;
+            height: 80%;
             background: var(--glass);
             border-top: 2px solid var(--neon);
             border-radius: 30px 30px 0 0;
             z-index: 1000;
             transition: bottom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
-            padding: 30px;
+            padding: 25px;
             box-sizing: border-box;
             overflow-y: auto;
         }
@@ -180,23 +185,43 @@
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .close-btn { font-size: 28px; cursor: pointer; color: var(--neon); }
 
-        .buy-btn { 
-            width: 100%; padding: 15px; background: var(--neon); border: none; 
-            border-radius: 12px; color: #000; font-weight: bold; cursor: pointer; 
-            font-family: 'Orbitron'; margin-top: 15px; transition: all 0.2s;
-        }
-        .buy-btn:disabled { background: #444; color: #888; cursor: not-allowed; }
-
+        /* SHOP ITEMS STYLE */
+        .shop-grid { display: flex; flex-direction: column; gap: 12px; }
+        
         .mine-card {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(0, 212, 255, 0.2);
-            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(0, 212, 255, 0.1);
+            border-radius: 18px;
             padding: 15px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
+            transition: transform 0.2s;
         }
+        .mine-card:active { transform: scale(0.98); background: rgba(255,255,255,0.05); }
+
+        .item-info h3 { margin: 0; font-size: 16px; color: var(--neon); }
+        .item-info p { margin: 5px 0 0; font-size: 11px; opacity: 0.6; }
+
+        .buy-ton-btn {
+            background: #0088cc;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-family: 'Orbitron';
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0, 136, 204, 0.3);
+        }
+
+        .buy-btn { 
+            width: 100%; padding: 18px; background: var(--neon); border: none; 
+            border-radius: 15px; color: #000; font-weight: bold; cursor: pointer; 
+            font-family: 'Orbitron'; margin-top: 15px;
+        }
+        .buy-btn:disabled { background: #333; color: #666; }
 
         .plus-animation { 
             position: absolute; 
@@ -253,22 +278,22 @@
 
     <div id="modal-wallet" class="modal">
         <div class="modal-header"><h2>Wallet</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <div class="modal-content">Подключите кошелек TON для будущих выплат. (Скоро...)</div>
+        <p>Подключите кошелек TON для будущих выплат. (Скоро...)</p>
     </div>
 
     <div id="modal-friends" class="modal">
         <div class="modal-header"><h2>Friends</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <div class="modal-content">Приглашайте друзей и получайте 10% от их добычи!</div>
+        <p>Приглашайте друзей и получайте 10% от их добычи!</p>
     </div>
 
     <div id="modal-tasks" class="modal">
         <div class="modal-header"><h2>Tasks</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <div class="modal-content">Выполняйте простые задания, чтобы заработать бонусные NP.</div>
+        <p>Выполняйте задания, чтобы заработать бонусные NP.</p>
     </div>
 
     <div id="modal-boost" class="modal">
-        <div class="modal-header"><h2>Boosters</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <div class="modal-content" style="text-align: center;">
+        <div class="modal-header"><h2>🚀 Boosters</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div style="text-align: center;">
             <p>Текущая сила клика: <strong style="color:var(--neon-secondary);">+<span id="boost-power-label">1</span></strong></p>
             <button id="buy-boost-btn" class="buy-btn" onclick="buyBoost()">
                 UPGRADE (Цена: <span id="boost-cost">0</span>)
@@ -278,21 +303,38 @@
 
     <div id="modal-mine" class="modal">
         <div class="modal-header"><h2>⛏️ TON SHOP</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <div class="modal-content">
+        <div class="shop-grid">
+            
             <div class="mine-card">
-                <div><h3>Micro Chip</h3><p>+500 к клику</p></div>
-                <button onclick="buyWithTon('Micro Chip', 0.5)" style="background:#0088cc; color:white; border:none; padding:10px; border-radius:8px;">0.5 TON</button>
+                <div class="item-info">
+                    <h3>Micro Chip</h3>
+                    <p>+500 к каждому клику</p>
+                </div>
+                <button class="buy-ton-btn" onclick="buyWithTon('Micro Chip', 0.5)">0.5 TON</button>
             </div>
+
             <div class="mine-card">
-                <div><h3>Neural Link</h3><p>+2,000 к клику</p></div>
-                <button onclick="buyWithTon('Neural Link', 1.5)" style="background:#0088cc; color:white; border:none; padding:10px; border-radius:8px;">1.5 TON</button>
+                <div class="item-info">
+                    <h3>Neural Link</h3>
+                    <p>+2,500 к каждому клику</p>
+                </div>
+                <button class="buy-ton-btn" onclick="buyWithTon('Neural Link', 1.5)">1.5 TON</button>
             </div>
+
+            <div class="mine-card">
+                <div class="item-info">
+                    <h3>Quantum Core</h3>
+                    <p>+10,000 к каждому клику</p>
+                </div>
+                <button class="buy-ton-btn" onclick="buyWithTon('Quantum Core', 5.0)">5.0 TON</button>
+            </div>
+
         </div>
     </div>
 
     <div id="modal-stats" class="modal">
         <div class="modal-header"><h2>Stats</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <div class="modal-content" id="stats-content">Детальная статистика скоро будет доступна.</div>
+        <div id="stats-content">Детальная статистика скоро будет доступна.</div>
     </div>
 
     <script>
@@ -307,7 +349,6 @@
         const scoreEl = document.getElementById('score');
         const btn = document.getElementById('btn');
 
-        // Конфигурация уровней
         const PLAYER_LEVELS = {
             1: { name: "Новичок", price: 0, tap: 1 },
             2: { name: "Стажер", price: 1000, tap: 5 },
@@ -340,18 +381,14 @@
                 costEl.textContent = nextCfg.price.toLocaleString();
                 buyBtn.disabled = score < nextCfg.price;
                 buyBtn.style.opacity = score < nextCfg.price ? "0.5" : "1";
-                buyBtn.style.display = "block";
-            } else {
-                costEl.textContent = "MAX";
-                buyBtn.style.display = "none";
             }
         }
 
         function openModal(id) {
             document.getElementById('overlay').classList.add('active');
             document.getElementById('modal-' + id).classList.add('active');
-            updateUI(); // Обновляем состояние кнопок при открытии
-            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            updateUI();
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
         }
 
         function closeAllModals() {
@@ -390,8 +427,6 @@
 
         btn.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            if (document.getElementById('overlay').classList.contains('active')) return;
-
             const tap = PLAYER_LEVELS[clickPower]?.tap || 1;
             for (let t of e.changedTouches) {
                 score += tap;
@@ -399,7 +434,7 @@
                 spawnPlus(t.pageX, t.pageY, tap);
             }
             updateUI();
-            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
         });
 
         function spawnPlus(x, y, val) {
