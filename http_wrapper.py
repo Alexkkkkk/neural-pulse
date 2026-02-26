@@ -69,9 +69,11 @@ app.add_middleware(
 )
 
 # МОНТИРОВАНИЕ СТАТИКИ
-# Теперь файлы unnamed3.jpg и unnamed4.jpg будут доступны по адресу /static/images/
+# Теперь файлы unnamed3.png и unnamed4.png будут доступны по адресу /static/images/
 if IMAGES_DIR.exists():
     app.mount("/static/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
+    logger.info(f"🖼️ [STATIC]: Картинки PNG подключены из {IMAGES_DIR}")
+
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
@@ -137,7 +139,7 @@ async def admin_reset(message: types.Message):
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute("DELETE FROM users")
         conn.commit()
-    await message.answer("🧨 <b>БАЗА ДАННЫХ ОЧИЩЕНА!</b>", parse_mode="HTML")
+    await message.answer("🧨 <b>БАЗА ДАННЫХ ПОЛНОСТЬЮ ОЧИЩЕНА!</b>", parse_mode="HTML")
 
 @dp.message(F.text == "/start")
 async def start_handler(message: types.Message):
