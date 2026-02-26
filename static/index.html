@@ -34,22 +34,23 @@
         }
 
         .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
-        .logo { width: 50px; height: 50px; background: url('/static/images/unnamed4.png') no-repeat center; background-size: cover; border-radius: 12px; box-shadow: 0 0 15px var(--neon); }
+        .logo { width: 50px; height: 50px; background: #111; border-radius: 12px; box-shadow: 0 0 15px var(--neon); border: 1px solid var(--neon); }
         #lvl { font-size: 14px; text-shadow: 0 0 10px var(--neon); color: var(--neon); font-weight: bold; }
 
         .balance-container { text-align: center; margin-top: 20px; }
         .balance-label { font-size: 12px; color: rgba(255,255,255,0.7); letter-spacing: 2px; }
-        #score { font-size: 48px; color: #fff; text-shadow: 0 0 20px var(--neon); font-weight: bold; margin-top: 5px; }
+        #score { font-size: 42px; color: #fff; text-shadow: 0 0 20px var(--neon); font-weight: bold; margin-top: 5px; }
 
         .play-area { position: relative; flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; }
         #btn { 
-            width: 80vw; max-width: 320px; height: 80vw; max-height: 320px;
-            background: url('/static/images/unnamed3.png') no-repeat center; background-size: contain;
+            width: 75vw; max-width: 300px; height: 75vw; max-height: 300px;
+            background: radial-gradient(circle, var(--neon) 0%, transparent 70%);
+            background-color: rgba(0, 212, 255, 0.1);
             border-radius: 50%; border: 4px solid rgba(0, 212, 255, 0.3);
             box-shadow: 0 0 40px rgba(0, 212, 255, 0.2); cursor: pointer; 
             transition: transform 0.05s; outline: none; z-index: 2;
         }
-        #btn:active { transform: scale(0.95); box-shadow: 0 0 60px var(--neon); }
+        #btn:active { transform: scale(0.92); box-shadow: 0 0 60px var(--neon); }
 
         .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 12px; z-index: 3; }
         .side-item { width: 90px; padding: 10px 5px; background: rgba(255,255,255,0.05); border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 8px; backdrop-filter: blur(5px); font-size: 9px; text-transform: uppercase; text-align: center; cursor: pointer; }
@@ -69,24 +70,19 @@
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .close-btn { font-size: 28px; cursor: pointer; color: var(--neon); }
 
-        /* BOT SHOP STYLES */
-        .shop-grid { display: flex; flex-direction: column; gap: 12px; }
-        .mine-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(0, 212, 255, 0.1); border-radius: 18px; padding: 15px; display: flex; justify-content: space-between; align-items: center; transition: transform 0.2s; }
-        .mine-card.active-bot { border-color: var(--neon-secondary); background: rgba(0, 255, 150, 0.05); }
-        .item-info h3 { margin: 0; font-size: 16px; color: var(--neon); }
-        .item-info p { margin: 5px 0 0; font-size: 11px; opacity: 0.6; }
-        .buy-ton-btn { background: #0088cc; color: white; border: none; padding: 10px 18px; border-radius: 10px; font-family: 'Orbitron'; font-size: 12px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 136, 204, 0.3); }
-        .buy-ton-btn:disabled { background: #333; box-shadow: none; color: #777; cursor: default; }
+        .mine-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(0, 212, 255, 0.1); border-radius: 18px; padding: 15px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .item-info h3 { margin: 0; font-size: 14px; color: var(--neon); }
+        .buy-ton-btn { background: #0088cc; color: white; border: none; padding: 10px 15px; border-radius: 10px; font-family: 'Orbitron'; font-size: 10px; font-weight: bold; cursor: pointer; }
 
-        .plus-animation { position: absolute; color: var(--neon); font-size: 32px; font-weight: bold; animation: float 0.7s ease-out forwards; pointer-events: none; text-shadow: 0 0 10px var(--neon); z-index: 100; }
-        @keyframes float { 0% { opacity:1; transform: translateY(0) scale(1); } 100% { opacity:0; transform: translateY(-150px) scale(1.5); } }
+        .plus-animation { position: absolute; color: var(--neon); font-size: 28px; font-weight: bold; animation: float 0.7s ease-out forwards; pointer-events: none; text-shadow: 0 0 10px var(--neon); z-index: 100; }
+        @keyframes float { 0% { opacity:1; transform: translateY(0) scale(1); } 100% { opacity:0; transform: translateY(-120px) scale(1.4); } }
     </style>
 </head>
 <body>
     <div class="game-container" id="game" style="opacity:0">
         <div class="header">
             <div class="logo"></div>
-            <span id="lvl">🏆 Loading...</span>
+            <span id="lvl">🏆 Новичок (Lvl 1)</span>
         </div>
 
         <div class="balance-container">
@@ -105,147 +101,128 @@
         </div>
 
         <div class="energy-container">
-            <div class="energy-bar"><div class="energy-fill" id="energyFill"></div></div>
+            <div class="energy-bar"><div class="energy-fill" id="energyFill" style="width: 100%;"></div></div>
             <div style="font-size: 10px; opacity: 0.7;">⚡ ENERGY RECHARGING</div>
         </div>
 
         <div class="bottom-nav">
-            <div class="nav-card" onclick="openModal('boost')">🚀 BOOST</div>
-            <div class="nav-card" onclick="openModal('mine')">🤖 BOT SHOP</div>
+            <div class="nav-card" onclick="openModal('boost')">🚀 UPGRADE</div>
+            <div class="nav-card" onclick="openModal('mine')">🤖 BOTS</div>
             <div class="nav-card" onclick="openModal('stats')">⚙️ STATS</div>
         </div>
     </div>
 
     <div class="overlay" id="overlay" onclick="closeAllModals()"></div>
 
-    <div id="modal-mine" class="modal">
-        <div class="modal-header"><h2>🤖 AUTO-BOTS</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <p style="font-size: 11px; opacity: 0.7; margin-bottom: 20px;">Улучшайте ботов для автоматической добычи очков даже когда вы не в игре!</p>
-        <div class="shop-grid" id="bot-list-container">
-            </div>
-    </div>
-
     <div id="modal-boost" class="modal">
-        <div class="modal-header"><h2>🚀 Boosters</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-header"><h2>🚀 Upgrade Status</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
         <div style="text-align: center;">
-            <p>Текущая сила клика: <strong style="color:var(--neon-secondary);">+<span id="boost-power-label">1</span></strong></p>
-            <button id="buy-boost-btn" style="width:100%; padding:18px; background:var(--neon); border:none; border-radius:15px; color:#000; font-weight:bold; font-family:'Orbitron';" onclick="buyBoost()">UPGRADE</button>
+            <p id="next-lvl-name" style="color: var(--neon); font-size: 18px;"></p>
+            <p>Сила клика будет: <strong id="next-tap-val" style="color:var(--neon-secondary);">+0</strong></p>
+            <button id="buy-upgrade-btn" style="width:100%; padding:18px; background:var(--neon); border:none; border-radius:15px; color:#000; font-weight:bold; font-family:'Orbitron'; margin-top: 20px;" onclick="handleUpgrade()">UPGRADE</button>
+            <p id="upgrade-cost-label" style="margin-top: 15px; font-size: 12px; opacity: 0.6;"></p>
         </div>
     </div>
-    <div id="modal-wallet" class="modal"><div class="modal-header"><h2>Wallet</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><p>TON Wallet (Soon...)</p></div>
-    <div id="modal-friends" class="modal"><div class="modal-header"><h2>Friends</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><p>Приглашайте друзей!</p></div>
-    <div id="modal-tasks" class="modal"><div class="modal-header"><h2>Tasks</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><p>Задания...</p></div>
-    <div id="modal-stats" class="modal"><div class="modal-header"><h2>Stats</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><div id="stats-content">Скоро...</div></div>
+
+    <div id="modal-mine" class="modal">
+        <div class="modal-header"><h2>🤖 TON AUTO-BOTS</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div id="bot-list-container"></div>
+    </div>
+
+    <div id="modal-wallet" class="modal"><div class="modal-header"><h2>Wallet</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><p>TON Wallet Integration Coming Soon...</p></div>
+    <div id="modal-friends" class="modal"><div class="modal-header"><h2>Friends</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><p>Приглашайте друзей и получайте 10% от их добычи!</p></div>
+    <div id="modal-tasks" class="modal"><div class="modal-header"><h2>Tasks</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><p>Выполняйте квесты для получения NP.</p></div>
+    <div id="modal-stats" class="modal"><div class="modal-header"><h2>Stats</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><div id="stats-content"></div></div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
         
-        const userId = String(tg.initDataUnsafe?.user?.id || "999");
+        const userId = String(tg.initDataUnsafe?.user?.id || "dev_user");
         let score = 0;
         let pending = 0;
-        let clickPower = 1;
-        let botLvl = 0; // Текущий уровень бота
+        let playerLevel = 1;
+        let botLvl = 0;
 
-        // Твои уровни из Python
-        const BOT_LEVELS = {
-            0: { name: "Нет бота", price_ton: 0, mult: 0 },
-            1: { name: "Basic Core", price_ton: 1, mult: 1.0 },
-            2: { name: "Advanced AI", price_ton: 2, mult: 1.5 },
-            3: { name: "Neural Master", price_ton: 3, mult: 2.0 },
-            4: { name: "Quantum Mind", price_ton: 5, mult: 2.5 },
-            5: { name: "Cyber God", price_ton: 7, mult: 3.0 }
-        };
-
+        // ВАША ТАБЛИЦА (20 Уровней)
         const PLAYER_LEVELS = {
             1: { name: "Новичок", price: 0, tap: 1 },
             2: { name: "Стажер", price: 1000, tap: 5 },
             3: { name: "Фрилансер", price: 5000, tap: 15 },
             4: { name: "Специалист", price: 15000, tap: 40 },
-            5: { name: "Менеджер", price: 45000, tap: 100 }
+            5: { name: "Менеджер", price: 45000, tap: 100 },
+            6: { name: "Тимлид", price: 120000, tap: 250 },
+            7: { name: "Инвестор", price: 350000, tap: 600 },
+            8: { name: "Миллионер", price: 1000000, tap: 1500 },
+            9: { name: "Владелец ТГ", price: 2500000, tap: 4000 },
+            10: { name: "CEO", price: 6000000, tap: 10000 },
+            11: { name: "Магнат", price: 15000000, tap: 25000 },
+            12: { name: "Крипто-Кит", price: 40000000, tap: 60000 },
+            13: { name: "Мировой Игрок", price: 100000000, tap: 150000 },
+            14: { name: "Теневой Лидер", price: 250000000, tap: 400000 },
+            15: { name: "Хозяин Биржи", price: 700000000, tap: 1000000 },
+            16: { name: "Олигарх", price: 2000000000, tap: 2500000 },
+            17: { name: "Пророк ИИ", price: 5000000000, tap: 6000000 },
+            18: { name: "Колонизатор", price: 12000000000, tap: 15000000 },
+            19: { name: "Архитектор", price: 35000000000, tap: 40000000 },
+            20: { name: "GOD MODE", price: 100000000000, tap: 100000000 }
+        };
+
+        const BOT_CONFIG = {
+            1: { name: "Basic Core", price_ton: 1, mult: 1 },    // 100% от тапа
+            10: { name: "Advanced AI", price_ton: 22, mult: 8.5 }, // 850% от тапа
+            20: { name: "Quantum Mind", price_ton: 100, mult: 30 }  // 3000% от тапа
         };
 
         function updateUI() {
-            const currentCfg = PLAYER_LEVELS[clickPower] || PLAYER_LEVELS[1];
-            scoreEl.textContent = Math.floor(score).toLocaleString();
-            document.getElementById('lvl').textContent = `🏆 ${currentCfg.name} (Lvl ${clickPower})`;
+            const current = PLAYER_LEVELS[playerLevel];
+            const next = PLAYER_LEVELS[playerLevel + 1];
+
+            document.getElementById('score').textContent = Math.floor(score).toLocaleString();
+            document.getElementById('lvl').textContent = `🏆 ${current.name} (Lvl ${playerLevel})`;
             
-            // Обновляем индикатор бота
-            const indicator = document.getElementById('bot-indicator');
-            if (botLvl > 0) {
-                indicator.textContent = `🤖 BOT LVL ${botLvl} ACTIVE (x${BOT_LEVELS[botLvl].mult})`;
+            // Настройка модалки апгрейда
+            if (next) {
+                document.getElementById('next-lvl-name').textContent = `СЛЕДУЮЩИЙ: ${next.name}`;
+                document.getElementById('next-tap-val').textContent = `+${next.tap.toLocaleString()}`;
+                document.getElementById('upgrade-cost-label').textContent = `Стоимость: ${next.price.toLocaleString()} NP`;
+                document.getElementById('buy-upgrade-btn').disabled = score < next.price;
+                document.getElementById('buy-upgrade-btn').style.opacity = score < next.price ? "0.5" : "1";
+            } else {
+                document.getElementById('next-lvl-name').textContent = "МАКСИМАЛЬНЫЙ УРОВЕНЬ";
+                document.getElementById('buy-upgrade-btn').style.display = "none";
             }
 
-            // Рендерим список в магазине
-            renderBotShop();
+            // Индикатор бота
+            const ind = document.getElementById('bot-indicator');
+            if (botLvl > 0) {
+                const income = current.tap * (BOT_CONFIG[botLvl]?.mult || 0);
+                ind.textContent = `🤖 АВТО-ДОХОД: ${income.toLocaleString()} /сек`;
+            }
         }
 
-        function renderBotShop() {
-            const container = document.getElementById('bot-list-container');
-            container.innerHTML = '';
-
-            Object.entries(BOT_LEVELS).forEach(([lvl, data]) => {
-                if (lvl == 0) return;
-                const isBought = botLvl >= lvl;
-                const card = document.createElement('div');
-                card.className = `mine-card ${botLvl == lvl ? 'active-bot' : ''}`;
-                card.innerHTML = `
-                    <div class="item-info">
-                        <h3>${data.name}</h3>
-                        <p>Доход: x${data.mult} к пассиву</p>
-                    </div>
-                    ${isBought ? 
-                        '<span style="color:var(--neon-secondary); font-size:10px;">АКТИВНО</span>' : 
-                        `<button class="buy-ton-btn" onclick="buyBot(${lvl}, ${data.price_ton})">${data.price_ton} TON</button>`
-                    }
-                `;
-                container.appendChild(card);
-            });
+        async function handleUpgrade() {
+            const nextLvl = playerLevel + 1;
+            const cost = PLAYER_LEVELS[nextLvl].price;
+            
+            if (score >= cost) {
+                score -= cost;
+                playerLevel = nextLvl;
+                updateUI();
+                if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+                // Отправка на бэкенд
+                syncData();
+            }
         }
 
-        async function buyBot(lvl, price) {
-            tg.showConfirm(`Купить ${BOT_LEVELS[lvl].name} за ${price} TON?`, async (ok) => {
-                if (ok) {
-                    try {
-                        const r = await fetch('/api/buy_bot', {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({ user_id: userId, target_lvl: lvl })
-                        });
-                        const d = await r.json();
-                        if (d.status === 'ok') {
-                            botLvl = d.new_bot_lvl;
-                            updateUI();
-                            tg.showAlert("Бот успешно активирован!");
-                        }
-                    } catch (e) { tg.showAlert("Ошибка соединения с сервером"); }
-                }
-            });
-        }
-
-        // Остальная логика (клики, модалки)
-        const scoreEl = document.getElementById('score');
-        const btn = document.getElementById('btn');
-
-        function openModal(id) {
-            document.getElementById('overlay').classList.add('active');
-            document.getElementById('modal-' + id).classList.add('active');
-            updateUI();
-            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-        }
-
-        function closeAllModals() {
-            document.getElementById('overlay').classList.remove('active');
-            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
-        }
-
-        btn.addEventListener('touchstart', (e) => {
+        // Клик
+        document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
-            const tap = PLAYER_LEVELS[clickPower]?.tap || 1;
+            const tapPower = PLAYER_LEVELS[playerLevel].tap;
             for (let t of e.changedTouches) {
-                score += tap;
-                pending += tap;
-                spawnPlus(t.pageX, t.pageY, tap);
+                score += tapPower;
+                pending += tapPower;
+                spawnPlus(t.pageX, t.pageY, tapPower);
             }
             updateUI();
             if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
@@ -261,45 +238,69 @@
             setTimeout(() => p.remove(), 700);
         }
 
-        // Пассивный доход от бота (визуальный)
+        // Пассивный доход
         setInterval(() => {
             if (botLvl > 0) {
-                const income = BOT_LEVELS[botLvl].mult;
-                score += income / 10; // Начисляем плавно
+                const pps = PLAYER_LEVELS[playerLevel].tap * BOT_CONFIG[botLvl].mult;
+                score += pps;
                 updateUI();
             }
         }, 1000);
 
-        // Синхронизация кликов
-        setInterval(async () => {
+        // Модалки
+        function openModal(id) {
+            document.getElementById('overlay').classList.add('active');
+            document.getElementById('modal-' + id).classList.add('active');
+            if (id === 'mine') renderBotShop();
+            updateUI();
+        }
+
+        function closeAllModals() {
+            document.getElementById('overlay').classList.remove('active');
+            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+        }
+
+        function renderBotShop() {
+            const container = document.getElementById('bot-list-container');
+            container.innerHTML = '';
+            Object.entries(BOT_CONFIG).forEach(([lvl, data]) => {
+                const card = document.createElement('div');
+                card.className = 'mine-card';
+                card.innerHTML = `
+                    <div class="item-info">
+                        <h3>${data.name} (Lvl ${lvl})</h3>
+                        <p>Доход: ${data.mult * 100}% силы тапа</p>
+                    </div>
+                    <button class="buy-ton-btn" onclick="buyBot(${lvl})">${data.price_ton} TON</button>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function buyBot(lvl) {
+            tg.showAlert(`Функция оплаты ${lvl} TON скоро будет подключена через TON Connect!`);
+        }
+
+        async function syncData() {
             if (pending > 0) {
                 const s = pending; pending = 0;
                 try {
-                    await fetch('/api/clicks', { 
-                        method: 'POST', 
-                        headers: {'Content-Type': 'application/json'}, 
-                        body: JSON.stringify({ user_id: userId, clicks: s }) 
+                    await fetch('/api/sync', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ user_id: userId, score: score, level: playerLevel })
                     });
                 } catch (e) { pending += s; }
             }
-        }, 2000);
-
-        async function load() {
-            try {
-                const r = await fetch(`/api/balance/${userId}?t=${Date.now()}`);
-                const d = await r.json();
-                score = d.balance || 0;
-                clickPower = d.click_lvl || 1;
-                botLvl = d.bot_lvl || 0; // Загружаем уровень бота из базы
-                updateUI();
-                document.getElementById('game').style.opacity = '1';
-            } catch (e) { 
-                document.getElementById('game').style.opacity = '1'; 
-            }
         }
+        
+        setInterval(syncData, 3000);
 
-        load();
-        tg.ready();
+        // Старт
+        window.onload = () => {
+            updateUI();
+            document.getElementById('game').style.opacity = '1';
+        };
     </script>
 </body>
 </html>
