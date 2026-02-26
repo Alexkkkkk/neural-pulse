@@ -150,7 +150,7 @@
         }
         .nav-card:active { background: rgba(0, 212, 255, 0.1); }
 
-        /* MODAL SYSTEM */
+        /* MODALS */
         .overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -180,12 +180,12 @@
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .close-btn { font-size: 28px; cursor: pointer; color: var(--neon); }
 
-        /* MINE/BOOST STYLE */
         .buy-btn { 
             width: 100%; padding: 15px; background: var(--neon); border: none; 
             border-radius: 12px; color: #000; font-weight: bold; cursor: pointer; 
-            font-family: 'Orbitron'; margin-top: 15px; 
+            font-family: 'Orbitron'; margin-top: 15px; transition: all 0.2s;
         }
+        .buy-btn:disabled { background: #444; color: #888; cursor: not-allowed; }
 
         .mine-card {
             background: rgba(255, 255, 255, 0.05);
@@ -218,7 +218,7 @@
     <div class="game-container" id="game" style="opacity:0">
         <div class="header">
             <div class="logo"></div>
-            <span id="lvl">🏆 Новичок (Lvl 1)</span>
+            <span id="lvl">🏆 Loading...</span>
         </div>
 
         <div class="balance-container">
@@ -253,7 +253,7 @@
 
     <div id="modal-wallet" class="modal">
         <div class="modal-header"><h2>Wallet</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <div class="modal-content">Подключите свой кошелек TON для будущих выплат. (Скоро...)</div>
+        <div class="modal-content">Подключите кошелек TON для будущих выплат. (Скоро...)</div>
     </div>
 
     <div id="modal-friends" class="modal">
@@ -269,7 +269,7 @@
     <div id="modal-boost" class="modal">
         <div class="modal-header"><h2>Boosters</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
         <div class="modal-content" style="text-align: center;">
-            <p>Сила клика: <strong style="color:var(--neon-secondary);">+<span id="boost-power-label">1</span></strong></p>
+            <p>Текущая сила клика: <strong style="color:var(--neon-secondary);">+<span id="boost-power-label">1</span></strong></p>
             <button id="buy-boost-btn" class="buy-btn" onclick="buyBoost()">
                 UPGRADE (Цена: <span id="boost-cost">0</span>)
             </button>
@@ -279,7 +279,6 @@
     <div id="modal-mine" class="modal">
         <div class="modal-header"><h2>⛏️ TON SHOP</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
         <div class="modal-content">
-            <p style="text-align: center; font-size: 11px; opacity: 0.8; margin-bottom: 20px;">Ускорители за TON действуют навсегда</p>
             <div class="mine-card">
                 <div><h3>Micro Chip</h3><p>+500 к клику</p></div>
                 <button onclick="buyWithTon('Micro Chip', 0.5)" style="background:#0088cc; color:white; border:none; padding:10px; border-radius:8px;">0.5 TON</button>
@@ -293,7 +292,7 @@
 
     <div id="modal-stats" class="modal">
         <div class="modal-header"><h2>Stats</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <div class="modal-content" id="stats-content">Здесь будет ваша детальная статистика.</div>
+        <div class="modal-content" id="stats-content">Детальная статистика скоро будет доступна.</div>
     </div>
 
     <script>
@@ -305,36 +304,53 @@
         let pending = 0;
         let clickPower = 1;
 
+        const scoreEl = document.getElementById('score');
+        const btn = document.getElementById('btn');
+
+        // Конфигурация уровней
         const PLAYER_LEVELS = {
             1: { name: "Новичок", price: 0, tap: 1 },
             2: { name: "Стажер", price: 1000, tap: 5 },
             3: { name: "Фрилансер", price: 5000, tap: 15 },
             4: { name: "Специалист", price: 15000, tap: 40 },
-            5: { name: "Менеджер", price: 45000, tap: 100 }
+            5: { name: "Менеджер", price: 45000, tap: 100 },
+            6: { name: "Тимлид", price: 120000, tap: 250 },
+            7: { name: "Инвестор", price: 350000, tap: 600 },
+            8: { name: "Миллионер", price: 1000000, tap: 1500 },
+            9: { name: "Владелец ТГ", price: 2500000, tap: 4000 },
+            10: { name: "CEO", price: 6000000, tap: 10000 }
         };
 
         function updateUI() {
-            const cfg = PLAYER_LEVELS[clickPower] || PLAYER_LEVELS[1];
-            const next = PLAYER_LEVELS[clickPower + 1];
+            const currentCfg = PLAYER_LEVELS[clickPower] || PLAYER_LEVELS[1];
+            const nextLvl = clickPower + 1;
+            const nextCfg = PLAYER_LEVELS[nextLvl];
 
-            document.getElementById('score').textContent = Math.floor(score).toLocaleString();
-            document.getElementById('lvl').textContent = `🏆 ${cfg.name} (Lvl ${clickPower})`;
+            scoreEl.textContent = Math.floor(score).toLocaleString();
+            document.getElementById('lvl').textContent = `🏆 ${currentCfg.name} (Lvl ${clickPower})`;
             
-            // Данные в модалке Boost
             if (document.getElementById('boost-power-label')) {
-                document.getElementById('boost-power-label').textContent = cfg.tap;
+                document.getElementById('boost-power-label').textContent = currentCfg.tap;
             }
-            if (next) {
-                document.getElementById('boost-cost').textContent = next.price.toLocaleString();
-                document.getElementById('buy-boost-btn').style.display = 'block';
+            
+            const costEl = document.getElementById('boost-cost');
+            const buyBtn = document.getElementById('buy-boost-btn');
+            
+            if (nextCfg) {
+                costEl.textContent = nextCfg.price.toLocaleString();
+                buyBtn.disabled = score < nextCfg.price;
+                buyBtn.style.opacity = score < nextCfg.price ? "0.5" : "1";
+                buyBtn.style.display = "block";
             } else {
-                document.getElementById('buy-boost-btn').style.display = 'none';
+                costEl.textContent = "MAX";
+                buyBtn.style.display = "none";
             }
         }
 
         function openModal(id) {
             document.getElementById('overlay').classList.add('active');
             document.getElementById('modal-' + id).classList.add('active');
+            updateUI(); // Обновляем состояние кнопок при открытии
             if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
         }
 
@@ -343,25 +359,10 @@
             document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
         }
 
-        // Покупка за TON
-        function buyWithTon(item, price) {
-            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('heavy');
-            tg.showConfirm(`Купить ${item} за ${price} TON?`, (ok) => {
-                if (ok) {
-                    tg.sendData(JSON.stringify({ action: "buy_ton", item: item, price: price }));
-                    closeAllModals();
-                    tg.showAlert("Запрос отправлен боту!");
-                }
-            });
-        }
-
-        // Покупка Boost за монеты
         async function buyBoost() {
             const next = clickPower + 1;
-            if (!PLAYER_LEVELS[next] || score < PLAYER_LEVELS[next].price) {
-                tg.showAlert("Недостаточно баллов!");
-                return;
-            }
+            if (!PLAYER_LEVELS[next] || score < PLAYER_LEVELS[next].price) return;
+            
             try {
                 const r = await fetch('/api/buy_boost', { 
                     method: 'POST', 
@@ -375,11 +376,19 @@
                     updateUI();
                     if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
                 }
-            } catch (e) { tg.showAlert("Ошибка сервера"); }
+            } catch (e) { tg.showAlert("Сервер недоступен"); }
         }
 
-        // Логика клика
-        document.getElementById('btn').addEventListener('touchstart', (e) => {
+        function buyWithTon(item, price) {
+            tg.showConfirm(`Купить ${item} за ${price} TON?`, (ok) => {
+                if (ok) {
+                    tg.sendData(JSON.stringify({ action: "buy_ton", item, price }));
+                    closeAllModals();
+                }
+            });
+        }
+
+        btn.addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (document.getElementById('overlay').classList.contains('active')) return;
 
@@ -403,7 +412,6 @@
             setTimeout(() => p.remove(), 700);
         }
 
-        // Авто-сохранение каждые 2 секунды
         setInterval(async () => {
             if (pending > 0) {
                 const s = pending; pending = 0;
@@ -417,7 +425,6 @@
             }
         }, 2000);
 
-        // Загрузка данных при входе
         async function load() {
             try {
                 const r = await fetch(`/api/balance/${userId}?t=${Date.now()}`);
