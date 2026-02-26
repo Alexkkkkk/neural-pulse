@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
-# --- 1. ПОЛНАЯ КОНФИГУРАЦИЯ (Из твоего ТЗ) ---
+# --- 1. КОНФИГУРАЦИЯ (Синхронно с JS) ---
 PLAYER_LEVELS = {
     1: {"name": "Новичок", "price": 0, "tap": 1},
     2: {"name": "Стажер", "price": 1000, "tap": 5},
@@ -50,7 +50,7 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher()
 logging.basicConfig(level=logging.INFO)
 
-# --- 2. БД И ЖИЗНЕННЫЙ ЦИКЛ ---
+# --- 2. ЖИЗНЕННЫЙ ЦИКЛ ПРИЛОЖЕНИЯ ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     with sqlite3.connect(str(DB_PATH)) as conn:
@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
                         (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
                          click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
                          last_collect INTEGER DEFAULT 0, referrer_id TEXT)''')
-        # Проверка и добавление новых колонок (миграция)
+        # Миграция БД
         cursor = conn.execute("PRAGMA table_info(users)")
         cols = [column[1] for column in cursor.fetchall()]
         if "last_collect" not in cols:
@@ -92,21 +92,16 @@ async def get_balance(user_id: str):
             return {"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "offline_profit": 0}
         
         balance, click_lvl, bot_lvl, last_collect = row
-        
-        # ЛОГИКА ОФЛАЙН ДОХОДА
         offline_profit = 0
+        
+        # Расчет офлайн прибыли
         if bot_lvl > 0 and last_collect > 0:
-            seconds_passed = now - last_collect
-            # Лимит офлайна 24 часа для баланса игры
-            seconds_passed = min(seconds_passed, 86400) 
-            
+            seconds_passed = min(now - last_collect, 86400) # Макс 24 часа
             tap_power = PLAYER_LEVELS.get(click_lvl, PLAYER_LEVELS[1])["tap"]
             multiplier = BOT_LEVELS.get(bot_lvl, BOT_LEVELS[0])["multiplier"]
-            
             offline_profit = int(seconds_passed * tap_power * multiplier)
             balance += offline_profit
 
-        # Обновляем время сбора и баланс
         conn.execute("UPDATE users SET balance = ?, last_collect = ? WHERE id = ?", (balance, now, user_id))
         conn.commit()
         
@@ -114,8 +109,7 @@ async def get_balance(user_id: str):
             "balance": balance, 
             "click_lvl": click_lvl, 
             "bot_lvl": bot_lvl, 
-            "offline_profit": offline_profit,
-            "dps": PLAYER_LEVELS.get(click_lvl)["tap"] * BOT_LEVELS.get(bot_lvl)["multiplier"]
+            "offline_profit": offline_profit
         }
 
 @app.post("/api/buy_boost")
@@ -129,7 +123,7 @@ async def buy_boost(data: dict = Body(...)):
         
         balance, current_lvl = res
         next_lvl = current_lvl + 1
-        if next_lvl not in PLAYER_LEVELS: return {"error": "MAX LVL"}
+        if next_lvl not in PLAYER_LEVELS: return {"error": "Максимальный уровень!"}
         
         cost = PLAYER_LEVELS[next_lvl]["price"]
         if balance >= cost:
@@ -140,21 +134,10 @@ async def buy_boost(data: dict = Body(...)):
             return {"status": "ok", "new_balance": new_balance, "new_lvl": next_lvl}
         return {"error": "Недостаточно NP"}
 
-@app.post("/api/buy_bot")
-async def buy_bot(data: dict = Body(...)):
-    uid = str(data.get("user_id"))
-    target_lvl = int(data.get("target_lvl", 1))
-    if target_lvl not in BOT_LEVELS: return {"error": "Invalid level"}
-        
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        conn.execute("UPDATE users SET bot_lvl = ?, last_collect = ? WHERE id = ?", (target_lvl, int(time.time()), uid))
-        conn.commit()
-    return {"status": "ok", "new_bot_lvl": target_lvl}
-
 @app.post("/api/clicks")
 async def save_clicks(data: dict = Body(...)):
     uid, clicks = str(data.get("user_id")), int(data.get("clicks", 0))
-    if clicks > 1000: clicks = 1000 
+    if clicks > 2000: clicks = 2000 # Лимит защиты
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute("UPDATE users SET balance = balance + ?, last_collect = ? WHERE id = ?", (clicks, int(time.time()), uid))
         conn.commit()
@@ -177,7 +160,6 @@ async def start_command(message: types.Message):
         c.execute("SELECT id FROM users WHERE id = ?", (uid,))
         if not c.fetchone():
             ref_id = args[1] if len(args) > 1 and args[1] != uid else None
-            # Дарим 1000 NP при регистрации
             conn.execute("INSERT INTO users (id, balance, click_lvl, bot_lvl, last_collect, referrer_id) VALUES (?, 1000, 1, 0, ?, ?)", (uid, now, ref_id))
             if ref_id:
                 conn.execute("UPDATE users SET balance = balance + 50000 WHERE id = ?", (ref_id,))
