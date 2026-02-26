@@ -10,94 +10,67 @@ from fastapi.templating import Jinja2Templates
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
-# --- НАСТРОЙКА ПУТЕЙ (Исправлено под твою структуру GitHub) ---
+# --- НАСТРОЙКА ПУТЕЙ ---
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
-IMAGES_DIR = STATIC_DIR / "images"  # Теперь ищем внутри static/images
+IMAGES_DIR = STATIC_DIR / "images"
 DB_PATH = BASE_DIR / "game.db"
 
-# Логирование
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("NEURAL_PULSE")
 
-# --- ОТЛАДКА: ПРОВЕРКА ФАЙЛОВ ---
-logger.info("=== ПРОВЕРКА СТРУКТУРЫ КАРТИНОК ===")
+# --- ОТЛАДКА ---
+logger.info("=== ПРОВЕРКА КАРТИНОК ===")
 if IMAGES_DIR.exists():
     files = os.listdir(IMAGES_DIR)
-    logger.info(f"✅ В папке {IMAGES_DIR} найдено файлов: {len(files)}")
+    logger.info(f"✅ Найдено файлов: {len(files)} по пути {IMAGES_DIR}")
     for f in files:
-        logger.info(f" -> Файл в наличии: {f}")
+        logger.info(f" -> Файл: {f}")
 else:
-    logger.error(f"❌ ПАПКА НЕ НАЙДЕНА ПО ПУТИ: {IMAGES_DIR}")
-    # На случай, если папки нет, создадим её, чтобы сервер не падал
+    logger.error(f"❌ Путь {IMAGES_DIR} не найден!")
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
-# Данные бота
 TOKEN = "8257287930:AAFhDcKz-ebfaAHzb5H4Hr1b9SCa9OrSauI"
 MY_DOMAIN = "ai.bothost.ru"
-ADM_ID = 476014374 
+ADM_ID = 476014374
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # --- 1. ИНИЦИАЛИЗАЦИЯ БД ---
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
             conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)")
             conn.commit()
-        logger.info("🗄️ [DB]: База данных готова.")
+        logger.info("🗄️ База данных готова.")
     except Exception as e:
-        logger.error(f"❌ [DB ERROR]: {e}")
+        logger.error(f"❌ DB ERROR: {e}")
 
-    # --- 2. ЗАПУСК БОТА ---
-    polling_task = None
-    try:
-        await bot.delete_webhook(drop_pending_updates=True)
-        polling_task = asyncio.create_task(dp.start_polling(bot))
-        logger.info(f"✅ [BOT]: Поллинг запущен. Админ: {ADM_ID}")
-    except Exception as e:
-        logger.error(f"❌ [BOT ERROR]: {e}")
-    
+    polling_task = asyncio.create_task(dp.start_polling(bot))
+    logger.info(f"✅ Бот запущен.")
     yield
-    
-    # --- 3. ЗАКРЫТИЕ ---
-    if polling_task:
-        polling_task.cancel()
+    polling_task.cancel()
     await bot.session.close()
-    logger.info("👋 [SYSTEM]: Сервер остановлен.")
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# МОНТИРОВАНИЕ СТАТИКИ
-# Важно: монтируем именно папку с картинками по адресу /static/images
+# Монтирование статики
 if IMAGES_DIR.exists():
     app.mount("/static/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
-    logger.info(f"🖼️ [STATIC]: Путь /static/images привязан к {IMAGES_DIR}")
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 templates = Jinja2Templates(directory=[str(BASE_DIR), str(STATIC_DIR)])
 
-# --- API ЭНДПОИНТЫ ---
-
+# --- API ---
 @app.get("/")
 async def serve_game(request: Request):
     try:
-        res = templates.TemplateResponse("index.html", {"request": request})
-        res.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-        return res
-    except Exception:
-        # Резервный поиск index.html
+        return templates.TemplateResponse("index.html", {"request": request})
+    except:
         for p in [BASE_DIR / "index.html", STATIC_DIR / "index.html"]:
             if p.exists():
                 from fastapi.responses import FileResponse
@@ -115,41 +88,22 @@ async def get_balance(user_id: str):
         c.execute("SELECT balance FROM users WHERE id = ?", (user_id,))
         row = c.fetchone()
         balance = row[0] if row else 0
-        return Response(
-            content=f'{{"balance": {balance}}}', 
-            media_type="application/json",
-            headers={"Cache-Control": "no-store"}
-        )
+        return Response(content=f'{{"balance": {balance}}}', media_type="application/json")
 
 @app.post("/api/clicks")
 async def save_clicks(data: dict = Body(...)):
     uid, clicks = str(data.get("user_id")), int(data.get("clicks", 0))
     with sqlite3.connect(str(DB_PATH)) as conn:
-        conn.execute(
-            "INSERT INTO users (id, balance) VALUES (?, ?) "
-            "ON CONFLICT(id) DO UPDATE SET balance = balance + ?", 
-            (uid, clicks, clicks)
-        )
+        conn.execute("INSERT INTO users (id, balance) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET balance = balance + ?", (uid, clicks, clicks))
         conn.commit()
     return {"status": "ok"}
 
-# --- ЛОГИКА БОТА ---
-
-@dp.message(F.from_user.id == ADM_ID, F.text == "/stats")
+# --- БОТ ---
+@dp.message(F.text == "/stats", F.from_user.id == ADM_ID)
 async def admin_stats(message: types.Message):
     with sqlite3.connect(str(DB_PATH)) as conn:
         res = conn.execute("SELECT COUNT(*), SUM(balance) FROM users").fetchone()
-    await message.answer(
-        f"<b>📊 Статистика Neural Pulse:</b>\n\n👥 Игроков: {res[0] or 0}\n💰 Всего NP: {res[1] or 0}", 
-        parse_mode="HTML"
-    )
-
-@dp.message(F.from_user.id == ADM_ID, F.text == "/reset_all")
-async def admin_reset(message: types.Message):
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        conn.execute("DELETE FROM users")
-        conn.commit()
-    await message.answer("🧨 <b>БАЗА ДАННЫХ ПОЛНОСТЬЮ ОЧИЩЕНА!</b>", parse_mode="HTML")
+    await message.answer(f"👥 Игроков: {res[0]}\n💰 Всего NP: {res[1]}")
 
 @dp.message(F.text == "/start")
 async def start_handler(message: types.Message):
@@ -157,12 +111,7 @@ async def start_handler(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/?v={v}"))
     ]])
-    
-    text = "Добро пожаловать в Neural Pulse! Жми на кнопку, чтобы начать майнить."
-    if message.from_user.id == ADM_ID:
-        text = "🤝 <b>Привет, Создатель!</b>\n\n/stats — стата\n/reset_all — сброс"
-        
-    await message.answer(text, reply_markup=kb, parse_mode="HTML")
+    await message.answer("Добро пожаловать в Neural Pulse!", reply_markup=kb)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
