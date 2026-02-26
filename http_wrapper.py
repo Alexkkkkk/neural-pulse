@@ -96,37 +96,4 @@ async def get_balance(user_id: str):
 async def save_clicks(data: dict = Body(...)):
     uid, clicks = str(data.get("user_id")), int(data.get("clicks", 0))
     with sqlite3.connect(str(DB_PATH)) as conn:
-        conn.execute("INSERT INTO users (id, balance) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET balance = balance + ?", (uid, clicks, clicks))
-        conn.commit()
-    return {"status": "ok"}
-
-# --- БОТ: АДМИН-КОМАНДЫ ---
-
-@dp.message(F.from_user.id == ADMIN_ID, F.text == "/reset_all")
-async def admin_reset(message: types.Message):
-    try:
-        with sqlite3.connect(str(DB_PATH)) as conn:
-            conn.execute("DELETE FROM users")
-            conn.commit()
-        await message.answer("🧨 **БАЗА ДАННЫХ ОЧИЩЕНА!**\nВсе балансы сброшены в ноль.", parse_mode="Markdown")
-        logger.warning(f"!!! БАЗА СБРОШЕНА АДМИНОМ {ADMIN_ID} !!!")
-    except Exception as e:
-        await message.answer(f"Ошибка: {e}")
-
-@dp.message(F.text == "/start")
-async def start_handler(message: types.Message):
-    v = int(datetime.now().timestamp())
-    kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/?v={v}"))
-    ]])
-    
-    text = "Привет! Начинай майнить кликами прямо сейчас!"
-    
-    # Персонализация для тебя
-    if message.from_user.id == ADMIN_ID:
-        text = "🤝 **Добро пожаловать, создатель!**\nСистема готова к работе.\n\n🛠 **Админ-команда:** `/reset_all` (очистка базы)."
-        
-    await message.answer(text, reply_markup=kb, parse_mode="Markdown")
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+        conn.execute("INSERT INTO users (id, balance) VALUES (?, ?) ON CONFLICT
