@@ -10,14 +10,18 @@ from fastapi.templating import Jinja2Templates
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
-# --- НАСТРОЙКА ПУТЕЙ ---
+# --- НАСТРОЙКА ПУТЕЙ (Исправлено для Bothost) ---
+# Получаем абсолютный путь к папке, где лежит этот скрипт
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
-IMAGES_DIR = STATIC_DIR / "images"
 DB_PATH = BASE_DIR / "game.db"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("NEURAL_PULSE")
+
+# Вывод отладочной информации в логи Bothost
+logger.info(f"📂 Рабочая директория: {BASE_DIR}")
+logger.info(f"📄 Файлы в директории: {os.listdir(str(BASE_DIR))}")
 
 # Твои настройки
 TOKEN = "8257287930:AAFhDcKz-ebfaAHzb5H4Hr1b9SCa9OrSauI"
@@ -31,17 +35,15 @@ dp = Dispatcher()
 async def lifespan(app: FastAPI):
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
-            # Унифицированная таблица: id, balance и уровень клика
             conn.execute('''CREATE TABLE IF NOT EXISTS users 
                             (id TEXT PRIMARY KEY, 
                              balance INTEGER DEFAULT 0, 
                              click_lvl INTEGER DEFAULT 1)''')
             conn.commit()
-        logger.info("🗄️ База данных готова и проверена.")
+        logger.info("🗄️ База данных готова.")
     except Exception as e:
         logger.error(f"❌ DB ERROR: {e}")
 
-    # Запуск бота в фоне
     polling_task = asyncio.create_task(dp.start_polling(bot))
     logger.info(f"✅ Бот Neural Pulse запущен.")
     
@@ -52,7 +54,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# Настройки CORS, чтобы Mini App мог делать запросы
 app.add_middleware(
     CORSMiddleware, 
     allow_origins=["*"], 
@@ -60,22 +61,29 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# Монтируем статику (картинки, стили)
+# Монтируем статику (проверяем наличие папки)
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    logger.info("🎨 Статика подключена.")
+else:
+    logger.warning("⚠️ Папка /static не найдена!")
 
+# Настройка шаблонов (Исправлено: явно указываем путь)
 templates = Jinja2Templates(directory=str(BASE_DIR))
 
-# --- API ЭНДПОИНТЫ (Логика из Flask перенесена сюда) ---
+# --- API ЭНДПОИНТЫ ---
 
 @app.get("/")
 async def serve_game(request: Request):
     """Отдает главную страницу игры"""
+    # Проверяем физическое наличие файла перед попыткой отдать его
+    if not (BASE_DIR / "index.html").exists():
+        logger.error("🚨 КРИТИЧЕСКАЯ ОШИБКА: index.html не найден в папке /app")
+        return {"error": "index.html missing on server"}
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
-    """Получение баланса и уровня клика"""
     with sqlite3.connect(str(DB_PATH)) as conn:
         c = conn.cursor()
         c.execute("SELECT balance, click_lvl FROM users WHERE id = ?", (user_id,))
@@ -88,7 +96,6 @@ async def get_balance(user_id: str):
 
 @app.post("/api/clicks")
 async def save_clicks(data: dict = Body(...)):
-    """Сохранение накликанных поинтов"""
     uid = str(data.get("user_id"))
     clicks = int(data.get("clicks", 0))
     with sqlite3.connect(str(DB_PATH)) as conn:
@@ -98,60 +105,39 @@ async def save_clicks(data: dict = Body(...)):
 
 @app.post("/api/buy_boost")
 async def buy_boost(data: dict = Body(...)):
-    """Покупка улучшения (Boost)"""
     uid = str(data.get("user_id"))
     with sqlite3.connect(str(DB_PATH)) as conn:
         c = conn.cursor()
         c.execute("SELECT balance, click_lvl FROM users WHERE id = ?", (uid,))
         row = c.fetchone()
-        
-        if not row:
-            return {"error": "User not found"}
+        if not row: return {"error": "User not found"}
         
         balance, lvl = row[0], row[1]
-        cost = lvl * 500  # Твоя формула: 500, 1000, 1500...
+        cost = lvl * 500
         
         if balance >= cost:
             new_balance = balance - cost
             new_lvl = lvl + 1
-            conn.execute("UPDATE users SET balance = ?, click_lvl = ? WHERE id = ?", 
-                         (new_balance, new_lvl, uid))
+            conn.execute("UPDATE users SET balance = ?, click_lvl = ? WHERE id = ?", (new_balance, new_lvl, uid))
             conn.commit()
-            return {
-                "status": "ok", 
-                "new_balance": new_balance, 
-                "new_lvl": new_lvl, 
-                "next_cost": new_lvl * 500
-            }
+            return {"status": "ok", "new_balance": new_balance, "new_lvl": new_lvl, "next_cost": new_lvl * 500}
         return {"error": "Недостаточно NP!"}
 
 @app.get("/api/all_stats")
 async def get_all_stats():
-    """Общая статистика для модального окна Stats"""
     with sqlite3.connect(str(DB_PATH)) as conn:
         res = conn.execute("SELECT COUNT(*), SUM(balance) FROM users").fetchone()
-        return {
-            "total_players": res[0] or 0, 
-            "total_balance": res[1] or 0
-        }
+        return {"total_players": res[0] or 0, "total_balance": res[1] or 0}
 
-# --- ЛОГИКА ТЕЛЕГРАМ-БОТА ---
+# --- ЛОГИКА БОТА ---
 @dp.message(F.text == "/start")
 async def start_handler(message: types.Message):
     v = int(datetime.now().timestamp())
     kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(
-            text="💎 Запустить Neural Pulse", 
-            web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/?v={v}")
-        )
+        InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/?v={v}"))
     ]])
-    await message.answer(
-        f"Привет, {message.from_user.first_name}! 🚀\n\n"
-        "Добро пожаловать в Neural Pulse — нейросетевой кликер будущего.\n"
-        "Нажимай на сферу, копи NP и прокачивай свой интеллект!", 
-        reply_markup=kb
-    )
+    await message.answer(f"Привет, {message.from_user.first_name}! 🚀\n Neural Pulse запущен!", reply_markup=kb)
 
 if __name__ == "__main__":
-    # Запуск сервера на порту 3000 (стандарт для FastAPI на хостингах)
+    # Порт 3000 для Bothost
     uvicorn.run(app, host="0.0.0.0", port=3000)
