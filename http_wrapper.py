@@ -29,6 +29,9 @@ dp = Dispatcher()
 async def lifespan(app: FastAPI):
     logger.info(f"📂 BASE_DIR: {BASE_DIR}")
     logger.info(f"📄 Files found: {os.listdir(str(BASE_DIR))}")
+    # Проверка содержимого static для отладки
+    if STATIC_DIR.exists():
+        logger.info(f"📂 STATIC_FILES: {os.listdir(str(STATIC_DIR))}")
     
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
@@ -57,18 +60,22 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+# Монтируем статику (для картинок и скриптов)
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-templates = Jinja2Templates(directory=str(BASE_DIR))
+# ПРАВКА ТУТ: Указываем Jinja2 искать шаблоны в папке static
+templates = Jinja2Templates(directory=str(STATIC_DIR))
 
 # --- API ЭНДПОИНТЫ ---
 
 @app.get("/")
 async def serve_game(request: Request):
-    index_path = BASE_DIR / "index.html"
+    # ПРАВКА ТУТ: Проверяем наличие файла именно в STATIC_DIR
+    index_path = STATIC_DIR / "index.html"
     if not index_path.exists():
-        return {"error": "Файл index.html отсутствует в корне проекта."}
+        logger.error(f"🚨 index.html не найден по пути: {index_path}")
+        return {"error": f"Файл index.html отсутствует в папке static. Путь: {index_path}"}
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/api/balance/{user_id}")
@@ -140,10 +147,3 @@ async def start_handler(message: types.Message):
             conn.commit()
 
     v = int(datetime.now().timestamp())
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/?v={v}"))]
-    ])
-    await message.answer(f"Привет, {message.from_user.first_name}! 🚀\nNeural Pulse готов.", reply_markup=kb)
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3000)
