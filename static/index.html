@@ -11,6 +11,7 @@
             --neon: #00d4ff; 
             --neon-secondary: #00ff96;
             --bg: #050a1a; 
+            --glass: rgba(10, 25, 47, 0.95);
         }
         
         body { 
@@ -35,8 +36,6 @@
             align-items: center; 
             padding: 20px;
             box-sizing: border-box;
-            border: 1px solid rgba(0, 212, 255, 0.1);
-            background: rgba(255, 255, 255, 0.02);
             transition: opacity 0.5s;
         }
 
@@ -48,7 +47,6 @@
             margin-top: 10px;
         }
         
-        /* Логотип: заменен .jpg на .png */
         .logo { 
             width: 50px; 
             height: 50px; 
@@ -60,10 +58,7 @@
 
         #lvl { font-size: 14px; text-shadow: 0 0 10px var(--neon); color: var(--neon); }
 
-        .balance-container {
-            text-align: center;
-            margin-top: 20px;
-        }
+        .balance-container { text-align: center; margin-top: 20px; }
         .balance-label { font-size: 12px; color: rgba(255,255,255,0.7); letter-spacing: 2px; }
         #score { font-size: 48px; color: #fff; text-shadow: 0 0 20px var(--neon); font-weight: bold; margin-top: 5px; }
 
@@ -76,32 +71,21 @@
             justify-content: center;
         }
 
-        /* Главная кнопка-монета: заменен .jpg на .png */
         #btn { 
             width: 80vw; 
             max-width: 320px;
             height: 80vw;
             max-height: 320px;
             background: url('/static/images/unnamed3.png') no-repeat center;
-            background-size: contain; /* Чтобы монета была видна полностью */
+            background-size: contain;
             border-radius: 50%;
             border: 4px solid rgba(0, 212, 255, 0.3);
             box-shadow: 0 0 40px rgba(0, 212, 255, 0.2);
             cursor: pointer; 
-            transition: transform 0.05s, box-shadow 0.2s; 
+            transition: transform 0.05s; 
             outline: none; 
             z-index: 2;
-            position: relative;
         }
-        
-        #btn::after {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            border-radius: 50%;
-            box-shadow: inset 0 0 30px rgba(0, 212, 255, 0.3);
-        }
-
         #btn:active { transform: scale(0.95); box-shadow: 0 0 60px var(--neon); }
 
         .side-menu {
@@ -122,6 +106,7 @@
             font-size: 9px;
             text-transform: uppercase;
             text-align: center;
+            cursor: pointer;
         }
 
         .energy-container {
@@ -164,6 +149,36 @@
         }
         .nav-card:active { background: rgba(0, 212, 255, 0.1); }
 
+        /* MODAL SYSTEM */
+        .overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            z-index: 999;
+            backdrop-filter: blur(4px);
+        }
+        .overlay.active { display: block; }
+
+        .modal {
+            position: fixed;
+            bottom: -100%;
+            left: 0;
+            width: 100%;
+            height: 75%;
+            background: var(--glass);
+            border-top: 2px solid var(--neon);
+            border-radius: 30px 30px 0 0;
+            z-index: 1000;
+            transition: bottom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+            padding: 30px;
+            box-sizing: border-box;
+        }
+        .modal.active { bottom: 0; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .close-btn { font-size: 28px; cursor: pointer; color: var(--neon); }
+        .modal-content { font-family: sans-serif; font-size: 14px; color: rgba(255,255,255,0.8); line-height: 1.6; }
+
         .plus-animation { 
             position: absolute; 
             color: var(--neon); 
@@ -195,9 +210,9 @@
         <div class="play-area">
             <button id="btn"></button>
             <div class="side-menu">
-                <div class="side-item" style="background: #2196F3; border:none; color:white;">Wallet</div>
-                <div class="side-item">Friends</div>
-                <div class="side-item">Tasks</div>
+                <div class="side-item" style="background: #2196F3; border:none; color:white;" onclick="openModal('wallet')">Wallet</div>
+                <div class="side-item" onclick="openModal('friends')">Friends</div>
+                <div class="side-item" onclick="openModal('tasks')">Tasks</div>
             </div>
         </div>
 
@@ -209,10 +224,42 @@
         </div>
 
         <div class="bottom-nav">
-            <div class="nav-card">🚀 BOOST</div>
-            <div class="nav-card">⛏️ MINE</div>
-            <div class="nav-card">⚙️ STATS</div>
+            <div class="nav-card" onclick="openModal('boost')">🚀 BOOST</div>
+            <div class="nav-card" onclick="openModal('mine')">⛏️ MINE</div>
+            <div class="nav-card" onclick="openModal('stats')">⚙️ STATS</div>
         </div>
+    </div>
+
+    <div class="overlay" id="overlay" onclick="closeAllModals()"></div>
+
+    <div id="modal-wallet" class="modal">
+        <div class="modal-header"><h2>Wallet</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content">Подключите свой кошелек TON для будущих выплат. (Скоро...)</div>
+    </div>
+
+    <div id="modal-friends" class="modal">
+        <div class="modal-header"><h2>Friends</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content">Приглашайте друзей и получайте 10% от их добычи!</div>
+    </div>
+
+    <div id="modal-tasks" class="modal">
+        <div class="modal-header"><h2>Tasks</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content">Выполняйте простые задания, чтобы заработать бонусные NP.</div>
+    </div>
+
+    <div id="modal-boost" class="modal">
+        <div class="modal-header"><h2>Boost</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content">Увеличьте силу клика или скорость восстановления энергии.</div>
+    </div>
+
+    <div id="modal-mine" class="modal">
+        <div class="modal-header"><h2>Mine</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content">Покупайте улучшения, чтобы добывать Neural Pulse пассивно.</div>
+    </div>
+
+    <div id="modal-stats" class="modal">
+        <div class="modal-header"><h2>Stats</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content">Здесь будет ваша детальная статистика и глобальный рейтинг.</div>
     </div>
 
     <script>
@@ -225,6 +272,19 @@
 
         const scoreEl = document.getElementById('score');
         const btn = document.getElementById('btn');
+
+        // Modal Logic
+        function openModal(id) {
+            document.getElementById('overlay').classList.add('active');
+            document.getElementById('modal-' + id).classList.add('active');
+            if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+        }
+
+        function closeAllModals() {
+            document.getElementById('overlay').classList.remove('active');
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(m => m.classList.remove('active'));
+        }
 
         async function loadData() {
             try {
@@ -240,6 +300,9 @@
 
         btn.addEventListener('touchstart', (e) => {
             e.preventDefault();
+            // Не кликаем, если открыто модальное окно
+            if (document.getElementById('overlay').classList.contains('active')) return;
+
             for (let t of e.changedTouches) {
                 score++;
                 pending++;
