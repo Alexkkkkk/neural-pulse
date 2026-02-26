@@ -3,173 +3,435 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse</title>
+    <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        :root { --neon: #00d4ff; --neon-sec: #00ff96; --bg: #050a1a; }
-        body { margin: 0; background: radial-gradient(circle at center, #0a192f 0%, #050a1a 100%); height: 100vh; font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; user-select: none; }
+        :root { 
+            --neon: #00d4ff; 
+            --neon-secondary: #00ff96;
+            --bg: #050a1a; 
+            --glass: rgba(10, 25, 47, 0.95);
+        }
         
-        .game-container { display: flex; flex-direction: column; align-items: center; height: 100vh; padding: 20px; box-sizing: border-box; transition: opacity 0.5s; }
-        .header { width: 100%; display: flex; justify-content: space-between; font-size: 12px; color: var(--neon); }
+        body { 
+            margin: 0; 
+            background: radial-gradient(circle at center, #0a192f 0%, #050a1a 100%);
+            height: 100vh; 
+            font-family: 'Orbitron', sans-serif; 
+            color: white; 
+            overflow: hidden; 
+            user-select: none; 
+            display: flex;
+            justify-content: center;
+        }
+
+        .game-container { 
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            height: 100vh;
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            padding: 20px;
+            box-sizing: border-box;
+            transition: opacity 0.5s;
+        }
+
+        .header { 
+            width: 100%; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-top: 10px;
+        }
         
-        #score { font-size: 44px; font-weight: bold; text-shadow: 0 0 20px var(--neon); margin-top: 20px; }
-        .label { font-size: 10px; opacity: 0.6; letter-spacing: 2px; }
+        .logo { 
+            width: 50px; 
+            height: 50px; 
+            background: url('/static/images/unnamed4.png') no-repeat center;
+            background-size: cover;
+            border-radius: 12px;
+            box-shadow: 0 0 15px var(--neon);
+        }
 
-        .click-area { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
-        #tap-btn { width: 260px; height: 260px; background: url('https://cdn-icons-png.flaticon.com/512/8637/8637110.png') center/contain no-repeat; border: none; outline: none; filter: drop-shadow(0 0 15px var(--neon)); transition: transform 0.05s; cursor: pointer; }
-        #tap-btn:active { transform: scale(0.92); }
+        #lvl { font-size: 13px; text-shadow: 0 0 10px var(--neon); color: var(--neon); font-weight: bold; }
 
-        .nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; margin-bottom: 20px; }
-        .nav-item { background: rgba(255,255,255,0.05); padding: 15px 5px; border-radius: 12px; text-align: center; font-size: 10px; border: 1px solid rgba(255,255,255,0.1); }
+        .balance-container { text-align: center; margin-top: 20px; }
+        .balance-label { font-size: 11px; color: rgba(255,255,255,0.6); letter-spacing: 2px; }
+        #score { font-size: 44px; color: #fff; text-shadow: 0 0 20px var(--neon); font-weight: bold; margin-top: 5px; }
 
-        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 75%; background: #0a192f; border-top: 2px solid var(--neon); border-radius: 25px 25px 0 0; z-index: 1000; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); padding: 25px; box-sizing: border-box; }
-        .modal.active { bottom: 0; }
-        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; z-index: 999; backdrop-filter: blur(4px); }
+        .play-area {
+            position: relative;
+            flex-grow: 1;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #btn { 
+            width: 75vw; 
+            max-width: 300px;
+            height: 75vw;
+            max-height: 300px;
+            background: url('/static/images/unnamed3.png') no-repeat center;
+            background-size: contain;
+            border-radius: 50%;
+            border: 4px solid rgba(0, 212, 255, 0.2);
+            box-shadow: 0 0 40px rgba(0, 212, 255, 0.15);
+            cursor: pointer; 
+            transition: transform 0.05s; 
+            outline: none; 
+            z-index: 2;
+        }
+        #btn:active { transform: scale(0.92); box-shadow: 0 0 60px var(--neon); }
+
+        .side-menu {
+            position: absolute;
+            right: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 3;
+        }
+        .side-item {
+            width: 85px;
+            padding: 10px 5px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 8px;
+            backdrop-filter: blur(5px);
+            font-size: 9px;
+            text-transform: uppercase;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .bottom-nav {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            width: 100%;
+            margin-bottom: 25px;
+        }
+        .nav-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 15px 5px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .nav-card:active { background: rgba(0, 212, 255, 0.15); }
+
+        /* MODAL SYSTEM */
+        .overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            z-index: 999;
+            backdrop-filter: blur(6px);
+        }
         .overlay.active { display: block; }
 
-        .btn-action { width: 100%; padding: 18px; background: var(--neon); border: none; border-radius: 12px; font-family: 'Orbitron'; font-weight: bold; color: #000; margin-top: 15px; }
-        .plus { position: absolute; color: var(--neon); font-size: 28px; font-weight: bold; pointer-events: none; animation: fly 0.8s forwards; text-shadow: 0 0 10px var(--neon); }
-        @keyframes fly { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px) scale(1.5); } }
+        .modal {
+            position: fixed;
+            bottom: -100%;
+            left: 0;
+            width: 100%;
+            height: 70%;
+            background: var(--glass);
+            border-top: 3px solid var(--neon);
+            border-radius: 30px 30px 0 0;
+            z-index: 1000;
+            transition: bottom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+            padding: 30px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        .modal.active { bottom: 0; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .close-btn { font-size: 28px; cursor: pointer; color: var(--neon); }
+
+        /* MINE SHOP STYLES */
+        .mine-grid { display: grid; grid-template-columns: 1fr; gap: 15px; margin-top: 10px; }
+        .mine-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 15px;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .mine-info h3 { margin: 0; font-size: 14px; color: var(--neon); text-transform: uppercase; }
+        .mine-info p { margin: 5px 0 0; font-size: 11px; color: var(--neon-secondary); font-weight: bold; }
+        
+        .ton-buy-btn {
+            background: #0088cc;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 10px;
+            font-family: 'Orbitron';
+            font-weight: bold;
+            font-size: 11px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .ton-buy-btn:active { transform: scale(0.95); opacity: 0.8; }
+
+        .buy-btn { width: 100%; padding: 18px; background: var(--neon); border: none; border-radius: 12px; color: #000; font-weight: bold; cursor: pointer; font-family: 'Orbitron'; margin-top: 15px; font-size: 14px; }
+        .buy-btn:disabled { background: #555; color: #888; cursor: not-allowed; }
+        
+        .plus-animation { 
+            position: absolute; 
+            color: var(--neon); 
+            font-size: 32px; 
+            font-weight: bold; 
+            animation: float 0.7s ease-out forwards; 
+            pointer-events: none; 
+            text-shadow: 0 0 10px var(--neon); 
+            z-index: 100; 
+        }
+        @keyframes float { 0% { opacity:1; transform: translateY(0) scale(1); } 100% { opacity:0; transform: translateY(-150px) scale(1.4); } }
     </style>
 </head>
 <body>
     <div class="game-container" id="game" style="opacity:0">
         <div class="header">
-            <span id="rank">RANK: ...</span>
-            <span id="lvl-display">LVL 1</span>
+            <div class="logo"></div>
+            <span id="lvl">🏆 Загрузка...</span>
         </div>
 
-        <div class="label" style="margin-top:20px">BALANCE</div>
-        <div id="score">0</div>
-
-        <div class="click-area">
-            <button id="tap-btn"></button>
+        <div class="balance-container">
+            <div class="balance-label">TOTAL NP POINTS</div>
+            <div id="score">0</div>
         </div>
 
-        <div class="nav">
-            <div class="nav-item" onclick="showModal('boost')">🚀 BOOST</div>
-            <div class="nav-item" onclick="showModal('friends')">👥 FRIENDS</div>
-            <div class="nav-item" onclick="showModal('mine')">⛏️ SHOP</div>
+        <div class="play-area">
+            <button id="btn"></button>
+            <div class="side-menu">
+                <div class="side-item" onclick="openModal('friends')">Friends</div>
+                <div class="side-item" onclick="openModal('tasks')">Tasks</div>
+            </div>
+        </div>
+
+        <div class="bottom-nav">
+            <div class="nav-card" onclick="openModal('boost')">🚀 BOOST</div>
+            <div class="nav-card" onclick="openModal('mine')">⛏️ MINE</div>
+            <div class="nav-card" onclick="openModal('stats')">⚙️ STATS</div>
         </div>
     </div>
 
-    <div class="overlay" id="overlay" onclick="closeModal()"></div>
+    <div class="overlay" id="overlay" onclick="closeAllModals()"></div>
 
-    <div id="m-boost" class="modal">
-        <h2>Boost Up</h2>
-        <p>Current power: <span id="pow" style="color:var(--neon-sec)">1</span> NP / Tap</p>
-        <button id="up-btn" class="btn-action" onclick="doUpgrade()">UPGRADE (<span id="price">0</span> NP)</button>
-    </div>
-
-    <div id="m-friends" class="modal">
-        <h2>Referrals</h2>
-        <div style="background:rgba(0,212,255,0.1); padding:15px; border-radius:12px; margin-bottom:15px">
-            <small>Get 50,000 NP for each friend!</small>
+    <div id="modal-boost" class="modal">
+        <div class="modal-header"><h2>Boosters</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content" style="text-align: center;">
+            <p>Текущая сила клика: <strong style="color:var(--neon-secondary); font-size: 20px;">+<span id="boost-power-label">1</span></strong></p>
+            <button id="buy-boost-btn" class="buy-btn" onclick="buyBoost()">
+                UPGRADE (Цена: <span id="boost-cost">0</span>)
+            </button>
         </div>
-        <button class="btn-action" style="background:#0088cc; color:#fff" onclick="invite()">INVITE FRIENDS</button>
-        <div id="f-list" style="margin-top:20px; overflow-y:auto; max-height:150px"></div>
     </div>
 
-    <div id="m-mine" class="modal">
-        <h2>Coming Soon</h2>
-        <p style="opacity:0.5">Shop with TON is under maintenance.</p>
+    <div id="modal-mine" class="modal">
+        <div class="modal-header">
+            <h2>⛏️ TON SHOP</h2>
+            <span class="close-btn" onclick="closeAllModals()">&times;</span>
+        </div>
+        <div class="modal-content">
+            <p style="text-align: center; font-size: 11px; opacity: 0.8; margin-bottom: 20px;">
+                Увеличьте мощность клика навсегда с помощью нейро-ускорителей за TON
+            </p>
+            <div class="mine-grid">
+                <div class="mine-card">
+                    <div class="mine-info">
+                        <h3>Micro Chip</h3>
+                        <p>+500 к клику</p>
+                    </div>
+                    <button class="ton-buy-btn" onclick="buyWithTon('micro_chip', 0.5)">
+                        0.5 TON
+                    </button>
+                </div>
+                <div class="mine-card">
+                    <div class="mine-info">
+                        <h3>Neural Link</h3>
+                        <p>+2,000 к клику</p>
+                    </div>
+                    <button class="ton-buy-btn" onclick="buyWithTon('neural_link', 1.5)">
+                        1.5 TON
+                    </button>
+                </div>
+                <div class="mine-card" style="border-color: var(--neon-secondary);">
+                    <div class="mine-info">
+                        <h3 style="color: var(--neon-secondary);">Quantum Core</h3>
+                        <p>+10,000 к клику</p>
+                    </div>
+                    <button class="ton-buy-btn" style="background: var(--neon-secondary); color: #000;" onclick="buyWithTon('quantum_core', 5.0)">
+                        5.0 TON
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
+
+    <div id="modal-stats" class="modal"><div class="modal-header"><h2>Stats</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><div class="modal-content" id="stats-content">Загрузка...</div></div>
+    <div id="modal-friends" class="modal"><div class="modal-header"><h2>Friends</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><div class="modal-content">Приглашайте друзей!</div></div>
+    <div id="modal-tasks" class="modal"><div class="modal-header"><h2>Tasks</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><div class="modal-content">Задания скоро появятся.</div></div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        const uid = String(tg.initDataUnsafe?.user?.id || "999");
-        let balance = 0, lvl = 1, pending = 0, CONF = {};
+        const userId = String(tg.initDataUnsafe?.user?.id || "999");
+        
+        let score = 0, pending = 0, clickPower = 1;
 
-        function showModal(id) {
-            document.getElementById('overlay').classList.add('active');
-            document.getElementById('m-' + id).classList.add('active');
-            if(id === 'friends') loadFriends();
-        }
-
-        function closeModal() {
-            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
-            document.getElementById('overlay').classList.remove('active');
-        }
+        // Конфигурация уровней
+        const PLAYER_LEVELS = {
+            1: { name: "Новичок", price: 0, tap: 1 },
+            2: { name: "Стажер", price: 1000, tap: 5 },
+            3: { name: "Фрилансер", price: 5000, tap: 15 },
+            4: { name: "Специалист", price: 15000, tap: 40 },
+            5: { name: "Менеджер", price: 45000, tap: 100 }
+        };
 
         function updateUI() {
-            document.getElementById('score').textContent = Math.floor(balance).toLocaleString();
-            const c = CONF[lvl];
-            if(c) {
-                document.getElementById('rank').textContent = `RANK: ${c.name}`;
-                document.getElementById('lvl-display').textContent = `LVL ${lvl}`;
-                document.getElementById('pow').textContent = c.tap;
-                const next = CONF[lvl + 1];
-                if(next) {
-                    document.getElementById('price').textContent = next.price.toLocaleString();
-                } else {
-                    document.getElementById('up-btn').style.display = 'none';
+            const currentLvlCfg = PLAYER_LEVELS[clickPower] || PLAYER_LEVELS[1];
+            const nextLvlCfg = PLAYER_LEVELS[clickPower + 1];
+
+            document.getElementById('score').textContent = Math.floor(score).toLocaleString();
+            document.getElementById('lvl').textContent = `🏆 ${currentLvlCfg.name} (Lvl ${clickPower})`;
+            document.getElementById('boost-power-label').textContent = currentLvlCfg.tap;
+            
+            if (nextLvlCfg) {
+                document.getElementById('boost-cost').textContent = nextLvlCfg.price.toLocaleString();
+                document.getElementById('buy-boost-btn').style.display = 'block';
+            } else {
+                document.getElementById('buy-boost-btn').style.display = 'none';
+            }
+        }
+
+        function openModal(id) {
+            document.getElementById('overlay').classList.add('active');
+            document.getElementById('modal-' + id).classList.add('active');
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+        }
+
+        function closeAllModals() {
+            document.getElementById('overlay').classList.remove('active');
+            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+        }
+
+        // Покупка за TON
+        function buyWithTon(itemId, price) {
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('heavy');
+            tg.showConfirm(`Вы подтверждаете покупку "${itemId}" за ${price} TON?`, (ok) => {
+                if (ok) {
+                    tg.sendData(JSON.stringify({
+                        action: "buy_ton",
+                        item: itemId,
+                        price: price
+                    }));
+                    closeAllModals();
+                    tg.showAlert("Счет отправлен боту! Проверьте чат.");
                 }
-            }
-        }
-
-        async function doUpgrade() {
-            const r = await fetch('/api/buy_boost', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ user_id: uid })
             });
-            const d = await r.json();
-            if(d.status === 'ok') {
-                balance = d.new_balance; lvl = d.new_lvl;
-                updateUI(); tg.HapticFeedback.notificationOccurred('success');
-            } else tg.showAlert(d.error);
         }
 
-        async function loadFriends() {
-            const r = await fetch(`/api/friends/${uid}`);
-            const d = await r.json();
-            document.getElementById('f-list').innerHTML = d.friends_list.map(f => 
-                `<div style="padding:10px; border-bottom:1px solid #1a2a3a">👤 User ${f}</div>`
-            ).join('') || "No friends yet";
-        }
+        // Покупка буста за игровую валюту
+        async function buyBoost() {
+            const nextLvl = clickPower + 1;
+            if (!PLAYER_LEVELS[nextLvl]) return;
 
-        function invite() {
-            const link = `https://t.me/YourBotUser?start=${uid}`; // ЗАМЕНИТЕ YourBotUser
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join me in Neural Pulse!`);
-        }
-
-        document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            const power = CONF[lvl]?.tap || 1;
-            for(let t of e.changedTouches) {
-                balance += power; pending += power;
-                const p = document.createElement('div');
-                p.className = 'plus'; p.textContent = `+${power}`;
-                p.style.left = t.pageX + 'px'; p.style.top = t.pageY + 'px';
-                document.body.appendChild(p);
-                setTimeout(() => p.remove(), 800);
+            if (score < PLAYER_LEVELS[nextLvl].price) {
+                tg.showAlert("Недостаточно монет для уровня " + PLAYER_LEVELS[nextLvl].name);
+                return;
             }
-            updateUI(); tg.HapticFeedback.impactOccurred('light');
-        });
 
-        setInterval(() => {
-            if(pending > 0) {
-                fetch('/api/clicks', {
+            const btn = document.getElementById('buy-boost-btn');
+            btn.disabled = true;
+
+            try {
+                const r = await fetch('/api/buy_boost', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ user_id: uid, clicks: pending })
+                    body: JSON.stringify({ user_id: userId })
                 });
-                pending = 0;
+                const d = await r.json();
+                if (d.status === 'ok') {
+                    score = d.new_balance;
+                    clickPower = d.new_lvl;
+                    updateUI();
+                    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+                } else {
+                    tg.showAlert(d.error);
+                }
+            } catch (e) {
+                tg.showAlert("Ошибка сервера");
+            }
+            btn.disabled = false;
+        }
+
+        // Клик
+        document.getElementById('btn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (document.getElementById('overlay').classList.contains('active')) return;
+            
+            const tap = PLAYER_LEVELS[clickPower]?.tap || 1;
+            for (let t of e.changedTouches) {
+                score += tap;
+                pending += tap;
+                
+                const p = document.createElement('div');
+                p.className = 'plus-animation';
+                p.textContent = '+' + tap;
+                p.style.left = t.pageX + 'px';
+                p.style.top = t.pageY + 'px';
+                document.body.appendChild(p);
+                setTimeout(() => p.remove(), 700);
+            }
+            updateUI();
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+        });
+
+        // Авто-сохранение
+        setInterval(async () => {
+            if (pending > 0) {
+                const s = pending; pending = 0;
+                try {
+                    await fetch('/api/clicks', { 
+                        method: 'POST', 
+                        headers: {'Content-Type': 'application/json'}, 
+                        body: JSON.stringify({ user_id: userId, clicks: s })
+                    });
+                } catch (e) { pending += s; }
             }
         }, 2000);
 
-        async function init() {
-            const [c, b] = await Promise.all([
-                fetch('/api/config').then(r => r.json()),
-                fetch(`/api/balance/${uid}`).then(r => r.json())
-            ]);
-            CONF = c.levels; balance = b.balance; lvl = b.click_lvl;
-            updateUI();
-            document.getElementById('game').style.opacity = 1;
+        async function load() {
+            try {
+                const r = await fetch(`/api/balance/${userId}`);
+                const d = await r.json();
+                score = d.balance || 0;
+                clickPower = d.click_lvl || 1;
+                updateUI();
+                document.getElementById('game').style.opacity = '1';
+            } catch (e) {
+                updateUI();
+                document.getElementById('game').style.opacity = '1';
+            }
         }
-        init();
+
+        load();
     </script>
 </body>
 </html>
