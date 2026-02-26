@@ -19,17 +19,6 @@ DB_PATH = BASE_DIR / "game.db"
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("NEURAL_PULSE")
 
-# --- ОТЛАДКА ---
-logger.info("=== ПРОВЕРКА КАРТИНОК ===")
-if IMAGES_DIR.exists():
-    files = os.listdir(IMAGES_DIR)
-    logger.info(f"✅ Найдено файлов: {len(files)} по пути {IMAGES_DIR}")
-    for f in files:
-        logger.info(f" -> Файл: {f}")
-else:
-    logger.error(f"❌ Путь {IMAGES_DIR} не найден!")
-    IMAGES_DIR.mkdir(parents=True, exist_ok=True)
-
 TOKEN = "8257287930:AAFhDcKz-ebfaAHzb5H4Hr1b9SCa9OrSauI"
 MY_DOMAIN = "ai.bothost.ru"
 ADM_ID = 476014374
@@ -41,7 +30,8 @@ dp = Dispatcher()
 async def lifespan(app: FastAPI):
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
-            conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)")
+            # Добавляем click_lvl для хранения уровня прокачки клика
+            conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, click_lvl INTEGER DEFAULT 1)")
             conn.commit()
         logger.info("🗄️ База данных готова.")
     except Exception as e:
@@ -56,39 +46,28 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# Монтирование статики
 if IMAGES_DIR.exists():
     app.mount("/static/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
-
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 templates = Jinja2Templates(directory=[str(BASE_DIR), str(STATIC_DIR)])
 
-# --- API ---
+# --- API ЭНДПОИНТЫ ---
+
 @app.get("/")
 async def serve_game(request: Request):
-    try:
-        return templates.TemplateResponse("index.html", {"request": request})
-    except:
-        for p in [BASE_DIR / "index.html", STATIC_DIR / "index.html"]:
-            if p.exists():
-                from fastapi.responses import FileResponse
-                return FileResponse(p)
-        return Response(content="index.html not found", status_code=404)
-
-@app.get("/favicon.ico", include_in_schema=False)
-async def favicon():
-    return Response(status_code=204)
+    return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     with sqlite3.connect(str(DB_PATH)) as conn:
         c = conn.cursor()
-        c.execute("SELECT balance FROM users WHERE id = ?", (user_id,))
+        c.execute("SELECT balance, click_lvl FROM users WHERE id = ?", (user_id,))
         row = c.fetchone()
-        balance = row[0] if row else 0
-        return Response(content=f'{{"balance": {balance}}}', media_type="application/json")
+        if row:
+            return {"balance": row[0], "click_lvl": row[1]}
+        return {"balance": 0, "click_lvl": 1}
 
 @app.post("/api/clicks")
 async def save_clicks(data: dict = Body(...)):
@@ -98,13 +77,33 @@ async def save_clicks(data: dict = Body(...)):
         conn.commit()
     return {"status": "ok"}
 
-# --- БОТ ---
-@dp.message(F.text == "/stats", F.from_user.id == ADM_ID)
-async def admin_stats(message: types.Message):
+@app.get("/api/all_stats")
+async def get_all_stats():
     with sqlite3.connect(str(DB_PATH)) as conn:
         res = conn.execute("SELECT COUNT(*), SUM(balance) FROM users").fetchone()
-    await message.answer(f"👥 Игроков: {res[0]}\n💰 Всего NP: {res[1]}")
+        return {"total_players": res[0] or 0, "total_balance": res[1] or 0}
 
+@app.post("/api/buy_boost")
+async def buy_boost(data: dict = Body(...)):
+    uid = str(data.get("user_id"))
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        c = conn.cursor()
+        c.execute("SELECT balance, click_lvl FROM users WHERE id = ?", (uid,))
+        row = c.fetchone()
+        if not row: return {"error": "User not found"}
+        
+        balance, lvl = row[0], row[1]
+        cost = lvl * 500 # Цена: 500, 1000, 1500...
+        
+        if balance >= cost:
+            new_balance = balance - cost
+            new_lvl = lvl + 1
+            conn.execute("UPDATE users SET balance = ?, click_lvl = ? WHERE id = ?", (new_balance, new_lvl, uid))
+            conn.commit()
+            return {"status": "ok", "new_balance": new_balance, "new_lvl": new_lvl, "next_cost": new_lvl * 500}
+        return {"error": "Недостаточно NP"}
+
+# --- ЛОГИКА БОТА ---
 @dp.message(F.text == "/start")
 async def start_handler(message: types.Message):
     v = int(datetime.now().timestamp())
