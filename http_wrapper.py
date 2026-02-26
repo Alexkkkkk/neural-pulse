@@ -12,12 +12,11 @@ from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
 # --- НАСТРОЙКА ПУТЕЙ ---
 BASE_DIR = Path(__file__).resolve().parent
-# Важно: эти папки должны существовать, чтобы картинки отображались
 IMAGES_DIR = BASE_DIR / "images"
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH = BASE_DIR / "game.db"
 
-# Создаем папки, если их нет
+# Создаем папки автоматически, если их еще нет
 IMAGES_DIR.mkdir(exist_ok=True)
 STATIC_DIR.mkdir(exist_ok=True)
 
@@ -39,7 +38,7 @@ async def lifespan(app: FastAPI):
         with sqlite3.connect(str(DB_PATH)) as conn:
             conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)")
             conn.commit()
-        logger.info("🗄️ [DB]: База данных готова к работе.")
+        logger.info("🗄️ [DB]: База данных готова.")
     except Exception as e:
         logger.error(f"❌ [DB ERROR]: {e}")
 
@@ -70,13 +69,15 @@ app.add_middleware(
 )
 
 # МОНТИРОВАНИЕ СТАТИКИ
-# Теперь сервер будет раздавать файлы из /images по адресу /static/images
-app.mount("/static/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+# Теперь файлы unnamed3.jpg и unnamed4.jpg будут доступны по адресу /static/images/
+if IMAGES_DIR.exists():
+    app.mount("/static/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 templates = Jinja2Templates(directory=[str(BASE_DIR), str(STATIC_DIR)])
 
-# --- API ---
+# --- API ЭНДПОИНТЫ ---
 
 @app.get("/")
 async def serve_game(request: Request):
@@ -120,14 +121,14 @@ async def save_clicks(data: dict = Body(...)):
         conn.commit()
     return {"status": "ok"}
 
-# --- БОТ ---
+# --- ЛОГИКА БОТА ---
 
 @dp.message(F.from_user.id == ADM_ID, F.text == "/stats")
 async def admin_stats(message: types.Message):
     with sqlite3.connect(str(DB_PATH)) as conn:
         res = conn.execute("SELECT COUNT(*), SUM(balance) FROM users").fetchone()
     await message.answer(
-        f"<b>📊 Статистика Neural Pulse:</b>\n\n👥 Игроков: {res[0] or 0}\n💰 Добыто NP: {res[1] or 0}", 
+        f"<b>📊 Статистика Neural Pulse:</b>\n\n👥 Игроков: {res[0] or 0}\n💰 Всего NP: {res[1] or 0}", 
         parse_mode="HTML"
     )
 
@@ -145,7 +146,7 @@ async def start_handler(message: types.Message):
         InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/?v={v}"))
     ]])
     
-    text = "Привет! Жми на кнопку, чтобы начать майнить NP."
+    text = "Добро пожаловать в Neural Pulse! Жми на кнопку, чтобы начать майнить."
     if message.from_user.id == ADM_ID:
         text = "🤝 <b>Привет, Создатель!</b>\n\n/stats — стата\n/reset_all — сброс"
         
