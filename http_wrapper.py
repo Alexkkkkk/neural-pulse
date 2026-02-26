@@ -93,4 +93,9 @@ async def start_handler(m: types.Message):
     v = int(datetime.now().timestamp())
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/?v={v}"))]])
     msg = "Привет! Начинай майнить кликами прямо сейчас!"
-    if m.from_user.id == ADMIN_
+    if m.from_user.id == ADMIN_ID:
+        msg = "🤝 **Добро пожаловать, Создатель!**\n\n🛠 Команды:\n/stats — статистика\n/reset_all — полный сброс"
+    await m.answer(msg, reply_markup=kb, parse_mode="Markdown")
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=3000)
