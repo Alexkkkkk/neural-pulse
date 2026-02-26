@@ -82,7 +82,7 @@
     <div class="game-container" id="game" style="opacity:0">
         <div class="header">
             <div class="logo"></div>
-            <span id="lvl">🏆 Новичок (Lvl 1)</span>
+            <span id="lvl">🏆 Loading...</span>
         </div>
 
         <div class="balance-container">
@@ -129,9 +129,9 @@
         <div id="bot-list-container"></div>
     </div>
 
-    <div id="modal-wallet" class="modal"><div class="modal-header"><h2>Wallet</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><p>TON Wallet Integration Coming Soon...</p></div>
-    <div id="modal-friends" class="modal"><div class="modal-header"><h2>Friends</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><p>Приглашайте друзей и получайте 10% от их добычи!</p></div>
-    <div id="modal-tasks" class="modal"><div class="modal-header"><h2>Tasks</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><p>Выполняйте квесты для получения NP.</p></div>
+    <div id="modal-wallet" class="modal"><div class="modal-header"><h2>Wallet</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><p>TON Wallet (Soon...)</p></div>
+    <div id="modal-friends" class="modal"><div class="modal-header"><h2>Friends</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><p id="ref-link">Приглашайте друзей!</p></div>
+    <div id="modal-tasks" class="modal"><div class="modal-header"><h2>Tasks</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><p>Задания в разработке...</p></div>
     <div id="modal-stats" class="modal"><div class="modal-header"><h2>Stats</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><div id="stats-content"></div></div>
 
     <script>
@@ -144,7 +144,6 @@
         let playerLevel = 1;
         let botLvl = 0;
 
-        // ВАША ТАБЛИЦА (20 Уровней)
         const PLAYER_LEVELS = {
             1: { name: "Новичок", price: 0, tap: 1 },
             2: { name: "Стажер", price: 1000, tap: 5 },
@@ -169,31 +168,46 @@
         };
 
         const BOT_CONFIG = {
-            1: { name: "Basic Core", price_ton: 1, mult: 1 },    // 100% от тапа
-            10: { name: "Advanced AI", price_ton: 22, mult: 8.5 }, // 850% от тапа
-            20: { name: "Quantum Mind", price_ton: 100, mult: 30 }  // 3000% от тапа
+            1: { name: "Basic Core", price_ton: 1, mult: 1.0 },
+            10: { name: "Advanced AI", price_ton: 22, mult: 8.5 },
+            20: { name: "Quantum Mind", price_ton: 100, mult: 30.0 }
         };
 
+        async function loadData() {
+            try {
+                const r = await fetch(`/api/balance/${userId}?t=${Date.now()}`);
+                const d = await r.json();
+                score = d.balance;
+                playerLevel = d.click_lvl;
+                botLvl = d.bot_lvl;
+                
+                if(d.offline_profit > 0) {
+                    tg.showAlert(`🤖 Бот принес вам ${d.offline_profit.toLocaleString()} NP за время вашего отсутствия!`);
+                }
+                
+                updateUI();
+                document.getElementById('game').style.opacity = '1';
+                document.getElementById('ref-link').innerHTML = `Приглашайте друзей!<br><small>https://t.me/neural_pulse_bot?start=${userId}</small>`;
+            } catch (e) { console.error("Load error", e); }
+        }
+
         function updateUI() {
-            const current = PLAYER_LEVELS[playerLevel];
+            const current = PLAYER_LEVELS[playerLevel] || PLAYER_LEVELS[1];
             const next = PLAYER_LEVELS[playerLevel + 1];
 
             document.getElementById('score').textContent = Math.floor(score).toLocaleString();
             document.getElementById('lvl').textContent = `🏆 ${current.name} (Lvl ${playerLevel})`;
             
-            // Настройка модалки апгрейда
             if (next) {
                 document.getElementById('next-lvl-name').textContent = `СЛЕДУЮЩИЙ: ${next.name}`;
                 document.getElementById('next-tap-val').textContent = `+${next.tap.toLocaleString()}`;
                 document.getElementById('upgrade-cost-label').textContent = `Стоимость: ${next.price.toLocaleString()} NP`;
                 document.getElementById('buy-upgrade-btn').disabled = score < next.price;
-                document.getElementById('buy-upgrade-btn').style.opacity = score < next.price ? "0.5" : "1";
             } else {
                 document.getElementById('next-lvl-name').textContent = "МАКСИМАЛЬНЫЙ УРОВЕНЬ";
                 document.getElementById('buy-upgrade-btn').style.display = "none";
             }
 
-            // Индикатор бота
             const ind = document.getElementById('bot-indicator');
             if (botLvl > 0) {
                 const income = current.tap * (BOT_CONFIG[botLvl]?.mult || 0);
@@ -202,20 +216,24 @@
         }
 
         async function handleUpgrade() {
-            const nextLvl = playerLevel + 1;
-            const cost = PLAYER_LEVELS[nextLvl].price;
-            
-            if (score >= cost) {
-                score -= cost;
-                playerLevel = nextLvl;
-                updateUI();
-                if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-                // Отправка на бэкенд
-                syncData();
-            }
+            try {
+                const r = await fetch('/api/buy_boost', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ user_id: userId })
+                });
+                const d = await r.json();
+                if (d.status === 'ok') {
+                    score = d.new_balance;
+                    playerLevel = d.new_lvl;
+                    updateUI();
+                    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+                } else {
+                    tg.showAlert(d.error || "Ошибка апгрейда");
+                }
+            } catch(e) { tg.showAlert("Ошибка связи с сервером"); }
         }
 
-        // Клик
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             const tapPower = PLAYER_LEVELS[playerLevel].tap;
@@ -238,7 +256,7 @@
             setTimeout(() => p.remove(), 700);
         }
 
-        // Пассивный доход
+        // Пассивный доход (визуальный)
         setInterval(() => {
             if (botLvl > 0) {
                 const pps = PLAYER_LEVELS[playerLevel].tap * BOT_CONFIG[botLvl].mult;
@@ -247,12 +265,24 @@
             }
         }, 1000);
 
-        // Модалки
+        async function syncData() {
+            if (pending > 0) {
+                const s = pending; pending = 0;
+                try {
+                    await fetch('/api/clicks', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ user_id: userId, clicks: s })
+                    });
+                } catch (e) { pending += s; }
+            }
+        }
+        setInterval(syncData, 3000);
+
         function openModal(id) {
             document.getElementById('overlay').classList.add('active');
             document.getElementById('modal-' + id).classList.add('active');
             if (id === 'mine') renderBotShop();
-            updateUI();
         }
 
         function closeAllModals() {
@@ -267,10 +297,7 @@
                 const card = document.createElement('div');
                 card.className = 'mine-card';
                 card.innerHTML = `
-                    <div class="item-info">
-                        <h3>${data.name} (Lvl ${lvl})</h3>
-                        <p>Доход: ${data.mult * 100}% силы тапа</p>
-                    </div>
+                    <div class="item-info"><h3>${data.name}</h3><p>Доход: x${data.mult} силы тапа</p></div>
                     <button class="buy-ton-btn" onclick="buyBot(${lvl})">${data.price_ton} TON</button>
                 `;
                 container.appendChild(card);
@@ -278,29 +305,21 @@
         }
 
         async function buyBot(lvl) {
-            tg.showAlert(`Функция оплаты ${lvl} TON скоро будет подключена через TON Connect!`);
-        }
-
-        async function syncData() {
-            if (pending > 0) {
-                const s = pending; pending = 0;
-                try {
-                    await fetch('/api/sync', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ user_id: userId, score: score, level: playerLevel })
-                    });
-                } catch (e) { pending += s; }
+            // В вашем Python-коде это просто обновляет БД без оплаты (для теста)
+            const r = await fetch('/api/buy_bot', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ user_id: userId, target_lvl: lvl })
+            });
+            const d = await r.json();
+            if (d.status === 'ok') {
+                botLvl = d.new_bot_lvl;
+                updateUI();
+                tg.showAlert("Бот успешно активирован!");
             }
         }
-        
-        setInterval(syncData, 3000);
 
-        // Старт
-        window.onload = () => {
-            updateUI();
-            document.getElementById('game').style.opacity = '1';
-        };
+        window.onload = loadData;
     </script>
 </body>
 </html>
