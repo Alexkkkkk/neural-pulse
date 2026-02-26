@@ -16,17 +16,27 @@ IMAGES_DIR = BASE_DIR / "images"
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH = BASE_DIR / "game.db"
 
-# Создаем папки автоматически, если их еще нет
+# Создаем папки автоматически
 IMAGES_DIR.mkdir(exist_ok=True)
 STATIC_DIR.mkdir(exist_ok=True)
 
-# Данные бота и домен
+# Данные бота
 TOKEN = "8257287930:AAFhDcKz-ebfaAHzb5H4Hr1b9SCa9OrSauI"
 MY_DOMAIN = "ai.bothost.ru"
-ADM_ID = 476014374  # Твой ID для доступа к админке
+ADM_ID = 476014374 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("NEURAL_PULSE")
+
+# --- ОТЛАДКА: ПРОВЕРКА ФАЙЛОВ ПЕРЕД ЗАПУСКОМ ---
+logger.info("=== ПРОВЕРКА КАРТИНОК ===")
+if IMAGES_DIR.exists():
+    files = os.listdir(IMAGES_DIR)
+    logger.info(f"В папке images найдено файлов: {len(files)}")
+    for f in files:
+        logger.info(f" -> Обнаружен файл: {f}")
+else:
+    logger.error("!!! ПАПКА IMAGES НЕ СУЩЕСТВУЕТ !!!")
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -69,10 +79,9 @@ app.add_middleware(
 )
 
 # МОНТИРОВАНИЕ СТАТИКИ
-# Теперь файлы unnamed3.png и unnamed4.png будут доступны по адресу /static/images/
 if IMAGES_DIR.exists():
     app.mount("/static/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
-    logger.info(f"🖼️ [STATIC]: Картинки PNG подключены из {IMAGES_DIR}")
+    logger.info(f"🖼️ [STATIC]: Картинки подключены из {IMAGES_DIR}")
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
