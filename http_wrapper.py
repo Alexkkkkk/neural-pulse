@@ -1,8 +1,4 @@
-import os
-import asyncio
-import sqlite3
-import uvicorn
-import logging
+import os, asyncio, sqlite3, uvicorn, logging
 from pathlib import Path
 from datetime import datetime
 from contextlib import asynccontextmanager
@@ -22,6 +18,7 @@ DB_PATH = BASE_DIR / "game.db"
 
 TOKEN = "8257287930:AAFhDcKz-ebfaAHzb5H4Hr1b9SCa9OrSauI"
 MY_DOMAIN = "ai.bothost.ru"
+ADM_ID = 476014374  # Твой ID для доступа к админке
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("NEURAL_PULSE")
@@ -34,40 +31,30 @@ async def lifespan(app: FastAPI):
     # --- 1. ОЧИСТКА И ИНИЦИАЛИЗАЦИЯ БД ---
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
-            # Создаем таблицу, если её нет
             conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)")
-            
-            # ПОЛНАЯ ОЧИСТКА ДАННЫХ ПРИ СТАРТЕ
+            # ОЧИСТКА ПРИ СТАРТЕ (как в твоем эталоне)
             conn.execute("DELETE FROM users") 
             conn.commit()
-            
-        logger.info(f"🗄️ [DB]: База данных очищена. Все балансы сброшены.")
+        logger.info("🗄️ [DB]: База данных инициализирована и очищена.")
     except Exception as e:
         logger.error(f"❌ [DB ERROR]: {e}")
 
-    # --- 2. ОЧИСТКА ОЧЕРЕДИ И ЗАПУСК БОТА ---
+    # --- 2. ЗАПУСК БОТА ---
     polling_task = None
     try:
-        # drop_pending_updates=True удаляет все сообщения, присланные пока бот был оффлайн
         await bot.delete_webhook(drop_pending_updates=True)
         polling_task = asyncio.create_task(dp.start_polling(bot))
-        logger.info("✅ [BOT]: Очередь обновлений очищена. Поллинг запущен!")
+        logger.info(f"✅ [BOT]: Поллинг запущен. Админ ID: {ADM_ID}")
     except Exception as e:
         logger.error(f"❌ [BOT ERROR]: {e}")
     
     yield
     
-    # --- 3. КОРРЕКТНОЕ ЗАКРЫТИЕ (CLEANUP) ---
-    logger.info("🛑 [SYSTEM]: Запущена процедура выключения...")
+    # --- 3. ЗАКРЫТИЕ ---
     if polling_task:
         polling_task.cancel()
-        try:
-            await polling_task
-        except asyncio.CancelledError:
-            pass
-            
     await bot.session.close()
-    logger.info("👋 [SYSTEM]: Все соединения закрыты.")
+    logger.info("👋 [SYSTEM]: Соединения закрыты.")
 
 app = FastAPI(lifespan=lifespan)
 
@@ -91,7 +78,9 @@ templates = Jinja2Templates(directory=[str(BASE_DIR), str(STATIC_DIR)])
 @app.get("/")
 async def serve_game(request: Request):
     try:
-        return templates.TemplateResponse("index.html", {"request": request})
+        res = templates.TemplateResponse("index.html", {"request": request})
+        res.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        return res
     except Exception:
         for p in [BASE_DIR / "index.html", STATIC_DIR / "index.html"]:
             if p.exists():
@@ -113,17 +102,33 @@ async def get_balance(user_id: str):
 
 @app.post("/api/clicks")
 async def save_clicks(data: dict = Body(...)):
-    uid = str(data.get("user_id"))
-    clicks = int(data.get("clicks", 0))
+    uid, clicks = str(data.get("user_id")), int(data.get("clicks", 0))
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute(
             "INSERT INTO users (id, balance) VALUES (?, ?) "
             "ON CONFLICT(id) DO UPDATE SET balance = balance + ?", 
             (uid, clicks, clicks)
         )
+        conn.commit()
     return {"status": "ok"}
 
-# --- ЛОГИКА БОТА ---
+# --- ЛОГИКА БОТА (С АДМИН-КОМАНДАМИ) ---
+
+@dp.message(F.from_user.id == ADM_ID, F.text == "/stats")
+async def admin_stats(message: types.Message):
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        res = conn.execute("SELECT COUNT(*), SUM(balance) FROM users").fetchone()
+    await message.answer(
+        f"<b>📊 Статистика:</b>\nЮзеров: {res[0] or 0}\nВсего NP: {res[1] or 0}", 
+        parse_mode="HTML"
+    )
+
+@dp.message(F.from_user.id == ADM_ID, F.text == "/reset_all")
+async def admin_reset(message: types.Message):
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        conn.execute("DELETE FROM users")
+        conn.commit()
+    await message.answer("🧨 <b>БАЗА ДАННЫХ ОЧИЩЕНА!</b>", parse_mode="HTML")
 
 @dp.message(F.text == "/start")
 async def start_handler(message: types.Message):
@@ -131,10 +136,12 @@ async def start_handler(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/?v={v}"))
     ]])
-    await message.answer(
-        f"Привет! Система была перезагружена, данные очищены.\nНачинай майнить заново!", 
-        reply_markup=kb
-    )
+    
+    text = "Привет! Система была перезагружена, данные очищены.\nНачинай майнить заново!"
+    if message.from_user.id == ADM_ID:
+        text = "🤝 <b>Добро пожаловать, Создатель!</b>\n\n🛠 Команды:\n/stats — статистика\n/reset_all — сброс"
+        
+    await message.answer(text, reply_markup=kb, parse_mode="HTML")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
