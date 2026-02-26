@@ -1,167 +1,280 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse AI</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
-    <style>
-        :root { 
-            --neon: #00d4ff; 
-            --neon-secondary: #00ff96;
-            --bg: #050a1a; 
-        }
-        
-        body { 
-            margin: 0; 
-            background: var(--bg); /* Чистый темный фон вместо картинки */
-            background: radial-gradient(circle at center, #0a192f 0%, #050a1a 100%);
-            height: 100vh; 
-            font-family: 'Orbitron', sans-serif; 
-            color: white; 
-            overflow: hidden; 
-            user-select: none; 
-            display: flex;
-            justify-content: center;
-        }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Neural Pulse AI</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --neon: #00d4ff; --bg: #050a1a; }
+        
+        body { 
+            margin: 0; 
+            background: var(--bg) url('/static/images/images.jpeg') no-repeat center; 
+            background-size: cover; 
+            height: 100vh; 
+            font-family: 'Orbitron', sans-serif; 
+            color: white; 
+            overflow: hidden; 
+            user-select: none; 
+            display: flex;
+            justify-content: center;
+        }
 
-        /* Главный контейнер без внешних картинок-рамок */
-        .game-container { 
-            position: relative;
-            width: 100%;
-            max-width: 500px;
-            height: 100vh;
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            padding: 20px;
-            box-sizing: border-box;
-            /* Добавляем внутреннее свечение вместо рамки unnamed1.png */
-            border: 1px solid rgba(0, 212, 255, 0.1);
-            background: rgba(255, 255, 255, 0.02);
-            transition: opacity 0.5s;
-        }
+        /* Главный контейнер с фоновой рамкой */
+        .game-container { 
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            height: 100vh;
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            padding: 20px;
+            box-sizing: border-box;
+            background: url('/static/images/unnamed1.png') no-repeat center; 
+            background-size: 100% 100%;
+            transition: opacity 0.5s;
+        }
 
-        .header { 
-            width: 100%; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            margin-top: 10px;
-        }
-        
-        /* Заменили логотип на CSS фигуру */
-        .logo { 
-            width: 45px; height: 45px; 
-            background: var(--neon);
-            border-radius: 50%;
-            box-shadow: 0 0 15px var(--neon);
-            display: flex; align-items: center; justify-content: center;
-            font-weight: bold; font-size: 20px;
-        }
+        /* Верхняя панель (Header) */
+        .header { 
+            width: 100%; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-top: 10px;
+        }
+        .logo { width: 45px; height: 45px; background: url('/static/images/unnamed4.png') no-repeat center; background-size: contain; }
+        #lvl { font-size: 14px; text-shadow: 0 0 10px var(--neon); }
 
-        #lvl { font-size: 14px; text-shadow: 0 0 10px var(--neon); color: var(--neon); }
+        /* Секция баланса */
+        .balance-container {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .balance-label { font-size: 12px; color: rgba(255,255,255,0.7); letter-spacing: 1px; }
+        #score { font-size: 42px; color: #ffcc00; text-shadow: 0 0 15px rgba(255,204,0,0.6); font-weight: bold; margin-top: 5px; }
 
-        .balance-container {
-            text-align: center;
-            margin-top: 20px;
-        }
-        .balance-label { font-size: 12px; color: rgba(255,255,255,0.7); letter-spacing: 2px; }
-        #score { font-size: 48px; color: #fff; text-shadow: 0 0 20px var(--neon); font-weight: bold; margin-top: 5px; }
+        /* Игровая зона с кнопкой и боковым меню */
+        .play-area {
+            position: relative;
+            flex-grow: 1;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
 
-        .play-area {
-            position: relative;
-            flex-grow: 1;
-            width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+        /* Главная кнопка */
+        #btn { 
+            width: 75vw; 
+            max-width: 320px;
+            height: 75vw;
+            max-height: 320px;
+            background: url('/static/images/unnamed3.png') no-repeat center; 
+            background-size: contain; 
+            border: none; 
+            cursor: pointer; 
+            filter: drop-shadow(0 0 30px var(--neon)); 
+            transition: transform 0.05s; 
+            outline: none; 
+            z-index: 2;
+        }
+        #btn:active { transform: scale(0.95); }
 
-        /* Заменили картинку кнопки unnamed3.png на неоновую сферу */
-        #btn { 
-            width: 70vw; 
-            max-width: 280px;
-            height: 70vw;
-            max-height: 280px;
-            background: radial-gradient(circle, var(--neon) 0%, #005f73 100%);
-            border-radius: 50%;
-            border: 4px solid rgba(255,255,255,0.2);
-            box-shadow: 0 0 50px rgba(0, 212, 255, 0.4), inset 0 0 20px rgba(255,255,255,0.3);
-            cursor: pointer; 
-            transition: transform 0.05s, box-shadow 0.2s; 
-            outline: none; 
-            z-index: 2;
-        }
-        #btn:active { transform: scale(0.92); box-shadow: 0 0 80px var(--neon); }
+        /* Правое боковое меню (Connect, Referrals, etc) */
+        .side-menu {
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 3;
+        }
+        .side-item {
+            width: 110px;
+            height: 45px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 8px;
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            text-transform: uppercase;
+            text-align: center;
+        }
 
-        .side-menu {
-            position: absolute;
-            right: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            z-index: 3;
-        }
-        .side-item {
-            width: 100px;
-            padding: 10px 5px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(0, 212, 255, 0.2);
-            border-radius: 8px;
-            backdrop-filter: blur(5px);
-            font-size: 8px;
-            text-transform: uppercase;
-            text-align: center;
-        }
+        /* Секция энергии */
+        .energy-container {
+            width: 100%;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .energy-text { font-size: 12px; margin-bottom: 8px; opacity: 0.8; }
+        .energy-bar {
+            width: 80%;
+            height: 10px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+            margin: 0 auto;
+            border: 1px solid rgba(0, 255, 150, 0.4);
+            overflow: hidden;
+        }
+        .energy-fill {
+            width: 87.5%; /* Пример заполнения */
+            height: 100%;
+            background: linear-gradient(90deg, #00ff96, #00d4ff);
+            box-shadow: 0 0 10px #00ff96;
+        }
 
-        .energy-container {
-            width: 100%;
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .energy-bar {
-            width: 80%;
-            height: 8px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 4px;
-            margin: 10px auto;
-            overflow: hidden;
-        }
-        .energy-fill {
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, var(--neon-secondary), var(--neon));
-            box-shadow: 0 0 10px var(--neon-secondary);
-        }
+        /* Нижнее меню (Upgrade, Mining, Achievements) */
+        .bottom-nav {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            width: 100%;
+            margin-bottom: 30px;
+        }
+        .nav-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            height: 70px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            backdrop-filter: blur(10px);
+        }
+        .nav-card i { font-size: 20px; margin-bottom: 5px; }
 
-        .bottom-nav {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            width: 100%;
-            margin-bottom: 20px;
-        }
-        .nav-card {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 15px 5px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            font-size: 10px;
-        }
+        /* Анимация клика */
+        .plus-animation { 
+            position: absolute; 
+            color: white; 
+            font-size: 32px; 
+            font-weight: bold; 
+            animation: float 0.6s ease-out forwards; 
+            pointer-events: none; 
+            text-shadow: 0 0 15px var(--neon); 
+            z-index: 100; 
+        }
+        @keyframes float { 
+            0% { opacity:1; transform: translateY(0) scale(1); } 
+            100% { opacity:0; transform: translateY(-100px) scale(1.5); } 
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container" id="game" style="opacity:0">
+        <div class="header">
+            <div class="logo"></div>
+            <span id="lvl">🏆 Level 10</span>
+        </div>
 
-        .plus-animation { 
-            position: absolute; 
-            color: var(--neon); 
-            font-size: 28px; 
-            font-weight: bold; 
-            animation: float 0.6s ease-out forwards; 
-            pointer-events: none; 
-            text-shadow: 0 0 10px var(--neon); 
-            z-index: 100; 
-        }
-        @
+        <div class="balance-container">
+            <div class="balance-label">BALANCE VALUE</div>
+            <div id="score">0</div>
+            <div style="font-size: 12px; opacity: 0.6;">AI</div>
+        </div>
+
+        <div class="play-area">
+            <button id="btn"></button>
+            
+            <div class="side-menu">
+                <div class="side-item" style="background: #2196F3; border:none;">Connect Wallet</div>
+                <div class="side-item">Referrals</div>
+                <div class="side-item">Settings</div>
+                <div class="side-item">Support</div>
+            </div>
+        </div>
+
+        <div class="energy-container">
+            <div class="energy-text">ENERGY</div>
+            <div class="energy-bar">
+                <div class="energy-fill" id="energyFill"></div>
+            </div>
+            <div style="font-size: 12px; margin-top: 8px;">⚡ 875 / 1000</div>
+        </div>
+
+        <div class="bottom-nav">
+            <div class="nav-card">🚀<br>UPGRADE</div>
+            <div class="nav-card">💎<br>MINING</div>
+            <div class="nav-card">🏆<br>TASKS</div>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        
+        const userId = String(tg.initDataUnsafe?.user?.id || "999");
+        let score = 0;
+        let pending = 0;
+
+        const scoreEl = document.getElementById('score');
+        const lvlEl = document.getElementById('lvl');
+        const btn = document.getElementById('btn');
+
+        async function loadData() {
+            try {
+                const r = await fetch(`/api/balance/${userId}`);
+                const d = await r.json();
+                score = d.balance || 0;
+                scoreEl.textContent = score.toLocaleString();
+                lvlEl.textContent = `🏆 Level ${d.level || 1}`;
+                document.getElementById('game').style.opacity = '1';
+            } catch (e) { 
+                console.error("Load Error");
+                // Для теста, если API нет
+                document.getElementById('game').style.opacity = '1';
+            }
+        }
+
+        btn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            for (let t of e.changedTouches) {
+                score++;
+                pending++;
+                spawnPlus(t.pageX, t.pageY);
+            }
+            scoreEl.textContent = score.toLocaleString();
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+        });
+
+        function spawnPlus(x, y) {
+            const p = document.createElement('div');
+            p.className = 'plus-animation';
+            p.textContent = '+1';
+            p.style.left = (x - 20) + 'px';
+            p.style.top = (y - 40) + 'px';
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 600);
+        }
+
+        setInterval(async () => {
+            if (pending > 0) {
+                const toSend = pending;
+                pending = 0;
+                try {
+                    await fetch('/api/clicks', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ user_id: userId, clicks: toSend })
+                    });
+                } catch (e) { pending += toSend; }
+            }
+        }, 1500);
+
+        loadData();
+        tg.ready();
+    </script>
+</body>
+</html> исправь
