@@ -27,14 +27,17 @@ dp = Dispatcher()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Логируем окружение для отладки на Bothost
     logger.info(f"📂 BASE_DIR: {BASE_DIR}")
     logger.info(f"📄 Files found: {os.listdir(str(BASE_DIR))}")
     
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
+            # Расширенная таблица: добавлен referrer_id для друзей
             conn.execute('''CREATE TABLE IF NOT EXISTS users 
-                            (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, click_lvl INTEGER DEFAULT 1)''')
+                            (id TEXT PRIMARY KEY, 
+                             balance INTEGER DEFAULT 0, 
+                             click_lvl INTEGER DEFAULT 1,
+                             referrer_id TEXT)''')
             conn.commit()
         logger.info("🗄️ База данных готова.")
     except Exception as e:
@@ -55,22 +58,18 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# Монтируем статику
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-    logger.info("🎨 Папка static подключена.")
 
-# Шаблоны ищем в корневой папке
 templates = Jinja2Templates(directory=str(BASE_DIR))
 
-# --- API ---
+# --- API ЭНДПОИНТЫ ---
 
 @app.get("/")
 async def serve_game(request: Request):
     index_path = BASE_DIR / "index.html"
     if not index_path.exists():
-        logger.error("🚨 index.html не найден!")
-        return {"error": "Файл index.html отсутствует в корневой папке проекта."}
+        return {"error": "Файл index.html отсутствует в корне проекта."}
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/api/balance/{user_id}")
@@ -87,8 +86,7 @@ async def get_balance(user_id: str):
 
 @app.post("/api/clicks")
 async def save_clicks(data: dict = Body(...)):
-    uid = str(data.get("user_id"))
-    clicks = int(data.get("clicks", 0))
+    uid, clicks = str(data.get("user_id")), int(data.get("clicks", 0))
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (clicks, uid))
         conn.commit()
@@ -105,10 +103,4 @@ async def buy_boost(data: dict = Body(...)):
         
         balance, lvl = row[0], row[1]
         cost = lvl * 500
-        
         if balance >= cost:
-            new_balance = balance - cost
-            new_lvl = lvl + 1
-            conn.execute("UPDATE users SET balance = ?, click_lvl = ? WHERE id = ?", (new_balance, new_lvl, uid))
-            conn.commit()
-            return {"status": "ok", "new_balance": new_balance, "new_lvl": new_lvl, "
