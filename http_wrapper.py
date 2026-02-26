@@ -10,18 +10,13 @@ from fastapi.templating import Jinja2Templates
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
-# --- НАСТРОЙКА ПУТЕЙ (Исправлено для Bothost) ---
-# Получаем абсолютный путь к папке, где лежит этот скрипт
+# --- НАСТРОЙКА ПУТЕЙ ---
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH = BASE_DIR / "game.db"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("NEURAL_PULSE")
-
-# Вывод отладочной информации в логи Bothost
-logger.info(f"📂 Рабочая директория: {BASE_DIR}")
-logger.info(f"📄 Файлы в директории: {os.listdir(str(BASE_DIR))}")
 
 # Твои настройки
 TOKEN = "8257287930:AAFhDcKz-ebfaAHzb5H4Hr1b9SCa9OrSauI"
@@ -30,15 +25,16 @@ MY_DOMAIN = "ai.bothost.ru"
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# --- ИНИЦИАЛИЗАЦИЯ БД И ЖИЗНЕННЫЙ ЦИКЛ ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Логируем окружение для отладки на Bothost
+    logger.info(f"📂 BASE_DIR: {BASE_DIR}")
+    logger.info(f"📄 Files found: {os.listdir(str(BASE_DIR))}")
+    
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
             conn.execute('''CREATE TABLE IF NOT EXISTS users 
-                            (id TEXT PRIMARY KEY, 
-                             balance INTEGER DEFAULT 0, 
-                             click_lvl INTEGER DEFAULT 1)''')
+                            (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, click_lvl INTEGER DEFAULT 1)''')
             conn.commit()
         logger.info("🗄️ База данных готова.")
     except Exception as e:
@@ -46,40 +42,35 @@ async def lifespan(app: FastAPI):
 
     polling_task = asyncio.create_task(dp.start_polling(bot))
     logger.info(f"✅ Бот Neural Pulse запущен.")
-    
     yield
-    
     polling_task.cancel()
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
-    CORSMiddleware, 
-    allow_origins=["*"], 
-    allow_methods=["*"], 
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
     allow_headers=["*"]
 )
 
-# Монтируем статику (проверяем наличие папки)
+# Монтируем статику
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-    logger.info("🎨 Статика подключена.")
-else:
-    logger.warning("⚠️ Папка /static не найдена!")
+    logger.info("🎨 Папка static подключена.")
 
-# Настройка шаблонов (Исправлено: явно указываем путь)
+# Шаблоны ищем в корневой папке
 templates = Jinja2Templates(directory=str(BASE_DIR))
 
-# --- API ЭНДПОИНТЫ ---
+# --- API ---
 
 @app.get("/")
 async def serve_game(request: Request):
-    """Отдает главную страницу игры"""
-    # Проверяем физическое наличие файла перед попыткой отдать его
-    if not (BASE_DIR / "index.html").exists():
-        logger.error("🚨 КРИТИЧЕСКАЯ ОШИБКА: index.html не найден в папке /app")
-        return {"error": "index.html missing on server"}
+    index_path = BASE_DIR / "index.html"
+    if not index_path.exists():
+        logger.error("🚨 index.html не найден!")
+        return {"error": "Файл index.html отсутствует в корневой папке проекта."}
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/api/balance/{user_id}")
@@ -120,24 +111,4 @@ async def buy_boost(data: dict = Body(...)):
             new_lvl = lvl + 1
             conn.execute("UPDATE users SET balance = ?, click_lvl = ? WHERE id = ?", (new_balance, new_lvl, uid))
             conn.commit()
-            return {"status": "ok", "new_balance": new_balance, "new_lvl": new_lvl, "next_cost": new_lvl * 500}
-        return {"error": "Недостаточно NP!"}
-
-@app.get("/api/all_stats")
-async def get_all_stats():
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        res = conn.execute("SELECT COUNT(*), SUM(balance) FROM users").fetchone()
-        return {"total_players": res[0] or 0, "total_balance": res[1] or 0}
-
-# --- ЛОГИКА БОТА ---
-@dp.message(F.text == "/start")
-async def start_handler(message: types.Message):
-    v = int(datetime.now().timestamp())
-    kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/?v={v}"))
-    ]])
-    await message.answer(f"Привет, {message.from_user.first_name}! 🚀\n Neural Pulse запущен!", reply_markup=kb)
-
-if __name__ == "__main__":
-    # Порт 3000 для Bothost
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+            return {"status": "ok", "new_balance": new_balance, "new_lvl": new_lvl, "
