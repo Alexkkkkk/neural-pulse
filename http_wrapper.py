@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
             conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)")
-            conn.execute("DELETE FROM users") # Та самая очистка
+            conn.execute("DELETE FROM users") # Очистка балансов при старте
             conn.commit()
         logger.info("🗄️ База очищена.")
     except Exception as e:
@@ -41,12 +41,12 @@ async def lifespan(app: FastAPI):
 
     # 2. Очистка очереди и запуск бота
     polling_task = asyncio.create_task(dp.start_polling(bot))
-    await bot.delete_webhook(drop_pending_updates=True) # Очистка обновлений
-    logger.info("✅ Бот запущен.")
+    await bot.delete_webhook(drop_pending_updates=True) 
+    logger.info("✅ Бот запущен без фоновых изображений.")
     
     yield
     
-    # 3. Закрытие (Cleanup)
+    # 3. Закрытие
     polling_task.cancel()
     await bot.session.close()
 
@@ -59,6 +59,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Монтируем только папку static (для стилей и скриптов, если они есть)
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
@@ -95,7 +96,7 @@ async def start_handler(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/?v={v}"))
     ]])
-    await message.answer("Система очищена. Начинай майнить!", reply_markup=kb)
+    await message.answer("Система очищена. Картинки отключены. Начинай майнить!", reply_markup=kb)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
