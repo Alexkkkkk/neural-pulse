@@ -56,11 +56,11 @@
             box-shadow: 0 0 15px var(--neon);
         }
 
-        #lvl { font-size: 13px; text-shadow: 0 0 10px var(--neon); color: var(--neon); font-weight: bold; }
+        #lvl { font-size: 14px; text-shadow: 0 0 10px var(--neon); color: var(--neon); font-weight: bold; }
 
         .balance-container { text-align: center; margin-top: 20px; }
-        .balance-label { font-size: 11px; color: rgba(255,255,255,0.6); letter-spacing: 2px; }
-        #score { font-size: 44px; color: #fff; text-shadow: 0 0 20px var(--neon); font-weight: bold; margin-top: 5px; }
+        .balance-label { font-size: 12px; color: rgba(255,255,255,0.7); letter-spacing: 2px; }
+        #score { font-size: 48px; color: #fff; text-shadow: 0 0 20px var(--neon); font-weight: bold; margin-top: 5px; }
 
         .play-area {
             position: relative;
@@ -72,21 +72,21 @@
         }
 
         #btn { 
-            width: 75vw; 
-            max-width: 300px;
-            height: 75vw;
-            max-height: 300px;
+            width: 80vw; 
+            max-width: 320px;
+            height: 80vw;
+            max-height: 320px;
             background: url('/static/images/unnamed3.png') no-repeat center;
             background-size: contain;
             border-radius: 50%;
-            border: 4px solid rgba(0, 212, 255, 0.2);
-            box-shadow: 0 0 40px rgba(0, 212, 255, 0.15);
+            border: 4px solid rgba(0, 212, 255, 0.3);
+            box-shadow: 0 0 40px rgba(0, 212, 255, 0.2);
             cursor: pointer; 
             transition: transform 0.05s; 
             outline: none; 
             z-index: 2;
         }
-        #btn:active { transform: scale(0.92); box-shadow: 0 0 60px var(--neon); }
+        #btn:active { transform: scale(0.95); box-shadow: 0 0 60px var(--neon); }
 
         .side-menu {
             position: absolute;
@@ -97,7 +97,7 @@
             z-index: 3;
         }
         .side-item {
-            width: 85px;
+            width: 90px;
             padding: 10px 5px;
             background: rgba(255,255,255,0.05);
             border: 1px solid rgba(0, 212, 255, 0.2);
@@ -109,12 +109,33 @@
             cursor: pointer;
         }
 
+        .energy-container {
+            width: 100%;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .energy-bar {
+            width: 80%;
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            margin: 10px auto;
+            overflow: hidden;
+        }
+        .energy-fill {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--neon-secondary), var(--neon));
+            box-shadow: 0 0 10px var(--neon-secondary);
+            transition: width 0.3s;
+        }
+
         .bottom-nav {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 10px;
             width: 100%;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
         .nav-card {
             background: rgba(255,255,255,0.05);
@@ -126,18 +147,17 @@
             align-items: center;
             font-size: 10px;
             cursor: pointer;
-            transition: background 0.2s;
         }
-        .nav-card:active { background: rgba(0, 212, 255, 0.15); }
+        .nav-card:active { background: rgba(0, 212, 255, 0.1); }
 
         /* MODAL SYSTEM */
         .overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8);
+            background: rgba(0,0,0,0.7);
             display: none;
             z-index: 999;
-            backdrop-filter: blur(6px);
+            backdrop-filter: blur(4px);
         }
         .overlay.active { display: block; }
 
@@ -146,9 +166,9 @@
             bottom: -100%;
             left: 0;
             width: 100%;
-            height: 70%;
+            height: 75%;
             background: var(--glass);
-            border-top: 3px solid var(--neon);
+            border-top: 2px solid var(--neon);
             border-radius: 30px 30px 0 0;
             z-index: 1000;
             transition: bottom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
@@ -160,37 +180,24 @@
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .close-btn { font-size: 28px; cursor: pointer; color: var(--neon); }
 
-        /* MINE SHOP STYLES */
-        .mine-grid { display: grid; grid-template-columns: 1fr; gap: 15px; margin-top: 10px; }
+        /* MINE/BOOST STYLE */
+        .buy-btn { 
+            width: 100%; padding: 15px; background: var(--neon); border: none; 
+            border-radius: 12px; color: #000; font-weight: bold; cursor: pointer; 
+            font-family: 'Orbitron'; margin-top: 15px; 
+        }
+
         .mine-card {
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(0, 212, 255, 0.2);
             border-radius: 15px;
-            padding: 15px 20px;
+            padding: 15px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 10px;
         }
-        .mine-info h3 { margin: 0; font-size: 14px; color: var(--neon); text-transform: uppercase; }
-        .mine-info p { margin: 5px 0 0; font-size: 11px; color: var(--neon-secondary); font-weight: bold; }
-        
-        .ton-buy-btn {
-            background: #0088cc;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 10px;
-            font-family: 'Orbitron';
-            font-weight: bold;
-            font-size: 11px;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-        .ton-buy-btn:active { transform: scale(0.95); opacity: 0.8; }
 
-        .buy-btn { width: 100%; padding: 18px; background: var(--neon); border: none; border-radius: 12px; color: #000; font-weight: bold; cursor: pointer; font-family: 'Orbitron'; margin-top: 15px; font-size: 14px; }
-        .buy-btn:disabled { background: #555; color: #888; cursor: not-allowed; }
-        
         .plus-animation { 
             position: absolute; 
             color: var(--neon); 
@@ -201,14 +208,17 @@
             text-shadow: 0 0 10px var(--neon); 
             z-index: 100; 
         }
-        @keyframes float { 0% { opacity:1; transform: translateY(0) scale(1); } 100% { opacity:0; transform: translateY(-150px) scale(1.4); } }
+        @keyframes float { 
+            0% { opacity:1; transform: translateY(0) scale(1); } 
+            100% { opacity:0; transform: translateY(-150px) scale(1.5); } 
+        }
     </style>
 </head>
 <body>
     <div class="game-container" id="game" style="opacity:0">
         <div class="header">
             <div class="logo"></div>
-            <span id="lvl">🏆 Загрузка...</span>
+            <span id="lvl">🏆 Новичок (Lvl 1)</span>
         </div>
 
         <div class="balance-container">
@@ -219,9 +229,17 @@
         <div class="play-area">
             <button id="btn"></button>
             <div class="side-menu">
+                <div class="side-item" style="background: #2196F3; border:none; color:white;" onclick="openModal('wallet')">Wallet</div>
                 <div class="side-item" onclick="openModal('friends')">Friends</div>
                 <div class="side-item" onclick="openModal('tasks')">Tasks</div>
             </div>
+        </div>
+
+        <div class="energy-container">
+            <div class="energy-bar">
+                <div class="energy-fill" id="energyFill"></div>
+            </div>
+            <div style="font-size: 10px; opacity: 0.7;">⚡ ENERGY RECHARGING</div>
         </div>
 
         <div class="bottom-nav">
@@ -233,10 +251,25 @@
 
     <div class="overlay" id="overlay" onclick="closeAllModals()"></div>
 
+    <div id="modal-wallet" class="modal">
+        <div class="modal-header"><h2>Wallet</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content">Подключите свой кошелек TON для будущих выплат. (Скоро...)</div>
+    </div>
+
+    <div id="modal-friends" class="modal">
+        <div class="modal-header"><h2>Friends</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content">Приглашайте друзей и получайте 10% от их добычи!</div>
+    </div>
+
+    <div id="modal-tasks" class="modal">
+        <div class="modal-header"><h2>Tasks</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content">Выполняйте простые задания, чтобы заработать бонусные NP.</div>
+    </div>
+
     <div id="modal-boost" class="modal">
         <div class="modal-header"><h2>Boosters</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
         <div class="modal-content" style="text-align: center;">
-            <p>Текущая сила клика: <strong style="color:var(--neon-secondary); font-size: 20px;">+<span id="boost-power-label">1</span></strong></p>
+            <p>Сила клика: <strong style="color:var(--neon-secondary);">+<span id="boost-power-label">1</span></strong></p>
             <button id="buy-boost-btn" class="buy-btn" onclick="buyBoost()">
                 UPGRADE (Цена: <span id="boost-cost">0</span>)
             </button>
@@ -244,58 +277,34 @@
     </div>
 
     <div id="modal-mine" class="modal">
-        <div class="modal-header">
-            <h2>⛏️ TON SHOP</h2>
-            <span class="close-btn" onclick="closeAllModals()">&times;</span>
-        </div>
+        <div class="modal-header"><h2>⛏️ TON SHOP</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
         <div class="modal-content">
-            <p style="text-align: center; font-size: 11px; opacity: 0.8; margin-bottom: 20px;">
-                Увеличьте мощность клика навсегда с помощью нейро-ускорителей за TON
-            </p>
-            <div class="mine-grid">
-                <div class="mine-card">
-                    <div class="mine-info">
-                        <h3>Micro Chip</h3>
-                        <p>+500 к клику</p>
-                    </div>
-                    <button class="ton-buy-btn" onclick="buyWithTon('micro_chip', 0.5)">
-                        0.5 TON
-                    </button>
-                </div>
-                <div class="mine-card">
-                    <div class="mine-info">
-                        <h3>Neural Link</h3>
-                        <p>+2,000 к клику</p>
-                    </div>
-                    <button class="ton-buy-btn" onclick="buyWithTon('neural_link', 1.5)">
-                        1.5 TON
-                    </button>
-                </div>
-                <div class="mine-card" style="border-color: var(--neon-secondary);">
-                    <div class="mine-info">
-                        <h3 style="color: var(--neon-secondary);">Quantum Core</h3>
-                        <p>+10,000 к клику</p>
-                    </div>
-                    <button class="ton-buy-btn" style="background: var(--neon-secondary); color: #000;" onclick="buyWithTon('quantum_core', 5.0)">
-                        5.0 TON
-                    </button>
-                </div>
+            <p style="text-align: center; font-size: 11px; opacity: 0.8; margin-bottom: 20px;">Ускорители за TON действуют навсегда</p>
+            <div class="mine-card">
+                <div><h3>Micro Chip</h3><p>+500 к клику</p></div>
+                <button onclick="buyWithTon('Micro Chip', 0.5)" style="background:#0088cc; color:white; border:none; padding:10px; border-radius:8px;">0.5 TON</button>
+            </div>
+            <div class="mine-card">
+                <div><h3>Neural Link</h3><p>+2,000 к клику</p></div>
+                <button onclick="buyWithTon('Neural Link', 1.5)" style="background:#0088cc; color:white; border:none; padding:10px; border-radius:8px;">1.5 TON</button>
             </div>
         </div>
     </div>
 
-    <div id="modal-stats" class="modal"><div class="modal-header"><h2>Stats</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><div class="modal-content" id="stats-content">Загрузка...</div></div>
-    <div id="modal-friends" class="modal"><div class="modal-header"><h2>Friends</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><div class="modal-content">Приглашайте друзей!</div></div>
-    <div id="modal-tasks" class="modal"><div class="modal-header"><h2>Tasks</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><div class="modal-content">Задания скоро появятся.</div></div>
+    <div id="modal-stats" class="modal">
+        <div class="modal-header"><h2>Stats</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content" id="stats-content">Здесь будет ваша детальная статистика.</div>
+    </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        const userId = String(tg.initDataUnsafe?.user?.id || "999");
         
-        let score = 0, pending = 0, clickPower = 1;
+        const userId = String(tg.initDataUnsafe?.user?.id || "999");
+        let score = 0;
+        let pending = 0;
+        let clickPower = 1;
 
-        // Конфигурация уровней
         const PLAYER_LEVELS = {
             1: { name: "Новичок", price: 0, tap: 1 },
             2: { name: "Стажер", price: 1000, tap: 5 },
@@ -305,15 +314,18 @@
         };
 
         function updateUI() {
-            const currentLvlCfg = PLAYER_LEVELS[clickPower] || PLAYER_LEVELS[1];
-            const nextLvlCfg = PLAYER_LEVELS[clickPower + 1];
+            const cfg = PLAYER_LEVELS[clickPower] || PLAYER_LEVELS[1];
+            const next = PLAYER_LEVELS[clickPower + 1];
 
             document.getElementById('score').textContent = Math.floor(score).toLocaleString();
-            document.getElementById('lvl').textContent = `🏆 ${currentLvlCfg.name} (Lvl ${clickPower})`;
-            document.getElementById('boost-power-label').textContent = currentLvlCfg.tap;
+            document.getElementById('lvl').textContent = `🏆 ${cfg.name} (Lvl ${clickPower})`;
             
-            if (nextLvlCfg) {
-                document.getElementById('boost-cost').textContent = nextLvlCfg.price.toLocaleString();
+            // Данные в модалке Boost
+            if (document.getElementById('boost-power-label')) {
+                document.getElementById('boost-power-label').textContent = cfg.tap;
+            }
+            if (next) {
+                document.getElementById('boost-cost').textContent = next.price.toLocaleString();
                 document.getElementById('buy-boost-btn').style.display = 'block';
             } else {
                 document.getElementById('buy-boost-btn').style.display = 'none';
@@ -332,39 +344,29 @@
         }
 
         // Покупка за TON
-        function buyWithTon(itemId, price) {
+        function buyWithTon(item, price) {
             if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('heavy');
-            tg.showConfirm(`Вы подтверждаете покупку "${itemId}" за ${price} TON?`, (ok) => {
+            tg.showConfirm(`Купить ${item} за ${price} TON?`, (ok) => {
                 if (ok) {
-                    tg.sendData(JSON.stringify({
-                        action: "buy_ton",
-                        item: itemId,
-                        price: price
-                    }));
+                    tg.sendData(JSON.stringify({ action: "buy_ton", item: item, price: price }));
                     closeAllModals();
-                    tg.showAlert("Счет отправлен боту! Проверьте чат.");
+                    tg.showAlert("Запрос отправлен боту!");
                 }
             });
         }
 
-        // Покупка буста за игровую валюту
+        // Покупка Boost за монеты
         async function buyBoost() {
-            const nextLvl = clickPower + 1;
-            if (!PLAYER_LEVELS[nextLvl]) return;
-
-            if (score < PLAYER_LEVELS[nextLvl].price) {
-                tg.showAlert("Недостаточно монет для уровня " + PLAYER_LEVELS[nextLvl].name);
+            const next = clickPower + 1;
+            if (!PLAYER_LEVELS[next] || score < PLAYER_LEVELS[next].price) {
+                tg.showAlert("Недостаточно баллов!");
                 return;
             }
-
-            const btn = document.getElementById('buy-boost-btn');
-            btn.disabled = true;
-
             try {
-                const r = await fetch('/api/buy_boost', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ user_id: userId })
+                const r = await fetch('/api/buy_boost', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ user_id: userId }) 
                 });
                 const d = await r.json();
                 if (d.status === 'ok') {
@@ -372,38 +374,36 @@
                     clickPower = d.new_lvl;
                     updateUI();
                     if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-                } else {
-                    tg.showAlert(d.error);
                 }
-            } catch (e) {
-                tg.showAlert("Ошибка сервера");
-            }
-            btn.disabled = false;
+            } catch (e) { tg.showAlert("Ошибка сервера"); }
         }
 
-        // Клик
+        // Логика клика
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (document.getElementById('overlay').classList.contains('active')) return;
-            
+
             const tap = PLAYER_LEVELS[clickPower]?.tap || 1;
             for (let t of e.changedTouches) {
                 score += tap;
                 pending += tap;
-                
-                const p = document.createElement('div');
-                p.className = 'plus-animation';
-                p.textContent = '+' + tap;
-                p.style.left = t.pageX + 'px';
-                p.style.top = t.pageY + 'px';
-                document.body.appendChild(p);
-                setTimeout(() => p.remove(), 700);
+                spawnPlus(t.pageX, t.pageY, tap);
             }
             updateUI();
             if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
         });
 
-        // Авто-сохранение
+        function spawnPlus(x, y, val) {
+            const p = document.createElement('div');
+            p.className = 'plus-animation';
+            p.textContent = '+' + val;
+            p.style.left = (x - 15) + 'px';
+            p.style.top = (y - 40) + 'px';
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 700);
+        }
+
+        // Авто-сохранение каждые 2 секунды
         setInterval(async () => {
             if (pending > 0) {
                 const s = pending; pending = 0;
@@ -411,27 +411,29 @@
                     await fetch('/api/clicks', { 
                         method: 'POST', 
                         headers: {'Content-Type': 'application/json'}, 
-                        body: JSON.stringify({ user_id: userId, clicks: s })
+                        body: JSON.stringify({ user_id: userId, clicks: s }) 
                     });
                 } catch (e) { pending += s; }
             }
         }, 2000);
 
+        // Загрузка данных при входе
         async function load() {
             try {
-                const r = await fetch(`/api/balance/${userId}`);
+                const r = await fetch(`/api/balance/${userId}?t=${Date.now()}`);
                 const d = await r.json();
                 score = d.balance || 0;
                 clickPower = d.click_lvl || 1;
                 updateUI();
                 document.getElementById('game').style.opacity = '1';
-            } catch (e) {
+            } catch (e) { 
                 updateUI();
                 document.getElementById('game').style.opacity = '1';
             }
         }
 
         load();
+        tg.ready();
     </script>
 </body>
 </html>
