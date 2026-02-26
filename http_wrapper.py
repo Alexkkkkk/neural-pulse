@@ -32,7 +32,6 @@ async def lifespan(app: FastAPI):
     
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
-            # Расширенная таблица: добавлен referrer_id для друзей
             conn.execute('''CREATE TABLE IF NOT EXISTS users 
                             (id TEXT PRIMARY KEY, 
                              balance INTEGER DEFAULT 0, 
@@ -99,8 +98,52 @@ async def buy_boost(data: dict = Body(...)):
         c = conn.cursor()
         c.execute("SELECT balance, click_lvl FROM users WHERE id = ?", (uid,))
         row = c.fetchone()
-        if not row: return {"error": "User not found"}
+        if not row: 
+            return {"error": "User not found"}
         
         balance, lvl = row[0], row[1]
         cost = lvl * 500
         if balance >= cost:
+            new_balance = balance - cost
+            new_lvl = lvl + 1
+            conn.execute("UPDATE users SET balance = ?, click_lvl = ? WHERE id = ?", (new_balance, new_lvl, uid))
+            conn.commit()
+            return {
+                "status": "ok", 
+                "new_balance": new_balance, 
+                "new_lvl": new_lvl, 
+                "next_cost": new_lvl * 500
+            }
+        return {"error": "Недостаточно NP!"}
+
+@app.get("/api/all_stats")
+async def get_all_stats():
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        res = conn.execute("SELECT COUNT(*), SUM(balance) FROM users").fetchone()
+        return {"total_players": res[0] or 0, "total_balance": res[1] or 0}
+
+# --- ЛОГИКА БОТА ---
+
+@dp.message(F.text.startswith("/start"))
+async def start_handler(message: types.Message):
+    uid = str(message.from_user.id)
+    args = message.text.split()
+    
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        c = conn.cursor()
+        c.execute("SELECT id FROM users WHERE id = ?", (uid,))
+        if not c.fetchone():
+            ref_id = args[1] if len(args) > 1 else None
+            conn.execute("INSERT INTO users (id, balance, click_lvl, referrer_id) VALUES (?, 0, 1, ?)", (uid, ref_id))
+            if ref_id:
+                conn.execute("UPDATE users SET balance = balance + 5000 WHERE id = ?", (ref_id,))
+            conn.commit()
+
+    v = int(datetime.now().timestamp())
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/?v={v}"))]
+    ])
+    await message.answer(f"Привет, {message.from_user.first_name}! 🚀\nNeural Pulse готов.", reply_markup=kb)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=3000)
