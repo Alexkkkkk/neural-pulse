@@ -109,26 +109,6 @@
             cursor: pointer;
         }
 
-        .energy-container {
-            width: 100%;
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .energy-bar {
-            width: 80%;
-            height: 8px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 4px;
-            margin: 10px auto;
-            overflow: hidden;
-        }
-        .energy-fill {
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, var(--neon-secondary), var(--neon));
-            box-shadow: 0 0 10px var(--neon-secondary);
-        }
-
         .bottom-nav {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -165,7 +145,7 @@
             bottom: -100%;
             left: 0;
             width: 100%;
-            height: 75%;
+            height: 70%;
             background: var(--glass);
             border-top: 2px solid var(--neon);
             border-radius: 30px 30px 0 0;
@@ -177,7 +157,11 @@
         .modal.active { bottom: 0; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .close-btn { font-size: 28px; cursor: pointer; color: var(--neon); }
-        .modal-content { font-family: sans-serif; font-size: 14px; color: rgba(255,255,255,0.8); line-height: 1.6; }
+
+        .stat-box { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; margin-bottom: 10px; text-align: center; border: 1px solid rgba(0, 212, 255, 0.1); }
+        .stat-val { color: var(--neon-secondary); font-size: 20px; font-weight: bold; margin-top: 5px; }
+
+        .buy-btn { width: 100%; padding: 15px; background: var(--neon); border: none; border-radius: 10px; color: #000; font-weight: bold; cursor: pointer; font-family: 'Orbitron'; margin-top: 15px; }
 
         .plus-animation { 
             position: absolute; 
@@ -210,17 +194,9 @@
         <div class="play-area">
             <button id="btn"></button>
             <div class="side-menu">
-                <div class="side-item" style="background: #2196F3; border:none; color:white;" onclick="openModal('wallet')">Wallet</div>
                 <div class="side-item" onclick="openModal('friends')">Friends</div>
                 <div class="side-item" onclick="openModal('tasks')">Tasks</div>
             </div>
-        </div>
-
-        <div class="energy-container">
-            <div class="energy-bar">
-                <div class="energy-fill" id="energyFill"></div>
-            </div>
-            <div style="font-size: 10px; opacity: 0.7;">⚡ ENERGY RECHARGING</div>
         </div>
 
         <div class="bottom-nav">
@@ -232,9 +208,22 @@
 
     <div class="overlay" id="overlay" onclick="closeAllModals()"></div>
 
-    <div id="modal-wallet" class="modal">
-        <div class="modal-header"><h2>Wallet</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <div class="modal-content">Подключите свой кошелек TON для будущих выплат. (Скоро...)</div>
+    <div id="modal-boost" class="modal">
+        <div class="modal-header"><h2>Boosters</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content">
+            <p style="text-align:center">Увеличьте силу клика. Текущий бонус: +<span id="boost-pwr">1</span></p>
+            <button class="buy-btn" onclick="buyBoost()">
+                КУПИТЬ UPGRADE (Цена: <span id="boost-cost">500</span>)
+            </button>
+        </div>
+    </div>
+
+    <div id="modal-stats" class="modal">
+        <div class="modal-header"><h2>Global Stats</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content">
+            <div class="stat-box">Активных игроков: <div id="s-p" class="stat-val">...</div></div>
+            <div class="stat-box">Всего добыто NP: <div id="s-t" class="stat-val">...</div></div>
+        </div>
     </div>
 
     <div id="modal-friends" class="modal">
@@ -247,19 +236,9 @@
         <div class="modal-content">Выполняйте простые задания, чтобы заработать бонусные NP.</div>
     </div>
 
-    <div id="modal-boost" class="modal">
-        <div class="modal-header"><h2>Boost</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <div class="modal-content">Увеличьте силу клика или скорость восстановления энергии.</div>
-    </div>
-
     <div id="modal-mine" class="modal">
         <div class="modal-header"><h2>Mine</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <div class="modal-content">Покупайте улучшения, чтобы добывать Neural Pulse пассивно.</div>
-    </div>
-
-    <div id="modal-stats" class="modal">
-        <div class="modal-header"><h2>Stats</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <div class="modal-content">Здесь будет ваша детальная статистика и глобальный рейтинг.</div>
+        <div class="modal-content">Пассивный доход в разработке...</div>
     </div>
 
     <script>
@@ -267,23 +246,55 @@
         tg.expand();
         
         const userId = String(tg.initDataUnsafe?.user?.id || "999");
-        let score = 0;
-        let pending = 0;
+        let score = 0, pending = 0, clickPower = 1;
 
         const scoreEl = document.getElementById('score');
         const btn = document.getElementById('btn');
 
-        // Modal Logic
-        function openModal(id) {
+        async function openModal(id) {
             document.getElementById('overlay').classList.add('active');
             document.getElementById('modal-' + id).classList.add('active');
-            if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+            
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+
+            if(id === 'stats') {
+                try {
+                    const r = await fetch('/api/all_stats');
+                    const d = await r.json();
+                    document.getElementById('s-p').textContent = d.total_players;
+                    document.getElementById('s-t').textContent = d.total_balance.toLocaleString();
+                } catch(e) { console.error("Stats load failed"); }
+            }
+            if(id === 'boost') {
+                document.getElementById('boost-pwr').textContent = clickPower;
+                document.getElementById('boost-cost').textContent = (clickPower * 500);
+            }
         }
 
         function closeAllModals() {
             document.getElementById('overlay').classList.remove('active');
-            const modals = document.querySelectorAll('.modal');
-            modals.forEach(m => m.classList.remove('active'));
+            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+        }
+
+        async function buyBoost() {
+            try {
+                const r = await fetch('/api/buy_boost', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({user_id: userId})
+                });
+                const d = await r.json();
+                if(d.status === 'ok') {
+                    score = d.new_balance; 
+                    clickPower = d.new_lvl;
+                    scoreEl.textContent = score.toLocaleString();
+                    document.getElementById('lvl').textContent = '🏆 Level ' + clickPower;
+                    closeAllModals();
+                    if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+                } else {
+                    tg.showAlert(d.error || "Недостаточно средств");
+                }
+            } catch (e) { console.error("Buy boost failed"); }
         }
 
         async function loadData() {
@@ -291,7 +302,9 @@
                 const r = await fetch(`/api/balance/${userId}?t=${Date.now()}`);
                 const d = await r.json();
                 score = d.balance || 0;
+                clickPower = d.click_lvl || 1;
                 scoreEl.textContent = score.toLocaleString();
+                document.getElementById('lvl').textContent = '🏆 Level ' + clickPower;
                 document.getElementById('game').style.opacity = '1';
             } catch (e) { 
                 document.getElementById('game').style.opacity = '1';
@@ -300,12 +313,11 @@
 
         btn.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            // Не кликаем, если открыто модальное окно
             if (document.getElementById('overlay').classList.contains('active')) return;
 
             for (let t of e.changedTouches) {
-                score++;
-                pending++;
+                score += clickPower;
+                pending += clickPower;
                 spawnPlus(t.pageX, t.pageY);
             }
             scoreEl.textContent = score.toLocaleString();
@@ -315,7 +327,7 @@
         function spawnPlus(x, y) {
             const p = document.createElement('div');
             p.className = 'plus-animation';
-            p.textContent = '+1';
+            p.textContent = '+' + clickPower;
             p.style.left = (x - 15) + 'px';
             p.style.top = (y - 40) + 'px';
             document.body.appendChild(p);
@@ -337,7 +349,6 @@
         }, 2000);
 
         loadData();
-        tg.ready();
     </script>
 </body>
 </html>
