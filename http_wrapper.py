@@ -94,6 +94,63 @@ async def get_balance(user_id: str):
 
 @app.post("/api/clicks")
 async def save_clicks(data: dict = Body(...)):
-    uid, clicks = str(data.get("user_id")), int(data.get("clicks", 0))
+    uid = str(data.get("user_id"))
+    clicks = int(data.get("clicks", 0))
     with sqlite3.connect(str(DB_PATH)) as conn:
-        conn.execute("INSERT INTO users (id, balance) VALUES (?, ?) ON CONFLICT
+        # Исправленный запрос в одну строку
+        conn.execute("INSERT INTO users (id, balance) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET balance = balance + ?", (uid, clicks, clicks))
+        conn.commit()
+    return {"status": "ok"}
+
+# --- БОТ: АДМИН-КОМАНДЫ ---
+
+@dp.message(F.from_user.id == ADMIN_ID, F.text == "/stats")
+async def admin_stats(message: types.Message):
+    try:
+        with sqlite3.connect(str(DB_PATH)) as conn:
+            res = conn.execute("SELECT COUNT(*), SUM(balance) FROM users").fetchone()
+            count = res[0] or 0
+            total = res[1] or 0
+        
+        await message.answer(
+            f"📊 **Статистика проекта:**\n\n"
+            f"👥 Всего игроков: `{count}`\n"
+            f"💰 Всего намайнено: `{total}` NP",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        await message.answer(f"Ошибка статистики: {e}")
+
+@dp.message(F.from_user.id == ADMIN_ID, F.text == "/reset_all")
+async def admin_reset(message: types.Message):
+    try:
+        with sqlite3.connect(str(DB_PATH)) as conn:
+            conn.execute("DELETE FROM users")
+            conn.commit()
+        await message.answer("🧨 **БАЗА ДАННЫХ ОЧИЩЕНА!**", parse_mode="Markdown")
+        logger.warning(f"!!! БАЗА СБРОШЕНА АДМИНОМ {ADMIN_ID} !!!")
+    except Exception as e:
+        await message.answer(f"Ошибка: {e}")
+
+@dp.message(F.text == "/start")
+async def start_handler(message: types.Message):
+    v = int(datetime.now().timestamp())
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/?v={v}"))
+    ]])
+    
+    text = "Привет! Начинай майнить кликами прямо сейчас!"
+    
+    if message.from_user.id == ADMIN_ID:
+        text = (
+            "🤝 **Добро пожаловать, создатель!**\n"
+            "Система готова к работе.\n\n"
+            "🛠 **Админ-команды:**\n"
+            "📈 `/stats` — статистика\n"
+            "🧹 `/reset_all` — очистка базы"
+        )
+        
+    await message.answer(text, reply_markup=kb, parse_mode="Markdown")
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0
