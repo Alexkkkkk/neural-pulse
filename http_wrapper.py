@@ -147,3 +147,10 @@ async def start_handler(message: types.Message):
             conn.commit()
 
     v = int(datetime.now().timestamp())
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/?v={v}"))]
+    ])
+    await message.answer(f"Привет, {message.from_user.first_name}! 🚀\nNeural Pulse готов к запуску.", reply_markup=kb)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=3000)
