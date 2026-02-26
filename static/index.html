@@ -15,7 +15,6 @@
         
         body { 
             margin: 0; 
-            background: var(--bg); /* Чистый темный фон вместо картинки */
             background: radial-gradient(circle at center, #0a192f 0%, #050a1a 100%);
             height: 100vh; 
             font-family: 'Orbitron', sans-serif; 
@@ -26,7 +25,6 @@
             justify-content: center;
         }
 
-        /* Главный контейнер без внешних картинок-рамок */
         .game-container { 
             position: relative;
             width: 100%;
@@ -37,7 +35,6 @@
             align-items: center; 
             padding: 20px;
             box-sizing: border-box;
-            /* Добавляем внутреннее свечение вместо рамки unnamed1.png */
             border: 1px solid rgba(0, 212, 255, 0.1);
             background: rgba(255, 255, 255, 0.02);
             transition: opacity 0.5s;
@@ -51,14 +48,14 @@
             margin-top: 10px;
         }
         
-        /* Заменили логотип на CSS фигуру */
+        /* Логотип из твоего файла unnamed4.jpg */
         .logo { 
-            width: 45px; height: 45px; 
-            background: var(--neon);
-            border-radius: 50%;
+            width: 50px; 
+            height: 50px; 
+            background: url('/static/images/unnamed4.jpg') no-repeat center;
+            background-size: cover;
+            border-radius: 12px;
             box-shadow: 0 0 15px var(--neon);
-            display: flex; align-items: center; justify-content: center;
-            font-weight: bold; font-size: 20px;
         }
 
         #lvl { font-size: 14px; text-shadow: 0 0 10px var(--neon); color: var(--neon); }
@@ -79,22 +76,33 @@
             justify-content: center;
         }
 
-        /* Заменили картинку кнопки unnamed3.png на неоновую сферу */
+        /* Главная кнопка из твоего файла unnamed3.jpg */
         #btn { 
-            width: 70vw; 
-            max-width: 280px;
-            height: 70vw;
-            max-height: 280px;
-            background: radial-gradient(circle, var(--neon) 0%, #005f73 100%);
+            width: 80vw; 
+            max-width: 320px;
+            height: 80vw;
+            max-height: 320px;
+            background: url('/static/images/unnamed3.jpg') no-repeat center;
+            background-size: cover;
             border-radius: 50%;
-            border: 4px solid rgba(255,255,255,0.2);
-            box-shadow: 0 0 50px rgba(0, 212, 255, 0.4), inset 0 0 20px rgba(255,255,255,0.3);
+            border: 4px solid rgba(0, 212, 255, 0.3);
+            box-shadow: 0 0 40px rgba(0, 212, 255, 0.2);
             cursor: pointer; 
             transition: transform 0.05s, box-shadow 0.2s; 
             outline: none; 
             z-index: 2;
+            position: relative;
         }
-        #btn:active { transform: scale(0.92); box-shadow: 0 0 80px var(--neon); }
+        
+        #btn::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border-radius: 50%;
+            box-shadow: inset 0 0 30px rgba(0, 212, 255, 0.5);
+        }
+
+        #btn:active { transform: scale(0.95); box-shadow: 0 0 60px var(--neon); }
 
         .side-menu {
             position: absolute;
@@ -105,13 +113,13 @@
             z-index: 3;
         }
         .side-item {
-            width: 100px;
+            width: 90px;
             padding: 10px 5px;
             background: rgba(255,255,255,0.05);
             border: 1px solid rgba(0, 212, 255, 0.2);
             border-radius: 8px;
             backdrop-filter: blur(5px);
-            font-size: 8px;
+            font-size: 9px;
             text-transform: uppercase;
             text-align: center;
         }
@@ -152,28 +160,30 @@
             flex-direction: column;
             align-items: center;
             font-size: 10px;
+            cursor: pointer;
         }
+        .nav-card:active { background: rgba(0, 212, 255, 0.1); }
 
         .plus-animation { 
             position: absolute; 
             color: var(--neon); 
-            font-size: 28px; 
+            font-size: 32px; 
             font-weight: bold; 
-            animation: float 0.6s ease-out forwards; 
+            animation: float 0.7s ease-out forwards; 
             pointer-events: none; 
             text-shadow: 0 0 10px var(--neon); 
             z-index: 100; 
         }
         @keyframes float { 
-            0% { opacity:1; transform: translateY(0); } 
-            100% { opacity:0; transform: translateY(-120px); } 
+            0% { opacity:1; transform: translateY(0) scale(1); } 
+            100% { opacity:0; transform: translateY(-150px) scale(1.5); } 
         }
     </style>
 </head>
 <body>
     <div class="game-container" id="game" style="opacity:0">
         <div class="header">
-            <div class="logo">NP</div>
+            <div class="logo"></div>
             <span id="lvl">🏆 Level 1</span>
         </div>
 
@@ -214,12 +224,10 @@
         let pending = 0;
 
         const scoreEl = document.getElementById('score');
-        const lvlEl = document.getElementById('lvl');
         const btn = document.getElementById('btn');
 
         async function loadData() {
             try {
-                // Добавляем timestamp для обхода кэша
                 const r = await fetch(`/api/balance/${userId}?t=${Date.now()}`);
                 const d = await r.json();
                 score = d.balance || 0;
@@ -238,19 +246,20 @@
                 spawnPlus(t.pageX, t.pageY);
             }
             scoreEl.textContent = score.toLocaleString();
-            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
         });
 
         function spawnPlus(x, y) {
             const p = document.createElement('div');
             p.className = 'plus-animation';
             p.textContent = '+1';
-            p.style.left = (x - 10) + 'px';
-            p.style.top = (y - 30) + 'px';
+            p.style.left = (x - 15) + 'px';
+            p.style.top = (y - 40) + 'px';
             document.body.appendChild(p);
-            setTimeout(() => p.remove(), 600);
+            setTimeout(() => p.remove(), 700);
         }
 
+        // Сохранение кликов каждые 2 секунды
         setInterval(async () => {
             if (pending > 0) {
                 const toSend = pending;
