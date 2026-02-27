@@ -37,13 +37,18 @@
         
         .game-container { position: relative; width: 100%; max-width: 500px; height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; box-sizing: border-box; transition: opacity 0.5s; z-index: 1; }
         
+        /* HEADER */
         .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
-        .logo { width: 50px; height: 50px; background: url('/static/images/unnamed4.png') no-repeat center; background-size: cover; border-radius: 12px; box-shadow: 0 0 15px var(--neon); animation: rainbow-pulse var(--rainbow-speed) linear infinite; }
-        #lvl { font-size: 14px; text-shadow: 0 0 10px var(--neon); color: var(--neon); }
-        
+        .logo { width: 50px; height: 50px; background: url('/static/images/unnamed4.png') no-repeat center/cover; border-radius: 12px; box-shadow: 0 0 15px var(--neon); animation: rainbow-pulse var(--rainbow-speed) linear infinite; }
+        .user-info { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+        #lvl { font-size: 14px; text-shadow: 0 0 10px var(--neon); color: var(--neon); font-weight: bold; }
+        #user-id-display { font-size: 10px; opacity: 0.6; font-family: monospace; }
+
+        /* SCORE */
         .balance-container { text-align: center; margin-top: 20px; }
         #score { font-size: 48px; color: #fff; text-shadow: 0 0 20px var(--neon); font-weight: bold; }
         
+        /* PLAY AREA */
         .play-area { position: relative; flex-grow: 1; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         
         #btn { 
@@ -56,18 +61,22 @@
         }
         #btn:active { transform: scale(0.92); }
 
-        /* Энергия */
+        /* SIDE MENU */
+        .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 12px; z-index: 3; }
+        .side-item { width: 85px; padding: 10px 5px; background: rgba(255,255,255,0.05); border: 1px solid rgba(0, 212, 255, 0.4); border-radius: 8px; backdrop-filter: blur(5px); font-size: 9px; text-align: center; cursor: pointer; transition: 0.3s; color: white; }
+        .side-item:hover { background: rgba(0, 212, 255, 0.1); }
+
+        /* ENERGY */
         .energy-container { width: 100%; max-width: 280px; margin-top: 25px; }
         .energy-text { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; color: var(--neon); }
         .energy-bar-bg { width: 100%; height: 12px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; border: 1px solid rgba(0, 212, 255, 0.3); }
         #energy-fill { width: 100%; height: 100%; background: linear-gradient(90deg, var(--neon), var(--neon-secondary)); transition: width 0.2s; }
         
-        .side-menu { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 12px; z-index: 3; }
-        .side-item { width: 85px; padding: 10px 5px; background: rgba(255,255,255,0.05); border: 1px solid rgba(0, 212, 255, 0.4); border-radius: 8px; backdrop-filter: blur(5px); font-size: 9px; text-align: center; cursor: pointer; transition: 0.3s; }
-        
+        /* NAVIGATION */
         .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; margin-bottom: 20px; }
         .nav-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 15px 5px; text-align: center; font-size: 10px; cursor: pointer; }
         
+        /* MODALS */
         .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; z-index: 999; backdrop-filter: blur(4px); }
         .overlay.active { display: block; }
         .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 75%; background: var(--glass); border-top: 2px solid var(--neon); border-radius: 30px 30px 0 0; z-index: 1000; transition: bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1); padding: 30px; box-sizing: border-box; overflow-y: auto; }
@@ -77,8 +86,8 @@
         
         .stat-box { background: rgba(255,255,255,0.03); padding: 15px; border-radius: 12px; margin-bottom: 10px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
         .btn-action { width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; color:#000; font-weight:bold; cursor:pointer; font-family:'Orbitron'; margin-top: 10px; }
-        .btn-action:disabled { opacity: 0.3; cursor: not-allowed; filter: grayscale(1); }
 
+        /* ANIMATIONS */
         .plus-animation { position: absolute; color: var(--neon); font-size: 32px; font-weight: bold; animation: float 0.7s ease-out forwards; pointer-events: none; z-index: 100; text-shadow: 0 0 15px var(--neon); }
         @keyframes float { 0% { opacity:1; transform: translateY(0) scale(1); } 100% { opacity:0; transform: translateY(-120px) scale(1.5); } }
     </style>
@@ -87,7 +96,10 @@
     <div class="game-container" id="game" style="opacity:0">
         <div class="header">
             <div class="logo"></div>
-            <span id="lvl">🏆 Level 1</span>
+            <div class="user-info">
+                <span id="lvl">🏆 Level 1</span>
+                <span id="user-id-display">ID: 000000000</span>
+            </div>
         </div>
         
         <div class="balance-container">
@@ -118,7 +130,7 @@
         <div class="bottom-nav">
             <div class="nav-card" onclick="openModal('boost')">🚀 BOOST</div>
             <div class="nav-card" onclick="openModal('mine')">⛏️ MINE</div>
-            <div class="nav-card" onclick="openModal('stats')">⚙️ STATS</div>
+            <div class="nav-card" onclick="openModal('stats')">📊 STATS</div>
         </div>
     </div>
 
@@ -130,40 +142,49 @@
             <div class="stat-box">
                 <div style="font-size: 14px; color: var(--neon); font-weight: bold;">⚡ MULTI-TAP</div>
                 <p style="font-size: 10px; margin: 5px 0; opacity: 0.8;">Сила клика: <span id="boost-power-val">1</span></p>
-                <button id="boost-btn-main" class="btn-action" onclick="handleUpgrade('tap')">UPGRADE</button>
+                <button class="btn-action" onclick="handleUpgrade('tap')">UPGRADE (500 NP)</button>
             </div>
 
             <div class="stat-box">
                 <div style="font-size: 14px; color: var(--neon-secondary); font-weight: bold;">🔋 ENERGY LIMIT</div>
                 <p style="font-size: 10px; margin: 5px 0; opacity: 0.8;">Макс. энергия: <span id="energy-limit-val">1000</span></p>
-                <button id="boost-btn-energy" class="btn-action" onclick="handleUpgrade('energy')">UPGRADE</button>
-            </div>
-
-            <div class="stat-box">
-                <div style="font-size: 14px; color: #ff9d00; font-weight: bold;">🤖 AUTO-BOT</div>
-                <button id="boost-btn-bot" class="btn-action" onclick="handleUpgrade('bot')">UPGRADE</button>
+                <button class="btn-action" onclick="handleUpgrade('energy')">UPGRADE (500 NP)</button>
             </div>
         </div>
     </div>
 
-    <div id="modal-friends" class="modal"><h2>Friends</h2></div>
-    <div id="modal-tasks" class="modal"><h2>Tasks</h2></div>
-    <div id="modal-daily" class="modal"><h2>Daily Bonus</h2></div>
-    <div id="modal-mine" class="modal"><h2>Mining</h2></div>
-    <div id="modal-stats" class="modal"><h2>Stats</h2></div>
+    <div id="modal-stats" class="modal">
+        <div class="modal-header"><h2>Статистика</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="stat-box">
+            <div style="opacity: 0.7; font-size: 12px;">Telegram ID</div>
+            <div id="modal-user-id" style="font-size: 18px; color: var(--neon-secondary);">000000000</div>
+        </div>
+        <div class="stat-box">
+            <div style="opacity: 0.7; font-size: 12px;">Статус узла</div>
+            <div style="color: #00ff00;">Active (NL2 Node)</div>
+        </div>
+    </div>
+
+    <div id="modal-friends" class="modal"><h2>Friends</h2><p>Система приглашений в разработке.</p></div>
+    <div id="modal-tasks" class="modal"><h2>Tasks</h2><p>Задания появятся скоро.</p></div>
+    <div id="modal-daily" class="modal"><h2>Daily Bonus</h2><p>Заходите завтра за наградой!</p></div>
+    <div id="modal-mine" class="modal"><h2>Mining</h2><p>Майнинг фермы в процессе постройки.</p></div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
         
+        // Telegram Data
+        const rawUserId = tg.initDataUnsafe?.user?.id || "Guest";
+        document.getElementById('user-id-display').textContent = "ID: " + rawUserId;
+        document.getElementById('modal-user-id').textContent = rawUserId;
+
+        // Game State
         let score = 0;
         let clickPower = 1;
         let energy = 1000;
         let maxEnergy = 1000;
-        let energyLvl = 1;
-        let playerLevel = 1;
 
-        // Обновление UI
         function updateUI() {
             document.getElementById('score').textContent = Math.floor(score).toLocaleString();
             document.getElementById('energy-val').textContent = `${Math.floor(energy)} / ${maxEnergy}`;
@@ -172,7 +193,7 @@
             document.getElementById('boost-power-val').textContent = clickPower;
         }
 
-        // Клик по кнопке
+        // Click Handler
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (energy >= clickPower) {
@@ -198,7 +219,7 @@
             setTimeout(() => p.remove(), 700);
         }
 
-        // Регенерация энергии (1 ед в секунду)
+        // Energy Regeneration
         setInterval(() => {
             if (energy < maxEnergy) {
                 energy = Math.min(maxEnergy, energy + 1);
@@ -206,9 +227,9 @@
             }
         }, 1000);
 
-        // Обработка покупки бустов (упрощенная логика для примера)
+        // Boost Logic
         function handleUpgrade(type) {
-            const cost = 500; // Для примера фиксированная цена
+            const cost = 500;
             if (score >= cost) {
                 score -= cost;
                 if (type === 'tap') clickPower += 1;
@@ -220,6 +241,7 @@
             }
         }
 
+        // Modal Logic
         function openModal(id) {
             document.getElementById('overlay').classList.add('active');
             document.getElementById('modal-' + id).classList.add('active');
@@ -230,8 +252,11 @@
             document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
         }
 
-        updateUI();
-        document.getElementById('game').style.opacity = '1';
+        // Start
+        window.onload = () => {
+            updateUI();
+            document.getElementById('game').style.opacity = '1';
+        };
     </script>
 </body>
 </html>
