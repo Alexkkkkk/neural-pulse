@@ -61,7 +61,7 @@ BOT_UPGRADE_COSTS = {
 }
 
 TOKEN = "8257287930:AAG3tTP9uCtv5GcaqLA_piMqFjzFvA1PExM"
-MY_DOMAIN = "ai.bothost.ru"
+MY_DOMAIN = "np.bothost.ru"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
