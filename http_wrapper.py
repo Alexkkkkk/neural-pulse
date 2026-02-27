@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import FileResponse  # Добавлено для иконки
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -46,21 +47,12 @@ PLAYER_LEVELS = {
     20: {"name": "GOD MODE", "price": 100000000000, "tap": 100000000}
 }
 
-# НОВАЯ ТАБЛИЦА ЦЕН ДЛЯ АВТОКЛИКЕРА ЗА NP
 BOT_UPGRADE_COSTS = {
     0: {"price": 25000, "mult": 1},
     1: {"price": 100000, "mult": 3},
     2: {"price": 500000, "mult": 8},
     3: {"price": 2000000, "mult": 20},
     4: {"price": 10000000, "mult": 50}
-}
-
-# Платные боты (оставляем для раздела MINE)
-BOT_CONFIG = {
-    0: {"mult": 0},
-    1: {"mult": 1.0},
-    10: {"mult": 8.5},
-    20: {"mult": 30.0}
 }
 
 TOKEN = "8257287930:AAFhDcKz-ebfaAHzb5H4Hr1b9SCa9OrSauI"
@@ -71,7 +63,7 @@ dp = Dispatcher()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🛠️ Запуск системы инициализации...")
+    logger.info("🛠️ Инициализация БД...")
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
                         (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
@@ -80,7 +72,7 @@ async def lifespan(app: FastAPI):
         conn.commit()
     
     polling_task = asyncio.create_task(dp.start_polling(bot))
-    logger.info("✅ Бот и Сервер успешно запущены.")
+    logger.info("✅ Запуск завершен.")
     yield
     polling_task.cancel()
 
@@ -91,6 +83,14 @@ if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 templates = Jinja2Templates(directory=str(STATIC_DIR))
+
+# --- ОБРАБОТКА FAVICON (Убирает 404 в логах) ---
+@app.get('/favicon.ico', include_in_schema=False)
+async def favicon():
+    icon_path = STATIC_DIR / "images" / "unnamed4.png"
+    if icon_path.exists():
+        return FileResponse(icon_path)
+    return {"status": "not found"}
 
 # --- API ЭНДПОИНТЫ ---
 
@@ -114,12 +114,10 @@ async def get_balance(user_id: str):
         balance, click_lvl, bot_lvl, last_collect = row
         offline_profit = 0
         
-        # Расчет офлайн прибыли (используем новые множители BOT_UPGRADE_COSTS)
         if bot_lvl > 0 and last_collect > 0:
-            seconds_passed = min(now - last_collect, 28800) # Максимум 8 часов офлайна
+            seconds_passed = min(now - last_collect, 28800) 
             tap_power = PLAYER_LEVELS.get(click_lvl, PLAYER_LEVELS[1])["tap"]
-            # Берем множитель текущего уровня бота
-            mult = BOT_UPGRADE_COSTS.get(bot_lvl-1, {"mult": 1})["mult"]
+            mult = BOT_UPGRADE_COSTS.get(bot_lvl - 1, {"mult": 1})["mult"]
             offline_profit = int(seconds_passed * tap_power * mult)
             balance += offline_profit
 
@@ -135,7 +133,6 @@ async def save_clicks(data: dict = Body(...)):
         conn.commit()
     return {"status": "ok"}
 
-# Покупка силы клика
 @app.post("/api/buy_boost")
 async def buy_boost(data: dict = Body(...)):
     uid = str(data.get("user_id"))
@@ -157,7 +154,6 @@ async def buy_boost(data: dict = Body(...)):
             return {"status": "ok", "new_balance": balance - cost, "new_lvl": next_lvl}
         return {"error": "Недостаточно NP!"}
 
-# НОВЫЙ ЭНДПОИНТ: Покупка автобота за NP
 @app.post("/api/buy_bot_np")
 async def buy_bot_np(data: dict = Body(...)):
     uid = str(data.get("user_id"))
@@ -169,7 +165,7 @@ async def buy_bot_np(data: dict = Body(...)):
         
         balance, current_bot_lvl = res
         if current_bot_lvl not in BOT_UPGRADE_COSTS:
-            return {"error": "Достигнут максимум бота!"}
+            return {"error": "MAX BOT LEVEL"}
         
         cost = BOT_UPGRADE_COSTS[current_bot_lvl]["price"]
         if balance >= cost:
@@ -177,9 +173,9 @@ async def buy_bot_np(data: dict = Body(...)):
             conn.execute("UPDATE users SET balance = balance - ?, bot_lvl = ?, last_collect = ? WHERE id = ?", 
                          (cost, new_bot_lvl, int(time.time()), uid))
             conn.commit()
-            logger.info(f"🤖 [BOT UPGRADE] {uid} теперь уровень {new_bot_lvl}")
+            logger.info(f"🤖 [AUTO-BOT] {uid} купил уровень {new_bot_lvl}")
             return {"status": "ok", "new_balance": balance - cost, "new_bot_lvl": new_bot_lvl}
-        return {"error": "Недостаточно NP для бота!"}
+        return {"error": "Недостаточно NP!"}
 
 @app.get("/api/all_stats")
 async def get_all_stats():
