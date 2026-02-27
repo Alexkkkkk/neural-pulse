@@ -1,4 +1,4 @@
-import os, asyncio, sqlite3, uvicorn, logging, time
+import os, asyncio, sqlite3, uvicorn, logging, time, sys
 from pathlib import Path
 from datetime import datetime
 from contextlib import asynccontextmanager
@@ -7,14 +7,14 @@ from fastapi import FastAPI, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import FileResponse  # Импорт для корректной отдачи иконки
+from fastapi.responses import FileResponse
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
 # --- НАСТРОЙКА ЛОГИРОВАНИЯ ---
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s | %(name)s | %(levelname)s | %(message)s',
+    format='%(asctime)s | %(levelname)s | %(message)s',
     datefmt='%H:%M:%S'
 )
 logger = logging.getLogger("NEURAL_PULSE")
@@ -63,17 +63,27 @@ dp = Dispatcher()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🛠️ Инициализация БД...")
+    print("\n" + "="*50)
+    logger.info("🚀 СИСТЕМА NEURAL PULSE ЗАПУСКАЕТСЯ...")
+    
+    # Инициализация БД
+    logger.info(f"📁 Путь БД: {DB_PATH}")
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
                         (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
                          click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
                          last_collect INTEGER DEFAULT 0, referrer_id TEXT)''')
         conn.commit()
-    
+    logger.info("✅ База данных готова.")
+
+    # Запуск бота
     polling_task = asyncio.create_task(dp.start_polling(bot))
-    logger.info("✅ Запуск завершен.")
+    logger.info("🤖 Telegram Bot: Online (Polling)")
+    print("="*50 + "\n")
+    
     yield
+    
+    logger.info("🛑 Завершение работы...")
     polling_task.cancel()
 
 app = FastAPI(lifespan=lifespan)
@@ -84,7 +94,6 @@ if STATIC_DIR.exists():
 
 templates = Jinja2Templates(directory=str(STATIC_DIR))
 
-# --- ОБРАБОТКА FAVICON ---
 @app.get('/favicon.ico', include_in_schema=False)
 async def favicon():
     icon_path = STATIC_DIR / "images" / "unnamed4.png"
@@ -208,4 +217,12 @@ async def start_handler(message: types.Message):
     await message.answer(f"Привет! 🚀\nГотов майнить NP?", reply_markup=kb)
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+    # Красивый лог запуска в консоль перед стартом uvicorn
+    print("\n" + "★"*50)
+    print(f"  NEURAL PULSE ENGINE v1.0")
+    print(f"  Python: {sys.version.split()[0]}")
+    print(f"  Domain: https://{MY_DOMAIN}")
+    print(f"  Static: {STATIC_DIR}")
+    print("★"*50 + "\n")
+    
+    uvicorn.run(app, host="0.0.0.0", port=3000, log_level="info")
