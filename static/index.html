@@ -6,6 +6,7 @@
     <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/static/images/unnamed4.png">
     <style>
         :root { --neon: #00d4ff; --neon-secondary: #00ff96; --bg: #050a1a; --glass: rgba(10, 25, 47, 0.95); }
         body { margin: 0; background: radial-gradient(circle at center, #0a192f 0%, #050a1a 100%); height: 100vh; font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; user-select: none; display: flex; justify-content: center; }
@@ -51,3 +52,254 @@
 </head>
 <body>
     <div class="game-container" id="game" style="opacity:0">
+        <div class="header">
+            <div class="logo"></div>
+            <span id="lvl">🏆 Level 1</span>
+        </div>
+        
+        <div class="balance-container">
+            <div style="font-size:10px; opacity:0.7; letter-spacing: 2px;">TOTAL NP POINTS</div>
+            <div id="score">0</div>
+            <div id="bot-income-label" style="font-size: 10px; color: var(--neon-secondary); margin-top: 5px; min-height: 12px;"></div>
+        </div>
+        
+        <div class="play-area">
+            <button id="btn"></button>
+            <div class="side-menu">
+                <div class="side-item" onclick="openModal('friends')">Friends</div>
+                <div class="side-item" onclick="openModal('tasks')">Tasks</div>
+            </div>
+        </div>
+
+        <div class="bottom-nav">
+            <div class="nav-card" onclick="openModal('boost')">🚀 BOOST</div>
+            <div class="nav-card" onclick="openModal('mine')">⛏️ MINE</div>
+            <div class="nav-card" onclick="openModal('stats')">⚙️ STATS</div>
+        </div>
+    </div>
+
+    <div class="overlay" id="overlay" onclick="closeAllModals()"></div>
+
+    <div id="modal-boost" class="modal">
+        <div class="modal-header"><h2>Boosters</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="modal-content">
+            <div class="stat-box">
+                <div style="font-size: 14px; color: var(--neon); font-weight: bold;">⚡ MULTI-TAP</div>
+                <p style="font-size: 10px; margin: 5px 0; opacity: 0.8;">Сила клика: <span id="boost-power-val">1</span></p>
+                <button id="boost-btn-main" class="btn-action" onclick="handleUpgrade()">
+                    UPGRADE (<span id="boost-cost-display">...</span>)
+                </button>
+            </div>
+
+            <div class="stat-box">
+                <div style="font-size: 14px; color: var(--neon-secondary); font-weight: bold;">🤖 AUTO-BOT</div>
+                <p style="font-size: 10px; margin: 5px 0; opacity: 0.8;">Уровень бота: <span id="bot-lvl-display">0</span></p>
+                <button id="boost-btn-bot" class="btn-action" onclick="handleBotUpgrade()">
+                    UPGRADE (<span id="bot-cost-display">...</span>)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-mine" class="modal">
+        <div class="modal-header"><h2>Mining Bots</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div id="bot-list"></div>
+    </div>
+
+    <div id="modal-stats" class="modal">
+        <div class="modal-header"><h2>Statistics</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="stat-box">Твой ID: <span id="stat-my-id">...</span></div>
+        <div class="stat-box">Игроков: <div id="stat-players" class="stat-val">...</div></div>
+        <div class="stat-box">Всего NP в сети: <div id="stat-total-np" class="stat-val">...</div></div>
+    </div>
+
+    <div id="modal-friends" class="modal">
+        <div class="modal-header"><h2>Friends</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="stat-box">
+            <p>Приглашай друзей и получай <br><span style="color:var(--neon)">+50,000 NP</span> за каждого!</p>
+            <button class="btn-action" style="background:var(--neon-secondary)" onclick="shareInvite()">ПРИГЛАСИТЬ</button>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        
+        const userId = String(tg.initDataUnsafe?.user?.id || "dev_user");
+        let score = 0, pending = 0, clickPower = 1, playerLevel = 1, botLvl = 0;
+
+        const PLAYER_LEVELS = {
+            1: { name: "Новичок", price: 0, tap: 1 },
+            2: { name: "Стажер", price: 1000, tap: 5 },
+            3: { name: "Фрилансер", price: 5000, tap: 15 },
+            4: { name: "Специалист", price: 15000, tap: 40 },
+            5: { name: "Менеджер", price: 45000, tap: 100 },
+            6: { name: "Тимлид", price: 120000, tap: 250 },
+            7: { name: "Инвестор", price: 350000, tap: 600 },
+            8: { name: "Миллионер", price: 1000000, tap: 1500 },
+            9: { name: "Владелец ТГ", price: 2500000, tap: 4000 },
+            10: { name: "CEO", price: 6000000, tap: 10000 }
+        };
+
+        const BOT_UPGRADE_COSTS = {
+            0: { price: 25000, mult: 1 },
+            1: { price: 100000, mult: 3 },
+            2: { price: 500000, mult: 8 },
+            3: { price: 2000000, mult: 20 },
+            4: { price: 10000000, mult: 50 }
+        };
+
+        function formatNP(num) {
+            if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
+            if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+            if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+            if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
+            return Math.floor(num).toString();
+        }
+
+        async function loadData() {
+            try {
+                const r = await fetch(`/api/balance/${userId}?t=${Date.now()}`);
+                const d = await r.json();
+                score = d.balance;
+                playerLevel = d.click_lvl;
+                botLvl = d.bot_lvl;
+                clickPower = PLAYER_LEVELS[playerLevel]?.tap || 1;
+
+                if (d.offline_profit > 0) {
+                    tg.showAlert(`Бот намайнил пока тебя не было: ${formatNP(d.offline_profit)} NP!`);
+                }
+                updateUI();
+            } catch (e) { console.error("Load error", e); }
+            finally { document.getElementById('game').style.opacity = '1'; }
+        }
+
+        function updateUI() {
+            document.getElementById('score').textContent = formatNP(score);
+            document.getElementById('lvl').textContent = `🏆 ${PLAYER_LEVELS[playerLevel]?.name || "Max"} (Lvl ${playerLevel})`;
+            
+            // Кнопка клика
+            const nextLvl = playerLevel + 1;
+            const upgradeBtn = document.getElementById('boost-btn-main');
+            if (PLAYER_LEVELS[nextLvl]) {
+                document.getElementById('boost-power-val').textContent = formatNP(clickPower);
+                document.getElementById('boost-cost-display').textContent = formatNP(PLAYER_LEVELS[nextLvl].price);
+                upgradeBtn.disabled = score < PLAYER_LEVELS[nextLvl].price;
+            } else {
+                upgradeBtn.textContent = "MAX LEVEL";
+                upgradeBtn.disabled = true;
+            }
+
+            // Кнопка автобота
+            const botBtn = document.getElementById('boost-btn-bot');
+            document.getElementById('bot-lvl-display').textContent = botLvl;
+            if (BOT_UPGRADE_COSTS[botLvl]) {
+                document.getElementById('bot-cost-display').textContent = formatNP(BOT_UPGRADE_COSTS[botLvl].price);
+                botBtn.disabled = score < BOT_UPGRADE_COSTS[botLvl].price;
+            } else {
+                botBtn.textContent = "MAX BOT";
+                botBtn.disabled = true;
+            }
+
+            const ind = document.getElementById('bot-income-label');
+            if (botLvl > 0) {
+                const mult = BOT_UPGRADE_COSTS[botLvl - 1]?.mult || 1;
+                ind.textContent = `🤖 АВТО-ДОХОД: ${formatNP(clickPower * mult)} /сек`;
+            }
+        }
+
+        async function handleUpgrade() {
+            const r = await fetch('/api/buy_boost', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ user_id: userId })
+            });
+            const d = await r.json();
+            if (d.status === 'ok') {
+                score = d.new_balance; playerLevel = d.new_lvl;
+                clickPower = PLAYER_LEVELS[playerLevel].tap;
+                updateUI();
+                tg.HapticFeedback?.notificationOccurred('success');
+            } else { tg.showAlert(d.error); }
+        }
+
+        async function handleBotUpgrade() {
+            const r = await fetch('/api/buy_bot_np', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ user_id: userId })
+            });
+            const d = await r.json();
+            if (d.status === 'ok') {
+                score = d.new_balance; botLvl = d.new_bot_lvl;
+                updateUI();
+                tg.HapticFeedback?.notificationOccurred('success');
+            } else { tg.showAlert(d.error); }
+        }
+
+        document.getElementById('btn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            for (let t of e.changedTouches) {
+                score += clickPower; pending += clickPower;
+                spawnPlus(t.pageX, t.pageY, formatNP(clickPower));
+            }
+            document.getElementById('score').textContent = formatNP(score);
+            tg.HapticFeedback?.impactOccurred('medium');
+        });
+
+        function spawnPlus(x, y, valText) {
+            const p = document.createElement('div');
+            p.className = 'plus-animation';
+            p.textContent = '+' + valText;
+            p.style.left = (x - 20) + 'px'; p.style.top = (y - 40) + 'px';
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 700);
+        }
+
+        // Пассивный доход каждую секунду
+        setInterval(() => {
+            if (botLvl > 0) {
+                const income = clickPower * (BOT_UPGRADE_COSTS[botLvl - 1]?.mult || 1);
+                score += income;
+                updateUI();
+            }
+        }, 1000);
+
+        // Синхронизация с сервером раз в 3 секунды
+        setInterval(async () => {
+            if (pending > 0) {
+                const s = pending; pending = 0;
+                await fetch('/api/clicks', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ user_id: userId, clicks: s })
+                }).catch(() => pending += s);
+            }
+        }, 3000);
+
+        async function openModal(id) {
+            document.getElementById('overlay').classList.add('active');
+            document.getElementById('modal-' + id).classList.add('active');
+            if (id === 'stats') {
+                document.getElementById('stat-my-id').textContent = userId;
+                const r = await fetch('/api/all_stats').then(res => res.json());
+                document.getElementById('stat-players').textContent = r.total_players;
+                document.getElementById('stat-total-np').textContent = formatNP(r.total_balance);
+            }
+            updateUI();
+        }
+
+        function closeAllModals() {
+            document.getElementById('overlay').classList.remove('active');
+            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+        }
+
+        function shareInvite() {
+            const inviteLink = `https://t.me/UltraMind_AI_bot?start=${userId}`;
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=Заходи в Neural Pulse!`);
+        }
+
+        window.onload = loadData;
+    </script>
+</body>
+</html>
