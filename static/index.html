@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -51,7 +50,6 @@
         
         /* PLAY AREA */
         .play-area { position: relative; flex-grow: 1; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        
         #btn { 
             width: 65vw; max-width: 260px; height: 65vw; max-height: 260px; 
             background: url('/static/images/unnamed3.png') no-repeat center; 
@@ -62,7 +60,6 @@
         }
         #btn:active { transform: scale(0.92); }
 
-        /* SIDE MENU */
         .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 12px; z-index: 3; }
         .side-item { width: 85px; padding: 10px 5px; background: rgba(255,255,255,0.05); border: 1px solid rgba(0, 212, 255, 0.4); border-radius: 8px; backdrop-filter: blur(5px); font-size: 9px; text-align: center; cursor: pointer; transition: 0.3s; color: white; }
 
@@ -85,6 +82,15 @@
         
         .stat-box { background: rgba(255,255,255,0.03); padding: 15px; border-radius: 12px; margin-bottom: 10px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
         .btn-action { width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; color:#000; font-weight:bold; cursor:pointer; font-family:'Orbitron'; margin-top: 10px; }
+
+        /* LEADERBOARD */
+        .leaderboard { margin-top: 20px; text-align: left; background: rgba(255, 255, 255, 0.02); border-radius: 15px; padding: 10px; border: 1px solid rgba(0, 212, 255, 0.1); }
+        .leader-item { display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); font-size: 12px; align-items: center; }
+        .leader-item:last-child { border: none; }
+        .leader-rank { color: var(--neon); font-weight: bold; width: 30px; }
+        .leader-name { flex-grow: 1; opacity: 0.9; }
+        .leader-score { color: var(--neon-secondary); font-family: monospace; }
+        .my-rank { background: rgba(0, 212, 255, 0.15); border-radius: 8px; border: 1px solid var(--neon); }
 
         /* ANIMATIONS */
         .plus-animation { position: absolute; color: var(--neon); font-size: 32px; font-weight: bold; animation: float 0.7s ease-out forwards; pointer-events: none; z-index: 100; text-shadow: 0 0 15px var(--neon); }
@@ -135,6 +141,26 @@
 
     <div class="overlay" id="overlay" onclick="closeAllModals()"></div>
 
+    <div id="modal-stats" class="modal">
+        <span class="close-btn" onclick="closeAllModals()">&times;</span>
+        <h2>Статистика</h2>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="stat-box">
+                <div style="opacity: 0.7; font-size: 10px;">ВАШ ID</div>
+                <div id="modal-user-id" style="font-size: 14px; color: var(--neon);">000</div>
+            </div>
+            <div class="stat-box">
+                <div style="opacity: 0.7; font-size: 10px;">УЗЕЛ</div>
+                <div style="font-size: 14px; color: #00ff00;">NL2 RU</div>
+            </div>
+        </div>
+
+        <h3 style="text-align: center; margin-top: 20px; font-size: 14px; color: var(--neon); letter-spacing: 1px;">🏆 TOP 20 PLAYERS</h3>
+        <div class="leaderboard" id="leaderboard-list">
+            </div>
+    </div>
+
     <div id="modal-boost" class="modal">
         <span class="close-btn" onclick="closeAllModals()">&times;</span>
         <h2>Boosters</h2>
@@ -150,19 +176,6 @@
         </div>
     </div>
 
-    <div id="modal-stats" class="modal">
-        <span class="close-btn" onclick="closeAllModals()">&times;</span>
-        <h2>Статистика</h2>
-        <div class="stat-box">
-            <div style="opacity: 0.7; font-size: 12px;">Telegram ID</div>
-            <div id="modal-user-id" style="font-size: 18px; color: var(--neon-secondary);">000000000</div>
-        </div>
-        <div class="stat-box">
-            <div style="opacity: 0.7; font-size: 12px;">Статус узла</div>
-            <div style="color: #00ff00;">Active (NL2 Node)</div>
-        </div>
-    </div>
-
     <div id="modal-friends" class="modal"><h2>Friends</h2><p>Система в разработке.</p></div>
     <div id="modal-tasks" class="modal"><h2>Tasks</h2><p>Задания появятся скоро.</p></div>
     <div id="modal-daily" class="modal"><h2>Daily Bonus</h2><p>Заходите завтра!</p></div>
@@ -173,7 +186,7 @@
         tg.expand();
         
         // Telegram Data
-        const userId = tg.initDataUnsafe?.user?.id || 12345;
+        const userId = tg.initDataUnsafe?.user?.id || 12345678;
         document.getElementById('user-id-display').textContent = "ID: " + userId;
         document.getElementById('modal-user-id').textContent = userId;
 
@@ -188,7 +201,6 @@
             document.getElementById('boost-power-val').textContent = clickPower;
         }
 
-        // Sync with Bothost
         async function syncWithServer() {
             try {
                 await fetch('/api/clicks', {
@@ -199,7 +211,6 @@
             } catch (e) { console.error("Sync error", e); }
         }
 
-        // Click Handler
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (energy >= clickPower) {
@@ -208,7 +219,7 @@
                 const t = e.changedTouches[0];
                 spawnPlus(t.pageX, t.pageY, clickPower);
                 updateUI();
-                syncWithServer(); // Сохранение на сервере Bothost
+                syncWithServer();
                 tg.HapticFeedback?.impactOccurred('light');
             } else {
                 tg.HapticFeedback?.notificationOccurred('error');
@@ -224,7 +235,6 @@
             setTimeout(() => p.remove(), 700);
         }
 
-        // Energy Regen
         setInterval(() => {
             if (energy < maxEnergy) {
                 energy = Math.min(maxEnergy, energy + 1);
@@ -232,7 +242,6 @@
             }
         }, 1000);
 
-        // Boosters
         function handleUpgrade(type) {
             if (score >= 500) {
                 score -= 500;
@@ -245,11 +254,56 @@
             }
         }
 
+        // Leaderboard Logic
+        function loadLeaderboard() {
+            const list = document.getElementById('leaderboard-list');
+            list.innerHTML = '';
+
+            // Список из 20 игроков (Твой счет всегда актуален)
+            const players = [
+                { id: userId, score: score, name: "Вы (You)" },
+                { id: 10001, score: 2500000, name: "NeuralMaster" },
+                { id: 10002, score: 1850400, name: "CyberPulse" },
+                { id: 10003, score: 980200, name: "Admin_Top" },
+                { id: 10004, score: 750000, name: "Satoshi_N" },
+                { id: 10005, score: 500100, name: "ClickerGod" },
+                { id: 10006, score: 420000, name: "AI_Hunter" },
+                { id: 10007, score: 310000, name: "Flash_Dev" },
+                { id: 10008, score: 290000, name: "CryptoKing" },
+                { id: 10009, score: 150000, name: "User_88" },
+                { id: 10010, score: 120000, name: "BetaTester" },
+                { id: 10011, score: 95000, name: "Giga_Click" },
+                { id: 10012, score: 84000, name: "Z-Pulse" },
+                { id: 10013, score: 72000, name: "Shadow" },
+                { id: 10014, score: 55000, name: "Matrix" },
+                { id: 10015, score: 43000, name: "Noob_1" },
+                { id: 10016, score: 32000, name: "FastTap" },
+                { id: 10017, score: 15000, name: "Newbie" },
+                { id: 10018, score: 8000, name: "Zero_X" },
+                { id: 10019, score: 5000, name: "PulseUser" }
+            ];
+
+            players.sort((a, b) => b.score - a.score);
+
+            players.forEach((player, index) => {
+                const item = document.createElement('div');
+                item.className = `leader-item ${player.id === userId ? 'my-rank' : ''}`;
+                item.innerHTML = `
+                    <span class="leader-rank">#${index + 1}</span>
+                    <span class="leader-name">${player.name}</span>
+                    <span class="leader-score">${Math.floor(player.score).toLocaleString()} NP</span>
+                `;
+                list.appendChild(item);
+            });
+        }
+
         // Modals
         function openModal(id) {
+            if(id === 'stats') loadLeaderboard();
             document.getElementById('overlay').classList.add('active');
             document.getElementById('modal-' + id).classList.add('active');
         }
+
         function closeAllModals() {
             document.getElementById('overlay').classList.remove('active');
             document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
