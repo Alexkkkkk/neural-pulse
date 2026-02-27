@@ -12,9 +12,10 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
 # --- НАСТРОЙКА ЛОГИРОВАНИЯ ---
+# Мы добавляем более детальный формат, чтобы сразу видеть источник события
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s | %(levelname)s | %(message)s',
+    format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
     datefmt='%H:%M:%S'
 )
 logger = logging.getLogger("NEURAL_PULSE")
@@ -63,7 +64,7 @@ dp = Dispatcher()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("--- [ ENGINE INITIALIZATION ] ---")
+    logger.info("--- [ ENGINE STARTING ] ---")
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
             conn.execute('''CREATE TABLE IF NOT EXISTS users 
@@ -71,14 +72,14 @@ async def lifespan(app: FastAPI):
                              click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
                              last_collect INTEGER DEFAULT 0, referrer_id TEXT)''')
             conn.commit()
-        logger.info(f"💾 Database status: OK ({DB_PATH.name})")
+        logger.info(f"💾 Database status: READY ({DB_PATH.name})")
     except Exception as e:
-        logger.error(f"❌ Database error: {e}")
+        logger.error(f"❌ DATABASE CRITICAL ERROR: {e}")
 
     polling_task = asyncio.create_task(dp.start_polling(bot))
-    logger.info("🤖 AI Telegram Bot: ACTIVE")
+    logger.info("🤖 AI Telegram Bot: POLLING STARTED")
     yield
-    logger.info("--- [ SHUTTING DOWN ] ---")
+    logger.info("--- [ ENGINE SHUTTING DOWN ] ---")
     polling_task.cancel()
 
 app = FastAPI(lifespan=lifespan)
@@ -90,27 +91,23 @@ if STATIC_DIR.exists():
 
 templates = Jinja2Templates(directory=str(STATIC_DIR))
 
-@app.get('/favicon.ico', include_in_schema=False)
-async def favicon():
-    icon_path = STATIC_DIR / "images" / "unnamed4.png"
-    if icon_path.exists():
-        return FileResponse(icon_path)
-    return {"status": "not found"}
-
-# --- API ЭНДПОИНТЫ ---
+# --- API ЭНДПОИНТЫ С ТЕСТОВЫМ ЛОГИРОВАНИЕМ ---
 
 @app.get("/")
 async def serve_game(request: Request):
+    logger.info("🌐 [WEB] Mini App page requested")
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     now = int(time.time())
+    logger.info(f"👤 [API] Fetching balance for user: {user_id}")
     with sqlite3.connect(str(DB_PATH)) as conn:
         c = conn.cursor()
         c.execute("SELECT balance, click_lvl, bot_lvl, last_collect FROM users WHERE id = ?", (user_id,))
         row = c.fetchone()
         if not row:
+            logger.info(f"🆕 [USER] New player detected via Web: {user_id}")
             conn.execute("INSERT INTO users (id, balance, click_lvl, bot_lvl, last_collect) VALUES (?, 1000, 1, 0, ?)", (user_id, now))
             conn.commit()
             return {"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "offline_profit": 0}
@@ -123,6 +120,8 @@ async def get_balance(user_id: str):
             mult = BOT_UPGRADE_COSTS.get(bot_lvl - 1, {"mult": 1})["mult"]
             offline_profit = int(seconds_passed * tap_power * mult)
             balance += offline_profit
+            if offline_profit > 0:
+                logger.info(f"💰 [ECONOMY] User {user_id} earned {offline_profit} NP offline")
 
         conn.execute("UPDATE users SET balance = ?, last_collect = ? WHERE id = ?", (balance, now, user_id))
         conn.commit()
@@ -130,7 +129,10 @@ async def get_balance(user_id: str):
 
 @app.post("/api/clicks")
 async def save_clicks(data: dict = Body(...)):
-    uid, clicks = str(data.get("user_id")), int(data.get("clicks", 0))
+    uid = str(data.get("user_id"))
+    clicks = int(data.get("clicks", 0))
+    logger.info(f"🖱️ [ACTIVITY] User {uid} submitted {clicks} clicks")
+    
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute("UPDATE users SET balance = balance + ?, last_collect = ? WHERE id = ?", (clicks, int(time.time()), uid))
         conn.commit()
@@ -139,6 +141,7 @@ async def save_clicks(data: dict = Body(...)):
 @app.post("/api/buy_boost")
 async def buy_boost(data: dict = Body(...)):
     uid = str(data.get("user_id"))
+    logger.info(f"🚀 [UPGRADE] Boost purchase attempt by {uid}")
     with sqlite3.connect(str(DB_PATH)) as conn:
         c = conn.cursor()
         c.execute("SELECT balance, click_lvl FROM users WHERE id = ?", (uid,))
@@ -152,12 +155,15 @@ async def buy_boost(data: dict = Body(...)):
             conn.execute("UPDATE users SET balance = balance - ?, click_lvl = ?, last_collect = ? WHERE id = ?", 
                          (cost, next_lvl, int(time.time()), uid))
             conn.commit()
+            logger.info(f"✅ [SUCCESS] {uid} upgraded to level {next_lvl}")
             return {"status": "ok", "new_balance": balance - cost, "new_lvl": next_lvl}
+        logger.warning(f"🚫 [FAIL] {uid} insufficient funds for boost")
         return {"error": "Недостаточно NP!"}
 
 @app.post("/api/buy_bot_np")
 async def buy_bot_np(data: dict = Body(...)):
     uid = str(data.get("user_id"))
+    logger.info(f"🤖 [UPGRADE] Bot purchase attempt by {uid}")
     with sqlite3.connect(str(DB_PATH)) as conn:
         c = conn.cursor()
         c.execute("SELECT balance, bot_lvl FROM users WHERE id = ?", (uid,))
@@ -172,21 +178,15 @@ async def buy_bot_np(data: dict = Body(...)):
             conn.execute("UPDATE users SET balance = balance - ?, bot_lvl = ?, last_collect = ? WHERE id = ?", 
                          (cost, new_bot_lvl, int(time.time()), uid))
             conn.commit()
-            logger.info(f"🤖 [BOT-UPGRADE] User {uid} reached level {new_bot_lvl}")
+            logger.info(f"✅ [SUCCESS] {uid} bot reached lvl {new_bot_lvl}")
             return {"status": "ok", "new_balance": balance - cost, "new_bot_lvl": new_bot_lvl}
+        logger.warning(f"🚫 [FAIL] {uid} insufficient funds for bot")
         return {"error": "Недостаточно NP!"}
-
-@app.get("/api/all_stats")
-async def get_all_stats():
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        c = conn.cursor()
-        total_players = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-        total_balance = c.execute("SELECT SUM(balance) FROM users").fetchone()[0] or 0
-        return {"total_players": total_players, "total_balance": total_balance}
 
 @dp.message(F.text.startswith("/start"))
 async def start_handler(message: types.Message):
     uid = str(message.from_user.id)
+    logger.info(f"📢 [BOT] /start command from {uid}")
     args = message.text.split()
     with sqlite3.connect(str(DB_PATH)) as conn:
         c = conn.cursor()
@@ -197,6 +197,7 @@ async def start_handler(message: types.Message):
                          (uid, int(time.time()), ref_id))
             if ref_id:
                 conn.execute("UPDATE users SET balance = balance + 50000 WHERE id = ?", (ref_id,))
+                logger.info(f"💎 [REF] User {uid} registered via {ref_id}")
                 try: await bot.send_message(ref_id, "💎 Друг зашел по ссылке! +50,000 NP!")
                 except: pass
             conn.commit()
@@ -206,9 +207,7 @@ async def start_handler(message: types.Message):
     ]])
     await message.answer(f"Привет! 🚀\nГотов майнить NP?", reply_markup=kb)
 
-# --- ТОЧКА ВХОДА С ДИНАМИЧЕСКИМ ИМЕНЕМ ФАЙЛА ---
 if __name__ == "__main__":
-    # Проверка TERM, чтобы не спамить ошибками в лог хостинга
     if os.environ.get('TERM'):
         os.system('cls' if os.name == 'nt' else 'clear')
         
@@ -218,20 +217,7 @@ if __name__ == "__main__":
     ║                 NEURAL PULSE ENGINE                  ║
     ║                HOSTING: BOTHOST.RU                   ║
     ╚══════════════════════════════════════════════════════╝\033[0m
-    
-    📡 \033[92mURL:\033[0m https://{MY_DOMAIN}
-    🛠️  \033[92mPORT:\033[0m 3000
-    🐍 \033[92mPYTHON:\033[0m {sys.version.split()[0]}
-    📅 \033[92mSTART:\033[0m {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
     """)
     
-    # Автоматическое определение имени файла (http_wrapper.py -> http_wrapper)
     filename = Path(__file__).stem  
-    
-    uvicorn.run(
-        f"{filename}:app", 
-        host="0.0.0.0", 
-        port=3000, 
-        log_level="info",
-        reload=False
-    )
+    uvicorn.run(f"{filename}:app", host="0.0.0.0", port=3000, log_level="info", reload=False)
