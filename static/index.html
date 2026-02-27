@@ -83,10 +83,26 @@
         <div class="modal-header"><h2>Boosters</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
         <div class="modal-content">
             <div class="stat-box">
-                <p id="next-lvl-title">Увеличь силу клика!</p>
-                <p>Текущая сила: <span id="boost-power-val" style="color:var(--neon)">1</span></p>
+                <div style="font-size: 14px; color: var(--neon); font-weight: bold;">⚡ MULTI-TAP</div>
+                <p style="font-size: 10px; margin: 5px 0; opacity: 0.8;">Текущая сила: <span id="boost-power-val">1</span></p>
                 <button id="boost-btn-main" class="btn-action" onclick="handleUpgrade()">
-                    UPGRADE (Цена: <span id="boost-cost-display">...</span>)
+                    UPGRADE (<span id="boost-cost-display">...</span>)
+                </button>
+            </div>
+
+            <div class="stat-box">
+                <div style="font-size: 14px; color: var(--neon-secondary); font-weight: bold;">🔋 ENERGY LIMIT</div>
+                <p style="font-size: 10px; margin: 5px 0; opacity: 0.8;">Лимит: 1,000</p>
+                <button class="btn-action" style="background: rgba(255,255,255,0.1); color: #aaa;" onclick="tg.showAlert('Скоро в обновлении!')">
+                    COMING SOON
+                </button>
+            </div>
+
+            <div class="stat-box">
+                <div style="font-size: 14px; color: #ffcc00; font-weight: bold;">🔥 FULL TANK</div>
+                <p style="font-size: 10px; margin: 5px 0; opacity: 0.8;">Восстановить энергию</p>
+                <button class="btn-action" style="background: #ffcc00; color: #000;" onclick="tg.showAlert('Энергия восполнена!')">
+                    GET FREE
                 </button>
             </div>
         </div>
@@ -94,8 +110,7 @@
 
     <div id="modal-mine" class="modal">
         <div class="modal-header"><h2>Mining Bots</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <div id="bot-list">
-            </div>
+        <div id="bot-list"></div>
     </div>
 
     <div id="modal-stats" class="modal">
@@ -114,7 +129,10 @@
         </div>
     </div>
 
-    <div id="modal-tasks" class="modal"><div class="modal-header"><h2>Tasks</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div><div class="stat-box">Задания скоро появятся!</div></div>
+    <div id="modal-tasks" class="modal">
+        <div class="modal-header"><h2>Tasks</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="stat-box">Задания скоро появятся!</div>
+    </div>
 
     <script>
         const tg = window.Telegram.WebApp;
@@ -152,6 +170,14 @@
             20: { name: "Quantum Mind", price_ton: 100, mult: 30 }
         };
 
+        function formatNP(num) {
+            if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
+            if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+            if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+            if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
+            return Math.floor(num).toString();
+        }
+
         async function loadData() {
             try {
                 const r = await fetch(`/api/balance/${userId}?t=${Date.now()}`);
@@ -162,7 +188,7 @@
                 clickPower = PLAYER_LEVELS[playerLevel].tap;
 
                 if (d.offline_profit > 0) {
-                    tg.showAlert(`Бот намайнил пока тебя не было: ${d.offline_profit.toLocaleString()} NP!`);
+                    tg.showAlert(`Бот намайнил пока тебя не было: ${formatNP(d.offline_profit)} NP!`);
                 }
                 updateUI();
             } catch (e) { console.error("Load error", e); }
@@ -170,25 +196,25 @@
         }
 
         function updateUI() {
-            document.getElementById('score').textContent = Math.floor(score).toLocaleString();
+            document.getElementById('score').textContent = formatNP(score);
             document.getElementById('lvl').textContent = `🏆 ${PLAYER_LEVELS[playerLevel].name} (Lvl ${playerLevel})`;
             
-            // Обновление модалки бустов
             const nextLvl = playerLevel + 1;
+            const upgradeBtn = document.getElementById('boost-btn-main');
+            
             if (PLAYER_LEVELS[nextLvl]) {
-                document.getElementById('boost-power-val').textContent = clickPower;
-                document.getElementById('boost-cost-display').textContent = PLAYER_LEVELS[nextLvl].price.toLocaleString();
-                document.getElementById('boost-btn-main').disabled = score < PLAYER_LEVELS[nextLvl].price;
+                document.getElementById('boost-power-val').textContent = formatNP(clickPower);
+                document.getElementById('boost-cost-display').textContent = formatNP(PLAYER_LEVELS[nextLvl].price);
+                upgradeBtn.disabled = score < PLAYER_LEVELS[nextLvl].price;
             } else {
-                document.getElementById('boost-btn-main').textContent = "MAX LEVEL";
-                document.getElementById('boost-btn-main').disabled = true;
+                upgradeBtn.textContent = "MAX LEVEL";
+                upgradeBtn.disabled = true;
             }
 
-            // Индикатор дохода
             const ind = document.getElementById('bot-income-label');
             if (botLvl > 0) {
                 const income = clickPower * (BOT_CONFIG[botLvl]?.mult || 0);
-                ind.textContent = `🤖 АВТО-ДОХОД: ${Math.floor(income).toLocaleString()} /сек`;
+                ind.textContent = `🤖 АВТО-ДОХОД: ${formatNP(income)} /сек`;
             }
         }
 
@@ -219,32 +245,30 @@
             for (let t of e.changedTouches) {
                 score += clickPower;
                 pending += clickPower;
-                spawnPlus(t.pageX, t.pageY, clickPower);
+                spawnPlus(t.pageX, t.pageY, formatNP(clickPower));
             }
-            document.getElementById('score').textContent = Math.floor(score).toLocaleString();
+            document.getElementById('score').textContent = formatNP(score);
             if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
         });
 
-        function spawnPlus(x, y, val) {
+        function spawnPlus(x, y, valText) {
             const p = document.createElement('div');
             p.className = 'plus-animation';
-            p.textContent = '+' + val;
+            p.textContent = '+' + valText;
             p.style.left = (x - 20) + 'px';
             p.style.top = (y - 40) + 'px';
             document.body.appendChild(p);
             setTimeout(() => p.remove(), 700);
         }
 
-        // Авто-майнинг (визуально)
         setInterval(() => {
             if (botLvl > 0) {
-                const pps = clickPower * (BOT_CONFIG[botLvl]?.mult || 0);
+                const pps = (clickPower * (BOT_CONFIG[botLvl]?.mult || 0));
                 score += pps;
                 updateUI();
             }
         }, 1000);
 
-        // Отправка кликов
         setInterval(async () => {
             if (pending > 0) {
                 const s = pending; pending = 0;
@@ -264,10 +288,12 @@
             
             if (id === 'stats') {
                 document.getElementById('stat-my-id').textContent = userId;
-                const r = await fetch('/api/all_stats');
-                const d = await r.json();
-                document.getElementById('stat-players').textContent = d.total_players;
-                document.getElementById('stat-total-np').textContent = d.total_balance.toLocaleString();
+                try {
+                    const r = await fetch('/api/all_stats');
+                    const d = await r.json();
+                    document.getElementById('stat-players').textContent = d.total_players;
+                    document.getElementById('stat-total-np').textContent = formatNP(d.total_balance);
+                } catch(e) {}
             }
             if (id === 'mine') renderBotShop();
             updateUI();
@@ -282,7 +308,7 @@
                 card.innerHTML = `
                     <div>
                         <div style="font-size:12px; font-weight:bold; color:var(--neon)">${data.name}</div>
-                        <div style="font-size:10px; opacity:0.7">Доход: ${data.mult * 100}% от клика/сек</div>
+                        <div style="font-size:10px; opacity:0.7">Множитель: x${data.mult} к силе клика</div>
                     </div>
                     <button class="buy-bot-btn" onclick="tg.showAlert('Оплата через TON скоро!')">${data.price_ton} TON</button>
                 `;
