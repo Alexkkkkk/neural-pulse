@@ -1,8 +1,6 @@
-import os, asyncio, sqlite3, uvicorn, logging, time, sys
+import os, asyncio, sqlite3, uvicorn, logging, time
 from pathlib import Path
-from datetime import datetime
 from contextlib import asynccontextmanager
-
 from fastapi import FastAPI, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -10,45 +8,21 @@ from fastapi.templating import Jinja2Templates
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
-# --- НАСТРОЙКА ЛОГИРОВАНИЯ ---
-logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s', datefmt='%H:%M:%S')
+# --- НАСТРОЙКА ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')
 logger = logging.getLogger("NEURAL_PULSE")
 
-# --- КОНФИГУРАЦИЯ ---
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH = BASE_DIR / "game.db"
 
-# Справочник уровней
+# Справочник уровней клика (как в твоем первом запросе)
 PLAYER_LEVELS = {
     1: {"name": "Новичок", "price": 0, "tap": 1},
     2: {"name": "Стажер", "price": 1000, "tap": 5},
     3: {"name": "Фрилансер", "price": 5000, "tap": 15},
     4: {"name": "Специалист", "price": 15000, "tap": 40},
-    5: {"name": "Менеджер", "price": 45000, "tap": 100},
-    6: {"name": "Тимлид", "price": 120000, "tap": 250},
-    7: {"name": "Инвестор", "price": 350000, "tap": 600},
-    8: {"name": "Миллионер", "price": 1000000, "tap": 1500},
-    9: {"name": "Владелец ТГ", "price": 2500000, "tap": 4000},
-    10: {"name": "CEO", "price": 6000000, "tap": 10000},
-    11: {"name": "Магнат", "price": 15000000, "tap": 25000},
-    12: {"name": "Крипто-Кит", "price": 40000000, "tap": 60000},
-    13: {"name": "Мировой Игрок", "price": 100000000, "tap": 150000},
-    14: {"name": "Теневой Лидер", "price": 250000000, "tap": 400000},
-    15: {"name": "Хозяин Биржи", "price": 700000000, "tap": 1000000},
-    16: {"name": "Олигарх", "price": 2000000000, "tap": 2500000},
-    17: {"name": "Пророк ИИ", "price": 5000000000, "tap": 6000000},
-    18: {"name": "Колонизатор", "price": 12000000000, "tap": 15000000},
-    19: {"name": "Архитектор", "price": 35000000000, "tap": 40000000},
-    20: {"name": "GOD MODE", "price": 100000000000, "tap": 100000000}
-}
-
-BOT_UPGRADE_COSTS = {
-    0: {"price": 25000, "mult": 1},
-    1: {"price": 100000, "mult": 3},
-    2: {"price": 500000, "mult": 8},
-    3: {"price": 2000000, "mult": 20},
-    4: {"price": 10000000, "mult": 50}
+    5: {"name": "CEO", "price": 100000, "tap": 1000}
 }
 
 TOKEN = "8257287930:AAG3tTP9uCtv5GcaqLA_piMqFjzFvA1PExM"
@@ -57,17 +31,14 @@ MY_DOMAIN = "np.bothost.ru"
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# --- БАЗА ДАННЫХ И ЦИКЛ ЖИЗНИ ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("--- [ ENGINE STARTING ] ---")
+    # Инициализация БД
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
                         (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
                          click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
-                         last_collect INTEGER DEFAULT 0, referrer_id TEXT,
-                         last_bonus INTEGER DEFAULT 0)''')
-    
+                         last_collect INTEGER DEFAULT 0)''')
     bot_task = asyncio.create_task(dp.start_polling(bot))
     yield
     bot_task.cancel()
@@ -79,7 +50,7 @@ if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(STATIC_DIR))
 
-# --- API ЭНДПОИНТЫ ---
+# --- API ---
 
 @app.get("/")
 async def serve_game(request: Request):
@@ -98,18 +69,18 @@ async def get_balance(user_id: str):
             conn.commit()
             return {"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "offline_profit": 0}
         
-        balance, click_lvl, bot_lvl, last_collect = row
+        bal, c_lvl, b_lvl, last_c = row
         offline_profit = 0
-        if bot_lvl > 0 and last_collect > 0:
-            seconds_passed = min(now - last_collect, 28800) # Лимит 8 часов
-            tap_power = PLAYER_LEVELS.get(click_lvl, PLAYER_LEVELS[1])["tap"]
-            mult = BOT_UPGRADE_COSTS.get(bot_lvl - 1, {"mult": 1})["mult"] if bot_lvl > 0 else 0
-            offline_profit = int(seconds_passed * (tap_power * mult / 10))
-            balance += offline_profit
+        
+        # Считаем офлайн доход (8 часов макс)
+        if b_lvl > 0:
+            seconds = min(now - last_c, 28800)
+            offline_profit = seconds * b_lvl * 2 # 2 NP в сек за каждый уровень бота
+            bal += offline_profit
+            conn.execute("UPDATE users SET balance = ?, last_collect = ? WHERE id = ?", (bal, now, user_id))
+            conn.commit()
 
-        conn.execute("UPDATE users SET balance = ?, last_collect = ? WHERE id = ?", (balance, now, user_id))
-        conn.commit()
-        return {"balance": balance, "click_lvl": click_lvl, "bot_lvl": bot_lvl, "offline_profit": offline_profit}
+        return {"balance": bal, "click_lvl": c_lvl, "bot_lvl": b_lvl, "offline_profit": offline_profit}
 
 @app.post("/api/clicks")
 async def save_clicks(data: dict = Body(...)):
@@ -136,8 +107,8 @@ async def buy_boost(data: dict = Body(...)):
                 return {"status": "ok", "new_balance": new_bal, "new_lvl": next_lvl}
     return {"status": "error", "message": "Недостаточно средств"}
 
-@app.post("/api/buy_bot_np")
-async def buy_bot_np(data: dict = Body(...)):
+@app.post("/api/buy_autoclicker")
+async def buy_bot(data: dict = Body(...)):
     uid = str(data.get("user_id"))
     with sqlite3.connect(str(DB_PATH)) as conn:
         c = conn.cursor()
@@ -145,47 +116,36 @@ async def buy_bot_np(data: dict = Body(...)):
         res = c.fetchone()
         if res:
             bal, b_lvl = res
-            if b_lvl in BOT_UPGRADE_COSTS and bal >= BOT_UPGRADE_COSTS[b_lvl]['price']:
-                new_bal = bal - BOT_UPGRADE_COSTS[b_lvl]['price']
-                new_bot_lvl = b_lvl + 1
+            price = (b_lvl + 1) * 2000
+            if bal >= price:
+                new_bal, new_bot_lvl = bal - price, b_lvl + 1
                 conn.execute("UPDATE users SET balance = ?, bot_lvl = ? WHERE id = ?", (new_bal, new_bot_lvl, uid))
                 conn.commit()
                 return {"status": "ok", "new_balance": new_bal, "new_bot_lvl": new_bot_lvl}
     return {"status": "error", "message": "Недостаточно средств"}
 
-# --- ОБНОВЛЕННЫЙ ЛИДЕРБОРД (ТОП-20) ---
 @app.get("/api/leaderboard")
 async def get_leaderboard():
-    try:
-        with sqlite3.connect(str(DB_PATH)) as conn:
-            c = conn.cursor()
-            # Получаем ТОП-20 по балансу
-            c.execute("SELECT id, balance, click_lvl FROM users ORDER BY balance DESC LIMIT 20")
-            rows = c.fetchall()
-            
-            leaders = []
-            for r in rows:
-                uid = str(r[0])
-                # Маскируем ID (напр. 1234...89) для красоты
-                display_name = f"{uid[:4]}...{uid[-2:]}" if len(uid) > 6 else uid
-                leaders.append({
-                    "id": uid, 
-                    "display_name": display_name,
-                    "balance": r[1],
-                    "level": PLAYER_LEVELS.get(r[2], PLAYER_LEVELS[1])["name"]
-                })
-            return {"leaders": leaders}
-    except Exception as e:
-        logger.error(f"Error in leaderboard: {e}")
-        return {"leaders": []}
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        c = conn.cursor()
+        c.execute("SELECT id, balance, click_lvl FROM users ORDER BY balance DESC LIMIT 20")
+        rows = c.fetchall()
+        leaders = []
+        for r in rows:
+            leaders.append({
+                "display_name": f"ID:{str(r[0])[:5]}", 
+                "balance": r[1], 
+                "level": PLAYER_LEVELS.get(r[2], PLAYER_LEVELS[1])["name"]
+            })
+        return {"leaders": leaders}
 
-# --- БОТ ХЕНДЛЕРЫ ---
+# --- БОТ ---
 @dp.message(F.text.startswith("/start"))
 async def start_handler(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
-    await message.answer(f"Привет, {message.from_user.first_name}! 🚀\nГотов к GOD MODE?", reply_markup=kb)
+    await message.answer(f"Привет, {message.from_user.first_name}! 🚀\nТвой нейронный пульс готов к разгону.", reply_markup=kb)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
