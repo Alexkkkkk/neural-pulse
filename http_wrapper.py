@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -16,7 +17,7 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH = BASE_DIR / "game.db"
 
-# Справочник уровней клика (как в твоем первом запросе)
+# Справочник уровней
 PLAYER_LEVELS = {
     1: {"name": "Новичок", "price": 0, "tap": 1},
     2: {"name": "Стажер", "price": 1000, "tap": 5},
@@ -31,6 +32,11 @@ MY_DOMAIN = "np.bothost.ru"
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
+# Модель данных для сохранения
+class SaveData(BaseModel):
+    user_id: int
+    score: int
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Инициализация БД
@@ -44,7 +50,14 @@ async def lifespan(app: FastAPI):
     bot_task.cancel()
 
 app = FastAPI(lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# CORS настройки
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -54,7 +67,29 @@ templates = Jinja2Templates(directory=str(STATIC_DIR))
 
 @app.get("/")
 async def serve_game(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    # Если файл index.html лежит в папке static
+    from fastapi.responses import FileResponse
+    index_path = STATIC_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    return {"error": "index.html not found in static folder"}
+
+# НОВЫЙ ЭНДПОИНТ (тот самый, что выдавал 404)
+@app.post("/api/save")
+async def save_progress(data: SaveData):
+    uid = str(data.user_id)
+    score = data.score
+    logger.info(f"Синхронизация: User {uid}, Score {score}")
+    
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        # Проверяем, есть ли пользователь, если нет — создаем, если есть — обновляем баланс
+        conn.execute("""
+            INSERT INTO users (id, balance, last_collect) 
+            VALUES (?, ?, ?) 
+            ON CONFLICT(id) DO UPDATE SET balance = ?, last_collect = ?
+        """, (uid, score, int(time.time()), score, int(time.time())))
+        conn.commit()
+    return {"status": "success", "received": score}
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
@@ -71,11 +106,9 @@ async def get_balance(user_id: str):
         
         bal, c_lvl, b_lvl, last_c = row
         offline_profit = 0
-        
-        # Считаем офлайн доход (8 часов макс)
         if b_lvl > 0:
             seconds = min(now - last_c, 28800)
-            offline_profit = seconds * b_lvl * 2 # 2 NP в сек за каждый уровень бота
+            offline_profit = seconds * b_lvl * 2
             bal += offline_profit
             conn.execute("UPDATE users SET balance = ?, last_collect = ? WHERE id = ?", (bal, now, user_id))
             conn.commit()
@@ -107,36 +140,13 @@ async def buy_boost(data: dict = Body(...)):
                 return {"status": "ok", "new_balance": new_bal, "new_lvl": next_lvl}
     return {"status": "error", "message": "Недостаточно средств"}
 
-@app.post("/api/buy_autoclicker")
-async def buy_bot(data: dict = Body(...)):
-    uid = str(data.get("user_id"))
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        c = conn.cursor()
-        c.execute("SELECT balance, bot_lvl FROM users WHERE id = ?", (uid,))
-        res = c.fetchone()
-        if res:
-            bal, b_lvl = res
-            price = (b_lvl + 1) * 2000
-            if bal >= price:
-                new_bal, new_bot_lvl = bal - price, b_lvl + 1
-                conn.execute("UPDATE users SET balance = ?, bot_lvl = ? WHERE id = ?", (new_bal, new_bot_lvl, uid))
-                conn.commit()
-                return {"status": "ok", "new_balance": new_bal, "new_bot_lvl": new_bot_lvl}
-    return {"status": "error", "message": "Недостаточно средств"}
-
 @app.get("/api/leaderboard")
 async def get_leaderboard():
     with sqlite3.connect(str(DB_PATH)) as conn:
         c = conn.cursor()
         c.execute("SELECT id, balance, click_lvl FROM users ORDER BY balance DESC LIMIT 20")
         rows = c.fetchall()
-        leaders = []
-        for r in rows:
-            leaders.append({
-                "display_name": f"ID:{str(r[0])[:5]}", 
-                "balance": r[1], 
-                "level": PLAYER_LEVELS.get(r[2], PLAYER_LEVELS[1])["name"]
-            })
+        leaders = [{"display_name": f"ID:{str(r[0])[:5]}", "balance": r[1], "level": PLAYER_LEVELS.get(r[2], PLAYER_LEVELS[1])["name"]} for r in rows]
         return {"leaders": leaders}
 
 # --- БОТ ---
