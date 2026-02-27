@@ -18,7 +18,7 @@
             --rainbow-speed: 5s;
         }
 
-        /* Анимация радужного перелива */
+        /* Анимация радужного перелива (теперь только для лого) */
         @keyframes rainbow-pulse {
             0% { filter: hue-rotate(0deg); }
             100% { filter: hue-rotate(360deg); }
@@ -56,15 +56,26 @@
         .game-container { position: relative; width: 100%; max-width: 500px; height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; box-sizing: border-box; transition: opacity 0.5s; z-index: 1; }
         
         .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
-        .logo { width: 50px; height: 50px; background: url('/static/images/unnamed4.png') no-repeat center; background-size: cover; border-radius: 12px; box-shadow: 0 0 15px var(--neon); animation: rainbow-pulse var(--rainbow-speed) linear infinite; }
-        #lvl { font-size: 14px; text-shadow: 0 0 10px var(--neon); color: var(--neon); animation: rainbow-pulse var(--rainbow-speed) linear infinite; }
+        
+        /* 1. ЛОГОТИП: Оставляем анимацию радуги */
+        .logo { 
+            width: 50px; height: 50px; 
+            background: url('/static/images/unnamed4.png') no-repeat center; 
+            background-size: cover; 
+            border-radius: 12px; 
+            box-shadow: 0 0 15px var(--neon); 
+            animation: rainbow-pulse var(--rainbow-speed) linear infinite; 
+        }
+
+        /* ТЕКСТ: Статичный неон */
+        #lvl { font-size: 14px; text-shadow: 0 0 10px var(--neon); color: var(--neon); }
         
         .balance-container { text-align: center; margin-top: 20px; }
-        #score { font-size: 48px; color: #fff; text-shadow: 0 0 20px var(--neon); font-weight: bold; animation: rainbow-pulse var(--rainbow-speed) linear infinite; }
+        #score { font-size: 48px; color: #fff; text-shadow: 0 0 20px var(--neon); font-weight: bold; }
         
         .play-area { position: relative; flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; }
         
-        /* Главная кнопка с радужным эффектом */
+        /* 2. ГЛАВНАЯ КНОПКА: Убрана радуга, оставлено статичное свечение */
         #btn { 
             width: 70vw; max-width: 280px; height: 70vw; max-height: 280px; 
             background: url('/static/images/unnamed3.png') no-repeat center; 
@@ -72,17 +83,16 @@
             cursor: pointer; transition: transform 0.05s, box-shadow 0.2s; 
             outline: none; z-index: 2;
             box-shadow: 0 0 30px var(--neon);
-            animation: rainbow-pulse var(--rainbow-speed) linear infinite;
         }
         #btn:active { transform: scale(0.92); }
         
         .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 12px; z-index: 3; }
         
-        /* Кнопки меню с переливом */
+        /* Элементы меню и кнопки: статичный неон */
         .side-item, .nav-card, .btn-action {
-            animation: rainbow-pulse var(--rainbow-speed) linear infinite;
             transition: all 0.3s ease;
             box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+            text-shadow: 0 0 10px var(--neon);
         }
 
         .side-item { width: 85px; padding: 10px 5px; background: rgba(255,255,255,0.05); border: 1px solid rgba(0, 212, 255, 0.4); border-radius: 8px; backdrop-filter: blur(5px); font-size: 9px; text-align: center; cursor: pointer; }
@@ -101,11 +111,16 @@
         .stat-val { color: var(--neon-secondary); font-size: 20px; font-weight: bold; }
         
         .btn-action { width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; color:#000; font-weight:bold; cursor:pointer; font-family:'Orbitron'; margin-top: 10px; }
-        .btn-action:disabled { opacity: 0.3; cursor: not-allowed; animation: none; filter: grayscale(1); }
+        .btn-action:disabled { opacity: 0.3; cursor: not-allowed; filter: grayscale(1); }
 
         .mine-card { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid rgba(0, 212, 255, 0.1); }
 
-        .plus-animation { position: absolute; color: var(--neon); font-size: 32px; font-weight: bold; animation: float 0.7s ease-out forwards, rainbow-pulse 1s linear infinite; pointer-events: none; z-index: 100; text-shadow: 0 0 15px var(--neon); }
+        /* 3. ЦИФРЫ ПРИ КЛИКЕ: Только анимация взлета, без радуги */
+        .plus-animation { 
+            position: absolute; color: var(--neon); font-size: 32px; font-weight: bold; 
+            animation: float 0.7s ease-out forwards; 
+            pointer-events: none; z-index: 100; text-shadow: 0 0 15px var(--neon); 
+        }
         @keyframes float { 0% { opacity:1; transform: translateY(0) scale(1); } 100% { opacity:0; transform: translateY(-120px) scale(1.5); } }
     </style>
 </head>
@@ -236,11 +251,11 @@
             return Math.floor(num).toString();
         }
 
-        // Рандомный неоновый цвет при клике
+        // Рандомная вспышка цвета при клике
         function applyRandomGlow(el) {
             const color = NEON_COLORS[Math.floor(Math.random() * NEON_COLORS.length)];
             el.style.boxShadow = `0 0 40px ${color}`;
-            setTimeout(() => { el.style.boxShadow = ''; }, 200);
+            setTimeout(() => { el.style.boxShadow = (el.id === 'btn') ? '0 0 30px var(--neon)' : ''; }, 200);
         }
 
         async function loadData() {
@@ -292,7 +307,7 @@
             }
         }
 
-        // Измененный обработчик клика для всех кнопок
+        // Эффект нажатия
         document.querySelectorAll('button, .nav-card, .side-item').forEach(el => {
             el.addEventListener('click', () => applyRandomGlow(el));
         });
@@ -369,7 +384,7 @@
             } catch (e) { listContainer.innerHTML = '<p style="color:red; text-align:center;">Ошибка загрузки</p>'; }
         }
 
-        // Основной клик по кнопке
+        // КЛИК ПО МОНЕТЕ
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             applyRandomGlow(e.target);
@@ -394,13 +409,13 @@
         setInterval(() => {
             if (botLvl > 0) {
                 const mult = BOT_UPGRADE_COSTS[botLvl - 1]?.mult || 1;
-                const income = clickPower * mult / 10; // Автоматический доход за тик (0.1 сек)
+                const income = clickPower * mult / 10;
                 score += income;
                 document.getElementById('score').textContent = formatNP(score);
             }
         }, 100);
 
-        // Синхронизация с сервером
+        // Синхронизация
         setInterval(async () => {
             if (pending > 0) {
                 const s = pending; pending = 0;
