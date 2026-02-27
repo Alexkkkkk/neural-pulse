@@ -10,15 +10,19 @@ from fastapi.templating import Jinja2Templates
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
-# Импорты для Google Drive
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
-from google.oauth2.credentials import Credentials
+# Безопасный импорт Google Drive
+try:
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaFileUpload
+    from google.oauth2.credentials import Credentials
+    HAS_GOOGLE_LIBS = True
+except ImportError:
+    HAS_GOOGLE_LIBS = False
 
 # --- НАСТРОЙКА ЛОГИРОВАНИЯ ---
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
+    format='%(asctime)s | %(levelname)s | %(message)s',
     datefmt='%H:%M:%S'
 )
 logger = logging.getLogger("NEURAL_PULSE")
@@ -65,61 +69,50 @@ MY_DOMAIN = "ai.bothost.ru"
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# --- ФУНКЦИИ ФОНОВЫХ ЗАДАЧ ---
+# --- ФОНОВЫЕ ЗАДАЧИ ---
 
 async def backup_to_gdrive():
-    """Функция для загрузки БД в Google Drive раз в 24 часа"""
+    """Бэкап в облако раз в сутки"""
     while True:
-        try:
-            if os.path.exists('token.json'):
-                logger.info("📡 [BACKUP] Запуск резервного копирования в Google Drive...")
+        if HAS_GOOGLE_LIBS and os.path.exists('token.json'):
+            try:
                 creds = Credentials.from_authorized_user_file('token.json')
                 service = build('drive', 'v3', credentials=creds)
-
-                file_metadata = {
-                    'name': f'backup_game_{datetime.now().strftime("%Y%m%d_%H%M")}.db'
-                }
                 media = MediaFileUpload(str(DB_PATH), mimetype='application/x-sqlite3')
-                
-                file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-                logger.info(f"✅ [BACKUP] Успешно! ID файла: {file.get('id')}")
-            else:
-                logger.warning("⚠️ [BACKUP] Файл token.json не найден. Пропуск.")
-        except Exception as e:
-            logger.error(f"❌ [BACKUP ERROR] {e}")
-        
+                service.files().create(
+                    body={'name': f'backup_{datetime.now():%Y%m%d_%H%M}.db'},
+                    media_body=media
+                ).execute()
+                logger.info("✅ [BACKUP] База данных успешно сохранена в Google Drive")
+            except Exception as e:
+                logger.error(f"❌ [BACKUP ERROR] {e}")
         await asyncio.sleep(86400)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("--- [ ENGINE STARTING ] ---")
-    try:
-        with sqlite3.connect(str(DB_PATH)) as conn:
-            conn.execute('''CREATE TABLE IF NOT EXISTS users 
-                            (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
-                             click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
-                             last_collect INTEGER DEFAULT 0, referrer_id TEXT,
-                             last_bonus INTEGER DEFAULT 0)''')
-            conn.commit()
-        logger.info(f"💾 Database status: READY ({DB_PATH.name})")
-    except Exception as e:
-        logger.error(f"❌ DATABASE CRITICAL ERROR: {e}")
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        conn.execute('''CREATE TABLE IF NOT EXISTS users 
+                        (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
+                         click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
+                         last_collect INTEGER DEFAULT 0, referrer_id TEXT,
+                         last_bonus INTEGER DEFAULT 0)''')
+        # Миграция: добавляем колонку, если её нет
+        try: conn.execute("ALTER TABLE users ADD COLUMN last_bonus INTEGER DEFAULT 0")
+        except: pass
+        conn.commit()
 
-    polling_task = asyncio.create_task(dp.start_polling(bot))
-    backup_task = asyncio.create_task(backup_to_gdrive())
-    
-    logger.info("🤖 AI Telegram Bot: POLLING STARTED")
+    bot_task = asyncio.create_task(dp.start_polling(bot))
+    back_task = asyncio.create_task(backup_to_gdrive())
     yield
-    logger.info("--- [ ENGINE SHUTTING DOWN ] ---")
-    polling_task.cancel()
-    backup_task.cancel()
+    bot_task.cancel()
+    back_task.cancel()
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
 templates = Jinja2Templates(directory=str(STATIC_DIR))
 
 # --- API ЭНДПОИНТЫ ---
@@ -143,10 +136,10 @@ async def get_balance(user_id: str):
         balance, click_lvl, bot_lvl, last_collect = row
         offline_profit = 0
         if bot_lvl > 0 and last_collect > 0:
-            seconds_passed = min(now - last_collect, 28800) 
+            seconds_passed = min(now - last_collect, 28800) # Макс 8 часов
             tap_power = PLAYER_LEVELS.get(click_lvl, PLAYER_LEVELS[1])["tap"]
             mult = BOT_UPGRADE_COSTS.get(bot_lvl - 1, {"mult": 1})["mult"]
-            offline_profit = int(seconds_passed * tap_power * mult)
+            offline_profit = int(seconds_passed * (tap_power * mult / 10)) # Примерная логика автодохода
             balance += offline_profit
 
         conn.execute("UPDATE users SET balance = ?, last_collect = ? WHERE id = ?", (balance, now, user_id))
@@ -161,22 +154,13 @@ async def save_clicks(data: dict = Body(...)):
         conn.commit()
     return {"status": "ok"}
 
-@app.get("/api/all_stats")
-async def get_all_stats():
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        c = conn.cursor()
-        players = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-        wealth = c.execute("SELECT SUM(balance) FROM users").fetchone()[0] or 0
-        return {"total_players": players, "total_balance": wealth}
-
 @app.get("/api/leaderboard")
 async def get_leaderboard():
     with sqlite3.connect(str(DB_PATH)) as conn:
         c = conn.cursor()
         c.execute("SELECT id, balance, click_lvl FROM users ORDER BY balance DESC LIMIT 10")
         rows = c.fetchall()
-        leaders = [{"id": r[0][:6]+"...", "balance": r[1], "level": PLAYER_LEVELS.get(r[2], {"name": "???"})["name"]} for r in rows]
-        return {"leaders": leaders}
+        return {"leaders": [{"id": r[0][:6]+"...", "balance": r[1], "level": PLAYER_LEVELS.get(r[2], {"name":"???"})["name"]} for r in rows]}
 
 @app.post("/api/daily_bonus")
 async def claim_daily_bonus(data: dict = Body(...)):
@@ -186,10 +170,18 @@ async def claim_daily_bonus(data: dict = Body(...)):
         c.execute("SELECT last_bonus FROM users WHERE id = ?", (uid,))
         res = c.fetchone()
         if res and (now - res[0] < 86400):
-            return {"error": "Бонус еще не доступен"}
+            return {"error": "Бонус будет доступен позже"}
         conn.execute("UPDATE users SET balance = balance + 5000, last_bonus = ? WHERE id = ?", (now, uid))
         conn.commit()
         return {"status": "ok", "bonus": 5000}
+
+@app.get("/api/all_stats")
+async def get_all_stats():
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        c = conn.cursor()
+        players = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        wealth = c.execute("SELECT SUM(balance) FROM users").fetchone()[0] or 0
+        return {"total_players": players, "total_balance": wealth}
 
 # --- БОТ ХЕНДЛЕРЫ ---
 
@@ -202,32 +194,18 @@ async def start_handler(message: types.Message):
         c.execute("SELECT id FROM users WHERE id = ?", (uid,))
         if not c.fetchone():
             ref_id = args[1] if len(args) > 1 and args[1] != uid else None
-            conn.execute("INSERT INTO users (id, balance, click_lvl, bot_lvl, last_collect, referrer_id) VALUES (?, 1000, 1, 0, ?, ?)", 
+            conn.execute("INSERT INTO users (id, balance, last_collect, referrer_id) VALUES (?, 1000, ?, ?)", 
                          (uid, int(time.time()), ref_id))
             if ref_id:
                 conn.execute("UPDATE users SET balance = balance + 50000 WHERE id = ?", (ref_id,))
-                try: await bot.send_message(ref_id, "💎 Друг зашел! +50,000 NP!")
+                try: await bot.send_message(ref_id, "💎 Друг зашел по ссылке! +50,000 NP!")
                 except: pass
             conn.commit()
 
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
-    await message.answer(f"Привет! 🚀\nГотов майнить NP?", reply_markup=kb)
-
-# --- ЗАПУСК ---
+    await message.answer("Привет! 🚀\nМайни токены NP и становись лидером сети!", reply_markup=kb)
 
 if __name__ == "__main__":
-    if os.environ.get('TERM'):
-        os.system('cls' if os.name == 'nt' else 'clear')
-        
-    print(f"""
-    \033[94m
-    ╔══════════════════════════════════════════════════════╗
-    ║                 NEURAL PULSE ENGINE                  ║
-    ║                HOSTING: BOTHOST.RU                   ║
-    ╚══════════════════════════════════════════════════════╝\033[0m
-    """)
-    
-    filename = Path(__file__).stem  
-    uvicorn.run(f"{filename}:app", host="0.0.0.0", port=3000, log_level="info", reload=False)
+    uvicorn.run(app, host="0.0.0.0", port=3000)
