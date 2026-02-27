@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Neural Pulse AI</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root { 
+            --neon: #00d4ff; 
+            --neon-secondary: #00ff96; 
+            --bg: #050a1a; 
+            --glass: rgba(10, 25, 47, 0.95);
+        }
+
+        @keyframes rainbow-pulse {
+            0% { filter: hue-rotate(0deg); }
+            100% { filter: hue-rotate(360deg); }
+        }
+
+        body { 
+            margin: 0; 
+            background: radial-gradient(circle at center, #0a192f 0%, #050a1a 100%); 
+            height: 100vh; 
+            font-family: 'Orbitron', sans-serif; 
+            color: white; 
+            overflow: hidden; 
+            user-select: none; 
+            display: flex; 
+            justify-content: center; 
+        }
+        
+        .game-container { position: relative; width: 100%; max-width: 500px; height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; box-sizing: border-box; transition: opacity 0.5s; z-index: 1; }
+        
+        .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+        .logo { width: 50px; height: 50px; background: #111; border: 2px solid var(--neon); border-radius: 12px; box-shadow: 0 0 15px var(--neon); animation: rainbow-pulse 5s linear infinite; }
+        .user-info { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+        #lvl { font-size: 14px; text-shadow: 0 0 10px var(--neon); color: var(--neon); font-weight: bold; }
+        #user-id-display { font-size: 10px; opacity: 0.6; font-family: monospace; }
+
+        .balance-container { text-align: center; margin-top: 20px; }
+        #score { font-size: 48px; color: #fff; text-shadow: 0 0 20px var(--neon); font-weight: bold; }
+        
+        .play-area { position: relative; flex-grow: 1; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #btn { 
+            width: 65vw; max-width: 260px; height: 65vw; max-height: 260px; 
+            background: radial-gradient(circle, var(--neon) 0%, transparent 70%);
+            border-radius: 50%; border: 4px solid var(--neon); 
+            cursor: pointer; transition: transform 0.05s, box-shadow 0.2s; 
+            outline: none; z-index: 2;
+            box-shadow: 0 0 30px var(--neon);
+        }
+        #btn:active { transform: scale(0.95); }
+
+        .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 12px; z-index: 3; }
+        .side-item { width: 85px; padding: 10px 5px; background: rgba(255,255,255,0.05); border: 1px solid rgba(0, 212, 255, 0.4); border-radius: 8px; backdrop-filter: blur(5px); font-size: 9px; text-align: center; cursor: pointer; color: white; }
+
+        .energy-container { width: 100%; max-width: 280px; margin-top: 25px; }
+        .energy-text { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; color: var(--neon); }
+        .energy-bar-bg { width: 100%; height: 12px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; border: 1px solid rgba(0, 212, 255, 0.3); }
+        #energy-fill { width: 100%; height: 100%; background: linear-gradient(90deg, var(--neon), var(--neon-secondary)); transition: width 0.2s; }
+        
+        .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; margin-bottom: 20px; }
+        .nav-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 15px 5px; text-align: center; font-size: 10px; cursor: pointer; }
+        
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; z-index: 999; backdrop-filter: blur(4px); }
+        .overlay.active { display: block; }
+        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 75%; background: var(--glass); border-top: 2px solid var(--neon); border-radius: 30px 30px 0 0; z-index: 1000; transition: bottom 0.4s; padding: 30px; box-sizing: border-box; overflow-y: auto; }
+        .modal.active { bottom: 0; }
+        .close-btn { font-size: 28px; color: var(--neon); cursor: pointer; float: right; }
+        
+        .stat-box { background: rgba(255,255,255,0.03); padding: 15px; border-radius: 12px; margin-bottom: 10px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
+        .btn-action { width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; color:#000; font-weight:bold; cursor:pointer; font-family:'Orbitron'; margin-top: 10px; }
+
+        .leader-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; }
+        .plus-animation { position: absolute; color: var(--neon); font-size: 28px; font-weight: bold; animation: float 0.7s ease-out forwards; pointer-events: none; z-index: 100; text-shadow: 0 0 10px var(--neon); }
+        @keyframes float { 0% { opacity:1; transform: translateY(0); } 100% { opacity:0; transform: translateY(-100px); } }
+    </style>
+</head>
+<body>
+    <div class="game-container" id="game" style="opacity:0">
+        <div class="header">
+            <div class="logo"></div>
+            <div class="user-info">
+                <span id="lvl">🏆 Level 1</span>
+                <span id="user-id-display">ID: 000000000</span>
+            </div>
+        </div>
+        
+        <div class="balance-container">
+            <div style="font-size:10px; opacity:0.7; letter-spacing: 2px;">TOTAL NP POINTS</div>
+            <div id="score">0</div>
+        </div>
+        
+        <div class="play-area">
+            <div class="side-menu">
+                <div class="side-item" onclick="openModal('friends')">Friends</div>
+                <div class="side-item" onclick="openModal('tasks')">Tasks</div>
+                <div class="side-item" style="border-color: #ff9d00;" onclick="openModal('daily')">🎁 Bonus</div>
+            </div>
+            <button id="btn"></button>
+            <div class="energy-container">
+                <div class="energy-text">
+                    <span>⚡ Energy</span>
+                    <span id="energy-val">1000 / 1000</span>
+                </div>
+                <div class="energy-bar-bg">
+                    <div id="energy-fill"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bottom-nav">
+            <div class="nav-card" onclick="openModal('boost')">🚀 BOOST</div>
+            <div class="nav-card" onclick="openModal('mine')">⛏️ MINE</div>
+            <div class="nav-card" onclick="openModal('stats')">📊 STATS</div>
+        </div>
+    </div>
+
+    <div class="overlay" id="overlay" onclick="closeAllModals()"></div>
+
+    <div id="modal-stats" class="modal">
+        <span class="close-btn" onclick="closeAllModals()">&times;</span>
+        <h2>Stats</h2>
+        <div id="leaderboard-list"></div>
+    </div>
+
+    <div id="modal-boost" class="modal">
+        <span class="close-btn" onclick="closeAllModals()">&times;</span>
+        <h2>Boosters</h2>
+        <div class="stat-box">
+            <div style="font-size: 14px; color: var(--neon);">⚡ MULTI-TAP</div>
+            <p>Power: <span id="boost-power-val">1</span></p>
+            <button class="btn-action" onclick="handleUpgrade('tap')">UPGRADE (500 NP)</button>
+        </div>
+        <div class="stat-box">
+            <div style="font-size: 14px; color: var(--neon-secondary);">🔋 ENERGY LIMIT</div>
+            <p>Max: <span id="energy-limit-val">1000</span></p>
+            <button class="btn-action" onclick="handleUpgrade('energy')">UPGRADE (500 NP)</button>
+        </div>
+    </div>
+
+    <div id="modal-friends" class="modal"><h2>Friends</h2><p>Invite friends to earn NP!</p></div>
+    <div id="modal-tasks" class="modal"><h2>Tasks</h2><p>Complete tasks soon...</p></div>
+    <div id="modal-daily" class="modal"><h2>Daily</h2><p>Come back tomorrow!</p></div>
+    <div id="modal-mine" class="modal"><h2>Mining</h2><p>Under construction...</p></div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        
+        const userId = tg.initDataUnsafe?.user?.id || 12345678;
+        document.getElementById('user-id-display').textContent = "ID: " + userId;
+
+        // Инициализация данных (значения по умолчанию)
+        let score = 0;
+        let clickPower = 1;
+        let maxEnergy = 1000;
+        let energy = 1000;
+        let pendingAmount = 0;
+
+        function updateUI() {
+            document.getElementById('score').textContent = Math.floor(score).toLocaleString();
+            document.getElementById('energy-val').textContent = `${Math.floor(energy)} / ${maxEnergy}`;
+            document.getElementById('energy-fill').style.width = (energy / maxEnergy * 100) + '%';
+            document.getElementById('lvl').textContent = `🏆 Level ${Math.floor(score/5000) + 1}`;
+            document.getElementById('boost-power-val').textContent = clickPower;
+            document.getElementById('energy-limit-val').textContent = maxEnergy;
+            
+            // Локальный бекап
+            localStorage.setItem('np_score', score);
+        }
+
+        // --- НОВАЯ ФУНКЦИЯ ЗАГРУЗКИ ---
+        async function loadUserData() {
+            try {
+                const response = await fetch(`/api/balance/${userId}`);
+                const data = await response.json();
+                
+                if (data) {
+                    score = data.balance;
+                    clickPower = data.click_lvl; 
+                    // Можно также добавить загрузку maxEnergy с сервера, если она там хранится
+                    
+                    if (data.offline_profit > 0) {
+                        tg.showAlert(`Пока тебя не было, боты заработали: ${data.offline_profit} NP!`);
+                    }
+                    updateUI();
+                }
+            } catch (e) {
+                console.error("Ошибка загрузки данных", e);
+                // Если сервер недоступен, берем из локального хранилища
+                score = parseInt(localStorage.getItem('np_score')) || 0;
+                updateUI();
+            }
+        }
+
+        // Клик с мультитачем
+        document.getElementById('btn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                if (energy >= clickPower) {
+                    energy -= clickPower;
+                    score += clickPower;
+                    pendingAmount += clickPower;
+                    
+                    const t = e.changedTouches[i];
+                    spawnPlus(t.pageX, t.pageY, clickPower);
+                    tg.HapticFeedback?.impactOccurred('light');
+                } else {
+                    tg.HapticFeedback?.notificationOccurred('error');
+                }
+            }
+            updateUI();
+        });
+
+        function spawnPlus(x, y, val) {
+            const p = document.createElement('div');
+            p.className = 'plus-animation';
+            p.textContent = '+' + val;
+            p.style.left = (x - 15) + 'px'; 
+            p.style.top = (y - 30) + 'px';
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 700);
+        }
+
+        // Регенерация энергии
+        setInterval(() => {
+            if (energy < maxEnergy) {
+                energy = Math.min(maxEnergy, energy + 2);
+                updateUI();
+            }
+        }, 1000);
+
+        // Синхронизация с сервером (каждые 3 сек)
+        setInterval(async () => {
+            if (pendingAmount > 0) {
+                pendingAmount = 0; // Сбрасываем счетчик перед отправкой
+                try {
+                    await fetch('/api/save', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ user_id: userId, score: score })
+                    });
+                } catch (e) { console.warn("Sync failed"); }
+            }
+        }, 3000);
+
+        function handleUpgrade(type) {
+            if (score >= 500) {
+                score -= 500;
+                if (type === 'tap') clickPower++;
+                if (type === 'energy') maxEnergy += 500;
+                updateUI();
+                tg.HapticFeedback?.notificationOccurred('success');
+                // Принудительно сохраняем покупку
+                pendingAmount = 1; 
+            } else {
+                tg.showAlert("Not enough NP!");
+            }
+        }
+
+        function openModal(id) {
+            document.getElementById('overlay').classList.add('active');
+            document.getElementById('modal-' + id).classList.add('active');
+        }
+
+        function closeAllModals() {
+            document.getElementById('overlay').classList.remove('active');
+            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+        }
+
+        // Инициализация при старте
+        window.onload = () => {
+            loadUserData();
+            document.getElementById('game').style.opacity = '1';
+        };
+    </script>
+</body>
+</html>
