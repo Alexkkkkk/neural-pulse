@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -64,7 +65,6 @@
         /* SIDE MENU */
         .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 12px; z-index: 3; }
         .side-item { width: 85px; padding: 10px 5px; background: rgba(255,255,255,0.05); border: 1px solid rgba(0, 212, 255, 0.4); border-radius: 8px; backdrop-filter: blur(5px); font-size: 9px; text-align: center; cursor: pointer; transition: 0.3s; color: white; }
-        .side-item:hover { background: rgba(0, 212, 255, 0.1); }
 
         /* ENERGY */
         .energy-container { width: 100%; max-width: 280px; margin-top: 25px; }
@@ -81,8 +81,7 @@
         .overlay.active { display: block; }
         .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 75%; background: var(--glass); border-top: 2px solid var(--neon); border-radius: 30px 30px 0 0; z-index: 1000; transition: bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1); padding: 30px; box-sizing: border-box; overflow-y: auto; }
         .modal.active { bottom: 0; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .close-btn { font-size: 28px; color: var(--neon); cursor: pointer; }
+        .close-btn { font-size: 28px; color: var(--neon); cursor: pointer; float: right; }
         
         .stat-box { background: rgba(255,255,255,0.03); padding: 15px; border-radius: 12px; margin-bottom: 10px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
         .btn-action { width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; color:#000; font-weight:bold; cursor:pointer; font-family:'Orbitron'; margin-top: 10px; }
@@ -137,24 +136,23 @@
     <div class="overlay" id="overlay" onclick="closeAllModals()"></div>
 
     <div id="modal-boost" class="modal">
-        <div class="modal-header"><h2>Boosters</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
-        <div class="modal-content">
-            <div class="stat-box">
-                <div style="font-size: 14px; color: var(--neon); font-weight: bold;">⚡ MULTI-TAP</div>
-                <p style="font-size: 10px; margin: 5px 0; opacity: 0.8;">Сила клика: <span id="boost-power-val">1</span></p>
-                <button class="btn-action" onclick="handleUpgrade('tap')">UPGRADE (500 NP)</button>
-            </div>
-
-            <div class="stat-box">
-                <div style="font-size: 14px; color: var(--neon-secondary); font-weight: bold;">🔋 ENERGY LIMIT</div>
-                <p style="font-size: 10px; margin: 5px 0; opacity: 0.8;">Макс. энергия: <span id="energy-limit-val">1000</span></p>
-                <button class="btn-action" onclick="handleUpgrade('energy')">UPGRADE (500 NP)</button>
-            </div>
+        <span class="close-btn" onclick="closeAllModals()">&times;</span>
+        <h2>Boosters</h2>
+        <div class="stat-box">
+            <div style="font-size: 14px; color: var(--neon); font-weight: bold;">⚡ MULTI-TAP</div>
+            <p style="font-size: 10px; margin: 5px 0; opacity: 0.8;">Power: <span id="boost-power-val">1</span></p>
+            <button class="btn-action" onclick="handleUpgrade('tap')">UPGRADE (500 NP)</button>
+        </div>
+        <div class="stat-box">
+            <div style="font-size: 14px; color: var(--neon-secondary); font-weight: bold;">🔋 ENERGY LIMIT</div>
+            <p style="font-size: 10px; margin: 5px 0; opacity: 0.8;">Max: <span id="energy-limit-val">1000</span></p>
+            <button class="btn-action" onclick="handleUpgrade('energy')">UPGRADE (500 NP)</button>
         </div>
     </div>
 
     <div id="modal-stats" class="modal">
-        <div class="modal-header"><h2>Статистика</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <span class="close-btn" onclick="closeAllModals()">&times;</span>
+        <h2>Статистика</h2>
         <div class="stat-box">
             <div style="opacity: 0.7; font-size: 12px;">Telegram ID</div>
             <div id="modal-user-id" style="font-size: 18px; color: var(--neon-secondary);">000000000</div>
@@ -165,25 +163,22 @@
         </div>
     </div>
 
-    <div id="modal-friends" class="modal"><h2>Friends</h2><p>Система приглашений в разработке.</p></div>
+    <div id="modal-friends" class="modal"><h2>Friends</h2><p>Система в разработке.</p></div>
     <div id="modal-tasks" class="modal"><h2>Tasks</h2><p>Задания появятся скоро.</p></div>
-    <div id="modal-daily" class="modal"><h2>Daily Bonus</h2><p>Заходите завтра за наградой!</p></div>
-    <div id="modal-mine" class="modal"><h2>Mining</h2><p>Майнинг фермы в процессе постройки.</p></div>
+    <div id="modal-daily" class="modal"><h2>Daily Bonus</h2><p>Заходите завтра!</p></div>
+    <div id="modal-mine" class="modal"><h2>Mining</h2><p>Фермы строятся...</p></div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
         
         // Telegram Data
-        const rawUserId = tg.initDataUnsafe?.user?.id || "Guest";
-        document.getElementById('user-id-display').textContent = "ID: " + rawUserId;
-        document.getElementById('modal-user-id').textContent = rawUserId;
+        const userId = tg.initDataUnsafe?.user?.id || 12345;
+        document.getElementById('user-id-display').textContent = "ID: " + userId;
+        document.getElementById('modal-user-id').textContent = userId;
 
         // Game State
-        let score = 0;
-        let clickPower = 1;
-        let energy = 1000;
-        let maxEnergy = 1000;
+        let score = 0, clickPower = 1, energy = 1000, maxEnergy = 1000;
 
         function updateUI() {
             document.getElementById('score').textContent = Math.floor(score).toLocaleString();
@@ -193,17 +188,27 @@
             document.getElementById('boost-power-val').textContent = clickPower;
         }
 
+        // Sync with Bothost
+        async function syncWithServer() {
+            try {
+                await fetch('/api/clicks', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ user_id: userId, amount: clickPower })
+                });
+            } catch (e) { console.error("Sync error", e); }
+        }
+
         // Click Handler
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (energy >= clickPower) {
                 energy -= clickPower;
                 score += clickPower;
-                
                 const t = e.changedTouches[0];
                 spawnPlus(t.pageX, t.pageY, clickPower);
-                
                 updateUI();
+                syncWithServer(); // Сохранение на сервере Bothost
                 tg.HapticFeedback?.impactOccurred('light');
             } else {
                 tg.HapticFeedback?.notificationOccurred('error');
@@ -219,7 +224,7 @@
             setTimeout(() => p.remove(), 700);
         }
 
-        // Energy Regeneration
+        // Energy Regen
         setInterval(() => {
             if (energy < maxEnergy) {
                 energy = Math.min(maxEnergy, energy + 1);
@@ -227,11 +232,10 @@
             }
         }, 1000);
 
-        // Boost Logic
+        // Boosters
         function handleUpgrade(type) {
-            const cost = 500;
-            if (score >= cost) {
-                score -= cost;
+            if (score >= 500) {
+                score -= 500;
                 if (type === 'tap') clickPower += 1;
                 if (type === 'energy') maxEnergy += 500;
                 updateUI();
@@ -241,18 +245,16 @@
             }
         }
 
-        // Modal Logic
+        // Modals
         function openModal(id) {
             document.getElementById('overlay').classList.add('active');
             document.getElementById('modal-' + id).classList.add('active');
         }
-
         function closeAllModals() {
             document.getElementById('overlay').classList.remove('active');
             document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
         }
 
-        // Start
         window.onload = () => {
             updateUI();
             document.getElementById('game').style.opacity = '1';
