@@ -74,8 +74,6 @@
         .btn-action { width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; color:#000; font-weight:bold; cursor:pointer; font-family:'Orbitron'; margin-top: 10px; }
 
         .leader-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; }
-        .my-rank { background: rgba(0, 212, 255, 0.1); border: 1px solid var(--neon); border-radius: 8px; }
-
         .plus-animation { position: absolute; color: var(--neon); font-size: 28px; font-weight: bold; animation: float 0.7s ease-out forwards; pointer-events: none; z-index: 100; text-shadow: 0 0 10px var(--neon); }
         @keyframes float { 0% { opacity:1; transform: translateY(0); } 100% { opacity:0; transform: translateY(-100px); } }
     </style>
@@ -155,11 +153,11 @@
         const userId = tg.initDataUnsafe?.user?.id || 12345678;
         document.getElementById('user-id-display').textContent = "ID: " + userId;
 
-        // Инициализация данных
-        let score = parseInt(localStorage.getItem('np_score')) || 0;
-        let clickPower = parseInt(localStorage.getItem('np_power')) || 1;
-        let maxEnergy = parseInt(localStorage.getItem('np_max_energy')) || 1000;
-        let energy = maxEnergy;
+        // Инициализация данных (значения по умолчанию)
+        let score = 0;
+        let clickPower = 1;
+        let maxEnergy = 1000;
+        let energy = 1000;
         let pendingAmount = 0;
 
         function updateUI() {
@@ -170,10 +168,32 @@
             document.getElementById('boost-power-val').textContent = clickPower;
             document.getElementById('energy-limit-val').textContent = maxEnergy;
             
-            // Сохранение локально
+            // Локальный бекап
             localStorage.setItem('np_score', score);
-            localStorage.setItem('np_power', clickPower);
-            localStorage.setItem('np_max_energy', maxEnergy);
+        }
+
+        // --- НОВАЯ ФУНКЦИЯ ЗАГРУЗКИ ---
+        async function loadUserData() {
+            try {
+                const response = await fetch(`/api/balance/${userId}`);
+                const data = await response.json();
+                
+                if (data) {
+                    score = data.balance;
+                    clickPower = data.click_lvl; 
+                    // Можно также добавить загрузку maxEnergy с сервера, если она там хранится
+                    
+                    if (data.offline_profit > 0) {
+                        tg.showAlert(`Пока тебя не было, боты заработали: ${data.offline_profit} NP!`);
+                    }
+                    updateUI();
+                }
+            } catch (e) {
+                console.error("Ошибка загрузки данных", e);
+                // Если сервер недоступен, берем из локального хранилища
+                score = parseInt(localStorage.getItem('np_score')) || 0;
+                updateUI();
+            }
         }
 
         // Клик с мультитачем
@@ -213,18 +233,17 @@
             }
         }, 1000);
 
-        // Синхронизация с сервером (раз в 3 сек)
+        // Синхронизация с сервером (каждые 3 сек)
         setInterval(async () => {
             if (pendingAmount > 0) {
-                const sendVal = pendingAmount;
-                pendingAmount = 0;
+                pendingAmount = 0; // Сбрасываем счетчик перед отправкой
                 try {
                     await fetch('/api/save', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ user_id: userId, score: score })
                     });
-                } catch (e) { console.warn("Offline mode"); }
+                } catch (e) { console.warn("Sync failed"); }
             }
         }, 3000);
 
@@ -235,6 +254,8 @@
                 if (type === 'energy') maxEnergy += 500;
                 updateUI();
                 tg.HapticFeedback?.notificationOccurred('success');
+                // Принудительно сохраняем покупку
+                pendingAmount = 1; 
             } else {
                 tg.showAlert("Not enough NP!");
             }
@@ -250,8 +271,9 @@
             document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
         }
 
+        // Инициализация при старте
         window.onload = () => {
-            updateUI();
+            loadUserData();
             document.getElementById('game').style.opacity = '1';
         };
     </script>
