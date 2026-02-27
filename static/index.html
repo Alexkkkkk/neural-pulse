@@ -31,17 +31,14 @@
 
         .game-container { width: 100%; max-width: 500px; display: flex; flex-direction: column; align-items: center; padding: 20px; box-sizing: border-box; }
 
-        /* HEADER */
         .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
         .logo { width: 45px; height: 45px; background: var(--neon); border-radius: 12px; box-shadow: 0 0 15px var(--neon); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 20px; color: #000; }
         .lvl-badge { background: rgba(0, 212, 255, 0.1); border: 1px solid var(--neon); padding: 5px 15px; border-radius: 20px; font-size: 12px; color: var(--neon); }
 
-        /* SCORE */
         .balance-container { text-align: center; margin-top: 30px; }
-        #score { font-size: 52px; color: #fff; text-shadow: 0 0 25px var(--neon); font-weight: bold; margin: 5px 0; }
+        #score { font-size: 42px; color: #fff; text-shadow: 0 0 25px var(--neon); font-weight: bold; margin: 5px 0; }
         .currency-label { font-size: 10px; opacity: 0.6; letter-spacing: 3px; }
 
-        /* PLAY AREA */
         .play-area { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; position: relative; }
         
         #btn-circle { 
@@ -59,24 +56,20 @@
         .turbo-mode { animation: pulse-turbo 0.4s infinite alternate; box-shadow: 0 0 60px #ff3d00 !important; border-color: #ff3d00 !important; background: radial-gradient(circle, #ff3d00 0%, #731a00 100%) !important; }
         @keyframes pulse-turbo { from { transform: scale(1); } to { transform: scale(1.08); } }
 
-        /* ENERGY */
         .energy-wrapper { width: 100%; max-width: 300px; margin-top: 30px; }
         .energy-info { display: flex; justify-content: space-between; font-size: 13px; color: var(--neon); margin-bottom: 8px; }
         .energy-bar { width: 100%; height: 12px; background: rgba(255,255,255,0.1); border-radius: 6px; overflow: hidden; }
         #energy-fill { width: 100%; height: 100%; background: linear-gradient(90deg, var(--neon), var(--neon-secondary)); transition: width 0.3s ease; }
 
-        /* NAVIGATION */
-        .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; margin-top: 40px; margin-bottom: 10px; }
-        .nav-item { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 15px; padding: 15px 5px; text-align: center; cursor: pointer; transition: 0.2s; }
+        .bottom-nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: 100%; margin-top: 40px; margin-bottom: 10px; }
+        .nav-item { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 2px; text-align: center; cursor: pointer; transition: 0.2s; }
         .nav-item:active { background: rgba(0, 212, 255, 0.1); transform: translateY(-2px); }
-        .nav-icon { font-size: 20px; margin-bottom: 5px; display: block; }
-        .nav-text { font-size: 10px; opacity: 0.8; font-weight: bold; }
+        .nav-icon { font-size: 18px; margin-bottom: 4px; display: block; }
+        .nav-text { font-size: 9px; opacity: 0.8; font-weight: bold; }
 
-        /* MODALS */
         .overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); display:none; z-index:99; backdrop-filter: blur(8px); }
-        .modal { position: fixed; bottom:-100%; left:0; width:100%; height:80%; background:var(--glass); border-top:3px solid var(--neon); border-radius:30px 30px 0 0; z-index:100; transition:0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); padding:25px; box-sizing:border-box; }
+        .modal { position: fixed; bottom:-100%; left:0; width:100%; height:80%; background:var(--glass); border-top:3px solid var(--neon); border-radius:30px 30px 0 0; z-index:100; transition:0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); padding:25px; box-sizing:border-box; overflow-y: auto; }
         .modal.active { bottom:0; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         
         .upgrade-card { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.1); }
         .upgrade-info h4 { margin: 0; color: var(--neon); }
@@ -85,6 +78,9 @@
 
         .plus-one { position: absolute; color: white; font-size: 28px; font-weight: bold; animation: fly 0.8s ease-out forwards; pointer-events: none; z-index: 999; text-shadow: 0 0 10px var(--neon); }
         @keyframes fly { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px) scale(1.5); } }
+        
+        #leaderboard-list { list-style: none; padding: 0; }
+        .leader-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; }
     </style>
 </head>
 <body>
@@ -123,11 +119,15 @@
             </div>
             <div class="nav-item" onclick="openModal('stats')">
                 <span class="nav-icon">📊</span>
-                <span class="nav-text">STATS</span>
+                <span class="nav-text">LEADER</span>
             </div>
             <div class="nav-item" onclick="openModal('tasks')">
                 <span class="nav-icon">📝</span>
                 <span class="nav-text">TASKS</span>
+            </div>
+            <div class="nav-item" onclick="activateTurbo()">
+                <span class="nav-icon">🔥</span>
+                <span class="nav-text">TURBO</span>
             </div>
         </div>
     </div>
@@ -135,86 +135,91 @@
     <div class="overlay" id="overlay" onclick="closeAllModals()"></div>
 
     <div id="modal-boost" class="modal">
-        <div class="modal-header">
+        <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
             <h3>Boosters</h3>
-            <span onclick="closeAllModals()" style="cursor:pointer">✖</span>
+            <span onclick="closeAllModals()" style="cursor:pointer; font-size:24px;">✖</span>
         </div>
         
         <div class="upgrade-card">
             <div class="upgrade-info">
                 <h4>Multi-Tap</h4>
-                <p>+1 к клику. Уровень: <span id="tap-lvl">1</span></p>
+                <p>Увеличивает силу клика. Текущий LVL: <span id="tap-lvl-ui">1</span></p>
             </div>
-            <button class="buy-btn" onclick="buyUpgrade('tap')">UPGRADE <br> 500 NP</button>
+            <button class="buy-btn" onclick="buyUpgrade('tap')">UPGRADE</button>
         </div>
 
         <div class="upgrade-card">
             <div class="upgrade-info">
-                <h4>Energy Limit</h4>
-                <p>+500 макс. энергии. Уровень: <span id="energy-lvl">1</span></p>
+                <h4>NP-Bot (Offline)</h4>
+                <p>Майнит NP пока ты спишь. Текущий LVL: <span id="bot-lvl-ui">0</span></p>
             </div>
-            <button class="buy-btn" onclick="buyUpgrade('limit')">UPGRADE <br> 1000 NP</button>
-        </div>
-
-        <div class="upgrade-card" style="border-color: #ff3d00;">
-            <div class="upgrade-info">
-                <h4 style="color:#ff3d00">Turbo Mode</h4>
-                <p>x5 за клик на 15 сек.</p>
-            </div>
-            <button class="buy-btn" style="background:#ff3d00" onclick="activateTurbo()">FREE DAILY</button>
+            <button class="buy-btn" onclick="buyUpgrade('autoclicker')">UPGRADE</button>
         </div>
     </div>
 
     <div id="modal-stats" class="modal">
-        <h3>Statistics</h3>
-        <p>User ID: <span id="user-id">Loading...</span></p>
-        <p>Total Taps: <span id="total-taps">0</span></p>
-        <hr style="opacity:0.1">
-        <h4>Leaderboard</h4>
-        <div style="opacity:0.5; font-size:12px">Coming soon with Global Sync...</div>
-    </div>
-
-    <div id="modal-tasks" class="modal">
-        <h3>Tasks</h3>
-        <div class="upgrade-card">
-            <div class="upgrade-info">
-                <h4>Join Community</h4>
-                <p>+5000 NP</p>
-            </div>
-            <button class="buy-btn" onclick="window.open('https://t.me/your_channel')">JOIN</button>
+        <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3>Leaderboard</h3>
+            <span onclick="closeAllModals()" style="cursor:pointer; font-size:24px;">✖</span>
         </div>
+        <div id="leaderboard-list">Loading...</div>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        tg.enableClosingConfirmation();
+        const userId = tg.initDataUnsafe?.user?.id || "LocalPlayer";
 
-        // Состояние игры
+        // Состояние игры (синхронизируется с бэкендом)
         let state = {
             score: 0,
             clickPower: 1,
             energy: 1000,
             maxEnergy: 1000,
+            botYield: 0,
             isTurbo: false,
-            totalTaps: 0,
-            levels: ["Novice", "Cyber Punk", "Neural Master", "AI God"]
+            levels: ["Novice", "Cyber Punk", "Neural Master", "AI God", "CEO"]
         };
 
-        // Инициализация
-        document.getElementById('user-id').textContent = tg.initDataUnsafe?.user?.id || "LocalUser";
-        
+        // Буфер для кликов (чтобы не спамить в сеть на каждый клик)
+        let clickBuffer = 0;
+
+        // ИНИЦИАЛИЗАЦИЯ
+        async function initGame() {
+            try {
+                const res = await fetch(`/api/balance/${userId}`);
+                const data = await res.json();
+                
+                state.score = data.balance;
+                state.clickPower = data.click_lvl; 
+                state.botYield = data.bot_lvl;
+                
+                // Отображение офлайн прибыли
+                if(data.offline_profit > 0) {
+                    tg.showAlert(`Пока тебя не было, бот намайнил: ${data.offline_profit} NP!`);
+                }
+                
+                updateUI();
+            } catch (e) { 
+                console.error("Init error", e); 
+                tg.showAlert("Ошибка подключения к серверу");
+            }
+        }
+
         function updateUI() {
             document.getElementById('score').textContent = Math.floor(state.score).toLocaleString();
             document.getElementById('energy-val').textContent = `${Math.floor(state.energy)} / ${state.maxEnergy}`;
             document.getElementById('energy-fill').style.width = (state.energy / state.maxEnergy * 100) + '%';
             
-            // Расчет уровня
-            let lvlIdx = Math.min(Math.floor(state.score / 10000), state.levels.length - 1);
-            document.getElementById('lvl-display').textContent = `Level ${lvlIdx + 1}: ${state.levels[lvlIdx]}`;
+            // Расчет уровня на основе clickPower
+            let lvlIdx = Math.min(state.clickPower - 1, state.levels.length - 1);
+            document.getElementById('lvl-display').textContent = `Lvl ${state.clickPower}: ${state.levels[lvlIdx]}`;
+            
+            document.getElementById('tap-lvl-ui').textContent = state.clickPower;
+            document.getElementById('bot-lvl-ui').textContent = state.botYield;
         }
 
-        // Клик
+        // КЛИК
         const btn = document.getElementById('btn-circle');
         btn.addEventListener('touchstart', (e) => {
             e.preventDefault();
@@ -223,15 +228,11 @@
             if (state.energy >= power) {
                 state.energy -= power;
                 state.score += power;
-                state.totalTaps++;
+                clickBuffer += power;
                 
-                // Эффекты
                 tg.HapticFeedback.impactOccurred('medium');
                 spawnPlus(e.touches[0].pageX, e.touches[0].pageY, power);
                 updateUI();
-                
-                // Синхронизация (отправка на бэкенд раз в 10 кликов или через API)
-                // syncWithServer(power); 
             } else {
                 tg.HapticFeedback.notificationOccurred('error');
             }
@@ -247,52 +248,87 @@
             setTimeout(() => p.remove(), 800);
         }
 
-        // Регенерация энергии
+        // ОТПРАВКА КЛИКОВ НА СЕРВЕР (раз в 3 секунды)
+        setInterval(async () => {
+            if (clickBuffer > 0) {
+                const tempClicks = clickBuffer;
+                clickBuffer = 0;
+                try {
+                    await fetch('/api/clicks', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ user_id: userId, clicks: tempClicks })
+                    });
+                } catch (e) { 
+                    clickBuffer += tempClicks; // Возвращаем если не ушло
+                }
+            }
+        }, 3000);
+
+        // РЕГЕНЕРАЦИЯ ЭНЕРГИИ
         setInterval(() => {
             if (state.energy < state.maxEnergy) {
-                state.energy = Math.min(state.maxEnergy, state.energy + 2);
+                state.energy = Math.min(state.maxEnergy, state.energy + 3);
                 updateUI();
             }
         }, 1000);
 
-        // Бусты
-        function buyUpgrade(type) {
-            if (type === 'tap' && state.score >= 500) {
-                state.score -= 500;
-                state.clickPower++;
-                document.getElementById('tap-lvl').textContent = state.clickPower;
-            } else if (type === 'limit' && state.score >= 1000) {
-                state.score -= 1000;
-                state.maxEnergy += 500;
-                state.energy = state.maxEnergy;
-                document.getElementById('energy-lvl').textContent = (state.maxEnergy/500 - 1);
-            } else {
-                tg.showAlert("Недостаточно Neural Pulse!");
-                return;
+        // ПОКУПКА АПГРЕЙДОВ
+        async function buyUpgrade(type) {
+            const endpoint = type === 'autoclicker' ? '/api/buy_autoclicker' : '/api/buy_boost';
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ user_id: userId })
+                });
+                const data = await res.json();
+                
+                if (data.status === 'ok') {
+                    state.score = data.new_balance;
+                    if(type === 'autoclicker') state.botYield = data.new_bot_lvl;
+                    else state.clickPower = data.new_lvl;
+                    
+                    updateUI();
+                    tg.HapticFeedback.notificationOccurred('success');
+                } else {
+                    tg.showAlert(data.message || "Ошибка покупки");
+                }
+            } catch (e) {
+                tg.showAlert("Сервер недоступен");
             }
-            tg.HapticFeedback.notificationOccurred('success');
-            updateUI();
         }
 
+        // ТУРБО
         function activateTurbo() {
             if (state.isTurbo) return;
             state.isTurbo = true;
-            closeAllModals();
             btn.classList.add('turbo-mode');
-            tg.showScanQrPopup({ text: "TURBO ACTIVATED!" }); // Просто как уведомление
-            setTimeout(() => tg.closeScanQrPopup(), 1000);
-
+            tg.HapticFeedback.notificationOccurred('warning');
+            
             setTimeout(() => {
                 state.isTurbo = false;
                 btn.classList.remove('turbo-mode');
             }, 15000);
         }
 
-        // Модалки
-        function openModal(id) {
+        // МОДАЛКИ И ЛИДЕРБОРД
+        async function openModal(id) {
             document.getElementById('overlay').style.display = 'block';
             document.getElementById('modal-' + id).classList.add('active');
-            if(id === 'stats') document.getElementById('total-taps').textContent = state.totalTaps;
+            
+            if(id === 'stats') {
+                const list = document.getElementById('leaderboard-list');
+                list.innerHTML = "Syncing...";
+                const res = await fetch('/api/leaderboard');
+                const data = await res.json();
+                list.innerHTML = data.leaders.map((l, i) => `
+                    <div class="leader-item">
+                        <span>#${i+1} ${l.display_name}</span>
+                        <span style="color:var(--neon)">${l.balance.toLocaleString()} NP</span>
+                    </div>
+                `).join('');
+            }
         }
 
         function closeAllModals() {
@@ -300,7 +336,7 @@
             document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
         }
 
-        updateUI();
+        initGame();
     </script>
 </body>
 </html>
