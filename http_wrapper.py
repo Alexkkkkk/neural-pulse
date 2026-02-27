@@ -60,7 +60,7 @@ BOT_UPGRADE_COSTS = {
     4: {"price": 10000000, "mult": 50}
 }
 
-TOKEN = "8257287930:AAFhDcKz-ebfaAHzb5H4Hr1b9SCa9OrSauI"
+TOKEN = "8257287930:AAG3tTP9uCtv5GcaqLA_piMqFjzFvA1PExM"
 MY_DOMAIN = "ai.bothost.ru"
 
 bot = Bot(token=TOKEN)
