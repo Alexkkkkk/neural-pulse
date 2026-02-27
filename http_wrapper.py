@@ -12,7 +12,6 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
 # --- НАСТРОЙКА ЛОГИРОВАНИЯ ---
-# Мы добавляем более детальный формат, чтобы сразу видеть источник события
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
@@ -91,7 +90,7 @@ if STATIC_DIR.exists():
 
 templates = Jinja2Templates(directory=str(STATIC_DIR))
 
-# --- API ЭНДПОИНТЫ С ТЕСТОВЫМ ЛОГИРОВАНИЕМ ---
+# --- API ЭНДПОИНТЫ ---
 
 @app.get("/")
 async def serve_game(request: Request):
@@ -137,6 +136,19 @@ async def save_clicks(data: dict = Body(...)):
         conn.execute("UPDATE users SET balance = balance + ?, last_collect = ? WHERE id = ?", (clicks, int(time.time()), uid))
         conn.commit()
     return {"status": "ok"}
+
+@app.get("/api/all_stats")
+async def get_all_stats():
+    try:
+        with sqlite3.connect(str(DB_PATH)) as conn:
+            c = conn.cursor()
+            total_players = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            total_balance = c.execute("SELECT SUM(balance) FROM users").fetchone()[0] or 0
+            logger.info(f"📊 [STATS] Total Players: {total_players}, Total Wealth: {total_balance}")
+            return {"total_players": total_players, "total_balance": total_balance}
+    except Exception as e:
+        logger.error(f"❌ [STATS ERROR] {e}")
+        return {"total_players": 0, "total_balance": 0}
 
 @app.post("/api/buy_boost")
 async def buy_boost(data: dict = Body(...)):
