@@ -1,5 +1,7 @@
 fastapi
 uvicorn
-jinja2
 aiogram
-python-multipart
+jinja2
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
