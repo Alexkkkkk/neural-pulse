@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import FileResponse  # Это заменяет flask.send_from_directory
+from fastapi.responses import FileResponse  # Импорт для корректной отдачи иконки
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -84,10 +84,9 @@ if STATIC_DIR.exists():
 
 templates = Jinja2Templates(directory=str(STATIC_DIR))
 
-# --- ОБРАБОТКА FAVICON (Аналог send_from_directory для FastAPI) ---
+# --- ОБРАБОТКА FAVICON ---
 @app.get('/favicon.ico', include_in_schema=False)
 async def favicon():
-    # Путь к твоей иконке: static/images/unnamed4.png
     icon_path = STATIC_DIR / "images" / "unnamed4.png"
     if icon_path.exists():
         return FileResponse(icon_path)
