@@ -32,7 +32,7 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH = BASE_DIR / "game.db"
 
-# Справочник уровней (все 20 уровней сохранены)
+# Справочник уровней
 PLAYER_LEVELS = {
     1: {"name": "Новичок", "price": 0, "tap": 1},
     2: {"name": "Стажер", "price": 1000, "tap": 5},
@@ -73,7 +73,6 @@ dp = Dispatcher()
 # --- ФОНОВЫЕ ЗАДАЧИ ---
 
 async def backup_to_gdrive():
-    """Бэкап в облако раз в сутки"""
     while True:
         if HAS_GOOGLE_LIBS and os.path.exists('token.json'):
             try:
@@ -92,33 +91,22 @@ async def backup_to_gdrive():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("--- [ ENGINE STARTING ] ---")
-    
-    # Инициализация базы данных
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
                         (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
                          click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
                          last_collect INTEGER DEFAULT 0, referrer_id TEXT,
                          last_bonus INTEGER DEFAULT 0)''')
-        
-        # Миграция: Проверка и добавление недостающих колонок
         cursor = conn.cursor()
         cursor.execute("PRAGMA table_info(users)")
         columns = [column[1] for column in cursor.fetchall()]
-        
         if 'last_bonus' not in columns:
-            try:
-                conn.execute("ALTER TABLE users ADD COLUMN last_bonus INTEGER DEFAULT 0")
-                logger.info("💾 Migration: Added 'last_bonus' column")
-            except Exception as e:
-                logger.error(f"Migration error: {e}")
+            conn.execute("ALTER TABLE users ADD COLUMN last_bonus INTEGER DEFAULT 0")
         conn.commit()
 
     bot_task = asyncio.create_task(dp.start_polling(bot))
     back_task = asyncio.create_task(backup_to_gdrive())
-    
     yield
-    
     bot_task.cancel()
     back_task.cancel()
 
@@ -152,9 +140,8 @@ async def get_balance(user_id: str):
         balance, click_lvl, bot_lvl, last_collect = row
         offline_profit = 0
         
-        # Расчет офлайн дохода
         if bot_lvl > 0 and last_collect > 0:
-            seconds_passed = min(now - last_collect, 28800)  # Лимит 8 часов
+            seconds_passed = min(now - last_collect, 28800) # 8 часов макс
             tap_power = PLAYER_LEVELS.get(click_lvl, PLAYER_LEVELS[1])["tap"]
             mult = BOT_UPGRADE_COSTS.get(bot_lvl - 1, {"mult": 1})["mult"]
             offline_profit = int(seconds_passed * (tap_power * mult / 10))
@@ -172,13 +159,46 @@ async def save_clicks(data: dict = Body(...)):
         conn.commit()
     return {"status": "ok"}
 
+@app.post("/api/buy_boost")
+async def buy_boost(data: dict = Body(...)):
+    uid = str(data.get("user_id"))
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        c = conn.cursor()
+        c.execute("SELECT balance, click_lvl FROM users WHERE id = ?", (uid,))
+        res = c.fetchone()
+        if res:
+            bal, lvl = res
+            next_lvl = lvl + 1
+            if next_lvl in PLAYER_LEVELS and bal >= PLAYER_LEVELS[next_lvl]['price']:
+                new_bal = bal - PLAYER_LEVELS[next_lvl]['price']
+                conn.execute("UPDATE users SET balance = ?, click_lvl = ? WHERE id = ?", (new_bal, next_lvl, uid))
+                conn.commit()
+                return {"status": "ok", "new_balance": new_bal, "new_lvl": next_lvl}
+    return {"status": "error", "error": "Недостаточно NP или макс. уровень"}
+
+@app.post("/api/buy_bot_np")
+async def buy_bot_np(data: dict = Body(...)):
+    uid = str(data.get("user_id"))
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        c = conn.cursor()
+        c.execute("SELECT balance, bot_lvl FROM users WHERE id = ?", (uid,))
+        res = c.fetchone()
+        if res:
+            bal, b_lvl = res
+            if b_lvl in BOT_UPGRADE_COSTS and bal >= BOT_UPGRADE_COSTS[b_lvl]['price']:
+                new_bal = bal - BOT_UPGRADE_COSTS[b_lvl]['price']
+                new_bot_lvl = b_lvl + 1
+                conn.execute("UPDATE users SET balance = ?, bot_lvl = ? WHERE id = ?", (new_bal, new_bot_lvl, uid))
+                conn.commit()
+                return {"status": "ok", "new_balance": new_bal, "new_bot_lvl": new_bot_lvl}
+    return {"status": "error", "error": "Недостаточно NP или макс. бот"}
+
 @app.get("/api/leaderboard")
 async def get_leaderboard():
     with sqlite3.connect(str(DB_PATH)) as conn:
         c = conn.cursor()
         c.execute("SELECT id, balance, click_lvl FROM users ORDER BY balance DESC LIMIT 10")
         rows = c.fetchall()
-        # Маскируем ID пользователя для безопасности
         leaders = [{"id": f"ID{r[0][:4]}****", "balance": r[1], "level": PLAYER_LEVELS.get(r[2], {"name":"???"})["name"]} for r in rows]
         return {"leaders": leaders}
 
@@ -189,11 +209,9 @@ async def claim_daily_bonus(data: dict = Body(...)):
         c = conn.cursor()
         c.execute("SELECT last_bonus FROM users WHERE id = ?", (uid,))
         res = c.fetchone()
-        
         if res and res[0] is not None and (now - res[0] < 86400):
             wait_time = 86400 - (now - res[0])
             return {"error": f"Бонус доступен через {wait_time // 3600}ч"}
-            
         conn.execute("UPDATE users SET balance = balance + 5000, last_bonus = ? WHERE id = ?", (now, uid))
         conn.commit()
         return {"status": "ok", "bonus": 5000}
@@ -212,7 +230,6 @@ async def get_all_stats():
 async def start_handler(message: types.Message):
     uid = str(message.from_user.id)
     args = message.text.split()
-    
     with sqlite3.connect(str(DB_PATH)) as conn:
         c = conn.cursor()
         c.execute("SELECT id FROM users WHERE id = ?", (uid,))
@@ -221,19 +238,15 @@ async def start_handler(message: types.Message):
             conn.execute("INSERT INTO users (id, balance, last_collect, referrer_id) VALUES (?, 1000, ?, ?)", 
                          (uid, int(time.time()), ref_id))
             if ref_id:
-                # Награда за реферала
                 conn.execute("UPDATE users SET balance = balance + 50000 WHERE id = ?", (ref_id,))
-                try:
-                    await bot.send_message(ref_id, "💎 Твой друг присоединился! Тебе начислено +50,000 NP!")
-                except:
-                    pass
+                try: await bot.send_message(ref_id, "💎 Твой друг присоединился! Тебе начислено +50,000 NP!")
+                except: pass
             conn.commit()
 
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
-    await message.answer(f"Привет, {message.from_user.first_name}! 🚀\nГотов добывать NP? Запускай приложение и начни путь к GOD MODE!", reply_markup=kb)
+    await message.answer(f"Привет, {message.from_user.first_name}! 🚀\nДобро пожаловать в Neural Pulse! Твой путь к GOD MODE начинается здесь.", reply_markup=kb)
 
 if __name__ == "__main__":
-    # Запуск сервера
     uvicorn.run(app, host="0.0.0.0", port=3000)
