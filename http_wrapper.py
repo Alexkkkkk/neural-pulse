@@ -63,10 +63,7 @@ dp = Dispatcher()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Лог старта в стиле Bothost
     logger.info("--- [ ENGINE INITIALIZATION ] ---")
-    
-    # Проверка БД
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
             conn.execute('''CREATE TABLE IF NOT EXISTS users 
@@ -78,12 +75,9 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ Database error: {e}")
 
-    # Запуск бота
     polling_task = asyncio.create_task(dp.start_polling(bot))
     logger.info("🤖 AI Telegram Bot: ACTIVE")
-    
     yield
-    
     logger.info("--- [ SHUTTING DOWN ] ---")
     polling_task.cancel()
 
@@ -103,7 +97,7 @@ async def favicon():
         return FileResponse(icon_path)
     return {"status": "not found"}
 
-# --- API ЭНДПОИНТЫ (без изменений) ---
+# --- API ЭНДПОИНТЫ ---
 
 @app.get("/")
 async def serve_game(request: Request):
@@ -116,7 +110,6 @@ async def get_balance(user_id: str):
         c = conn.cursor()
         c.execute("SELECT balance, click_lvl, bot_lvl, last_collect FROM users WHERE id = ?", (user_id,))
         row = c.fetchone()
-        
         if not row:
             conn.execute("INSERT INTO users (id, balance, click_lvl, bot_lvl, last_collect) VALUES (?, 1000, 1, 0, ?)", (user_id, now))
             conn.commit()
@@ -124,7 +117,6 @@ async def get_balance(user_id: str):
         
         balance, click_lvl, bot_lvl, last_collect = row
         offline_profit = 0
-        
         if bot_lvl > 0 and last_collect > 0:
             seconds_passed = min(now - last_collect, 28800) 
             tap_power = PLAYER_LEVELS.get(click_lvl, PLAYER_LEVELS[1])["tap"]
@@ -152,11 +144,9 @@ async def buy_boost(data: dict = Body(...)):
         c.execute("SELECT balance, click_lvl FROM users WHERE id = ?", (uid,))
         res = c.fetchone()
         if not res: return {"error": "User not found"}
-        
         balance, current_lvl = res
         next_lvl = current_lvl + 1
         if next_lvl not in PLAYER_LEVELS: return {"error": "MAX LEVEL"}
-        
         cost = PLAYER_LEVELS[next_lvl]["price"]
         if balance >= cost:
             conn.execute("UPDATE users SET balance = balance - ?, click_lvl = ?, last_collect = ? WHERE id = ?", 
@@ -173,11 +163,9 @@ async def buy_bot_np(data: dict = Body(...)):
         c.execute("SELECT balance, bot_lvl FROM users WHERE id = ?", (uid,))
         res = c.fetchone()
         if not res: return {"error": "User not found"}
-        
         balance, current_bot_lvl = res
         if current_bot_lvl not in BOT_UPGRADE_COSTS:
             return {"error": "MAX BOT LEVEL"}
-        
         cost = BOT_UPGRADE_COSTS[current_bot_lvl]["price"]
         if balance >= cost:
             new_bot_lvl = current_bot_lvl + 1
@@ -218,9 +206,12 @@ async def start_handler(message: types.Message):
     ]])
     await message.answer(f"Привет! 🚀\nГотов майнить NP?", reply_markup=kb)
 
-# --- ТОЧКА ВХОДА ДЛЯ BOTHOST ---
+# --- ТОЧКА ВХОДА С ДИНАМИЧЕСКИМ ИМЕНЕМ ФАЙЛА ---
 if __name__ == "__main__":
-    os.system('cls' if os.name == 'nt' else 'clear')
+    # Проверка TERM, чтобы не спамить ошибками в лог хостинга
+    if os.environ.get('TERM'):
+        os.system('cls' if os.name == 'nt' else 'clear')
+        
     print(f"""
     \033[94m
     ╔══════════════════════════════════════════════════════╗
@@ -234,11 +225,13 @@ if __name__ == "__main__":
     📅 \033[92mSTART:\033[0m {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
     """)
     
-    # Запуск сервера
+    # Автоматическое определение имени файла (http_wrapper.py -> http_wrapper)
+    filename = Path(__file__).stem  
+    
     uvicorn.run(
-        "main:app" if __name__ == "__main__" else app, 
+        f"{filename}:app", 
         host="0.0.0.0", 
         port=3000, 
         log_level="info",
-        reload=False  # На хостинге лучше держать False
+        reload=False
     )
