@@ -10,12 +10,20 @@ from fastapi.templating import Jinja2Templates
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
+# --- НАСТРОЙКА ЛОГИРОВАНИЯ ---
+# Устанавливаем формат: Время - Имя - Уровень - Сообщение
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s | %(name)s | %(levelname)s | %(message)s',
+    datefmt='%H:%M:%S'
+)
+logger = logging.getLogger("NEURAL_PULSE")
+
 # --- КОНФИГУРАЦИЯ ---
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH = BASE_DIR / "game.db"
 
-# Данные уровней (согласно твоей таблице)
 PLAYER_LEVELS = {
     1: {"name": "Новичок", "price": 0, "tap": 1},
     2: {"name": "Стажер", "price": 1000, "tap": 5},
@@ -41,9 +49,9 @@ PLAYER_LEVELS = {
 
 BOT_CONFIG = {
     0: {"mult": 0},
-    1: {"mult": 1.0},   # 100% от тапа в секунду
-    10: {"mult": 8.5},  # 850% от тапа в секунду
-    20: {"mult": 30.0}  # 3000% от тапа в секунду
+    1: {"mult": 1.0},
+    10: {"mult": 8.5},
+    20: {"mult": 30.0}
 }
 
 TOKEN = "8257287930:AAFhDcKz-ebfaAHzb5H4Hr1b9SCa9OrSauI"
@@ -51,32 +59,28 @@ MY_DOMAIN = "ai.bothost.ru"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("NEURAL_PULSE")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Инициализация БД с поддержкой новых колонок
+    logger.info("🛠️ Запуск системы инициализации...")
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
                         (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
                          click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
                          last_collect INTEGER DEFAULT 0, referrer_id TEXT)''')
-        # Проверка на наличие новых колонок (миграция)
         cursor = conn.execute("PRAGMA table_info(users)")
         cols = [column[1] for column in cursor.fetchall()]
-        if "bot_lvl" not in cols:
-            conn.execute("ALTER TABLE users ADD COLUMN bot_lvl INTEGER DEFAULT 0")
-        if "last_collect" not in cols:
-            conn.execute("ALTER TABLE users ADD COLUMN last_collect INTEGER DEFAULT 0")
-        if "referrer_id" not in cols:
-            conn.execute("ALTER TABLE users ADD COLUMN referrer_id TEXT")
+        if "bot_lvl" not in cols: conn.execute("ALTER TABLE users ADD COLUMN bot_lvl INTEGER DEFAULT 0")
+        if "last_collect" not in cols: conn.execute("ALTER TABLE users ADD COLUMN last_collect INTEGER DEFAULT 0")
+        if "referrer_id" not in cols: conn.execute("ALTER TABLE users ADD COLUMN referrer_id TEXT")
         conn.commit()
     
+    logger.info(f"📂 База данных проверена: {DB_PATH}")
     polling_task = asyncio.create_task(dp.start_polling(bot))
-    logger.info("✅ Бот и Сервер запущены.")
+    logger.info("✅ Бот и Сервер успешно запущены.")
     yield
     polling_task.cancel()
+    logger.info("🛑 Сервер останавливается...")
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -101,6 +105,7 @@ async def get_balance(user_id: str):
         row = c.fetchone()
         
         if not row:
+            logger.info(f"🆕 [НОВЫЙ ИГРОК] ID: {user_id}")
             conn.execute("INSERT INTO users (id, balance, click_lvl, bot_lvl, last_collect) VALUES (?, 1000, 1, 0, ?)", (user_id, now))
             conn.commit()
             return {"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "offline_profit": 0}
@@ -108,26 +113,34 @@ async def get_balance(user_id: str):
         balance, click_lvl, bot_lvl, last_collect = row
         offline_profit = 0
         
-        # Расчет офлайн прибыли
         if bot_lvl > 0 and last_collect > 0:
-            seconds_passed = min(now - last_collect, 86400) # Максимум за 24 часа
+            seconds_passed = min(now - last_collect, 86400)
             tap_power = PLAYER_LEVELS.get(click_lvl, PLAYER_LEVELS[1])["tap"]
             mult = BOT_CONFIG.get(bot_lvl, BOT_CONFIG[0])["mult"]
             offline_profit = int(seconds_passed * tap_power * mult)
             balance += offline_profit
+            if offline_profit > 0:
+                logger.info(f"💰 [OFFLINE] Игрок {user_id} получил {offline_profit} за время отсутствия")
 
         conn.execute("UPDATE users SET balance = ?, last_collect = ? WHERE id = ?", (balance, now, user_id))
         conn.commit()
+        logger.info(f"💾 [LOAD] Данные {user_id}: Баланс {balance}, Уровень {click_lvl}")
         return {"balance": balance, "click_lvl": click_lvl, "bot_lvl": bot_lvl, "offline_profit": offline_profit}
 
 @app.post("/api/clicks")
 async def save_clicks(data: dict = Body(...)):
-    uid, clicks = str(data.get("user_id")), int(data.get("clicks", 0))
-    # Лимит анти-чита (не более 1500 кликов за 3 сек)
-    if clicks > 1500: clicks = 1500 
+    uid = str(data.get("user_id"))
+    clicks = int(data.get("clicks", 0))
+    
+    if clicks > 1500: 
+        logger.warning(f"⚠️ [CHEAT?] Игрок {uid} прислал подозрительно много кликов: {clicks}")
+        clicks = 1500 
+
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute("UPDATE users SET balance = balance + ?, last_collect = ? WHERE id = ?", (clicks, int(time.time()), uid))
         conn.commit()
+    
+    logger.info(f"🖱️ [CLICKS] {uid}: +{clicks} NP")
     return {"status": "ok"}
 
 @app.post("/api/buy_boost")
@@ -149,7 +162,10 @@ async def buy_boost(data: dict = Body(...)):
             conn.execute("UPDATE users SET balance = ?, click_lvl = ?, last_collect = ? WHERE id = ?", 
                          (new_balance, next_lvl, int(time.time()), uid))
             conn.commit()
+            logger.info(f"🚀 [UPGRADE] {uid} купил уровень {next_lvl} за {cost} NP")
             return {"status": "ok", "new_balance": new_balance, "new_lvl": next_lvl}
+        
+        logger.info(f"❌ [UPGRADE FAIL] {uid} не хватило денег на уровень {next_lvl} (Цена: {cost})")
         return {"error": "Недостаточно NP!"}
 
 @app.get("/api/all_stats")
@@ -158,6 +174,7 @@ async def get_all_stats():
         c = conn.cursor()
         total_players = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         total_balance = c.execute("SELECT SUM(balance) FROM users").fetchone()[0] or 0
+        logger.info(f"📊 [STATS] Запрос статистики. Всего игроков: {total_players}")
         return {"total_players": total_players, "total_balance": total_balance}
 
 # --- ЛОГИКА БОТА ---
@@ -172,10 +189,10 @@ async def start_handler(message: types.Message):
         c = conn.cursor()
         c.execute("SELECT id FROM users WHERE id = ?", (uid,))
         if not c.fetchone():
-            # Реферальная система
             ref_id = args[1] if len(args) > 1 and args[1] != uid else None
             conn.execute("INSERT INTO users (id, balance, click_lvl, bot_lvl, last_collect, referrer_id) VALUES (?, 1000, 1, 0, ?, ?)", 
                          (uid, now, ref_id))
+            logger.info(f"👤 [BOT START] Новый пользователь в ТГ: {uid} (Реферал от: {ref_id})")
             if ref_id:
                 conn.execute("UPDATE users SET balance = balance + 50000 WHERE id = ?", (ref_id,))
                 try: await bot.send_message(ref_id, "💎 Твой друг зашел в игру! Тебе начислено +50,000 NP!")
@@ -188,4 +205,6 @@ async def start_handler(message: types.Message):
     await message.answer(f"Привет, {message.from_user.first_name}! 🚀\nДобро пожаловать в Neural Pulse AI.", reply_markup=kb)
 
 if __name__ == "__main__":
+    # Лог о том, на каком хосте запускаемся
+    logger.info("📡 Uvicorn стартует на порту 3000...")
     uvicorn.run(app, host="0.0.0.0", port=3000)
