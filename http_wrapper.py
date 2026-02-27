@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
-# Безопасный импорт Google Drive
+# Безопасный импорт Google Drive (если библиотеки установлены в Docker)
 try:
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaFileUpload
@@ -20,11 +20,7 @@ except ImportError:
     HAS_GOOGLE_LIBS = False
 
 # --- НАСТРОЙКА ЛОГИРОВАНИЯ ---
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s | %(levelname)s | %(message)s',
-    datefmt='%H:%M:%S'
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s', datefmt='%H:%M:%S')
 logger = logging.getLogger("NEURAL_PULSE")
 
 # --- КОНФИГУРАЦИЯ ---
@@ -32,7 +28,7 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH = BASE_DIR / "game.db"
 
-# Справочник уровней
+# Справочник уровней (все 20 уровней)
 PLAYER_LEVELS = {
     1: {"name": "Новичок", "price": 0, "tap": 1},
     2: {"name": "Стажер", "price": 1000, "tap": 5},
@@ -70,24 +66,7 @@ MY_DOMAIN = "ai.bothost.ru"
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# --- ФОНОВЫЕ ЗАДАЧИ ---
-
-async def backup_to_gdrive():
-    while True:
-        if HAS_GOOGLE_LIBS and os.path.exists('token.json'):
-            try:
-                creds = Credentials.from_authorized_user_file('token.json')
-                service = build('drive', 'v3', credentials=creds)
-                media = MediaFileUpload(str(DB_PATH), mimetype='application/x-sqlite3')
-                service.files().create(
-                    body={'name': f'backup_{datetime.now():%Y%m%d_%H%M}.db'},
-                    media_body=media
-                ).execute()
-                logger.info("✅ [BACKUP] База данных успешно сохранена в Google Drive")
-            except Exception as e:
-                logger.error(f"❌ [BACKUP ERROR] {e}")
-        await asyncio.sleep(86400)
-
+# --- БАЗА ДАННЫХ И ЦИКЛ ЖИЗНИ ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("--- [ ENGINE STARTING ] ---")
@@ -97,25 +76,16 @@ async def lifespan(app: FastAPI):
                          click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
                          last_collect INTEGER DEFAULT 0, referrer_id TEXT,
                          last_bonus INTEGER DEFAULT 0)''')
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA table_info(users)")
-        columns = [column[1] for column in cursor.fetchall()]
-        if 'last_bonus' not in columns:
-            conn.execute("ALTER TABLE users ADD COLUMN last_bonus INTEGER DEFAULT 0")
-        conn.commit()
-
+    
     bot_task = asyncio.create_task(dp.start_polling(bot))
-    back_task = asyncio.create_task(backup_to_gdrive())
     yield
     bot_task.cancel()
-    back_task.cancel()
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
 templates = Jinja2Templates(directory=str(STATIC_DIR))
 
 # --- API ЭНДПОИНТЫ ---
@@ -139,11 +109,10 @@ async def get_balance(user_id: str):
         
         balance, click_lvl, bot_lvl, last_collect = row
         offline_profit = 0
-        
         if bot_lvl > 0 and last_collect > 0:
-            seconds_passed = min(now - last_collect, 28800) # 8 часов макс
+            seconds_passed = min(now - last_collect, 28800) # Лимит 8 часов
             tap_power = PLAYER_LEVELS.get(click_lvl, PLAYER_LEVELS[1])["tap"]
-            mult = BOT_UPGRADE_COSTS.get(bot_lvl - 1, {"mult": 1})["mult"]
+            mult = BOT_UPGRADE_COSTS.get(bot_lvl - 1, {"mult": 1})["mult"] if bot_lvl > 0 else 0
             offline_profit = int(seconds_passed * (tap_power * mult / 10))
             balance += offline_profit
 
@@ -158,6 +127,8 @@ async def save_clicks(data: dict = Body(...)):
         conn.execute("UPDATE users SET balance = balance + ?, last_collect = ? WHERE id = ?", (clicks, int(time.time()), uid))
         conn.commit()
     return {"status": "ok"}
+
+# --- НОВЫЕ ЭНДПОИНТЫ ДЛЯ МАГАЗИНА ---
 
 @app.post("/api/buy_boost")
 async def buy_boost(data: dict = Body(...)):
@@ -174,7 +145,7 @@ async def buy_boost(data: dict = Body(...)):
                 conn.execute("UPDATE users SET balance = ?, click_lvl = ? WHERE id = ?", (new_bal, next_lvl, uid))
                 conn.commit()
                 return {"status": "ok", "new_balance": new_bal, "new_lvl": next_lvl}
-    return {"status": "error", "error": "Недостаточно NP или макс. уровень"}
+    return {"status": "error", "message": "Недостаточно средств"}
 
 @app.post("/api/buy_bot_np")
 async def buy_bot_np(data: dict = Body(...)):
@@ -191,7 +162,7 @@ async def buy_bot_np(data: dict = Body(...)):
                 conn.execute("UPDATE users SET balance = ?, bot_lvl = ? WHERE id = ?", (new_bal, new_bot_lvl, uid))
                 conn.commit()
                 return {"status": "ok", "new_balance": new_bal, "new_bot_lvl": new_bot_lvl}
-    return {"status": "error", "error": "Недостаточно NP или макс. бот"}
+    return {"status": "error", "message": "Недостаточно средств"}
 
 @app.get("/api/leaderboard")
 async def get_leaderboard():
@@ -202,51 +173,13 @@ async def get_leaderboard():
         leaders = [{"id": f"ID{r[0][:4]}****", "balance": r[1], "level": PLAYER_LEVELS.get(r[2], {"name":"???"})["name"]} for r in rows]
         return {"leaders": leaders}
 
-@app.post("/api/daily_bonus")
-async def claim_daily_bonus(data: dict = Body(...)):
-    uid, now = str(data.get("user_id")), int(time.time())
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        c = conn.cursor()
-        c.execute("SELECT last_bonus FROM users WHERE id = ?", (uid,))
-        res = c.fetchone()
-        if res and res[0] is not None and (now - res[0] < 86400):
-            wait_time = 86400 - (now - res[0])
-            return {"error": f"Бонус доступен через {wait_time // 3600}ч"}
-        conn.execute("UPDATE users SET balance = balance + 5000, last_bonus = ? WHERE id = ?", (now, uid))
-        conn.commit()
-        return {"status": "ok", "bonus": 5000}
-
-@app.get("/api/all_stats")
-async def get_all_stats():
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        c = conn.cursor()
-        players = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-        wealth = c.execute("SELECT SUM(balance) FROM users").fetchone()[0] or 0
-        return {"total_players": players, "total_balance": wealth}
-
 # --- БОТ ХЕНДЛЕРЫ ---
-
 @dp.message(F.text.startswith("/start"))
 async def start_handler(message: types.Message):
-    uid = str(message.from_user.id)
-    args = message.text.split()
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        c = conn.cursor()
-        c.execute("SELECT id FROM users WHERE id = ?", (uid,))
-        if not c.fetchone():
-            ref_id = args[1] if len(args) > 1 and args[1] != uid else None
-            conn.execute("INSERT INTO users (id, balance, last_collect, referrer_id) VALUES (?, 1000, ?, ?)", 
-                         (uid, int(time.time()), ref_id))
-            if ref_id:
-                conn.execute("UPDATE users SET balance = balance + 50000 WHERE id = ?", (ref_id,))
-                try: await bot.send_message(ref_id, "💎 Твой друг присоединился! Тебе начислено +50,000 NP!")
-                except: pass
-            conn.commit()
-
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
-    await message.answer(f"Привет, {message.from_user.first_name}! 🚀\nДобро пожаловать в Neural Pulse! Твой путь к GOD MODE начинается здесь.", reply_markup=kb)
+    await message.answer(f"Привет, {message.from_user.first_name}! 🚀\nГотов к GOD MODE?", reply_markup=kb)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
