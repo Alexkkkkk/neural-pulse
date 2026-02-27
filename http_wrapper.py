@@ -11,7 +11,6 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
 # --- НАСТРОЙКА ЛОГИРОВАНИЯ ---
-# Устанавливаем формат: Время - Имя - Уровень - Сообщение
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s | %(name)s | %(levelname)s | %(message)s',
@@ -47,6 +46,16 @@ PLAYER_LEVELS = {
     20: {"name": "GOD MODE", "price": 100000000000, "tap": 100000000}
 }
 
+# НОВАЯ ТАБЛИЦА ЦЕН ДЛЯ АВТОКЛИКЕРА ЗА NP
+BOT_UPGRADE_COSTS = {
+    0: {"price": 25000, "mult": 1},
+    1: {"price": 100000, "mult": 3},
+    2: {"price": 500000, "mult": 8},
+    3: {"price": 2000000, "mult": 20},
+    4: {"price": 10000000, "mult": 50}
+}
+
+# Платные боты (оставляем для раздела MINE)
 BOT_CONFIG = {
     0: {"mult": 0},
     1: {"mult": 1.0},
@@ -68,19 +77,12 @@ async def lifespan(app: FastAPI):
                         (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
                          click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
                          last_collect INTEGER DEFAULT 0, referrer_id TEXT)''')
-        cursor = conn.execute("PRAGMA table_info(users)")
-        cols = [column[1] for column in cursor.fetchall()]
-        if "bot_lvl" not in cols: conn.execute("ALTER TABLE users ADD COLUMN bot_lvl INTEGER DEFAULT 0")
-        if "last_collect" not in cols: conn.execute("ALTER TABLE users ADD COLUMN last_collect INTEGER DEFAULT 0")
-        if "referrer_id" not in cols: conn.execute("ALTER TABLE users ADD COLUMN referrer_id TEXT")
         conn.commit()
     
-    logger.info(f"📂 База данных проверена: {DB_PATH}")
     polling_task = asyncio.create_task(dp.start_polling(bot))
     logger.info("✅ Бот и Сервер успешно запущены.")
     yield
     polling_task.cancel()
-    logger.info("🛑 Сервер останавливается...")
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -105,7 +107,6 @@ async def get_balance(user_id: str):
         row = c.fetchone()
         
         if not row:
-            logger.info(f"🆕 [НОВЫЙ ИГРОК] ID: {user_id}")
             conn.execute("INSERT INTO users (id, balance, click_lvl, bot_lvl, last_collect) VALUES (?, 1000, 1, 0, ?)", (user_id, now))
             conn.commit()
             return {"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "offline_profit": 0}
@@ -113,36 +114,28 @@ async def get_balance(user_id: str):
         balance, click_lvl, bot_lvl, last_collect = row
         offline_profit = 0
         
+        # Расчет офлайн прибыли (используем новые множители BOT_UPGRADE_COSTS)
         if bot_lvl > 0 and last_collect > 0:
-            seconds_passed = min(now - last_collect, 86400)
+            seconds_passed = min(now - last_collect, 28800) # Максимум 8 часов офлайна
             tap_power = PLAYER_LEVELS.get(click_lvl, PLAYER_LEVELS[1])["tap"]
-            mult = BOT_CONFIG.get(bot_lvl, BOT_CONFIG[0])["mult"]
+            # Берем множитель текущего уровня бота
+            mult = BOT_UPGRADE_COSTS.get(bot_lvl-1, {"mult": 1})["mult"]
             offline_profit = int(seconds_passed * tap_power * mult)
             balance += offline_profit
-            if offline_profit > 0:
-                logger.info(f"💰 [OFFLINE] Игрок {user_id} получил {offline_profit} за время отсутствия")
 
         conn.execute("UPDATE users SET balance = ?, last_collect = ? WHERE id = ?", (balance, now, user_id))
         conn.commit()
-        logger.info(f"💾 [LOAD] Данные {user_id}: Баланс {balance}, Уровень {click_lvl}")
         return {"balance": balance, "click_lvl": click_lvl, "bot_lvl": bot_lvl, "offline_profit": offline_profit}
 
 @app.post("/api/clicks")
 async def save_clicks(data: dict = Body(...)):
-    uid = str(data.get("user_id"))
-    clicks = int(data.get("clicks", 0))
-    
-    if clicks > 1500: 
-        logger.warning(f"⚠️ [CHEAT?] Игрок {uid} прислал подозрительно много кликов: {clicks}")
-        clicks = 1500 
-
+    uid, clicks = str(data.get("user_id")), int(data.get("clicks", 0))
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute("UPDATE users SET balance = balance + ?, last_collect = ? WHERE id = ?", (clicks, int(time.time()), uid))
         conn.commit()
-    
-    logger.info(f"🖱️ [CLICKS] {uid}: +{clicks} NP")
     return {"status": "ok"}
 
+# Покупка силы клика
 @app.post("/api/buy_boost")
 async def buy_boost(data: dict = Body(...)):
     uid = str(data.get("user_id"))
@@ -154,19 +147,39 @@ async def buy_boost(data: dict = Body(...)):
         
         balance, current_lvl = res
         next_lvl = current_lvl + 1
-        if next_lvl not in PLAYER_LEVELS: return {"error": "Достигнут максимум!"}
+        if next_lvl not in PLAYER_LEVELS: return {"error": "MAX LEVEL"}
         
         cost = PLAYER_LEVELS[next_lvl]["price"]
         if balance >= cost:
-            new_balance = balance - cost
-            conn.execute("UPDATE users SET balance = ?, click_lvl = ?, last_collect = ? WHERE id = ?", 
-                         (new_balance, next_lvl, int(time.time()), uid))
+            conn.execute("UPDATE users SET balance = balance - ?, click_lvl = ?, last_collect = ? WHERE id = ?", 
+                         (cost, next_lvl, int(time.time()), uid))
             conn.commit()
-            logger.info(f"🚀 [UPGRADE] {uid} купил уровень {next_lvl} за {cost} NP")
-            return {"status": "ok", "new_balance": new_balance, "new_lvl": next_lvl}
-        
-        logger.info(f"❌ [UPGRADE FAIL] {uid} не хватило денег на уровень {next_lvl} (Цена: {cost})")
+            return {"status": "ok", "new_balance": balance - cost, "new_lvl": next_lvl}
         return {"error": "Недостаточно NP!"}
+
+# НОВЫЙ ЭНДПОИНТ: Покупка автобота за NP
+@app.post("/api/buy_bot_np")
+async def buy_bot_np(data: dict = Body(...)):
+    uid = str(data.get("user_id"))
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        c = conn.cursor()
+        c.execute("SELECT balance, bot_lvl FROM users WHERE id = ?", (uid,))
+        res = c.fetchone()
+        if not res: return {"error": "User not found"}
+        
+        balance, current_bot_lvl = res
+        if current_bot_lvl not in BOT_UPGRADE_COSTS:
+            return {"error": "Достигнут максимум бота!"}
+        
+        cost = BOT_UPGRADE_COSTS[current_bot_lvl]["price"]
+        if balance >= cost:
+            new_bot_lvl = current_bot_lvl + 1
+            conn.execute("UPDATE users SET balance = balance - ?, bot_lvl = ?, last_collect = ? WHERE id = ?", 
+                         (cost, new_bot_lvl, int(time.time()), uid))
+            conn.commit()
+            logger.info(f"🤖 [BOT UPGRADE] {uid} теперь уровень {new_bot_lvl}")
+            return {"status": "ok", "new_balance": balance - cost, "new_bot_lvl": new_bot_lvl}
+        return {"error": "Недостаточно NP для бота!"}
 
 @app.get("/api/all_stats")
 async def get_all_stats():
@@ -174,37 +187,29 @@ async def get_all_stats():
         c = conn.cursor()
         total_players = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         total_balance = c.execute("SELECT SUM(balance) FROM users").fetchone()[0] or 0
-        logger.info(f"📊 [STATS] Запрос статистики. Всего игроков: {total_players}")
         return {"total_players": total_players, "total_balance": total_balance}
-
-# --- ЛОГИКА БОТА ---
 
 @dp.message(F.text.startswith("/start"))
 async def start_handler(message: types.Message):
     uid = str(message.from_user.id)
     args = message.text.split()
-    now = int(time.time())
-    
     with sqlite3.connect(str(DB_PATH)) as conn:
         c = conn.cursor()
         c.execute("SELECT id FROM users WHERE id = ?", (uid,))
         if not c.fetchone():
             ref_id = args[1] if len(args) > 1 and args[1] != uid else None
             conn.execute("INSERT INTO users (id, balance, click_lvl, bot_lvl, last_collect, referrer_id) VALUES (?, 1000, 1, 0, ?, ?)", 
-                         (uid, now, ref_id))
-            logger.info(f"👤 [BOT START] Новый пользователь в ТГ: {uid} (Реферал от: {ref_id})")
+                         (uid, int(time.time()), ref_id))
             if ref_id:
                 conn.execute("UPDATE users SET balance = balance + 50000 WHERE id = ?", (ref_id,))
-                try: await bot.send_message(ref_id, "💎 Твой друг зашел в игру! Тебе начислено +50,000 NP!")
+                try: await bot.send_message(ref_id, "💎 Друг зашел по ссылке! +50,000 NP!")
                 except: pass
             conn.commit()
 
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
-    await message.answer(f"Привет, {message.from_user.first_name}! 🚀\nДобро пожаловать в Neural Pulse AI.", reply_markup=kb)
+    await message.answer(f"Привет! 🚀\nГотов майнить NP?", reply_markup=kb)
 
 if __name__ == "__main__":
-    # Лог о том, на каком хосте запускаемся
-    logger.info("📡 Uvicorn стартует на порту 3000...")
     uvicorn.run(app, host="0.0.0.0", port=3000)
