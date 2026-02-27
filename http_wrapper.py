@@ -10,15 +10,6 @@ from fastapi.templating import Jinja2Templates
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
-# Безопасный импорт Google Drive (если библиотеки установлены в Docker)
-try:
-    from googleapiclient.discovery import build
-    from googleapiclient.http import MediaFileUpload
-    from google.oauth2.credentials import Credentials
-    HAS_GOOGLE_LIBS = True
-except ImportError:
-    HAS_GOOGLE_LIBS = False
-
 # --- НАСТРОЙКА ЛОГИРОВАНИЯ ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s', datefmt='%H:%M:%S')
 logger = logging.getLogger("NEURAL_PULSE")
@@ -28,7 +19,7 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH = BASE_DIR / "game.db"
 
-# Справочник уровней (все 20 уровней)
+# Справочник уровней
 PLAYER_LEVELS = {
     1: {"name": "Новичок", "price": 0, "tap": 1},
     2: {"name": "Стажер", "price": 1000, "tap": 5},
@@ -128,8 +119,6 @@ async def save_clicks(data: dict = Body(...)):
         conn.commit()
     return {"status": "ok"}
 
-# --- НОВЫЕ ЭНДПОИНТЫ ДЛЯ МАГАЗИНА ---
-
 @app.post("/api/buy_boost")
 async def buy_boost(data: dict = Body(...)):
     uid = str(data.get("user_id"))
@@ -164,14 +153,31 @@ async def buy_bot_np(data: dict = Body(...)):
                 return {"status": "ok", "new_balance": new_bal, "new_bot_lvl": new_bot_lvl}
     return {"status": "error", "message": "Недостаточно средств"}
 
+# --- ОБНОВЛЕННЫЙ ЛИДЕРБОРД (ТОП-20) ---
 @app.get("/api/leaderboard")
 async def get_leaderboard():
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        c = conn.cursor()
-        c.execute("SELECT id, balance, click_lvl FROM users ORDER BY balance DESC LIMIT 10")
-        rows = c.fetchall()
-        leaders = [{"id": f"ID{r[0][:4]}****", "balance": r[1], "level": PLAYER_LEVELS.get(r[2], {"name":"???"})["name"]} for r in rows]
-        return {"leaders": leaders}
+    try:
+        with sqlite3.connect(str(DB_PATH)) as conn:
+            c = conn.cursor()
+            # Получаем ТОП-20 по балансу
+            c.execute("SELECT id, balance, click_lvl FROM users ORDER BY balance DESC LIMIT 20")
+            rows = c.fetchall()
+            
+            leaders = []
+            for r in rows:
+                uid = str(r[0])
+                # Маскируем ID (напр. 1234...89) для красоты
+                display_name = f"{uid[:4]}...{uid[-2:]}" if len(uid) > 6 else uid
+                leaders.append({
+                    "id": uid, 
+                    "display_name": display_name,
+                    "balance": r[1],
+                    "level": PLAYER_LEVELS.get(r[2], PLAYER_LEVELS[1])["name"]
+                })
+            return {"leaders": leaders}
+    except Exception as e:
+        logger.error(f"Error in leaderboard: {e}")
+        return {"leaders": []}
 
 # --- БОТ ХЕНДЛЕРЫ ---
 @dp.message(F.text.startswith("/start"))
