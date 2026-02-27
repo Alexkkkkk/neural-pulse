@@ -63,27 +63,28 @@ dp = Dispatcher()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("\n" + "="*50)
-    logger.info("🚀 СИСТЕМА NEURAL PULSE ЗАПУСКАЕТСЯ...")
+    # Лог старта в стиле Bothost
+    logger.info("--- [ ENGINE INITIALIZATION ] ---")
     
-    # Инициализация БД
-    logger.info(f"📁 Путь БД: {DB_PATH}")
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        conn.execute('''CREATE TABLE IF NOT EXISTS users 
-                        (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
-                         click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
-                         last_collect INTEGER DEFAULT 0, referrer_id TEXT)''')
-        conn.commit()
-    logger.info("✅ База данных готова.")
+    # Проверка БД
+    try:
+        with sqlite3.connect(str(DB_PATH)) as conn:
+            conn.execute('''CREATE TABLE IF NOT EXISTS users 
+                            (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
+                             click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
+                             last_collect INTEGER DEFAULT 0, referrer_id TEXT)''')
+            conn.commit()
+        logger.info(f"💾 Database status: OK ({DB_PATH.name})")
+    except Exception as e:
+        logger.error(f"❌ Database error: {e}")
 
     # Запуск бота
     polling_task = asyncio.create_task(dp.start_polling(bot))
-    logger.info("🤖 Telegram Bot: Online (Polling)")
-    print("="*50 + "\n")
+    logger.info("🤖 AI Telegram Bot: ACTIVE")
     
     yield
     
-    logger.info("🛑 Завершение работы...")
+    logger.info("--- [ SHUTTING DOWN ] ---")
     polling_task.cancel()
 
 app = FastAPI(lifespan=lifespan)
@@ -91,6 +92,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    logger.info(f"📂 Static files: MOUNTED ({STATIC_DIR.name})")
 
 templates = Jinja2Templates(directory=str(STATIC_DIR))
 
@@ -101,7 +103,7 @@ async def favicon():
         return FileResponse(icon_path)
     return {"status": "not found"}
 
-# --- API ЭНДПОИНТЫ ---
+# --- API ЭНДПОИНТЫ (без изменений) ---
 
 @app.get("/")
 async def serve_game(request: Request):
@@ -182,7 +184,7 @@ async def buy_bot_np(data: dict = Body(...)):
             conn.execute("UPDATE users SET balance = balance - ?, bot_lvl = ?, last_collect = ? WHERE id = ?", 
                          (cost, new_bot_lvl, int(time.time()), uid))
             conn.commit()
-            logger.info(f"🤖 [AUTO-BOT] {uid} купил уровень {new_bot_lvl}")
+            logger.info(f"🤖 [BOT-UPGRADE] User {uid} reached level {new_bot_lvl}")
             return {"status": "ok", "new_balance": balance - cost, "new_bot_lvl": new_bot_lvl}
         return {"error": "Недостаточно NP!"}
 
@@ -216,13 +218,27 @@ async def start_handler(message: types.Message):
     ]])
     await message.answer(f"Привет! 🚀\nГотов майнить NP?", reply_markup=kb)
 
+# --- ТОЧКА ВХОДА ДЛЯ BOTHOST ---
 if __name__ == "__main__":
-    # Красивый лог запуска в консоль перед стартом uvicorn
-    print("\n" + "★"*50)
-    print(f"  NEURAL PULSE ENGINE v1.0")
-    print(f"  Python: {sys.version.split()[0]}")
-    print(f"  Domain: https://{MY_DOMAIN}")
-    print(f"  Static: {STATIC_DIR}")
-    print("★"*50 + "\n")
+    os.system('cls' if os.name == 'nt' else 'clear')
+    print(f"""
+    \033[94m
+    ╔══════════════════════════════════════════════════════╗
+    ║                 NEURAL PULSE ENGINE                  ║
+    ║                HOSTING: BOTHOST.RU                   ║
+    ╚══════════════════════════════════════════════════════╝\033[0m
     
-    uvicorn.run(app, host="0.0.0.0", port=3000, log_level="info")
+    📡 \033[92mURL:\033[0m https://{MY_DOMAIN}
+    🛠️  \033[92mPORT:\033[0m 3000
+    🐍 \033[92mPYTHON:\033[0m {sys.version.split()[0]}
+    📅 \033[92mSTART:\033[0m {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+    """)
+    
+    # Запуск сервера
+    uvicorn.run(
+        "main:app" if __name__ == "__main__" else app, 
+        host="0.0.0.0", 
+        port=3000, 
+        log_level="info",
+        reload=False  # На хостинге лучше держать False
+    )
