@@ -46,7 +46,6 @@
         .btn-action:disabled { opacity: 0.3; cursor: not-allowed; }
 
         .mine-card { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid rgba(0, 212, 255, 0.1); }
-        .buy-bot-btn { background: #0088cc; color: white; border: none; padding: 8px 12px; border-radius: 8px; font-family: 'Orbitron'; font-size: 10px; }
 
         .plus-animation { position: absolute; color: var(--neon); font-size: 32px; font-weight: bold; animation: float 0.7s ease-out forwards; pointer-events: none; z-index: 100; text-shadow: 0 0 10px var(--neon); }
         @keyframes float { 0% { opacity:1; transform: translateY(0); } 100% { opacity:0; transform: translateY(-100px); } }
@@ -70,6 +69,8 @@
             <div class="side-menu">
                 <div class="side-item" onclick="openModal('friends')">Friends</div>
                 <div class="side-item" onclick="openModal('tasks')">Tasks</div>
+                <div class="side-item" style="border-color: #ff9d00;" onclick="openModal('daily')">🎁 Bonus</div>
+                <div class="side-item" style="border-color: #00ff96;" onclick="openModal('leaders')">🏆 Top 10</div>
             </div>
         </div>
 
@@ -120,6 +121,22 @@
         <div class="stat-box">
             <p>Приглашай друзей и получай <br><span style="color:var(--neon)">+50,000 NP</span> за каждого!</p>
             <button class="btn-action" style="background:var(--neon-secondary)" onclick="shareInvite()">ПРИГЛАСИТЬ</button>
+        </div>
+    </div>
+
+    <div id="modal-daily" class="modal">
+        <div class="modal-header"><h2>Daily Reward</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div class="stat-box">
+            <div style="font-size: 40px;">🎁</div>
+            <p>Заходи каждый день и забирай <br><span style="color:var(--neon-secondary); font-size: 1.2em;">+5,000 NP</span></p>
+            <button id="claim-bonus-btn" class="btn-action" style="background:var(--neon-secondary)" onclick="claimDailyBonus()">ПОЛУЧИТЬ</button>
+        </div>
+    </div>
+
+    <div id="modal-leaders" class="modal">
+        <div class="modal-header"><h2>Top Leaders</h2><span class="close-btn" onclick="closeAllModals()">&times;</span></div>
+        <div id="leaders-list">
+            <p style="text-align:center; opacity:0.5;">Загрузка топа...</p>
         </div>
     </div>
 
@@ -237,6 +254,52 @@
             } else { tg.showAlert(d.error); }
         }
 
+        // Функции для новых модулей
+        async function claimDailyBonus() {
+            try {
+                const r = await fetch('/api/daily_bonus', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ user_id: userId })
+                });
+                const d = await r.json();
+                if (d.status === 'ok') {
+                    score += d.bonus;
+                    updateUI();
+                    tg.showAlert(`🎉 Поздравляем! Вы получили ${formatNP(d.bonus)} NP!`);
+                    tg.HapticFeedback?.notificationOccurred('success');
+                    closeAllModals();
+                } else {
+                    tg.showAlert(d.error);
+                }
+            } catch (e) { tg.showAlert("Ошибка сервера"); }
+        }
+
+        async function loadLeaderboard() {
+            const listContainer = document.getElementById('leaders-list');
+            listContainer.innerHTML = '<p style="text-align:center; opacity:0.5;">Загрузка...</p>';
+            try {
+                const r = await fetch('/api/leaderboard');
+                const d = await r.json();
+                listContainer.innerHTML = '';
+                d.leaders.forEach((player, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'mine-card';
+                    item.innerHTML = `
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span style="color:var(--neon); font-weight:bold;">#${index + 1}</span>
+                            <div>
+                                <div style="font-size:12px;">ID: ${player.id}</div>
+                                <div style="font-size:9px; opacity:0.6;">${player.level}</div>
+                            </div>
+                        </div>
+                        <div style="color:var(--neon-secondary); font-weight:bold;">${formatNP(player.balance)}</div>
+                    `;
+                    listContainer.appendChild(item);
+                });
+            } catch (e) { listContainer.innerHTML = '<p style="color:red; text-align:center;">Ошибка загрузки</p>'; }
+        }
+
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             for (let t of e.changedTouches) {
@@ -284,6 +347,7 @@
                 document.getElementById('stat-players').textContent = r.total_players;
                 document.getElementById('stat-total-np').textContent = formatNP(r.total_balance);
             }
+            if (id === 'leaders') { loadLeaderboard(); }
             updateUI();
         }
 
