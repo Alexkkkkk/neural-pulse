@@ -21,7 +21,7 @@ STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "game.db"
 
-TOKEN = "8257287930:AAGkVGln4-vsvbPaPBcaOiEjohO3VvobIhI"
+TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU"
 MY_DOMAIN = "np.bothost.ru"
 
 class SaveData(BaseModel):
