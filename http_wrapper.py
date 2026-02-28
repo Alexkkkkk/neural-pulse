@@ -6,11 +6,11 @@ logger = logging.getLogger("NEURAL_PULSE")
 
 class HTTPWrapper:
     @staticmethod
-    def success(data: dict = None, message: str = "Success"):
+    def success(data: dict = None, message: str = "ok"):
         return {"status": "ok", "message": message, "data": data if data else {}}
 
     @staticmethod
-    def error(message: str = "Internal Error", status_code: int = 500):
+    def error(message: str = "error", status_code: int = 500):
         return JSONResponse(status_code=status_code, content={"status": "error", "message": message})
 
 def api_error_handler(func):
@@ -19,6 +19,6 @@ def api_error_handler(func):
         try:
             return await func(*args, **kwargs)
         except Exception as e:
-            logger.error(f"💥 API Error in {func.__name__}: {str(e)}")
-            return HTTPWrapper.error(message="Server error. Please try again.")
+            logger.error(f"API Error: {e}")
+            return HTTPWrapper.error(message=str(e))
     return wrapper
