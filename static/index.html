@@ -76,7 +76,6 @@
         .plus-animation { position: absolute; color: var(--neon); font-size: 28px; font-weight: bold; animation: float 0.7s ease-out forwards; pointer-events: none; z-index: 100; text-shadow: 0 0 10px var(--neon); }
         @keyframes float { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
         
-        /* Leaderboard Styles */
         .leaderboard-container { display: flex; flex-direction: column; gap: 10px; margin-top: 15px; }
         .leader-item { display: flex; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.05); padding: 12px; border-radius: 10px; border: 1px solid rgba(0, 212, 255, 0.1); }
         .leader-rank { width: 30px; font-weight: bold; color: var(--neon); }
@@ -190,7 +189,6 @@
         let turboMultiplier = 1;
         let isTurbo = false;
         let pendingAmount = 0;
-        let sessionClicks = 0;
 
         function updateUI() {
             document.getElementById('score').textContent = Math.floor(score).toLocaleString();
@@ -205,7 +203,6 @@
             document.getElementById('lvl').textContent = "🏆 " + levels[lvlIdx];
         }
 
-        // Клик логика
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             let currentTap = tapPower * turboMultiplier;
@@ -214,7 +211,6 @@
                     energy -= tapPower;
                     score += currentTap;
                     pendingAmount += currentTap;
-                    sessionClicks += currentTap;
                     spawnPlus(e.changedTouches[i].pageX, e.changedTouches[i].pageY, currentTap);
                     tg.HapticFeedback?.impactOccurred(isTurbo ? 'heavy' : 'light');
                 }
@@ -231,19 +227,28 @@
             setTimeout(() => p.remove(), 700);
         }
 
-        // ЛИДЕРБОРД ЛОГИКА
+        // ОБНОВЛЕННАЯ ФУНКЦИЯ ЛИДЕРБОРДА
         async function openStats() {
             openModal('stats');
+            
             document.getElementById('my-id-stat').textContent = userId;
             document.getElementById('my-score-stat').textContent = Math.floor(score).toLocaleString() + " NP";
             
             try {
-                const response = await fetch('/api/leaderboard');
+                // Добавляем user_id в запрос для расчета ранга
+                const response = await fetch(`/api/leaderboard?user_id=${userId}`);
                 const data = await response.json(); 
+                
                 renderLeaderboard(data.top10);
-                if (data.user_rank) document.getElementById('my-rank').textContent = data.user_rank;
+                
+                if (data.user_rank) {
+                    document.getElementById('my-rank').textContent = data.user_rank;
+                } else {
+                    document.getElementById('my-rank').textContent = "?";
+                }
             } catch (e) {
-                document.getElementById('leaderboard-list').innerHTML = "<div style='opacity:0.5; text-align:center;'>Ошибка загрузки данных</div>";
+                console.error("Leaderboard error", e);
+                document.getElementById('leaderboard-list').innerHTML = "<div style='opacity:0.5; text-align:center;'>Ошибка сети</div>";
             }
         }
 
@@ -253,11 +258,13 @@
             list.forEach((player, index) => {
                 const item = document.createElement('div');
                 item.className = 'leader-item';
+                // Подсвечиваем себя в списке
                 if (player.user_id == userId) item.classList.add('my-stats');
+                
                 item.innerHTML = `
                     <div class="leader-rank">${index + 1}</div>
                     <div class="leader-info">
-                        <span class="leader-name">ID: ${player.user_id}</span>
+                        <span class="leader-name">ID: ${String(player.user_id).slice(0, 8)}...</span>
                         <span class="leader-score">${Math.floor(player.score).toLocaleString()} NP</span>
                     </div>
                 `;
@@ -265,7 +272,6 @@
             });
         }
 
-        // Системные функции
         function handleUpgrade(type) {
             let cost = (type === 'autoclick') ? 2000 : 500;
             if (score >= cost) {
@@ -273,7 +279,8 @@
                 if (type === 'tap') tapPower++;
                 if (type === 'energy') maxEnergy += 500;
                 if (type === 'autoclick') autoLvl++;
-                pendingAmount = 1; updateUI();
+                pendingAmount += 1; // Триггер сохранения
+                updateUI();
                 tg.HapticFeedback?.notificationOccurred('success');
             } else { tg.showAlert("Недостаточно NP!"); }
         }
@@ -309,7 +316,7 @@
                     await fetch('/api/save', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ user_id: userId, score: score, click_lvl: tapPower, bot_lvl: autoLvl })
+                        body: JSON.stringify({ user_id: userId, score: Math.floor(score), click_lvl: tapPower, bot_lvl: autoLvl })
                     });
                 } catch (e) { pendingAmount = cur; }
             }
