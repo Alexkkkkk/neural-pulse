@@ -2,9 +2,12 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse AI</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <script src="https://telegram.org/js/telegram-web-app.js?5"></script>
+    
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <style>
@@ -226,7 +229,6 @@
             setTimeout(() => p.remove(), 700);
         }
 
-        // --- ЛИДЕРБОРД ---
         function renderLeaderboard(list) {
             const container = document.getElementById('leaderboard-list');
             container.innerHTML = ''; 
@@ -270,7 +272,6 @@
             }
         }
 
-        // --- УЛУЧШЕНИЯ ---
         function handleUpgrade(type) {
             let cost = (type === 'autoclick') ? 2000 : 500;
             if (score >= cost) {
@@ -303,7 +304,6 @@
             } else { tg.showAlert("Нужно 1000 NP!"); }
         }
 
-        // --- ЦИКЛЫ ---
         setInterval(() => {
             if (energy < maxEnergy) { energy = Math.min(maxEnergy, energy + 2); updateUI(); }
             if (autoLvl > 0) { score += autoLvl; pendingAmount += autoLvl; updateUI(); }
