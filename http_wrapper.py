@@ -22,7 +22,7 @@ STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "game.db"
 
-TOKEN = "8257287930:AAFOaH0ZxRH200r5sGLclf95co8wU7AUBwg"
+TOKEN = "8257287930:AAEjSRHN7MDVNAFNfPxa1CjVSLB0QywQQ3E"
 MY_DOMAIN = "np.bothost.ru"
 
 # --- ПРОВЕРКА СТРУКТУРЫ ---
