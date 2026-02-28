@@ -13,20 +13,22 @@ from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')
 logger = logging.getLogger("NEURAL_PULSE")
 
+# Настройка путей (Bothost требует /app/data для персистентности)
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
-DB_PATH = BASE_DIR / "game.db"
+DATA_DIR = BASE_DIR / "data"
+DATA_DIR.mkdir(exist_ok=True) 
+DB_PATH = DATA_DIR / "game.db"
 
-# Токен твоего бота и домен
-TOKEN = "8257287930:AAFTqc_EyqiFzKfBsJokV9w0e-J9CJdQ0dg"
+# Данные бота (обнови токен если нужно)
+TOKEN = "8257287930:AAG3tTP9uCtv5GcaqLA_piMqFjzFvA1PExM"
 MY_DOMAIN = "np.bothost.ru"
 
-# Настройки лиг и начальные цели джекпотов (20 лиг)
+# 20 лиг и прогресс джекпотов
 BASE_TARGETS = [
     600000, 900000, 1400000, 2100000, 3000000, 4100000, 5400000, 6900000, 8600000, 10500000, 
     12600000, 14900000, 17400000, 20100000, 23000000, 26100000, 29400000, 32900000, 36600000, 40500000
 ]
-# Глобальные джекпоты в оперативной памяти (наполняются всеми игроками)
 current_jackpots = [float(t * 0.01) for t in BASE_TARGETS] 
 
 bot = Bot(token=TOKEN)
@@ -42,7 +44,7 @@ class SaveData(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Инициализация базы данных SQLite при запуске сервера
+    # Инициализация БД в защищенной папке /data
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
                         (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
@@ -51,15 +53,13 @@ async def lifespan(app: FastAPI):
         conn.execute("CREATE INDEX IF NOT EXISTS idx_balance ON users (balance DESC)")
         conn.commit()
     
-    # Запуск Telegram Polling в фоновом режиме
+    # Запуск Telegram Polling
     bot_task = asyncio.create_task(dp.start_polling(bot))
     yield
-    # Остановка бота при выключении сервера
     bot_task.cancel()
 
 app = FastAPI(lifespan=lifespan)
 
-# Настройка CORS для работы WebApp
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -67,7 +67,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- РАЗДАЧА СТАТИКИ ---
+# --- РОУТЫ СТАТИКИ ---
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
@@ -81,7 +81,7 @@ async def favicon():
     icon_path = STATIC_DIR / "images" / "unnamed4.png"
     return FileResponse(icon_path) if icon_path.exists() else Response(status_code=204)
 
-# --- API ЭНДПОИНТЫ ---
+# --- API ДЛЯ ИГРЫ ---
 
 @app.post("/api/save")
 async def save_progress(data: SaveData):
@@ -91,10 +91,10 @@ async def save_progress(data: SaveData):
 
     # Логика джекпота
     if data.won_jackpot:
-        logger.info(f"!!! JACKPOT WON by {uid} in league {data.league_id} !!!")
         current_jackpots[l_idx] = 0 
+        logger.info(f"!!! JACKPOT WON by {uid} in league {data.league_id} !!!")
     else:
-        # Джекпот растет от действий всех игроков (0.1 монеты за клик * номер лиги)
+        # Джекпот растет от действий всех игроков
         current_jackpots[l_idx] += (data.league_id * 0.1)
 
     with sqlite3.connect(str(DB_PATH)) as conn:
@@ -123,10 +123,10 @@ async def get_balance(user_id: str):
         if not row:
             return {"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "league_id": 1, "offline_profit": 0}
         
-        # Расчет офлайн прибыли (1.5 монеты в сек за уровень бота, макс 8 часов)
+        # Расчет офлайн прибыли
         offline_profit = 0
         if row["bot_lvl"] > 0 and row["last_collect"] > 0:
-            seconds = min(now - row["last_collect"], 28800) 
+            seconds = min(now - row["last_collect"], 28800) # Макс 8 часов
             if seconds > 60:
                 offline_profit = int(seconds * row["bot_lvl"] * 1.5)
         
@@ -152,14 +152,13 @@ async def get_leaderboard(user_id: str = None):
 
         return {"top10": top10, "user_rank": user_rank}
 
-# --- КОМАНДЫ TELEGRAM БОТА ---
+# --- БОТ ---
 @dp.message(F.text.startswith("/start"))
 async def start_handler(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
-    await message.answer(f"Привет, {message.from_user.first_name}! 🚀\nРазгони свой нейронный пульс до предела и сорви джекпот.", reply_markup=kb)
+    await message.answer(f"Привет, {message.from_user.first_name}! 🚀\nТвой нейронный пульс готов к разгону.", reply_markup=kb)
 
-# --- ЗАПУСК ---
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
