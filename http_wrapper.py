@@ -86,6 +86,8 @@ async def save_progress(data: SaveData):
     uid = str(data.user_id)
     now = int(time.time())
     with sqlite3.connect(str(DB_PATH)) as conn:
+        # Используем округление score до целого, чтобы избежать конфликтов типов в SQLite
+        score_int = int(data.score)
         conn.execute("""
             INSERT INTO users (id, balance, click_lvl, bot_lvl, last_collect) 
             VALUES (?, ?, ?, ?, ?) 
@@ -94,8 +96,8 @@ async def save_progress(data: SaveData):
                 click_lvl = ?, 
                 bot_lvl = ?, 
                 last_collect = ?
-        """, (uid, data.score, data.click_lvl, data.bot_lvl, now, 
-              data.score, data.click_lvl, data.bot_lvl, now))
+        """, (uid, score_int, data.click_lvl, data.bot_lvl, now, 
+              score_int, data.click_lvl, data.bot_lvl, now))
         conn.commit()
     return {"status": "success"}
 
@@ -109,28 +111,36 @@ async def get_balance(user_id: str):
         row = c.fetchone()
         
         if not row:
+            # Стартовый баланс для новых игроков
             conn.execute("INSERT INTO users (id, balance, click_lvl, bot_lvl, last_collect) VALUES (?, 1000, 1, 0, ?)", (user_id, now))
             conn.commit()
             return {"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "offline_profit": 0}
         
         bal, c_lvl, b_lvl, last_c = row["balance"], row["click_lvl"], row["bot_lvl"], row["last_collect"]
+        
         offline_profit = 0
-        if b_lvl > 0:
-            # Офлайн профит: 2 монеты за секунду * уровень бота (макс за 8 часов)
-            seconds = min(now - last_c, 28800)
-            offline_profit = seconds * b_lvl * 2
-            bal += offline_profit
-            conn.execute("UPDATE users SET balance = ?, last_collect = ? WHERE id = ?", (bal, now, user_id))
-            conn.commit()
+        if b_lvl > 0 and last_c > 0:
+            # Офлайн профит: уровень бота * 2 монеты в секунду (макс за 8 часов)
+            seconds = min(now - last_c, 28800) 
+            if seconds > 60:  # Начисляем, если игрока не было хотя бы минуту
+                offline_profit = seconds * b_lvl * 2
+                bal += offline_profit
+                # Сразу сохраняем обновленный баланс и время захода
+                conn.execute("UPDATE users SET balance = ?, last_collect = ? WHERE id = ?", (bal, now, user_id))
+                conn.commit()
 
-        return {"balance": bal, "click_lvl": c_lvl, "bot_lvl": b_lvl, "offline_profit": offline_profit}
+        return {
+            "balance": bal, 
+            "click_lvl": c_lvl, 
+            "bot_lvl": b_lvl, 
+            "offline_profit": offline_profit
+        }
 
 @app.get("/api/leaderboard")
 async def get_leaderboard(user_id: str = None):
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.row_factory = sqlite3.Row 
         c = conn.cursor()
-        # Топ 10
         c.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10")
         top_rows = c.fetchall()
         top10 = [{"user_id": row["id"], "score": row["balance"]} for row in top_rows]
