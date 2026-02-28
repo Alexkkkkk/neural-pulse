@@ -8,19 +8,23 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
+from dotenv import load_dotenv
+
+# Загружаем переменные из .env, если он есть
+load_dotenv()
 
 # --- НАСТРОЙКИ ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')
 logger = logging.getLogger("NEURAL_PULSE")
 
-# Настройка путей (Bothost требует /app/data для персистентности)
+# Важно: на Bothost папка /app/data сохраняется между перезагрузками
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = BASE_DIR / "data" 
 DATA_DIR.mkdir(exist_ok=True) 
 DB_PATH = DATA_DIR / "game.db"
 
-# Данные бота (обнови токен если нужно)
+# ТВОИ ДАННЫЕ
 TOKEN = "8257287930:AAFOaH0ZxRH200r5sGLclf95co8wU7AUBwg"
 MY_DOMAIN = "np.bothost.ru"
 
@@ -44,7 +48,7 @@ class SaveData(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Инициализация БД в защищенной папке /data
+    # Инициализация БД в защищенной папке /app/data
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
                         (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
@@ -81,7 +85,7 @@ async def favicon():
     icon_path = STATIC_DIR / "images" / "unnamed4.png"
     return FileResponse(icon_path) if icon_path.exists() else Response(status_code=204)
 
-# --- API ДЛЯ ИГРЫ ---
+# --- API ЭНДПОИНТЫ ---
 
 @app.post("/api/save")
 async def save_progress(data: SaveData):
@@ -89,12 +93,10 @@ async def save_progress(data: SaveData):
     now = int(time.time())
     l_idx = max(0, min(data.league_id - 1, 19))
 
-    # Логика джекпота
     if data.won_jackpot:
         current_jackpots[l_idx] = 0 
         logger.info(f"!!! JACKPOT WON by {uid} in league {data.league_id} !!!")
     else:
-        # Джекпот растет от действий всех игроков
         current_jackpots[l_idx] += (data.league_id * 0.1)
 
     with sqlite3.connect(str(DB_PATH)) as conn:
@@ -107,11 +109,7 @@ async def save_progress(data: SaveData):
               data.score, data.click_lvl, data.bot_lvl, now, data.league_id))
         conn.commit()
 
-    return {
-        "status": "success", 
-        "global_jackpot": round(current_jackpots[l_idx], 2),
-        "target": BASE_TARGETS[l_idx]
-    }
+    return {"status": "success", "global_jackpot": round(current_jackpots[l_idx], 2), "target": BASE_TARGETS[l_idx]}
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
@@ -123,10 +121,9 @@ async def get_balance(user_id: str):
         if not row:
             return {"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "league_id": 1, "offline_profit": 0}
         
-        # Расчет офлайн прибыли
         offline_profit = 0
         if row["bot_lvl"] > 0 and row["last_collect"] > 0:
-            seconds = min(now - row["last_collect"], 28800) # Макс 8 часов
+            seconds = min(now - row["last_collect"], 28800)
             if seconds > 60:
                 offline_profit = int(seconds * row["bot_lvl"] * 1.5)
         
@@ -158,7 +155,7 @@ async def start_handler(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
-    await message.answer(f"Привет, {message.from_user.first_name}! 🚀\nТвой нейронный пульс готов к разгону.", reply_markup=kb)
+    await message.answer(f"Привет, {message.from_user.first_name}! 🚀\nРазгони свой нейронный пульс до предела.", reply_markup=kb)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
