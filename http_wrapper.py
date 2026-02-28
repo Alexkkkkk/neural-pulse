@@ -10,10 +10,10 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 from dotenv import load_dotenv
 
-# Загружаем переменные из .env, если он есть
+# Загружаем переменные окружения
 load_dotenv()
 
-# --- УЛУЧШЕННОЕ ЛОГИРОВАНИЕ ---
+# --- КОНФИГУРАЦИЯ ЛОГИРОВАНИЯ ---
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
@@ -21,40 +21,41 @@ logging.basicConfig(
 )
 logger = logging.getLogger("NEURAL_PULSE")
 
-# Пути (на Bothost важно использовать /app/data для сохранения БД)
+# ПУТИ К ФАЙЛАМ
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "game.db"
 
-# ДАННЫЕ БОТА
+# ДАННЫЕ ПРОЕКТА
 TOKEN = "8257287930:AAFOaH0ZxRH200r5sGLclf95co8wU7AUBwg"
 MY_DOMAIN = "np.bothost.ru"
 
-# --- ЛОГ ПРОВЕРКИ ПРИ ЗАПУСКЕ ---
-def startup_check():
-    logger.info("=== ПРОВЕРКА ОКРУЖЕНИЯ ===")
-    logger.info(f"Рабочая директория: {BASE_DIR}")
+# --- ФУНКЦИЯ ДИАГНОСТИКИ (СТАРТОВАЯ ПРОВЕРКА) ---
+def run_diagnostic():
+    logger.info("=== [STARTUP DIAGNOSTIC] ===")
+    logger.info(f"Working Directory: {BASE_DIR}")
     
+    # Проверка папки static и index.html
     if STATIC_DIR.exists():
-        logger.info(f"✅ Папка static найдена: {STATIC_DIR}")
-        index_file = STATIC_DIR / "index.html"
-        if index_file.exists():
-            logger.info("✅ Файл index.html на месте")
+        logger.info(f"✅ Static folder found: {STATIC_DIR}")
+        if (STATIC_DIR / "index.html").exists():
+            logger.info("✅ index.html is present in static.")
         else:
-            logger.warning("❌ Файл index.html ОТСУТСТВУЕТ в папке static")
+            logger.error("❌ index.html is MISSING in static folder!")
     else:
-        logger.error(f"❌ Папка static НЕ НАЙДЕНА по пути: {STATIC_DIR}")
+        logger.error(f"❌ Static folder NOT FOUND at {STATIC_DIR}")
 
+    # Подготовка папки для БД
     try:
         DATA_DIR.mkdir(exist_ok=True)
-        logger.info(f"✅ Папка данных готова: {DATA_DIR}")
+        logger.info(f"✅ Data directory ready: {DATA_DIR}")
     except Exception as e:
-        logger.error(f"❌ Ошибка создания папки data: {e}")
+        logger.error(f"❌ Could not create data directory: {e}")
+    
+    logger.info("=== [DIAGNOSTIC END] ===")
 
-    logger.info("==========================")
-
-# 20 лиг и прогресс джекпотов
+# --- ИГРОВАЯ ЛОГИКА ---
 BASE_TARGETS = [
     600000, 900000, 1400000, 2100000, 3000000, 4100000, 5400000, 6900000, 8600000, 10500000, 
     12600000, 14900000, 17400000, 20100000, 23000000, 26100000, 29400000, 32900000, 36600000, 40500000
@@ -74,9 +75,10 @@ class SaveData(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    startup_check()
+    # 1. Запуск диагностики
+    run_diagnostic()
     
-    # Инициализация БД
+    # 2. Инициализация БД
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
             conn.execute('''CREATE TABLE IF NOT EXISTS users 
@@ -85,21 +87,22 @@ async def lifespan(app: FastAPI):
                              last_collect INTEGER DEFAULT 0, league_id INTEGER DEFAULT 1)''')
             conn.execute("CREATE INDEX IF NOT EXISTS idx_balance ON users (balance DESC)")
             conn.commit()
-        logger.info(f"✅ База данных инициализирована: {DB_PATH}")
+        logger.info("✅ Database initialized successfully.")
     except Exception as e:
-        logger.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА БД: {e}")
+        logger.error(f"❌ Database error: {e}")
 
-    # Запуск Telegram Polling в фоне
+    # 3. Запуск бота
     bot_task = asyncio.create_task(dp.start_polling(bot))
-    logger.info("🚀 Telegram Polling запущен")
+    logger.info("🚀 Telegram Polling started.")
     
     yield
     
     bot_task.cancel()
-    logger.info("🛑 Сервер останавливается...")
+    logger.info("🛑 Server shutting down...")
 
 app = FastAPI(lifespan=lifespan)
 
+# CORS для фронтенда
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -107,7 +110,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Роуты статики
+# Монтирование статики
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
@@ -116,7 +119,7 @@ async def serve_game():
     index_path = STATIC_DIR / "index.html"
     if index_path.exists():
         return index_path.read_text(encoding="utf-8")
-    return "<h1>Error: index.html not found in static folder</h1>"
+    return "<h1 style='color:red; text-align:center;'>Neural Pulse: static/index.html not found!</h1>"
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
@@ -161,7 +164,7 @@ async def get_balance(user_id: str):
         
         offline_profit = 0
         if row["bot_lvl"] > 0 and row["last_collect"] > 0:
-            seconds = min(now - row["last_collect"], 28800)
+            seconds = min(now - row["last_collect"], 28800) # Макс 8 часов
             if seconds > 60:
                 offline_profit = int(seconds * row["bot_lvl"] * 1.5)
         
@@ -193,7 +196,10 @@ async def start_handler(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
-    await message.answer(f"Привет, {message.from_user.first_name}! 🚀\nРазгони свой нейронный пульс до предела.", reply_markup=kb)
+    await message.answer(
+        f"Привет, {message.from_user.first_name}! 🚀\nТвой нейронный пульс готов к разгону. Нажми кнопку ниже, чтобы начать.",
+        reply_markup=kb
+    )
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000, log_level="info")
