@@ -71,8 +71,7 @@
         
         .stat-box { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid rgba(0,212,255,0.2); text-align: center; }
         .buy-btn { width: 100%; padding: 12px; background: var(--neon); color: black; border: none; border-radius: 8px; font-weight: bold; margin-top: 10px; cursor: pointer; font-family: 'Orbitron'; }
-        .buy-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
+        
         .plus-animation { position: absolute; color: var(--neon); font-size: 28px; font-weight: bold; animation: float 0.7s ease-out forwards; pointer-events: none; z-index: 100; text-shadow: 0 0 10px var(--neon); }
         @keyframes float { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
         
@@ -82,7 +81,7 @@
         .leader-info { flex-grow: 1; margin-left: 10px; text-align: left; }
         .leader-name { font-size: 14px; display: block; }
         .leader-score { font-size: 11px; opacity: 0.6; color: var(--neon-secondary); }
-        .my-stats { background: rgba(0, 212, 255, 0.1) !important; border: 1px solid var(--neon) !important; margin-bottom: 20px; }
+        .my-stats { background: rgba(0, 212, 255, 0.1) !important; border: 1px solid var(--neon) !important; }
     </style>
 </head>
 <body>
@@ -163,7 +162,7 @@
                 </div>
             </div>
         </div>
-        <div style="font-size: 12px; opacity: 0.5; margin-bottom: 10px; text-align: center;">ТОП-10 ИГРОКОВ</div>
+        <div style="font-size: 12px; opacity: 0.5; margin-bottom: 10px; text-align: center; margin-top: 15px;">ТОП-10 ИГРОКОВ</div>
         <div id="leaderboard-list" class="leaderboard-container">
             <div style="text-align: center; opacity: 0.5;">Загрузка...</div>
         </div>
@@ -227,28 +226,36 @@
             setTimeout(() => p.remove(), 700);
         }
 
-        // ОБНОВЛЕННАЯ ФУНКЦИЯ ЛИДЕРБОРДА
         async function openStats() {
             openModal('stats');
             
-            document.getElementById('my-id-stat').textContent = userId;
-            document.getElementById('my-score-stat').textContent = Math.floor(score).toLocaleString() + " NP";
+            // 1. Сразу отображаем локальные данные для мгновенного отклика
+            const myIdEl = document.getElementById('my-id-stat');
+            const myScoreEl = document.getElementById('my-score-stat');
+            const myRankEl = document.getElementById('my-rank');
+            const listContainer = document.getElementById('leaderboard-list');
+
+            if (myIdEl) myIdEl.textContent = userId;
+            if (myScoreEl) myScoreEl.textContent = Math.floor(score).toLocaleString() + " NP";
             
+            listContainer.innerHTML = '<div style="text-align: center; opacity: 0.5; padding: 20px;">Загрузка данных...</div>';
+
             try {
-                // Добавляем user_id в запрос для расчета ранга
+                // 2. Запрос к API с передачей user_id для ранга
                 const response = await fetch(`/api/leaderboard?user_id=${userId}`);
-                const data = await response.json(); 
+                if (!response.ok) throw new Error('Ошибка сервера');
                 
+                const data = await response.json();
+                
+                // 3. Отрисовка ТОП-10
                 renderLeaderboard(data.top10);
                 
-                if (data.user_rank) {
-                    document.getElementById('my-rank').textContent = data.user_rank;
-                } else {
-                    document.getElementById('my-rank').textContent = "?";
-                }
+                // 4. Обновление ранга
+                myRankEl.textContent = data.user_rank || "—";
             } catch (e) {
-                console.error("Leaderboard error", e);
-                document.getElementById('leaderboard-list').innerHTML = "<div style='opacity:0.5; text-align:center;'>Ошибка сети</div>";
+                console.error("Rank error:", e);
+                listContainer.innerHTML = '<div style="text-align: center; color: #ff4e50; padding: 20px;">Ошибка загрузки</div>';
+                myRankEl.textContent = "!";
             }
         }
 
@@ -258,8 +265,7 @@
             list.forEach((player, index) => {
                 const item = document.createElement('div');
                 item.className = 'leader-item';
-                // Подсвечиваем себя в списке
-                if (player.user_id == userId) item.classList.add('my-stats');
+                if (String(player.user_id) === String(userId)) item.classList.add('my-stats');
                 
                 item.innerHTML = `
                     <div class="leader-rank">${index + 1}</div>
@@ -279,7 +285,7 @@
                 if (type === 'tap') tapPower++;
                 if (type === 'energy') maxEnergy += 500;
                 if (type === 'autoclick') autoLvl++;
-                pendingAmount += 1; // Триггер сохранения
+                pendingAmount += 1;
                 updateUI();
                 tg.HapticFeedback?.notificationOccurred('success');
             } else { tg.showAlert("Недостаточно NP!"); }
