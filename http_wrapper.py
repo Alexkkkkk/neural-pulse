@@ -4,12 +4,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Response, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
-# --- НАСТРОЙКИ ЛОГИРОВАНИЯ ---
+# --- НАСТРОЙКИ ---
 logging.basicConfig(
     level=logging.INFO, 
     format='%(asctime)s | %(levelname)s | %(name)s | %(message)s', 
@@ -24,12 +24,6 @@ DB_PATH = DATA_DIR / "game.db"
 
 TOKEN = "8257287930:AAEjSRHN7MDVNAFNfPxa1CjVSLB0QywQQ3E"
 MY_DOMAIN = "np.bothost.ru"
-
-# --- ПРОВЕРКА СТРУКТУРЫ ---
-if not STATIC_DIR.exists():
-    logger.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА: Папка {STATIC_DIR} не найдена!")
-else:
-    logger.info(f"✅ Папка статики найдена: {STATIC_DIR}")
 
 # --- МОДЕЛИ ---
 class SaveData(BaseModel):
@@ -54,6 +48,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ Ошибка БД: {e}")
 
+    # Запуск бота в фоне
     bot_task = asyncio.create_task(dp.start_polling(bot))
     logger.info("🚀 Приложение запущено на порту 3000")
     yield
@@ -81,7 +76,18 @@ async def get_balance(user_id: str):
                 conn.execute("INSERT INTO users (id, balance, last_collect) VALUES (?, 1000, ?)", (user_id, now))
                 conn.commit()
                 return {"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "league_id": 1, "offline_profit": 0}
-            return dict(row)
+            
+            data = dict(row)
+            # Расчет оффлайн прибыли (простая логика для примера)
+            offline_time = now - data['last_collect']
+            offline_profit = 0
+            if data['bot_lvl'] > 0 and offline_time > 60:
+                offline_profit = int(offline_time * (data['bot_lvl'] * 0.2))
+                # Ограничим прибыль, например, 12 часами
+                offline_profit = min(offline_profit, 50000) 
+            
+            data['offline_profit'] = offline_profit
+            return data
     except Exception as e:
         logger.error(f"🔥 Ошибка API Balance: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -89,14 +95,19 @@ async def get_balance(user_id: str):
 @app.post("/api/save")
 async def save_progress(data: SaveData):
     try:
+        now = int(time.time())
         with sqlite3.connect(str(DB_PATH)) as conn:
+            # ИСПРАВЛЕНО: количество аргументов совпадает с количеством ?
             conn.execute("""
                 INSERT INTO users (id, balance, click_lvl, bot_lvl, last_collect, league_id) 
                 VALUES (?, ?, ?, ?, ?, ?) 
                 ON CONFLICT(id) DO UPDATE SET 
-                balance=excluded.balance, click_lvl=excluded.click_lvl, 
-                bot_lvl=excluded.bot_lvl, last_collect=?, league_id=excluded.league_id
-            """, (str(data.user_id), data.score, data.click_lvl, data.bot_lvl, int(time.time()), data.league_id, int(time.time())))
+                balance=excluded.balance, 
+                click_lvl=excluded.click_lvl, 
+                bot_lvl=excluded.bot_lvl, 
+                last_collect=?, 
+                league_id=excluded.league_id
+            """, (str(data.user_id), data.score, data.click_lvl, data.bot_lvl, now, data.league_id, now))
             conn.commit()
         return {"status": "ok"}
     except Exception as e:
@@ -105,7 +116,6 @@ async def save_progress(data: SaveData):
 
 # --- ОБРАБОТКА СТАТИКИ ---
 
-# 1. Главная страница с защитой от кэша
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
     index_path = STATIC_DIR / "index.html"
@@ -121,7 +131,6 @@ async def serve_index():
         )
     return HTMLResponse(content="<h1>Error: static/index.html not found</h1>", status_code=404)
 
-# 2. Монтируем подпапку /static для JS, CSS и картинок
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
@@ -131,12 +140,12 @@ dp = Dispatcher()
 
 @dp.message(F.text.startswith("/start"))
 async def start(m: types.Message):
-    # Добавляем случайный параметр к URL, чтобы Telegram всегда открывал "свежую" версию
+    # Добавляем v={time}, чтобы избежать кэширования превью в TG
     web_app_url = f"https://{MY_DOMAIN}/?v={int(time.time())}"
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=web_app_url))
     ]])
-    await m.answer(f"Привет! Твой нейронный пульс готов к разгону. Нажми кнопку ниже:", reply_markup=kb)
+    await m.answer(f"Привет, {m.from_user.first_name}! Твой нейронный пульс готов к разгону. Нажми кнопку ниже:", reply_markup=kb)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
