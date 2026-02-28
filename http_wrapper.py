@@ -21,7 +21,7 @@ DATA_DIR.mkdir(exist_ok=True)
 DB_PATH = DATA_DIR / "game.db"
 
 # Данные бота (обнови токен если нужно)
-TOKEN = "8257287930:AAG3tTP9uCtv5GcaqLA_piMqFjzFvA1PExM"
+TOKEN = "8257287930:AAFTqc_EyqiFzKfBsJokV9w0e-J9CJdQ0dg"
 MY_DOMAIN = "np.bothost.ru"
 
 # 20 лиг и прогресс джекпотов
