@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Body, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from fastapi.responses import FileResponse # Добавили для favicon
 from pydantic import BaseModel
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
@@ -17,13 +17,13 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH = BASE_DIR / "game.db"
 
-# Справочник уровней
+# Справочник уровней (для лидерборда)
 PLAYER_LEVELS = {
-    1: {"name": "Новичок", "price": 0, "tap": 1},
-    2: {"name": "Стажер", "price": 1000, "tap": 5},
-    3: {"name": "Фрилансер", "price": 5000, "tap": 15},
-    4: {"name": "Специалист", "price": 15000, "tap": 40},
-    5: {"name": "CEO", "price": 100000, "tap": 1000}
+    1: "Новичок",
+    2: "Стажер",
+    3: "Фрилансер",
+    4: "Специалист",
+    5: "CEO"
 }
 
 TOKEN = "8257287930:AAG3tTP9uCtv5GcaqLA_piMqFjzFvA1PExM"
@@ -32,9 +32,12 @@ MY_DOMAIN = "np.bothost.ru"
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
+# --- МОДЕЛЬ ДАННЫХ (теперь принимает и уровни) ---
 class SaveData(BaseModel):
     user_id: int
     score: int
+    click_lvl: int = 1  # По умолчанию 1
+    bot_lvl: int = 0    # По умолчанию 0
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -61,18 +64,19 @@ app.add_middleware(
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
-    # Возвращаем статус 204 (No Content), чтобы убрать ошибки 404 из логов
+    # Пытаемся отдать твое лого как иконку, чтобы не было 404
+    icon_path = STATIC_DIR / "images" / "unnamed4.png"
+    if icon_path.exists():
+        return FileResponse(icon_path)
     return Response(status_code=204)
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-templates = Jinja2Templates(directory=str(STATIC_DIR))
 
 # --- API ---
 
 @app.get("/")
-async def serve_game(request: Request):
-    from fastapi.responses import FileResponse
+async def serve_game():
     index_path = STATIC_DIR / "index.html"
     if index_path.exists():
         return FileResponse(index_path)
@@ -81,17 +85,22 @@ async def serve_game(request: Request):
 @app.post("/api/save")
 async def save_progress(data: SaveData):
     uid = str(data.user_id)
-    score = data.score
-    logger.info(f"Синхронизация: User {uid}, Score {score}")
+    # Теперь логируем и уровень прокачки
+    logger.info(f"Синхронизация: User {uid}, Score {data.score}, TapLvl {data.click_lvl}")
     
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute("""
-            INSERT INTO users (id, balance, last_collect) 
-            VALUES (?, ?, ?) 
-            ON CONFLICT(id) DO UPDATE SET balance = ?, last_collect = ?
-        """, (uid, score, int(time.time()), score, int(time.time())))
+            INSERT INTO users (id, balance, click_lvl, bot_lvl, last_collect) 
+            VALUES (?, ?, ?, ?, ?) 
+            ON CONFLICT(id) DO UPDATE SET 
+                balance = ?, 
+                click_lvl = ?, 
+                bot_lvl = ?, 
+                last_collect = ?
+        """, (uid, data.score, data.click_lvl, data.bot_lvl, int(time.time()), 
+              data.score, data.click_lvl, data.bot_lvl, int(time.time())))
         conn.commit()
-    return {"status": "success", "received": score}
+    return {"status": "success"}
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
@@ -121,9 +130,19 @@ async def get_balance(user_id: str):
 async def get_leaderboard():
     with sqlite3.connect(str(DB_PATH)) as conn:
         c = conn.cursor()
+        # Сортируем по балансу
         c.execute("SELECT id, balance, click_lvl FROM users ORDER BY balance DESC LIMIT 20")
         rows = c.fetchall()
-        leaders = [{"display_name": f"ID:{str(r[0])[:5]}", "balance": r[1], "level": PLAYER_LEVELS.get(r[2], PLAYER_LEVELS[1])["name"]} for r in rows]
+        
+        leaders = []
+        for r in rows:
+            # Определяем имя уровня на основе click_lvl
+            lvl_name = PLAYER_LEVELS.get(min(r[2], 5), "Новичок")
+            leaders.append({
+                "display_name": f"ID:{str(r[0])[:5]}...", 
+                "balance": r[1], 
+                "level": lvl_name
+            })
         return {"leaders": leaders}
 
 # --- БОТ ---
