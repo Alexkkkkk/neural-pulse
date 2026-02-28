@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Neural Pulse AI | Ultimate Gold</title>
+    
+    <script src="https://telegram.org/js/telegram-web-app.js?5"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <style>
+        :root { 
+            --neon: #00d4ff; 
+            --neon-secondary: #00ff96; 
+            --crit: #ff4e50;
+            --bg: #050a1a; 
+            --glass: rgba(10, 25, 47, 0.95);
+        }
+
+        /* CRT Scanline Effect */
+        body::before {
+            content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.05) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 255, 0, 0.02));
+            z-index: 9999; background-size: 100% 3px, 3px 100%; pointer-events: none;
+        }
+
+        body { 
+            margin: 0; background: radial-gradient(circle at center, #0a192f 0%, #050a1a 100%); 
+            height: 100vh; font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; 
+            user-select: none; display: flex; justify-content: center; 
+        }
+
+        .game-container { 
+            position: relative; width: 100%; max-width: 500px; height: 100vh; 
+            display: flex; flex-direction: column; align-items: center; 
+            padding: 15px; box-sizing: border-box; 
+        }
+        
+        .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .logo { width: 45px; height: 45px; background: url('/static/images/unnamed4.png') no-repeat center/cover; border-radius: 10px; box-shadow: 0 0 15px var(--neon); cursor: pointer; }
+        .league-box { flex-grow: 1; margin: 0 12px; }
+        .league-info { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 4px; font-weight: bold; }
+        .league-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05); }
+        #league-fill { height: 100%; width: 0%; transition: width 0.5s; }
+
+        .online-indicator { display: flex; align-items: center; gap: 5px; font-size: 9px; color: var(--neon-secondary); margin-top: 4px; }
+        .online-dot { width: 6px; height: 6px; background: var(--neon-secondary); border-radius: 50%; box-shadow: 0 0 5px var(--neon-secondary); animation: pulse 1.5s infinite; }
+
+        .jackpot-container {
+            width: 100%; background: rgba(255, 0, 212, 0.05); 
+            border: 1px solid rgba(255, 0, 212, 0.3); border-radius: 12px; 
+            padding: 8px; margin-bottom: 15px; text-align: center;
+        }
+        #jackpot-amount { font-size: 24px; font-weight: 900; color: #fff; text-shadow: 0 0 10px #ff00d4; }
+
+        .balance-container { text-align: center; margin: 10px 0; }
+        #score { font-size: 58px; font-weight: 900; text-shadow: 0 0 20px var(--neon); letter-spacing: -2px; }
+
+        /* Play Area Adjusted */
+        .play-area { 
+            position: relative; width: 100%; flex-grow: 1; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+        }
+        
+        #btn { 
+            width: 70vw; height: 70vw; max-width: 280px; max-height: 280px;
+            background: url('/static/images/unnamed3.png') no-repeat center/contain;
+            border-radius: 50%; border: none; outline: none;
+            filter: drop-shadow(0 0 30px var(--neon));
+            transition: transform 0.05s;
+            z-index: 2;
+        }
+        #btn:active { transform: scale(0.92); }
+
+        .side-menu { 
+            position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+            display: flex; flex-direction: column; gap: 10px; z-index: 5; 
+        }
+        .side-btn { 
+            width: 80px; padding: 10px 5px; background: rgba(10, 25, 47, 0.7); 
+            border: 1px solid var(--neon); border-radius: 12px; 
+            font-size: 10px; color: white; text-align: center; backdrop-filter: blur(10px);
+        }
+
+        .energy-wrapper { width: 85%; margin-top: 25px; }
+        .energy-info { display: flex; justify-content: space-between; font-size: 12px; color: var(--neon); margin-bottom: 6px; font-weight: bold; }
+        .energy-bar { width: 100%; height: 12px; background: rgba(255,255,255,0.05); border-radius: 10px; border: 1px solid var(--neon); overflow: hidden; }
+        #energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--neon), var(--neon-secondary)); transition: width 0.2s; }
+
+        .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; padding-bottom: 20px; }
+        .nav-item { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 18px; text-align: center; font-size: 12px; border: 1px solid rgba(255,255,255,0.1); font-weight: bold; }
+
+        /* Modals & Animations */
+        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 80%; background: var(--glass); border-top: 3px solid var(--neon); border-radius: 35px 35px 0 0; z-index: 1000; transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1); padding: 30px; box-sizing: border-box; overflow-y: auto; }
+        .modal.active { bottom: 0; }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; z-index: 999; backdrop-filter: blur(8px); }
+        .overlay.active { display: block; }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .plus-animation { position: absolute; pointer-events: none; font-weight: 900; animation: float 0.7s ease-out forwards; z-index: 100; text-shadow: 0 0 10px currentColor; }
+        @keyframes float { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.6); } }
+    </style>
+</head>
+<body>
+
+    <div id="toast-container" class="toast-container"></div>
+
+    <div class="game-container" id="game" style="opacity:0">
+        <div class="header">
+            <div class="logo" id="main-logo"></div>
+            <div class="league-box">
+                <div class="league-info">
+                    <span id="league-name">BRONZE LEAGUE</span>
+                    <span id="league-percent">0%</span>
+                </div>
+                <div class="league-bar"><div id="league-fill"></div></div>
+                <div class="online-indicator">
+                    <div class="online-dot"></div>
+                    <span id="online-count">1,240 ONLINE</span>
+                </div>
+            </div>
+            <div style="font-size: 8px; opacity: 0.4; text-align: right;" id="user-id-display">ID: 0000</div>
+        </div>
+
+        <div class="jackpot-container">
+            <div style="font-size: 9px; letter-spacing: 3px; color: var(--neon); margin-bottom: 3px; font-weight: 900;">GLOBAL JACKPOT</div>
+            <div id="jackpot-amount">500,240</div>
+        </div>
+
+        <div class="balance-container">
+            <div id="score">0</div>
+        </div>
+
+        <div class="play-area">
+            <div id="rocket-timer">🚀 <span id="rocket-time">30</span>s</div>
+            <div class="side-menu">
+                <div class="side-btn" onclick="openModal('friends')">FRIENDS</div>
+                <div class="side-btn" onclick="openModal('tasks')">TASKS</div>
+                <div class="side-btn" style="border-color: #ff9d00;" onclick="openModal('daily')">BONUS</div>
+            </div>
+            <button id="btn"></button>
+
+            <div class="energy-wrapper">
+                <div class="energy-info">
+                    <span>⚡ ENERGY</span>
+                    <span id="energy-stat">1000/1000</span>
+                </div>
+                <div class="energy-bar"><div id="energy-fill"></div></div>
+            </div>
+        </div>
+
+        <div class="bottom-nav">
+            <div class="nav-item" onclick="openModal('boost')">🚀 BOOST</div>
+            <div class="nav-item" onclick="openModal('tasks')">⛏️ MINE</div>
+            <div class="nav-item" onclick="openStats()">📊 STATS</div>
+        </div>
+    </div>
+
+    <div class="overlay" id="overlay" onclick="closeModals()"></div>
+
+    <div id="modal-boost" class="modal">
+        <h2 style="color: var(--neon);">UPGRADES</h2>
+        <div class="stat-box" style="border: 1px solid var(--crit); padding:15px; border-radius:15px; margin-bottom:10px;">
+            <div style="color: var(--crit); font-weight: 900;">🚀 TURBO ROCKET (x5)</div>
+            <button class="buy-btn" style="background: var(--crit); color: white;" onclick="activateRocket()">LAUNCH (1000 NP)</button>
+        </div>
+        <div class="stat-box" style="border: 1px solid var(--neon); padding:15px; border-radius:15px; margin-bottom:10px;">
+            <div>MULTI-TAP (LVL <span id="tap-lvl-val">1</span>)</div>
+            <button class="buy-btn" onclick="handleUpgrade('tap')">UPGRADE (500 NP)</button>
+        </div>
+        <div class="stat-box" style="border: 1px solid var(--neon); padding:15px; border-radius:15px; margin-bottom:10px;">
+            <div>AUTO-BOT (LVL <span id="auto-lvl-val">0</span>)</div>
+            <button class="buy-btn" onclick="handleUpgrade('autoclick')">UPGRADE (2000 NP)</button>
+        </div>
+    </div>
+
+    <div id="modal-stats" class="modal">
+        <h2 style="text-align: center; color: var(--neon);">🏆 LEADERBOARD</h2>
+        <div id="leaderboard-list"></div>
+    </div>
+
+    <div id="modal-friends" class="modal">
+        <h2>FRIENDS</h2>
+        <p>Invite friends to get 10% of their earnings!</p>
+        <div id="referral-link" style="word-break:break-all; padding:15px; background:rgba(0,0,0,0.3); border-radius:10px; margin-bottom:15px; font-size:12px;"></div>
+        <button class="buy-btn" onclick="shareRef()">INVITE FRIENDS</button>
+    </div>
+
+    <div id="modal-daily" class="modal">
+        <h2>DAILY BONUS</h2>
+        <p>Come back every day to claim rewards!</p>
+        <button class="buy-btn" onclick="handleDailyClaim()">CLAIM DAILY REWARD</button>
+    </div>
+
+    <div id="modal-tasks" class="modal"><h2>TASKS</h2><p>Coming Soon...</p></div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        const userId = tg.initDataUnsafe?.user?.id || 12345678;
+        document.getElementById('user-id-display').textContent = "ID: " + userId;
+
+        let score = 0, energy = 1000, maxEnergy = 1000, tapPower = 1, autoLvl = 0;
+        let pendingAmount = 0, rocketActive = false, currentJackpot = 500240;
+
+        const LEAGUES = [
+            { name: "BRONZE", min: 0, color: "#cd7f32" },
+            { name: "SILVER", min: 50000, color: "#c0c0c0" },
+            { name: "GOLD", min: 250000, color: "#ffd700" }
+        ];
+
+        const getCost = (base, lvl) => Math.floor(base * Math.pow(1.5, lvl - 1));
+
+        function updateUI() {
+            document.getElementById('score').textContent = Math.floor(score).toLocaleString();
+            document.getElementById('energy-stat').textContent = `${Math.floor(energy)}/${maxEnergy}`;
+            document.getElementById('energy-fill').style.width = (energy / maxEnergy * 100) + '%';
+            
+            document.getElementById('tap-lvl-val').textContent = tapPower;
+            document.getElementById('auto-lvl-val').textContent = autoLvl;
+
+            let current = LEAGUES[0], nextLeague = LEAGUES[1];
+            for (let i = 0; i < LEAGUES.length; i++) {
+                if (score >= LEAGUES[i].min) {
+                    current = LEAGUES[i];
+                    nextLeague = LEAGUES[i+1] || null;
+                }
+            }
+            
+            document.getElementById('league-name').textContent = current.name + " LEAGUE";
+            document.getElementById('league-name').style.color = current.color;
+            document.getElementById('league-fill').style.background = current.color;
+
+            if (nextLeague) {
+                let progress = ((score - current.min) / (nextLeague.min - current.min)) * 100;
+                document.getElementById('league-fill').style.width = Math.min(100, progress) + '%';
+                document.getElementById('league-percent').textContent = Math.floor(Math.min(100, progress)) + '%';
+            } else {
+                document.getElementById('league-fill').style.width = '100%';
+                document.getElementById('league-percent').textContent = 'MAX';
+            }
+        }
+
+        function handleUpgrade(type) {
+            let cost = (type === 'tap') ? getCost(500, tapPower) : getCost(2000, autoLvl + 1);
+            if (score >= cost) {
+                score -= cost;
+                if (type === 'tap') tapPower++;
+                else autoLvl++;
+                tg.HapticFeedback?.notificationOccurred('success');
+                updateUI();
+            } else {
+                tg.showAlert("Not enough NP!");
+            }
+        }
+
+        document.getElementById('btn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                let pwr = rocketActive ? tapPower * 5 : tapPower;
+                if (rocketActive || energy >= tapPower) {
+                    if (!rocketActive) energy -= tapPower;
+                    score += pwr; pendingAmount += pwr;
+                    spawnPlus(e.changedTouches[i].pageX, e.changedTouches[i].pageY, pwr);
+                    tg.HapticFeedback?.impactOccurred('light');
+                }
+            }
+            updateUI();
+        });
+
+        function spawnPlus(x, y, val) {
+            const p = document.createElement('div');
+            p.className = 'plus-animation';
+            p.style.left = x + 'px'; p.style.top = y + 'px';
+            p.style.color = 'var(--neon)';
+            p.textContent = `+${val}`;
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 700);
+        }
+
+        function shareRef() {
+            const url = `https://t.me/share/url?url=https://t.me/UltraMind_AI_bot?start=${userId}&text=Join Neural Pulse AI and earn tokens!`;
+            tg.openTelegramLink(url);
+        }
+
+        function openModal(id) {
+            document.getElementById('overlay').classList.add('active');
+            document.getElementById('modal-' + id).classList.add('active');
+            if(id === 'friends') document.getElementById('referral-link').textContent = `https://t.me/UltraMind_AI_bot?start=${userId}`;
+        }
+
+        function closeModals() {
+            document.getElementById('overlay').classList.remove('active');
+            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+        }
+
+        function activateRocket() {
+            if (score < 1000 || rocketActive) return;
+            score -= 1000; rocketActive = true;
+            document.getElementById('rocket-timer').style.display = 'block';
+            let time = 30;
+            let inter = setInterval(() => {
+                time--; document.getElementById('rocket-time').textContent = time;
+                if(time <= 0) { clearInterval(inter); rocketActive = false; document.getElementById('rocket-timer').style.display = 'none'; }
+            }, 1000);
+            closeModals();
+        }
+
+        function handleDailyClaim() {
+            tg.showPopup({ title: "Bonus", message: "You claimed 500 NP!" });
+            score += 500;
+            updateUI();
+            closeModals();
+        }
+
+        setInterval(() => {
+            if (energy < maxEnergy) { energy = Math.min(maxEnergy, energy + 2); updateUI(); }
+            if (autoLvl > 0) { score += (autoLvl * 0.5); updateUI(); }
+            currentJackpot += 1; document.getElementById('jackpot-amount').textContent = currentJackpot.toLocaleString();
+        }, 1000);
+
+        window.onload = () => {
+            document.getElementById('game').style.opacity = '1';
+            updateUI();
+        };
+    </script>
+</body>
+</html>
