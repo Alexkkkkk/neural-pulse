@@ -24,7 +24,7 @@ DB_PATH = DATA_DIR / "game.db"
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 logger = logging.getLogger("NEURAL_PULSE")
 
-# --- ТВОЙ КЛАСС HTTPWrapper ---
+# --- КЛАСС HTTPWrapper ---
 class HTTPWrapper:
     @staticmethod
     def success(data: dict = None, message: str = "ok"):
@@ -34,7 +34,7 @@ class HTTPWrapper:
     def error(message: str = "error", status_code: int = 500):
         return JSONResponse(status_code=status_code, content={"status": "error", "message": message})
 
-# --- ТВОЙ ДЕКОРАТОР ---
+# --- ДЕКОРАТОР ---
 def api_error_handler(func):
     @wraps(func)
     async def wrapper(*args, **kwargs):
@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI):
              click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
              last_collect INTEGER DEFAULT 0, league_id INTEGER DEFAULT 1)''')
     bot_task = asyncio.create_task(dp.start_polling(bot))
-    logger.info("✅ Server started")
+    logger.info("✅ Server started and Bot Polling active")
     yield
     bot_task.cancel()
 
@@ -75,14 +75,15 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 @app.get("/api/balance/{user_id}")
 @api_error_handler
 async def get_balance(user_id: str, request: Request):
-    # Логгируем заголовки, чтобы поймать причину "Unauthorized"
+    # Принимаем заголовок Authorization, чтобы избежать 401 от прокси
     auth_header = request.headers.get("Authorization")
-    logger.info(f"Request from {user_id}. Auth: {auth_header}")
+    logger.info(f"👤 [API] Fetching balance for: {user_id} | Auth: {auth_header[:20] if auth_header else 'None'}...")
     
     now = int(time.time())
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        
         if not row:
             conn.execute("INSERT INTO users (id, balance, last_collect) VALUES (?, 1000, ?)", (user_id, now))
             conn.commit()
@@ -90,12 +91,17 @@ async def get_balance(user_id: str, request: Request):
         
         user = dict(row)
         off_time = now - user['last_collect']
+        # Профит ограничен 50к за период офлайна
         profit = min((off_time * user['bot_lvl']), 50000) if user['bot_lvl'] > 0 else 0
         return HTTPWrapper.success({**user, "offline_profit": profit})
 
 @app.post("/api/save")
 @api_error_handler
-async def save_progress(data: SaveData):
+async def save_progress(data: SaveData, request: Request):
+    # Также логгируем заголовок для POST запроса
+    auth_header = request.headers.get("Authorization")
+    logger.info(f"💾 [API] Saving progress for: {data.user_id} | Auth present: {bool(auth_header)}")
+    
     now = int(time.time())
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute("""INSERT INTO users (id, balance, click_lvl, bot_lvl, last_collect, league_id) 
