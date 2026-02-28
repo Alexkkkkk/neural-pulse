@@ -135,36 +135,10 @@
 
     <div class="overlay" id="overlay" onclick="closeModals()"></div>
 
-    <div id="modal-boost" class="modal">
-        <h2 style="color: var(--neon);">UPGRADES</h2>
-        <div style="border: 1px solid var(--crit); padding:15px; border-radius:15px; margin-bottom:10px;">
-            <div style="color: var(--crit); font-weight: 900;">🚀 TURBO ROCKET (x5)</div>
-            <button class="buy-btn" style="background: var(--crit); color: white;" onclick="activateRocket()">LAUNCH (1000 NP)</button>
-        </div>
-        <div style="border: 1px solid var(--neon); padding:15px; border-radius:15px; margin-bottom:10px;">
-            <div>MULTI-TAP (LVL <span id="tap-lvl">1</span>)</div>
-            <button class="buy-btn" id="upgrade-tap">UPGRADE</button>
-        </div>
-        <div style="border: 1px solid var(--neon-secondary); padding:15px; border-radius:15px;">
-            <div>AUTO-BOT (LVL <span id="auto-lvl">0</span>)</div>
-            <button class="buy-btn" style="background: var(--neon-secondary);" id="upgrade-auto">UPGRADE</button>
-        </div>
-    </div>
-
-    <div id="modal-friends" class="modal">
-        <h2>FRIENDS</h2>
-        <p>Invite friends and get 10% of their earnings!</p>
-        <div id="ref-link" style="word-break:break-all; padding:10px; background:rgba(0,0,0,0.3); border-radius:10px; font-size:11px;"></div>
-        <button class="buy-btn" onclick="shareRef()">INVITE</button>
-    </div>
-
-    <div id="modal-daily" class="modal">
-        <h2>DAILY BONUS</h2>
-        <p>Claim your daily 500 NP reward!</p>
-        <button class="buy-btn" onclick="claimDaily()">CLAIM</button>
-    </div>
-
-    <div id="modal-tasks" class="modal"><h2>TASKS</h2><p>Coming Soon...</p></div>
+    <div id="modal-boost" class="modal">...</div>
+    <div id="modal-friends" class="modal">...</div>
+    <div id="modal-daily" class="modal">...</div>
+    <div id="modal-tasks" class="modal">...</div>
 
     <div class="win-overlay" id="win-screen" style="position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; display: none; flex-direction: column; align-items: center; justify-content: center;">
         <h1 style="color: var(--gold); font-size: 40px;">🏆 JACKPOT!</h1>
@@ -178,13 +152,24 @@
         const userId = tg.initDataUnsafe?.user?.id || 12345678;
         document.getElementById('user-id').textContent = "ID: " + userId;
 
-        // Константы лиг
         const BASE_TARGETS = [600000, 900000, 1400000, 2100000, 3000000, 4100000, 5400000, 6900000, 8600000, 10500000, 12600000, 14900000, 17400000, 20100000, 23000000, 26100000, 29400000, 32900000, 36600000, 40500000];
         const LEAGUES = ["BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND", "ELITE", "MASTER", "GRANDMASTER", "CHALLENGER", "TITAN", "ETERNAL", "MYTHIC", "ASCENDED", "DIVINE", "IMMORTAL", "CELESTIAL", "OVERLORD", "ZENITH", "NEURAL", "ULTIMATE"];
 
-        // Состояние
         let score = 0, currentJp = 0, energy = 1000, maxEnergy = 1000;
         let tapPower = 1, autoLvl = 0, rocketActive = false, hasBipped = false;
+
+        // Инициализация при загрузке
+        async function loadData() {
+            try {
+                const res = await fetch(`/api/balance/${userId}`);
+                const data = await res.json();
+                score = data.balance;
+                tapPower = data.click_lvl;
+                autoLvl = data.bot_lvl;
+                if(data.offline_profit > 0) tg.showAlert(`Auto-Bot earned: ${data.offline_profit} NP!`);
+                updateUI();
+            } catch(e) { console.error("Load error", e); }
+        }
 
         function getLvlData() {
             let l = 1;
@@ -197,17 +182,6 @@
             return { id: l, name: LEAGUES[l-1], targetJp: BASE_TARGETS[l-1], min: prev, max: next };
         }
 
-        function playBeep() {
-            try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.connect(gain); gain.connect(ctx.destination);
-                osc.frequency.value = 800; gain.gain.value = 0.1;
-                osc.start(); osc.stop(ctx.currentTime + 0.1);
-            } catch(e) {}
-        }
-
         function updateUI() {
             const L = getLvlData();
             document.getElementById('score').textContent = Math.floor(score).toLocaleString();
@@ -216,20 +190,17 @@
             document.getElementById('tap-lvl').textContent = tapPower;
             document.getElementById('auto-lvl').textContent = autoLvl;
 
-            // Джекпот прогресс
             let jpProg = (currentJp / L.targetJp) * 100;
             document.getElementById('jp-fill').style.width = Math.min(100, jpProg) + "%";
+            
             if (jpProg >= 100) {
                 document.getElementById('jp-card').classList.add('ready-blink');
                 document.getElementById('jp-status').textContent = "READY TO DROP! 🔥";
-                if (!hasBipped) { playBeep(); hasBipped = true; }
             } else {
                 document.getElementById('jp-card').classList.remove('ready-blink');
                 document.getElementById('jp-status').textContent = "COLLECTING...";
-                hasBipped = false;
             }
 
-            // Лига прогресс
             if (L.max) {
                 let lp = ((score - L.min) / (L.max - L.min)) * 100;
                 document.getElementById('league-fill').style.width = lp + "%";
@@ -243,7 +214,28 @@
             document.getElementById('energy-fill').style.width = (energy / maxEnergy * 100) + "%";
         }
 
-        // Клик
+        async function sendSave(won = false) {
+            const L = getLvlData();
+            try {
+                const res = await fetch('/api/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ 
+                        user_id: userId, 
+                        score: Math.floor(score), 
+                        league_id: L.id,
+                        click_lvl: tapPower,
+                        bot_lvl: autoLvl,
+                        won_jackpot: won 
+                    })
+                });
+                const data = await res.json();
+                currentJp = data.global_jackpot;
+                updateUI();
+            } catch(e) { console.error("Save error:", e); }
+        }
+
+        // Обработка клика
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             const L = getLvlData();
@@ -252,17 +244,14 @@
                 if (rocketActive || energy >= tapPower) {
                     if (!rocketActive) energy -= tapPower;
                     score += pwr;
-                    currentJp += (L.id * 0.1);
-
-                    // Шанс на джекпот
+                    
+                    // Джекпот шанс
                     if (Math.random() < 0.00001) {
                         document.getElementById('win-amount').textContent = Math.floor(currentJp).toLocaleString();
                         document.getElementById('win-screen').style.display = 'flex';
                         score += currentJp;
                         sendSave(true);
-                        currentJp = 0;
                     }
-
                     spawnPlus(e.changedTouches[i].pageX, e.changedTouches[i].pageY, pwr);
                     tg.HapticFeedback?.impactOccurred('light');
                 }
@@ -279,71 +268,15 @@
             setTimeout(() => p.remove(), 700);
         }
 
-        // Системные функции
-        function openModal(id) {
-            document.getElementById('overlay').classList.add('active');
-            document.getElementById('modal-' + id).classList.add('active');
-            if(id === 'friends') document.getElementById('ref-link').textContent = `https://t.me/UltraMind_AI_bot?start=${userId}`;
-        }
-        function closeModals() {
-            document.getElementById('overlay').classList.remove('active');
-            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
-        }
-
-        function activateRocket() {
-            if (score < 1000 || rocketActive) return;
-            score -= 1000; rocketActive = true;
-            closeModals();
-            document.getElementById('rocket-timer').style.display = 'block';
-            let t = 30;
-            let int = setInterval(() => {
-                t--; document.getElementById('rocket-time').textContent = t;
-                if(t <= 0) { clearInterval(int); rocketActive = false; document.getElementById('rocket-timer').style.display = 'none'; }
-            }, 1000);
-        }
-
-        function claimDaily() {
-            score += 500; tg.showAlert("Claimed 500 NP!"); updateUI(); closeModals();
-        }
-
-        function shareRef() {
-            const url = `https://t.me/share/url?url=https://t.me/UltraMind_AI_bot?start=${userId}&text=Earn NP together!`;
-            tg.openTelegramLink(url);
-        }
-
-        // Апгрейды
-        document.getElementById('upgrade-tap').onclick = () => {
-            let cost = Math.floor(500 * Math.pow(1.5, tapPower));
-            if(score >= cost) { score -= cost; tapPower++; updateUI(); } else tg.showAlert("Not enough NP!");
-        };
-        document.getElementById('upgrade-auto').onclick = () => {
-            let cost = Math.floor(2000 * Math.pow(1.6, autoLvl + 1));
-            if(score >= cost) { score -= cost; autoLvl++; updateUI(); } else tg.showAlert("Not enough NP!");
-        };
-
-        // Синхронизация
-        async function sendSave(won = false) {
-            const L = getLvlData();
-            try {
-                const res = await fetch('/api/save', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ user_id: userId, score: Math.floor(score), league_id: L.id, won_jackpot: won })
-                });
-                const data = await res.json();
-                currentJp = data.global_jackpot;
-                updateUI();
-            } catch(e) {}
-        }
-
-        setInterval(() => sendSave(), 4000);
+        // Интервалы
+        setInterval(() => sendSave(), 5000);
         setInterval(() => {
             if (energy < maxEnergy) energy = Math.min(maxEnergy, energy + 2);
             if (autoLvl > 0) score += (autoLvl * 0.5);
             updateUI();
         }, 1000);
 
-        updateUI();
+        loadData(); // Загрузка данных при старте
     </script>
 </body>
 </html>
