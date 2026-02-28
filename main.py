@@ -11,27 +11,17 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
-# Импорт твоей обертки (обязательно создай файл http_wrapper.py)
-try:
-    from http_wrapper import HTTPWrapper, api_error_handler
-except ImportError:
-    def api_error_handler(func): return func
-    class HTTPWrapper:
-        @staticmethod
-        def success(data=None): return {"status": "ok", "data": data}
-
 # --- НАСТРОЙКИ ---
-logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s', handlers=[logging.StreamHandler(sys.stdout)])
-logger = logging.getLogger("NEURAL_PULSE")
+TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU"
+MY_DOMAIN = "np.bothost.ru"
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "game.db"
 
-# ТВОЙ АКТУАЛЬНЫЙ ТОКЕН
-TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU"
-MY_DOMAIN = "np.bothost.ru"
+logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+logger = logging.getLogger("PULSE")
 
 class SaveData(BaseModel):
     user_id: int
@@ -40,81 +30,67 @@ class SaveData(BaseModel):
     click_lvl: int = 1
     bot_lvl: int = 0
 
-# --- ЖИЗНЕННЫЙ ЦИКЛ ---
+# --- БД И ЖИЗНЕННЫЙ ЦИКЛ ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     DATA_DIR.mkdir(exist_ok=True)
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
-                        (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
-                         click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
-                         last_collect INTEGER DEFAULT 0, league_id INTEGER DEFAULT 1)''')
-        conn.commit()
+            (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
+             click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
+             last_collect INTEGER DEFAULT 0, league_id INTEGER DEFAULT 1)''')
     
     bot_task = asyncio.create_task(dp.start_polling(bot))
-    logger.info("✅ База данных готова. Бот Neural Pulse запущен.")
+    logger.info("✅ Бот и БД запущены")
     yield
     bot_task.cancel()
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- API ---
+# --- API ЭНДПОИНТЫ ---
 @app.get("/api/balance/{user_id}")
-@api_error_handler
 async def get_balance(user_id: str):
     now = int(time.time())
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-        
         if not row:
             conn.execute("INSERT INTO users (id, balance, last_collect) VALUES (?, 1000, ?)", (user_id, now))
             conn.commit()
-            return HTTPWrapper.success(data={"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "league_id": 1, "offline_profit": 0})
+            return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "league_id": 1, "offline_profit": 0}}
         
-        user_data = dict(row)
-        off_time = now - user_data['last_collect']
-        profit = (off_time * user_data['bot_lvl']) if user_data['bot_lvl'] > 0 and off_time > 60 else 0
-        user_data['offline_profit'] = min(profit, 50000)
-        return HTTPWrapper.success(data=user_data)
+        user = dict(row)
+        off_time = now - user['last_collect']
+        profit = min((off_time * user['bot_lvl']), 50000) if user['bot_lvl'] > 0 else 0
+        return {"status": "ok", "data": {**user, "offline_profit": profit}}
 
 @app.post("/api/save")
-@api_error_handler
 async def save_progress(data: SaveData):
     now = int(time.time())
     with sqlite3.connect(str(DB_PATH)) as conn:
-        conn.execute("""
-            INSERT INTO users (id, balance, click_lvl, bot_lvl, last_collect, league_id) 
+        conn.execute("""INSERT INTO users (id, balance, click_lvl, bot_lvl, last_collect, league_id) 
             VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET 
             balance=excluded.balance, click_lvl=excluded.click_lvl, 
-            bot_lvl=excluded.bot_lvl, last_collect=?, league_id=excluded.league_id
-        """, (str(data.user_id), data.score, data.click_lvl, data.bot_lvl, now, data.league_id, now))
+            bot_lvl=excluded.bot_lvl, last_collect=?, league_id=excluded.league_id""", 
+            (str(data.user_id), data.score, data.click_lvl, data.bot_lvl, now, data.league_id, now))
         conn.commit()
-    return HTTPWrapper.success()
+    return {"status": "ok"}
 
-# --- СТАТИКА ---
-@app.get("/", response_class=HTMLResponse)
-async def serve_index():
-    index_path = STATIC_DIR / "index.html"
-    if index_path.exists():
-        return HTMLResponse(content=index_path.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
-    return HTMLResponse(f"<h1>404</h1><p>Static file not found at {index_path}</p>", status_code=404)
-
+# --- СТАТИКА (ПОДКЛЮЧАЕМ ПОСЛЕ API) ---
 if STATIC_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
 
 # --- БОТ ---
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-@dp.message(F.text.startswith("/start"))
-async def start_cmd(m: types.Message):
-    url = f"https://{MY_DOMAIN}/?v={int(time.time())}"
+@dp.message(F.text == "/start")
+async def start(m: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=url))
+        InlineKeyboardButton(text="💎 Играть", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
-    await m.answer(f"Привет, <b>{m.from_user.first_name}</b>! 🚀\nТвоя сеть готова.", reply_markup=kb)
+    await m.answer(f"<b>Neural Pulse</b> запущен!", reply_markup=kb)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
