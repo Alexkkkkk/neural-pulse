@@ -17,6 +17,7 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH = BASE_DIR / "game.db"
 
+# СОВЕТ: В будущем вынеси токен в переменные окружения (.env)
 TOKEN = "8257287930:AAG3tTP9uCtv5GcaqLA_piMqFjzFvA1PExM"
 MY_DOMAIN = "np.bothost.ru"
 
@@ -31,6 +32,7 @@ class SaveData(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Инициализация БД
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
                         (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
@@ -39,8 +41,10 @@ async def lifespan(app: FastAPI):
         conn.execute("CREATE INDEX IF NOT EXISTS idx_balance ON users (balance DESC)")
         conn.commit()
     
+    # Запуск бота
     bot_task = asyncio.create_task(dp.start_polling(bot))
     yield
+    # Остановка
     bot_task.cancel()
 
 app = FastAPI(lifespan=lifespan)
@@ -52,7 +56,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- УТИЛИТЫ ---
+# --- РОУТЫ ДЛЯ ИКОНОК ---
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
@@ -61,7 +65,6 @@ async def favicon():
         return FileResponse(icon_path)
     return Response(status_code=204)
 
-# ИСПРАВЛЕНИЕ: Обработка запроса иконки из папки static
 @app.get("/static/favicon.ico", include_in_schema=False)
 async def static_favicon():
     return await favicon()
@@ -81,6 +84,7 @@ async def serve_game():
 @app.post("/api/save")
 async def save_progress(data: SaveData):
     uid = str(data.user_id)
+    now = int(time.time())
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute("""
             INSERT INTO users (id, balance, click_lvl, bot_lvl, last_collect) 
@@ -90,8 +94,8 @@ async def save_progress(data: SaveData):
                 click_lvl = ?, 
                 bot_lvl = ?, 
                 last_collect = ?
-        """, (uid, data.score, data.click_lvl, data.bot_lvl, int(time.time()), 
-              data.score, data.click_lvl, data.bot_lvl, int(time.time())))
+        """, (uid, data.score, data.click_lvl, data.bot_lvl, now, 
+              data.score, data.click_lvl, data.bot_lvl, now))
         conn.commit()
     return {"status": "success"}
 
@@ -112,6 +116,7 @@ async def get_balance(user_id: str):
         bal, c_lvl, b_lvl, last_c = row["balance"], row["click_lvl"], row["bot_lvl"], row["last_collect"]
         offline_profit = 0
         if b_lvl > 0:
+            # Офлайн профит: 2 монеты за секунду * уровень бота (макс за 8 часов)
             seconds = min(now - last_c, 28800)
             offline_profit = seconds * b_lvl * 2
             bal += offline_profit
@@ -125,6 +130,7 @@ async def get_leaderboard(user_id: str = None):
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.row_factory = sqlite3.Row 
         c = conn.cursor()
+        # Топ 10
         c.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10")
         top_rows = c.fetchall()
         top10 = [{"user_id": row["id"], "score": row["balance"]} for row in top_rows]
