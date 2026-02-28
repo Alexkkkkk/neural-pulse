@@ -1,11 +1,12 @@
-import os, asyncio, sqlite3, uvicorn, logging, time, sys
+import os, asyncio, sqlite3, uvicorn, logging, time, sys, traceback
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from functools import wraps
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -21,7 +22,29 @@ DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "game.db"
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
-logger = logging.getLogger("PULSE")
+logger = logging.getLogger("NEURAL_PULSE")
+
+# --- ТВОЙ КЛАСС HTTPWrapper ---
+class HTTPWrapper:
+    @staticmethod
+    def success(data: dict = None, message: str = "ok"):
+        return {"status": "ok", "message": message, "data": data if data else {}}
+
+    @staticmethod
+    def error(message: str = "error", status_code: int = 500):
+        return JSONResponse(status_code=status_code, content={"status": "error", "message": message})
+
+# --- ТВОЙ ДЕКОРАТОР ---
+def api_error_handler(func):
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except Exception as e:
+            logger.error(f"API Error: {e}")
+            logger.error(traceback.format_exc())
+            return HTTPWrapper.error(message=str(e))
+    return wrapper
 
 class SaveData(BaseModel):
     user_id: int
@@ -30,7 +53,7 @@ class SaveData(BaseModel):
     click_lvl: int = 1
     bot_lvl: int = 0
 
-# --- БД И ЖИЗНЕННЫЙ ЦИКЛ ---
+# --- ЖИЗНЕННЫЙ ЦИКЛ ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     DATA_DIR.mkdir(exist_ok=True)
@@ -39,9 +62,8 @@ async def lifespan(app: FastAPI):
             (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
              click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
              last_collect INTEGER DEFAULT 0, league_id INTEGER DEFAULT 1)''')
-    
     bot_task = asyncio.create_task(dp.start_polling(bot))
-    logger.info("✅ Бот и БД запущены")
+    logger.info("✅ Server started")
     yield
     bot_task.cancel()
 
@@ -49,8 +71,14 @@ app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # --- API ЭНДПОИНТЫ ---
+
 @app.get("/api/balance/{user_id}")
-async def get_balance(user_id: str):
+@api_error_handler
+async def get_balance(user_id: str, request: Request):
+    # Логгируем заголовки, чтобы поймать причину "Unauthorized"
+    auth_header = request.headers.get("Authorization")
+    logger.info(f"Request from {user_id}. Auth: {auth_header}")
+    
     now = int(time.time())
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.row_factory = sqlite3.Row
@@ -58,14 +86,15 @@ async def get_balance(user_id: str):
         if not row:
             conn.execute("INSERT INTO users (id, balance, last_collect) VALUES (?, 1000, ?)", (user_id, now))
             conn.commit()
-            return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "league_id": 1, "offline_profit": 0}}
+            return HTTPWrapper.success({"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "league_id": 1, "offline_profit": 0})
         
         user = dict(row)
         off_time = now - user['last_collect']
         profit = min((off_time * user['bot_lvl']), 50000) if user['bot_lvl'] > 0 else 0
-        return {"status": "ok", "data": {**user, "offline_profit": profit}}
+        return HTTPWrapper.success({**user, "offline_profit": profit})
 
 @app.post("/api/save")
+@api_error_handler
 async def save_progress(data: SaveData):
     now = int(time.time())
     with sqlite3.connect(str(DB_PATH)) as conn:
@@ -75,9 +104,9 @@ async def save_progress(data: SaveData):
             bot_lvl=excluded.bot_lvl, last_collect=?, league_id=excluded.league_id""", 
             (str(data.user_id), data.score, data.click_lvl, data.bot_lvl, now, data.league_id, now))
         conn.commit()
-    return {"status": "ok"}
+    return HTTPWrapper.success()
 
-# --- СТАТИКА (ПОДКЛЮЧАЕМ ПОСЛЕ API) ---
+# --- СТАТИКА ---
 if STATIC_DIR.exists():
     app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
 
@@ -88,9 +117,9 @@ dp = Dispatcher()
 @dp.message(F.text == "/start")
 async def start(m: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="💎 Играть", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
+        InlineKeyboardButton(text="💎 Play Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
-    await m.answer(f"<b>Neural Pulse</b> запущен!", reply_markup=kb)
+    await m.answer(f"<b>Welcome, {m.from_user.first_name}!</b>\nNeural Pulse system is online.", reply_markup=kb)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
