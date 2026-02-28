@@ -6,6 +6,7 @@ let score = 0, clickLvl = 1, botLvl = 0, leagueId = 1;
 let energy = 1000, maxEnergy = 1000;
 let currentJp = 0;
 
+// Получаем ID пользователя из Telegram или ставим 123 для тестов в браузере
 const userId = tg.initDataUnsafe?.user?.id || 123;
 
 // Константы лиг
@@ -23,77 +24,85 @@ async function load() {
         botLvl = d.bot_lvl || 0;
         leagueId = d.league_id || 1;
         
-        // Добавляем офлайн прибыль, если она есть
+        // Офлайн прибыль
         if(d.offline_profit > 0) {
-            score += d.offline_profit;
             tg.showAlert(`Ваши боты добыли, пока вас не было: ${d.offline_profit} 💎`);
         }
         
         update();
+        console.log("✅ Данные загружены");
     } catch (e) {
-        console.error("Ошибка загрузки:", e);
+        console.error("❌ Ошибка загрузки:", e);
     }
 }
 
 // Обновление интерфейса
 function update() {
-    // Числа и тексты
-    document.getElementById('score').innerText = Math.floor(score).toLocaleString();
-    document.getElementById('league-name').innerText = LEAGUE_NAMES[leagueId-1] + " League";
-    document.getElementById('jackpot-val').innerText = Math.floor(currentJp).toLocaleString();
+    const scoreEl = document.getElementById('score');
+    if (scoreEl) scoreEl.innerText = Math.floor(score).toLocaleString();
     
-    // Обновление цен в модальном окне
-    document.getElementById('tap-lvl').innerText = clickLvl;
-    document.getElementById('auto-lvl').innerText = botLvl;
-    document.getElementById('buy-click').innerHTML = `MULTI-TAP (LVL ${clickLvl})<br><small>Цена: ${clickLvl * 500} 💎</small>`;
-    document.getElementById('buy-bot').innerHTML = `AUTO-BOT (LVL ${botLvl})<br><small>Цена: ${(botLvl + 1) * 1500} 💎</small>`;
+    const leagueNameEl = document.getElementById('league-name');
+    if (leagueNameEl) leagueNameEl.innerText = LEAGUE_NAMES[leagueId-1] + " League";
+    
+    const jpValEl = document.getElementById('jackpot-val');
+    if (jpValEl) jpValEl.innerText = Math.floor(currentJp).toLocaleString();
+    
+    // Обновление цен и уровней в модалках
+    const tapLvlEl = document.getElementById('tap-lvl');
+    const autoLvlEl = document.getElementById('auto-lvl');
+    if (tapLvlEl) tapLvlEl.innerText = clickLvl;
+    if (autoLvlEl) autoLvlEl.innerText = botLvl;
+
+    const buyClickBtn = document.getElementById('buy-click');
+    const buyBotBtn = document.getElementById('buy-bot');
+    if (buyClickBtn) buyClickBtn.innerHTML = `MULTI-TAP (LVL ${clickLvl})<br><small>Цена: ${clickLvl * 500} 💎</small>`;
+    if (buyBotBtn) buyBotBtn.innerHTML = `AUTO-BOT (LVL ${botLvl})<br><small>Цена: ${(botLvl + 1) * 1500} 💎</small>`;
 
     // Прогресс лиги
     let prev = leagueId === 1 ? 0 : LEAGUE_TARGETS[leagueId-2];
     let next = LEAGUE_TARGETS[leagueId-1];
     let prog = ((score - prev) / (next - prev)) * 100;
     
-    document.getElementById('league-fill').style.width = `${Math.min(100, prog)}%`;
-    document.getElementById('league-percent').innerText = `${Math.floor(Math.min(100, prog))}%`;
-
-    // Прогресс джекпота (визуально до 1% от цели лиги)
-    let jpGoal = next * 0.01;
-    let jpProg = (currentJp / jpGoal) * 100;
-    document.getElementById('jp-fill').style.width = `${Math.min(100, jpProg)}%`;
+    const leagueFill = document.getElementById('league-fill');
+    const leaguePerc = document.getElementById('league-percent');
+    if (leagueFill) leagueFill.style.width = `${Math.min(100, prog)}%`;
+    if (leaguePerc) leaguePerc.innerText = `${Math.floor(Math.min(100, prog))}%`;
 
     // Энергия
-    document.getElementById('energy-stat').innerText = `${Math.floor(energy)}/${maxEnergy}`;
-    document.getElementById('energy-fill').style.width = `${(energy / maxEnergy) * 100}%`;
+    const energyStat = document.getElementById('energy-stat');
+    const energyFill = document.getElementById('energy-fill');
+    if (energyStat) energyStat.innerText = `${Math.floor(energy)}/${maxEnergy}`;
+    if (energyFill) energyFill.style.width = `${(energy / maxEnergy) * 100}%`;
 }
 
-// Обработка клика по кнопке
-document.getElementById('btn').addEventListener('touchstart', (e) => {
-    e.preventDefault(); // Запрет зума и скролла
-    
-    for (let i = 0; i < e.changedTouches.length; i++) {
-        if (energy >= clickLvl) {
-            // Логика клика
-            score += clickLvl;
-            energy -= clickLvl;
-            
-            // Проверка новой лиги
-            if (score >= LEAGUE_TARGETS[leagueId-1] && leagueId < 20) {
-                leagueId++;
-                tg.showAlert(`Поздравляем! Вы перешли в лигу: ${LEAGUE_NAMES[leagueId-1]}`);
-            }
+// Обработка клика (TouchStart для мобилок)
+const btn = document.getElementById('btn');
+if (btn) {
+    btn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            if (energy >= clickLvl) {
+                score += clickLvl;
+                energy -= clickLvl;
+                
+                // Проверка лиги
+                if (score >= LEAGUE_TARGETS[leagueId-1] && leagueId < 20) {
+                    leagueId++;
+                    tg.showAlert(`Поздравляем! Вы перешли в лигу: ${LEAGUE_NAMES[leagueId-1]}`);
+                }
 
-            // Шанс выпадения джекпота (0.001%)
-            if (Math.random() < 0.00001 && currentJp > 0) {
-                winJackpot();
-            }
+                // Шанс джекпота
+                if (Math.random() < 0.00001 && currentJp > 0) {
+                    winJackpot();
+                }
 
-            // Эффекты
-            tg.HapticFeedback.impactOccurred('light');
-            spawnParticle(e.changedTouches[i].pageX, e.changedTouches[i].pageY);
+                tg.HapticFeedback.impactOccurred('light');
+                spawnParticle(e.changedTouches[i].pageX, e.changedTouches[i].pageY);
+            }
         }
-    }
-    update();
-});
+        update();
+    });
+}
 
 function spawnParticle(x, y) {
     const p = document.createElement('div');
@@ -101,56 +110,67 @@ function spawnParticle(x, y) {
     p.className = 'plus-animation';
     p.style.left = `${x}px`;
     p.style.top = `${y}px`;
+    p.style.position = 'absolute';
+    p.style.color = '#00f2ff';
+    p.style.fontWeight = 'bold';
+    p.style.pointerEvents = 'none';
     document.body.appendChild(p);
     setTimeout(() => p.remove(), 700);
 }
 
 // Модальные окна
-function openModal(id) {
+window.openModal = function(id) {
     document.getElementById('modal-' + id).classList.add('active');
     document.getElementById('overlay').classList.add('active');
 }
 
-function closeModals() {
+window.closeModals = function() {
     document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
     document.getElementById('overlay').classList.remove('active');
 }
 
-// Покупки улучшений
-document.getElementById('buy-click').onclick = () => {
-    let cost = clickLvl * 500;
-    if(score >= cost) {
-        score -= cost;
-        clickLvl++;
-        update();
-        save();
-    } else {
-        tg.showAlert("Недостаточно 💎");
-    }
-};
+// Покупки
+const buyClick = document.getElementById('buy-click');
+if (buyClick) {
+    buyClick.onclick = () => {
+        let cost = clickLvl * 500;
+        if(score >= cost) {
+            score -= cost;
+            clickLvl++;
+            update();
+            save();
+        } else {
+            tg.showAlert("Недостаточно 💎");
+        }
+    };
+}
 
-document.getElementById('buy-bot').onclick = () => {
-    let cost = (botLvl + 1) * 1500;
-    if(score >= cost) {
-        score -= cost;
-        botLvl++;
-        update();
-        save();
-    } else {
-        tg.showAlert("Недостаточно 💎");
-    }
-};
+const buyBot = document.getElementById('buy-bot');
+if (buyBot) {
+    buyBot.onclick = () => {
+        let cost = (botLvl + 1) * 1500;
+        if(score >= cost) {
+            score -= cost;
+            botLvl++;
+            update();
+            save();
+        } else {
+            tg.showAlert("Недостаточно 💎");
+        }
+    };
+}
 
-// Функция выигрыша джекпота
 function winJackpot() {
-    document.getElementById('win-amount').innerText = Math.floor(currentJp).toLocaleString();
-    document.getElementById('win-screen').style.display = 'flex';
+    const winSc = document.getElementById('win-screen');
+    const winAm = document.getElementById('win-amount');
+    if (winAm) winAm.innerText = Math.floor(currentJp).toLocaleString();
+    if (winSc) winSc.style.display = 'flex';
     score += currentJp;
     currentJp = 0;
     save();
 }
 
-// Сохранение на сервер
+// Сохранение
 async function save() {
     try {
         const res = await fetch('/api/save', {
@@ -187,7 +207,7 @@ setInterval(() => {
     update();
 }, 1000);
 
-// Автосохранение каждые 15 секунд
+// Автосохранение каждые 15 сек
 setInterval(save, 15000);
 
 // Инициализация
