@@ -1,4 +1,4 @@
-import os, asyncio, sqlite3, uvicorn, logging, time
+import os, asyncio, sqlite3, uvicorn, logging, time, sys
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Body, Response
@@ -13,20 +13,46 @@ from dotenv import load_dotenv
 # Загружаем переменные из .env, если он есть
 load_dotenv()
 
-# --- НАСТРОЙКИ ---
-logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')
+# --- УЛУЧШЕННОЕ ЛОГИРОВАНИЕ ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
 logger = logging.getLogger("NEURAL_PULSE")
 
-# Важно: на Bothost папка /app/data сохраняется между перезагрузками
+# Пути (на Bothost важно использовать /app/data для сохранения БД)
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
-DATA_DIR = BASE_DIR / "data" 
-DATA_DIR.mkdir(exist_ok=True) 
+DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "game.db"
 
-# ТВОИ ДАННЫЕ
+# ДАННЫЕ БОТА
 TOKEN = "8257287930:AAFOaH0ZxRH200r5sGLclf95co8wU7AUBwg"
 MY_DOMAIN = "np.bothost.ru"
+
+# --- ЛОГ ПРОВЕРКИ ПРИ ЗАПУСКЕ ---
+def startup_check():
+    logger.info("=== ПРОВЕРКА ОКРУЖЕНИЯ ===")
+    logger.info(f"Рабочая директория: {BASE_DIR}")
+    
+    if STATIC_DIR.exists():
+        logger.info(f"✅ Папка static найдена: {STATIC_DIR}")
+        index_file = STATIC_DIR / "index.html"
+        if index_file.exists():
+            logger.info("✅ Файл index.html на месте")
+        else:
+            logger.warning("❌ Файл index.html ОТСУТСТВУЕТ в папке static")
+    else:
+        logger.error(f"❌ Папка static НЕ НАЙДЕНА по пути: {STATIC_DIR}")
+
+    try:
+        DATA_DIR.mkdir(exist_ok=True)
+        logger.info(f"✅ Папка данных готова: {DATA_DIR}")
+    except Exception as e:
+        logger.error(f"❌ Ошибка создания папки data: {e}")
+
+    logger.info("==========================")
 
 # 20 лиг и прогресс джекпотов
 BASE_TARGETS = [
@@ -48,19 +74,29 @@ class SaveData(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Инициализация БД в защищенной папке /app/data
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        conn.execute('''CREATE TABLE IF NOT EXISTS users 
-                        (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
-                         click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
-                         last_collect INTEGER DEFAULT 0, league_id INTEGER DEFAULT 1)''')
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_balance ON users (balance DESC)")
-        conn.commit()
+    startup_check()
     
-    # Запуск Telegram Polling
+    # Инициализация БД
+    try:
+        with sqlite3.connect(str(DB_PATH)) as conn:
+            conn.execute('''CREATE TABLE IF NOT EXISTS users 
+                            (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
+                             click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
+                             last_collect INTEGER DEFAULT 0, league_id INTEGER DEFAULT 1)''')
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_balance ON users (balance DESC)")
+            conn.commit()
+        logger.info(f"✅ База данных инициализирована: {DB_PATH}")
+    except Exception as e:
+        logger.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА БД: {e}")
+
+    # Запуск Telegram Polling в фоне
     bot_task = asyncio.create_task(dp.start_polling(bot))
+    logger.info("🚀 Telegram Polling запущен")
+    
     yield
+    
     bot_task.cancel()
+    logger.info("🛑 Сервер останавливается...")
 
 app = FastAPI(lifespan=lifespan)
 
@@ -71,14 +107,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- РОУТЫ СТАТИКИ ---
+# Роуты статики
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_game():
     index_path = STATIC_DIR / "index.html"
-    return index_path.read_text(encoding="utf-8") if index_path.exists() else "<h1>Neural Pulse: index.html not found</h1>"
+    if index_path.exists():
+        return index_path.read_text(encoding="utf-8")
+    return "<h1>Error: index.html not found in static folder</h1>"
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
@@ -95,7 +133,7 @@ async def save_progress(data: SaveData):
 
     if data.won_jackpot:
         current_jackpots[l_idx] = 0 
-        logger.info(f"!!! JACKPOT WON by {uid} in league {data.league_id} !!!")
+        logger.info(f"!!! JACKPOT WON by {uid} !!!")
     else:
         current_jackpots[l_idx] += (data.league_id * 0.1)
 
@@ -158,4 +196,4 @@ async def start_handler(message: types.Message):
     await message.answer(f"Привет, {message.from_user.first_name}! 🚀\nРазгони свой нейронный пульс до предела.", reply_markup=kb)
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+    uvicorn.run(app, host="0.0.0.0", port=3000, log_level="info")
