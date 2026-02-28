@@ -18,7 +18,7 @@ STATIC_DIR = BASE_DIR / "static"
 DB_PATH = BASE_DIR / "game.db"
 
 # Токен твоего бота и домен
-TOKEN = "8257287930:AAG3tTP9uCtv5GcaqLA_piMqFjzFvA1PExM"
+TOKEN = "8257287930:AAFTqc_EyqiFzKfBsJokV9w0e-J9CJdQ0dg"
 MY_DOMAIN = "np.bothost.ru"
 
 # Настройки лиг и начальные цели джекпотов (20 лиг)
