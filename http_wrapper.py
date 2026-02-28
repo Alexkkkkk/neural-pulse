@@ -18,7 +18,7 @@ STATIC_DIR = BASE_DIR / "static"
 DB_PATH = BASE_DIR / "game.db"
 
 # СОВЕТ: В будущем вынеси токен в переменные окружения (.env)
-TOKEN = "8257287930:AAG3tTP9uCtv5GcaqLA_piMqFjzFvA1PExM"
+TOKEN = "8257287930:AAFOaH0ZxRH200r5sGLclf95co8wU7AUBwg"
 MY_DOMAIN = "np.bothost.ru"
 
 bot = Bot(token=TOKEN)
