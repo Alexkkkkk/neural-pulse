@@ -3,3 +3,4 @@ uvicorn
 aiogram
 pydantic
 python-multipart
+python-dotenv
