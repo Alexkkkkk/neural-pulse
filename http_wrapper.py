@@ -30,8 +30,6 @@ if not STATIC_DIR.exists():
     logger.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА: Папка {STATIC_DIR} не найдена!")
 else:
     logger.info(f"✅ Папка статики найдена: {STATIC_DIR}")
-    if not (STATIC_DIR / "index.html").exists():
-        logger.warning("⚠️ Файл index.html отсутствует в папке static!")
 
 # --- МОДЕЛИ ---
 class SaveData(BaseModel):
@@ -63,7 +61,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# CORS для работы WebApp
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -71,7 +68,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- API МЕТОДЫ (Должны быть ВЫШЕ монтажа статики) ---
+# --- API МЕТОДЫ ---
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
@@ -106,14 +103,27 @@ async def save_progress(data: SaveData):
         logger.error(f"🔥 Ошибка API Save: {e}")
         return {"status": "error", "message": str(e)}
 
-# --- МОНТАЖ СТАТИКИ ---
-# html=True заменяет необходимость в отдельном роуте для "/"
+# --- ОБРАБОТКА СТАТИКИ ---
+
+# 1. Главная страница с защитой от кэша
+@app.get("/", response_class=HTMLResponse)
+async def serve_index():
+    index_path = STATIC_DIR / "index.html"
+    if index_path.exists():
+        content = index_path.read_text(encoding="utf-8")
+        return HTMLResponse(
+            content=content, 
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
+    return HTMLResponse(content="<h1>Error: static/index.html not found</h1>", status_code=404)
+
+# 2. Монтируем подпапку /static для JS, CSS и картинок
 if STATIC_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
-else:
-    @app.get("/")
-    async def root_err():
-        return {"error": "Static directory missing"}
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # --- ТЕЛЕГРАМ БОТ ---
 bot = Bot(token=TOKEN)
@@ -121,10 +131,12 @@ dp = Dispatcher()
 
 @dp.message(F.text.startswith("/start"))
 async def start(m: types.Message):
+    # Добавляем случайный параметр к URL, чтобы Telegram всегда открывал "свежую" версию
+    web_app_url = f"https://{MY_DOMAIN}/?v={int(time.time())}"
     kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
+        InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=web_app_url))
     ]])
-    await m.answer(f"Привет! Твой домен: {MY_DOMAIN}. Нажми кнопку ниже:", reply_markup=kb)
+    await m.answer(f"Привет! Твой нейронный пульс готов к разгону. Нажми кнопку ниже:", reply_markup=kb)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
