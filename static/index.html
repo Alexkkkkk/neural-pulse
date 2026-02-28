@@ -43,9 +43,6 @@
         #jackpot-val { font-size: 26px; font-weight: 900; text-shadow: 0 0 10px var(--gold); }
         #jp-fill { height: 100%; width: 0%; background: var(--gold); transition: width 0.4s; }
 
-        .ready-blink { animation: blink-gold 0.8s infinite; border-color: #fff !important; }
-        @keyframes blink-gold { 0%, 100% { box-shadow: 0 0 5px var(--gold); } 50% { box-shadow: 0 0 25px #fff; } }
-
         #score { font-size: 44px; font-weight: 900; text-shadow: 0 0 20px var(--neon); margin: 10px 0; }
 
         .play-area { position: relative; width: 100%; flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
@@ -67,7 +64,6 @@
         .plus-animation { position: absolute; pointer-events: none; font-weight: 900; animation: float 0.7s ease-out forwards; z-index: 100; color: var(--neon); font-size: 24px; }
         @keyframes float { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
 
-        /* MODALS */
         .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 60%; background: var(--glass); border-top: 3px solid var(--neon); border-radius: 30px 30px 0 0; z-index: 1000; transition: 0.4s; padding: 25px; box-sizing: border-box; }
         .modal.active { bottom: 0; }
         .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; z-index: 999; backdrop-filter: blur(5px); }
@@ -132,7 +128,7 @@
         <button class="buy-btn" style="background:var(--neon-secondary)" id="buy-bot">AUTO-BOT (LVL <span id="auto-lvl">0</span>)</button>
     </div>
 
-    <div class="win-overlay" id="win-screen" style="position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; display: none; flex-direction: column; align-items: center; justify-content: center;">
+    <div id="win-screen" style="position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; display: none; flex-direction: column; align-items: center; justify-content: center;">
         <h1 style="color: var(--gold); font-size: 40px;">🏆 JACKPOT!</h1>
         <div id="win-amount" style="font-size: 50px; font-weight: 900; color:white;">0</div>
         <button onclick="location.reload()" style="padding: 15px 30px; background: var(--gold); border: none; font-weight: 900; margin-top: 20px;">COLLECT</button>
@@ -141,120 +137,134 @@
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
+
+        // Состояние игры
+        let score = 0, clickLvl = 1, botLvl = 0, leagueId = 1;
+        let energy = 1000, maxEnergy = 1000, currentJp = 0;
         const userId = tg.initDataUnsafe?.user?.id || 12345;
         document.getElementById('user-id').textContent = "ID: " + userId;
 
-        const LEAGUES = ["BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND", "ELITE", "MASTER", "GRANDMASTER", "CHALLENGER", "TITAN", "ETERNAL", "MYTHIC", "ASCENDED", "DIVINE", "IMMORTAL", "CELESTIAL", "OVERLORD", "ZENITH", "NEURAL", "ULTIMATE"];
-        const TARGETS = [600000, 900000, 1400000, 2100000, 3000000, 4100000, 5400000, 6900000, 8600000, 10500000, 12600000, 14900000, 17400000, 20100000, 23000000, 26100000, 29400000, 32900000, 36600000, 40500000];
+        const LEAGUE_NAMES = ["BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND", "ELITE", "MASTER", "GRANDMASTER", "CHALLENGER", "TITAN", "ETERNAL", "MYTHIC", "ASCENDED", "DIVINE", "IMMORTAL", "CELESTIAL", "OVERLORD", "ZENITH", "NEURAL", "ULTIMATE"];
+        const LEAGUE_TARGETS = [600000, 900000, 1400000, 2100000, 3000000, 4100000, 5400000, 6900000, 8600000, 10500000, 12600000, 14900000, 17400000, 20100000, 23000000, 26100000, 29400000, 32900000, 36600000, 40500000];
 
-        let score = 0, currentJp = 0, energy = 1000, maxEnergy = 1000;
-        let tapPower = 1, autoLvl = 0, leagueId = 1;
-
-        async function loadData() {
+        // Загрузка
+        async function load() {
             try {
                 const res = await fetch(`/api/balance/${userId}`);
                 const d = await res.json();
-                score = d.balance;
-                tapPower = d.click_lvl || 1;
-                autoLvl = d.bot_lvl || 0;
+                score = d.balance || 0;
+                clickLvl = d.click_lvl || 1;
+                botLvl = d.bot_lvl || 0;
                 leagueId = d.league_id || 1;
-                if(d.offline_profit > 0) tg.showAlert(`Auto-Bot earned: ${d.offline_profit} NP!`);
-                updateUI();
-            } catch(e) { console.error(e); }
+                if(d.offline_profit > 0) tg.showAlert(`Auto-Bot earned: ${d.offline_profit} 💎`);
+                update();
+            } catch(e) { console.error("Load error:", e); }
         }
 
-        function updateUI() {
-            document.getElementById('score').textContent = Math.floor(score).toLocaleString();
-            document.getElementById('jackpot-val').textContent = Math.floor(currentJp).toLocaleString();
-            document.getElementById('league-name').textContent = LEAGUES[leagueId-1] + " LEAGUE";
-            document.getElementById('tap-lvl').textContent = tapPower;
-            document.getElementById('auto-lvl').textContent = autoLvl;
+        // Обновление UI
+        function update() {
+            document.getElementById('score').innerText = Math.floor(score).toLocaleString();
+            document.getElementById('jackpot-val').innerText = Math.floor(currentJp).toLocaleString();
+            document.getElementById('league-name').innerText = LEAGUE_NAMES[leagueId-1] + " LEAGUE";
+            document.getElementById('tap-lvl').innerText = clickLvl;
+            document.getElementById('auto-lvl').innerText = botLvl;
 
             // Прогресс лиги
-            let prev = leagueId === 1 ? 0 : TARGETS[leagueId-2];
-            let next = TARGETS[leagueId-1];
-            let lp = ((score - prev) / (next - prev)) * 100;
-            document.getElementById('league-fill').style.width = Math.min(100, lp) + "%";
-            document.getElementById('league-percent').textContent = Math.floor(Math.min(100, lp)) + "%";
+            let prev = leagueId === 1 ? 0 : LEAGUE_TARGETS[leagueId-2];
+            let next = LEAGUE_TARGETS[leagueId-1];
+            let prog = ((score - prev) / (next - prev)) * 100;
+            document.getElementById('league-fill').style.width = Math.min(100, prog) + "%";
+            document.getElementById('league-percent').innerText = Math.floor(Math.min(100, prog)) + "%";
 
             // Прогресс джекпота
             let jpProg = (currentJp / (next * 0.01)) * 100;
             document.getElementById('jp-fill').style.width = Math.min(100, jpProg) + "%";
-            
+
             // Энергия
-            document.getElementById('energy-stat').textContent = `${Math.floor(energy)}/${maxEnergy}`;
+            document.getElementById('energy-stat').innerText = `${Math.floor(energy)}/${maxEnergy}`;
             document.getElementById('energy-fill').style.width = (energy/maxEnergy*100) + "%";
         }
 
-        async function save(won = false) {
-            const res = await fetch('/api/save', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({user_id: userId, score: Math.floor(score), league_id: leagueId, click_lvl: tapPower, bot_lvl: autoLvl})
-            });
-            const d = await res.json();
-            currentJp = d.global_jackpot;
-            updateUI();
+        // Сохранение
+        async function save() {
+            try {
+                const res = await fetch('/api/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({user_id: userId, score: Math.floor(score), league_id: leagueId, click_lvl: clickLvl, bot_lvl: botLvl})
+                });
+                const d = await res.json();
+                if(d.global_jackpot !== undefined) currentJp = d.global_jackpot;
+                update();
+            } catch(e) { console.error("Save error:", e); }
         }
 
+        // Клик
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
-            if (energy >= tapPower) {
-                energy -= tapPower;
-                score += tapPower;
-                if (score >= TARGETS[leagueId-1] && leagueId < 20) leagueId++;
-                
-                // Шанс джекпота (0.001%)
-                if (Math.random() < 0.00001) {
-                    document.getElementById('win-amount').textContent = Math.floor(currentJp).toLocaleString();
-                    document.getElementById('win-screen').style.display = 'flex';
-                    score += currentJp;
-                    save(true);
-                }
+            for (let t of e.changedTouches) {
+                if (energy >= clickLvl) {
+                    energy -= clickLvl;
+                    score += clickLvl;
+                    
+                    if (score >= LEAGUE_TARGETS[leagueId-1] && leagueId < 20) {
+                        leagueId++;
+                        tg.showAlert(`League Up: ${LEAGUE_NAMES[leagueId-1]}!`);
+                    }
 
-                for (let t of e.changedTouches) spawnPlus(t.pageX, t.pageY, tapPower);
-                tg.HapticFeedback.impactOccurred('light');
-                updateUI();
+                    if (Math.random() < 0.00001 && currentJp > 0) {
+                        document.getElementById('win-amount').innerText = Math.floor(currentJp).toLocaleString();
+                        document.getElementById('win-screen').style.display = 'flex';
+                        score += currentJp;
+                    }
+
+                    spawnParticle(t.pageX, t.pageY);
+                    tg.HapticFeedback.impactOccurred('light');
+                }
             }
+            update();
         });
 
-        function spawnPlus(x, y, val) {
+        function spawnParticle(x, y) {
             const p = document.createElement('div');
             p.className = 'plus-animation';
             p.style.left = x + 'px'; p.style.top = y + 'px';
-            p.textContent = `+${val}`;
+            p.innerText = `+${clickLvl}`;
             document.body.appendChild(p);
             setTimeout(() => p.remove(), 700);
         }
 
-        // Modals logic
-        function openModal(id) {
+        // Модалки
+        window.openModal = (id) => {
             document.getElementById('modal-' + id).classList.add('active');
             document.getElementById('overlay').classList.add('active');
-        }
-        function closeModals() {
+        };
+        window.closeModals = () => {
             document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
             document.getElementById('overlay').classList.remove('active');
-        }
+        };
 
-        // Upgrades
+        // Апгрейды
         document.getElementById('buy-click').onclick = () => {
-            let cost = tapPower * 500;
-            if(score >= cost) { score -= cost; tapPower++; save(); }
+            let cost = clickLvl * 500;
+            if(score >= cost) { score -= cost; clickLvl++; save(); }
+            else tg.showAlert("Need more 💎");
         };
         document.getElementById('buy-bot').onclick = () => {
-            let cost = (autoLvl + 1) * 1500;
-            if(score >= cost) { score -= cost; autoLvl++; save(); }
+            let cost = (botLvl + 1) * 1500;
+            if(score >= cost) { score -= cost; botLvl++; save(); }
+            else tg.showAlert("Need more 💎");
         };
 
+        // Циклы
         setInterval(() => {
             if (energy < maxEnergy) energy = Math.min(maxEnergy, energy + 1.5);
-            if (autoLvl > 0) score += (autoLvl * 0.2);
-            updateUI();
+            if (botLvl > 0) score += (botLvl * 0.2);
+            update();
         }, 1000);
 
-        setInterval(save, 10000);
-        loadData();
+        setInterval(save, 15000);
+        load();
     </script>
 </body>
 </html>
