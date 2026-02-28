@@ -20,6 +20,12 @@
             100% { filter: hue-rotate(360deg); }
         }
 
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
         body { 
             margin: 0; background: radial-gradient(circle at center, #0a192f 0%, #050a1a 100%); 
             height: 100vh; font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; 
@@ -43,7 +49,7 @@
             width: 65vw; height: 65vw; max-width: 250px; max-height: 250px;
             background: url('/static/images/unnamed3.png') no-repeat center/contain;
             border-radius: 50%; border: none; cursor: pointer; outline: none;
-            box-shadow: 0 0 30px var(--neon); transition: transform 0.05s;
+            box-shadow: 0 0 30px var(--neon); transition: transform 0.05s, box-shadow 0.3s;
         }
         #btn:active { transform: scale(0.95); }
 
@@ -115,14 +121,31 @@
     <div class="overlay" id="overlay" onclick="closeModals()"></div>
 
     <div id="modal-boost" class="modal">
-        <h2>Улучшения</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2 style="margin:0;">Boosters</h2>
+            <div id="turbo-timer" style="color: #ff4e50; font-size: 14px; display: none; border: 1px solid #ff4e50; padding: 2px 8px; border-radius: 5px; animation: pulse 1s infinite;">
+                TURBO: <span id="timer-val">20</span>s
+            </div>
+        </div>
+
         <div class="stat-box">
             <div>Multi-Tap (Сила: <span id="tap-lvl-val">1</span>)</div>
             <button class="buy-btn" onclick="handleUpgrade('tap')">Улучшить (500 NP)</button>
         </div>
+
         <div class="stat-box">
             <div>Energy Limit (Макс: <span id="energy-limit-val">1000</span>)</div>
             <button class="buy-btn" onclick="handleUpgrade('energy')">Улучшить (500 NP)</button>
+        </div>
+
+        <div class="stat-box">
+            <div>Auto-Clicker (Уровень: <span id="auto-lvl-val">0</span>)</div>
+            <button class="buy-btn" onclick="handleUpgrade('autoclick')">Купить (2000 NP)</button>
+        </div>
+
+        <div class="stat-box" style="border-color: #ff4e50;">
+            <div style="color: #ff4e50; font-weight: bold;">TURBO BOOST (x5)</div>
+            <button class="buy-btn" style="background: #ff4e50;" onclick="activateTurbo()">Активировать (1000 NP)</button>
         </div>
     </div>
 
@@ -147,7 +170,9 @@
         let energy = 1000;
         let maxEnergy = 1000;
         let tapPower = 1;
-        let botLvl = 0; 
+        let autoLvl = 0;
+        let turboMultiplier = 1;
+        let isTurbo = false;
         let pendingAmount = 0;
 
         function updateUI() {
@@ -157,6 +182,10 @@
             document.getElementById('tap-lvl-val').textContent = tapPower;
             document.getElementById('energy-limit-val').textContent = maxEnergy;
             
+            if(document.getElementById('auto-lvl-val')) {
+                document.getElementById('auto-lvl-val').textContent = autoLvl;
+            }
+
             const levels = ["Новичок", "Стажер", "Фрилансер", "Специалист", "CEO"];
             let lvlIdx = Math.min(Math.floor(score / 5000), levels.length - 1);
             document.getElementById('lvl').textContent = "🏆 " + levels[lvlIdx];
@@ -169,8 +198,7 @@
                 if (data) {
                     score = data.balance;
                     tapPower = data.click_lvl || 1;
-                    botLvl = data.bot_lvl || 0;
-                    // Рассчитываем лимит энергии на основе прокачки
+                    autoLvl = data.bot_lvl || 0;
                     maxEnergy = 1000 + ((tapPower - 1) * 200); 
                     energy = maxEnergy; 
 
@@ -184,15 +212,16 @@
 
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
+            let currentTap = tapPower * turboMultiplier;
             for (let i = 0; i < e.changedTouches.length; i++) {
                 if (energy >= tapPower) {
                     energy -= tapPower;
-                    score += tapPower;
-                    pendingAmount += tapPower;
+                    score += currentTap;
+                    pendingAmount += currentTap;
                     
                     const t = e.changedTouches[i];
-                    spawnPlus(t.pageX, t.pageY, tapPower);
-                    tg.HapticFeedback?.impactOccurred('light');
+                    spawnPlus(t.pageX, t.pageY, currentTap);
+                    tg.HapticFeedback?.impactOccurred(isTurbo ? 'heavy' : 'light');
                 }
             }
             updateUI();
@@ -214,7 +243,7 @@
             }
         }, 1000);
 
-        // Синхронизация с сервером
+        // Синхронизация
         setInterval(async () => {
             if (pendingAmount > 0) {
                 const currentPending = pendingAmount;
@@ -227,7 +256,7 @@
                             user_id: userId, 
                             score: score, 
                             click_lvl: tapPower, 
-                            bot_lvl: botLvl 
+                            bot_lvl: autoLvl 
                         })
                     });
                 } catch (e) { 
@@ -238,11 +267,12 @@
         }, 3000);
 
         function handleUpgrade(type) {
-            let cost = 500;
+            let cost = (type === 'autoclick') ? 2000 : 500;
             if (score >= cost) {
                 score -= cost;
                 if (type === 'tap') tapPower++;
                 if (type === 'energy') maxEnergy += 500;
+                if (type === 'autoclick') autoLvl++;
                 
                 pendingAmount = 1; 
                 updateUI();
@@ -251,6 +281,44 @@
                 tg.showAlert("Недостаточно NP!");
             }
         }
+
+        function activateTurbo() {
+            if (isTurbo) return;
+            if (score >= 1000) {
+                score -= 1000;
+                isTurbo = true;
+                turboMultiplier = 5;
+                document.getElementById('turbo-timer').style.display = 'block';
+                document.getElementById('btn').style.boxShadow = '0 0 50px #ff4e50';
+                
+                let timeLeft = 20;
+                let timer = setInterval(() => {
+                    timeLeft--;
+                    document.getElementById('timer-val').textContent = timeLeft;
+                    if (timeLeft <= 0) {
+                        clearInterval(timer);
+                        isTurbo = false;
+                        turboMultiplier = 1;
+                        document.getElementById('turbo-timer').style.display = 'none';
+                        document.getElementById('btn').style.boxShadow = '0 0 30px var(--neon)';
+                    }
+                }, 1000);
+                closeModals();
+                updateUI();
+            } else {
+                tg.showAlert("Нужно 1000 NP!");
+            }
+        }
+
+        // Работа автокликера
+        setInterval(() => {
+            if (autoLvl > 0) {
+                let passiveGain = autoLvl * 1;
+                score += passiveGain;
+                pendingAmount += passiveGain;
+                updateUI();
+            }
+        }, 1000);
 
         async function loadLeaderboard() {
             const list = document.getElementById('leaderboard-list');
