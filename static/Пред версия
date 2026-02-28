@@ -2,9 +2,12 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse AI</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <script src="https://telegram.org/js/telegram-web-app.js?5"></script>
+    
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <style>
@@ -64,19 +67,24 @@
         .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; margin-bottom: 20px; }
         .nav-item { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; text-align: center; font-size: 12px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; }
 
-        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 70%; background: var(--glass); border-top: 2px solid var(--neon); border-radius: 25px 25px 0 0; z-index: 1000; transition: 0.4s; padding: 25px; box-sizing: border-box; overflow-y: auto; }
+        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 75%; background: var(--glass); border-top: 2px solid var(--neon); border-radius: 25px 25px 0 0; z-index: 1000; transition: 0.4s; padding: 25px; box-sizing: border-box; overflow-y: auto; }
         .modal.active { bottom: 0; }
         .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; z-index: 999; backdrop-filter: blur(4px); }
         .overlay.active { display: block; }
         
         .stat-box { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid rgba(0,212,255,0.2); text-align: center; }
         .buy-btn { width: 100%; padding: 12px; background: var(--neon); color: black; border: none; border-radius: 8px; font-weight: bold; margin-top: 10px; cursor: pointer; font-family: 'Orbitron'; }
-        .buy-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
+        
         .plus-animation { position: absolute; color: var(--neon); font-size: 28px; font-weight: bold; animation: float 0.7s ease-out forwards; pointer-events: none; z-index: 100; text-shadow: 0 0 10px var(--neon); }
         @keyframes float { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
         
-        .leader-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; }
+        .leaderboard-container { display: flex; flex-direction: column; gap: 10px; margin-top: 15px; }
+        .leader-item { display: flex; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.05); padding: 12px; border-radius: 10px; border: 1px solid rgba(0, 212, 255, 0.1); }
+        .leader-rank { width: 30px; font-weight: bold; color: var(--neon); }
+        .leader-info { flex-grow: 1; margin-left: 10px; text-align: left; }
+        .leader-name { font-size: 14px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
+        .leader-score { font-size: 11px; opacity: 0.6; color: var(--neon-secondary); }
+        .my-stats { background: rgba(0, 212, 255, 0.1) !important; border: 1px solid var(--neon) !important; }
     </style>
 </head>
 <body>
@@ -115,7 +123,7 @@
         <div class="bottom-nav">
             <div class="nav-item" onclick="openModal('boost')">🚀 BOOST</div>
             <div class="nav-item" onclick="openModal('mine')">⛏️ MINE</div>
-            <div class="nav-item" onclick="openModal('stats')">📊 STATS</div>
+            <div class="nav-item" onclick="openStats()">📊 STATS</div>
         </div>
     </div>
 
@@ -146,31 +154,27 @@
         </div>
     </div>
 
-    <div id="modal-tasks" class="modal">
-        <h2 style="margin-bottom: 20px;">Задания</h2>
-        <div class="stat-box" id="task-tg-sub" style="text-align: left;">
-            <div style="font-weight: bold; color: var(--neon);">Join Community</div>
-            <div style="font-size: 10px; opacity: 0.7; margin-bottom: 10px;">Подпишись на канал и получи 5,000 NP</div>
-            <div style="display: flex; gap: 10px;">
-                <button class="buy-btn" style="margin:0; flex: 1; background: #24A1DE;" onclick="window.open('https://t.me/your_channel', '_blank')">Канал</button>
-                <button class="buy-btn" style="margin:0; flex: 1;" onclick="checkTask('tg_sub', 5000)">Проверить</button>
+    <div id="modal-stats" class="modal">
+        <h2 style="text-align: center; color: var(--neon);">🏆 LEADERBOARD</h2>
+        <div id="my-rank-container">
+            <div class="leader-item my-stats">
+                <div class="leader-rank" id="my-rank">?</div>
+                <div class="leader-info">
+                    <span class="leader-name">Вы (ID: <span id="my-id-stat"></span>)</span>
+                    <span class="leader-score" id="my-score-stat">0 NP</span>
+                </div>
             </div>
         </div>
-        <div class="stat-box" id="task-clicks" style="text-align: left;">
-            <div style="font-weight: bold; color: var(--neon);">Click Master</div>
-            <div style="font-size: 10px; opacity: 0.7; margin-bottom: 10px;">Накликай 1,000 NP за сессию</div>
-            <button class="buy-btn" id="claim-clicks-btn" onclick="claimReward('clicks', 2000)" disabled>Забрать 2,000 NP</button>
+        <div style="font-size: 12px; opacity: 0.5; margin-bottom: 10px; text-align: center; margin-top: 15px;">ТОП-10 ИГРОКОВ</div>
+        <div id="leaderboard-list" class="leaderboard-container">
+            <div style="text-align: center; opacity: 0.5;">Загрузка...</div>
         </div>
     </div>
 
-    <div id="modal-stats" class="modal">
-        <h2>Leaderboard</h2>
-        <div id="leaderboard-list"></div>
-    </div>
-
-    <div id="modal-friends" class="modal"><h2>Friends</h2><p>Приглашай друзей и получай NP!</p></div>
-    <div id="modal-mine" class="modal"><h2>Mining</h2><p>Раздел в разработке...</p></div>
-    <div id="modal-daily" class="modal"><h2>Daily Bonus</h2><p>Заходи завтра за наградой!</p></div>
+    <div id="modal-tasks" class="modal"><h2>Задания</h2><p>Скоро...</p></div>
+    <div id="modal-friends" class="modal"><h2>Друзья</h2><p>Скоро...</p></div>
+    <div id="modal-mine" class="modal"><h2>Майнинг</h2><p>Скоро...</p></div>
+    <div id="modal-daily" class="modal"><h2>Бонус</h2><p>Скоро...</p></div>
 
     <script>
         const tg = window.Telegram.WebApp;
@@ -187,7 +191,6 @@
         let turboMultiplier = 1;
         let isTurbo = false;
         let pendingAmount = 0;
-        let sessionClicks = 0;
 
         function updateUI() {
             document.getElementById('score').textContent = Math.floor(score).toLocaleString();
@@ -195,10 +198,7 @@
             document.getElementById('energy-fill').style.width = (energy / maxEnergy * 100) + '%';
             document.getElementById('tap-lvl-val').textContent = tapPower;
             document.getElementById('energy-limit-val').textContent = maxEnergy;
-            
-            if(document.getElementById('auto-lvl-val')) {
-                document.getElementById('auto-lvl-val').textContent = autoLvl;
-            }
+            document.getElementById('auto-lvl-val').textContent = autoLvl;
 
             const levels = ["Новичок", "Стажер", "Фрилансер", "Специалист", "CEO"];
             let lvlIdx = Math.min(Math.floor(score / 5000), levels.length - 1);
@@ -213,43 +213,12 @@
                     energy -= tapPower;
                     score += currentTap;
                     pendingAmount += currentTap;
-                    sessionClicks += currentTap; // Прогресс задания
-                    
                     spawnPlus(e.changedTouches[i].pageX, e.changedTouches[i].pageY, currentTap);
                     tg.HapticFeedback?.impactOccurred(isTurbo ? 'heavy' : 'light');
-                    
-                    // Проверка задания на клики
-                    if (sessionClicks >= 1000) {
-                        const btn = document.getElementById('claim-clicks-btn');
-                        if (btn && btn.disabled) {
-                            btn.disabled = false;
-                            btn.style.background = 'var(--neon-secondary)';
-                        }
-                    }
                 }
             }
             updateUI();
         });
-
-        function checkTask(taskId, reward) {
-            tg.showConfirm("Вы подписались на канал?", (confirmed) => {
-                if (confirmed) {
-                    claimReward(taskId, reward);
-                    const taskEl = document.getElementById('task-tg-sub');
-                    taskEl.style.opacity = '0.5';
-                    taskEl.innerHTML = "<div style='color: var(--neon-secondary); padding: 10px; text-align:center;'>✅ Задание выполнено!</div>";
-                }
-            });
-        }
-
-        function claimReward(taskId, reward) {
-            score += reward;
-            pendingAmount += reward;
-            updateUI();
-            tg.HapticFeedback?.notificationOccurred('success');
-            tg.showAlert(`Получено ${reward.toLocaleString()} NP!`);
-            if(taskId === 'clicks') document.getElementById('task-clicks').style.display = 'none';
-        }
 
         function spawnPlus(x, y, val) {
             const p = document.createElement('div');
@@ -260,6 +229,49 @@
             setTimeout(() => p.remove(), 700);
         }
 
+        function renderLeaderboard(list) {
+            const container = document.getElementById('leaderboard-list');
+            container.innerHTML = ''; 
+            list.forEach((player, index) => {
+                const item = document.createElement('div');
+                item.className = 'leader-item';
+                if (String(player.user_id) === String(userId)) item.classList.add('my-stats');
+                
+                item.innerHTML = `
+                    <div class="leader-rank">${index + 1}</div>
+                    <div class="leader-info">
+                        <span class="leader-name">ID: ${player.user_id}</span>
+                        <span class="leader-score">${Math.floor(player.score).toLocaleString()} NP</span>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        async function openStats() {
+            openModal('stats');
+            const myIdEl = document.getElementById('my-id-stat');
+            const myScoreEl = document.getElementById('my-score-stat');
+            const myRankEl = document.getElementById('my-rank');
+            const listContainer = document.getElementById('leaderboard-list');
+
+            if (myIdEl) myIdEl.textContent = userId;
+            if (myScoreEl) myScoreEl.textContent = Math.floor(score).toLocaleString() + " NP";
+            listContainer.innerHTML = '<div style="text-align: center; opacity: 0.5; padding: 20px;">Загрузка данных...</div>';
+
+            try {
+                const response = await fetch(`/api/leaderboard?user_id=${userId}`);
+                if (!response.ok) throw new Error('Ошибка сервера');
+                const data = await response.json();
+                renderLeaderboard(data.top10);
+                myRankEl.textContent = data.user_rank || "—";
+            } catch (e) {
+                console.error("Rank error:", e);
+                listContainer.innerHTML = '<div style="text-align: center; color: #ff4e50; padding: 20px;">Ошибка сети</div>';
+                myRankEl.textContent = "!";
+            }
+        }
+
         function handleUpgrade(type) {
             let cost = (type === 'autoclick') ? 2000 : 500;
             if (score >= cost) {
@@ -267,7 +279,7 @@
                 if (type === 'tap') tapPower++;
                 if (type === 'energy') maxEnergy += 500;
                 if (type === 'autoclick') autoLvl++;
-                pendingAmount = 1; 
+                pendingAmount += 1;
                 updateUI();
                 tg.HapticFeedback?.notificationOccurred('success');
             } else { tg.showAlert("Недостаточно NP!"); }
@@ -276,8 +288,7 @@
         function activateTurbo() {
             if (isTurbo) return;
             if (score >= 1000) {
-                score -= 1000;
-                isTurbo = true; turboMultiplier = 5;
+                score -= 1000; isTurbo = true; turboMultiplier = 5;
                 document.getElementById('turbo-timer').style.display = 'block';
                 document.getElementById('btn').style.boxShadow = '0 0 50px #ff4e50';
                 let timeLeft = 20;
@@ -305,7 +316,7 @@
                     await fetch('/api/save', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ user_id: userId, score: score, click_lvl: tapPower, bot_lvl: autoLvl })
+                        body: JSON.stringify({ user_id: userId, score: Math.floor(score), click_lvl: tapPower, bot_lvl: autoLvl })
                     });
                 } catch (e) { pendingAmount = cur; }
             }
@@ -328,6 +339,7 @@
                 if(d) { 
                     score = d.balance; tapPower = d.click_lvl || 1; autoLvl = d.bot_lvl || 0; 
                     maxEnergy = 1000 + ((tapPower - 1) * 200); energy = maxEnergy;
+                    if (d.offline_profit > 0) tg.showPopup({title: "Офлайн доход!", message: `Ваши боты собрали ${d.offline_profit} NP пока вас не было.`});
                 }
             } catch(e){}
             document.getElementById('game').style.opacity = '1';
