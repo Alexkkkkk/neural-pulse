@@ -22,4 +22,4 @@ COPY . .
 EXPOSE 3000
 
 # Запускаем скрипт
-CMD ["python", "http_wrapper.py"]
+CMD ["python", "main.py"]
