@@ -28,7 +28,6 @@
 
         .game-container { position: relative; width: 100%; max-width: 500px; height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; box-sizing: border-box; transition: opacity 0.5s; }
         
-        /* Лого с твоей картинкой и радугой */
         .logo { width: 50px; height: 50px; background: url('/static/images/unnamed4.png') no-repeat center/cover; border-radius: 12px; box-shadow: 0 0 15px var(--neon); animation: rainbow-pulse 5s linear infinite; }
         
         .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
@@ -40,7 +39,6 @@
         
         .play-area { position: relative; flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
         
-        /* Твоя главная кнопка-картинка */
         #btn { 
             width: 65vw; height: 65vw; max-width: 250px; max-height: 250px;
             background: url('/static/images/unnamed3.png') no-repeat center/contain;
@@ -149,6 +147,7 @@
         let energy = 1000;
         let maxEnergy = 1000;
         let tapPower = 1;
+        let botLvl = 0; 
         let pendingAmount = 0;
 
         function updateUI() {
@@ -158,7 +157,6 @@
             document.getElementById('tap-lvl-val').textContent = tapPower;
             document.getElementById('energy-limit-val').textContent = maxEnergy;
             
-            // Динамический уровень на основе счета
             const levels = ["Новичок", "Стажер", "Фрилансер", "Специалист", "CEO"];
             let lvlIdx = Math.min(Math.floor(score / 5000), levels.length - 1);
             document.getElementById('lvl').textContent = "🏆 " + levels[lvlIdx];
@@ -170,7 +168,12 @@
                 const data = await response.json();
                 if (data) {
                     score = data.balance;
-                    tapPower = data.click_lvl;
+                    tapPower = data.click_lvl || 1;
+                    botLvl = data.bot_lvl || 0;
+                    // Рассчитываем лимит энергии на основе прокачки
+                    maxEnergy = 1000 + ((tapPower - 1) * 200); 
+                    energy = maxEnergy; 
+
                     if (data.offline_profit > 0) {
                         tg.showAlert(`Пока тебя не было, боты заработали: ${data.offline_profit} NP!`);
                     }
@@ -179,7 +182,6 @@
             } catch (e) { console.error("Load failed", e); }
         }
 
-        // Клик с поддержкой мультитача
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             for (let i = 0; i < e.changedTouches.length; i++) {
@@ -205,7 +207,6 @@
             setTimeout(() => p.remove(), 700);
         }
 
-        // Реген энергии
         setInterval(() => {
             if (energy < maxEnergy) {
                 energy = Math.min(maxEnergy, energy + 2);
@@ -213,26 +214,37 @@
             }
         }, 1000);
 
-        // Синхронизация
+        // Синхронизация с сервером
         setInterval(async () => {
             if (pendingAmount > 0) {
+                const currentPending = pendingAmount;
                 pendingAmount = 0;
                 try {
                     await fetch('/api/save', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ user_id: userId, score: score })
+                        body: JSON.stringify({ 
+                            user_id: userId, 
+                            score: score, 
+                            click_lvl: tapPower, 
+                            bot_lvl: botLvl 
+                        })
                     });
-                } catch (e) { console.warn("Sync error"); }
+                } catch (e) { 
+                    console.warn("Sync error"); 
+                    pendingAmount = currentPending; 
+                }
             }
         }, 3000);
 
         function handleUpgrade(type) {
-            if (score >= 500) {
-                score -= 500;
+            let cost = 500;
+            if (score >= cost) {
+                score -= cost;
                 if (type === 'tap') tapPower++;
                 if (type === 'energy') maxEnergy += 500;
-                pendingAmount = 1;
+                
+                pendingAmount = 1; 
                 updateUI();
                 tg.HapticFeedback?.notificationOccurred('success');
             } else {
@@ -242,7 +254,7 @@
 
         async function loadLeaderboard() {
             const list = document.getElementById('leaderboard-list');
-            list.innerHTML = 'Загрузка данных...';
+            list.innerHTML = 'Загрузка...';
             try {
                 const response = await fetch('/api/leaderboard');
                 const data = await response.json();
@@ -250,7 +262,7 @@
                 data.leaders.forEach((u, i) => {
                     const item = document.createElement('div');
                     item.className = 'leader-item';
-                    item.innerHTML = `<span>${i+1}. ${u.display_name}</span><b>${u.balance} NP</b>`;
+                    item.innerHTML = `<span>${i+1}. ${u.display_name} (${u.level})</span><b>${u.balance} NP</b>`;
                     list.appendChild(item);
                 });
             } catch (e) { list.innerHTML = 'Ошибка загрузки'; }
