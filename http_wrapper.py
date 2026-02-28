@@ -26,7 +26,7 @@ BASE_TARGETS = [
     600000, 900000, 1400000, 2100000, 3000000, 4100000, 5400000, 6900000, 8600000, 10500000, 
     12600000, 14900000, 17400000, 20100000, 23000000, 26100000, 29400000, 32900000, 36600000, 40500000
 ]
-# Глобальные джекпоты в оперативной памяти
+# Глобальные джекпоты в оперативной памяти (наполняются всеми игроками)
 current_jackpots = [float(t * 0.01) for t in BASE_TARGETS] 
 
 bot = Bot(token=TOKEN)
@@ -42,7 +42,7 @@ class SaveData(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Инициализация базы данных SQLite
+    # Инициализация базы данных SQLite при запуске сервера
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
                         (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
@@ -51,14 +51,15 @@ async def lifespan(app: FastAPI):
         conn.execute("CREATE INDEX IF NOT EXISTS idx_balance ON users (balance DESC)")
         conn.commit()
     
-    # Запуск Telegram Polling
+    # Запуск Telegram Polling в фоновом режиме
     bot_task = asyncio.create_task(dp.start_polling(bot))
     yield
-    # Остановка
+    # Остановка бота при выключении сервера
     bot_task.cancel()
 
 app = FastAPI(lifespan=lifespan)
 
+# Настройка CORS для работы WebApp
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -66,23 +67,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- СТАТИКА ---
+# --- РАЗДАЧА СТАТИКИ ---
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_game():
     index_path = STATIC_DIR / "index.html"
-    if index_path.exists():
-        return index_path.read_text(encoding="utf-8")
-    return "<h1>Error: index.html not found in static/</h1>"
+    return index_path.read_text(encoding="utf-8") if index_path.exists() else "<h1>Neural Pulse: index.html not found</h1>"
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     icon_path = STATIC_DIR / "images" / "unnamed4.png"
     return FileResponse(icon_path) if icon_path.exists() else Response(status_code=204)
 
-# --- API ДЛЯ ИГРЫ ---
+# --- API ЭНДПОИНТЫ ---
 
 @app.post("/api/save")
 async def save_progress(data: SaveData):
@@ -95,7 +94,7 @@ async def save_progress(data: SaveData):
         logger.info(f"!!! JACKPOT WON by {uid} in league {data.league_id} !!!")
         current_jackpots[l_idx] = 0 
     else:
-        # Джекпот растет от действий всех игроков
+        # Джекпот растет от действий всех игроков (0.1 монеты за клик * номер лиги)
         current_jackpots[l_idx] += (data.league_id * 0.1)
 
     with sqlite3.connect(str(DB_PATH)) as conn:
@@ -124,10 +123,10 @@ async def get_balance(user_id: str):
         if not row:
             return {"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "league_id": 1, "offline_profit": 0}
         
-        # Расчет офлайн прибыли
+        # Расчет офлайн прибыли (1.5 монеты в сек за уровень бота, макс 8 часов)
         offline_profit = 0
         if row["bot_lvl"] > 0 and row["last_collect"] > 0:
-            seconds = min(now - row["last_collect"], 28800) # Макс 8 часов
+            seconds = min(now - row["last_collect"], 28800) 
             if seconds > 60:
                 offline_profit = int(seconds * row["bot_lvl"] * 1.5)
         
@@ -153,13 +152,14 @@ async def get_leaderboard(user_id: str = None):
 
         return {"top10": top10, "user_rank": user_rank}
 
-# --- БОТ ---
+# --- КОМАНДЫ TELEGRAM БОТА ---
 @dp.message(F.text.startswith("/start"))
 async def start_handler(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💎 Запустить Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
-    await message.answer(f"Привет, {message.from_user.first_name}! 🚀\nТвой нейронный пульс готов к разгону.", reply_markup=kb)
+    await message.answer(f"Привет, {message.from_user.first_name}! 🚀\nРазгони свой нейронный пульс до предела и сорви джекпот.", reply_markup=kb)
 
+# --- ЗАПУСК ---
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
