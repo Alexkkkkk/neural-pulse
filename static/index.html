@@ -71,6 +71,7 @@
         
         .stat-box { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid rgba(0,212,255,0.2); text-align: center; }
         .buy-btn { width: 100%; padding: 12px; background: var(--neon); color: black; border: none; border-radius: 8px; font-weight: bold; margin-top: 10px; cursor: pointer; font-family: 'Orbitron'; }
+        .buy-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .plus-animation { position: absolute; color: var(--neon); font-size: 28px; font-weight: bold; animation: float 0.7s ease-out forwards; pointer-events: none; z-index: 100; text-shadow: 0 0 10px var(--neon); }
         @keyframes float { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
@@ -127,25 +128,38 @@
                 TURBO: <span id="timer-val">20</span>s
             </div>
         </div>
-
         <div class="stat-box">
             <div>Multi-Tap (Сила: <span id="tap-lvl-val">1</span>)</div>
             <button class="buy-btn" onclick="handleUpgrade('tap')">Улучшить (500 NP)</button>
         </div>
-
         <div class="stat-box">
             <div>Energy Limit (Макс: <span id="energy-limit-val">1000</span>)</div>
             <button class="buy-btn" onclick="handleUpgrade('energy')">Улучшить (500 NP)</button>
         </div>
-
         <div class="stat-box">
             <div>Auto-Clicker (Уровень: <span id="auto-lvl-val">0</span>)</div>
             <button class="buy-btn" onclick="handleUpgrade('autoclick')">Купить (2000 NP)</button>
         </div>
-
         <div class="stat-box" style="border-color: #ff4e50;">
             <div style="color: #ff4e50; font-weight: bold;">TURBO BOOST (x5)</div>
             <button class="buy-btn" style="background: #ff4e50;" onclick="activateTurbo()">Активировать (1000 NP)</button>
+        </div>
+    </div>
+
+    <div id="modal-tasks" class="modal">
+        <h2 style="margin-bottom: 20px;">Задания</h2>
+        <div class="stat-box" id="task-tg-sub" style="text-align: left;">
+            <div style="font-weight: bold; color: var(--neon);">Join Community</div>
+            <div style="font-size: 10px; opacity: 0.7; margin-bottom: 10px;">Подпишись на канал и получи 5,000 NP</div>
+            <div style="display: flex; gap: 10px;">
+                <button class="buy-btn" style="margin:0; flex: 1; background: #24A1DE;" onclick="window.open('https://t.me/your_channel', '_blank')">Канал</button>
+                <button class="buy-btn" style="margin:0; flex: 1;" onclick="checkTask('tg_sub', 5000)">Проверить</button>
+            </div>
+        </div>
+        <div class="stat-box" id="task-clicks" style="text-align: left;">
+            <div style="font-weight: bold; color: var(--neon);">Click Master</div>
+            <div style="font-size: 10px; opacity: 0.7; margin-bottom: 10px;">Накликай 1,000 NP за сессию</div>
+            <button class="buy-btn" id="claim-clicks-btn" onclick="claimReward('clicks', 2000)" disabled>Забрать 2,000 NP</button>
         </div>
     </div>
 
@@ -155,7 +169,6 @@
     </div>
 
     <div id="modal-friends" class="modal"><h2>Friends</h2><p>Приглашай друзей и получай NP!</p></div>
-    <div id="modal-tasks" class="modal"><h2>Tasks</h2><p>Задания появятся скоро...</p></div>
     <div id="modal-mine" class="modal"><h2>Mining</h2><p>Раздел в разработке...</p></div>
     <div id="modal-daily" class="modal"><h2>Daily Bonus</h2><p>Заходи завтра за наградой!</p></div>
 
@@ -174,6 +187,7 @@
         let turboMultiplier = 1;
         let isTurbo = false;
         let pendingAmount = 0;
+        let sessionClicks = 0;
 
         function updateUI() {
             document.getElementById('score').textContent = Math.floor(score).toLocaleString();
@@ -191,25 +205,6 @@
             document.getElementById('lvl').textContent = "🏆 " + levels[lvlIdx];
         }
 
-        async function loadUserData() {
-            try {
-                const response = await fetch(`/api/balance/${userId}`);
-                const data = await response.json();
-                if (data) {
-                    score = data.balance;
-                    tapPower = data.click_lvl || 1;
-                    autoLvl = data.bot_lvl || 0;
-                    maxEnergy = 1000 + ((tapPower - 1) * 200); 
-                    energy = maxEnergy; 
-
-                    if (data.offline_profit > 0) {
-                        tg.showAlert(`Пока тебя не было, боты заработали: ${data.offline_profit} NP!`);
-                    }
-                    updateUI();
-                }
-            } catch (e) { console.error("Load failed", e); }
-        }
-
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             let currentTap = tapPower * turboMultiplier;
@@ -218,14 +213,43 @@
                     energy -= tapPower;
                     score += currentTap;
                     pendingAmount += currentTap;
+                    sessionClicks += currentTap; // Прогресс задания
                     
-                    const t = e.changedTouches[i];
-                    spawnPlus(t.pageX, t.pageY, currentTap);
+                    spawnPlus(e.changedTouches[i].pageX, e.changedTouches[i].pageY, currentTap);
                     tg.HapticFeedback?.impactOccurred(isTurbo ? 'heavy' : 'light');
+                    
+                    // Проверка задания на клики
+                    if (sessionClicks >= 1000) {
+                        const btn = document.getElementById('claim-clicks-btn');
+                        if (btn && btn.disabled) {
+                            btn.disabled = false;
+                            btn.style.background = 'var(--neon-secondary)';
+                        }
+                    }
                 }
             }
             updateUI();
         });
+
+        function checkTask(taskId, reward) {
+            tg.showConfirm("Вы подписались на канал?", (confirmed) => {
+                if (confirmed) {
+                    claimReward(taskId, reward);
+                    const taskEl = document.getElementById('task-tg-sub');
+                    taskEl.style.opacity = '0.5';
+                    taskEl.innerHTML = "<div style='color: var(--neon-secondary); padding: 10px; text-align:center;'>✅ Задание выполнено!</div>";
+                }
+            });
+        }
+
+        function claimReward(taskId, reward) {
+            score += reward;
+            pendingAmount += reward;
+            updateUI();
+            tg.HapticFeedback?.notificationOccurred('success');
+            tg.showAlert(`Получено ${reward.toLocaleString()} NP!`);
+            if(taskId === 'clicks') document.getElementById('task-clicks').style.display = 'none';
+        }
 
         function spawnPlus(x, y, val) {
             const p = document.createElement('div');
@@ -236,36 +260,6 @@
             setTimeout(() => p.remove(), 700);
         }
 
-        setInterval(() => {
-            if (energy < maxEnergy) {
-                energy = Math.min(maxEnergy, energy + 2);
-                updateUI();
-            }
-        }, 1000);
-
-        // Синхронизация
-        setInterval(async () => {
-            if (pendingAmount > 0) {
-                const currentPending = pendingAmount;
-                pendingAmount = 0;
-                try {
-                    await fetch('/api/save', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ 
-                            user_id: userId, 
-                            score: score, 
-                            click_lvl: tapPower, 
-                            bot_lvl: autoLvl 
-                        })
-                    });
-                } catch (e) { 
-                    console.warn("Sync error"); 
-                    pendingAmount = currentPending; 
-                }
-            }
-        }, 3000);
-
         function handleUpgrade(type) {
             let cost = (type === 'autoclick') ? 2000 : 500;
             if (score >= cost) {
@@ -273,71 +267,51 @@
                 if (type === 'tap') tapPower++;
                 if (type === 'energy') maxEnergy += 500;
                 if (type === 'autoclick') autoLvl++;
-                
                 pendingAmount = 1; 
                 updateUI();
                 tg.HapticFeedback?.notificationOccurred('success');
-            } else {
-                tg.showAlert("Недостаточно NP!");
-            }
+            } else { tg.showAlert("Недостаточно NP!"); }
         }
 
         function activateTurbo() {
             if (isTurbo) return;
             if (score >= 1000) {
                 score -= 1000;
-                isTurbo = true;
-                turboMultiplier = 5;
+                isTurbo = true; turboMultiplier = 5;
                 document.getElementById('turbo-timer').style.display = 'block';
                 document.getElementById('btn').style.boxShadow = '0 0 50px #ff4e50';
-                
                 let timeLeft = 20;
                 let timer = setInterval(() => {
-                    timeLeft--;
-                    document.getElementById('timer-val').textContent = timeLeft;
+                    timeLeft--; document.getElementById('timer-val').textContent = timeLeft;
                     if (timeLeft <= 0) {
-                        clearInterval(timer);
-                        isTurbo = false;
-                        turboMultiplier = 1;
+                        clearInterval(timer); isTurbo = false; turboMultiplier = 1;
                         document.getElementById('turbo-timer').style.display = 'none';
                         document.getElementById('btn').style.boxShadow = '0 0 30px var(--neon)';
                     }
                 }, 1000);
-                closeModals();
-                updateUI();
-            } else {
-                tg.showAlert("Нужно 1000 NP!");
-            }
+                closeModals(); updateUI();
+            } else { tg.showAlert("Нужно 1000 NP!"); }
         }
 
-        // Работа автокликера
         setInterval(() => {
-            if (autoLvl > 0) {
-                let passiveGain = autoLvl * 1;
-                score += passiveGain;
-                pendingAmount += passiveGain;
-                updateUI();
-            }
+            if (energy < maxEnergy) { energy = Math.min(maxEnergy, energy + 2); updateUI(); }
+            if (autoLvl > 0) { score += autoLvl; pendingAmount += autoLvl; updateUI(); }
         }, 1000);
 
-        async function loadLeaderboard() {
-            const list = document.getElementById('leaderboard-list');
-            list.innerHTML = 'Загрузка...';
-            try {
-                const response = await fetch('/api/leaderboard');
-                const data = await response.json();
-                list.innerHTML = '';
-                data.leaders.forEach((u, i) => {
-                    const item = document.createElement('div');
-                    item.className = 'leader-item';
-                    item.innerHTML = `<span>${i+1}. ${u.display_name} (${u.level})</span><b>${u.balance} NP</b>`;
-                    list.appendChild(item);
-                });
-            } catch (e) { list.innerHTML = 'Ошибка загрузки'; }
-        }
+        setInterval(async () => {
+            if (pendingAmount > 0) {
+                const cur = pendingAmount; pendingAmount = 0;
+                try {
+                    await fetch('/api/save', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ user_id: userId, score: score, click_lvl: tapPower, bot_lvl: autoLvl })
+                    });
+                } catch (e) { pendingAmount = cur; }
+            }
+        }, 3000);
 
         function openModal(id) {
-            if (id === 'stats') loadLeaderboard();
             document.getElementById('overlay').classList.add('active');
             document.getElementById('modal-' + id).classList.add('active');
         }
@@ -347,9 +321,17 @@
             document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
         }
 
-        window.onload = () => {
-            loadUserData();
+        window.onload = async () => {
+            try {
+                const r = await fetch(`/api/balance/${userId}`);
+                const d = await r.json();
+                if(d) { 
+                    score = d.balance; tapPower = d.click_lvl || 1; autoLvl = d.bot_lvl || 0; 
+                    maxEnergy = 1000 + ((tapPower - 1) * 200); energy = maxEnergy;
+                }
+            } catch(e){}
             document.getElementById('game').style.opacity = '1';
+            updateUI();
         };
     </script>
 </body>
