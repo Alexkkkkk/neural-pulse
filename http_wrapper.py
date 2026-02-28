@@ -1,7 +1,7 @@
 import os, asyncio, sqlite3, uvicorn, logging, time
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Body
+from fastapi import FastAPI, Request, Body, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -32,7 +32,6 @@ MY_DOMAIN = "np.bothost.ru"
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# Модель данных для сохранения
 class SaveData(BaseModel):
     user_id: int
     score: int
@@ -51,13 +50,19 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# CORS настройки
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- УТИЛИТЫ ---
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    # Возвращаем статус 204 (No Content), чтобы убрать ошибки 404 из логов
+    return Response(status_code=204)
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -67,14 +72,12 @@ templates = Jinja2Templates(directory=str(STATIC_DIR))
 
 @app.get("/")
 async def serve_game(request: Request):
-    # Если файл index.html лежит в папке static
     from fastapi.responses import FileResponse
     index_path = STATIC_DIR / "index.html"
     if index_path.exists():
         return FileResponse(index_path)
-    return {"error": "index.html not found in static folder"}
+    return {"error": "index.html not found"}
 
-# НОВЫЙ ЭНДПОИНТ (тот самый, что выдавал 404)
 @app.post("/api/save")
 async def save_progress(data: SaveData):
     uid = str(data.user_id)
@@ -82,7 +85,6 @@ async def save_progress(data: SaveData):
     logger.info(f"Синхронизация: User {uid}, Score {score}")
     
     with sqlite3.connect(str(DB_PATH)) as conn:
-        # Проверяем, есть ли пользователь, если нет — создаем, если есть — обновляем баланс
         conn.execute("""
             INSERT INTO users (id, balance, last_collect) 
             VALUES (?, ?, ?) 
@@ -107,38 +109,13 @@ async def get_balance(user_id: str):
         bal, c_lvl, b_lvl, last_c = row
         offline_profit = 0
         if b_lvl > 0:
-            seconds = min(now - last_c, 28800)
+            seconds = min(now - last_c, 28800) # Макс 8 часов
             offline_profit = seconds * b_lvl * 2
             bal += offline_profit
             conn.execute("UPDATE users SET balance = ?, last_collect = ? WHERE id = ?", (bal, now, user_id))
             conn.commit()
 
         return {"balance": bal, "click_lvl": c_lvl, "bot_lvl": b_lvl, "offline_profit": offline_profit}
-
-@app.post("/api/clicks")
-async def save_clicks(data: dict = Body(...)):
-    uid, clicks = str(data.get("user_id")), int(data.get("clicks", 0))
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        conn.execute("UPDATE users SET balance = balance + ?, last_collect = ? WHERE id = ?", (clicks, int(time.time()), uid))
-        conn.commit()
-    return {"status": "ok"}
-
-@app.post("/api/buy_boost")
-async def buy_boost(data: dict = Body(...)):
-    uid = str(data.get("user_id"))
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        c = conn.cursor()
-        c.execute("SELECT balance, click_lvl FROM users WHERE id = ?", (uid,))
-        res = c.fetchone()
-        if res:
-            bal, lvl = res
-            next_lvl = lvl + 1
-            if next_lvl in PLAYER_LEVELS and bal >= PLAYER_LEVELS[next_lvl]['price']:
-                new_bal = bal - PLAYER_LEVELS[next_lvl]['price']
-                conn.execute("UPDATE users SET balance = ?, click_lvl = ? WHERE id = ?", (new_bal, next_lvl, uid))
-                conn.commit()
-                return {"status": "ok", "new_balance": new_bal, "new_lvl": next_lvl}
-    return {"status": "error", "message": "Недостаточно средств"}
 
 @app.get("/api/leaderboard")
 async def get_leaderboard():
