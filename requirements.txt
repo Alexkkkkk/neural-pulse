@@ -1,9 +1,5 @@
 fastapi
 uvicorn
 aiogram
-jinja2
-google-api-python-client
-google-auth-httplib2
-google-auth-oauthlib
-pydantic
 python-dotenv
+pydantic
