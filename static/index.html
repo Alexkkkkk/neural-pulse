@@ -98,8 +98,6 @@
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         .plus-animation { position: absolute; pointer-events: none; font-weight: 900; animation: float 0.7s ease-out forwards; z-index: 100; text-shadow: 0 0 10px currentColor; }
         @keyframes float { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.6); } }
-        
-        #rocket-timer { display: none; position: absolute; top: -40px; background: var(--crit); padding: 5px 15px; border-radius: 20px; font-size: 14px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -131,7 +129,6 @@
         </div>
 
         <div class="play-area">
-            <div id="rocket-timer">🚀 <span id="rocket-time">30</span>s</div>
             <div class="side-menu">
                 <div class="side-btn" onclick="openModal('friends')">FRIENDS</div>
                 <div class="side-btn" onclick="openModal('tasks')">TASKS</div>
@@ -173,9 +170,13 @@
         <h2 style="text-align: center; color: var(--neon);">🏆 LEADERBOARD</h2>
         <div id="leaderboard-list">Загрузка...</div>
     </div>
+    
+    <div id="modal-friends" class="modal"><h2>FRIENDS</h2><p>Invite friends coming soon...</p></div>
+    <div id="modal-tasks" class="modal"><h2>TASKS</h2><p>Coming Soon...</p></div>
+    <div id="modal-daily" class="modal"><h2>DAILY BONUS</h2><p>Coming Soon...</p></div>
 
     <script>
-        // --- ИНИЦИАЛИЗАЦИЯ TELEGRAM ---
+        // Инициализация Telegram
         const tg = window.Telegram.WebApp;
         tg.expand();
         tg.ready();
@@ -185,58 +186,55 @@
             energy: 1000,
             max_energy: 1000,
             tap_power: 1,
-            rocket_active: false,
             user_id: tg.initDataUnsafe?.user?.id || 0
         };
 
-        // Элементы интерфейса
-        const scoreEl = document.getElementById('score');
-        const energyStatEl = document.getElementById('energy-stat');
-        const energyFillEl = document.getElementById('energy-fill');
-        const btn = document.getElementById('btn');
-
-        // 1. ЗАГРУЗКА ДАННЫХ ПРИ СТАРТЕ
+        // 1. Загрузка данных при старте (синхронизировано с вашим main.py)
         async function loadData() {
+            if (!state.user_id) return;
             try {
-                const response = await fetch(`/api/user/${state.user_id}`);
+                const response = await fetch(`/api/balance/${state.user_id}`);
                 if (response.ok) {
-                    const data = await response.json();
-                    state.score = data.score || 0;
-                    state.energy = data.energy || 1000;
-                    state.tap_power = data.tap_power || 1;
-                    updateUI();
+                    const res = await response.json();
+                    if (res.status === "ok") {
+                        // Баланс из БД в score игры
+                        state.score = res.data.balance || 0;
+                        state.tap_power = res.data.click_lvl || 1;
+                        updateUI();
+                        console.log("Данные успешно загружены");
+                    }
                 }
             } catch (e) { console.error("Ошибка загрузки:", e); }
         }
 
-        // 2. СОХРАНЕНИЕ ДАННЫХ
+        // 2. Сохранение данных (синхронизировано с моделью SaveData в main.py)
         async function saveData() {
+            if (!state.user_id) return;
             try {
                 await fetch('/api/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         user_id: state.user_id,
-                        score: state.score,
-                        energy: state.energy
+                        score: Math.floor(state.score), // Это попадет в balance в БД
+                        click_lvl: state.tap_power,
+                        bot_lvl: 0
                     })
                 });
             } catch (e) { console.error("Ошибка сохранения:", e); }
         }
 
-        // --- ЛОГИКА КЛИКА ---
+        // --- Логика клика ---
+        const btn = document.getElementById('btn');
         btn.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            const power = state.rocket_active ? state.tap_power * 5 : state.tap_power;
-            
             if (state.energy >= state.tap_power) {
-                state.score += power;
+                state.score += state.tap_power;
                 state.energy -= state.tap_power;
                 updateUI();
                 
-                // Анимация + Вибрация
                 const touch = e.changedTouches[0];
-                createPlusAnim(touch.clientX, touch.clientY, power);
+                createPlusAnim(touch.clientX, touch.clientY, state.tap_power);
                 tg.HapticFeedback.impactOccurred('light');
             } else {
                 tg.HapticFeedback.notificationOccurred('error');
@@ -244,9 +242,9 @@
         });
 
         function updateUI() {
-            scoreEl.innerText = Math.floor(state.score).toLocaleString();
-            energyStatEl.innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
-            energyFillEl.style.width = (state.energy / state.max_energy * 100) + '%';
+            document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
+            document.getElementById('energy-stat').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
+            document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
             document.getElementById('user-id-display').innerText = `ID: ${state.user_id}`;
         }
 
@@ -256,12 +254,12 @@
             el.innerText = '+' + val;
             el.style.left = x + 'px';
             el.style.top = y + 'px';
-            el.style.color = state.rocket_active ? 'var(--crit)' : 'var(--neon)';
+            el.style.color = 'var(--neon)';
             document.body.appendChild(el);
             setTimeout(() => el.remove(), 700);
         }
 
-        // --- МОДАЛЬНЫЕ ОКНА ---
+        // Модалки
         function openModal(id) {
             document.getElementById('modal-' + id).classList.add('active');
             document.getElementById('overlay').classList.add('active');
@@ -272,7 +270,7 @@
             document.getElementById('overlay').classList.remove('active');
         }
 
-        // Регенерация энергии
+        // Регенерация энергии (1 в сек)
         setInterval(() => {
             if (state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 1);
@@ -280,9 +278,9 @@
             }
         }, 1000);
 
-        // Авто-сохранение каждые 3 секунды
+        // Автосохранение каждые 3 секунды
         setInterval(saveData, 3000);
-
+        
         window.onload = () => {
             document.getElementById('game').style.opacity = "1";
             loadData();
