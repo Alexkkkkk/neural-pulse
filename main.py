@@ -5,14 +5,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
-# --- НАСТРОЙКИ (Замени на свои если нужно) ---
+# --- НАСТРОЙКИ ---
 TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU"
 MY_DOMAIN = "np.bothost.ru"
 BASE_DIR = Path(__file__).resolve().parent
@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, click_lvl INTEGER DEFAULT 1, 
-             last_bonus_date TEXT DEFAULT '', streak_days INTEGER DEFAULT 0)''')
+             last_bonus_date TEXT DEFAULT '')''')
         conn.execute("CREATE TABLE IF NOT EXISTS system_stats (key TEXT PRIMARY KEY, value INTEGER)")
         conn.execute("INSERT OR IGNORE INTO system_stats VALUES ('jackpot', 500000)")
         conn.commit()
@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- API ---
+# --- API ЭНДПОИНТЫ ---
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     with sqlite3.connect(str(DB_PATH)) as conn:
@@ -82,22 +82,7 @@ async def buy_upgrade(data: dict):
             return {"status": "ok", "new_balance": new_bal, "new_lvl": new_lvl, "next_cost": new_lvl * 500}
         return {"status": "error", "message": "Low balance"}
 
-@app.post("/api/daily-bonus")
-async def daily_bonus(data: dict):
-    uid, today = str(data.get("user_id")), date.today().isoformat()
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        u = conn.execute("SELECT last_bonus_date FROM users WHERE id=?", (uid,)).fetchone()
-        if u and u[0] == today: return {"status": "error", "message": "Уже получено"}
-        reward = 5000
-        conn.execute("UPDATE users SET balance=balance+?, last_bonus_date=? WHERE id=?", (reward, today, uid))
-        conn.commit()
-        return {"status": "ok", "reward": reward}
-
-@app.get("/api/winners")
-async def get_winners():
-    return {"status": "ok", "data": [{"user_id": "TopPlayer", "amount": 500000}]}
-
-# --- BOT & WEBHOOK ---
+# --- БОТ ---
 @app.post("/webhook")
 async def bot_webhook(request: Request):
     update = Update.model_validate(await request.json(), context={"bot": bot})
@@ -106,14 +91,20 @@ async def bot_webhook(request: Request):
 
 @dp.message(F.text.startswith("/start"))
 async def cmd_start(m: types.Message):
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🚀 ИГРАТЬ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))]])
-    await m.answer(f"<b>Neural Pulse AI</b>\nНачни копить NP прямо сейчас!", reply_markup=kb)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="🚀 ИГРАТЬ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
+    ]])
+    await m.answer(f"<b>Neural Pulse AI</b>\nТвой ID: {m.from_user.id}", reply_markup=kb)
 
+# --- ГЛАВНАЯ И СТАТИКА ---
 @app.get("/")
-async def index(): return FileResponse(BASE_DIR / "static" / "index.html")
+async def index():
+    return FileResponse(BASE_DIR / "static" / "index.html")
 
-# Раздача картинок из папки static
-app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+# Монтируем статику (для картинок)
+static_path = BASE_DIR / "static"
+if static_path.exists():
+    app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 
 if __name__ == "__main__":
     import uvicorn
