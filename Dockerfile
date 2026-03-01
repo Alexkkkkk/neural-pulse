@@ -1,10 +1,16 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
+
 WORKDIR /app
-ENV PYTHONUNBUFFERED=1
+
+# Установка зависимостей
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-RUN mkdir -p /app/data /app/static
+
+# Копируем всё остальное
 COPY . .
-RUN chmod 777 /app/data
+
+# Открываем порт
 EXPOSE 3000
+
+# ЯВНО указываем запускать ПИТОН
 CMD ["python", "main.py"]
