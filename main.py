@@ -12,7 +12,7 @@ from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
-# --- ФОРСИРОВАННЫЙ ВЫВОД ЛОГОВ ---
+# --- ПРИНУДИТЕЛЬНЫЕ ЛОГИ ---
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 print("--- [!] ENGINE STARTING ---", flush=True)
@@ -38,26 +38,40 @@ class SaveData(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Создаем папку для базы
     DATA_DIR.mkdir(exist_ok=True, parents=True)
     print(f"--- [DB] CONNECTING TO {DB_PATH} ---", flush=True)
+    
     with sqlite3.connect(str(DB_PATH)) as conn:
+        # 1. Создаем таблицу пользователей
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
              click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
              last_collect INTEGER DEFAULT 0, league_id INTEGER DEFAULT 1)''')
+        
+        # 2. Создаем таблицу статистики (для джекпота)
+        conn.execute('''CREATE TABLE IF NOT EXISTS system_stats 
+            (key TEXT PRIMARY KEY, value INTEGER)''')
+        
+        # 3. Индекс для лидерборда
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_bal ON users(balance DESC)")
+        
+        # 4. Начальное значение джекпота
         conn.execute("INSERT OR IGNORE INTO system_stats (key, value) VALUES ('jackpot', 0)")
         conn.commit()
     
+    # Установка вебхука
     webhook_url = f"https://{MY_DOMAIN}/webhook"
     await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
     print(f"--- [!] WEBHOOK READY: {webhook_url} ---", flush=True)
+    
     yield
     await bot.delete_webhook()
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- API ЭНДПОИНТЫ ---
+# --- API ---
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
@@ -97,11 +111,11 @@ async def index():
         return FileResponse(p)
     return "<h1>Frontend (index.html) not found in /static/</h1>"
 
-# --- МОНТИРОВАНИЕ СТАТИКИ ---
+# Статика монтируется в конце
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-# --- ЛОГИКА БОТА ---
+# --- БОТ ---
 @dp.message(F.text == "/start")
 async def cmd_start(m: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
