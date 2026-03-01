@@ -1,21 +1,9 @@
-
-/**
- * NEURAL PULSE - Frontend Logic
- */
-
-// ПРОВЕРКА СРЕДЫ: Если это сервер (Node.js), скрипт немедленно самоликвидируется
 if (typeof window !== 'undefined') {
-
 (function() {
     const API_BASE = window.location.origin;
     const tg = window.Telegram?.WebApp;
 
-    let gameState = {
-        userId: null,
-        score: 0,
-        clickLvl: 1,
-        botLvl: 0
-    };
+    let gameState = { userId: null, score: 0, clickLvl: 1, botLvl: 0 };
 
     async function init() {
         if (tg) {
@@ -25,11 +13,8 @@ if (typeof window !== 'undefined') {
         } else {
             gameState.userId = "123456789";
         }
-
-        console.log("🎮 Game starting...");
         await loadBalance();
         updateJackpotDisplay();
-
         setInterval(updateJackpotDisplay, 20000);
         setInterval(autoSave, 30000);
     }
@@ -60,16 +45,15 @@ if (typeof window !== 'undefined') {
 
     async function autoSave() {
         try {
-            const payload = {
-                user_id: parseInt(gameState.userId),
-                score: Math.floor(gameState.score),
-                click_lvl: gameState.clickLvl,
-                bot_lvl: gameState.botLvl
-            };
             await fetch(`${API_BASE}/api/save`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({
+                    user_id: parseInt(gameState.userId),
+                    score: Math.floor(gameState.score),
+                    click_lvl: gameState.clickLvl,
+                    bot_lvl: gameState.botLvl
+                })
             });
         } catch (e) { }
     }
@@ -77,23 +61,26 @@ if (typeof window !== 'undefined') {
     function handleMainClick() {
         gameState.score += gameState.clickLvl;
         updateUI();
-        tg?.HapticFeedback.impactOccurred('light');
+        if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
     }
 
+    // ТВОЯ ИСПРАВЛЕННАЯ ФУНКЦИЯ
     function updateUI() {
         const scoreEl = document.getElementById('balance');
-        if (scoreEl) scoreEl.innerText = Math.floor(gameState.score).toLocaleString();
+        if (scoreEl) {
+            scoreEl.innerText = Math.floor(gameState.score).toLocaleString();
+        }
+        // Если мы в Telegram, обновляем заголовок
+        if (tg) {
+            tg.headerColor = gameState.score > 1000 ? "#ff0000" : "#000000";
+        }
     }
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
+    } else { init(); }
 
     const coin = document.getElementById('coin');
     if (coin) coin.addEventListener('click', handleMainClick);
-
 })();
-
-} // Конец проверки window
+}
