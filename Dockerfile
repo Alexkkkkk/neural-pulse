@@ -1,22 +1,24 @@
-# Стейдж сборки: используем Python 3.11
+# ИСПОЛЬЗУЕМ ЯВНЫЙ ОБРАЗ ПИТОНА
 FROM python:3.11-slim
 
-# Устанавливаем рабочую директорию
+# Установка системных зависимостей
+RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# Отключаем кэш питона и логируем сразу в консоль
+# Отключаем создание лишних файлов
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
-# Ставим зависимости
+# Ставим библиотеки
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Копируем проект
 COPY . .
 
-# Открываем порт 3000
+# Открываем порт
 EXPOSE 3000
 
-# ЯВНО указываем путь к python3
-ENTRYPOINT ["/usr/local/bin/python3", "main.py"]
+# ГЛАВНОЕ: Используем ENTRYPOINT в формате списка
+ENTRYPOINT ["python3", "main.py"]
