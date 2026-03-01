@@ -2,15 +2,15 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Установка зависимостей
+# Копируем только зависимости для кэша
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем всё остальное
+# Копируем весь проект
 COPY . .
 
-# Открываем порт
+# Открываем порт 3000
 EXPOSE 3000
 
-# ЯВНО указываем запускать ПИТОН
-CMD ["python", "main.py"]
+# ГЛАВНОЕ: Явно запускаем питон
+ENTRYPOINT ["python", "main.py"]
