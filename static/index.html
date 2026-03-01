@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse AI | Wallet Edition</title>
+    <title>Neural Pulse AI | Ultimate Gold</title>
     
     <script src="https://telegram.org/js/telegram-web-app.js?5"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
@@ -38,11 +38,15 @@
         }
         
         .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .logo { width: 45px; height: 45px; background: #111; border: 1px solid var(--neon); border-radius: 10px; box-shadow: 0 0 15px var(--neon); }
+        /* Заглушка логотипа, если картинки нет */
+        .logo { width: 45px; height: 45px; background: #111; border: 1px solid var(--neon); border-radius: 10px; box-shadow: 0 0 15px var(--neon); cursor: pointer; }
         .league-box { flex-grow: 1; margin: 0 12px; }
         .league-info { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 4px; font-weight: bold; }
-        .league-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; }
+        .league-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05); }
         #league-fill { height: 100%; width: 0%; transition: width 0.5s; background: var(--neon); }
+
+        .online-indicator { display: flex; align-items: center; gap: 5px; font-size: 9px; color: var(--neon-secondary); margin-top: 4px; }
+        .online-dot { width: 6px; height: 6px; background: var(--neon-secondary); border-radius: 50%; box-shadow: 0 0 5px var(--neon-secondary); animation: pulse 1.5s infinite; }
 
         .jackpot-container {
             width: 100%; background: rgba(255, 0, 212, 0.05); 
@@ -68,13 +72,23 @@
         }
         #btn:active { transform: scale(0.92); }
 
+        .side-menu { 
+            position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+            display: flex; flex-direction: column; gap: 10px; z-index: 5; 
+        }
+        .side-btn { 
+            width: 80px; padding: 10px 5px; background: rgba(10, 25, 47, 0.7); 
+            border: 1px solid var(--neon); border-radius: 12px; 
+            font-size: 10px; color: white; text-align: center; backdrop-filter: blur(10px);
+        }
+
         .energy-wrapper { width: 85%; margin-top: 25px; }
-        .energy-info { display: flex; justify-content: space-between; font-size: 12px; color: var(--neon); margin-bottom: 6px; }
+        .energy-info { display: flex; justify-content: space-between; font-size: 12px; color: var(--neon); margin-bottom: 6px; font-weight: bold; }
         .energy-bar { width: 100%; height: 12px; background: rgba(255,255,255,0.05); border-radius: 10px; border: 1px solid var(--neon); overflow: hidden; }
         #energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--neon), var(--neon-secondary)); transition: width 0.2s; }
 
-        .bottom-nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: 100%; padding-bottom: 20px; }
-        .nav-item { background: rgba(255,255,255,0.05); padding: 12px 5px; border-radius: 15px; text-align: center; font-size: 10px; border: 1px solid rgba(255,255,255,0.1); font-weight: bold; cursor: pointer; }
+        .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; padding-bottom: 20px; }
+        .nav-item { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 18px; text-align: center; font-size: 12px; border: 1px solid rgba(255,255,255,0.1); font-weight: bold; cursor: pointer; }
 
         .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 80%; background: var(--glass); border-top: 3px solid var(--neon); border-radius: 35px 35px 0 0; z-index: 1000; transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1); padding: 30px; box-sizing: border-box; overflow-y: auto; }
         .modal.active { bottom: 0; }
@@ -83,27 +97,31 @@
 
         .plus-animation { position: absolute; pointer-events: none; font-weight: 900; animation: float 0.7s ease-out forwards; z-index: 100; text-shadow: 0 0 10px currentColor; }
         @keyframes float { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.6); } }
-        
-        /* Стили транзакций */
-        .trans-item { background: rgba(255,255,255,0.03); padding: 12px; border-radius: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.05); }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        @keyframes shake { 0%, 100% { transform: translate(0,0); } 25% { transform: translate(5px, 0); } 75% { transform: translate(-5px, 0); } }
     </style>
 </head>
 <body>
 
     <div class="game-container" id="game" style="opacity:0">
         <div class="header">
-            <div class="logo"></div>
+            <div class="logo" id="main-logo"></div>
             <div class="league-box">
                 <div class="league-info">
                     <span id="league-name">BRONZE LEAGUE</span>
                     <span id="league-percent">0%</span>
                 </div>
                 <div class="league-bar"><div id="league-fill"></div></div>
+                <div class="online-indicator">
+                    <div class="online-dot"></div>
+                    <span id="online-count">1,240 ONLINE</span>
+                </div>
             </div>
-            <div style="font-size: 8px; opacity: 0.4;" id="user-id-display">ID: 0000</div>
+            <div style="font-size: 8px; opacity: 0.4; text-align: right;" id="user-id-display">ID: 0000</div>
         </div>
 
         <div class="jackpot-container">
+            <div style="font-size: 9px; letter-spacing: 3px; color: var(--neon); margin-bottom: 3px; font-weight: 900;">GLOBAL JACKPOT</div>
             <div id="jackpot-amount">500,000</div>
         </div>
 
@@ -112,7 +130,13 @@
         </div>
 
         <div class="play-area">
+            <div class="side-menu">
+                <div class="side-btn" onclick="openModal('friends')">FRIENDS</div>
+                <div class="side-btn" onclick="openModal('tasks')">TASKS</div>
+                <div class="side-btn" style="border-color: #ff9d00;" onclick="openModal('daily')">BONUS</div>
+            </div>
             <button id="btn"></button>
+
             <div class="energy-wrapper">
                 <div class="energy-info">
                     <span>⚡ ENERGY</span>
@@ -124,46 +148,39 @@
 
         <div class="bottom-nav">
             <div class="nav-item" onclick="openModal('boost')">🚀 BOOST</div>
-            <div class="nav-item" onclick="openModal('daily')">🎁 BONUS</div>
-            <div class="nav-item" onclick="openModal('wallet')" style="border-color: var(--neon-secondary);">💎 WALLET</div>
+            <div class="nav-item" onclick="openModal('tasks')">⛏️ MINE</div>
             <div class="nav-item" onclick="openModal('stats')">📊 STATS</div>
         </div>
     </div>
 
     <div class="overlay" id="overlay" onclick="closeModals()"></div>
 
-    <div id="modal-wallet" class="modal">
-        <h2 style="color: var(--neon-secondary); text-align: center;">NEURAL WALLET</h2>
-        <div style="background: rgba(0,255,150,0.05); border: 1px solid var(--neon-secondary); padding: 25px; border-radius: 20px; text-align: center; margin-bottom: 20px;">
-            <div style="font-size: 10px; opacity: 0.5; letter-spacing: 2px;">ASSETS BALANCE</div>
-            <div style="font-size: 36px; font-weight: 900; margin: 10px 0;" id="wallet-val">0</div>
-            <div id="wallet-addr" style="font-size: 8px; opacity: 0.3; font-family: monospace;"></div>
-        </div>
-        <button onclick="connectTon()" style="width: 100%; padding: 18px; background: #007aff; border: none; border-radius: 15px; color: white; font-weight: bold;">CONNECT TON</button>
-        
-        <h4 style="margin: 25px 0 15px; font-size: 12px; color: var(--neon);">HISTORY</h4>
-        <div id="trans-history"></div>
-    </div>
-
     <div id="modal-boost" class="modal">
         <h2 style="color: var(--neon);">UPGRADES</h2>
-        <div style="background: rgba(255,255,255,0.05); padding:20px; border-radius:20px; border: 1px solid var(--neon);">
-            <div style="font-weight: bold;">MULTI-TAP (LVL <span id="tap-lvl-val">1</span>)</div>
-            <div style="font-size: 12px; margin: 10px 0; opacity: 0.7;">Дает +1 к каждому тапу</div>
-            <button onclick="buyUpgrade()" style="width: 100%; padding: 15px; background: var(--neon); border: none; border-radius: 12px; color: black; font-weight: 900;">
-                UPGRADE (<span id="upgrade-cost-text">500</span> NP)
-            </button>
+        <div style="border: 1px solid var(--neon); padding:15px; border-radius:15px; margin-bottom:10px;">
+            <div>MULTI-TAP (LVL <span id="tap-lvl-val">1</span>)</div>
+            <div style="font-size: 10px; color: var(--neon); margin: 5px 0;">Цена: <span id="upgrade-cost-text">500</span> NP</div>
+            <button onclick="buyUpgrade()" style="width: 100%; padding: 12px; background: var(--neon); border: none; border-radius: 10px; color: black; font-weight: bold; cursor: pointer;">UPGRADE</button>
         </div>
-    </div>
-
-    <div id="modal-daily" class="modal">
-        <h2 style="text-align: center; color: #ff9d00;">DAILY BONUS</h2>
-        <button onclick="claimDailyBonus()" style="width: 100%; padding: 20px; background: #ff9d00; border: none; border-radius: 15px; color: black; font-weight: 900;">ЗАБРАТЬ 5,000 NP</button>
     </div>
 
     <div id="modal-stats" class="modal">
-        <h2 style="text-align: center; color: var(--neon);">HALL OF FAME</h2>
-        <div id="winners-list">Загрузка...</div>
+        <h2 style="text-align: center; color: var(--neon);">🏆 HALL OF FAME</h2>
+        <div id="winners-list" style="background: rgba(255,255,255,0.05); border-radius: 15px; padding: 15px;">Загрузка...</div>
+    </div>
+    
+    <div id="modal-friends" class="modal">
+        <h2>FRIENDS</h2>
+        <p style="font-size: 12px; opacity: 0.7;">Твоя ссылка для приглашения:</p>
+        <div id="ref-link-display" style="background: rgba(255,255,255,0.1); padding: 10px; border-radius: 10px; word-break: break-all; font-size: 10px; margin: 10px 0;"></div>
+        <button onclick="shareLink()" style="width:100%; padding:15px; background: var(--neon-secondary); border:none; border-radius:12px; color:black; font-weight:bold;">ПРИГЛАСИТЬ ДРУГА</button>
+    </div>
+
+    <div id="modal-tasks" class="modal"><h2>TASKS</h2><p>Mining & Tasks system coming soon...</p></div>
+    
+    <div id="modal-daily" class="modal">
+        <h2 style="color: #ff9d00; text-align: center;">DAILY REWARDS</h2>
+        <button onclick="claimDailyBonus()" style="width: 100%; padding: 15px; background: #ff9d00; border: none; border-radius: 15px; color: black; font-weight: 900;">ЗАБРАТЬ БОНУС</button>
     </div>
 
     <script>
@@ -180,47 +197,40 @@
 
         let state = {
             score: 0, energy: 1000, max_energy: 1000, tap_power: 1,
-            user_id: tg.initDataUnsafe?.user?.id || 12345,
-            transactions: []
+            user_id: tg.initDataUnsafe?.user?.id || 12345
         };
 
-        // Логика транзакций
-        function addTrans(label, amount, type) {
-            const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            state.transactions.unshift({label, amount, type, time});
-            if(state.transactions.length > 10) state.transactions.pop();
-        }
-
-        function renderTrans() {
-            const container = document.getElementById('trans-history');
-            if(state.transactions.length === 0) {
-                container.innerHTML = '<div style="text-align:center; opacity:0.3; font-size:11px;">Нет операций</div>';
-                return;
-            }
-            container.innerHTML = state.transactions.map(t => `
-                <div class="trans-item">
-                    <div style="font-size:11px;">${t.label}<br><small style="opacity:0.3">${t.time}</small></div>
-                    <div style="color:${t.type==='plus'?'var(--neon-secondary)':'var(--crit)'}; font-weight:900;">
-                        ${t.type==='plus'?'+':'-'}${t.amount.toLocaleString()}
-                    </div>
-                </div>
-            `).join('');
-        }
-
         async function loadData() {
-            const r = await fetch(`/api/balance/${state.user_id}`);
-            const res = await r.json();
-            if (res.status === "ok") {
-                state.score = res.data.balance;
-                state.tap_power = res.data.click_lvl;
-                document.getElementById('tap-lvl-val').innerText = state.tap_power;
-                document.getElementById('upgrade-cost-text').innerText = state.tap_power * 500;
-                updateUI();
-            }
+            try {
+                const r = await fetch(`/api/balance/${state.user_id}`);
+                const res = await r.json();
+                if (res.status === "ok") {
+                    state.score = res.data.balance;
+                    state.tap_power = res.data.click_lvl;
+                    document.getElementById('tap-lvl-val').innerText = state.tap_power;
+                    document.getElementById('upgrade-cost-text').innerText = state.tap_power * 500;
+                    document.getElementById('ref-link-display').innerText = `https://t.me/NeuralPulseBot?start=ref_${state.user_id}`;
+                    updateUI();
+                }
+            } catch (e) { console.error("Load Error", e); }
+        }
+
+        async function saveData() {
+            try {
+                const r = await fetch('/api/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ user_id: state.user_id, score: Math.floor(state.score), click_lvl: state.tap_power })
+                });
+                const res = await r.json();
+                if (res.status === "ok") {
+                    document.getElementById('jackpot-amount').innerText = res.jackpot.toLocaleString();
+                    if (res.explosion) triggerExplosion(res.winner == state.user_id);
+                }
+            } catch (e) { console.error("Save Error", e); }
         }
 
         async function buyUpgrade() {
-            const cost = state.tap_power * 500;
             const r = await fetch('/api/upgrade', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -228,16 +238,26 @@
             });
             const res = await r.json();
             if (res.status === "ok") {
-                addTrans("Multi-Tap Upgrade", cost, "minus");
                 state.score = res.new_balance;
                 state.tap_power = res.new_lvl;
                 document.getElementById('tap-lvl-val').innerText = res.new_lvl;
                 document.getElementById('upgrade-cost-text').innerText = res.next_cost;
                 updateUI();
                 tg.HapticFeedback.notificationOccurred('success');
-            } else {
-                tg.showAlert("Недостаточно NP!");
-            }
+            } else { tg.showAlert("Недостаточно NP!"); }
+        }
+
+        async function loadWinners() {
+            const r = await fetch('/api/winners');
+            const res = await r.json();
+            const list = document.getElementById('winners-list');
+            if (res.status === "ok" && res.data.length > 0) {
+                list.innerHTML = res.data.map(w => `
+                    <div style="display:flex; justify-content:space-between; margin-bottom:10px; font-size:12px; border-bottom:1px solid #333;">
+                        <span>👤 ${w.user_id.toString().slice(0,6)}...</span>
+                        <span style="color:var(--neon-secondary)">+${w.amount.toLocaleString()}</span>
+                    </div>`).join('');
+            } else { list.innerHTML = "Победителей пока нет"; }
         }
 
         async function claimDailyBonus() {
@@ -248,8 +268,7 @@
             });
             const res = await r.json();
             if (res.status === "ok") {
-                addTrans("Daily Reward", 5000, "plus");
-                tg.showAlert(`Получено: 5000 NP!`);
+                tg.showAlert(`Получено: ${res.reward} NP!`);
                 loadData();
             } else { tg.showAlert(res.message); }
         }
@@ -257,7 +276,6 @@
         function updateUI() {
             const score = Math.floor(state.score);
             document.getElementById('score').innerText = score.toLocaleString();
-            document.getElementById('wallet-val').innerText = score.toLocaleString();
             
             const league = LEAGUES.find(l => score >= l.min && score < l.max) || LEAGUES[0];
             const prog = league.max === Infinity ? 100 : ((score - league.min) / (league.max - league.min)) * 100;
@@ -274,7 +292,14 @@
             document.getElementById('user-id-display').innerText = "ID: " + state.user_id;
         }
 
-        // Обработка клика
+        function triggerExplosion(isMe) {
+            document.body.style.animation = "shake 0.5s 5";
+            tg.showAlert(isMe ? "ВЫ ВЫИГРАЛИ ДЖЕКПОТ! 🎉" : "Кто-то только что сорвал джекпот! 💥");
+            if (isMe) loadData();
+            setTimeout(() => { document.body.style.animation = ""; }, 3000);
+        }
+
+        // Клик с анимацией
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (state.energy >= state.tap_power) {
@@ -296,10 +321,7 @@
         });
 
         function openModal(id) {
-            if(id === 'wallet') {
-                document.getElementById('wallet-addr').innerText = "NP_WALLET_" + btoa(state.user_id).slice(0,12);
-                renderTrans();
-            }
+            if(id === 'stats') loadWinners();
             document.getElementById('modal-'+id).classList.add('active');
             document.getElementById('overlay').classList.add('active');
         }
@@ -309,22 +331,14 @@
             document.getElementById('overlay').classList.remove('active');
         }
 
-        function connectTon() {
-            tg.HapticFeedback.notificationOccurred('warning');
-            tg.showAlert("Подключение кошельков TON будет доступно в фазе Mainnet!");
+        function shareLink() {
+            const url = `https://t.me/share/url?url=https://t.me/NeuralPulseBot?start=ref_${state.user_id}&text=Играй в Neural Pulse и забирай джекпот!`;
+            tg.openTelegramLink(url);
         }
 
-        // Сохранение и энергия
+        // Циклы
         setInterval(() => { if(state.energy < 1000) { state.energy += 1.5; updateUI(); } }, 1000);
-        setInterval(async () => {
-            await fetch('/api/save', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ user_id: state.user_id, score: Math.floor(state.score), click_lvl: state.tap_power })
-            }).then(r => r.json()).then(res => {
-                document.getElementById('jackpot-amount').innerText = res.jackpot.toLocaleString();
-            });
-        }, 3000);
+        setInterval(saveData, 3000);
         
         window.onload = () => {
             document.getElementById('game').style.opacity = "1";
