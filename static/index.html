@@ -161,11 +161,11 @@
         <h2 style="color: var(--neon);">UPGRADES</h2>
         <div class="stat-box" style="border: 1px solid var(--crit); padding:15px; border-radius:15px; margin-bottom:10px;">
             <div style="color: var(--crit); font-weight: 900;">🚀 TURBO ROCKET (x5)</div>
-            <button class="buy-btn" style="background: var(--crit); color: white; width: 100%; padding: 10px; border: none; border-radius: 10px; margin-top: 10px;" onclick="activateRocket()">LAUNCH (1000 NP)</button>
+            <button class="buy-btn" style="background: var(--crit); color: white; width: 100%; padding: 10px; border: none; border-radius: 10px; margin-top: 10px;">LAUNCH (1000 NP)</button>
         </div>
         <div class="stat-box" style="border: 1px solid var(--neon); padding:15px; border-radius:15px; margin-bottom:10px;">
             <div>MULTI-TAP (LVL <span id="tap-lvl-val">1</span>)</div>
-            <button class="buy-btn" style="width: 100%; padding: 10px; background: var(--neon); border: none; border-radius: 10px; margin-top: 10px;" onclick="handleUpgrade('tap')">UPGRADE</button>
+            <button class="buy-btn" style="width: 100%; padding: 10px; background: var(--neon); border: none; border-radius: 10px; margin-top: 10px;">UPGRADE</button>
         </div>
     </div>
 
@@ -174,26 +174,11 @@
         <div id="leaderboard-list">Загрузка...</div>
     </div>
 
-    <div id="modal-friends" class="modal">
-        <h2>FRIENDS</h2>
-        <p>Invite friends to get 10% of their earnings!</p>
-        <div id="referral-link" style="word-break:break-all; padding:15px; background:rgba(0,0,0,0.3); border-radius:10px; margin-bottom:15px; font-size:12px;"></div>
-        <button class="buy-btn" style="width: 100%; padding: 15px; background: var(--neon); border: none; border-radius: 10px;" onclick="shareRef()">INVITE FRIENDS</button>
-    </div>
-
-    <div id="modal-daily" class="modal">
-        <h2>DAILY BONUS</h2>
-        <p>Come back every day to claim rewards!</p>
-        <button class="buy-btn" style="width: 100%; padding: 15px; background: #ff9d00; border: none; border-radius: 10px;" onclick="handleDailyClaim()">CLAIM DAILY REWARD</button>
-    </div>
-
-    <div id="modal-tasks" class="modal"><h2>TASKS</h2><p>Coming Soon...</p></div>
-
     <script>
-        // --- ЛОГИКА ИГРЫ ---
-        window.tg = window.Telegram.WebApp;
-        window.tg.expand();
-        window.tg.ready();
+        // --- ИНИЦИАЛИЗАЦИЯ TELEGRAM ---
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.ready();
 
         let state = {
             score: 0,
@@ -201,41 +186,68 @@
             max_energy: 1000,
             tap_power: 1,
             rocket_active: false,
-            user_id: window.tg.initDataUnsafe?.user?.id || 0
+            user_id: tg.initDataUnsafe?.user?.id || 0
         };
 
+        // Элементы интерфейса
         const scoreEl = document.getElementById('score');
         const energyStatEl = document.getElementById('energy-stat');
         const energyFillEl = document.getElementById('energy-fill');
         const btn = document.getElementById('btn');
 
-        // Клик по кнопке
+        // 1. ЗАГРУЗКА ДАННЫХ ПРИ СТАРТЕ
+        async function loadData() {
+            try {
+                const response = await fetch(`/api/user/${state.user_id}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    state.score = data.score || 0;
+                    state.energy = data.energy || 1000;
+                    state.tap_power = data.tap_power || 1;
+                    updateUI();
+                }
+            } catch (e) { console.error("Ошибка загрузки:", e); }
+        }
+
+        // 2. СОХРАНЕНИЕ ДАННЫХ
+        async function saveData() {
+            try {
+                await fetch('/api/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: state.user_id,
+                        score: state.score,
+                        energy: state.energy
+                    })
+                });
+            } catch (e) { console.error("Ошибка сохранения:", e); }
+        }
+
+        // --- ЛОГИКА КЛИКА ---
         btn.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            const touches = e.changedTouches;
-            for(let i=0; i<touches.length; i++) {
-                handleTap(touches[i].clientX, touches[i].clientY);
-            }
-        });
-
-        function handleTap(x, y) {
             const power = state.rocket_active ? state.tap_power * 5 : state.tap_power;
             
             if (state.energy >= state.tap_power) {
                 state.score += power;
                 state.energy -= state.tap_power;
                 updateUI();
-                createPlusAnim(x, y, power);
-                saveData();
+                
+                // Анимация + Вибрация
+                const touch = e.changedTouches[0];
+                createPlusAnim(touch.clientX, touch.clientY, power);
+                tg.HapticFeedback.impactOccurred('light');
             } else {
-                window.tg.HapticFeedback.notificationOccurred('error');
+                tg.HapticFeedback.notificationOccurred('error');
             }
-        }
+        });
 
         function updateUI() {
             scoreEl.innerText = Math.floor(state.score).toLocaleString();
             energyStatEl.innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
             energyFillEl.style.width = (state.energy / state.max_energy * 100) + '%';
+            document.getElementById('user-id-display').innerText = `ID: ${state.user_id}`;
         }
 
         function createPlusAnim(x, y, val) {
@@ -249,7 +261,7 @@
             setTimeout(() => el.remove(), 700);
         }
 
-        // Модалки
+        // --- МОДАЛЬНЫЕ ОКНА ---
         function openModal(id) {
             document.getElementById('modal-' + id).classList.add('active');
             document.getElementById('overlay').classList.add('active');
@@ -260,7 +272,7 @@
             document.getElementById('overlay').classList.remove('active');
         }
 
-        // Энергия восстанавливается сама
+        // Регенерация энергии
         setInterval(() => {
             if (state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 1);
@@ -268,15 +280,12 @@
             }
         }, 1000);
 
-        // Сохранение (заглушка для примера)
-        function saveData() {
-            console.log("Saving score:", state.score);
-        }
+        // Авто-сохранение каждые 3 секунды
+        setInterval(saveData, 3000);
 
-        // Плавное появление игры
         window.onload = () => {
             document.getElementById('game').style.opacity = "1";
-            updateUI();
+            loadData();
         };
     </script>
 </body>
