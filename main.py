@@ -1,10 +1,10 @@
 import os, asyncio, sqlite3, uvicorn, logging, time, sys, traceback
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 from functools import wraps
 from aiogram import Bot, Dispatcher, types, F
@@ -20,7 +20,8 @@ WEBHOOK_URL = f"https://{MY_DOMAIN}{WEBHOOK_PATH}"
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
-DATA_DIR = Path("/app/data") # Путь для Docker на Bothost
+# ВАЖНО: Путь для сохранения данных на Bothost
+DATA_DIR = Path("/app/data") 
 DB_PATH = DATA_DIR / "game.db"
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
@@ -55,49 +56,74 @@ class SaveData(BaseModel):
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-# --- ЭНДПОИНТ ДЛЯ TELEGRAM ---
-app = FastAPI() # Lifespan ниже
-
-@app.post(WEBHOOK_PATH)
-async def bot_webhook(request: Request):
-    update = Update.model_validate(await request.json(), context={"bot": bot})
-    await dp.feed_update(bot, update)
-    return {"status": "ok"}
-
 # --- ЖИЗНЕННЫЙ ЦИКЛ ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    DATA_DIR.mkdir(exist_ok=True)
+    # 1. Подготовка БД в защищенном разделе
+    DATA_DIR.mkdir(exist_ok=True, parents=True)
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
              click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
              last_collect INTEGER DEFAULT 0, league_id INTEGER DEFAULT 1)''')
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_bal ON users(balance DESC)")
     
-    # Установка вебхука
+    # 2. Установка вебхука
     await bot.set_webhook(url=WEBHOOK_URL, drop_pending_updates=True)
     logger.info(f"🚀 Webhook active: {WEBHOOK_URL}")
+    
     yield
+    # 3. Отключение вебхука при остановке
     await bot.delete_webhook()
 
-app.router.lifespan_context = lifespan
+app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# --- ЭНДПОИНТ ДЛЯ TELEGRAM ---
+@app.post(WEBHOOK_PATH)
+async def bot_webhook(request: Request):
+    try:
+        data = await request.json()
+        update = Update.model_validate(data, context={"bot": bot})
+        await dp.feed_update(bot, update)
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"Webhook process error: {e}")
+        return {"status": "error"}
+
+# --- ИСПРАВЛЕНИЕ ОШИБОК 404 (Иконки) ---
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    icon_path = STATIC_DIR / "images" / "unnamed4.png"
+    if icon_path.exists():
+        return FileResponse(icon_path)
+    return Response(status_code=204)
 
 # --- API ИГРЫ ---
 @app.get("/api/balance/{user_id}")
 @api_error_handler
-async def get_balance(user_id: str, request: Request):
-    auth = request.headers.get("Authorization")
+async def get_balance(user_id: str):
     now = int(time.time())
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        
         if not row:
+            # Новый игрок
             conn.execute("INSERT INTO users (id, balance, last_collect) VALUES (?, 1000, ?)", (user_id, now))
             conn.commit()
-            return HTTPWrapper.success({"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "league_id": 1})
+            return HTTPWrapper.success({"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "league_id": 1, "offline_profit": 0})
+        
         user = dict(row)
-        profit = min(((now - user['last_collect']) * user['bot_lvl']), 50000) if user['bot_lvl'] > 0 else 0
+        # Офлайн-профит: уровень бота * 2 в сек (макс 8 часов)
+        off_time = min(now - user['last_collect'], 28800)
+        profit = (off_time * user['bot_lvl'] * 2) if user['bot_lvl'] > 0 and off_time > 60 else 0
+        
+        if profit > 0:
+            user['balance'] += profit
+            conn.execute("UPDATE users SET balance = ?, last_collect = ? WHERE id = ?", (user['balance'], now, user_id))
+            conn.commit()
+            
         return HTTPWrapper.success({**user, "offline_profit": profit})
 
 @app.post("/api/save")
@@ -113,15 +139,44 @@ async def save_progress(data: SaveData):
         conn.commit()
     return HTTPWrapper.success()
 
-if STATIC_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
+@app.get("/api/leaderboard")
+@api_error_handler
+async def get_leaderboard(user_id: str = None):
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        conn.row_factory = sqlite3.Row
+        top_rows = conn.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10").fetchall()
+        top10 = [{"user_id": row["id"], "score": row["balance"]} for row in top_rows]
+        
+        user_rank = 0
+        if user_id:
+            row = conn.execute("SELECT (SELECT COUNT(*) FROM users WHERE balance > u.balance) + 1 as rank 
+                                FROM users u WHERE id = ?", (user_id,)).fetchone()
+            if row: user_rank = row["rank"]
+            
+        return HTTPWrapper.success({"top10": top10, "user_rank": user_rank})
 
+# --- СТАТИКА ---
+if STATIC_DIR.exists():
+    # Главная страница игры
+    @app.get("/")
+    async def serve_game():
+        return FileResponse(STATIC_DIR / "index.html")
+    
+    # Монтируем папку static для CSS/JS/Images
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+# --- ОБРАБОТКА КОМАНД БОТА ---
 @dp.message(F.text == "/start")
 async def start(m: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💎 Play Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
-    await m.answer(f"<b>System Online, {m.from_user.first_name}!</b>", reply_markup=kb)
+    await m.answer(
+        f"<b>System Online, {m.from_user.first_name}!</b>\n\n"
+        f"🚀 Твой нейронный интерфейс готов к работе.\n"
+        f"💰 Собирай энергию, прокачивай ботов и стань лидером сети.", 
+        reply_markup=kb
+    )
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
