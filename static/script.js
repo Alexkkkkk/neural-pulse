@@ -1,6 +1,10 @@
 if (typeof window !== 'undefined') {
 (function() {
-    const API_BASE = window.location.origin;
+    // Автоматически определяем адрес: если сидим на домене bothost - используем его, иначе ставим вручную
+    const API_BASE = window.location.origin.includes('bothost.ru') 
+        ? window.location.origin 
+        : "https://np.bothost.ru";
+
     const tg = window.Telegram?.WebApp;
 
     // Глобальное состояние игры
@@ -22,6 +26,7 @@ if (typeof window !== 'undefined') {
 
     async function init() {
         if (tg) {
+            tg.expand();
             gameState.userId = tg.initDataUnsafe?.user?.id || "123456789";
             document.getElementById('user-id-display').textContent = "ID: " + gameState.userId;
         } else {
@@ -35,35 +40,37 @@ if (typeof window !== 'undefined') {
 
         // Запуск циклов
         setInterval(updateJackpotDisplay, 10000);
-        setInterval(autoSave, 20000);
+        setInterval(autoSave, 20000); // Сохранение каждые 20 сек
         setInterval(gameLoop, 1000);
     }
 
-    // Загрузка данных с сервера
     async function loadBalance() {
         try {
             const res = await fetch(`${API_BASE}/api/balance/${gameState.userId}`);
             const result = await res.json();
             if (result.status === 'ok') {
                 gameState.score = result.data.balance;
-                gameState.clickLvl = result.data.click_lvl;
-                gameState.botLvl = result.data.bot_lvl;
+                gameState.clickLvl = result.data.click_lvl || 1;
+                gameState.botLvl = result.data.bot_lvl || 0;
                 updateUI();
             }
-        } catch (e) { console.error("Ошибка загрузки:", e); }
+        } catch (e) { console.error("Ошибка загрузки баланса:", e); }
     }
 
-    // Обновление интерфейса (Лиги, Энергия, Текст)
     function updateUI() {
         const scoreEl = document.getElementById('score');
         const energyStat = document.getElementById('energy-stat');
         const energyFill = document.getElementById('energy-fill');
         const leagueName = document.getElementById('league-name');
         const leagueFill = document.getElementById('league-fill');
+        const tapLvlVal = document.getElementById('tap-lvl-val');
+        const autoLvlVal = document.getElementById('auto-lvl-val');
 
         if (scoreEl) scoreEl.innerText = Math.floor(gameState.score).toLocaleString();
         if (energyStat) energyStat.textContent = `${Math.floor(gameState.energy)}/${gameState.maxEnergy}`;
         if (energyFill) energyFill.style.width = (gameState.energy / gameState.maxEnergy * 100) + '%';
+        if (tapLvlVal) tapLvlVal.textContent = gameState.clickLvl;
+        if (autoLvlVal) autoLvlVal.textContent = gameState.botLvl;
 
         // Логика лиг
         let current = LEAGUES[0], next = LEAGUES[1];
@@ -89,7 +96,6 @@ if (typeof window !== 'undefined') {
         }
     }
 
-    // Клик по кнопке (Монета)
     function handleMainClick(e) {
         e.preventDefault();
         const touch = e.changedTouches ? e.changedTouches[0] : e;
@@ -102,7 +108,10 @@ if (typeof window !== 'undefined') {
             
             spawnPlus(touch.pageX, touch.pageY, power);
             updateUI();
-            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            
+            if (tg?.HapticFeedback) {
+                tg.HapticFeedback.impactOccurred('light');
+            }
         }
     }
 
@@ -116,7 +125,53 @@ if (typeof window !== 'undefined') {
         setTimeout(() => p.remove(), 700);
     }
 
-    // Ежесекундный цикл (Реген энергии и Автобот)
+    // Обработка покупки улучшений
+    window.handleUpgrade = function(type) {
+        const costs = {
+            tap: Math.floor(500 * Math.pow(1.5, gameState.clickLvl - 1)),
+            autoclick: Math.floor(2000 * Math.pow(1.5, gameState.botLvl))
+        };
+
+        const currentCost = type === 'tap' ? costs.tap : costs.autoclick;
+
+        if (gameState.score >= currentCost) {
+            gameState.score -= currentCost;
+            if (type === 'tap') gameState.clickLvl++;
+            else gameState.botLvl++;
+            
+            updateUI();
+            autoSave(); // Сразу сохраняем покупку
+            if (tg) tg.HapticFeedback.notificationOccurred('success');
+        } else {
+            if (tg) tg.showAlert("Недостаточно NP!");
+        }
+    };
+
+    // Активация ракеты
+    window.activateRocket = function() {
+        if (gameState.score >= 1000 && !gameState.rocketActive) {
+            gameState.score -= 1000;
+            gameState.rocketActive = true;
+            window.closeModals();
+            
+            const timerEl = document.getElementById('rocket-timer');
+            const timeVal = document.getElementById('rocket-time');
+            if (timerEl) timerEl.style.display = 'block';
+
+            let timeLeft = 30;
+            const interval = setInterval(() => {
+                timeLeft--;
+                if (timeVal) timeVal.textContent = timeLeft;
+                if (timeLeft <= 0) {
+                    clearInterval(interval);
+                    gameState.rocketActive = false;
+                    if (timerEl) timerEl.style.display = 'none';
+                }
+            }, 1000);
+            updateUI();
+        }
+    };
+
     function gameLoop() {
         if (gameState.energy < gameState.maxEnergy) {
             gameState.energy = Math.min(gameState.maxEnergy, gameState.energy + 2);
@@ -127,7 +182,6 @@ if (typeof window !== 'undefined') {
         updateUI();
     }
 
-    // Сохранение на сервер
     async function autoSave() {
         try {
             await fetch(`${API_BASE}/api/save`, {
@@ -140,7 +194,7 @@ if (typeof window !== 'undefined') {
                     bot_lvl: gameState.botLvl
                 })
             });
-        } catch (e) { }
+        } catch (e) { console.error("Ошибка автосохранения"); }
     }
 
     async function updateJackpotDisplay() {
@@ -154,7 +208,6 @@ if (typeof window !== 'undefined') {
         } catch (e) { }
     }
 
-    // Управление модалками
     window.openModal = function(id) {
         document.getElementById('overlay').classList.add('active');
         document.getElementById('modal-' + id).classList.add('active');
@@ -168,7 +221,18 @@ if (typeof window !== 'undefined') {
         document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
     };
 
-    // Слушатели событий
+    window.shareRef = function() {
+        const url = `https://t.me/share/url?url=https://t.me/UltraMind_AI_bot?start=${gameState.userId}&text=Присоединяйся к Neural Pulse AI!`;
+        if (tg) tg.openTelegramLink(url);
+    };
+
+    window.handleDailyClaim = function() {
+        gameState.score += 500;
+        updateUI();
+        window.closeModals();
+        if (tg) tg.showPopup({ message: "Вы получили 500 NP!" });
+    };
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else { init(); }
