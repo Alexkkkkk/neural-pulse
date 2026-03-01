@@ -1,56 +1,33 @@
-import os, asyncio, sqlite3, uvicorn, logging, time, sys, traceback, random
+import os, sys, asyncio, sqlite3, uvicorn, logging, time, random, traceback
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Request, Response
+from functools import wraps
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from pydantic import BaseModel
-from functools import wraps
 from aiogram import Bot, Dispatcher, types, F
+from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, Update
 
-# --- ПРИНУДИТЕЛЬНЫЕ ЛОГИ ДЛЯ BOTHOST ---
+# --- ФОРСИРОВАННЫЙ ВЫВОД ЛОГОВ ---
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
-print("--- [SYSTEM] PYTHON STARTING UP ---", flush=True)
+print("--- [!] ENGINE STARTING ---", flush=True)
 
 # --- НАСТРОЙКИ ---
 TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU"
-MY_DOMAIN = "np.bothost.ru" 
-WEBHOOK_PATH = "/webhook"
-WEBHOOK_URL = f"https://{MY_DOMAIN}{WEBHOOK_PATH}"
-
+MY_DOMAIN = "np.bothost.ru"
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
-# Используем папку data внутри проекта для надежности
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "game.db"
 
-JACKPOT_CHANCE = 0.0001  
-JACKPOT_INCREMENT = 10   
-
-logging.basicConfig(level=logging.INFO, stream=sys.stdout)
-logger = logging.getLogger("NEURAL_PULSE")
-
-class HTTPWrapper:
-    @staticmethod
-    def success(data: dict = None, message: str = "ok"):
-        return {"status": "ok", "message": message, "data": data if data else {}}
-    @staticmethod
-    def error(message: str = "error", status_code: int = 500):
-        return JSONResponse(status_code=status_code, content={"status": "error", "message": message})
-
-def api_error_handler(func):
-    @wraps(func)
-    async def wrapper(*args, **kwargs):
-        try: return await func(*args, **kwargs)
-        except Exception as e:
-            logger.error(f"API Error: {e}\n{traceback.format_exc()}")
-            return HTTPWrapper.error(message=str(e))
-    return wrapper
+# --- ИНИЦИАЛИЗАЦИЯ ---
+bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+dp = Dispatcher()
 
 class SaveData(BaseModel):
     user_id: int
@@ -59,138 +36,80 @@ class SaveData(BaseModel):
     click_lvl: int = 1
     bot_lvl: int = 0
 
-bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-dp = Dispatcher()
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Создаем папку для базы, если её нет
     DATA_DIR.mkdir(exist_ok=True, parents=True)
     print(f"--- [DB] CONNECTING TO {DB_PATH} ---", flush=True)
-    
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
              click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
              last_collect INTEGER DEFAULT 0, league_id INTEGER DEFAULT 1)''')
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_bal ON users(balance DESC)")
-        conn.execute("CREATE TABLE IF NOT EXISTS system_stats (key TEXT PRIMARY KEY, value INTEGER)")
         conn.execute("INSERT OR IGNORE INTO system_stats (key, value) VALUES ('jackpot', 0)")
         conn.commit()
     
-    await bot.set_webhook(url=WEBHOOK_URL, drop_pending_updates=True)
-    print(f"--- [WEBHOOK] SET TO {WEBHOOK_URL} ---", flush=True)
+    webhook_url = f"https://{MY_DOMAIN}/webhook"
+    await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+    print(f"--- [!] WEBHOOK READY: {webhook_url} ---", flush=True)
     yield
     await bot.delete_webhook()
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- API ---
+# --- API ЭНДПОИНТЫ ---
 
-@app.post(WEBHOOK_PATH)
+@app.post("/webhook")
 async def bot_webhook(request: Request):
     try:
         data = await request.json()
         update = Update.model_validate(data, context={"bot": bot})
         await dp.feed_update(bot, update)
-        return {"status": "ok"}
-    except Exception as e:
-        return {"status": "error"}
-
-@app.get("/api/jackpot")
-@api_error_handler
-async def get_jackpot():
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        conn.row_factory = sqlite3.Row
-        row = conn.execute("SELECT value FROM system_stats WHERE key = 'jackpot'").fetchone()
-        return HTTPWrapper.success({"amount": row["value"] if row else 0})
-
-@app.post("/api/jackpot/try")
-@api_error_handler
-async def try_jackpot(data: SaveData):
-    win, amount = False, 0
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        conn.execute("UPDATE system_stats SET value = value + ? WHERE key = 'jackpot'", (JACKPOT_INCREMENT,))
-        if random.random() < JACKPOT_CHANCE:
-            row = conn.execute("SELECT value FROM system_stats WHERE key = 'jackpot'").fetchone()
-            amount = row["value"]
-            conn.execute("UPDATE system_stats SET value = 0 WHERE key = 'jackpot'")
-            conn.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (amount, str(data.user_id)))
-            win = True
-        conn.commit()
-    return HTTPWrapper.success({"win": win, "amount": amount})
+        return {"ok": True}
+    except Exception:
+        return {"ok": False}
 
 @app.get("/api/balance/{user_id}")
-@api_error_handler
 async def get_balance(user_id: str):
-    now = int(time.time())
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.row_factory = sqlite3.Row
-        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-        if not row:
-            conn.execute("INSERT INTO users (id, balance, last_collect) VALUES (?, 1000, ?)", (user_id, now))
+        user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not user:
+            conn.execute("INSERT INTO users (id, balance) VALUES (?, 1000)", (user_id,))
             conn.commit()
-            return HTTPWrapper.success({"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "league_id": 1, "offline_profit": 0})
-        user = dict(row)
-        off_time = min(now - user['last_collect'], 28800)
-        profit = (off_time * user['bot_lvl'] * 2) if user['bot_lvl'] > 0 and off_time > 60 else 0
-        if profit > 0:
-            user['balance'] += profit
-            conn.execute("UPDATE users SET balance = ?, last_collect = ? WHERE id = ?", (user['balance'], now, user_id))
-            conn.commit()
-        return HTTPWrapper.success({**user, "offline_profit": profit})
+            return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "bot_lvl": 0}}
+        return {"status": "ok", "data": dict(user)}
 
 @app.post("/api/save")
-@api_error_handler
-async def save_progress(data: SaveData):
-    now = int(time.time())
+async def save_game(data: SaveData):
     with sqlite3.connect(str(DB_PATH)) as conn:
-        conn.execute("""INSERT INTO users (id, balance, click_lvl, bot_lvl, last_collect, league_id) 
-            VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET 
-            balance=excluded.balance, click_lvl=excluded.click_lvl, 
-            bot_lvl=excluded.bot_lvl, last_collect=?, league_id=excluded.league_id""", 
-            (str(data.user_id), data.score, data.click_lvl, data.bot_lvl, now, data.league_id, now))
+        conn.execute("""INSERT INTO users (id, balance, click_lvl, bot_lvl) 
+            VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET 
+            balance=excluded.balance, click_lvl=excluded.click_lvl, bot_lvl=excluded.bot_lvl""", 
+            (str(data.user_id), data.score, data.click_lvl, data.bot_lvl))
         conn.commit()
-    return HTTPWrapper.success()
-
-@app.get("/api/leaderboard")
-@api_error_handler
-async def get_leaderboard(user_id: str = None):
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        conn.row_factory = sqlite3.Row
-        top_rows = conn.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10").fetchall()
-        top10 = [{"user_id": row["id"], "score": row["balance"]} for row in top_rows]
-        user_rank = 0
-        if user_id:
-            query = "SELECT (SELECT COUNT(*) FROM users WHERE balance > u.balance) + 1 as rank FROM users u WHERE id = ?"
-            row = conn.execute(query, (user_id,)).fetchone()
-            if row: user_rank = row["rank"]
-        return HTTPWrapper.success({"top10": top10, "user_rank": user_rank})
-
-# --- СТАТИКА И ГЛАВНАЯ ---
+    return {"status": "ok"}
 
 @app.get("/", response_class=HTMLResponse)
-async def serve_index():
-    index_path = STATIC_DIR / "index.html"
-    if index_path.exists():
-        return FileResponse(index_path)
-    return "<h1>Frontend not found! Check /static/ folder</h1>"
+async def index():
+    p = STATIC_DIR / "index.html"
+    if p.exists():
+        return FileResponse(p)
+    return "<h1>Frontend (index.html) not found in /static/</h1>"
 
-# Монтируем статику В САМОМ КОНЦЕ
+# --- МОНТИРОВАНИЕ СТАТИКИ ---
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-# --- БОТ ---
-
+# --- ЛОГИКА БОТА ---
 @dp.message(F.text == "/start")
-async def start(m: types.Message):
+async def cmd_start(m: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="💎 Play Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
+        InlineKeyboardButton(text="🚀 PLAY NEURAL PULSE", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
     await m.answer(f"<b>System Online, {m.from_user.first_name}!</b>", reply_markup=kb)
 
 if __name__ == "__main__":
-    # Для Bothost порт берем из переменной или 3000
     port = int(os.environ.get("PORT", 3000))
+    print(f"--- [!] RUNNING ON PORT {port} ---", flush=True)
     uvicorn.run(app, host="0.0.0.0", port=port)
