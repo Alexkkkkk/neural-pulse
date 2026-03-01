@@ -156,6 +156,6 @@ async def cmd_start(m: types.Message):
     await m.answer(f"<b>System Online, {m.from_user.first_name}!</b>\nWelcome to Neural Pulse.", reply_markup=kb)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 3000))
     logger.info(f"Starting server on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
