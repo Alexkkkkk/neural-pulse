@@ -109,13 +109,11 @@ async def get_balance(user_id: str):
         row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         
         if not row:
-            # Новый игрок
             conn.execute("INSERT INTO users (id, balance, last_collect) VALUES (?, 1000, ?)", (user_id, now))
             conn.commit()
             return HTTPWrapper.success({"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "league_id": 1, "offline_profit": 0})
         
         user = dict(row)
-        # Офлайн-профит: уровень бота * 2 в сек (макс 8 часов)
         off_time = min(now - user['last_collect'], 28800)
         profit = (off_time * user['bot_lvl'] * 2) if user['bot_lvl'] > 0 and off_time > 60 else 0
         
@@ -144,25 +142,30 @@ async def save_progress(data: SaveData):
 async def get_leaderboard(user_id: str = None):
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.row_factory = sqlite3.Row
+        
+        # 1. Получаем Топ-10
         top_rows = conn.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10").fetchall()
         top10 = [{"user_id": row["id"], "score": row["balance"]} for row in top_rows]
         
+        # 2. Получаем ранг пользователя (исправленный запрос с тройными кавычками)
         user_rank = 0
         if user_id:
-            row = conn.execute("SELECT (SELECT COUNT(*) FROM users WHERE balance > u.balance) + 1 as rank 
-                                FROM users u WHERE id = ?", (user_id,)).fetchone()
-            if row: user_rank = row["rank"]
+            query = """
+                SELECT (SELECT COUNT(*) FROM users WHERE balance > u.balance) + 1 as rank 
+                FROM users u WHERE id = ?
+            """
+            row = conn.execute(query, (user_id,)).fetchone()
+            if row:
+                user_rank = row["rank"]
             
         return HTTPWrapper.success({"top10": top10, "user_rank": user_rank})
 
 # --- СТАТИКА ---
 if STATIC_DIR.exists():
-    # Главная страница игры
     @app.get("/")
     async def serve_game():
         return FileResponse(STATIC_DIR / "index.html")
     
-    # Монтируем папку static для CSS/JS/Images
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # --- ОБРАБОТКА КОМАНД БОТА ---
