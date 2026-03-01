@@ -98,6 +98,13 @@
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         .plus-animation { position: absolute; pointer-events: none; font-weight: 900; animation: float 0.7s ease-out forwards; z-index: 100; text-shadow: 0 0 10px currentColor; }
         @keyframes float { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.6); } }
+        
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
     </style>
 </head>
 <body>
@@ -121,7 +128,7 @@
 
         <div class="jackpot-container">
             <div style="font-size: 9px; letter-spacing: 3px; color: var(--neon); margin-bottom: 3px; font-weight: 900;">GLOBAL JACKPOT</div>
-            <div id="jackpot-amount">500,240</div>
+            <div id="jackpot-amount">500,000</div>
         </div>
 
         <div class="balance-container">
@@ -162,106 +169,198 @@
         </div>
         <div class="stat-box" style="border: 1px solid var(--neon); padding:15px; border-radius:15px; margin-bottom:10px;">
             <div>MULTI-TAP (LVL <span id="tap-lvl-val">1</span>)</div>
-            <button class="buy-btn" style="width: 100%; padding: 10px; background: var(--neon); border: none; border-radius: 10px; margin-top: 10px;">UPGRADE</button>
+            <div style="font-size: 10px; color: var(--neon); margin: 5px 0;">Цена: <span id="upgrade-cost-text">500</span> NP</div>
+            <button onclick="buyUpgrade()" class="buy-btn" style="width: 100%; padding: 10px; background: var(--neon); border: none; border-radius: 10px; margin-top: 10px; color: black; font-weight: bold;">UPGRADE</button>
         </div>
     </div>
 
     <div id="modal-stats" class="modal">
-        <h2 style="text-align: center; color: var(--neon);">🏆 LEADERBOARD</h2>
-        <div id="leaderboard-list">Загрузка...</div>
+        <h2 style="text-align: center; color: var(--neon);">🏆 HALL OF FAME</h2>
+        <p style="font-size: 10px; text-align: center; opacity: 0.6;">ПОСЛЕДНИЕ ПОБЕДИТЕЛИ ДЖЕКПОТА</p>
+        <div id="winners-list" style="margin-bottom: 20px; background: rgba(255,255,255,0.05); border-radius: 15px; padding: 10px;">
+            Загрузка...
+        </div>
     </div>
     
     <div id="modal-friends" class="modal"><h2>FRIENDS</h2><p>Invite friends coming soon...</p></div>
     <div id="modal-tasks" class="modal"><h2>TASKS</h2><p>Coming Soon...</p></div>
-    <div id="modal-daily" class="modal"><h2>DAILY BONUS</h2><p>Coming Soon...</p></div>
+    
+    <div id="modal-daily" class="modal">
+        <h2 style="color: #ff9d00; text-align: center;">DAILY REWARDS</h2>
+        <p style="text-align: center; font-size: 12px; opacity: 0.7;">Заходи каждый день!</p>
+        <button onclick="claimDailyBonus()" style="width: 100%; padding: 15px; background: #ff9d00; border: none; border-radius: 15px; color: black; font-weight: 900;">ЗАБРАТЬ БОНУС</button>
+    </div>
 
     <script>
-        // Инициализация Telegram
         const tg = window.Telegram.WebApp;
         tg.expand();
         tg.ready();
 
+        const LEAGUES = [
+            { name: "BRONZE", min: 0, max: 10000, color: "#cd7f32" },
+            { name: "SILVER", min: 10000, max: 50000, color: "#c0c0c0" },
+            { name: "GOLD", min: 50000, max: 250000, color: "#ffd700" },
+            { name: "PLATINUM", min: 250000, max: 1000000, color: "#e5e4e2" },
+            { name: "DIAMOND", min: 1000000, max: Infinity, color: "#00d4ff" }
+        ];
+
         let state = {
-            score: 0,
-            energy: 1000,
-            max_energy: 1000,
-            tap_power: 1,
-            user_id: tg.initDataUnsafe?.user?.id || 0
+            score: 0, energy: 1000, max_energy: 1000, tap_power: 1,
+            user_id: tg.initDataUnsafe?.user?.id || 12345,
+            lastLeague: null
         };
 
-        // 1. Загрузка данных при старте (синхронизировано с вашим main.py)
+        // Загрузка
         async function loadData() {
-            if (!state.user_id) return;
             try {
-                const response = await fetch(`/api/balance/${state.user_id}`);
-                if (response.ok) {
-                    const res = await response.json();
-                    if (res.status === "ok") {
-                        // Баланс из БД в score игры
-                        state.score = res.data.balance || 0;
-                        state.tap_power = res.data.click_lvl || 1;
-                        updateUI();
-                        console.log("Данные успешно загружены");
-                    }
+                const r = await fetch(`/api/balance/${state.user_id}`);
+                const res = await r.json();
+                if (res.status === "ok") {
+                    state.score = res.data.balance;
+                    state.tap_power = res.data.click_lvl;
+                    document.getElementById('tap-lvl-val').innerText = state.tap_power;
+                    document.getElementById('upgrade-cost-text').innerText = state.tap_power * 500;
+                    updateUI();
                 }
-            } catch (e) { console.error("Ошибка загрузки:", e); }
+            } catch (e) { console.error(e); }
         }
 
-        // 2. Сохранение данных (синхронизировано с моделью SaveData в main.py)
+        // Сохранение + Джекпот
         async function saveData() {
-            if (!state.user_id) return;
             try {
-                await fetch('/api/save', {
+                const r = await fetch('/api/save', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        user_id: state.user_id,
-                        score: Math.floor(state.score), // Это попадет в balance в БД
+                        user_id: state.user_id, 
+                        score: Math.floor(state.score), 
                         click_lvl: state.tap_power,
                         bot_lvl: 0
                     })
                 });
-            } catch (e) { console.error("Ошибка сохранения:", e); }
+                const res = await r.json();
+                if (res.status === "ok") {
+                    document.getElementById('jackpot-amount').innerText = res.jackpot.toLocaleString();
+                    if (res.explosion) triggerExplosion(res.winner == state.user_id);
+                }
+            } catch (e) { console.error(e); }
         }
 
-        // --- Логика клика ---
-        const btn = document.getElementById('btn');
-        btn.addEventListener('touchstart', (e) => {
+        // Прокачка
+        async function buyUpgrade() {
+            try {
+                const r = await fetch('/api/upgrade', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({user_id: state.user_id})
+                });
+                const res = await r.json();
+                if (res.status === "ok") {
+                    state.score = res.new_balance;
+                    state.tap_power = res.new_lvl;
+                    document.getElementById('tap-lvl-val').innerText = res.new_lvl;
+                    document.getElementById('upgrade-cost-text').innerText = res.next_cost;
+                    updateUI();
+                    tg.HapticFeedback.notificationOccurred('success');
+                } else { 
+                    tg.showPopup({message: "Недостаточно NP!"}); 
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        // Победители
+        async function loadWinners() {
+            try {
+                const r = await fetch('/api/winners');
+                const res = await r.json();
+                const list = document.getElementById('winners-list');
+                if (res.status === "ok" && res.data.length > 0) {
+                    list.innerHTML = res.data.map(w => `
+                        <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.05); font-size:12px;">
+                            <span>👤 ID: ${w.user_id.toString().slice(0,6)}...</span>
+                            <span style="color:var(--neon-secondary); font-weight:bold;">+${w.amount.toLocaleString()} NP</span>
+                        </div>
+                    `).join('');
+                } else {
+                    list.innerHTML = "Победителей пока нет";
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        // Ежедневный бонус
+        async function claimDailyBonus() {
+            try {
+                const r = await fetch('/api/daily-bonus', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({user_id: state.user_id})
+                });
+                const res = await r.json();
+                if (res.status === "ok") {
+                    tg.showPopup({title: "УСПЕХ!", message: `Вы получили ${res.reward} NP!`});
+                    loadData();
+                } else {
+                    tg.showPopup({message: res.message});
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        function updateUI() {
+            const score = Math.floor(state.score);
+            document.getElementById('score').innerText = score.toLocaleString();
+            
+            const league = LEAGUES.find(l => score >= l.min && score < l.max) || LEAGUES[0];
+            const prog = league.max === Infinity ? 100 : ((score - league.min) / (league.max - league.min)) * 100;
+            
+            const ln = document.getElementById('league-name');
+            ln.innerText = league.name + " LEAGUE";
+            ln.style.color = league.color;
+            document.getElementById('league-fill').style.width = prog + "%";
+            document.getElementById('league-fill').style.background = league.color;
+            document.getElementById('league-percent').innerText = Math.floor(prog) + "%";
+            
+            document.getElementById('energy-stat').innerText = `${Math.floor(state.energy)}/1000`;
+            document.getElementById('energy-fill').style.width = (state.energy/10) + "%";
+            document.getElementById('user-id-display').innerText = "ID: " + state.user_id;
+
+            if (state.lastLeague && state.lastLeague !== league.name) {
+                tg.HapticFeedback.notificationOccurred('success');
+            }
+            state.lastLeague = league.name;
+        }
+
+        function triggerExplosion(isMe) {
+            document.body.style.animation = "shake 0.5s 5";
+            tg.showPopup({
+                title: isMe ? "JACKPOT!" : "ВЗРЫВ!", 
+                message: isMe ? "ВЫ ВЫИГРАЛИ ГЛОБАЛЬНЫЙ ДЖЕКПОТ!" : "Кто-то только что сорвал куш!"
+            });
+            if (isMe) loadData();
+            setTimeout(() => { document.body.style.animation = ""; }, 3000);
+        }
+
+        // Клик
+        document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (state.energy >= state.tap_power) {
                 state.score += state.tap_power;
                 state.energy -= state.tap_power;
                 updateUI();
-                
-                const touch = e.changedTouches[0];
-                createPlusAnim(touch.clientX, touch.clientY, state.tap_power);
+                const t = e.changedTouches[0];
+                const p = document.createElement('div');
+                p.className = 'plus-animation'; 
+                p.innerText = '+'+state.tap_power;
+                p.style.left = t.clientX+'px'; p.style.top = t.clientY+'px';
+                p.style.color = 'var(--neon)';
+                document.body.appendChild(p);
+                setTimeout(() => p.remove(), 700);
                 tg.HapticFeedback.impactOccurred('light');
-            } else {
-                tg.HapticFeedback.notificationOccurred('error');
             }
         });
 
-        function updateUI() {
-            document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
-            document.getElementById('energy-stat').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
-            document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
-            document.getElementById('user-id-display').innerText = `ID: ${state.user_id}`;
-        }
-
-        function createPlusAnim(x, y, val) {
-            const el = document.createElement('div');
-            el.className = 'plus-animation';
-            el.innerText = '+' + val;
-            el.style.left = x + 'px';
-            el.style.top = y + 'px';
-            el.style.color = 'var(--neon)';
-            document.body.appendChild(el);
-            setTimeout(() => el.remove(), 700);
-        }
-
-        // Модалки
         function openModal(id) {
-            document.getElementById('modal-' + id).classList.add('active');
+            if(id === 'stats') loadWinners();
+            document.getElementById('modal-'+id).classList.add('active');
             document.getElementById('overlay').classList.add('active');
         }
 
@@ -270,15 +369,7 @@
             document.getElementById('overlay').classList.remove('active');
         }
 
-        // Регенерация энергии (1 в сек)
-        setInterval(() => {
-            if (state.energy < state.max_energy) {
-                state.energy = Math.min(state.max_energy, state.energy + 1);
-                updateUI();
-            }
-        }, 1000);
-
-        // Автосохранение каждые 3 секунды
+        setInterval(() => { if(state.energy < 1000) { state.energy++; updateUI(); } }, 1000);
         setInterval(saveData, 3000);
         
         window.onload = () => {
