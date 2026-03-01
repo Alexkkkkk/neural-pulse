@@ -20,7 +20,6 @@ WEBHOOK_URL = f"https://{MY_DOMAIN}{WEBHOOK_PATH}"
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
-# ВАЖНО: Путь для сохранения данных на Bothost
 DATA_DIR = Path("/app/data") 
 DB_PATH = DATA_DIR / "game.db"
 
@@ -59,7 +58,6 @@ dp = Dispatcher()
 # --- ЖИЗНЕННЫЙ ЦИКЛ ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Подготовка БД в защищенном разделе
     DATA_DIR.mkdir(exist_ok=True, parents=True)
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
@@ -68,12 +66,9 @@ async def lifespan(app: FastAPI):
              last_collect INTEGER DEFAULT 0, league_id INTEGER DEFAULT 1)''')
         conn.execute("CREATE INDEX IF NOT EXISTS idx_bal ON users(balance DESC)")
     
-    # 2. Установка вебхука
     await bot.set_webhook(url=WEBHOOK_URL, drop_pending_updates=True)
     logger.info(f"🚀 Webhook active: {WEBHOOK_URL}")
-    
     yield
-    # 3. Отключение вебхука при остановке
     await bot.delete_webhook()
 
 app = FastAPI(lifespan=lifespan)
@@ -88,10 +83,10 @@ async def bot_webhook(request: Request):
         await dp.feed_update(bot, update)
         return {"status": "ok"}
     except Exception as e:
-        logger.error(f"Webhook process error: {e}")
+        logger.error(f"Webhook error: {e}")
         return {"status": "error"}
 
-# --- ИСПРАВЛЕНИЕ ОШИБОК 404 (Иконки) ---
+# --- ИКОНКИ ---
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     icon_path = STATIC_DIR / "images" / "unnamed4.png"
@@ -99,7 +94,7 @@ async def favicon():
         return FileResponse(icon_path)
     return Response(status_code=204)
 
-# --- API ИГРЫ ---
+# --- API ---
 @app.get("/api/balance/{user_id}")
 @api_error_handler
 async def get_balance(user_id: str):
@@ -147,7 +142,7 @@ async def get_leaderboard(user_id: str = None):
         top_rows = conn.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10").fetchall()
         top10 = [{"user_id": row["id"], "score": row["balance"]} for row in top_rows]
         
-        # 2. Получаем ранг пользователя (исправленный запрос с тройными кавычками)
+        # 2. Получаем ранг пользователя
         user_rank = 0
         if user_id:
             query = """
@@ -165,21 +160,14 @@ if STATIC_DIR.exists():
     @app.get("/")
     async def serve_game():
         return FileResponse(STATIC_DIR / "index.html")
-    
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-# --- ОБРАБОТКА КОМАНД БОТА ---
 @dp.message(F.text == "/start")
 async def start(m: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💎 Play Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
-    await m.answer(
-        f"<b>System Online, {m.from_user.first_name}!</b>\n\n"
-        f"🚀 Твой нейронный интерфейс готов к работе.\n"
-        f"💰 Собирай энергию, прокачивай ботов и стань лидером сети.", 
-        reply_markup=kb
-    )
+    await m.answer(f"<b>System Online, {m.from_user.first_name}!</b>", reply_markup=kb)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
