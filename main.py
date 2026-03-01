@@ -12,6 +12,11 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, Update
 
+# --- ПРИНУДИТЕЛЬНЫЕ ЛОГИ ДЛЯ BOTHOST ---
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
+print("--- СЕРВЕР ЗАПУСКАЕТСЯ ---", flush=True)
+
 # --- НАСТРОЙКИ ---
 TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU"
 MY_DOMAIN = "np.bothost.ru" 
@@ -81,7 +86,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- МАРШРУТЫ API (Должны быть ДО монтирования статики) ---
+# --- МАРШРУТЫ API ---
 
 @app.post(WEBHOOK_PATH)
 async def bot_webhook(request: Request):
