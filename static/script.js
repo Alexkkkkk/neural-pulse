@@ -6,6 +6,7 @@ if (typeof window !== 'undefined') {
     let gameState = { userId: null, score: 0, clickLvl: 1, botLvl: 0 };
 
     async function init() {
+        console.log("🎮 Инициализация игры...");
         if (tg) {
             tg.expand();
             tg.ready();
@@ -13,23 +14,41 @@ if (typeof window !== 'undefined') {
         } else {
             gameState.userId = "123456789";
         }
+        
+        console.log("👤 User ID:", gameState.userId);
+        
         await loadBalance();
         updateJackpotDisplay();
+        
         setInterval(updateJackpotDisplay, 20000);
         setInterval(autoSave, 30000);
     }
 
+    // ТВОЯ ОБНОВЛЕННАЯ ФУНКЦИЯ С ЛОГАМИ
     async function loadBalance() {
+        console.log("📡 Запрос баланса для ID:", gameState.userId);
         try {
             const res = await fetch(`${API_BASE}/api/balance/${gameState.userId}`);
+            console.log("📡 Ответ сервера получен:", res.status);
+            
+            if (!res.ok) {
+                console.error("❌ Сервер ответил ошибкой:", res.status);
+                return;
+            }
+
             const result = await res.json();
+            console.log("📦 Данные от сервера:", result);
+
             if (result.status === 'ok') {
                 gameState.score = result.data.balance;
                 gameState.clickLvl = result.data.click_lvl;
                 gameState.botLvl = result.data.bot_lvl;
                 updateUI();
+                console.log("✅ Баланс успешно обновлен в UI");
             }
-        } catch (e) { console.error("Balance error:", e); }
+        } catch (e) { 
+            console.error("❌ Ошибка сети или сервера:", e); 
+        }
     }
 
     async function updateJackpotDisplay() {
@@ -40,12 +59,15 @@ if (typeof window !== 'undefined') {
                 const el = document.getElementById('jackpot-amount');
                 if (el) el.innerText = `🎰 JACKPOT: ${result.data.amount.toLocaleString()}`;
             }
-        } catch (e) { }
+        } catch (e) { 
+            console.log("🎰 Джекпот пока недоступен");
+        }
     }
 
     async function autoSave() {
+        console.log("💾 Попытка автосохранения...");
         try {
-            await fetch(`${API_BASE}/api/save`, {
+            const res = await fetch(`${API_BASE}/api/save`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -55,7 +77,10 @@ if (typeof window !== 'undefined') {
                     bot_lvl: gameState.botLvl
                 })
             });
-        } catch (e) { }
+            if (res.ok) console.log("💾 Прогресс сохранен");
+        } catch (e) { 
+            console.error("❌ Ошибка сохранения:", e);
+        }
     }
 
     function handleMainClick() {
@@ -64,13 +89,11 @@ if (typeof window !== 'undefined') {
         if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
     }
 
-    // ТВОЯ ИСПРАВЛЕННАЯ ФУНКЦИЯ
     function updateUI() {
         const scoreEl = document.getElementById('balance');
         if (scoreEl) {
             scoreEl.innerText = Math.floor(gameState.score).toLocaleString();
         }
-        // Если мы в Telegram, обновляем заголовок
         if (tg) {
             tg.headerColor = gameState.score > 1000 ? "#ff0000" : "#000000";
         }
