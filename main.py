@@ -15,7 +15,7 @@ from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 # --- ПРИНУДИТЕЛЬНЫЕ ЛОГИ ДЛЯ BOTHOST ---
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
-print("--- СЕРВЕР ЗАПУСКАЕТСЯ ---", flush=True)
+print("--- [SYSTEM] PYTHON STARTING UP ---", flush=True)
 
 # --- НАСТРОЙКИ ---
 TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU"
@@ -25,17 +25,16 @@ WEBHOOK_URL = f"https://{MY_DOMAIN}{WEBHOOK_PATH}"
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
-DATA_DIR = Path("/app/data") 
+# Используем папку data внутри проекта для надежности
+DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "game.db"
 
-# КОНФИГУРАЦИЯ ДЖЕКПОТА
 JACKPOT_CHANCE = 0.0001  
 JACKPOT_INCREMENT = 10   
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 logger = logging.getLogger("NEURAL_PULSE")
 
-# --- КЛАСС ОТВЕТОВ ---
 class HTTPWrapper:
     @staticmethod
     def success(data: dict = None, message: str = "ok"):
@@ -60,14 +59,15 @@ class SaveData(BaseModel):
     click_lvl: int = 1
     bot_lvl: int = 0
 
-# --- ИНИЦИАЛИЗАЦИЯ БОТА ---
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-# --- ЖИЗНЕННЫЙ ЦИКЛ ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Создаем папку для базы, если её нет
     DATA_DIR.mkdir(exist_ok=True, parents=True)
+    print(f"--- [DB] CONNECTING TO {DB_PATH} ---", flush=True)
+    
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
@@ -79,14 +79,14 @@ async def lifespan(app: FastAPI):
         conn.commit()
     
     await bot.set_webhook(url=WEBHOOK_URL, drop_pending_updates=True)
-    logger.info(f"🚀 Webhook active: {WEBHOOK_URL}")
+    print(f"--- [WEBHOOK] SET TO {WEBHOOK_URL} ---", flush=True)
     yield
     await bot.delete_webhook()
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- МАРШРУТЫ API ---
+# --- API ---
 
 @app.post(WEBHOOK_PATH)
 async def bot_webhook(request: Request):
@@ -96,7 +96,6 @@ async def bot_webhook(request: Request):
         await dp.feed_update(bot, update)
         return {"status": "ok"}
     except Exception as e:
-        logger.error(f"Webhook error: {e}")
         return {"status": "error"}
 
 @app.get("/api/jackpot")
@@ -164,21 +163,21 @@ async def get_leaderboard(user_id: str = None):
         top10 = [{"user_id": row["id"], "score": row["balance"]} for row in top_rows]
         user_rank = 0
         if user_id:
-            query = """SELECT (SELECT COUNT(*) FROM users WHERE balance > u.balance) + 1 as rank 
-                       FROM users u WHERE id = ?"""
+            query = "SELECT (SELECT COUNT(*) FROM users WHERE balance > u.balance) + 1 as rank FROM users u WHERE id = ?"
             row = conn.execute(query, (user_id,)).fetchone()
             if row: user_rank = row["rank"]
         return HTTPWrapper.success({"top10": top10, "user_rank": user_rank})
 
-# --- СТАТИКА ---
+# --- СТАТИКА И ГЛАВНАЯ ---
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
     index_path = STATIC_DIR / "index.html"
     if index_path.exists():
         return FileResponse(index_path)
-    return "<h1>index.html не найден в папке static!</h1>"
+    return "<h1>Frontend not found! Check /static/ folder</h1>"
 
+# Монтируем статику В САМОМ КОНЦЕ
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
@@ -192,4 +191,6 @@ async def start(m: types.Message):
     await m.answer(f"<b>System Online, {m.from_user.first_name}!</b>", reply_markup=kb)
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+    # Для Bothost порт берем из переменной или 3000
+    port = int(os.environ.get("PORT", 3000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
