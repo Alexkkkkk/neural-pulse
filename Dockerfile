@@ -1,11 +1,16 @@
+# Базовый образ Питона
 FROM python:3.11-slim
+
+# Установка зависимостей
 WORKDIR /app
-# Явно ставим зависимости
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-# Копируем проект
+
+# Копируем всё
 COPY . .
+
 # Открываем порт
 EXPOSE 3000
-# ГЛАВНОЕ: Используем ENTRYPOINT в JSON-формате (это сложнее переопределить)
+
+# ИСПОЛЬЗУЕМ JSON-ФОРМАТ (это критично, чтобы хостинг не подставил 'node' перед командой)
 ENTRYPOINT ["python3", "main.py"]
