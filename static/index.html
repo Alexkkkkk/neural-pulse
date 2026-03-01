@@ -5,102 +5,161 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        body { background: #0a0a0b; color: white; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; }
-        .header { padding: 20px; }
-        #balance { font-size: 42px; font-weight: bold; color: #00f2ff; }
-        .jackpot { color: #ff9d00; font-size: 14px; }
+        :root { --neon: #00f2ff; --bg: #0a0a0b; }
+        body { background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; user-select: none; }
+        .app { display: flex; flex-direction: column; height: 100vh; align-items: center; justify-content: space-between; padding: 20px 0; }
         
-        .main-btn { width: 200px; height: 200px; background: #111; border: 5px solid #222; border-radius: 50%; margin: 50px auto; display: flex; align-items: center; justify-content: center; font-size: 50px; transition: 0.1s; cursor: pointer; }
-        .main-btn:active { transform: scale(0.95); }
+        #score { font-size: 48px; font-weight: 900; text-shadow: 0 0 20px var(--neon); margin-top: 20px; }
+        #jackpot-ui { font-size: 14px; color: #ff9d00; background: rgba(255,157,0,0.1); padding: 5px 15px; border-radius: 20px; border: 1px solid #ff9d00; }
 
-        .menu { display: flex; justify-content: space-around; position: fixed; bottom: 20px; width: 100%; }
-        .menu button { background: #161618; border: 1px solid #333; color: white; padding: 15px; border-radius: 15px; width: 30%; font-size: 12px; }
-        
-        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
-        .modal.active { display: flex; }
+        .circle-container { position: relative; width: 280px; height: 280px; }
+        #main-btn { width: 100%; height: 100%; background: radial-gradient(circle, #1a1a1d 0%, #000 100%); border-radius: 50%; border: 8px solid #161618; box-shadow: 0 0 50px rgba(0,242,255,0.1); display: flex; align-items: center; justify-content: center; transition: transform 0.05s; }
+        #main-btn:active { transform: scale(0.95); }
+        #main-btn img { width: 160px; filter: drop-shadow(0 0 10px var(--neon)); }
+
+        .nav { display: flex; width: 90%; background: #161618; border-radius: 25px; padding: 10px; justify-content: space-around; }
+        .nav-item { text-align: center; font-size: 10px; color: #666; cursor: pointer; }
+        .nav-item.active { color: var(--neon); }
+
+        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; background: #161618; border-radius: 30px 30px 0 0; padding: 30px 20px; transition: 0.3s; z-index: 1000; box-sizing: border-box; }
+        .modal.active { bottom: 0; }
+        #overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:none; z-index: 999; }
+        #overlay.active { display:block; }
+
+        .floating-text { position: absolute; color: var(--neon); font-weight: bold; pointer-events: none; animation: floatUp 0.8s ease-out forwards; }
+        @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-100px); opacity: 0; } }
     </style>
 </head>
 <body>
+    <div id="overlay" onclick="closeModals()"></div>
+    <div class="app">
+        <div id="jackpot-ui">JACKPOT: <span id="jackpot-val">500,000</span> NP</div>
+        <div id="score">0</div>
+        
+        <div class="circle-container">
+            <div id="main-btn" onclick="handleTap(event)">
+                <img src="https://cdn-icons-png.flaticon.com/512/2103/2103633.png">
+            </div>
+        </div>
 
-    <div class="header">
-        <div class="jackpot">JACKPOT: <span id="jack-val">500,000</span> NP</div>
-        <div id="balance">0</div>
+        <div class="nav">
+            <div class="nav-item" onclick="openModal('friends')">👥 FRIENDS</div>
+            <div class="nav-item" onclick="openModal('tasks')">⚡ TASKS</div>
+            <div class="nav-item" onclick="openModal('daily')">🎁 DAILY</div>
+            <div class="nav-item" onclick="openModal('upgrades')">🚀 UPGRADES</div>
+        </div>
     </div>
 
-    <div class="main-btn" onclick="tap(event)">⚡</div>
-
-    <div class="menu">
-        <button onclick="openModal('friends')">FRIENDS</button>
-        <button onclick="openModal('tasks')">TASKS</button>
-        <button onclick="claimBonus()">BONUS</button>
-    </div>
-
-    <div id="modal-friends" class="modal" onclick="this.classList.remove('active')">
+    <div id="modal-friends" class="modal">
         <h2>FRIENDS</h2>
-        <p>Твоя ссылка:</p>
-        <small id="ref-link"></small>
-        <button onclick="share()" style="margin-top:20px; padding:10px;">ПРИГЛАСИТЬ</button>
+        <p>Приглашай друзей и получай 5,000 NP!</p>
+        <button onclick="shareInvite()" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:15px; font-weight:bold;">INVITE FRIEND</button>
     </div>
 
-    <div id="modal-tasks" class="modal" onclick="this.classList.remove('active')">
-        <h2>TASKS</h2>
-        <p>1. Подпишись на канал (+5000 NP)</p>
-        <p>2. Пригласи 3 друзей (+10000 NP)</p>
+    <div id="modal-daily" class="modal">
+        <h2>DAILY BONUS</h2>
+        <button onclick="claimBonus()" style="width:100%; padding:15px; background:#ff9d00; border:none; border-radius:15px; font-weight:bold;">CLAIM REWARD</button>
+    </div>
+
+    <div id="modal-upgrades" class="modal">
+        <h2>UPGRADES</h2>
+        <div onclick="buyUpgrade('click')" style="background:#222; padding:15px; border-radius:15px; margin-bottom:10px;">
+            Multitap (Lvl <span id="click-lvl">1</span>) <br> <small id="click-cost">Cost: 500</small>
+        </div>
+        <div onclick="buyUpgrade('bot')" style="background:#222; padding:15px; border-radius:15px;">
+            Auto-Bot (Lvl <span id="bot-lvl">0</span>) <br> <small id="bot-cost">Cost: 2000</small>
+        </div>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
-        let state = { score: 0, user_id: tg.initDataUnsafe.user?.id || 123, click: 1 };
+        tg.expand();
+        let state = { user_id: tg.initDataUnsafe.user?.id || 123, score: 0, click_lvl: 1, bot_lvl: 0 };
 
-        async function load() {
+        async function loadData() {
             const r = await fetch(`/api/balance/${state.user_id}`);
             const res = await r.json();
-            state.score = res.data.balance;
-            state.click = res.data.click_lvl;
+            state = { ...state, ...res.data };
             updateUI();
         }
 
         function updateUI() {
-            document.getElementById('balance').innerText = Math.floor(state.score).toLocaleString();
-            document.getElementById('ref-link').innerText = `t.me/NeuralPulseBot?start=ref_${state.user_id}`;
+            document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
+            document.getElementById('click-lvl').innerText = state.click_lvl;
+            document.getElementById('bot-lvl').innerText = state.bot_lvl;
+            document.getElementById('click-cost').innerText = `Cost: ${state.click_lvl * 500}`;
+            document.getElementById('bot-cost').innerText = `Cost: ${(state.bot_lvl + 1) * 2000}`;
         }
 
-        function tap(e) {
-            state.score += state.click;
+        function handleTap(e) {
+            state.score += state.click_lvl;
             updateUI();
-            tg.HapticFeedback.impactOccurred('light');
-            save();
+            tg.HapticFeedback.impactOccurred('medium');
+            createFloatingText(e.clientX, e.clientY, `+${state.click_lvl}`);
+            saveData();
         }
 
-        async function save() {
-            const r = await fetch('/api/save', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({user_id: state.user_id, score: state.score, click_lvl: state.click})
-            });
-            const res = await r.json();
-            document.getElementById('jack-val').innerText = res.jackpot.toLocaleString();
+        function createFloatingText(x, y, text) {
+            const el = document.createElement('div');
+            el.className = 'floating-text';
+            el.style.left = `${x}px`;
+            el.style.top = `${y}px`;
+            el.innerText = text;
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 800);
         }
 
-        async function claimBonus() {
-            const r = await fetch('/api/daily-bonus', {
+        async function saveData() {
+            await fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({user_id: state.user_id})
+                body: JSON.stringify({ user_id: state.user_id, score: state.score, click_lvl: state.click_lvl, bot_lvl: state.bot_lvl })
             });
-            const res = await r.json();
-            if (res.status === "ok") {
-                tg.showAlert(`Бонус получен: +${res.reward} NP!`);
-                load();
+        }
+
+        function buyUpgrade(type) {
+            let cost = type === 'click' ? state.click_lvl * 500 : (state.bot_lvl + 1) * 2000;
+            if (state.score >= cost) {
+                state.score -= cost;
+                if (type === 'click') state.click_lvl++;
+                else state.bot_lvl++;
+                updateUI();
+                saveData();
             } else {
-                tg.showAlert(res.message);
+                tg.showAlert("Недостаточно NP!");
             }
         }
 
-        function openModal(id) { document.getElementById('modal-' + id).classList.add('active'); }
-        function share() { tg.openTelegramLink(`https://t.me/share/url?url=https://t.me/NeuralPulseBot?start=ref_${state.user_id}`); }
+        function openModal(id) {
+            document.getElementById('modal-' + id).classList.add('active');
+            document.getElementById('overlay').classList.add('active');
+        }
 
-        load();
+        function closeModals() {
+            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+            document.getElementById('overlay').classList.remove('active');
+        }
+
+        function shareInvite() {
+            tg.openTelegramLink(`https://t.me/share/url?url=https://t.me/NeuralPulseBot?start=ref_${state.user_id}`);
+        }
+
+        async function claimBonus() {
+            const r = await fetch('/api/daily-bonus', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user_id: state.user_id})});
+            const res = await r.json();
+            if (res.status === "ok") { loadData(); tg.showAlert(`Получено ${res.reward} NP!`); }
+            else tg.showAlert(res.message);
+        }
+
+        // Авто-майнинг раз в 5 секунд
+        setInterval(() => {
+            if (state.bot_lvl > 0) {
+                state.score += (state.bot_lvl * 0.5);
+                updateUI();
+            }
+        }, 5000);
+
+        loadData();
     </script>
 </body>
 </html>
