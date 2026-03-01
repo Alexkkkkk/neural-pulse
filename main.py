@@ -73,13 +73,13 @@ async def lifespan(app: FastAPI):
     
     yield
     
-    # 3. Завершение работы (Не удаляем вебхук для стабильности на хостинге)
+    # 3. Завершение работы
     logger.info("Application stopping... Webhook preserved for stability.")
 
 # --- ИНИЦИАЛИЗАЦИЯ FASTAPI ---
 app = FastAPI(lifespan=lifespan)
 
-# Разрешаем CORS для работы фронтенда
+# Разрешаем CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -88,6 +88,11 @@ app.add_middleware(
 )
 
 # --- ЭНДПОИНТЫ API ---
+
+@app.get("/health")
+async def health_check():
+    """Эндпоинт для проверки хостингом, что бот жив"""
+    return {"status": "alive", "timestamp": time.time()}
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
@@ -105,7 +110,6 @@ async def get_jackpot():
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
             res = conn.execute("SELECT value FROM system_stats WHERE key='jackpot'").fetchone()
-            # Имитация роста джекпота
             current_val = res[0] if res else 500000
             new_val = current_val + random.randint(1, 15)
             conn.execute("UPDATE system_stats SET value = ? WHERE key='jackpot'", (new_val,))
@@ -160,7 +164,6 @@ async def index():
     logger.error("index.html NOT FOUND in static folder")
     return HTMLResponse("<h1>404: Frontend not found</h1>", status_code=404)
 
-# Монтируем статику (стили, скрипты)
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
@@ -183,7 +186,6 @@ async def cmd_start(m: types.Message):
 
 # --- ЗАПУСК ---
 if __name__ == "__main__":
-    # Bothost выдает PORT автоматически, по умолчанию используем 3000
     port = int(os.environ.get("PORT", 3000))
     logger.info(f"Starting Production Server on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
