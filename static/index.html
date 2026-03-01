@@ -7,38 +7,28 @@
     <script src="https://telegram.org/js/telegram-web-app.js?5"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
-        :root { --neon: #00d4ff; --neon-sec: #00ff96; --bg: #050a1a; }
+        :root { --neon: #00d4ff; --bg: #050a1a; }
         body { margin: 0; background: var(--bg); font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; display: flex; justify-content: center; }
         .game-container { width: 100%; max-width: 500px; height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 15px; box-sizing: border-box; }
         
-        .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        /* Исправленный логотип с картинкой */
+        .header { width: 100%; display: flex; justify-content: space-between; align-items: center; }
         .logo { width: 50px; height: 50px; border: 1px solid var(--neon); border-radius: 12px; overflow: hidden; box-shadow: 0 0 15px var(--neon); }
         .logo img { width: 100%; height: 100%; object-fit: cover; }
 
-        .jackpot-box { width: 100%; background: rgba(255,0,212,0.1); border: 1px solid #ff00d4; border-radius: 15px; padding: 10px; text-align: center; margin-bottom: 20px; }
-        #jackpot-amount { font-size: 26px; font-weight: 900; text-shadow: 0 0 10px #ff00d4; }
-        
-        #score { font-size: 50px; font-weight: 900; text-shadow: 0 0 20px var(--neon); margin: 20px 0; }
+        #score { font-size: 50px; font-weight: 900; text-shadow: 0 0 20px var(--neon); margin: 30px 0; }
 
-        /* Кнопка ТАПА */
         #btn { 
-            width: 280px; height: 280px; border-radius: 50%; border: 4px solid var(--neon);
+            width: 260px; height: 260px; border-radius: 50%; border: 4px solid var(--neon);
             background: radial-gradient(circle, var(--neon) 0%, transparent 70%);
             box-shadow: 0 0 40px var(--neon); transition: transform 0.05s; outline: none; cursor: pointer;
         }
         #btn:active { transform: scale(0.95); }
 
-        .energy-bar { width: 80%; height: 12px; background: rgba(255,255,255,0.1); border-radius: 10px; border: 1px solid var(--neon); margin-top: 20px; overflow: hidden; }
+        .energy-bar { width: 80%; height: 12px; background: rgba(255,255,255,0.1); border-radius: 10px; border: 1px solid var(--neon); margin-top: 30px; overflow: hidden; }
         #energy-fill { height: 100%; width: 100%; background: var(--neon); transition: width 0.2s; }
 
-        .nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; margin-top: auto; padding-bottom: 20px; }
-        .nav-item { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; text-align: center; font-size: 12px; border: 1px solid var(--neon); cursor: pointer; }
-
-        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 70%; background: #0a192f; border-top: 3px solid var(--neon); border-radius: 30px 30px 0 0; z-index: 1000; transition: 0.4s; padding: 25px; box-sizing: border-box; }
-        .modal.active { bottom: 0; }
-        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; z-index: 999; }
-        .overlay.active { display: block; }
+        .footer { margin-top: auto; padding-bottom: 30px; width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .btn-action { background: rgba(255,255,255,0.05); border: 1px solid var(--neon); padding: 15px; border-radius: 15px; text-align: center; color: white; font-size: 14px; cursor: pointer; font-weight: bold; }
         
         .plus-animation { position: absolute; pointer-events: none; animation: float 0.7s ease-out forwards; font-weight: 900; color: var(--neon); }
         @keyframes float { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
@@ -48,13 +38,8 @@
 
 <div class="game-container">
     <div class="header">
-        <div class="logo"><img src="/static/logo.png" alt="Logo"></div>
-        <div style="text-align: right; font-size: 10px; color: var(--neon)" id="user-id">ID: 000</div>
-    </div>
-
-    <div class="jackpot-box">
-        <div style="font-size: 10px; color: #ff00d4;">GLOBAL JACKPOT</div>
-        <div id="jackpot-amount">500,000</div>
+        <div class="logo"><img src="/static/logo.png" alt="NP"></div>
+        <div id="user-id" style="font-size: 10px; opacity: 0.6;">ID: 000</div>
     </div>
 
     <div id="score">0</div>
@@ -62,35 +47,20 @@
     <button id="btn"></button>
 
     <div class="energy-bar"><div id="energy-fill"></div></div>
-    <div style="font-size: 12px; margin-top: 5px;" id="energy-text">1000/1000</div>
+    <div id="energy-text" style="font-size: 12px; margin-top: 5px;">1000/1000</div>
 
-    <div class="nav">
-        <div class="nav-item" onclick="openModal('boost')">🚀 BOOST</div>
-        <div class="nav-item" onclick="openModal('daily')">🎁 BONUS</div>
-        <div class="nav-item" onclick="openModal('stats')">📊 STATS</div>
+    <div class="footer">
+        <div class="btn-action" onclick="buyUpgrade()">🚀 UPGRADE (<span id="up-cost">500</span>)</div>
+        <div class="btn-action" onclick="alert('Mining coming soon!')">⛏️ MINE</div>
     </div>
-</div>
-
-<div class="overlay" id="overlay" onclick="closeModal()"></div>
-
-<div id="modal-boost" class="modal">
-    <h2>Upgrades</h2>
-    <p>Multi-Tap Level: <span id="tap-lvl">1</span></p>
-    <button onclick="buyUpgrade()" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; font-weight:bold;">Улучшить за <span id="up-cost">500</span> NP</button>
-</div>
-
-<div id="modal-daily" class="modal">
-    <h2>Daily Bonus</h2>
-    <p>Забирай 5,000 NP каждые 24 часа!</p>
-    <button onclick="claimBonus()" style="width:100%; padding:15px; background:var(--neon-sec); border:none; border-radius:10px; font-weight:bold;">ЗАБРАТЬ</button>
 </div>
 
 <script>
     const tg = window.Telegram.WebApp;
     tg.expand();
-    let state = { score: 0, energy: 1000, tap: 1, user_id: tg.initDataUnsafe?.user?.id || 123 };
+    let state = { score: 0, energy: 1000, tap: 1, user_id: tg.initDataUnsafe?.user?.id || 12345 };
 
-    async function load() {
+    async function loadData() {
         const r = await fetch(`/api/balance/${state.user_id}`);
         const res = await r.json();
         if(res.status === 'ok') {
@@ -100,7 +70,7 @@
         }
     }
 
-    async function save() {
+    async function saveData() {
         await fetch('/api/save', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -123,20 +93,8 @@
         } else { alert("Недостаточно NP!"); }
     }
 
-    async function claimBonus() {
-        const r = await fetch('/api/daily-bonus', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({user_id: state.user_id})
-        });
-        const res = await r.json();
-        alert(res.status === 'ok' ? "Бонус получен!" : res.message);
-        load();
-    }
-
     function updateUI() {
         document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
-        document.getElementById('tap-lvl').innerText = state.tap;
         document.getElementById('up-cost').innerText = state.tap * 500;
         document.getElementById('energy-fill').style.width = (state.energy/10) + "%";
         document.getElementById('energy-text').innerText = Math.floor(state.energy) + "/1000";
@@ -148,32 +106,23 @@
             state.score += state.tap;
             state.energy -= state.tap;
             updateUI();
-            createPlus(e.touches[0].clientX, e.touches[0].clientY);
+            
+            const touch = e.touches[0];
+            const p = document.createElement('div');
+            p.className = 'plus-animation';
+            p.innerText = '+' + state.tap;
+            p.style.left = touch.clientX + 'px'; 
+            p.style.top = touch.clientY + 'px';
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 700);
+
             tg.HapticFeedback.impactOccurred('medium');
         }
     });
 
-    function createPlus(x, y) {
-        const p = document.createElement('div');
-        p.className = 'plus-animation';
-        p.innerText = '+' + state.tap;
-        p.style.left = x + 'px'; p.style.top = y + 'px';
-        document.body.appendChild(p);
-        setTimeout(() => p.remove(), 700);
-    }
-
-    function openModal(id) {
-        document.getElementById('modal-'+id).classList.add('active');
-        document.getElementById('overlay').classList.add('active');
-    }
-    function closeModal() {
-        document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
-        document.getElementById('overlay').classList.remove('active');
-    }
-
-    setInterval(() => { if(state.energy < 1000) { state.energy += 1; updateUI(); } }, 1000);
-    setInterval(save, 5000);
-    window.onload = load;
+    setInterval(() => { if(state.energy < 1000) { state.energy += 1.5; updateUI(); } }, 1000);
+    setInterval(saveData, 5000);
+    window.onload = loadData;
 </script>
 </body>
 </html>
