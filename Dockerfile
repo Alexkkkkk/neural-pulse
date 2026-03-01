@@ -1,21 +1,22 @@
-# Указываем базовый образ Python максимально явно
+# Стейдж сборки: используем Python 3.11
 FROM python:3.11-slim
 
-# Установка системных зависимостей для сборки
-RUN apt-get update && apt-get install -y --no-install-recommends gcc python3-dev && rm -rf /var/lib/apt/lists/*
-
+# Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем и ставим зависимости Python
+# Отключаем кэш питона и логируем сразу в консоль
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+# Ставим зависимости
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем всё остальное
+# Копируем проект
 COPY . .
 
-# Открываем порт 3000 (тот, что в коде)
+# Открываем порт 3000
 EXPOSE 3000
 
-# ИСПОЛЬЗУЕМ ENTRYPOINT — это самая жесткая команда запуска, 
-# которую хостингу сложнее всего подменить своим 'node'
-ENTRYPOINT ["python3", "main.py"]
+# ЯВНО указываем путь к python3
+ENTRYPOINT ["/usr/local/bin/python3", "main.py"]
