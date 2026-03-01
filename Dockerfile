@@ -1,16 +1,20 @@
+# Стейдж сборки
 FROM python:3.11-slim
+
+# Установка системных зависимостей
+RUN apt-get update && apt-get install -y --no-install-recommends gcc python3-dev && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Копируем только зависимости для кэша
+# Установка зависимостей Python
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем весь проект
+# Копируем проект
 COPY . .
 
-# Открываем порт 3000
+# Открываем порт
 EXPOSE 3000
 
-# ГЛАВНОЕ: Явно запускаем питон
-ENTRYPOINT ["python", "main.py"]
+# ГЛАВНОЕ: Принудительный запуск именно через python
+ENTRYPOINT ["/usr/local/bin/python", "main.py"]
