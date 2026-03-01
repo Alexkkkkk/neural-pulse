@@ -10,39 +10,37 @@ from functools import wraps
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, Update
 
 # --- НАСТРОЙКИ ---
 TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU"
-MY_DOMAIN = "np.bothost.ru"
+MY_DOMAIN = "np.bothost.ru" 
+WEBHOOK_PATH = "/webhook"
+WEBHOOK_URL = f"https://{MY_DOMAIN}{WEBHOOK_PATH}"
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = Path("/app/data") # Путь для Docker на Bothost
 DB_PATH = DATA_DIR / "game.db"
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 logger = logging.getLogger("NEURAL_PULSE")
 
-# --- КЛАСС HTTPWrapper ---
+# --- КЛАСС ОТВЕТОВ ---
 class HTTPWrapper:
     @staticmethod
     def success(data: dict = None, message: str = "ok"):
         return {"status": "ok", "message": message, "data": data if data else {}}
-
     @staticmethod
     def error(message: str = "error", status_code: int = 500):
         return JSONResponse(status_code=status_code, content={"status": "error", "message": message})
 
-# --- ДЕКОРАТОР ---
 def api_error_handler(func):
     @wraps(func)
     async def wrapper(*args, **kwargs):
-        try:
-            return await func(*args, **kwargs)
+        try: return await func(*args, **kwargs)
         except Exception as e:
-            logger.error(f"API Error: {e}")
-            logger.error(traceback.format_exc())
+            logger.error(f"API Error: {e}\n{traceback.format_exc()}")
             return HTTPWrapper.error(message=str(e))
     return wrapper
 
@@ -53,6 +51,19 @@ class SaveData(BaseModel):
     click_lvl: int = 1
     bot_lvl: int = 0
 
+# --- ИНИЦИАЛИЗАЦИЯ БОТА ---
+bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+dp = Dispatcher()
+
+# --- ЭНДПОИНТ ДЛЯ TELEGRAM ---
+app = FastAPI() # Lifespan ниже
+
+@app.post(WEBHOOK_PATH)
+async def bot_webhook(request: Request):
+    update = Update.model_validate(await request.json(), context={"bot": bot})
+    await dp.feed_update(bot, update)
+    return {"status": "ok"}
+
 # --- ЖИЗНЕННЫЙ ЦИКЛ ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -62,46 +73,36 @@ async def lifespan(app: FastAPI):
             (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0, 
              click_lvl INTEGER DEFAULT 1, bot_lvl INTEGER DEFAULT 0, 
              last_collect INTEGER DEFAULT 0, league_id INTEGER DEFAULT 1)''')
-    bot_task = asyncio.create_task(dp.start_polling(bot))
-    logger.info("✅ Server started and Bot Polling active")
+    
+    # Установка вебхука
+    await bot.set_webhook(url=WEBHOOK_URL, drop_pending_updates=True)
+    logger.info(f"🚀 Webhook active: {WEBHOOK_URL}")
     yield
-    bot_task.cancel()
+    await bot.delete_webhook()
 
-app = FastAPI(lifespan=lifespan)
+app.router.lifespan_context = lifespan
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- API ЭНДПОИНТЫ ---
-
+# --- API ИГРЫ ---
 @app.get("/api/balance/{user_id}")
 @api_error_handler
 async def get_balance(user_id: str, request: Request):
-    # Принимаем заголовок Authorization, чтобы избежать 401 от прокси
-    auth_header = request.headers.get("Authorization")
-    logger.info(f"👤 [API] Fetching balance for: {user_id} | Auth: {auth_header[:20] if auth_header else 'None'}...")
-    
+    auth = request.headers.get("Authorization")
     now = int(time.time())
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-        
         if not row:
             conn.execute("INSERT INTO users (id, balance, last_collect) VALUES (?, 1000, ?)", (user_id, now))
             conn.commit()
-            return HTTPWrapper.success({"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "league_id": 1, "offline_profit": 0})
-        
+            return HTTPWrapper.success({"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "league_id": 1})
         user = dict(row)
-        off_time = now - user['last_collect']
-        # Профит ограничен 50к за период офлайна
-        profit = min((off_time * user['bot_lvl']), 50000) if user['bot_lvl'] > 0 else 0
+        profit = min(((now - user['last_collect']) * user['bot_lvl']), 50000) if user['bot_lvl'] > 0 else 0
         return HTTPWrapper.success({**user, "offline_profit": profit})
 
 @app.post("/api/save")
 @api_error_handler
-async def save_progress(data: SaveData, request: Request):
-    # Также логгируем заголовок для POST запроса
-    auth_header = request.headers.get("Authorization")
-    logger.info(f"💾 [API] Saving progress for: {data.user_id} | Auth present: {bool(auth_header)}")
-    
+async def save_progress(data: SaveData):
     now = int(time.time())
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute("""INSERT INTO users (id, balance, click_lvl, bot_lvl, last_collect, league_id) 
@@ -112,20 +113,15 @@ async def save_progress(data: SaveData, request: Request):
         conn.commit()
     return HTTPWrapper.success()
 
-# --- СТАТИКА ---
 if STATIC_DIR.exists():
     app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
-
-# --- БОТ ---
-bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-dp = Dispatcher()
 
 @dp.message(F.text == "/start")
 async def start(m: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💎 Play Neural Pulse", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
-    await m.answer(f"<b>Welcome, {m.from_user.first_name}!</b>\nNeural Pulse system is online.", reply_markup=kb)
+    await m.answer(f"<b>System Online, {m.from_user.first_name}!</b>", reply_markup=kb)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
