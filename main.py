@@ -1,4 +1,4 @@
-import os, sys, asyncio, sqlite3, uvicorn, logging, random, time
+import os, sys, asyncio, sqlite3, uvicorn, logging, random, time, traceback
 from datetime import date, timedelta
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -15,10 +15,13 @@ from aiogram.enums import ParseMode
 # --- НАСТРОЙКИ ---
 TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU"
 MY_DOMAIN = "np.bothost.ru"
+CHANNEL_ID = "@your_channel" # ЗАМЕНИ НА СВОЙ КАНАЛ ДЛЯ ПРОВЕРКИ ПОДПИСКИ
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "data" / "game.db"
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger(__name__)
+
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
@@ -28,9 +31,10 @@ class SaveData(BaseModel):
     click_lvl: int = 1
     bot_lvl: int = 0
 
+# --- БАЗА ДАННЫХ ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    (BASE_DIR / "data").mkdir(exist_ok=True)
+    DB_PATH.parent.mkdir(exist_ok=True)
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, click_lvl INTEGER DEFAULT 1, 
@@ -38,6 +42,7 @@ async def lifespan(app: FastAPI):
              streak_days INTEGER DEFAULT 0, last_collect INTEGER DEFAULT 0, referrer TEXT)''')
         conn.execute("CREATE TABLE IF NOT EXISTS system_stats (key TEXT PRIMARY KEY, value INTEGER)")
         conn.execute("INSERT OR IGNORE INTO system_stats VALUES ('jackpot', 500000)")
+        conn.execute("CREATE TABLE IF NOT EXISTS winners (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, amount INTEGER, ts DATETIME DEFAULT CURRENT_TIMESTAMP)")
         conn.commit()
     await bot.set_webhook(url=f"https://{MY_DOMAIN}/webhook", drop_pending_updates=True)
     yield
@@ -46,6 +51,7 @@ app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # --- API ---
+
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     with sqlite3.connect(str(DB_PATH)) as conn:
@@ -54,52 +60,81 @@ async def get_balance(user_id: str):
         if not user:
             conn.execute("INSERT INTO users (id, balance, last_collect) VALUES (?, 1000, ?)", (user_id, int(time.time())))
             conn.commit()
-            return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "bot_lvl": 0}}
+            return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "streak_days": 0}}
         return {"status": "ok", "data": dict(user)}
 
 @app.post("/api/save")
 async def save_game(data: SaveData):
+    LIMIT, START_JACKPOT = 1000000, 500000
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
-            conn.execute("UPDATE users SET balance=?, click_lvl=?, bot_lvl=? WHERE id=?", 
-                         (data.score, data.click_lvl, data.bot_lvl, str(data.user_id)))
-            conn.execute("UPDATE system_stats SET value = value + 10 WHERE key='jackpot'") # Рост джекпота
-            jack = conn.execute("SELECT value FROM system_stats WHERE key='jackpot'").fetchone()[0]
+            conn.row_factory = sqlite3.Row
+            old = conn.execute("SELECT balance FROM users WHERE id = ?", (str(data.user_id),)).fetchone()
+            profit = data.score - (old["balance"] if old else 0)
+            if profit > 0:
+                conn.execute("UPDATE system_stats SET value = value + ? WHERE key='jackpot'", (int(profit*0.01),))
+            
+            jack_val = conn.execute("SELECT value FROM system_stats WHERE key='jackpot'").fetchone()[0]
+            winner_id = None
+            if jack_val >= LIMIT:
+                win_row = conn.execute("SELECT id FROM users ORDER BY RANDOM() LIMIT 1").fetchone()
+                if win_row:
+                    winner_id = win_row["id"]
+                    conn.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (jack_val, winner_id))
+                    conn.execute("INSERT INTO winners (user_id, amount) VALUES (?, ?)", (winner_id, jack_val))
+                    conn.execute("UPDATE system_stats SET value = ?", (START_JACKPOT,))
+                    jack_val = START_JACKPOT
+
+            conn.execute("UPDATE users SET balance=?, click_lvl=?, bot_lvl=? WHERE id=?", (data.score, data.click_lvl, data.bot_lvl, str(data.user_id)))
             conn.commit()
-            return {"status": "ok", "jackpot": jack}
-    except: return {"status": "error"}
+            return {"status": "ok", "jackpot": jack_val, "explosion": winner_id is not None}
+    except Exception as e: return {"status": "error", "message": str(e)}
 
 @app.post("/api/daily-bonus")
 async def daily_bonus(data: dict):
     uid, today = str(data.get("user_id")), date.today().isoformat()
-    rewards = [1000, 2500, 5000, 10000, 20000, 50000, 100000]
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    rewards = [1000, 2500, 5000, 10000, 25000, 50000, 100000]
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.row_factory = sqlite3.Row
         u = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
         if u["last_bonus_date"] == today: return {"status": "error", "message": "Уже получено"}
-        streak = (u["streak_days"] % 7) + 1
-        reward = rewards[streak-1]
-        conn.execute("UPDATE users SET balance=balance+?, last_bonus_date=?, streak_days=? WHERE id=?", (reward, today, streak, uid))
+        new_streak = (u["streak_days"] + 1) if u["last_bonus_date"] == yesterday else 1
+        if new_streak > 7: new_streak = 1
+        reward = rewards[new_streak-1]
+        conn.execute("UPDATE users SET balance=balance+?, last_bonus_date=?, streak_days=? WHERE id=?", (reward, today, new_streak, uid))
         conn.commit()
-        return {"status": "ok", "reward": reward, "streak": streak}
+        return {"status": "ok", "reward": reward, "streak": new_streak}
 
+# --- БОТ И РЕФЕРАЛЫ ---
 @app.post("/webhook")
 async def bot_webhook(request: Request):
-    update = Update.model_validate(await request.json(), context={"bot": bot})
+    data = await request.json()
+    update = Update.model_validate(data, context={"bot": bot})
     await dp.feed_update(bot, update)
     return {"ok": True}
 
 @dp.message(F.text.startswith("/start"))
 async def cmd_start(m: types.Message):
+    args = m.text.split()
     uid = str(m.from_user.id)
+    ref = args[1].replace("ref_", "") if len(args) > 1 and "ref_" in args[1] else None
+    
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        exists = conn.execute("SELECT id FROM users WHERE id=?", (uid,)).fetchone()
+        if not exists:
+            conn.execute("INSERT INTO users (id, balance, referrer, last_collect) VALUES (?, 1000, ?, ?)", (uid, ref, int(time.time())))
+            if ref:
+                conn.execute("UPDATE users SET balance = balance + 5000 WHERE id=?", (ref,))
+                try: await bot.send_message(ref, "🤝 Твой друг зашел в игру! +5,000 NP начислено.")
+                except: pass
+            conn.commit()
+
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🚀 ИГРАТЬ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))]])
-    await m.answer(f"<b>Welcome to Neural Pulse!</b>\nТвой ID: {uid}", reply_markup=kb)
+    await m.answer(f"<b>Neural Pulse запущен!</b>\nПриглашай друзей и забирай джекпот.", reply_markup=kb)
 
 @app.get("/")
 async def index(): return FileResponse(BASE_DIR / "static" / "index.html")
 
-if (BASE_DIR / "static").exists():
-    app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
-
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 3000)))
