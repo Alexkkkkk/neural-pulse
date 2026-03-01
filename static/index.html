@@ -1,128 +1,106 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse AI</title>
-    <script src="https://telegram.org/js/telegram-web-app.js?5"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root { --neon: #00d4ff; --bg: #050a1a; }
-        body { margin: 0; background: var(--bg); font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; display: flex; justify-content: center; }
-        .game-container { width: 100%; max-width: 500px; height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 15px; box-sizing: border-box; }
+        body { background: #0a0a0b; color: white; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; }
+        .header { padding: 20px; }
+        #balance { font-size: 42px; font-weight: bold; color: #00f2ff; }
+        .jackpot { color: #ff9d00; font-size: 14px; }
         
-        .header { width: 100%; display: flex; justify-content: space-between; align-items: center; }
-        .logo { width: 50px; height: 50px; border: 1px solid var(--neon); border-radius: 12px; overflow: hidden; box-shadow: 0 0 15px var(--neon); }
-        .logo img { width: 100%; height: 100%; object-fit: cover; }
+        .main-btn { width: 200px; height: 200px; background: #111; border: 5px solid #222; border-radius: 50%; margin: 50px auto; display: flex; align-items: center; justify-content: center; font-size: 50px; transition: 0.1s; cursor: pointer; }
+        .main-btn:active { transform: scale(0.95); }
 
-        #score { font-size: 50px; font-weight: 900; text-shadow: 0 0 20px var(--neon); margin: 30px 0; }
-
-        #btn { 
-            width: 260px; height: 260px; border-radius: 50%; border: 4px solid var(--neon);
-            background: radial-gradient(circle, var(--neon) 0%, transparent 70%);
-            box-shadow: 0 0 40px var(--neon); transition: transform 0.05s; outline: none; cursor: pointer;
-        }
-        #btn:active { transform: scale(0.95); }
-
-        .energy-bar { width: 80%; height: 12px; background: rgba(255,255,255,0.1); border-radius: 10px; border: 1px solid var(--neon); margin-top: 30px; overflow: hidden; }
-        #energy-fill { height: 100%; width: 100%; background: var(--neon); transition: width 0.2s; }
-
-        .footer { margin-top: auto; padding-bottom: 30px; width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .btn-action { background: rgba(255,255,255,0.05); border: 1px solid var(--neon); padding: 15px; border-radius: 15px; text-align: center; color: white; font-size: 14px; cursor: pointer; font-weight: bold; }
+        .menu { display: flex; justify-content: space-around; position: fixed; bottom: 20px; width: 100%; }
+        .menu button { background: #161618; border: 1px solid #333; color: white; padding: 15px; border-radius: 15px; width: 30%; font-size: 12px; }
         
-        .plus-animation { position: absolute; pointer-events: none; animation: float 0.7s ease-out forwards; font-weight: 900; color: var(--neon); }
-        @keyframes float { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
+        .modal.active { display: flex; }
     </style>
 </head>
 <body>
 
-<div class="game-container">
     <div class="header">
-        <div class="logo"><img src="/static/logo.png" alt="NP"></div>
-        <div id="user-id" style="font-size: 10px; opacity: 0.6;">ID: 000</div>
+        <div class="jackpot">JACKPOT: <span id="jack-val">500,000</span> NP</div>
+        <div id="balance">0</div>
     </div>
 
-    <div id="score">0</div>
+    <div class="main-btn" onclick="tap(event)">⚡</div>
 
-    <button id="btn"></button>
-
-    <div class="energy-bar"><div id="energy-fill"></div></div>
-    <div id="energy-text" style="font-size: 12px; margin-top: 5px;">1000/1000</div>
-
-    <div class="footer">
-        <div class="btn-action" onclick="buyUpgrade()">🚀 UPGRADE (<span id="up-cost">500</span>)</div>
-        <div class="btn-action" onclick="alert('Mining coming soon!')">⛏️ MINE</div>
+    <div class="menu">
+        <button onclick="openModal('friends')">FRIENDS</button>
+        <button onclick="openModal('tasks')">TASKS</button>
+        <button onclick="claimBonus()">BONUS</button>
     </div>
-</div>
 
-<script>
-    const tg = window.Telegram.WebApp;
-    tg.expand();
-    let state = { score: 0, energy: 1000, tap: 1, user_id: tg.initDataUnsafe?.user?.id || 12345 };
+    <div id="modal-friends" class="modal" onclick="this.classList.remove('active')">
+        <h2>FRIENDS</h2>
+        <p>Твоя ссылка:</p>
+        <small id="ref-link"></small>
+        <button onclick="share()" style="margin-top:20px; padding:10px;">ПРИГЛАСИТЬ</button>
+    </div>
 
-    async function loadData() {
-        const r = await fetch(`/api/balance/${state.user_id}`);
-        const res = await r.json();
-        if(res.status === 'ok') {
+    <div id="modal-tasks" class="modal" onclick="this.classList.remove('active')">
+        <h2>TASKS</h2>
+        <p>1. Подпишись на канал (+5000 NP)</p>
+        <p>2. Пригласи 3 друзей (+10000 NP)</p>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        let state = { score: 0, user_id: tg.initDataUnsafe.user?.id || 123, click: 1 };
+
+        async function load() {
+            const r = await fetch(`/api/balance/${state.user_id}`);
+            const res = await r.json();
             state.score = res.data.balance;
-            state.tap = res.data.click_lvl;
+            state.click = res.data.click_lvl;
             updateUI();
         }
-    }
 
-    async function saveData() {
-        await fetch('/api/save', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({user_id: state.user_id, score: state.score, click_lvl: state.tap})
-        });
-    }
-
-    async function buyUpgrade() {
-        const r = await fetch('/api/upgrade', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({user_id: state.user_id})
-        });
-        const res = await r.json();
-        if(res.status === 'ok') {
-            state.score = res.new_balance;
-            state.tap = res.new_lvl;
-            updateUI();
-            tg.HapticFeedback.notificationOccurred('success');
-        } else { alert("Недостаточно NP!"); }
-    }
-
-    function updateUI() {
-        document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
-        document.getElementById('up-cost').innerText = state.tap * 500;
-        document.getElementById('energy-fill').style.width = (state.energy/10) + "%";
-        document.getElementById('energy-text').innerText = Math.floor(state.energy) + "/1000";
-        document.getElementById('user-id').innerText = "ID: " + state.user_id;
-    }
-
-    document.getElementById('btn').addEventListener('touchstart', (e) => {
-        if(state.energy >= state.tap) {
-            state.score += state.tap;
-            state.energy -= state.tap;
-            updateUI();
-            
-            const touch = e.touches[0];
-            const p = document.createElement('div');
-            p.className = 'plus-animation';
-            p.innerText = '+' + state.tap;
-            p.style.left = touch.clientX + 'px'; 
-            p.style.top = touch.clientY + 'px';
-            document.body.appendChild(p);
-            setTimeout(() => p.remove(), 700);
-
-            tg.HapticFeedback.impactOccurred('medium');
+        function updateUI() {
+            document.getElementById('balance').innerText = Math.floor(state.score).toLocaleString();
+            document.getElementById('ref-link').innerText = `t.me/NeuralPulseBot?start=ref_${state.user_id}`;
         }
-    });
 
-    setInterval(() => { if(state.energy < 1000) { state.energy += 1.5; updateUI(); } }, 1000);
-    setInterval(saveData, 5000);
-    window.onload = loadData;
-</script>
+        function tap(e) {
+            state.score += state.click;
+            updateUI();
+            tg.HapticFeedback.impactOccurred('light');
+            save();
+        }
+
+        async function save() {
+            const r = await fetch('/api/save', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({user_id: state.user_id, score: state.score, click_lvl: state.click})
+            });
+            const res = await r.json();
+            document.getElementById('jack-val').innerText = res.jackpot.toLocaleString();
+        }
+
+        async function claimBonus() {
+            const r = await fetch('/api/daily-bonus', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({user_id: state.user_id})
+            });
+            const res = await r.json();
+            if (res.status === "ok") {
+                tg.showAlert(`Бонус получен: +${res.reward} NP!`);
+                load();
+            } else {
+                tg.showAlert(res.message);
+            }
+        }
+
+        function openModal(id) { document.getElementById('modal-' + id).classList.add('active'); }
+        function share() { tg.openTelegramLink(`https://t.me/share/url?url=https://t.me/NeuralPulseBot?start=ref_${state.user_id}`); }
+
+        load();
+    </script>
 </body>
 </html>
