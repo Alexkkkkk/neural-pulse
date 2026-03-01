@@ -1,20 +1,20 @@
-# Стейдж сборки
+# Указываем базовый образ Python максимально явно
 FROM python:3.11-slim
 
-# Установка системных зависимостей
+# Установка зависимостей
 RUN apt-get update && apt-get install -y --no-install-recommends gcc python3-dev && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Установка зависимостей Python
+# Копируем требования
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем проект
+# Копируем весь проект
 COPY . .
 
 # Открываем порт
 EXPOSE 3000
 
-# ГЛАВНОЕ: Принудительный запуск именно через python
-ENTRYPOINT ["/usr/local/bin/python", "main.py"]
+# ИСПОЛЬЗУЕМ ENTRYPOINT ВМЕСТО CMD (его сложнее переопределить системе)
+ENTRYPOINT ["python3", "main.py"]
