@@ -18,49 +18,58 @@ MY_DOMAIN = "np.bothost.ru"
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "game.db"
 
-# Настройка логирования для Bothost
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
+# --- МОДЕЛИ ДАННЫХ ---
 class SaveData(BaseModel):
     user_id: int
     score: int
     click_lvl: int = 1
     bot_lvl: int = 0
 
+# НОВАЯ МОДЕЛЬ ДЛЯ КОШЕЛЬКА
+class WalletUpdate(BaseModel):
+    user_id: int
+    address: str
+
 # --- БАЗА ДАННЫХ ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Гарантируем наличие папки static, чтобы mount не падал
     (BASE_DIR / "static").mkdir(exist_ok=True)
     
-    # Инициализация БД
     with sqlite3.connect(str(DB_PATH)) as conn:
+        # Добавлено поле wallet TEXT в таблицу users
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, click_lvl INTEGER DEFAULT 1, 
              bot_lvl INTEGER DEFAULT 0, last_bonus_date TEXT DEFAULT '', 
-             streak_days INTEGER DEFAULT 0, last_collect INTEGER DEFAULT 0, referrer TEXT)''')
+             streak_days INTEGER DEFAULT 0, last_collect INTEGER DEFAULT 0, 
+             referrer TEXT, wallet TEXT)''') # <--- Добавили wallet
+        
+        # На случай, если таблица уже создана без этого поля, пробуем добавить колонку
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN wallet TEXT")
+        except:
+            pass # Если колонка уже есть, sqlite выдаст ошибку, просто игнорируем
+            
         conn.execute("CREATE TABLE IF NOT EXISTS system_stats (key TEXT PRIMARY KEY, value INTEGER)")
         conn.execute("INSERT OR IGNORE INTO system_stats VALUES ('jackpot', 500000)")
         conn.execute("CREATE TABLE IF NOT EXISTS winners (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, amount INTEGER, ts DATETIME DEFAULT CURRENT_TIMESTAMP)")
         conn.commit()
     
-    # Установка вебхука при старте
     webhook_url = f"https://{MY_DOMAIN}/webhook"
-    await bot.delete_webhook(drop_pending_updates=True) # Очищаем очередь старых сообщений
+    await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_webhook(url=webhook_url)
     logger.info(f"🚀 Webhook set to {webhook_url}")
     
     yield
-    # Закрытие сессии при выключении
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
 
-# CORS и доверенные хосты (необходимо для работы Web App)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -70,6 +79,20 @@ app.add_middleware(
 
 # --- API ---
 
+# ЭНДПОИНТ ДЛЯ СОХРАНЕНИЯ КОШЕЛЬКА
+@app.post("/api/save-wallet")
+async def save_wallet(data: WalletUpdate):
+    try:
+        with sqlite3.connect(str(DB_PATH)) as conn:
+            # Обновляем адрес кошелька для конкретного пользователя
+            conn.execute("UPDATE users SET wallet = ? WHERE id = ?", (data.address, str(data.user_id)))
+            conn.commit()
+            logger.info(f"✅ Wallet linked for user {data.user_id}: {data.address}")
+            return {"status": "ok", "message": "Wallet linked!"}
+    except Exception as e:
+        logger.error(f"Wallet save error: {e}")
+        return {"status": "error", "message": str(e)}
+
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     with sqlite3.connect(str(DB_PATH)) as conn:
@@ -78,7 +101,7 @@ async def get_balance(user_id: str):
         if not user:
             conn.execute("INSERT INTO users (id, balance, last_collect) VALUES (?, 1000, ?)", (user_id, int(time.time())))
             conn.commit()
-            return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "streak_days": 0}}
+            return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "streak_days": 0, "wallet": None}}
         return {"status": "ok", "data": dict(user)}
 
 @app.post("/api/save")
@@ -113,6 +136,8 @@ async def save_game(data: SaveData):
         logger.error(f"Save error: {e}")
         return {"status": "error", "message": str(e)}
 
+# ... (остальной код daily_bonus, bot_webhook, cmd_start без изменений) ...
+
 @app.post("/api/daily-bonus")
 async def daily_bonus(data: dict):
     uid, today = str(data.get("user_id")), date.today().isoformat()
@@ -134,7 +159,6 @@ async def daily_bonus(data: dict):
         conn.commit()
         return {"status": "ok", "reward": reward, "streak": new_streak}
 
-# --- БОТ ---
 @app.post("/webhook")
 async def bot_webhook(request: Request):
     try:
@@ -168,18 +192,14 @@ async def cmd_start(m: types.Message):
     ]])
     await m.answer(f"<b>Neural Pulse AI</b>\nПриглашай друзей и забирай джекпот!", reply_markup=kb)
 
-# --- РОУТИНГ ---
 @app.get("/")
 async def index():
-    # Проверяем существование файла перед отправкой
     index_path = BASE_DIR / "static" / "index.html"
     if index_path.exists():
         return FileResponse(index_path)
     return JSONResponse({"error": "index.html not found in static folder"}, status_code=404)
 
-# Монтируем статику
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 if __name__ == "__main__":
-    # На Bothost порт обычно 3000
     uvicorn.run(app, host="0.0.0.0", port=3000)
