@@ -40,10 +40,8 @@ class SaveData(BaseModel):
     @field_validator('score', 'click_lvl', 'energy', mode='before')
     @classmethod
     def validate_to_int(cls, v):
-        try:
-            return int(float(v))
-        except (ValueError, TypeError):
-            return v
+        try: return int(float(v))
+        except: return v
 
 class UpgradeRequest(BaseModel):
     user_id: str
@@ -78,9 +76,7 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 [SYSTEM] Старт приложения...")
     STATIC_DIR.mkdir(exist_ok=True)
     (STATIC_DIR / "images").mkdir(exist_ok=True)
-    
     await init_db()
-    
     await bot.delete_webhook(drop_pending_updates=True)
     webhook_url = f"https://{MY_DOMAIN}/webhook"
     await bot.set_webhook(url=webhook_url, allowed_updates=["message", "callback_query"])
@@ -107,70 +103,23 @@ async def get_balance(user_id: str):
             db.row_factory = aiosqlite.Row
             async with db.execute("SELECT * FROM users WHERE id = ?", (user_id,)) as cursor:
                 user = await cursor.fetchone()
-            
             if not user:
                 now = int(time.time())
                 await db.execute("INSERT INTO users (id, balance, click_lvl, energy, last_active) VALUES (?, ?, ?, ?, ?)", 
                                  (user_id, 1000, 1, 1000, now))
                 await db.commit()
-                try:
-                    await bot.send_message(ADMIN_ID, f"🆕 <b>Новый игрок!</b>\nID: <code>{user_id}</code>")
-                except: pass
                 return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "energy": 1000, "wallet": None}}
-            
             return {"status": "ok", "data": dict(user)}
     except Exception as e:
-        logger.error(f"Error GET balance: {e}")
         return JSONResponse(status_code=500, content={"status": "error"})
 
 @app.post("/api/save")
 async def save_game(data: SaveData):
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("UPDATE users SET balance=?, click_lvl=?, energy=?, last_active=? WHERE id=?", 
-                             (data.score, data.click_lvl, data.energy, int(time.time()), data.user_id))
-            await db.commit()
-        return {"status": "ok"}
-    except Exception as e:
-        logger.error(f"Error SAVE game: {e}")
-        return JSONResponse(status_code=500, content={"status": "error"})
-
-@app.post("/api/upgrade")
-async def upgrade_click(data: UpgradeRequest):
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            async with db.execute("SELECT balance FROM users WHERE id=?", (data.user_id,)) as cursor:
-                row = await cursor.fetchone()
-            if row and row[0] >= data.cost:
-                new_balance = row[0] - data.cost
-                await db.execute("UPDATE users SET balance = ?, click_lvl = ? WHERE id = ?",
-                                 (new_balance, data.new_lvl, data.user_id))
-                await db.commit()
-                return {"status": "ok", "new_balance": new_balance}
-            return JSONResponse(status_code=400, content={"status": "error", "message": "Low balance"})
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"status": "error"})
-
-@app.get("/api/leaderboard")
-async def get_leaderboard():
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10") as cursor:
-                rows = await cursor.fetchall()
-                return {"status": "ok", "data": [dict(row) for row in rows]}
-    except:
-        return JSONResponse(status_code=500, content={"status": "error"})
-
-@app.post("/api/save_wallet")
-async def save_wallet(data: WalletRequest):
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("UPDATE users SET wallet=? WHERE id=?", (data.wallet_address, data.user_id))
-            await db.commit()
-        return {"status": "ok"}
-    except:
-        return JSONResponse(status_code=500, content={"status": "error"})
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE users SET balance=?, click_lvl=?, energy=?, last_active=? WHERE id=?", 
+                         (data.score, data.click_lvl, data.energy, int(time.time()), data.user_id))
+        await db.commit()
+    return {"status": "ok"}
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
@@ -179,9 +128,7 @@ async def bot_webhook(request: Request):
         update = Update.model_validate(data, context={"bot": bot})
         await dp.feed_update(bot, update)
         return {"ok": True}
-    except Exception as e:
-        logger.error(f"Webhook error: {e}")
-        return {"ok": False}
+    except: return {"ok": False}
 
 # --- ТЕЛЕГРАМ БОТ ---
 @dp.message(F.text.startswith("/start"))
@@ -191,25 +138,23 @@ async def cmd_start(m: types.Message):
     ]])
     await m.answer(f"<b>Neural Pulse Terminal</b>\n\nОбнаружен: <code>{m.from_user.first_name}</code>", reply_markup=kb)
 
-# --- СТАТИКА (ПРАВИЛЬНЫЙ ПОРЯДОК) ---
+# --- СТАТИКА (ИСПРАВЛЕННЫЙ БЛОК) ---
 
-@app.get("/")
-async def serve_index():
-    index_file = STATIC_DIR / "index.html"
-    if index_file.exists():
-        return FileResponse(
-            index_file, 
-            headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
-        )
-    return JSONResponse(status_code=404, content={"error": "index.html missing"})
-
-# Монтируем подпапки статики
+# 1. Сначала монтируем папку с картинками, чтобы /images/ файл.png работал
 if (STATIC_DIR / "images").exists():
     app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images")
 
-# Монтируем всё остальное из статики (стили, скрипты)
+# 2. Монтируем общую статику (CSS/JS)
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+# 3. Главная страница (самый важный эндпоинт)
+@app.get("/")
+async def serve_index():
+    index_path = STATIC_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path, media_type='text/html')
+    return JSONResponse(status_code=404, content={"error": f"index.html not found at {index_path}"})
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=3000, reload=False)
