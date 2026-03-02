@@ -3,3 +3,5 @@ uvicorn
 aiogram
 pydantic
 aiohttp
+flask
+python-telegram-bot
