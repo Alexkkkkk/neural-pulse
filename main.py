@@ -14,19 +14,16 @@ from aiogram.enums import ParseMode
 
 # --- КОНФИГУРАЦИЯ ---
 TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU"
+ADMIN_ID = "476014374"  # Вставь сюда свой ID (уже стоит твой из логов)
 MY_DOMAIN = "np.bothost.ru"
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 
-# Константы игры
 INITIAL_BALANCE = 1000
-MAX_ENERGY = 1000 # Увеличил до 1000, как в HTML
+MAX_ENERGY = 1000
 
-# Создание структуры папок
-STATIC_DIR.mkdir(exist_ok=True)
-(STATIC_DIR / "images").mkdir(exist_ok=True)
-
+# Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -71,7 +68,6 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 [SYSTEM] Старт приложения...")
     await init_db()
     
-    # Регистрация вебхука
     await bot.delete_webhook(drop_pending_updates=True)
     webhook_url = f"https://{MY_DOMAIN}/webhook"
     await bot.set_webhook(url=webhook_url, allowed_updates=["message", "callback_query"])
@@ -105,6 +101,12 @@ async def get_balance(user_id: str):
                 await db.execute("INSERT INTO users (id, balance, click_lvl, energy, last_active) VALUES (?, ?, ?, ?, ?)", 
                                  (user_id, INITIAL_BALANCE, 1, MAX_ENERGY, now))
                 await db.commit()
+                
+                # Уведомление админу о новом входе через WebApp
+                try:
+                    await bot.send_message(ADMIN_ID, f"🆕 <b>Новый вход в WebApp!</b>\nID: <code>{user_id}</code>")
+                except: pass
+                
                 return {"status": "ok", "data": {"balance": INITIAL_BALANCE, "click_lvl": 1, "energy": MAX_ENERGY, "wallet": None}}
             
             return {"status": "ok", "data": dict(user)}
@@ -184,6 +186,10 @@ async def cmd_start(m: types.Message):
                 await db.execute("INSERT INTO users (id, balance, click_lvl, energy, last_active) VALUES (?, ?, ?, ?, ?)", 
                                  (uid, INITIAL_BALANCE, 1, MAX_ENERGY, int(time.time())))
                 await db.commit()
+                # Уведомление о регистрации нового пользователя через команду
+                try:
+                    await bot.send_message(ADMIN_ID, f"🚀 <b>Новая регистрация в боте!</b>\nИмя: {m.from_user.full_name}\nID: <code>{uid}</code>")
+                except: pass
 
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="⚡ ВОЙТИ В СИСТЕМУ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
@@ -197,10 +203,11 @@ async def cmd_start(m: types.Message):
 
 # --- СТАТИЧЕСКИЕ ФАЙЛЫ ---
 
-# Важно: Сначала монтируем специфичные папки, потом корень
+# 1. Монтируем изображения
 if (STATIC_DIR / "images").exists():
     app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images")
 
+# 2. Главная страница
 @app.get("/")
 async def serve_index():
     index_file = STATIC_DIR / "index.html"
@@ -208,7 +215,7 @@ async def serve_index():
         return FileResponse(index_file)
     return JSONResponse(status_code=404, content={"error": "Frontend missing"})
 
-# Резервный монтаж всей папки static
+# 3. Всё остальное (чтобы не было 404 по /static/...)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
