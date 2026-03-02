@@ -20,7 +20,6 @@ BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 
-# Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -38,7 +37,6 @@ class SaveData(BaseModel):
     click_lvl: int = 1
     energy: int = 1000
 
-    # Это решение ошибки 422: приводим любые входящие данные к нужному типу
     @field_validator('score', 'click_lvl', 'energy', mode='before')
     @classmethod
     def validate_to_int(cls, v):
@@ -51,6 +49,12 @@ class UpgradeRequest(BaseModel):
     user_id: str
     cost: int
     new_lvl: int
+
+    @field_validator('cost', 'new_lvl', mode='before')
+    @classmethod
+    def validate_to_int(cls, v):
+        try: return int(float(v))
+        except: return v
 
 class WalletRequest(BaseModel):
     user_id: str
@@ -72,13 +76,11 @@ async def init_db():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("🚀 [SYSTEM] Старт приложения...")
-    # Создаем нужные папки, если их нет
     STATIC_DIR.mkdir(exist_ok=True)
     (STATIC_DIR / "images").mkdir(exist_ok=True)
     
     await init_db()
     
-    # Установка вебхука
     await bot.delete_webhook(drop_pending_updates=True)
     webhook_url = f"https://{MY_DOMAIN}/webhook"
     await bot.set_webhook(url=webhook_url, allowed_updates=["message", "callback_query"])
@@ -88,7 +90,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# CORS для доступа из WebApp
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -163,10 +164,13 @@ async def get_leaderboard():
 
 @app.post("/api/save_wallet")
 async def save_wallet(data: WalletRequest):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("UPDATE users SET wallet=? WHERE id=?", (data.wallet_address, data.user_id))
-        await db.commit()
-    return {"status": "ok"}
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("UPDATE users SET wallet=? WHERE id=?", (data.wallet_address, data.user_id))
+            await db.commit()
+        return {"status": "ok"}
+    except:
+        return JSONResponse(status_code=500, content={"status": "error"})
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
@@ -187,11 +191,7 @@ async def cmd_start(m: types.Message):
     ]])
     await m.answer(f"<b>Neural Pulse Terminal</b>\n\nОбнаружен: <code>{m.from_user.first_name}</code>", reply_markup=kb)
 
-# --- СТАТИКА И FRONTEND ---
-
-# Приоритет отдаем монтированию папок
-if (STATIC_DIR / "images").exists():
-    app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images")
+# --- СТАТИКА (ПРАВИЛЬНЫЙ ПОРЯДОК) ---
 
 @app.get("/")
 async def serve_index():
@@ -199,12 +199,15 @@ async def serve_index():
     if index_file.exists():
         return FileResponse(
             index_file, 
-            media_type='text/html',
-            headers={"Cache-Control": "no-cache, no-store, must-revalidate"} # Чтобы обновления видели все сразу
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
         )
-    return JSONResponse(status_code=404, content={"error": "index.html missing in static folder"})
+    return JSONResponse(status_code=404, content={"error": "index.html missing"})
 
-# Монтируем корень статики последним
+# Монтируем подпапки статики
+if (STATIC_DIR / "images").exists():
+    app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images")
+
+# Монтируем всё остальное из статики (стили, скрипты)
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
