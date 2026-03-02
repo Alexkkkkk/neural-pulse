@@ -14,7 +14,7 @@ from aiogram.enums import ParseMode
 
 # --- КОНФИГУРАЦИЯ ---
 TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU"
-ADMIN_ID = "476014374"  # Вставь сюда свой ID (уже стоит твой из логов)
+ADMIN_ID = "476014374" 
 MY_DOMAIN = "np.bothost.ru"
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
@@ -102,7 +102,6 @@ async def get_balance(user_id: str):
                                  (user_id, INITIAL_BALANCE, 1, MAX_ENERGY, now))
                 await db.commit()
                 
-                # Уведомление админу о новом входе через WebApp
                 try:
                     await bot.send_message(ADMIN_ID, f"🆕 <b>Новый вход в WebApp!</b>\nID: <code>{user_id}</code>")
                 except: pass
@@ -186,7 +185,6 @@ async def cmd_start(m: types.Message):
                 await db.execute("INSERT INTO users (id, balance, click_lvl, energy, last_active) VALUES (?, ?, ?, ?, ?)", 
                                  (uid, INITIAL_BALANCE, 1, MAX_ENERGY, int(time.time())))
                 await db.commit()
-                # Уведомление о регистрации нового пользователя через команду
                 try:
                     await bot.send_message(ADMIN_ID, f"🚀 <b>Новая регистрация в боте!</b>\nИмя: {m.from_user.full_name}\nID: <code>{uid}</code>")
                 except: pass
@@ -196,18 +194,19 @@ async def cmd_start(m: types.Message):
     ]])
     
     await m.answer(
-        f"<b>Neural Pulse Terminal v1.0.4</b>\n\nОбнаружен пользователь: <code>{m.from_user.first_name}</code>\n"
+        f"<b>Neural Pulse Terminal v1.1.0</b>\n\nОбнаружен пользователь: <code>{m.from_user.first_name}</code>\n"
         f"ID доступа: <code>{uid}</code>\nСтатус: <b>Авторизован</b>", 
         reply_markup=kb
     )
 
 # --- СТАТИЧЕСКИЕ ФАЙЛЫ ---
 
-# 1. Монтируем изображения
-if (STATIC_DIR / "images").exists():
-    app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images")
+# 1. Монтируем изображения отдельно (если папка существует)
+images_path = STATIC_DIR / "images"
+if images_path.exists():
+    app.mount("/images", StaticFiles(directory=str(images_path)), name="images")
 
-# 2. Главная страница
+# 2. Главная страница (должна быть перед общим монтированием статики)
 @app.get("/")
 async def serve_index():
     index_file = STATIC_DIR / "index.html"
@@ -215,7 +214,7 @@ async def serve_index():
         return FileResponse(index_file)
     return JSONResponse(status_code=404, content={"error": "Frontend missing"})
 
-# 3. Всё остальное (чтобы не было 404 по /static/...)
+# 3. Всё остальное из папки static
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
