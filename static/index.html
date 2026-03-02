@@ -17,7 +17,6 @@
             --glass: rgba(10, 25, 47, 0.95);
         }
 
-        /* Эффект старого монитора и сканирующих линий */
         body::before {
             content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0;
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.05) 50%), 
@@ -195,7 +194,7 @@
 
     <div id="modal-stats" class="modal">
         <h2 style="text-align: center; color: var(--neon);">🏆 LEADERBOARD</h2>
-        <div id="leaderboard-list" style="font-size: 14px; line-height: 1.6;">Загрузка...</div>
+        <div id="leaderboard-list" style="font-size: 14px; line-height: 1.6;"></div>
     </div>
     
     <div id="modal-tasks" class="modal">
@@ -215,17 +214,15 @@
         tg.ready();
         tg.setHeaderColor('#050a1a');
 
-        // Глобальное состояние
         let state = {
             score: 0,
             energy: 1000,
             max_energy: 1000,
             tap_power: 1,
-            user_id: String(tg.initDataUnsafe?.user?.id || '12345'), // Принудительно строка
+            user_id: String(tg.initDataUnsafe?.user?.id || '12345'),
             is_saving: false
         };
 
-        // Загрузка данных
         async function loadData() {
             try {
                 const r = await fetch(`/api/balance/${state.user_id}`);
@@ -233,24 +230,16 @@
                 if (res.status === "ok") {
                     state.score = res.data.balance;
                     state.tap_power = res.data.click_lvl;
-                    if (res.data.wallet) {
-                        const winp = document.getElementById('wallet-input');
-                        winp.value = res.data.wallet;
-                        winp.disabled = true;
-                    }
                     updateUI();
                 }
-            } catch (e) { 
-                console.warn("Server not reachable, using local state."); 
-            }
+            } catch (e) { console.warn("Offline mode"); }
         }
 
-        // Сохранение данных
         async function saveData() {
             if (state.is_saving) return;
             state.is_saving = true;
             try {
-                const r = await fetch('/api/save', {
+                await fetch('/api/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -259,42 +248,29 @@
                         click_lvl: state.tap_power
                     })
                 });
-                const res = await r.json();
-                if (res.jackpot) document.getElementById('jackpot-amount').innerText = res.jackpot.toLocaleString();
-                if (res.explosion) tg.showAlert("💥 BOOM! ВЫ ВЫИГРАЛИ ДЖЕКПОТ!");
-            } catch (e) { 
-                console.error("Save error"); 
-            } finally {
-                state.is_saving = false;
-            }
+            } catch (e) { console.error("Save failed"); } 
+            finally { state.is_saving = false; }
         }
 
         async function loadLeaderboard() {
             const listElement = document.getElementById('leaderboard-list');
-            listElement.innerHTML = "<div style='text-align:center;'>Загрузка данных...</div>";
-
+            listElement.innerHTML = "<div style='text-align:center;'>ЗАГРУЗКА...</div>";
             try {
                 const r = await fetch('/api/leaderboard');
                 const res = await r.json();
-                
                 if (res.status === "ok") {
                     let html = "";
-                    res.data.forEach(player => {
-                        const pId = String(player.user_id);
-                        const shortId = pId.substring(0, 3) + "..." + pId.slice(-3);
-                        const isMe = pId === state.user_id ? "color: var(--neon-secondary); background: rgba(0,255,150,0.1); border-radius: 8px;" : "";
-                        
-                        html += `
-                            <div style="display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); ${isMe}">
-                                <span>${player.rank}. ID: ${shortId}</span>
-                                <span style="font-weight: bold;">${player.balance.toLocaleString()} NP</span>
-                            </div>`;
+                    res.data.forEach(p => {
+                        const isMe = String(p.user_id) === state.user_id ? "color:var(--neon-secondary); background:rgba(0,255,150,0.1);" : "";
+                        const online = p.is_online ? "🟢" : "⚪";
+                        html += `<div style="display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid rgba(255,255,255,0.05); ${isMe}">
+                                    <span>#${p.rank} ID:${String(p.user_id).slice(-4)} ${online}</span>
+                                    <span style="font-weight:bold;">${p.balance.toLocaleString()} NP</span>
+                                 </div>`;
                     });
-                    listElement.innerHTML = html || "<div style='text-align:center;'>Список пока пуст</div>";
+                    listElement.innerHTML = html;
                 }
-            } catch (e) {
-                listElement.innerHTML = "<div style='text-align:center; color: var(--crit);'>Ошибка сети</div>";
-            }
+            } catch (e) { listElement.innerHTML = "Ошибка сети"; }
         }
 
         function openModal(id) {
@@ -308,75 +284,16 @@
             document.getElementById('overlay').classList.remove('active');
         }
 
-        async function linkWallet() {
-            const addr = document.getElementById('wallet-input').value.trim();
-            if (addr.length < 10) return tg.showAlert("Некорректный адрес!");
-            try {
-                const r = await fetch('/api/save-wallet', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: state.user_id, address: addr })
-                });
-                const res = await r.json();
-                if (res.status === "ok") {
-                    tg.showAlert("Кошелек успешно привязан! 🚀");
-                    document.getElementById('wallet-input').disabled = true;
-                }
-            } catch (e) { tg.showAlert("Ошибка при сохранении."); }
-        }
-
-        function inviteFriend() {
-            const bot_username = "NeuralPulse_bot"; 
-            const link = `https://t.me/${bot_username}?start=ref_${state.user_id}`;
-            const shareText = "Neural Pulse AI: Забирай 5,000 NP за вход! 🚀";
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(shareText)}`);
-        }
-
-        async function claimBonus() {
-            try {
-                const r = await fetch('/api/daily-bonus', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({user_id: state.user_id})
-                });
-                const res = await r.json();
-                if(res.status === 'ok') {
-                    tg.showAlert(`Бонус получен: +${res.reward} NP!`);
-                    loadData();
-                } else { tg.showAlert(res.message || "Бонус пока не доступен"); }
-            } catch (e) { console.error(e); }
-        }
-
-        function buyUpgrade() {
-            const cost = state.tap_power * 500;
-            if (state.score >= cost) {
-                state.score -= cost;
-                state.tap_power += 1;
-                updateUI();
-                saveData();
-                tg.HapticFeedback.notificationOccurred('success');
-            } else { 
-                tg.showAlert("Недостаточно NP!"); 
-            }
-        }
-
-        // Логика клика
         const btn = document.getElementById('btn');
         btn.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            // Поддержка мультитача (несколько пальцев)
             const touches = e.changedTouches;
             for (let i = 0; i < touches.length; i++) {
                 if (state.energy >= state.tap_power) {
                     state.score += state.tap_power;
                     state.energy -= state.tap_power;
-                    
-                    const touch = touches[i];
-                    createPlusAnim(touch.clientX, touch.clientY, state.tap_power);
+                    createPlusAnim(touches[i].clientX, touches[i].clientY, state.tap_power);
                     tg.HapticFeedback.impactOccurred('medium');
-                } else {
-                    tg.HapticFeedback.notificationOccurred('error');
-                    break;
                 }
             }
             updateUI();
@@ -385,16 +302,11 @@
         function updateUI() {
             document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
             document.getElementById('energy-stat').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
-            document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
+            document.getElementById('energy-fill').style.width = (state.energy/state.max_energy*100) + '%';
             document.getElementById('user-id-display').innerText = `ID: ${state.user_id}`;
             document.getElementById('tap-lvl-val').innerText = state.tap_power;
             document.getElementById('up-cost').innerText = (state.tap_power * 500).toLocaleString();
             document.getElementById('wallet-tokens').innerText = (state.score / 1000).toFixed(2);
-            
-            // Прогресс лиги (каждые 100к очков новая лига визуально)
-            let progress = (state.score % 100000) / 1000;
-            document.getElementById('league-fill').style.width = progress + '%';
-            document.getElementById('league-percent').innerText = Math.floor(progress) + '%';
         }
 
         function createPlusAnim(x, y, val) {
@@ -407,7 +319,6 @@
             setTimeout(() => el.remove(), 700);
         }
 
-        // Регенерация энергии
         setInterval(() => {
             if (state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 1.5);
@@ -415,9 +326,7 @@
             }
         }, 1000);
 
-        // Автосохранение раз в 3 сек
         setInterval(saveData, 3000);
-        
         window.onload = () => {
             document.getElementById('game').style.opacity = "1";
             loadData();
