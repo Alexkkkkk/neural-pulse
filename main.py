@@ -26,28 +26,37 @@ logger = logging.getLogger("NeuralPulse")
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-# --- МОДЕЛИ ---
+# --- МОДЕЛИ ДАННЫХ ---
 class SaveData(BaseModel):
     user_id: int
     score: int
     click_lvl: int = 1
 
-# --- ЖИЗНЕННЫЙ ЦИКЛ ---
+# --- ЖИЗНЕННЫЙ ЦИКЛ ПРИЛОЖЕНИЯ ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("=== ЗАПУСК NEURAL PULSE ===")
     with sqlite3.connect(str(DB_PATH)) as conn:
-        # Добавляем колонку wallet, если её нет
+        # Создаем таблицу и добавляем колонку wallet, если её нет
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, 
              click_lvl INTEGER DEFAULT 1, last_active INTEGER DEFAULT 0, wallet TEXT)''')
         conn.commit()
+    
+    # Установка вебхука для Telegram
     await bot.set_webhook(url=f"https://{MY_DOMAIN}/webhook", drop_pending_updates=True)
     yield
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# Разрешаем запросы со всех доменов (CORS)
+app.add_middleware(
+    CORSMiddleware, 
+    allow_origins=["*"], 
+    allow_methods=["*"], 
+    allow_headers=["*"]
+)
 
 # --- API ЭНДПОИНТЫ ---
 
@@ -112,6 +121,7 @@ async def get_bonus(data: dict):
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.row_factory = sqlite3.Row
         user = conn.execute("SELECT last_active FROM users WHERE id = ?", (uid,)).fetchone()
+        # Бонус раз в 24 часа
         if user and (now - user["last_active"]) > 86400:
             reward = 5000
             conn.execute("UPDATE users SET balance = balance + ?, last_active = ? WHERE id = ?", (reward, now, uid))
@@ -125,27 +135,44 @@ async def bot_webhook(request: Request):
     await dp.feed_update(bot, update)
     return {"ok": True}
 
-# --- БОТ ЛОГИКА (РЕФЕРАЛЫ) ---
+# --- ЛОГИКА БОТА (AIOGRAM) ---
+
 @dp.message(F.text.startswith("/start"))
 async def cmd_start(m: types.Message):
     uid = str(m.from_user.id)
     args = m.text.split()
     
-    # Логика рефералов
+    # Реферальная система: /start ref_ID
     if len(args) > 1 and args[1].startswith("ref_"):
         referrer_id = args[1].replace("ref_", "")
         if referrer_id != uid:
             with sqlite3.connect(str(DB_PATH)) as conn:
                 conn.execute("UPDATE users SET balance = balance + 10000 WHERE id = ?", (referrer_id,))
                 conn.commit()
-                try: await bot.send_message(referrer_id, "💎 Друг зашел по ссылке! Вам начислено +10,000 NP!")
-                except: pass
+                try: 
+                    await bot.send_message(referrer_id, "💎 Друг зашел по ссылке! Вам начислено +10,000 NP!")
+                except: 
+                    pass
 
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="🚀 ИГРАТЬ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
     await m.answer(f"<b>Neural Pulse AI</b>\nДобро пожаловать, {m.from_user.first_name}!\nСистема активирована.", reply_markup=kb)
 
-# --- СТАТИКА ---
+# --- СТАТИЧЕСКИЕ ФАЙЛЫ ---
+
+# Монтируем основную папку со статикой
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-if (STATIC_DIR / "images").exists
+
+# Исправленная проверка наличия папки с картинками
+if (STATIC_DIR / "images").exists():
+    app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images_fix")
+
+@app.get("/")
+async def index():
+    # Отдаем главную страницу игры
+    return FileResponse(STATIC_DIR / "index.html")
+
+# --- ЗАПУСК ---
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=3000)
