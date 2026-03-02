@@ -17,6 +17,7 @@
             --glass: rgba(10, 25, 47, 0.95);
         }
 
+        /* Эффект сканирующих линий (CRT) */
         body::before {
             content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0;
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.05) 50%), 
@@ -28,6 +29,7 @@
             margin: 0; background: radial-gradient(circle at center, #0a192f 0%, #050a1a 100%); 
             height: 100vh; font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; 
             user-select: none; -webkit-user-select: none; display: flex; justify-content: center; 
+            touch-action: manipulation;
         }
 
         .game-container { 
@@ -73,7 +75,7 @@
             cursor: pointer;
             position: relative;
         }
-        #btn:active { transform: scale(0.92); }
+        #btn:active { transform: scale(0.95); }
 
         .side-menu { 
             position: absolute; right: 0; top: 50%; transform: translateY(-50%);
@@ -91,7 +93,7 @@
         #energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--neon), var(--neon-secondary)); transition: width 0.2s; }
 
         .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; padding-bottom: 25px; }
-        .nav-item { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 18px; text-align: center; font-size: 12px; border: 1px solid rgba(255,255,255,0.1); font-weight: bold; }
+        .nav-item { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 18px; text-align: center; font-size: 12px; border: 1px solid rgba(255,255,255,0.1); font-weight: bold; cursor: pointer;}
 
         .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 80%; background: var(--glass); border-top: 3px solid var(--neon); border-radius: 35px 35px 0 0; z-index: 1000; transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1); padding: 30px; box-sizing: border-box; overflow-y: auto; }
         .modal.active { bottom: 0; }
@@ -248,7 +250,7 @@
                         document.getElementById('wallet-input').value = res.data.wallet;
                     }
                 }
-            } catch (e) { console.error("Load Error:", e); }
+            } catch (e) { console.warn("Using local state (API offline)"); }
             updateUI();
         }
 
@@ -267,7 +269,7 @@
                         pnl: state.pnl
                     })
                 });
-            } catch (e) { console.error("Save Error:", e); }
+            } catch (e) { console.error("Save Error"); }
             finally { state.is_saving = false; }
         }
 
@@ -299,8 +301,9 @@
             document.getElementById('league-percent').innerText = Math.floor(Math.min(100, progress)) + '%';
         }
 
-        // Исправленный мультитач
-        document.getElementById('btn').addEventListener('touchstart', (e) => {
+        // Мультитач с защитой
+        const btn = document.getElementById('btn');
+        btn.addEventListener('touchstart', (e) => {
             e.preventDefault();
             const touches = e.changedTouches;
             
@@ -318,12 +321,19 @@
             updateUI();
         }, { passive: false });
 
+        // Отключение контекстного меню (защита от читов/багов)
+        window.oncontextmenu = function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        };
+
         function createPlusAnim(x, y, val) {
             const el = document.createElement('div');
             el.className = 'plus-animation';
             el.innerText = '+' + val;
-            el.style.left = `${x - 10}px`; 
-            el.style.top = `${y - 20}px`;
+            el.style.left = `${x - 20}px`; 
+            el.style.top = `${y - 40}px`;
             el.style.color = (val > 1) ? 'var(--neon)' : 'white';
             document.body.appendChild(el);
             setTimeout(() => el.remove(), 700);
@@ -336,7 +346,7 @@
         }
 
         function openModal(id) {
-            closeModals(); // Закрываем другие перед открытием новой
+            closeModals();
             if (id === 'stats') loadLeaderboard();
             document.getElementById('modal-' + id).classList.add('active');
             document.getElementById('overlay').classList.add('active');
@@ -351,6 +361,12 @@
         async function buyUpgrade() {
             const cost = state.tap_power * 500;
             if (state.score < cost) { tg.showAlert("NOT ENOUGH NP"); return; }
+            
+            // Локальный апдейт для мгновенного отклика
+            state.score -= cost;
+            state.tap_power += 1;
+            updateUI();
+
             try {
                 const r = await fetch('/api/upgrade', {
                     method: 'POST',
@@ -358,18 +374,18 @@
                     body: JSON.stringify({ 
                         user_id: state.user_id, 
                         cost: cost, 
-                        new_lvl: state.tap_power + 1 
+                        new_lvl: state.tap_power 
                     })
                 });
                 const res = await r.json();
-                if (res.status === "ok") {
-                    state.score = res.new_balance;
-                    state.tap_power += 1;
-                    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-                    updateUI();
-                    closeModals();
-                }
-            } catch (e) { tg.showAlert("Server Error"); }
+                if (res.status !== "ok") throw new Error();
+                
+                if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+                closeModals();
+            } catch (e) { 
+                tg.showAlert("Server Error - Syncing..."); 
+                loadData(); // Откат при ошибке
+            }
         }
 
         async function loadLeaderboard() {
@@ -386,12 +402,12 @@
                         </div>
                     `).join('');
                 }
-            } catch (e) { list.innerHTML = "<div style='text-align:center;'>Service Unavailable</div>"; }
+            } catch (e) { list.innerHTML = "<div style='text-align:center;'>Service Offline</div>"; }
         }
 
         async function linkWallet() {
             const addr = document.getElementById('wallet-input').value.trim();
-            if (addr.length < 10) { tg.showAlert("Invalid Address"); return; }
+            if (addr.length < 10) { tg.showAlert("Invalid TON Address"); return; }
             try {
                 const r = await fetch('/api/save_wallet', {
                     method: 'POST',
@@ -400,27 +416,33 @@
                 });
                 const res = await r.json();
                 if (res.status === "ok") {
-                    tg.showAlert("Wallet Linked!");
+                    tg.showAlert("Wallet Linked Successfully!");
                     closeModals();
                 }
             } catch (e) { tg.showAlert("Error linking wallet"); }
         }
 
-        function claimBonus() { tg.showAlert("Come back in 24 hours!"); }
+        function claimBonus() { 
+            tg.showAlert("Bonus available in 24 hours!"); 
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+        }
 
         // Энергия + PNL (раз в секунду)
         setInterval(() => {
+            let changed = false;
             if (state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 1.5);
+                changed = true;
             }
             if (state.pnl > 0) {
                 state.score += (state.pnl / 3600);
+                changed = true;
             }
-            updateUI();
+            if (changed) updateUI();
         }, 1000);
 
-        // Автосохранение каждые 10 секунд
-        setInterval(saveData, 10000);
+        // Автосохранение
+        setInterval(saveData, 15000);
 
         window.onload = () => {
             document.getElementById('game').style.opacity = "1";
