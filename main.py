@@ -19,11 +19,9 @@ DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 IMAGES_DIR = STATIC_DIR / "images"
 
-# Гарантируем наличие папок, чтобы сервер не выдал ошибку при монтировании
 STATIC_DIR.mkdir(exist_ok=True)
 IMAGES_DIR.mkdir(exist_ok=True)
 
-# Настройка логирования для Bothost (обязательно StreamHandler на sys.stdout)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -34,52 +32,46 @@ logger = logging.getLogger("NeuralPulse")
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
+# --- МОДЕЛИ ДАННЫХ ---
 class SaveData(BaseModel):
     user_id: int
     score: int
     click_lvl: int = 1
 
+class UpgradeRequest(BaseModel):
+    user_id: int
+    cost: int
+    new_lvl: int
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("🚀 [SYSTEM] Запуск сервера...")
-    
-    # Инициализация Базы Данных
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
             conn.execute('''CREATE TABLE IF NOT EXISTS users 
                 (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, 
                  click_lvl INTEGER DEFAULT 1, last_active INTEGER DEFAULT 0, wallet TEXT)''')
             conn.commit()
-        logger.info("📂 [DB] База данных проверена и готова")
+        logger.info("📂 [DB] База данных готова")
     except Exception as e:
-        logger.error(f"❌ [DB ERROR] Ошибка инициализации БД: {e}")
+        logger.error(f"❌ [DB ERROR]: {e}")
 
-    # Настройка Webhook
     await bot.delete_webhook(drop_pending_updates=True)
     webhook_url = f"https://{MY_DOMAIN}/webhook"
     await bot.set_webhook(url=webhook_url)
-    logger.info(f"✅ [WEBHOOK] Установлен на адрес: {webhook_url}")
+    logger.info(f"✅ [WEBHOOK] Установлен: {webhook_url}")
     
     yield
-    # Закрытие сессии при выключении
     await bot.session.close()
-    logger.info("🛑 [SYSTEM] Сервер остановлен")
 
 app = FastAPI(lifespan=lifespan)
-
-# CORS для стабильной работы WebApp
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # --- API ЭНДПОИНТЫ ---
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
-    logger.info(f"📥 [API GET] Запрос баланса пользователя: {user_id}")
+    logger.info(f"📥 [API GET] Баланс ID: {user_id}")
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
             conn.row_factory = sqlite3.Row
@@ -91,7 +83,6 @@ async def get_balance(user_id: str):
                 return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1}}
             return {"status": "ok", "data": dict(user)}
     except Exception as e:
-        logger.error(f"❌ [API ERROR] Ошибка получения баланса: {e}")
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
 @app.post("/api/save")
@@ -104,7 +95,35 @@ async def save_game(data: SaveData):
             conn.commit()
         return {"status": "ok"}
     except Exception as e:
-        logger.error(f"❌ [SAVE ERROR]: {e}")
+        return JSONResponse(status_code=500, content={"status": "error"})
+
+# НОВАЯ ФУНКЦИЯ: Таблица лидеров
+@app.get("/api/leaderboard")
+async def get_leaderboard():
+    logger.info("🏆 [API GET] Запрос таблицы лидеров")
+    try:
+        with sqlite3.connect(str(DB_PATH)) as conn:
+            conn.row_factory = sqlite3.Row
+            # Получаем топ 10 игроков по балансу
+            top_users = conn.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10").fetchall()
+            return {"status": "ok", "data": [dict(row) for row in top_users]}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"status": "error"})
+
+# НОВАЯ ФУНКЦИЯ: Покупка улучшения
+@app.post("/api/upgrade")
+async def upgrade_click(data: UpgradeRequest):
+    logger.info(f"🛒 [UPGRADE] Попытка покупки: User {data.user_id}, Lvl {data.new_lvl}")
+    try:
+        with sqlite3.connect(str(DB_PATH)) as conn:
+            user = conn.execute("SELECT balance FROM users WHERE id=?", (str(data.user_id),)).fetchone()
+            if user and user[0] >= data.cost:
+                conn.execute("UPDATE users SET balance = balance - ?, click_lvl = ? WHERE id = ?",
+                             (data.cost, data.new_lvl, str(data.user_id)))
+                conn.commit()
+                return {"status": "ok", "new_balance": user[0] - data.cost}
+            return JSONResponse(status_code=400, content={"status": "error", "message": "Недостаточно средств"})
+    except Exception as e:
         return JSONResponse(status_code=500, content={"status": "error"})
 
 @app.post("/webhook")
@@ -115,7 +134,6 @@ async def bot_webhook(request: Request):
         await dp.feed_update(bot, update)
         return {"ok": True}
     except Exception as e:
-        logger.error(f"❌ [WEBHOOK ERROR]: {e}")
         return JSONResponse(status_code=400, content={"ok": False})
 
 # --- ЛОГИКА БОТА ---
@@ -123,7 +141,6 @@ async def bot_webhook(request: Request):
 @dp.message(F.text.startswith("/start"))
 async def cmd_start(m: types.Message):
     logger.info(f"🤖 [START] User ID: {m.from_user.id}")
-    # Проверяем, есть ли пользователь в БД
     with sqlite3.connect(str(DB_PATH)) as conn:
         user = conn.execute("SELECT id FROM users WHERE id = ?", (str(m.from_user.id),)).fetchone()
         if not user:
@@ -136,16 +153,11 @@ async def cmd_start(m: types.Message):
     ]])
     
     await m.answer(
-        f"<b>Neural Pulse AI | Ultimate Gold</b>\n\n"
-        f"Добро пожаловать в нейронную сеть.\n"
-        f"Ваш протокол доступа: <code>{m.from_user.id}</code>\n\n"
-        f"Нажмите кнопку для входа:", 
+        f"<b>Neural Pulse AI | Ultimate Gold</b>\n\nПротокол доступа: <code>{m.from_user.id}</code>\nСистема готова к транзакциям.", 
         reply_markup=kb
     )
 
-# --- РАБОТА СО СТАТИКОЙ ---
-
-# Важно: Сначала монтируем вложенные папки, потом корень
+# --- СТАТИКА ---
 if IMAGES_DIR.exists():
     app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
 
@@ -154,9 +166,8 @@ async def index():
     index_path = STATIC_DIR / "index.html"
     if index_path.exists():
         return FileResponse(index_path)
-    return JSONResponse(status_code=404, content={"error": "index.html not found. Check static folder."})
+    return JSONResponse(status_code=404, content={"error": "index.html not found"})
 
-# Монтируем папку static для доступа к CSS/JS (если они там будут)
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
