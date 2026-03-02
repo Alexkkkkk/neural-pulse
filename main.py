@@ -19,7 +19,7 @@ BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 
-# Настройка логирования
+# Улучшенное логирование
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -33,75 +33,47 @@ logger = logging.getLogger("NeuralPulse")
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-# --- МОДЕЛИ ДАННЫХ ---
 class SaveData(BaseModel):
     user_id: int
     score: int
     click_lvl: int = 1
     bot_lvl: int = 0
 
-class WalletUpdate(BaseModel):
-    user_id: int
-    address: str
-
-# --- БАЗА ДАННЫХ И ЖИЗНЕННЫЙ ЦИКЛ ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Проверка структуры папок при старте
-    STATIC_DIR.mkdir(exist_ok=True)
-    images_dir = STATIC_DIR / "images"
-    
-    logger.info("--- ПРОВЕРКА РЕСУРСОВ ---")
+    # Предварительная проверка файлов
+    logger.info("=== ПРОВЕРКА ЗАПУСКА ===")
     if (STATIC_DIR / "index.html").exists():
-        logger.info("✅ index.html найден")
+        logger.info("✅ index.html на месте")
     else:
-        logger.error("❌ index.html ОТСУТСТВУЕТ в /static")
+        logger.error("❌ index.html НЕ НАЙДЕН!")
 
-    if images_dir.exists():
-        imgs = [f.name for f in images_dir.glob("*") if f.suffix in ['.png', '.jpg', '.jpeg', '.svg', '.webp']]
-        logger.info(f"🖼 Найдено картинок в /static/images: {len(imgs)} шт. ({imgs})")
-    else:
-        logger.warning("⚠️ Папка /static/images не создана")
-    logger.info("--------------------------")
-
-    try:
-        with sqlite3.connect(str(DB_PATH)) as conn:
-            conn.execute('''CREATE TABLE IF NOT EXISTS users 
-                (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, click_lvl INTEGER DEFAULT 1, 
-                 bot_lvl INTEGER DEFAULT 0, last_bonus_date TEXT DEFAULT '', 
-                 streak_days INTEGER DEFAULT 0, last_collect INTEGER DEFAULT 0, 
-                 referrer TEXT, wallet TEXT)''')
-            conn.commit()
-            logger.info("✅ База данных готова")
-    except Exception as e:
-        logger.critical(f"❌ Ошибка БД: {e}")
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        conn.execute('''CREATE TABLE IF NOT EXISTS users 
+            (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, click_lvl INTEGER DEFAULT 1, 
+             bot_lvl INTEGER DEFAULT 0, last_bonus_date TEXT DEFAULT '', 
+             streak_days INTEGER DEFAULT 0, last_collect INTEGER DEFAULT 0, 
+             referrer TEXT, wallet TEXT)''')
+        conn.commit()
+    logger.info("✅ База данных подключена")
 
     webhook_url = f"https://{MY_DOMAIN}/webhook"
-    await bot.delete_webhook(drop_pending_updates=True)
-    await bot.set_webhook(url=webhook_url)
-    logger.info(f"🚀 Вебхук: {webhook_url}")
+    await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+    logger.info(f"🚀 Вебхук активен: {webhook_url}")
     
     yield
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
 
-# --- MIDDLEWARE ДЛЯ ЛОГИРОВАНИЯ ЗАГРУЗКИ HTML И КАРТИНОК ---
+# Middleware для логирования ресурсов
 @app.middleware("http")
-async def log_static_requests(request: Request, call_next):
+async def log_requests(request: Request, call_next):
     path = request.url.path
-    # Логируем только статические расширения
-    static_extensions = ('.html', '.png', '.jpg', '.jpeg', '.svg', '.gif', '.css', '.js')
-    
-    if path == "/" or path.endswith(static_extensions):
-        logger.info(f"🔍 Запрос ресурса: {path}")
-        
     response = await call_next(request)
-    
-    if path == "/" or path.endswith(static_extensions):
-        status_icon = "✅" if response.status_code == 200 else "❌"
-        logger.info(f"{status_icon} Ответ {path}: {response.status_code}")
-        
+    if path.startswith("/static") or path == "/":
+        status = "🟢" if response.status_code == 200 else "🔴"
+        logger.info(f"{status} Ресурс: {path} [{response.status_code}]")
     return response
 
 app.add_middleware(
@@ -111,7 +83,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- API ЭНДПОИНТЫ ---
+# --- API ---
+
+@app.get("/favicon.ico")
+async def favicon():
+    # Заглушка, чтобы не было ошибки 404 в логах
+    return Response(status_code=204)
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
@@ -119,6 +96,7 @@ async def get_balance(user_id: str):
         conn.row_factory = sqlite3.Row
         user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         if not user:
+            logger.info(f"🆕 РЕГИСТРАЦИЯ: Пользователь {user_id} вошел в игру")
             conn.execute("INSERT INTO users (id, balance) VALUES (?, 1000)", (user_id,))
             conn.commit()
             return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1}}
@@ -131,12 +109,11 @@ async def save_game(data: SaveData):
             conn.execute("UPDATE users SET balance=?, click_lvl=? WHERE id=?", 
                          (data.score, data.click_lvl, str(data.user_id)))
             conn.commit()
+            logger.info(f"💾 СОХРАНЕНИЕ: User {data.user_id} -> {data.score} NP")
             return {"status": "ok"}
     except Exception as e:
-        logger.error(f"❌ Ошибка сохранения: {e}")
+        logger.error(f"❌ ОШИБКА API /save: {e}")
         return {"status": "error"}
-
-# --- БОТ ---
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
@@ -150,23 +127,13 @@ async def cmd_start(m: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="🚀 ИГРАТЬ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
-    await m.answer(f"<b>Neural Pulse AI</b>\nБот запущен!", reply_markup=kb)
+    await m.answer(f"<b>Neural Pulse AI</b>\nДобро пожаловать в систему!", reply_markup=kb)
 
-# --- РОУТИНГ СТАТИКИ ---
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.get("/")
 async def index():
-    index_path = STATIC_DIR / "index.html"
-    if index_path.exists():
-        # Мы логируем это через Middleware выше
-        return FileResponse(index_path)
-    return JSONResponse({"error": "index.html not found"}, status_code=404)
-
-# Монтируем статику (картинки будут доступны по адресу /static/images/...)
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-# Дополнительно монтируем images для удобства обращения из корня (если в HTML прописано images/...)
-if (STATIC_DIR / "images").exists():
-    app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images_root")
+    return FileResponse(STATIC_DIR / "index.html")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
