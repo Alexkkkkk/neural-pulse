@@ -99,9 +99,15 @@
         .plus-animation { position: absolute; pointer-events: none; font-weight: 900; animation: float 0.7s ease-out forwards; z-index: 100; text-shadow: 0 0 10px currentColor; }
         @keyframes float { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.6); } }
         
-        /* Стили для кошелька внутри модалки */
         .wallet-card { background: rgba(0, 255, 150, 0.05); border: 1px dashed var(--neon-secondary); border-radius: 20px; padding: 20px; text-align: center; margin: 20px 0; }
         .token-val { font-size: 32px; font-weight: 900; color: var(--neon-secondary); text-shadow: 0 0 15px rgba(0, 255, 150, 0.3); }
+        
+        #wallet-input {
+            width: 100%; padding: 12px; background: rgba(0,0,0,0.3); 
+            border: 1px solid var(--neon-secondary); border-radius: 10px; 
+            color: white; margin-bottom: 15px; font-family: 'Orbitron', sans-serif;
+            text-align: center; font-size: 12px; box-sizing: border-box;
+        }
     </style>
 </head>
 <body>
@@ -160,17 +166,21 @@
     <div class="overlay" id="overlay" onclick="closeModals()"></div>
 
     <div id="modal-wallet" class="modal">
-        <h2 style="color: var(--neon-secondary); text-align: center;">MY WALLET</h2>
+        <h2 style="color: var(--neon-secondary); text-align: center;">CRYPTO WALLET</h2>
+        
         <div class="wallet-card">
-            <p style="font-size: 10px; opacity: 0.7; margin: 0;">ESTIMATED $NP TOKENS</p>
+            <p style="font-size: 10px; opacity: 0.7; margin-bottom: 10px;">ESTIMATED $NP TOKENS</p>
             <div class="token-val"><span id="wallet-tokens">0.00</span></div>
-            <p style="font-size: 9px; opacity: 0.5;">Rate: 1,000 Score = 1 $NP</p>
+            <p style="font-size: 9px; opacity: 0.5; margin-bottom: 20px;">Rate: 1,000 Score = 1 $NP</p>
+
+            <input type="text" id="wallet-input" placeholder="Введите ваш TON адрес">
+            
+            <button onclick="linkWallet()" 
+                    style="width: 100%; padding: 15px; background: var(--neon-secondary); color: black; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; font-family: 'Orbitron';">
+                LINK WALLET
+            </button>
         </div>
-        <button onclick="tg.showAlert('Withdrawal will be available after TGE (Token Generation Event). Stay tuned!')" 
-                style="width: 100%; padding: 15px; background: var(--neon-secondary); color: black; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; font-family: 'Orbitron';">
-            WITHDRAW TO TON
-        </button>
-        <p style="font-size: 11px; margin-top: 20px; opacity: 0.6; text-align: center;">Connect your TON wallet in the next update!</p>
+        <p style="font-size: 11px; opacity: 0.6; text-align: center;">Адрес будет использован для будущего дропа $NP.</p>
     </div>
 
     <div id="modal-boost" class="modal">
@@ -235,6 +245,28 @@
             } catch (e) { console.error("Save error", e); }
         }
 
+        async function linkWallet() {
+            const addr = document.getElementById('wallet-input').value;
+            if (addr.length < 10) return tg.showAlert("Некорректный адрес!");
+
+            try {
+                const r = await fetch('/api/save-wallet', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: state.user_id,
+                        address: addr
+                    })
+                });
+                const res = await r.json();
+                if (res.status === "ok") {
+                    tg.showAlert("Кошелек успешно привязан! 🚀");
+                }
+            } catch (e) {
+                tg.showAlert("Ошибка при сохранении кошелька. Проверьте соединение.");
+            }
+        }
+
         async function claimBonus() {
             try {
                 const r = await fetch('/api/daily-bonus', {
@@ -251,7 +283,7 @@
         }
 
         function inviteFriend() {
-            const bot_username = "твой_ник_бота"; // ЗАМЕНИ НА СВОЙ
+            const bot_username = "твой_ник_бота"; 
             const link = `https://t.me/${bot_username}?start=ref_${state.user_id}`;
             tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text= Neural Pulse AI: Забирай 5,000 NP за вход! 🚀`);
         }
@@ -292,11 +324,8 @@
             document.getElementById('user-id-display').innerText = `ID: ${state.user_id}`;
             document.getElementById('tap-lvl-val').innerText = state.tap_power;
             document.getElementById('up-cost').innerText = state.tap_power * 500;
-
-            // ОБНОВЛЕНИЕ БАЛАНСА В КОШЕЛЬКЕ (1 токен за 1000 очков)
             document.getElementById('wallet-tokens').innerText = (state.score / 1000).toFixed(2);
             
-            // Прогресс лиги
             let progress = (state.score % 100000) / 1000;
             document.getElementById('league-fill').style.width = progress + '%';
             document.getElementById('league-percent').innerText = Math.floor(progress) + '%';
