@@ -19,7 +19,9 @@ BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 
-# Улучшенное логирование
+# Словарь для хранения времени начала сессии в памяти (для логов)
+session_starts = {}
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -37,36 +39,27 @@ class SaveData(BaseModel):
     user_id: int
     score: int
     click_lvl: int = 1
-    bot_lvl: int = 0
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Предварительная проверка файлов
     logger.info("=== ПРОВЕРКА ЗАПУСКА ===")
     if (STATIC_DIR / "index.html").exists():
         logger.info("✅ index.html на месте")
-    else:
-        logger.error("❌ index.html НЕ НАЙДЕН!")
-
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        conn.execute('''CREATE TABLE IF NOT EXISTS users 
-            (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, click_lvl INTEGER DEFAULT 1, 
-             bot_lvl INTEGER DEFAULT 0, last_bonus_date TEXT DEFAULT '', 
-             streak_days INTEGER DEFAULT 0, last_collect INTEGER DEFAULT 0, 
-             referrer TEXT, wallet TEXT)''')
-        conn.commit()
-    logger.info("✅ База данных подключена")
-
-    webhook_url = f"https://{MY_DOMAIN}/webhook"
-    await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
-    logger.info(f"🚀 Вебхук активен: {webhook_url}")
     
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        # Добавляем колонку last_active, если её нет
+        conn.execute('''CREATE TABLE IF NOT EXISTS users 
+            (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, click_lvl INTEGER DEFAULT 1,
+             last_active INTEGER DEFAULT 0)''')
+        conn.commit()
+    logger.info("✅ База данных готова")
+
+    await bot.set_webhook(url=f"https://{MY_DOMAIN}/webhook", drop_pending_updates=True)
     yield
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
 
-# Middleware для логирования ресурсов
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     path = request.url.path
@@ -76,43 +69,43 @@ async def log_requests(request: Request, call_next):
         logger.info(f"{status} Ресурс: {path} [{response.status_code}]")
     return response
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # --- API ---
 
-@app.get("/favicon.ico")
-async def favicon():
-    # Заглушка, чтобы не было ошибки 404 в логах
-    return Response(status_code=204)
-
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
+    # Фиксируем время начала сессии
+    session_starts[user_id] = time.time()
+    
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.row_factory = sqlite3.Row
         user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         if not user:
-            logger.info(f"🆕 РЕГИСТРАЦИЯ: Пользователь {user_id} вошел в игру")
-            conn.execute("INSERT INTO users (id, balance) VALUES (?, 1000)", (user_id,))
+            conn.execute("INSERT INTO users (id, balance, last_active) VALUES (?, 1000, ?)", 
+                         (user_id, int(time.time())))
             conn.commit()
             return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1}}
         return {"status": "ok", "data": dict(user)}
 
 @app.post("/api/save")
 async def save_game(data: SaveData):
+    uid = str(data.user_id)
+    now = time.time()
+    
+    # Считаем длительность сессии для лога
+    duration = int(now - session_starts.get(uid, now))
+    
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
-            conn.execute("UPDATE users SET balance=?, click_lvl=? WHERE id=?", 
-                         (data.score, data.click_lvl, str(data.user_id)))
+            conn.execute("UPDATE users SET balance=?, click_lvl=?, last_active=? WHERE id=?", 
+                         (data.score, data.click_lvl, int(now), uid))
             conn.commit()
-            logger.info(f"💾 СОХРАНЕНИЕ: User {data.user_id} -> {data.score} NP")
+            
+            logger.info(f"💾 СОХРАНЕНИЕ: User {uid} | Баланс: {data.score} | Сессия: {duration} сек.")
             return {"status": "ok"}
     except Exception as e:
-        logger.error(f"❌ ОШИБКА API /save: {e}")
+        logger.error(f"❌ Ошибка сохранения {uid}: {e}")
         return {"status": "error"}
 
 @app.post("/webhook")
@@ -127,7 +120,7 @@ async def cmd_start(m: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="🚀 ИГРАТЬ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
-    await m.answer(f"<b>Neural Pulse AI</b>\nДобро пожаловать в систему!", reply_markup=kb)
+    await m.answer(f"<b>Neural Pulse AI</b>\nЗапускай систему и начни майнинг!", reply_markup=kb)
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
