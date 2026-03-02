@@ -21,8 +21,7 @@ STATIC_DIR = BASE_DIR / "static"
 
 # Константы игры
 INITIAL_BALANCE = 1000
-MAX_ENERGY = 500
-REGEN_RATE = 1  # 1 единица в секунду
+MAX_ENERGY = 1000 # Увеличил до 1000, как в HTML
 
 # Создание структуры папок
 STATIC_DIR.mkdir(exist_ok=True)
@@ -43,22 +42,25 @@ class SaveData(BaseModel):
     user_id: str
     score: int
     click_lvl: int = 1
-    energy: int = 500
+    energy: int = 1000
 
 class UpgradeRequest(BaseModel):
     user_id: str
     cost: int
     new_lvl: int
 
+class WalletRequest(BaseModel):
+    user_id: str
+    wallet_address: str
+
 # --- БАЗА ДАННЫХ ---
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
-        # Добавляем energy и last_regen для контроля прогресса
         await db.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, 
              balance INTEGER DEFAULT 1000, 
              click_lvl INTEGER DEFAULT 1, 
-             energy INTEGER DEFAULT 500,
+             energy INTEGER DEFAULT 1000,
              last_active INTEGER DEFAULT 0,
              wallet TEXT)''')
         await db.commit()
@@ -103,7 +105,7 @@ async def get_balance(user_id: str):
                 await db.execute("INSERT INTO users (id, balance, click_lvl, energy, last_active) VALUES (?, ?, ?, ?, ?)", 
                                  (user_id, INITIAL_BALANCE, 1, MAX_ENERGY, now))
                 await db.commit()
-                return {"status": "ok", "data": {"balance": INITIAL_BALANCE, "click_lvl": 1, "energy": MAX_ENERGY}}
+                return {"status": "ok", "data": {"balance": INITIAL_BALANCE, "click_lvl": 1, "energy": MAX_ENERGY, "wallet": None}}
             
             return {"status": "ok", "data": dict(user)}
     except Exception as e:
@@ -122,6 +124,16 @@ async def save_game(data: SaveData):
         logger.error(f"Error POST save: {e}")
         return JSONResponse(status_code=500, content={"status": "error"})
 
+@app.post("/api/save_wallet")
+async def save_wallet(data: WalletRequest):
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("UPDATE users SET wallet=? WHERE id=?", (data.wallet_address, data.user_id))
+            await db.commit()
+        return {"status": "ok"}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"status": "error"})
+
 @app.get("/api/leaderboard")
 async def get_leaderboard():
     try:
@@ -138,10 +150,10 @@ async def upgrade_click(data: UpgradeRequest):
     try:
         async with aiosqlite.connect(DB_PATH) as db:
             async with db.execute("SELECT balance FROM users WHERE id=?", (data.user_id,)) as cursor:
-                user = await cursor.fetchone()
+                row = await cursor.fetchone()
             
-            if user and user[0] >= data.cost:
-                new_balance = user[0] - data.cost
+            if row and row[0] >= data.cost:
+                new_balance = row[0] - data.cost
                 await db.execute("UPDATE users SET balance = ?, click_lvl = ? WHERE id = ?",
                                  (new_balance, data.new_lvl, data.user_id))
                 await db.commit()
@@ -185,11 +197,10 @@ async def cmd_start(m: types.Message):
 
 # --- СТАТИЧЕСКИЕ ФАЙЛЫ ---
 
-# 1. Монтируем папку с картинками
+# Важно: Сначала монтируем специфичные папки, потом корень
 if (STATIC_DIR / "images").exists():
     app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images")
 
-# 2. Главный HTML (точка входа)
 @app.get("/")
 async def serve_index():
     index_file = STATIC_DIR / "index.html"
@@ -197,9 +208,8 @@ async def serve_index():
         return FileResponse(index_file)
     return JSONResponse(status_code=404, content={"error": "Frontend missing"})
 
-# 3. Монтируем всё остальное в /static (CSS, JS)
+# Резервный монтаж всей папки static
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
-    # Запуск сервера
     uvicorn.run("main:app", host="0.0.0.0", port=3000, reload=False)
