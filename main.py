@@ -47,7 +47,6 @@ async def lifespan(app: FastAPI):
         logger.info("✅ index.html на месте")
     
     with sqlite3.connect(str(DB_PATH)) as conn:
-        # Добавляем колонку last_active, если её нет
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, click_lvl INTEGER DEFAULT 1,
              last_active INTEGER DEFAULT 0)''')
@@ -60,11 +59,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# Middleware для контроля ресурсов
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     path = request.url.path
     response = await call_next(request)
-    if path.startswith("/static") or path == "/":
+    # Логируем только важные запросы (главная страница, статика, картинки)
+    if path == "/" or path.startswith(("/static", "/images")):
         status = "🟢" if response.status_code == 200 else "🔴"
         logger.info(f"{status} Ресурс: {path} [{response.status_code}]")
     return response
@@ -75,9 +76,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
-    # Фиксируем время начала сессии
     session_starts[user_id] = time.time()
-    
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.row_factory = sqlite3.Row
         user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
@@ -92,16 +91,12 @@ async def get_balance(user_id: str):
 async def save_game(data: SaveData):
     uid = str(data.user_id)
     now = time.time()
-    
-    # Считаем длительность сессии для лога
     duration = int(now - session_starts.get(uid, now))
-    
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
             conn.execute("UPDATE users SET balance=?, click_lvl=?, last_active=? WHERE id=?", 
                          (data.score, data.click_lvl, int(now), uid))
             conn.commit()
-            
             logger.info(f"💾 СОХРАНЕНИЕ: User {uid} | Баланс: {data.score} | Сессия: {duration} сек.")
             return {"status": "ok"}
     except Exception as e:
@@ -122,7 +117,15 @@ async def cmd_start(m: types.Message):
     ]])
     await m.answer(f"<b>Neural Pulse AI</b>\nЗапускай систему и начни майнинг!", reply_markup=kb)
 
+# --- МОНТИРОВАНИЕ СТАТИКИ ---
+
+# 1. Стандартный путь
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+# 2. Исправление для картинок (чтобы работало обращение /images/...)
+if (STATIC_DIR / "images").exists():
+    app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images_fix")
+    logger.info("✅ Дополнительный маршрут /images активирован")
 
 @app.get("/")
 async def index():
