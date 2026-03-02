@@ -2,7 +2,7 @@ import os, sys, asyncio, sqlite3, uvicorn, logging, random, time
 from datetime import date, timedelta
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
@@ -19,8 +19,16 @@ BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-logger = logging.getLogger(__name__)
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(BASE_DIR / "bot_log.txt", encoding="utf-8")
+    ]
+)
+logger = logging.getLogger("NeuralPulse")
 
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
@@ -39,37 +47,62 @@ class WalletUpdate(BaseModel):
 # --- БАЗА ДАННЫХ И ЖИЗНЕННЫЙ ЦИКЛ ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Проверка структуры папок при старте
     STATIC_DIR.mkdir(exist_ok=True)
+    images_dir = STATIC_DIR / "images"
     
-    available_files = [f.name for f in STATIC_DIR.glob("*")]
-    logger.info(f"📂 Файлы в static: {available_files}")
+    logger.info("--- ПРОВЕРКА РЕСУРСОВ ---")
+    if (STATIC_DIR / "index.html").exists():
+        logger.info("✅ index.html найден")
+    else:
+        logger.error("❌ index.html ОТСУТСТВУЕТ в /static")
 
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        conn.execute('''CREATE TABLE IF NOT EXISTS users 
-            (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, click_lvl INTEGER DEFAULT 1, 
-             bot_lvl INTEGER DEFAULT 0, last_bonus_date TEXT DEFAULT '', 
-             streak_days INTEGER DEFAULT 0, last_collect INTEGER DEFAULT 0, 
-             referrer TEXT, wallet TEXT)''')
-        
-        cursor = conn.execute("PRAGMA table_info(users)")
-        columns = [column[1] for column in cursor.fetchall()]
-        if "wallet" not in columns:
-            conn.execute("ALTER TABLE users ADD COLUMN wallet TEXT")
-            
-        conn.execute("CREATE TABLE IF NOT EXISTS system_stats (key TEXT PRIMARY KEY, value INTEGER)")
-        conn.execute("INSERT OR IGNORE INTO system_stats VALUES ('jackpot', 500000)")
-        conn.execute("CREATE TABLE IF NOT EXISTS winners (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, amount INTEGER, ts DATETIME DEFAULT CURRENT_TIMESTAMP)")
-        conn.commit()
-    
+    if images_dir.exists():
+        imgs = [f.name for f in images_dir.glob("*") if f.suffix in ['.png', '.jpg', '.jpeg', '.svg', '.webp']]
+        logger.info(f"🖼 Найдено картинок в /static/images: {len(imgs)} шт. ({imgs})")
+    else:
+        logger.warning("⚠️ Папка /static/images не создана")
+    logger.info("--------------------------")
+
+    try:
+        with sqlite3.connect(str(DB_PATH)) as conn:
+            conn.execute('''CREATE TABLE IF NOT EXISTS users 
+                (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, click_lvl INTEGER DEFAULT 1, 
+                 bot_lvl INTEGER DEFAULT 0, last_bonus_date TEXT DEFAULT '', 
+                 streak_days INTEGER DEFAULT 0, last_collect INTEGER DEFAULT 0, 
+                 referrer TEXT, wallet TEXT)''')
+            conn.commit()
+            logger.info("✅ База данных готова")
+    except Exception as e:
+        logger.critical(f"❌ Ошибка БД: {e}")
+
     webhook_url = f"https://{MY_DOMAIN}/webhook"
     await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_webhook(url=webhook_url)
-    logger.info(f"🚀 Webhook set to {webhook_url}")
+    logger.info(f"🚀 Вебхук: {webhook_url}")
     
     yield
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
+
+# --- MIDDLEWARE ДЛЯ ЛОГИРОВАНИЯ ЗАГРУЗКИ HTML И КАРТИНОК ---
+@app.middleware("http")
+async def log_static_requests(request: Request, call_next):
+    path = request.url.path
+    # Логируем только статические расширения
+    static_extensions = ('.html', '.png', '.jpg', '.jpeg', '.svg', '.gif', '.css', '.js')
+    
+    if path == "/" or path.endswith(static_extensions):
+        logger.info(f"🔍 Запрос ресурса: {path}")
+        
+    response = await call_next(request)
+    
+    if path == "/" or path.endswith(static_extensions):
+        status_icon = "✅" if response.status_code == 200 else "❌"
+        logger.info(f"{status_icon} Ответ {path}: {response.status_code}")
+        
+    return response
 
 app.add_middleware(
     CORSMiddleware,
@@ -80,145 +113,60 @@ app.add_middleware(
 
 # --- API ЭНДПОИНТЫ ---
 
-@app.get("/api/leaderboard")
-async def get_leaderboard():
-    try:
-        with sqlite3.connect(str(DB_PATH)) as conn:
-            cursor = conn.cursor()
-            # Берем топ-10 игроков. В твоей базе колонка называется 'id'
-            cursor.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10")
-            rows = cursor.fetchall()
-            
-            leaderboard = []
-            for i, row in enumerate(rows):
-                leaderboard.append({
-                    "rank": i + 1,
-                    "user_id": row[0],
-                    "balance": row[1]
-                })
-            return {"status": "ok", "data": leaderboard}
-    except Exception as e:
-        logger.error(f"Leaderboard error: {e}")
-        return {"status": "error", "message": str(e)}
-
-@app.post("/api/save-wallet")
-async def save_wallet(data: WalletUpdate):
-    try:
-        with sqlite3.connect(str(DB_PATH)) as conn:
-            conn.execute("UPDATE users SET wallet = ? WHERE id = ?", (data.address, str(data.user_id)))
-            conn.commit()
-            return {"status": "ok", "message": "Wallet linked!"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.row_factory = sqlite3.Row
         user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         if not user:
-            conn.execute("INSERT INTO users (id, balance, last_collect) VALUES (?, 1000, ?)", (user_id, int(time.time())))
+            conn.execute("INSERT INTO users (id, balance) VALUES (?, 1000)", (user_id,))
             conn.commit()
-            return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "bot_lvl": 0, "streak_days": 0, "wallet": None}}
+            return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1}}
         return {"status": "ok", "data": dict(user)}
 
 @app.post("/api/save")
 async def save_game(data: SaveData):
-    LIMIT, START_JACKPOT = 1000000, 500000
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
-            conn.row_factory = sqlite3.Row
-            old = conn.execute("SELECT balance FROM users WHERE id = ?", (str(data.user_id),)).fetchone()
-            
-            if old:
-                profit = data.score - old["balance"]
-                if profit > 0:
-                    conn.execute("UPDATE system_stats SET value = value + ? WHERE key='jackpot'", (int(profit*0.01),))
-            
-            jack_val = conn.execute("SELECT value FROM system_stats WHERE key='jackpot'").fetchone()[0]
-            winner_id = None
-            if jack_val >= LIMIT:
-                win_row = conn.execute("SELECT id FROM users ORDER BY RANDOM() LIMIT 1").fetchone()
-                if win_row:
-                    winner_id = win_row["id"]
-                    conn.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (jack_val, winner_id))
-                    conn.execute("INSERT INTO winners (user_id, amount) VALUES (?, ?)", (winner_id, jack_val))
-                    conn.execute("UPDATE system_stats SET value = ?", (START_JACKPOT,))
-                    jack_val = START_JACKPOT
-
-            conn.execute("UPDATE users SET balance=?, click_lvl=?, bot_lvl=? WHERE id=?", 
-                         (data.score, data.click_lvl, data.bot_lvl, str(data.user_id)))
+            conn.execute("UPDATE users SET balance=?, click_lvl=? WHERE id=?", 
+                         (data.score, data.click_lvl, str(data.user_id)))
             conn.commit()
-            return {"status": "ok", "jackpot": jack_val, "explosion": winner_id is not None}
-    except Exception as e: 
-        return {"status": "error", "message": str(e)}
+            return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"❌ Ошибка сохранения: {e}")
+        return {"status": "error"}
 
-@app.post("/api/daily-bonus")
-async def daily_bonus(data: dict):
-    uid, today = str(data.get("user_id")), date.today().isoformat()
-    yesterday = (date.today() - timedelta(days=1)).isoformat()
-    rewards = [1000, 2500, 5000, 10000, 25000, 50000, 100000]
-    
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        conn.row_factory = sqlite3.Row
-        u = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
-        if not u: return {"status": "error", "message": "User not found"}
-        if u["last_bonus_date"] == today: return {"status": "error", "message": "Уже получено"}
-        
-        new_streak = (u["streak_days"] + 1) if u["last_bonus_date"] == yesterday else 1
-        if new_streak > 7: new_streak = 1
-        
-        reward = rewards[new_streak-1]
-        conn.execute("UPDATE users SET balance=balance+?, last_bonus_date=?, streak_days=? WHERE id=?", 
-                     (reward, today, new_streak, uid))
-        conn.commit()
-        return {"status": "ok", "reward": reward, "streak": new_streak}
-
-# --- БОТ И ВЕБХУК ---
+# --- БОТ ---
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
-    try:
-        body = await request.json()
-        update = Update.model_validate(body, context={"bot": bot})
-        await dp.feed_update(bot, update)
-        return {"ok": True}
-    except Exception as e:
-        logger.error(f"Webhook error: {e}")
-        return {"ok": False, "error": str(e)}
+    body = await request.json()
+    update = Update.model_validate(body, context={"bot": bot})
+    await dp.feed_update(bot, update)
+    return {"ok": True}
 
 @dp.message(F.text.startswith("/start"))
 async def cmd_start(m: types.Message):
-    args = m.text.split()
-    uid = str(m.from_user.id)
-    ref = args[1].replace("ref_", "") if len(args) > 1 and "ref_" in args[1] else None
-    
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        exists = conn.execute("SELECT id FROM users WHERE id=?", (uid,)).fetchone()
-        if not exists:
-            conn.execute("INSERT INTO users (id, balance, referrer, last_collect) VALUES (?, 1000, ?, ?)", 
-                         (uid, ref, int(time.time())))
-            if ref and ref != uid:
-                conn.execute("UPDATE users SET balance = balance + 5000 WHERE id=?", (ref,))
-                try: await bot.send_message(ref, "🤝 Твой друг зашел в игру! +5,000 NP начислено.")
-                except: pass
-            conn.commit()
-
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="🚀 ИГРАТЬ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
-    await m.answer(f"<b>Neural Pulse AI</b>\nПриглашай друзей и забирай джекпот!", reply_markup=kb)
+    await m.answer(f"<b>Neural Pulse AI</b>\nБот запущен!", reply_markup=kb)
 
-# --- РОУТИНГ ФАЙЛОВ ---
+# --- РОУТИНГ СТАТИКИ ---
 
 @app.get("/")
 async def index():
     index_path = STATIC_DIR / "index.html"
     if index_path.exists():
+        # Мы логируем это через Middleware выше
         return FileResponse(index_path)
     return JSONResponse({"error": "index.html not found"}, status_code=404)
 
+# Монтируем статику (картинки будут доступны по адресу /static/images/...)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+# Дополнительно монтируем images для удобства обращения из корня (если в HTML прописано images/...)
+if (STATIC_DIR / "images").exists():
+    app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images_root")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
