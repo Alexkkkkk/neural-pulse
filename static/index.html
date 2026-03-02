@@ -2,7 +2,6 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse AI | Ultimate Gold</title>
     
@@ -10,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     
     <style>
+        /* ... (твой CSS без изменений, кроме путей к фону ниже) ... */
         :root { 
             --neon: #00d4ff; 
             --neon-secondary: #00ff96; 
@@ -38,7 +38,10 @@
         }
         
         .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .logo { width: 45px; height: 45px; background: url('/static/unnamed4.png') no-repeat center/cover; border-radius: 10px; box-shadow: 0 0 15px var(--neon); cursor: pointer; }
+        
+        /* ИСПРАВЛЕН ПУТЬ К ЛОГО */
+        .logo { width: 45px; height: 45px; background: url('/static/images/unnamed4.png') no-repeat center/cover; border-radius: 10px; box-shadow: 0 0 15px var(--neon); cursor: pointer; }
+        
         .league-box { flex-grow: 1; margin: 0 12px; }
         .league-info { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 4px; font-weight: bold; }
         .league-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05); }
@@ -62,9 +65,10 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center; 
         }
         
+        /* ИСПРАВЛЕН ПУТЬ К КНОПКЕ */
         #btn { 
             width: 70vw; height: 70vw; max-width: 280px; max-height: 280px;
-            background: url('/static/unnamed3.png') no-repeat center/contain;
+            background: url('/static/images/unnamed3.png') no-repeat center/contain;
             border-radius: 50%; border: none; outline: none;
             filter: drop-shadow(0 0 30px var(--neon));
             transition: transform 0.05s;
@@ -167,20 +171,13 @@
 
     <div id="modal-wallet" class="modal">
         <h2 style="color: var(--neon-secondary); text-align: center;">CRYPTO WALLET</h2>
-        
         <div class="wallet-card">
             <p style="font-size: 10px; opacity: 0.7; margin-bottom: 10px;">ESTIMATED $NP TOKENS</p>
             <div class="token-val"><span id="wallet-tokens">0.00</span></div>
             <p style="font-size: 9px; opacity: 0.5; margin-bottom: 20px;">Rate: 1,000 Score = 1 $NP</p>
-
             <input type="text" id="wallet-input" placeholder="Введите ваш TON адрес">
-            
-            <button onclick="linkWallet()" 
-                    style="width: 100%; padding: 15px; background: var(--neon-secondary); color: black; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; font-family: 'Orbitron';">
-                LINK WALLET
-            </button>
+            <button onclick="linkWallet()" style="width: 100%; padding: 15px; background: var(--neon-secondary); color: black; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; font-family: 'Orbitron';">LINK WALLET</button>
         </div>
-        <p style="font-size: 11px; opacity: 0.6; text-align: center;">Адрес будет использован для будущего дропа $NP.</p>
     </div>
 
     <div id="modal-boost" class="modal">
@@ -192,16 +189,8 @@
         </div>
     </div>
 
-    <div id="modal-stats" class="modal">
-        <h2 style="text-align: center; color: var(--neon);">🏆 LEADERBOARD</h2>
-        <div id="leaderboard-list" style="font-size: 14px; opacity: 0.8; line-height: 2;">
-            1. Player_772... - 1,200,000<br>
-            2. Alex_K... - 850,000<br>
-            3. User_092... - 500,000
-        </div>
-    </div>
-    
-    <div id="modal-tasks" class="modal"><h2>TASKS</h2><p>Подпишись на наш канал и получи 10,000 NP!</p></div>
+    <div id="modal-stats" class="modal"><h2 style="text-align: center; color: var(--neon);">🏆 LEADERBOARD</h2><div id="leaderboard-list">Загрузка...</div></div>
+    <div id="modal-tasks" class="modal"><h2>TASKS</h2><p>Подписки скоро появятся!</p></div>
 
     <script>
         const tg = window.Telegram.WebApp;
@@ -223,6 +212,11 @@
                 if (res.status === "ok") {
                     state.score = res.data.balance;
                     state.tap_power = res.data.click_lvl;
+                    // Если кошелек уже привязан, показываем его
+                    if (res.data.wallet) {
+                        document.getElementById('wallet-input').value = res.data.wallet;
+                        document.getElementById('wallet-input').disabled = true;
+                    }
                     updateUI();
                 }
             } catch (e) { console.error("Load error", e); }
@@ -253,18 +247,21 @@
                 const r = await fetch('/api/save-wallet', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        user_id: state.user_id,
-                        address: addr
-                    })
+                    body: JSON.stringify({ user_id: state.user_id, address: addr })
                 });
                 const res = await r.json();
                 if (res.status === "ok") {
                     tg.showAlert("Кошелек успешно привязан! 🚀");
                 }
-            } catch (e) {
-                tg.showAlert("Ошибка при сохранении кошелька. Проверьте соединение.");
-            }
+            } catch (e) { tg.showAlert("Ошибка при сохранении."); }
+        }
+
+        // ИСПРАВЛЕН ЮЗЕРНЕЙМ БОТА В ИНВАЙТЕ
+        function inviteFriend() {
+            const bot_username = "NeuralPulse_bot"; // ЗАМЕНИ НА СВОЙ РЕАЛЬНЫЙ ЮЗЕРНЕЙМ
+            const link = `https://t.me/${bot_username}?start=ref_${state.user_id}`;
+            const shareText = "Neural Pulse AI: Забирай 5,000 NP за вход! 🚀";
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(shareText)}`);
         }
 
         async function claimBonus() {
@@ -282,12 +279,6 @@
             } catch (e) { console.error(e); }
         }
 
-        function inviteFriend() {
-            const bot_username = "твой_ник_бота"; 
-            const link = `https://t.me/${bot_username}?start=ref_${state.user_id}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text= Neural Pulse AI: Забирай 5,000 NP за вход! 🚀`);
-        }
-
         function buyUpgrade() {
             const cost = state.tap_power * 500;
             if (state.score >= cost) {
@@ -296,9 +287,7 @@
                 updateUI();
                 saveData();
                 tg.HapticFeedback.notificationOccurred('success');
-            } else {
-                tg.showAlert("Недостаточно NP!");
-            }
+            } else { tg.showAlert("Недостаточно NP!"); }
         }
 
         const btn = document.getElementById('btn');
@@ -308,13 +297,10 @@
                 state.score += state.tap_power;
                 state.energy -= state.tap_power;
                 updateUI();
-                
                 const touch = e.changedTouches[0];
                 createPlusAnim(touch.clientX, touch.clientY, state.tap_power);
                 tg.HapticFeedback.impactOccurred('medium');
-            } else {
-                tg.HapticFeedback.notificationOccurred('error');
-            }
+            } else { tg.HapticFeedback.notificationOccurred('error'); }
         });
 
         function updateUI() {
@@ -323,7 +309,7 @@
             document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
             document.getElementById('user-id-display').innerText = `ID: ${state.user_id}`;
             document.getElementById('tap-lvl-val').innerText = state.tap_power;
-            document.getElementById('up-cost').innerText = state.tap_power * 500;
+            document.getElementById('up-cost').innerText = (state.tap_power * 500).toLocaleString();
             document.getElementById('wallet-tokens').innerText = (state.score / 1000).toFixed(2);
             
             let progress = (state.score % 100000) / 1000;
@@ -336,6 +322,7 @@
             el.className = 'plus-animation';
             el.innerText = '+' + val;
             el.style.left = x + 'px'; el.style.top = y + 'px';
+            el.style.color = '#00ff96';
             document.body.appendChild(el);
             setTimeout(() => el.remove(), 700);
         }
