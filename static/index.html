@@ -149,7 +149,7 @@
 
         <div class="play-area">
             <div class="side-menu">
-                <div class="side-btn" onclick="tg.openTelegramLink('https://t.me/share/url?url=https://t.me/neural_pulse_bot&text=Join me!')">INVITE</div>
+                <div class="side-btn" onclick="shareReferral()">INVITE</div>
                 <div class="side-btn" onclick="openModal('tasks')">TASKS</div>
                 <div class="side-btn" style="border-color: var(--neon-secondary); color: var(--neon-secondary);" onclick="openModal('wallet')">WALLET</div>
                 <div class="side-btn" style="border-color: #ff9d00;" onclick="claimBonus()">BONUS</div>
@@ -220,7 +220,7 @@
             energy: 1000,
             max_energy: 1000,
             tap_power: 1,
-            pnl: 0, // Прибыль в час
+            pnl: 0, 
             user_id: String(tg.initDataUnsafe?.user?.id || '476014374'), 
             is_saving: false
         };
@@ -233,7 +233,6 @@
             { name: "NEURAL MASTER", min: 1000000 }
         ];
 
-        // 1. Загрузка данных
         async function loadData() {
             try {
                 const r = await fetch(`/api/balance/${state.user_id}`);
@@ -252,7 +251,6 @@
             updateUI();
         }
 
-        // 2. Сохранение (Исправлено для соответствия FastAPI Schema)
         async function saveData() {
             if (state.is_saving) return;
             state.is_saving = true;
@@ -265,14 +263,13 @@
                         score: Math.floor(state.score),
                         click_lvl: Math.floor(state.tap_power),
                         energy: Math.floor(state.energy),
-                        pnl: Math.floor(state.pnl) // Добавили PNL в отправку
+                        pnl: Math.floor(state.pnl)
                     })
                 });
             } catch (e) { console.error("Save Error:", e); }
             finally { state.is_saving = false; }
         }
 
-        // 3. Обновление интерфейса
         function updateUI() {
             document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
             document.getElementById('pnl-display').innerText = `PROFIT: +${state.pnl}/hr`;
@@ -300,7 +297,6 @@
             document.getElementById('league-percent').innerText = Math.floor(Math.min(100, progress)) + '%';
         }
 
-        // 4. Мультитач кликер
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (state.energy >= state.tap_power) {
@@ -324,6 +320,12 @@
             el.style.color = (val > 1) ? 'var(--neon)' : 'white';
             document.body.appendChild(el);
             setTimeout(() => el.remove(), 700);
+        }
+
+        function shareReferral() {
+            const inviteUrl = `https://t.me/neural_pulse_bot?start=${state.user_id}`;
+            const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent("Join my Neural Pulse terminal! Get 50,000 NP bonus!")}`;
+            tg.openTelegramLink(shareUrl);
         }
 
         function openModal(id) {
@@ -370,8 +372,8 @@
                 const res = await r.json();
                 if (res.status === "ok") {
                     list.innerHTML = res.data.map((u, i) => `
-                        <div style="display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid rgba(0,212,255,0.1); background: rgba(255,255,255,0.02)">
-                            <span><span style="color:var(--neon)">${i + 1}.</span> ID: ${String(u.id).slice(0,8)}</span>
+                        <div style="display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid rgba(0,212,255,0.1); background: rgba(255,255,255,0.02); border-radius: 8px; margin-bottom: 5px;">
+                            <span><span style="color:var(--neon)">#${i + 1}</span> ID: ${String(u.id).slice(0,10)}...</span>
                             <span style="font-weight:bold; color:var(--neon-secondary)">${Number(u.balance).toLocaleString()} NP</span>
                         </div>
                     `).join('');
@@ -398,22 +400,16 @@
 
         function claimBonus() { tg.showAlert("Come back in 24 hours!"); }
 
-        // ГЛАВНЫЙ ТИКЕР (Энергия + Пассивный доход)
         setInterval(() => {
-            // 1. Реген энергии
             if (state.energy < state.max_energy) {
-                state.energy = Math.min(state.max_energy, state.energy + 2);
+                state.energy = Math.min(state.max_energy, state.energy + 1.5);
             }
-            
-            // 2. Начисление прибыли в секунду (PNL / 3600)
             if (state.pnl > 0) {
                 state.score += (state.pnl / 3600);
             }
-            
             updateUI();
         }, 1000);
 
-        // Автосохранение раз в 10 секунд
         setInterval(saveData, 10000);
 
         window.onload = () => {
