@@ -1,5 +1,4 @@
 import os, sys, asyncio, sqlite3, uvicorn, logging, random, time
-from datetime import date, timedelta
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
@@ -21,14 +20,7 @@ STATIC_DIR = BASE_DIR / "static"
 
 session_starts = {}
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler(BASE_DIR / "bot_log.txt", encoding="utf-8")
-    ]
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("NeuralPulse")
 
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -43,43 +35,30 @@ class SaveData(BaseModel):
 # --- ЖИЗНЕННЫЙ ЦИКЛ ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("=== ЗАПУСК СИСТЕМЫ ===")
-    
+    logger.info("=== ЗАПУСК NEURAL PULSE ===")
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
-            (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, click_lvl INTEGER DEFAULT 1,
-             last_active INTEGER DEFAULT 0)''')
+            (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, 
+             click_lvl INTEGER DEFAULT 1, last_active INTEGER DEFAULT 0)''')
         conn.commit()
-    logger.info("✅ База данных готова")
-
     await bot.set_webhook(url=f"https://{MY_DOMAIN}/webhook", drop_pending_updates=True)
     yield
     await bot.session.close()
 
-# --- СОЗДАНИЕ ПРИЛОЖЕНИЯ ---
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# --- API ---
+# --- API ЭНДПОИНТЫ ---
 
 @app.get("/api/leaderboard")
 async def get_leaderboard():
     try:
         with sqlite3.connect(str(DB_PATH)) as conn:
             conn.row_factory = sqlite3.Row
-            cursor = conn.execute("""
-                SELECT id, balance, last_active 
-                FROM users 
-                ORDER BY balance DESC 
-                LIMIT 10
-            """)
-            rows = cursor.fetchall()
+            rows = conn.execute("""
+                SELECT id, balance, last_active FROM users 
+                ORDER BY balance DESC LIMIT 10
+            """).fetchall()
             leaderboard = []
             now = time.time()
             for i, row in enumerate(rows):
@@ -91,8 +70,7 @@ async def get_leaderboard():
                 })
             return {"status": "ok", "data": leaderboard}
     except Exception as e:
-        logger.error(f"❌ Ошибка лидерборда: {e}")
-        return {"status": "error"}
+        return {"status": "error", "message": str(e)}
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
@@ -124,8 +102,7 @@ async def save_game(data: SaveData):
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
-    body = await request.json()
-    update = Update.model_validate(body, context={"bot": bot})
+    update = Update.model_validate(await request.json(), context={"bot": bot})
     await dp.feed_update(bot, update)
     return {"ok": True}
 
@@ -134,7 +111,7 @@ async def cmd_start(m: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="🚀 ИГРАТЬ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
-    await m.answer(f"<b>Neural Pulse AI</b>\nСистема готова к работе!", reply_markup=kb)
+    await m.answer("<b>Neural Pulse AI</b>\nСистема готова!", reply_markup=kb)
 
 # --- СТАТИКА ---
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -144,10 +121,7 @@ if (STATIC_DIR / "images").exists():
 
 @app.get("/")
 async def index():
-    index_path = STATIC_DIR / "index.html"
-    if index_path.exists():
-        return FileResponse(index_path)
-    return JSONResponse({"error": "index.html not found"}, status_code=404)
+    return FileResponse(STATIC_DIR / "index.html")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
