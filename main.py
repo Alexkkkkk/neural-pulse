@@ -21,7 +21,6 @@ BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 
-# Автоматическое создание необходимых папок
 STATIC_DIR.mkdir(exist_ok=True)
 (STATIC_DIR / "images").mkdir(exist_ok=True)
 
@@ -29,12 +28,12 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-# --- СХЕМЫ ДАННЫХ ---
+# --- СХЕМЫ ДАННЫХ (ИСПРАВЛЕНО) ---
 class SaveData(BaseModel):
     user_id: str
-    score: int
+    score: float   # Было int, стало float (решает ошибку 422)
     click_lvl: int
-    energy: int
+    energy: float  # Было int, стало float (решает ошибку 422)
     pnl: int = 0
 
 class UpgradeData(BaseModel):
@@ -60,7 +59,6 @@ async def init_db():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    # Установка вебхука
     webhook_url = f"https://{MY_DOMAIN}/webhook"
     await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
     logging.info(f"Webhook set to {webhook_url}")
@@ -89,6 +87,7 @@ async def get_balance(user_id: str):
         # Пассивный доход
         if u['pnl'] > 0 and u['last_active'] > 0:
             diff = now - u['last_active']
+            # Лимит 8 часов
             earned = int((min(diff, 28800) / 3600) * u['pnl']) 
             if earned > 0:
                 u['balance'] += earned
@@ -100,8 +99,9 @@ async def get_balance(user_id: str):
 @app.post("/api/save")
 async def save_game(data: SaveData):
     async with aiosqlite.connect(DB_PATH) as db:
+        # Приводим к int перед сохранением в INTEGER колонки
         await db.execute("UPDATE users SET balance=?, click_lvl=?, energy=?, pnl=?, last_active=? WHERE id=?", 
-                         (data.score, data.click_lvl, data.energy, data.pnl, int(time.time()), data.user_id))
+                         (int(data.score), data.click_lvl, int(data.energy), data.pnl, int(time.time()), data.user_id))
         await db.commit()
     return {"status": "ok"}
 
@@ -177,9 +177,7 @@ async def index():
         return FileResponse(index_file)
     return JSONResponse({"error": "index.html not found in /static"}, status_code=404)
 
-# Важно: монтируем /images отдельно, если они нужны
 app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images")
-# Монтируем корень статики последним
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
