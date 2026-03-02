@@ -5,3 +5,5 @@ pydantic
 aiohttp
 flask
 python-telegram-bot
+aiogram>=3.0.0
+pydantic-settings
