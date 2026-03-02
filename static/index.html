@@ -9,7 +9,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     
     <style>
-        /* ... (твой CSS без изменений, кроме путей к фону ниже) ... */
         :root { 
             --neon: #00d4ff; 
             --neon-secondary: #00ff96; 
@@ -38,8 +37,6 @@
         }
         
         .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        
-        /* ИСПРАВЛЕН ПУТЬ К ЛОГО */
         .logo { width: 45px; height: 45px; background: url('/static/images/unnamed4.png') no-repeat center/cover; border-radius: 10px; box-shadow: 0 0 15px var(--neon); cursor: pointer; }
         
         .league-box { flex-grow: 1; margin: 0 12px; }
@@ -65,7 +62,6 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center; 
         }
         
-        /* ИСПРАВЛЕН ПУТЬ К КНОПКЕ */
         #btn { 
             width: 70vw; height: 70vw; max-width: 280px; max-height: 280px;
             background: url('/static/images/unnamed3.png') no-repeat center/contain;
@@ -189,7 +185,11 @@
         </div>
     </div>
 
-    <div id="modal-stats" class="modal"><h2 style="text-align: center; color: var(--neon);">🏆 LEADERBOARD</h2><div id="leaderboard-list">Загрузка...</div></div>
+    <div id="modal-stats" class="modal">
+        <h2 style="text-align: center; color: var(--neon);">🏆 LEADERBOARD</h2>
+        <div id="leaderboard-list" style="font-size: 14px; line-height: 1.6;">Загрузка...</div>
+    </div>
+    
     <div id="modal-tasks" class="modal"><h2>TASKS</h2><p>Подписки скоро появятся!</p></div>
 
     <script>
@@ -212,7 +212,6 @@
                 if (res.status === "ok") {
                     state.score = res.data.balance;
                     state.tap_power = res.data.click_lvl;
-                    // Если кошелек уже привязан, показываем его
                     if (res.data.wallet) {
                         document.getElementById('wallet-input').value = res.data.wallet;
                         document.getElementById('wallet-input').disabled = true;
@@ -239,10 +238,50 @@
             } catch (e) { console.error("Save error", e); }
         }
 
+        async function loadLeaderboard() {
+            const listElement = document.getElementById('leaderboard-list');
+            listElement.innerHTML = "<div style='text-align:center;'>Загрузка данных...</div>";
+
+            try {
+                const r = await fetch('/api/leaderboard');
+                const res = await r.json();
+                
+                if (res.status === "ok") {
+                    let html = "";
+                    res.data.forEach(player => {
+                        const shortId = player.user_id.toString().substring(0, 3) + "..." + player.user_id.toString().slice(-3);
+                        const isMe = player.user_id == state.user_id ? "color: var(--neon-secondary); background: rgba(0,255,150,0.1); border-radius: 8px;" : "";
+                        
+                        html += `
+                            <div style="display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); ${isMe}">
+                                <span>${player.rank}. ID: ${shortId}</span>
+                                <span style="font-weight: bold;">${player.balance.toLocaleString()} NP</span>
+                            </div>`;
+                    });
+                    listElement.innerHTML = html || "<div style='text-align:center;'>Список пока пуст</div>";
+                } else {
+                    listElement.innerHTML = "<div style='text-align:center; color: var(--crit);'>Ошибка загрузки</div>";
+                }
+            } catch (e) {
+                listElement.innerHTML = "<div style='text-align:center; color: var(--crit);'>Сервер недоступен</div>";
+                console.error(e);
+            }
+        }
+
+        function openModal(id) {
+            if (id === 'stats') loadLeaderboard();
+            document.getElementById('modal-' + id).classList.add('active');
+            document.getElementById('overlay').classList.add('active');
+        }
+
+        function closeModals() {
+            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+            document.getElementById('overlay').classList.remove('active');
+        }
+
         async function linkWallet() {
             const addr = document.getElementById('wallet-input').value;
             if (addr.length < 10) return tg.showAlert("Некорректный адрес!");
-
             try {
                 const r = await fetch('/api/save-wallet', {
                     method: 'POST',
@@ -250,15 +289,12 @@
                     body: JSON.stringify({ user_id: state.user_id, address: addr })
                 });
                 const res = await r.json();
-                if (res.status === "ok") {
-                    tg.showAlert("Кошелек успешно привязан! 🚀");
-                }
+                if (res.status === "ok") tg.showAlert("Кошелек успешно привязан! 🚀");
             } catch (e) { tg.showAlert("Ошибка при сохранении."); }
         }
 
-        // ИСПРАВЛЕН ЮЗЕРНЕЙМ БОТА В ИНВАЙТЕ
         function inviteFriend() {
-            const bot_username = "NeuralPulse_bot"; // ЗАМЕНИ НА СВОЙ РЕАЛЬНЫЙ ЮЗЕРНЕЙМ
+            const bot_username = "NeuralPulse_bot"; 
             const link = `https://t.me/${bot_username}?start=ref_${state.user_id}`;
             const shareText = "Neural Pulse AI: Забирай 5,000 NP за вход! 🚀";
             tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(shareText)}`);
@@ -325,16 +361,6 @@
             el.style.color = '#00ff96';
             document.body.appendChild(el);
             setTimeout(() => el.remove(), 700);
-        }
-
-        function openModal(id) {
-            document.getElementById('modal-' + id).classList.add('active');
-            document.getElementById('overlay').classList.add('active');
-        }
-
-        function closeModals() {
-            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
-            document.getElementById('overlay').classList.remove('active');
         }
 
         setInterval(() => {
