@@ -233,35 +233,40 @@
                 if (res.status === "ok") {
                     state.score = res.data.balance;
                     state.tap_power = res.data.click_lvl || 1;
-                    log("Данные загружены", res.data);
+                    state.energy = res.data.energy !== undefined ? res.data.energy : 1000;
+                    
+                    if (res.data.wallet) {
+                        document.getElementById('wallet-input').value = res.data.wallet;
+                    }
+                    log("Данные успешно загружены", res.data);
                 }
             } catch (e) { log("Ошибка загрузки", e); }
             updateUI();
         }
 
-        // --- ТАБЛИЦА ЛИДЕРОВ (ИСПРАВЛЕНО) ---
+        // --- ТАБЛИЦА ЛИДЕРОВ ---
         async function loadLeaderboard() {
             const listContainer = document.getElementById('leaderboard-list');
-            listContainer.innerHTML = "Загрузка данных...";
+            listContainer.innerHTML = "<div style='text-align:center; padding:20px; color:var(--neon)'>UPLOADING DATA...</div>";
             try {
                 const r = await fetch('/api/leaderboard');
                 const res = await r.json();
                 if (res.status === "ok") {
                     listContainer.innerHTML = res.data.map((user, index) => `
-                        <div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid rgba(255,255,255,0.1)">
-                            <span>${index + 1}. ID: ${user.id.slice(0,6)}...</span>
-                            <span style="color:var(--neon)">${user.balance.toLocaleString()} NP</span>
+                        <div style="display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid rgba(0,212,255,0.1); background: rgba(255,255,255,0.02)">
+                            <span><span style="color:var(--neon)">${index + 1}.</span> ID: ${user.id.slice(0,8)}...</span>
+                            <span style="font-weight:bold; color:var(--neon-secondary)">${user.balance.toLocaleString()} NP</span>
                         </div>
                     `).join('');
                 }
-            } catch (e) { listContainer.innerHTML = "Ошибка загрузки ТОПа"; }
+            } catch (e) { listContainer.innerHTML = "Leaderboard offline"; }
         }
 
-        // --- ПОКУПКА АПГРЕЙДА (ИСПРАВЛЕНО) ---
+        // --- ПОКУПКА АПГРЕЙДА ---
         async function buyUpgrade() {
             const cost = state.tap_power * 500;
             if (state.score < cost) {
-                tg.showAlert("Недостаточно средств для апгрейда!");
+                tg.showAlert("НЕДОСТАТОЧНО NP ДЛЯ МОДЕРНИЗАЦИИ");
                 return;
             }
 
@@ -270,7 +275,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        user_id: parseInt(state.user_id),
+                        user_id: state.user_id,
                         cost: cost,
                         new_lvl: state.tap_power + 1
                     })
@@ -279,13 +284,36 @@
                 if (res.status === "ok") {
                     state.score = res.new_balance;
                     state.tap_power += 1;
-                    tg.showScanQrPopup({text: "СИСТЕМА ОБНОВЛЕНА"}); 
-                    setTimeout(() => tg.closeScanQrPopup(), 1000);
+                    tg.HapticFeedback.notificationOccurred('success');
                     updateUI();
                 } else {
                     tg.showAlert(res.message || "Ошибка сервера");
                 }
             } catch (e) { log("Ошибка покупки", e); }
+        }
+
+        // --- ПРИВЯЗКА КОШЕЛЬКА ---
+        async function linkWallet() {
+            const addr = document.getElementById('wallet-input').value.trim();
+            if (!addr || addr.length < 10) {
+                tg.showAlert("Введите верный TON адрес!");
+                return;
+            }
+
+            try {
+                const r = await fetch('/api/save_wallet', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: state.user_id,
+                        wallet_address: addr
+                    })
+                });
+                const res = await r.json();
+                if (res.status === "ok") {
+                    tg.showAlert("Wallet linked successfully! 💎");
+                }
+            } catch (e) { tg.showAlert("Error connecting to server"); }
         }
 
         // --- СОХРАНЕНИЕ ---
@@ -297,9 +325,10 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        user_id: parseInt(state.user_id),
+                        user_id: state.user_id,
                         score: Math.floor(state.score),
-                        click_lvl: state.tap_power
+                        click_lvl: state.tap_power,
+                        energy: Math.floor(state.energy)
                     })
                 });
             } catch (e) { log("Ошибка синхронизации", e); }
@@ -315,6 +344,10 @@
             document.getElementById('tap-lvl-val').innerText = state.tap_power;
             document.getElementById('up-cost').innerText = (state.tap_power * 500).toLocaleString();
             document.getElementById('wallet-tokens').innerText = (state.score / 1000).toFixed(2);
+            
+            let progress = (state.score % 10000) / 100;
+            document.getElementById('league-fill').style.width = progress + '%';
+            document.getElementById('league-percent').innerText = Math.floor(progress) + '%';
         }
 
         function openModal(id) {
@@ -329,26 +362,23 @@
         }
 
         function claimBonus() {
-            log("Бонус нажат");
-            tg.showAlert("Daily Bonus coming soon!");
+            tg.showAlert("Daily Bonus system initializing... Come back tomorrow!");
         }
 
-        function linkWallet() {
-            const addr = document.getElementById('wallet-input').value;
-            if (addr) tg.showAlert("Wallet linked successfully!");
-        }
-
+        // --- ТАП ОБРАБОТЧИК ---
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
-            for (let touch of e.changedTouches) {
-                if (state.energy >= state.tap_power) {
+            if (state.energy >= state.tap_power) {
+                for (let touch of e.changedTouches) {
                     state.score += state.tap_power;
                     state.energy -= state.tap_power;
                     createPlusAnim(touch.clientX, touch.clientY, state.tap_power);
-                    tg.HapticFeedback.impactOccurred('light');
                 }
+                tg.HapticFeedback.impactOccurred('medium');
+                updateUI();
+            } else {
+                tg.HapticFeedback.notificationOccurred('warning');
             }
-            updateUI();
         });
 
         function createPlusAnim(x, y, val) {
@@ -356,11 +386,12 @@
             el.className = 'plus-animation';
             el.innerText = '+' + val;
             el.style.left = x + 'px'; el.style.top = y + 'px';
-            el.style.color = '#00ff96';
+            el.style.color = 'var(--neon-secondary)';
             document.body.appendChild(el);
             setTimeout(() => el.remove(), 700);
         }
 
+        // Регенерация энергии
         setInterval(() => {
             if (state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 2);
@@ -368,6 +399,7 @@
             }
         }, 1000);
 
+        // Авто-сохранение каждые 7 секунд
         setInterval(saveData, 7000);
 
         window.onload = () => {
