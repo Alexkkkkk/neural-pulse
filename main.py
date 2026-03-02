@@ -1,4 +1,5 @@
 import os, sys, asyncio, sqlite3, uvicorn, logging, time
+import aiosqlite
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
@@ -11,16 +12,21 @@ from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
-# --- НАСТРОЙКИ ---
+# --- КОНФИГУРАЦИЯ ---
 TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU"
 MY_DOMAIN = "np.bothost.ru"
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
-IMAGES_DIR = STATIC_DIR / "images"
 
+# Константы игры
+INITIAL_BALANCE = 1000
+MAX_ENERGY = 500
+REGEN_RATE = 1  # 1 единица в секунду
+
+# Создание структуры папок
 STATIC_DIR.mkdir(exist_ok=True)
-IMAGES_DIR.mkdir(exist_ok=True)
+(STATIC_DIR / "images").mkdir(exist_ok=True)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,142 +40,166 @@ dp = Dispatcher()
 
 # --- МОДЕЛИ ДАННЫХ ---
 class SaveData(BaseModel):
-    user_id: int
+    user_id: str
     score: int
     click_lvl: int = 1
+    energy: int = 500
 
 class UpgradeRequest(BaseModel):
-    user_id: int
+    user_id: str
     cost: int
     new_lvl: int
 
+# --- БАЗА ДАННЫХ ---
+async def init_db():
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Добавляем energy и last_regen для контроля прогресса
+        await db.execute('''CREATE TABLE IF NOT EXISTS users 
+            (id TEXT PRIMARY KEY, 
+             balance INTEGER DEFAULT 1000, 
+             click_lvl INTEGER DEFAULT 1, 
+             energy INTEGER DEFAULT 500,
+             last_active INTEGER DEFAULT 0,
+             wallet TEXT)''')
+        await db.commit()
+    logger.info("📂 [DB] База данных синхронизирована")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 [SYSTEM] Запуск сервера...")
-    try:
-        with sqlite3.connect(str(DB_PATH)) as conn:
-            conn.execute('''CREATE TABLE IF NOT EXISTS users 
-                (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, 
-                 click_lvl INTEGER DEFAULT 1, last_active INTEGER DEFAULT 0, wallet TEXT)''')
-            conn.commit()
-        logger.info("📂 [DB] База данных готова")
-    except Exception as e:
-        logger.error(f"❌ [DB ERROR]: {e}")
-
+    logger.info("🚀 [SYSTEM] Старт приложения...")
+    await init_db()
+    
+    # Регистрация вебхука
     await bot.delete_webhook(drop_pending_updates=True)
     webhook_url = f"https://{MY_DOMAIN}/webhook"
-    await bot.set_webhook(url=webhook_url)
-    logger.info(f"✅ [WEBHOOK] Установлен: {webhook_url}")
+    await bot.set_webhook(url=webhook_url, allowed_updates=["message", "callback_query"])
+    logger.info(f"✅ [WEBHOOK] Активен: {webhook_url}")
     
     yield
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --- API ЭНДПОИНТЫ ---
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
-    logger.info(f"📥 [API GET] Баланс ID: {user_id}")
     try:
-        with sqlite3.connect(str(DB_PATH)) as conn:
-            conn.row_factory = sqlite3.Row
-            user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        async with aiosqlite.connect(DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("SELECT * FROM users WHERE id = ?", (user_id,)) as cursor:
+                user = await cursor.fetchone()
+            
             if not user:
-                conn.execute("INSERT INTO users (id, balance, click_lvl, last_active) VALUES (?, 1000, 1, ?)", 
-                             (user_id, int(time.time())))
-                conn.commit()
-                return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1}}
+                now = int(time.time())
+                await db.execute("INSERT INTO users (id, balance, click_lvl, energy, last_active) VALUES (?, ?, ?, ?, ?)", 
+                                 (user_id, INITIAL_BALANCE, 1, MAX_ENERGY, now))
+                await db.commit()
+                return {"status": "ok", "data": {"balance": INITIAL_BALANCE, "click_lvl": 1, "energy": MAX_ENERGY}}
+            
             return {"status": "ok", "data": dict(user)}
     except Exception as e:
-        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
+        logger.error(f"Error GET balance: {e}")
+        return JSONResponse(status_code=500, content={"status": "error"})
 
 @app.post("/api/save")
 async def save_game(data: SaveData):
-    logger.info(f"📤 [API POST] Сохранение: ID={data.user_id}, Score={data.score}")
     try:
-        with sqlite3.connect(str(DB_PATH)) as conn:
-            conn.execute("UPDATE users SET balance=?, click_lvl=?, last_active=? WHERE id=?", 
-                         (data.score, data.click_lvl, int(time.time()), str(data.user_id)))
-            conn.commit()
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("UPDATE users SET balance=?, click_lvl=?, energy=?, last_active=? WHERE id=?", 
+                             (data.score, data.click_lvl, data.energy, int(time.time()), data.user_id))
+            await db.commit()
         return {"status": "ok"}
     except Exception as e:
+        logger.error(f"Error POST save: {e}")
         return JSONResponse(status_code=500, content={"status": "error"})
 
-# НОВАЯ ФУНКЦИЯ: Таблица лидеров
 @app.get("/api/leaderboard")
 async def get_leaderboard():
-    logger.info("🏆 [API GET] Запрос таблицы лидеров")
     try:
-        with sqlite3.connect(str(DB_PATH)) as conn:
-            conn.row_factory = sqlite3.Row
-            # Получаем топ 10 игроков по балансу
-            top_users = conn.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10").fetchall()
-            return {"status": "ok", "data": [dict(row) for row in top_users]}
+        async with aiosqlite.connect(DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10") as cursor:
+                rows = await cursor.fetchall()
+                return {"status": "ok", "data": [dict(row) for row in rows]}
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "error"})
 
-# НОВАЯ ФУНКЦИЯ: Покупка улучшения
 @app.post("/api/upgrade")
 async def upgrade_click(data: UpgradeRequest):
-    logger.info(f"🛒 [UPGRADE] Попытка покупки: User {data.user_id}, Lvl {data.new_lvl}")
     try:
-        with sqlite3.connect(str(DB_PATH)) as conn:
-            user = conn.execute("SELECT balance FROM users WHERE id=?", (str(data.user_id),)).fetchone()
+        async with aiosqlite.connect(DB_PATH) as db:
+            async with db.execute("SELECT balance FROM users WHERE id=?", (data.user_id,)) as cursor:
+                user = await cursor.fetchone()
+            
             if user and user[0] >= data.cost:
-                conn.execute("UPDATE users SET balance = balance - ?, click_lvl = ? WHERE id = ?",
-                             (data.cost, data.new_lvl, str(data.user_id)))
-                conn.commit()
-                return {"status": "ok", "new_balance": user[0] - data.cost}
-            return JSONResponse(status_code=400, content={"status": "error", "message": "Недостаточно средств"})
+                new_balance = user[0] - data.cost
+                await db.execute("UPDATE users SET balance = ?, click_lvl = ? WHERE id = ?",
+                                 (new_balance, data.new_lvl, data.user_id))
+                await db.commit()
+                return {"status": "ok", "new_balance": new_balance}
+            return JSONResponse(status_code=400, content={"status": "error", "message": "Недостаточно NP"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "error"})
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
     try:
-        raw_data = await request.json()
-        update = Update.model_validate(raw_data, context={"bot": bot})
+        update_data = await request.json()
+        update = Update.model_validate(update_data, context={"bot": bot})
         await dp.feed_update(bot, update)
         return {"ok": True}
     except Exception as e:
+        logger.error(f"Webhook error: {e}")
         return JSONResponse(status_code=400, content={"ok": False})
 
-# --- ЛОГИКА БОТА ---
+# --- ТЕЛЕГРАМ БОТ ---
 
 @dp.message(F.text.startswith("/start"))
 async def cmd_start(m: types.Message):
-    logger.info(f"🤖 [START] User ID: {m.from_user.id}")
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        user = conn.execute("SELECT id FROM users WHERE id = ?", (str(m.from_user.id),)).fetchone()
-        if not user:
-            conn.execute("INSERT INTO users (id, balance, click_lvl, last_active) VALUES (?, 1000, 1, ?)", 
-                         (str(m.from_user.id), int(time.time())))
-            conn.commit()
+    uid = str(m.from_user.id)
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT id FROM users WHERE id = ?", (uid,)) as cursor:
+            if not await cursor.fetchone():
+                await db.execute("INSERT INTO users (id, balance, click_lvl, energy, last_active) VALUES (?, ?, ?, ?, ?)", 
+                                 (uid, INITIAL_BALANCE, 1, MAX_ENERGY, int(time.time())))
+                await db.commit()
 
     kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="🚀 ЗАПУСТИТЬ ТЕРМИНАЛ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
+        InlineKeyboardButton(text="⚡ ВОЙТИ В СИСТЕМУ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
     
     await m.answer(
-        f"<b>Neural Pulse AI | Ultimate Gold</b>\n\nПротокол доступа: <code>{m.from_user.id}</code>\nСистема готова к транзакциям.", 
+        f"<b>Neural Pulse Terminal v1.0.4</b>\n\nОбнаружен пользователь: <code>{m.from_user.first_name}</code>\n"
+        f"ID доступа: <code>{uid}</code>\nСтатус: <b>Авторизован</b>", 
         reply_markup=kb
     )
 
-# --- СТАТИКА ---
-if IMAGES_DIR.exists():
-    app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
+# --- СТАТИЧЕСКИЕ ФАЙЛЫ ---
 
+# 1. Монтируем папку с картинками
+if (STATIC_DIR / "images").exists():
+    app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images")
+
+# 2. Главный HTML (точка входа)
 @app.get("/")
-async def index():
-    index_path = STATIC_DIR / "index.html"
-    if index_path.exists():
-        return FileResponse(index_path)
-    return JSONResponse(status_code=404, content={"error": "index.html not found"})
+async def serve_index():
+    index_file = STATIC_DIR / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    return JSONResponse(status_code=404, content={"error": "Frontend missing"})
 
-if STATIC_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+# 3. Монтируем всё остальное в /static (CSS, JS)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+    # Запуск сервера
+    uvicorn.run("main:app", host="0.0.0.0", port=3000, reload=False)
