@@ -147,7 +147,7 @@
 
         <div class="play-area">
             <div class="side-menu">
-                <div class="side-btn" onclick="inviteFriend()">INVITE</div>
+                <div class="side-btn" onclick="tg.openTelegramLink('https://t.me/share/url?url=https://t.me/neural_pulse_bot&text=Join me!')">INVITE</div>
                 <div class="side-btn" onclick="openModal('tasks')">TASKS</div>
                 <div class="side-btn" style="border-color: var(--neon-secondary); color: var(--neon-secondary);" onclick="openModal('wallet')">WALLET</div>
                 <div class="side-btn" style="border-color: #ff9d00;" onclick="claimBonus()">BONUS</div>
@@ -214,6 +214,11 @@
         tg.ready();
         tg.setHeaderColor('#050a1a');
 
+        // Логгер для отладки
+        const log = (msg, data = "") => {
+            console.log(`[NP LOG] ${msg}`, data);
+        };
+
         let state = {
             score: 0,
             energy: 1000,
@@ -223,67 +228,49 @@
             is_saving: false
         };
 
+        // Загрузка данных
         async function loadData() {
+            log("Запрос данных для пользователя", state.user_id);
             try {
                 const r = await fetch(`/api/balance/${state.user_id}`);
+                if (!r.ok) throw new Error('Network response was not ok');
                 const res = await r.json();
                 if (res.status === "ok") {
                     state.score = res.data.balance;
-                    state.tap_power = res.data.click_lvl;
-                    updateUI();
+                    state.tap_power = res.data.click_lvl || 1;
+                    log("Данные успешно загружены", res.data);
                 }
-            } catch (e) { console.warn("Offline mode"); }
+            } catch (e) {
+                log("ОШИБКА ЗАГРУЗКИ (Офлайн режим)", e);
+            }
+            updateUI();
         }
 
+        // Сохранение данных
         async function saveData() {
-            if (state.is_saving) return;
+            if (state.is_saving || state.score === 0) return;
             state.is_saving = true;
+            log("Синхронизация прогресса...");
             try {
-                await fetch('/api/save', {
+                const r = await fetch('/api/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        user_id: state.user_id,
+                        user_id: parseInt(state.user_id),
                         score: Math.floor(state.score),
                         click_lvl: state.tap_power
                     })
                 });
-            } catch (e) { console.error("Save failed"); } 
-            finally { state.is_saving = false; }
-        }
-
-        async function loadLeaderboard() {
-            const listElement = document.getElementById('leaderboard-list');
-            listElement.innerHTML = "<div style='text-align:center;'>ЗАГРУЗКА...</div>";
-            try {
-                const r = await fetch('/api/leaderboard');
                 const res = await r.json();
-                if (res.status === "ok") {
-                    let html = "";
-                    res.data.forEach(p => {
-                        const isMe = String(p.user_id) === state.user_id ? "color:var(--neon-secondary); background:rgba(0,255,150,0.1);" : "";
-                        const online = p.is_online ? "🟢" : "⚪";
-                        html += `<div style="display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid rgba(255,255,255,0.05); ${isMe}">
-                                    <span>#${p.rank} ID:${String(p.user_id).slice(-4)} ${online}</span>
-                                    <span style="font-weight:bold;">${p.balance.toLocaleString()} NP</span>
-                                 </div>`;
-                    });
-                    listElement.innerHTML = html;
-                }
-            } catch (e) { listElement.innerHTML = "Ошибка сети"; }
+                if (res.status === "ok") log("Сохранение успешно");
+            } catch (e) {
+                log("ОШИБКА СОХРАНЕНИЯ", e);
+            } finally {
+                state.is_saving = false;
+            }
         }
 
-        function openModal(id) {
-            if (id === 'stats') loadLeaderboard();
-            document.getElementById('modal-' + id).classList.add('active');
-            document.getElementById('overlay').classList.add('active');
-        }
-
-        function closeModals() {
-            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
-            document.getElementById('overlay').classList.remove('active');
-        }
-
+        // Логика клика
         const btn = document.getElementById('btn');
         btn.addEventListener('touchstart', (e) => {
             e.preventDefault();
@@ -319,6 +306,29 @@
             setTimeout(() => el.remove(), 700);
         }
 
+        // Вспомогательные функции
+        function openModal(id) {
+            document.getElementById('modal-' + id).classList.add('active');
+            document.getElementById('overlay').classList.add('active');
+        }
+
+        function closeModals() {
+            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+            document.getElementById('overlay').classList.remove('active');
+        }
+
+        function claimBonus() {
+            log("Бонус нажат");
+            tg.showAlert("Daily Bonus coming soon!");
+        }
+
+        function linkWallet() {
+            const addr = document.getElementById('wallet-input').value;
+            log("Привязка кошелька", addr);
+            if (addr) tg.showAlert("Wallet linked successfully!");
+        }
+
+        // Циклы
         setInterval(() => {
             if (state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 1.5);
@@ -326,9 +336,11 @@
             }
         }, 1000);
 
-        setInterval(saveData, 3000);
+        setInterval(saveData, 5000);
+
         window.onload = () => {
             document.getElementById('game').style.opacity = "1";
+            log("Приложение запущено");
             loadData();
         };
     </script>
