@@ -15,7 +15,6 @@ from aiogram.enums import ParseMode
 # --- НАСТРОЙКИ ---
 TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU"
 MY_DOMAIN = "np.bothost.ru"
-# Используем .resolve() для абсолютного пути
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
@@ -37,31 +36,24 @@ class WalletUpdate(BaseModel):
     user_id: int
     address: str
 
-# --- БАЗА ДАННЫХ ---
+# --- БАЗА ДАННЫХ И ЖИЗНЕННЫЙ ЦИКЛ ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Создаем папку static если её нет
     STATIC_DIR.mkdir(exist_ok=True)
     
-    # ПРОВЕРКА ФАЙЛОВ (Для отладки 404 ошибки)
     available_files = [f.name for f in STATIC_DIR.glob("*")]
     logger.info(f"📂 Файлы в static: {available_files}")
-    if "unnamed4.png" not in available_files:
-        logger.warning("⚠️ ВНИМАНИЕ: unnamed4.png не найден в папке static!")
 
     with sqlite3.connect(str(DB_PATH)) as conn:
-        # 1. Создаем таблицу если нет
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, click_lvl INTEGER DEFAULT 1, 
              bot_lvl INTEGER DEFAULT 0, last_bonus_date TEXT DEFAULT '', 
              streak_days INTEGER DEFAULT 0, last_collect INTEGER DEFAULT 0, 
              referrer TEXT, wallet TEXT)''')
         
-        # 2. Проверяем наличие колонки wallet (на случай если БД старая)
         cursor = conn.execute("PRAGMA table_info(users)")
         columns = [column[1] for column in cursor.fetchall()]
         if "wallet" not in columns:
-            logger.info("adding column wallet to users")
             conn.execute("ALTER TABLE users ADD COLUMN wallet TEXT")
             
         conn.execute("CREATE TABLE IF NOT EXISTS system_stats (key TEXT PRIMARY KEY, value INTEGER)")
@@ -86,7 +78,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- API ---
+# --- API ЭНДПОИНТЫ ---
+
+@app.get("/api/leaderboard")
+async def get_leaderboard():
+    try:
+        with sqlite3.connect(str(DB_PATH)) as conn:
+            cursor = conn.cursor()
+            # Берем топ-10 игроков. В твоей базе колонка называется 'id'
+            cursor.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10")
+            rows = cursor.fetchall()
+            
+            leaderboard = []
+            for i, row in enumerate(rows):
+                leaderboard.append({
+                    "rank": i + 1,
+                    "user_id": row[0],
+                    "balance": row[1]
+                })
+            return {"status": "ok", "data": leaderboard}
+    except Exception as e:
+        logger.error(f"Leaderboard error: {e}")
+        return {"status": "error", "message": str(e)}
 
 @app.post("/api/save-wallet")
 async def save_wallet(data: WalletUpdate):
@@ -96,7 +109,6 @@ async def save_wallet(data: WalletUpdate):
             conn.commit()
             return {"status": "ok", "message": "Wallet linked!"}
     except Exception as e:
-        logger.error(f"Wallet save error: {e}")
         return {"status": "error", "message": str(e)}
 
 @app.get("/api/balance/{user_id}")
@@ -139,7 +151,6 @@ async def save_game(data: SaveData):
             conn.commit()
             return {"status": "ok", "jackpot": jack_val, "explosion": winner_id is not None}
     except Exception as e: 
-        logger.error(f"Save error: {e}")
         return {"status": "error", "message": str(e)}
 
 @app.post("/api/daily-bonus")
@@ -162,6 +173,8 @@ async def daily_bonus(data: dict):
                      (reward, today, new_streak, uid))
         conn.commit()
         return {"status": "ok", "reward": reward, "streak": new_streak}
+
+# --- БОТ И ВЕБХУК ---
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
@@ -196,14 +209,15 @@ async def cmd_start(m: types.Message):
     ]])
     await m.answer(f"<b>Neural Pulse AI</b>\nПриглашай друзей и забирай джекпот!", reply_markup=kb)
 
+# --- РОУТИНГ ФАЙЛОВ ---
+
 @app.get("/")
 async def index():
     index_path = STATIC_DIR / "index.html"
     if index_path.exists():
         return FileResponse(index_path)
-    return JSONResponse({"error": f"index.html not found at {index_path}"}, status_code=404)
+    return JSONResponse({"error": "index.html not found"}, status_code=404)
 
-# Монтируем статику ПОСЛЕ всех роутов
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
