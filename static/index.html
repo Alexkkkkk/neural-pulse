@@ -38,7 +38,6 @@
         }
         
         .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        /* Исправлен путь к логотипу */
         .logo { width: 45px; height: 45px; background: url('/static/unnamed4.png') no-repeat center/cover; border-radius: 10px; box-shadow: 0 0 15px var(--neon); cursor: pointer; }
         .league-box { flex-grow: 1; margin: 0 12px; }
         .league-info { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 4px; font-weight: bold; }
@@ -63,7 +62,6 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center; 
         }
         
-        /* Исправлен путь к главной кнопке */
         #btn { 
             width: 70vw; height: 70vw; max-width: 280px; max-height: 280px;
             background: url('/static/unnamed3.png') no-repeat center/contain;
@@ -100,6 +98,10 @@
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         .plus-animation { position: absolute; pointer-events: none; font-weight: 900; animation: float 0.7s ease-out forwards; z-index: 100; text-shadow: 0 0 10px currentColor; }
         @keyframes float { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.6); } }
+        
+        /* Стили для кошелька внутри модалки */
+        .wallet-card { background: rgba(0, 255, 150, 0.05); border: 1px dashed var(--neon-secondary); border-radius: 20px; padding: 20px; text-align: center; margin: 20px 0; }
+        .token-val { font-size: 32px; font-weight: 900; color: var(--neon-secondary); text-shadow: 0 0 15px rgba(0, 255, 150, 0.3); }
     </style>
 </head>
 <body>
@@ -134,6 +136,7 @@
             <div class="side-menu">
                 <div class="side-btn" onclick="inviteFriend()">INVITE</div>
                 <div class="side-btn" onclick="openModal('tasks')">TASKS</div>
+                <div class="side-btn" style="border-color: var(--neon-secondary); color: var(--neon-secondary);" onclick="openModal('wallet')">WALLET</div>
                 <div class="side-btn" style="border-color: #ff9d00;" onclick="claimBonus()">BONUS</div>
             </div>
             <button id="btn"></button>
@@ -155,6 +158,20 @@
     </div>
 
     <div class="overlay" id="overlay" onclick="closeModals()"></div>
+
+    <div id="modal-wallet" class="modal">
+        <h2 style="color: var(--neon-secondary); text-align: center;">MY WALLET</h2>
+        <div class="wallet-card">
+            <p style="font-size: 10px; opacity: 0.7; margin: 0;">ESTIMATED $NP TOKENS</p>
+            <div class="token-val"><span id="wallet-tokens">0.00</span></div>
+            <p style="font-size: 9px; opacity: 0.5;">Rate: 1,000 Score = 1 $NP</p>
+        </div>
+        <button onclick="tg.showAlert('Withdrawal will be available after TGE (Token Generation Event). Stay tuned!')" 
+                style="width: 100%; padding: 15px; background: var(--neon-secondary); color: black; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; font-family: 'Orbitron';">
+            WITHDRAW TO TON
+        </button>
+        <p style="font-size: 11px; margin-top: 20px; opacity: 0.6; text-align: center;">Connect your TON wallet in the next update!</p>
+    </div>
 
     <div id="modal-boost" class="modal">
         <h2 style="color: var(--neon);">UPGRADES</h2>
@@ -275,6 +292,9 @@
             document.getElementById('user-id-display').innerText = `ID: ${state.user_id}`;
             document.getElementById('tap-lvl-val').innerText = state.tap_power;
             document.getElementById('up-cost').innerText = state.tap_power * 500;
+
+            // ОБНОВЛЕНИЕ БАЛАНСА В КОШЕЛЬКЕ (1 токен за 1000 очков)
+            document.getElementById('wallet-tokens').innerText = (state.score / 1000).toFixed(2);
             
             // Прогресс лиги
             let progress = (state.score % 100000) / 1000;
