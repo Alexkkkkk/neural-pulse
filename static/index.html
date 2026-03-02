@@ -37,7 +37,7 @@
         }
         
         .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; z-index: 10; }
-        .logo { width: 45px; height: 45px; background: url('/images/unnamed4.png') no-repeat center/cover; border-radius: 10px; box-shadow: 0 0 15px var(--neon); cursor: pointer; }
+        .logo { width: 45px; height: 45px; background: #111; border-radius: 10px; box-shadow: 0 0 15px var(--neon); cursor: pointer; border: 1px solid var(--neon); }
         
         .league-box { flex-grow: 1; margin: 0 12px; }
         .league-info { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 4px; font-weight: bold; }
@@ -64,15 +64,16 @@
         
         #btn { 
             width: 75vw; height: 75vw; max-width: 280px; max-height: 280px;
-            background: url('/images/unnamed3.png') no-repeat center/contain;
-            border-radius: 50%; border: none; outline: none;
-            filter: drop-shadow(0 0 30px var(--neon));
+            background: radial-gradient(circle, var(--neon) 0%, transparent 70%);
+            border-radius: 50%; border: 4px solid var(--neon); outline: none;
+            box-shadow: inset 0 0 30px var(--neon);
             transition: transform 0.05s;
             z-index: 2;
             -webkit-tap-highlight-color: transparent;
             cursor: pointer;
+            position: relative;
         }
-        #btn:active { transform: scale(0.94); filter: drop-shadow(0 0 50px var(--neon-secondary)); }
+        #btn:active { transform: scale(0.95); }
 
         .side-menu { 
             position: absolute; right: 0; top: 50%; transform: translateY(-50%);
@@ -221,7 +222,7 @@
             max_energy: 1000,
             tap_power: 1,
             pnl: 0, 
-            user_id: String(tg.initDataUnsafe?.user?.id || '476014374'), 
+            user_id: String(tg.initDataUnsafe?.user?.id || 'TEST_USER'), 
             is_saving: false
         };
 
@@ -297,26 +298,31 @@
             document.getElementById('league-percent').innerText = Math.floor(Math.min(100, progress)) + '%';
         }
 
+        // Исправленный мультитач
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
-            if (state.energy >= state.tap_power) {
-                for (let touch of e.changedTouches) {
+            let touches = e.changedTouches;
+            
+            for (let i = 0; i < touches.length; i++) {
+                if (state.energy >= state.tap_power) {
                     state.score += state.tap_power;
                     state.energy -= state.tap_power;
-                    createPlusAnim(touch.clientX, touch.clientY, state.tap_power);
+                    createPlusAnim(touches[i].clientX, touches[i].clientY, state.tap_power);
+                    if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+                } else {
+                    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
+                    break;
                 }
-                if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-                updateUI();
-            } else {
-                if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
             }
+            updateUI();
         }, { passive: false });
 
         function createPlusAnim(x, y, val) {
             const el = document.createElement('div');
             el.className = 'plus-animation';
             el.innerText = '+' + val;
-            el.style.left = (x - 10) + 'px'; el.style.top = (y - 20) + 'px';
+            el.style.left = `${x - 10}px`; 
+            el.style.top = `${y - 20}px`;
             el.style.color = (val > 1) ? 'var(--neon)' : 'white';
             document.body.appendChild(el);
             setTimeout(() => el.remove(), 700);
@@ -373,12 +379,12 @@
                 if (res.status === "ok") {
                     list.innerHTML = res.data.map((u, i) => `
                         <div style="display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid rgba(0,212,255,0.1); background: rgba(255,255,255,0.02); border-radius: 8px; margin-bottom: 5px;">
-                            <span><span style="color:var(--neon)">#${i + 1}</span> ID: ${String(u.id).slice(0,10)}...</span>
+                            <span><span style="color:var(--neon)">#${i + 1}</span> ID: ${String(u.id).slice(0,8)}...</span>
                             <span style="font-weight:bold; color:var(--neon-secondary)">${Number(u.balance).toLocaleString()} NP</span>
                         </div>
                     `).join('');
                 }
-            } catch (e) { list.innerHTML = "Offline"; }
+            } catch (e) { list.innerHTML = "<div style='text-align:center;'>Service Unavailable</div>"; }
         }
 
         async function linkWallet() {
@@ -400,6 +406,7 @@
 
         function claimBonus() { tg.showAlert("Come back in 24 hours!"); }
 
+        // Энергия + PNL
         setInterval(() => {
             if (state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 1.5);
