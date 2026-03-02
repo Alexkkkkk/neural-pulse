@@ -144,6 +144,7 @@
 
         <div class="balance-container">
             <div id="score">0</div>
+            <div id="pnl-display" style="font-size: 10px; color: var(--neon-secondary); margin-top: 5px;">PROFIT: +0/hr</div>
         </div>
 
         <div class="play-area">
@@ -219,6 +220,7 @@
             energy: 1000,
             max_energy: 1000,
             tap_power: 1,
+            pnl: 0, // Прибыль в час
             user_id: String(tg.initDataUnsafe?.user?.id || '476014374'), 
             is_saving: false
         };
@@ -231,7 +233,7 @@
             { name: "NEURAL MASTER", min: 1000000 }
         ];
 
-        // Загрузка данных
+        // 1. Загрузка данных
         async function loadData() {
             try {
                 const r = await fetch(`/api/balance/${state.user_id}`);
@@ -240,6 +242,7 @@
                     state.score = Number(res.data.balance) || 0;
                     state.tap_power = Number(res.data.click_lvl) || 1;
                     state.energy = (res.data.energy !== undefined) ? Number(res.data.energy) : 1000;
+                    state.pnl = Number(res.data.pnl) || 0;
                     
                     if (res.data.wallet) {
                         document.getElementById('wallet-input').value = res.data.wallet;
@@ -249,7 +252,7 @@
             updateUI();
         }
 
-        // Сохранение (Исправлено)
+        // 2. Сохранение (Исправлено для соответствия FastAPI Schema)
         async function saveData() {
             if (state.is_saving) return;
             state.is_saving = true;
@@ -261,15 +264,18 @@
                         user_id: String(state.user_id),
                         score: Math.floor(state.score),
                         click_lvl: Math.floor(state.tap_power),
-                        energy: Math.floor(state.energy)
+                        energy: Math.floor(state.energy),
+                        pnl: Math.floor(state.pnl) // Добавили PNL в отправку
                     })
                 });
             } catch (e) { console.error("Save Error:", e); }
             finally { state.is_saving = false; }
         }
 
+        // 3. Обновление интерфейса
         function updateUI() {
             document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
+            document.getElementById('pnl-display').innerText = `PROFIT: +${state.pnl}/hr`;
             document.getElementById('energy-stat').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
             document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
             document.getElementById('user-id-display').innerText = `ID: ${state.user_id}`;
@@ -294,7 +300,7 @@
             document.getElementById('league-percent').innerText = Math.floor(Math.min(100, progress)) + '%';
         }
 
-        // Мультитач кликер
+        // 4. Мультитач кликер
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (state.energy >= state.tap_power) {
@@ -324,6 +330,7 @@
             if (id === 'stats') loadLeaderboard();
             document.getElementById('modal-' + id).classList.add('active');
             document.getElementById('overlay').classList.add('active');
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
         }
 
         function closeModals() {
@@ -391,13 +398,22 @@
 
         function claimBonus() { tg.showAlert("Come back in 24 hours!"); }
 
+        // ГЛАВНЫЙ ТИКЕР (Энергия + Пассивный доход)
         setInterval(() => {
+            // 1. Реген энергии
             if (state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 2);
-                updateUI();
             }
+            
+            // 2. Начисление прибыли в секунду (PNL / 3600)
+            if (state.pnl > 0) {
+                state.score += (state.pnl / 3600);
+            }
+            
+            updateUI();
         }, 1000);
 
+        // Автосохранение раз в 10 секунд
         setInterval(saveData, 10000);
 
         window.onload = () => {
