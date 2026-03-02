@@ -17,6 +17,7 @@
             --glass: rgba(10, 25, 47, 0.95);
         }
 
+        /* Эффект сканирующих линий (CRT) */
         body::before {
             content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0;
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.05) 50%), 
@@ -37,7 +38,7 @@
         }
         
         .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; z-index: 10; }
-        .logo { width: 45px; height: 45px; background: url('images/unnamed4.png') no-repeat center/cover; border-radius: 10px; box-shadow: 0 0 15px var(--neon); cursor: pointer; }
+        .logo { width: 45px; height: 45px; background: url('/images/unnamed4.png') no-repeat center/cover; border-radius: 10px; box-shadow: 0 0 15px var(--neon); cursor: pointer; }
         
         .league-box { flex-grow: 1; margin: 0 12px; }
         .league-info { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 4px; font-weight: bold; }
@@ -64,7 +65,7 @@
         
         #btn { 
             width: 75vw; height: 75vw; max-width: 280px; max-height: 280px;
-            background: url('images/unnamed3.png') no-repeat center/contain;
+            background: url('/images/unnamed3.png') no-repeat center/contain;
             border-radius: 50%; border: none; outline: none;
             filter: drop-shadow(0 0 30px var(--neon));
             transition: transform 0.05s;
@@ -72,7 +73,7 @@
             -webkit-tap-highlight-color: transparent;
             cursor: pointer;
         }
-        #btn:active { transform: scale(0.94); }
+        #btn:active { transform: scale(0.94); filter: drop-shadow(0 0 50px var(--neon-secondary)); }
 
         .side-menu { 
             position: absolute; right: 0; top: 50%; transform: translateY(-50%);
@@ -219,7 +220,7 @@
             energy: 1000,
             max_energy: 1000,
             tap_power: 1,
-            user_id: String(tg.initDataUnsafe?.user?.id || '0'), 
+            user_id: String(tg.initDataUnsafe?.user?.id || '476014374'), 
             is_saving: false
         };
 
@@ -231,6 +232,7 @@
             { name: "NEURAL MASTER", min: 1000000 }
         ];
 
+        // Загрузка данных при входе
         async function loadData() {
             try {
                 const r = await fetch(`/api/balance/${state.user_id}`);
@@ -244,7 +246,7 @@
                         document.getElementById('wallet-input').value = res.data.wallet;
                     }
                 }
-            } catch (e) { console.error("Load error", e); }
+            } catch (e) { console.error("API Error:", e); }
             updateUI();
         }
 
@@ -284,20 +286,20 @@
                     tg.HapticFeedback.notificationOccurred('success');
                     updateUI();
                 }
-            } catch (e) { console.error(e); }
+            } catch (e) { tg.showAlert("Server Error"); }
         }
 
         async function linkWallet() {
             const addr = document.getElementById('wallet-input').value.trim();
             if (addr.length < 10) { tg.showAlert("Invalid Address"); return; }
             try {
-                await fetch('/api/save_wallet', {
+                const r = await fetch('/api/save_wallet', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: state.user_id, wallet_address: addr })
                 });
-                tg.showAlert("Linked!");
-            } catch (e) { tg.showAlert("Error"); }
+                tg.showAlert("Wallet Linked!");
+            } catch (e) { tg.showAlert("Error linking wallet"); }
         }
 
         async function saveData() {
@@ -326,7 +328,7 @@
             document.getElementById('up-cost').innerText = (state.tap_power * 500).toLocaleString();
             document.getElementById('wallet-tokens').innerText = (state.score / 1000).toFixed(2);
             
-            // League Logic
+            // Логика лиг
             let currentLeague = leagues[0];
             for (let i = leagues.length - 1; i >= 0; i--) {
                 if (state.score >= leagues[i].min) {
@@ -354,9 +356,9 @@
             document.getElementById('overlay').classList.remove('active');
         }
 
-        function claimBonus() { tg.showAlert("Come back later!"); }
+        function claimBonus() { tg.showAlert("Come back in 24 hours!"); }
 
-        // Touch handling
+        // Обработка кликов (Мультитач)
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (state.energy >= state.tap_power) {
@@ -367,6 +369,8 @@
                 }
                 tg.HapticFeedback.impactOccurred('medium');
                 updateUI();
+            } else {
+                tg.HapticFeedback.notificationOccurred('error');
             }
         }, { passive: false });
 
@@ -375,18 +379,20 @@
             el.className = 'plus-animation';
             el.innerText = '+' + val;
             el.style.left = (x - 10) + 'px'; el.style.top = (y - 20) + 'px';
-            el.style.color = 'var(--neon-secondary)';
+            el.style.color = (val > 1) ? 'var(--neon)' : 'white';
             document.body.appendChild(el);
             setTimeout(() => el.remove(), 700);
         }
 
+        // Регенерация энергии
         setInterval(() => {
             if (state.energy < state.max_energy) {
-                state.energy = Math.min(state.max_energy, state.energy + 3);
+                state.energy = Math.min(state.max_energy, state.energy + 2);
                 updateUI();
             }
         }, 1000);
 
+        // Авто-сохранение каждые 10 сек
         setInterval(saveData, 10000);
 
         window.onload = () => {
