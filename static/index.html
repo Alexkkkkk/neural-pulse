@@ -63,7 +63,7 @@
         }
         
         #btn { 
-            width: 75vw; height: 75vw; max-width: 280px; max-height: 280px;
+            width: 70vw; height: 70vw; max-width: 280px; max-height: 280px;
             background: radial-gradient(circle, var(--neon) 0%, transparent 70%);
             border-radius: 50%; border: 4px solid var(--neon); outline: none;
             box-shadow: inset 0 0 30px var(--neon);
@@ -73,7 +73,7 @@
             cursor: pointer;
             position: relative;
         }
-        #btn:active { transform: scale(0.95); }
+        #btn:active { transform: scale(0.92); }
 
         .side-menu { 
             position: absolute; right: 0; top: 50%; transform: translateY(-50%);
@@ -239,10 +239,10 @@
                 const r = await fetch(`/api/balance/${state.user_id}`);
                 const res = await r.json();
                 if (res.status === "ok" && res.data) {
-                    state.score = Number(res.data.balance) || 0;
-                    state.tap_power = Number(res.data.click_lvl) || 1;
-                    state.energy = (res.data.energy !== undefined) ? Number(res.data.energy) : 1000;
-                    state.pnl = Number(res.data.pnl) || 0;
+                    state.score = parseFloat(res.data.balance) || 0;
+                    state.tap_power = parseInt(res.data.click_lvl) || 1;
+                    state.energy = (res.data.energy !== undefined) ? parseFloat(res.data.energy) : 1000;
+                    state.pnl = parseInt(res.data.pnl) || 0;
                     
                     if (res.data.wallet) {
                         document.getElementById('wallet-input').value = res.data.wallet;
@@ -260,11 +260,11 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        user_id: String(state.user_id),
+                        user_id: state.user_id,
                         score: Math.floor(state.score),
-                        click_lvl: Math.floor(state.tap_power),
+                        click_lvl: state.tap_power,
                         energy: Math.floor(state.energy),
-                        pnl: Math.floor(state.pnl)
+                        pnl: state.pnl
                     })
                 });
             } catch (e) { console.error("Save Error:", e); }
@@ -272,18 +272,19 @@
         }
 
         function updateUI() {
-            document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
+            const visualScore = Math.floor(state.score);
+            document.getElementById('score').innerText = visualScore.toLocaleString();
             document.getElementById('pnl-display').innerText = `PROFIT: +${state.pnl}/hr`;
             document.getElementById('energy-stat').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
             document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
             document.getElementById('user-id-display').innerText = `ID: ${state.user_id}`;
             document.getElementById('tap-lvl-val').innerText = state.tap_power;
-            document.getElementById('up-cost').innerText = Math.floor(state.tap_power * 500).toLocaleString();
+            document.getElementById('up-cost').innerText = (state.tap_power * 500).toLocaleString();
             document.getElementById('wallet-tokens').innerText = (state.score / 1000).toFixed(2);
             
             let currentLeague = leagues[0];
             for (let i = leagues.length - 1; i >= 0; i--) {
-                if (state.score >= leagues[i].min) {
+                if (visualScore >= leagues[i].min) {
                     currentLeague = leagues[i];
                     break;
                 }
@@ -291,7 +292,7 @@
             const nextIdx = leagues.indexOf(currentLeague) + 1;
             const nextLeague = leagues[nextIdx] || currentLeague;
             const diff = nextLeague.min - currentLeague.min;
-            const progress = diff > 0 ? ((state.score - currentLeague.min) / diff) * 100 : 100;
+            const progress = diff > 0 ? ((visualScore - currentLeague.min) / diff) * 100 : 100;
 
             document.getElementById('league-name').innerText = currentLeague.name + " LEAGUE";
             document.getElementById('league-fill').style.width = Math.min(100, progress) + '%';
@@ -301,7 +302,7 @@
         // Исправленный мультитач
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
-            let touches = e.changedTouches;
+            const touches = e.changedTouches;
             
             for (let i = 0; i < touches.length; i++) {
                 if (state.energy >= state.tap_power) {
@@ -335,6 +336,7 @@
         }
 
         function openModal(id) {
+            closeModals(); // Закрываем другие перед открытием новой
             if (id === 'stats') loadLeaderboard();
             document.getElementById('modal-' + id).classList.add('active');
             document.getElementById('overlay').classList.add('active');
@@ -347,16 +349,16 @@
         }
 
         async function buyUpgrade() {
-            const cost = Math.floor(state.tap_power * 500);
+            const cost = state.tap_power * 500;
             if (state.score < cost) { tg.showAlert("NOT ENOUGH NP"); return; }
             try {
                 const r = await fetch('/api/upgrade', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        user_id: String(state.user_id), 
-                        cost: Number(cost), 
-                        new_lvl: Math.floor(state.tap_power + 1) 
+                        user_id: state.user_id, 
+                        cost: cost, 
+                        new_lvl: state.tap_power + 1 
                     })
                 });
                 const res = await r.json();
@@ -376,11 +378,11 @@
             try {
                 const r = await fetch('/api/leaderboard');
                 const res = await r.json();
-                if (res.status === "ok") {
+                if (res.status === "ok" && res.data) {
                     list.innerHTML = res.data.map((u, i) => `
                         <div style="display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid rgba(0,212,255,0.1); background: rgba(255,255,255,0.02); border-radius: 8px; margin-bottom: 5px;">
                             <span><span style="color:var(--neon)">#${i + 1}</span> ID: ${String(u.id).slice(0,8)}...</span>
-                            <span style="font-weight:bold; color:var(--neon-secondary)">${Number(u.balance).toLocaleString()} NP</span>
+                            <span style="font-weight:bold; color:var(--neon-secondary)">${Math.floor(u.balance).toLocaleString()} NP</span>
                         </div>
                     `).join('');
                 }
@@ -394,7 +396,7 @@
                 const r = await fetch('/api/save_wallet', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: String(state.user_id), wallet_address: addr })
+                    body: JSON.stringify({ user_id: state.user_id, wallet_address: addr })
                 });
                 const res = await r.json();
                 if (res.status === "ok") {
@@ -406,7 +408,7 @@
 
         function claimBonus() { tg.showAlert("Come back in 24 hours!"); }
 
-        // Энергия + PNL
+        // Энергия + PNL (раз в секунду)
         setInterval(() => {
             if (state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 1.5);
@@ -417,6 +419,7 @@
             updateUI();
         }, 1000);
 
+        // Автосохранение каждые 10 секунд
         setInterval(saveData, 10000);
 
         window.onload = () => {
