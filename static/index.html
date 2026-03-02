@@ -17,7 +17,7 @@
             --glass: rgba(10, 25, 47, 0.95);
         }
 
-        /* Эффект сканирующих линий (CRT) */
+        /* Эффект CRT монитора */
         body::before {
             content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0;
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.05) 50%), 
@@ -38,6 +38,7 @@
         }
         
         .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; z-index: 10; }
+        /* Исправлен путь к логотипу */
         .logo { width: 45px; height: 45px; background: url('/images/unnamed4.png') no-repeat center/cover; border-radius: 10px; box-shadow: 0 0 15px var(--neon); cursor: pointer; }
         
         .league-box { flex-grow: 1; margin: 0 12px; }
@@ -63,6 +64,7 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center; 
         }
         
+        /* Исправлен путь к главной кнопке */
         #btn { 
             width: 75vw; height: 75vw; max-width: 280px; max-height: 280px;
             background: url('/images/unnamed3.png') no-repeat center/contain;
@@ -232,76 +234,25 @@
             { name: "NEURAL MASTER", min: 1000000 }
         ];
 
-        // Загрузка данных при входе
+        // Загрузка данных
         async function loadData() {
             try {
                 const r = await fetch(`/api/balance/${state.user_id}`);
                 const res = await r.json();
                 if (res.status === "ok") {
-                    state.score = res.data.balance || 0;
-                    state.tap_power = res.data.click_lvl || 1;
-                    state.energy = (res.data.energy !== undefined) ? res.data.energy : 1000;
+                    state.score = Number(res.data.balance) || 0;
+                    state.tap_power = Number(res.data.click_lvl) || 1;
+                    state.energy = (res.data.energy !== undefined) ? Number(res.data.energy) : 1000;
                     
                     if (res.data.wallet) {
                         document.getElementById('wallet-input').value = res.data.wallet;
                     }
                 }
-            } catch (e) { console.error("API Error:", e); }
+            } catch (e) { console.error("Load Error:", e); }
             updateUI();
         }
 
-        async function loadLeaderboard() {
-            const list = document.getElementById('leaderboard-list');
-            list.innerHTML = "<div style='text-align:center; padding:20px; color:var(--neon)'>SYNCING...</div>";
-            try {
-                const r = await fetch('/api/leaderboard');
-                const res = await r.json();
-                if (res.status === "ok") {
-                    list.innerHTML = res.data.map((u, i) => `
-                        <div style="display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid rgba(0,212,255,0.1); background: rgba(255,255,255,0.02)">
-                            <span><span style="color:var(--neon)">${i + 1}.</span> ID: ${u.id.slice(0,8)}</span>
-                            <span style="font-weight:bold; color:var(--neon-secondary)">${u.balance.toLocaleString()} NP</span>
-                        </div>
-                    `).join('');
-                }
-            } catch (e) { list.innerHTML = "Offline"; }
-        }
-
-        async function buyUpgrade() {
-            const cost = state.tap_power * 500;
-            if (state.score < cost) {
-                tg.showAlert("NOT ENOUGH NP");
-                return;
-            }
-            try {
-                const r = await fetch('/api/upgrade', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: state.user_id, cost: cost, new_lvl: state.tap_power + 1 })
-                });
-                const res = await r.json();
-                if (res.status === "ok") {
-                    state.score = res.new_balance;
-                    state.tap_power += 1;
-                    tg.HapticFeedback.notificationOccurred('success');
-                    updateUI();
-                }
-            } catch (e) { tg.showAlert("Server Error"); }
-        }
-
-        async function linkWallet() {
-            const addr = document.getElementById('wallet-input').value.trim();
-            if (addr.length < 10) { tg.showAlert("Invalid Address"); return; }
-            try {
-                const r = await fetch('/api/save_wallet', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: state.user_id, wallet_address: addr })
-                });
-                tg.showAlert("Wallet Linked!");
-            } catch (e) { tg.showAlert("Error linking wallet"); }
-        }
-
+        // Сохранение (Исправлено для предотвращения 422)
         async function saveData() {
             if (state.is_saving) return;
             state.is_saving = true;
@@ -310,25 +261,26 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        user_id: state.user_id,
+                        user_id: String(state.user_id),
                         score: Math.floor(state.score),
-                        click_lvl: state.tap_power,
+                        click_lvl: Math.floor(state.tap_power),
                         energy: Math.floor(state.energy)
                     })
                 });
-            } finally { state.is_saving = false; }
+            } catch (e) { console.error("Save Error:", e); }
+            finally { state.is_saving = false; }
         }
 
         function updateUI() {
             document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
             document.getElementById('energy-stat').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
-            document.getElementById('energy-fill').style.width = (state.energy/state.max_energy*100) + '%';
+            document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
             document.getElementById('user-id-display').innerText = `ID: ${state.user_id}`;
             document.getElementById('tap-lvl-val').innerText = state.tap_power;
             document.getElementById('up-cost').innerText = (state.tap_power * 500).toLocaleString();
             document.getElementById('wallet-tokens').innerText = (state.score / 1000).toFixed(2);
             
-            // Логика лиг
+            // Лиги
             let currentLeague = leagues[0];
             for (let i = leagues.length - 1; i >= 0; i--) {
                 if (state.score >= leagues[i].min) {
@@ -336,7 +288,8 @@
                     break;
                 }
             }
-            const nextLeague = leagues[leagues.indexOf(currentLeague) + 1] || currentLeague;
+            const nextIdx = leagues.indexOf(currentLeague) + 1;
+            const nextLeague = leagues[nextIdx] || currentLeague;
             const diff = nextLeague.min - currentLeague.min;
             const progress = diff > 0 ? ((state.score - currentLeague.min) / diff) * 100 : 100;
 
@@ -345,20 +298,7 @@
             document.getElementById('league-percent').innerText = Math.floor(Math.min(100, progress)) + '%';
         }
 
-        function openModal(id) {
-            if (id === 'stats') loadLeaderboard();
-            document.getElementById('modal-' + id).classList.add('active');
-            document.getElementById('overlay').classList.add('active');
-        }
-
-        function closeModals() {
-            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
-            document.getElementById('overlay').classList.remove('active');
-        }
-
-        function claimBonus() { tg.showAlert("Come back in 24 hours!"); }
-
-        // Обработка кликов (Мультитач)
+        // Мультитач кликер
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (state.energy >= state.tap_power) {
@@ -384,7 +324,68 @@
             setTimeout(() => el.remove(), 700);
         }
 
-        // Регенерация энергии
+        // Остальные функции (модалки, реген)
+        function openModal(id) {
+            if (id === 'stats') loadLeaderboard();
+            document.getElementById('modal-' + id).classList.add('active');
+            document.getElementById('overlay').classList.add('active');
+        }
+        function closeModals() {
+            document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+            document.getElementById('overlay').classList.remove('active');
+        }
+
+        async function buyUpgrade() {
+            const cost = state.tap_power * 500;
+            if (state.score < cost) { tg.showAlert("NOT ENOUGH NP"); return; }
+            try {
+                const r = await fetch('/api/upgrade', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: String(state.user_id), cost: Number(cost), new_lvl: Number(state.tap_power + 1) })
+                });
+                const res = await r.json();
+                if (res.status === "ok") {
+                    state.score = res.new_balance;
+                    state.tap_power += 1;
+                    tg.HapticFeedback.notificationOccurred('success');
+                    updateUI();
+                }
+            } catch (e) { tg.showAlert("Server Error"); }
+        }
+
+        async function loadLeaderboard() {
+            const list = document.getElementById('leaderboard-list');
+            list.innerHTML = "<div style='text-align:center; padding:20px; color:var(--neon)'>SYNCING...</div>";
+            try {
+                const r = await fetch('/api/leaderboard');
+                const res = await r.json();
+                if (res.status === "ok") {
+                    list.innerHTML = res.data.map((u, i) => `
+                        <div style="display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid rgba(0,212,255,0.1); background: rgba(255,255,255,0.02)">
+                            <span><span style="color:var(--neon)">${i + 1}.</span> ID: ${String(u.id).slice(0,8)}</span>
+                            <span style="font-weight:bold; color:var(--neon-secondary)">${Number(u.balance).toLocaleString()} NP</span>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) { list.innerHTML = "Offline"; }
+        }
+
+        async function linkWallet() {
+            const addr = document.getElementById('wallet-input').value.trim();
+            if (addr.length < 10) { tg.showAlert("Invalid Address"); return; }
+            try {
+                await fetch('/api/save_wallet', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: String(state.user_id), wallet_address: addr })
+                });
+                tg.showAlert("Wallet Linked!");
+            } catch (e) { tg.showAlert("Error linking wallet"); }
+        }
+
+        function claimBonus() { tg.showAlert("Come back in 24 hours!"); }
+
         setInterval(() => {
             if (state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 2);
@@ -392,7 +393,6 @@
             }
         }, 1000);
 
-        // Авто-сохранение каждые 10 сек
         setInterval(saveData, 10000);
 
         window.onload = () => {
