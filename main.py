@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from aiogram.client.default import DefaultBotProperties
@@ -38,6 +38,15 @@ class SaveData(BaseModel):
     click_lvl: int = 1
     energy: int = 1000
 
+    # Это решение ошибки 422: приводим любые входящие данные к нужному типу
+    @field_validator('score', 'click_lvl', 'energy', mode='before')
+    @classmethod
+    def validate_to_int(cls, v):
+        try:
+            return int(float(v))
+        except (ValueError, TypeError):
+            return v
+
 class UpgradeRequest(BaseModel):
     user_id: str
     cost: int
@@ -63,7 +72,12 @@ async def init_db():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("🚀 [SYSTEM] Старт приложения...")
+    # Создаем нужные папки, если их нет
+    STATIC_DIR.mkdir(exist_ok=True)
+    (STATIC_DIR / "images").mkdir(exist_ok=True)
+    
     await init_db()
+    
     # Установка вебхука
     await bot.delete_webhook(drop_pending_updates=True)
     webhook_url = f"https://{MY_DOMAIN}/webhook"
@@ -117,6 +131,7 @@ async def save_game(data: SaveData):
             await db.commit()
         return {"status": "ok"}
     except Exception as e:
+        logger.error(f"Error SAVE game: {e}")
         return JSONResponse(status_code=500, content={"status": "error"})
 
 @app.post("/api/upgrade")
@@ -155,9 +170,14 @@ async def save_wallet(data: WalletRequest):
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
-    update = Update.model_validate(await request.json(), context={"bot": bot})
-    await dp.feed_update(bot, update)
-    return {"ok": True}
+    try:
+        data = await request.json()
+        update = Update.model_validate(data, context={"bot": bot})
+        await dp.feed_update(bot, update)
+        return {"ok": True}
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return {"ok": False}
 
 # --- ТЕЛЕГРАМ БОТ ---
 @dp.message(F.text.startswith("/start"))
@@ -169,20 +189,22 @@ async def cmd_start(m: types.Message):
 
 # --- СТАТИКА И FRONTEND ---
 
-# 1. Монтируем папку с картинками (чтобы src="/images/..." работал)
-images_path = STATIC_DIR / "images"
-if images_path.exists():
-    app.mount("/images", StaticFiles(directory=str(images_path)), name="images")
+# Приоритет отдаем монтированию папок
+if (STATIC_DIR / "images").exists():
+    app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images")
 
-# 2. Главная страница (отдает твой исправленный index.html)
 @app.get("/")
 async def serve_index():
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
-        return FileResponse(index_file, media_type='text/html')
-    return JSONResponse(status_code=404, content={"error": "Frontend missing"})
+        return FileResponse(
+            index_file, 
+            media_type='text/html',
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"} # Чтобы обновления видели все сразу
+        )
+    return JSONResponse(status_code=404, content={"error": "index.html missing in static folder"})
 
-# 3. Монтаж папки static для прочих нужд (если появятся)
+# Монтируем корень статики последним
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
