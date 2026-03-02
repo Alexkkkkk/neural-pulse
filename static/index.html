@@ -214,45 +214,86 @@
         tg.ready();
         tg.setHeaderColor('#050a1a');
 
-        // Логгер для отладки
-        const log = (msg, data = "") => {
-            console.log(`[NP LOG] ${msg}`, data);
-        };
+        const log = (msg, data = "") => console.log(`[NP LOG] ${msg}`, data);
 
         let state = {
             score: 0,
             energy: 1000,
             max_energy: 1000,
             tap_power: 1,
-            user_id: String(tg.initDataUnsafe?.user?.id || '12345'),
+            user_id: String(tg.initDataUnsafe?.user?.id || '476014374'), 
             is_saving: false
         };
 
-        // Загрузка данных
+        // --- ЗАГРУЗКА ДАННЫХ ---
         async function loadData() {
-            log("Запрос данных для пользователя", state.user_id);
             try {
                 const r = await fetch(`/api/balance/${state.user_id}`);
-                if (!r.ok) throw new Error('Network response was not ok');
                 const res = await r.json();
                 if (res.status === "ok") {
                     state.score = res.data.balance;
                     state.tap_power = res.data.click_lvl || 1;
-                    log("Данные успешно загружены", res.data);
+                    log("Данные загружены", res.data);
                 }
-            } catch (e) {
-                log("ОШИБКА ЗАГРУЗКИ (Офлайн режим)", e);
-            }
+            } catch (e) { log("Ошибка загрузки", e); }
             updateUI();
         }
 
-        // Сохранение данных
-        async function saveData() {
-            if (state.is_saving || state.score === 0) return;
-            state.is_saving = true;
-            log("Синхронизация прогресса...");
+        // --- ТАБЛИЦА ЛИДЕРОВ (ИСПРАВЛЕНО) ---
+        async function loadLeaderboard() {
+            const listContainer = document.getElementById('leaderboard-list');
+            listContainer.innerHTML = "Загрузка данных...";
             try {
-                const r = await fetch('/api/save', {
+                const r = await fetch('/api/leaderboard');
+                const res = await r.json();
+                if (res.status === "ok") {
+                    listContainer.innerHTML = res.data.map((user, index) => `
+                        <div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid rgba(255,255,255,0.1)">
+                            <span>${index + 1}. ID: ${user.id.slice(0,6)}...</span>
+                            <span style="color:var(--neon)">${user.balance.toLocaleString()} NP</span>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) { listContainer.innerHTML = "Ошибка загрузки ТОПа"; }
+        }
+
+        // --- ПОКУПКА АПГРЕЙДА (ИСПРАВЛЕНО) ---
+        async function buyUpgrade() {
+            const cost = state.tap_power * 500;
+            if (state.score < cost) {
+                tg.showAlert("Недостаточно средств для апгрейда!");
+                return;
+            }
+
+            try {
+                const r = await fetch('/api/upgrade', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: parseInt(state.user_id),
+                        cost: cost,
+                        new_lvl: state.tap_power + 1
+                    })
+                });
+                const res = await r.json();
+                if (res.status === "ok") {
+                    state.score = res.new_balance;
+                    state.tap_power += 1;
+                    tg.showScanQrPopup({text: "СИСТЕМА ОБНОВЛЕНА"}); 
+                    setTimeout(() => tg.closeScanQrPopup(), 1000);
+                    updateUI();
+                } else {
+                    tg.showAlert(res.message || "Ошибка сервера");
+                }
+            } catch (e) { log("Ошибка покупки", e); }
+        }
+
+        // --- СОХРАНЕНИЕ ---
+        async function saveData() {
+            if (state.is_saving) return;
+            state.is_saving = true;
+            try {
+                await fetch('/api/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -261,31 +302,11 @@
                         click_lvl: state.tap_power
                     })
                 });
-                const res = await r.json();
-                if (res.status === "ok") log("Сохранение успешно");
-            } catch (e) {
-                log("ОШИБКА СОХРАНЕНИЯ", e);
-            } finally {
-                state.is_saving = false;
-            }
+            } catch (e) { log("Ошибка синхронизации", e); }
+            finally { state.is_saving = false; }
         }
 
-        // Логика клика
-        const btn = document.getElementById('btn');
-        btn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            const touches = e.changedTouches;
-            for (let i = 0; i < touches.length; i++) {
-                if (state.energy >= state.tap_power) {
-                    state.score += state.tap_power;
-                    state.energy -= state.tap_power;
-                    createPlusAnim(touches[i].clientX, touches[i].clientY, state.tap_power);
-                    tg.HapticFeedback.impactOccurred('medium');
-                }
-            }
-            updateUI();
-        });
-
+        // --- ИНТЕРФЕЙС ---
         function updateUI() {
             document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
             document.getElementById('energy-stat').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
@@ -296,18 +317,8 @@
             document.getElementById('wallet-tokens').innerText = (state.score / 1000).toFixed(2);
         }
 
-        function createPlusAnim(x, y, val) {
-            const el = document.createElement('div');
-            el.className = 'plus-animation';
-            el.innerText = '+' + val;
-            el.style.left = x + 'px'; el.style.top = y + 'px';
-            el.style.color = '#00ff96';
-            document.body.appendChild(el);
-            setTimeout(() => el.remove(), 700);
-        }
-
-        // Вспомогательные функции
         function openModal(id) {
+            if (id === 'stats') loadLeaderboard(); 
             document.getElementById('modal-' + id).classList.add('active');
             document.getElementById('overlay').classList.add('active');
         }
@@ -324,23 +335,43 @@
 
         function linkWallet() {
             const addr = document.getElementById('wallet-input').value;
-            log("Привязка кошелька", addr);
             if (addr) tg.showAlert("Wallet linked successfully!");
         }
 
-        // Циклы
+        document.getElementById('btn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            for (let touch of e.changedTouches) {
+                if (state.energy >= state.tap_power) {
+                    state.score += state.tap_power;
+                    state.energy -= state.tap_power;
+                    createPlusAnim(touch.clientX, touch.clientY, state.tap_power);
+                    tg.HapticFeedback.impactOccurred('light');
+                }
+            }
+            updateUI();
+        });
+
+        function createPlusAnim(x, y, val) {
+            const el = document.createElement('div');
+            el.className = 'plus-animation';
+            el.innerText = '+' + val;
+            el.style.left = x + 'px'; el.style.top = y + 'px';
+            el.style.color = '#00ff96';
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 700);
+        }
+
         setInterval(() => {
             if (state.energy < state.max_energy) {
-                state.energy = Math.min(state.max_energy, state.energy + 1.5);
+                state.energy = Math.min(state.max_energy, state.energy + 2);
                 updateUI();
             }
         }, 1000);
 
-        setInterval(saveData, 5000);
+        setInterval(saveData, 7000);
 
         window.onload = () => {
             document.getElementById('game').style.opacity = "1";
-            log("Приложение запущено");
             loadData();
         };
     </script>
