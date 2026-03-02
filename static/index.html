@@ -38,7 +38,8 @@
         }
         
         .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .logo { width: 45px; height: 45px; background: url('/static/images/unnamed4.png') no-repeat center/cover; border-radius: 10px; box-shadow: 0 0 15px var(--neon); cursor: pointer; }
+        /* Исправлен путь к логотипу */
+        .logo { width: 45px; height: 45px; background: url('/static/unnamed4.png') no-repeat center/cover; border-radius: 10px; box-shadow: 0 0 15px var(--neon); cursor: pointer; }
         .league-box { flex-grow: 1; margin: 0 12px; }
         .league-info { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 4px; font-weight: bold; }
         .league-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05); }
@@ -55,16 +56,17 @@
         #jackpot-amount { font-size: 24px; font-weight: 900; color: #fff; text-shadow: 0 0 10px #ff00d4; }
 
         .balance-container { text-align: center; margin: 10px 0; }
-        #score { font-size: 58px; font-weight: 900; text-shadow: 0 0 20px var(--neon); letter-spacing: -2px; }
+        #score { font-size: 48px; font-weight: 900; text-shadow: 0 0 20px var(--neon); letter-spacing: -2px; }
 
         .play-area { 
             position: relative; width: 100%; flex-grow: 1; 
             display: flex; flex-direction: column; align-items: center; justify-content: center; 
         }
         
+        /* Исправлен путь к главной кнопке */
         #btn { 
             width: 70vw; height: 70vw; max-width: 280px; max-height: 280px;
-            background: url('/static/images/unnamed3.png') no-repeat center/contain;
+            background: url('/static/unnamed3.png') no-repeat center/contain;
             border-radius: 50%; border: none; outline: none;
             filter: drop-shadow(0 0 30px var(--neon));
             transition: transform 0.05s;
@@ -104,7 +106,7 @@
 
     <div class="game-container" id="game" style="opacity:0">
         <div class="header">
-            <div class="logo" id="main-logo"></div>
+            <div class="logo" id="main-logo" onclick="location.reload()"></div>
             <div class="league-box">
                 <div class="league-info">
                     <span id="league-name">BRONZE LEAGUE</span>
@@ -121,7 +123,7 @@
 
         <div class="jackpot-container">
             <div style="font-size: 9px; letter-spacing: 3px; color: var(--neon); margin-bottom: 3px; font-weight: 900;">GLOBAL JACKPOT</div>
-            <div id="jackpot-amount">500,240</div>
+            <div id="jackpot-amount">500,000</div>
         </div>
 
         <div class="balance-container">
@@ -130,9 +132,9 @@
 
         <div class="play-area">
             <div class="side-menu">
-                <div class="side-btn" onclick="openModal('friends')">FRIENDS</div>
+                <div class="side-btn" onclick="inviteFriend()">INVITE</div>
                 <div class="side-btn" onclick="openModal('tasks')">TASKS</div>
-                <div class="side-btn" style="border-color: #ff9d00;" onclick="openModal('daily')">BONUS</div>
+                <div class="side-btn" style="border-color: #ff9d00;" onclick="claimBonus()">BONUS</div>
             </div>
             <button id="btn"></button>
 
@@ -156,27 +158,25 @@
 
     <div id="modal-boost" class="modal">
         <h2 style="color: var(--neon);">UPGRADES</h2>
-        <div class="stat-box" style="border: 1px solid var(--crit); padding:15px; border-radius:15px; margin-bottom:10px;">
-            <div style="color: var(--crit); font-weight: 900;">🚀 TURBO ROCKET (x5)</div>
-            <button class="buy-btn" style="background: var(--crit); color: white; width: 100%; padding: 10px; border: none; border-radius: 10px; margin-top: 10px;">LAUNCH (1000 NP)</button>
-        </div>
         <div class="stat-box" style="border: 1px solid var(--neon); padding:15px; border-radius:15px; margin-bottom:10px;">
-            <div>MULTI-TAP (LVL <span id="tap-lvl-val">1</span>)</div>
-            <button class="buy-btn" style="width: 100%; padding: 10px; background: var(--neon); border: none; border-radius: 10px; margin-top: 10px;">UPGRADE</button>
+            <div style="margin-bottom: 10px;">MULTI-TAP (LVL <span id="tap-lvl-val">1</span>)</div>
+            <div style="font-size: 12px; opacity: 0.7; margin-bottom: 10px;">Цена: <span id="up-cost">500</span> NP</div>
+            <button onclick="buyUpgrade()" style="width: 100%; padding: 12px; background: var(--neon); color: black; border: none; border-radius: 10px; font-weight: bold; cursor: pointer;">UPGRADE</button>
         </div>
     </div>
 
     <div id="modal-stats" class="modal">
         <h2 style="text-align: center; color: var(--neon);">🏆 LEADERBOARD</h2>
-        <div id="leaderboard-list">Загрузка...</div>
+        <div id="leaderboard-list" style="font-size: 14px; opacity: 0.8; line-height: 2;">
+            1. Player_772... - 1,200,000<br>
+            2. Alex_K... - 850,000<br>
+            3. User_092... - 500,000
+        </div>
     </div>
     
-    <div id="modal-friends" class="modal"><h2>FRIENDS</h2><p>Invite friends coming soon...</p></div>
-    <div id="modal-tasks" class="modal"><h2>TASKS</h2><p>Coming Soon...</p></div>
-    <div id="modal-daily" class="modal"><h2>DAILY BONUS</h2><p>Coming Soon...</p></div>
+    <div id="modal-tasks" class="modal"><h2>TASKS</h2><p>Подпишись на наш канал и получи 10,000 NP!</p></div>
 
     <script>
-        // Инициализация Telegram
         const tg = window.Telegram.WebApp;
         tg.expand();
         tg.ready();
@@ -186,45 +186,72 @@
             energy: 1000,
             max_energy: 1000,
             tap_power: 1,
-            user_id: tg.initDataUnsafe?.user?.id || 0
+            user_id: tg.initDataUnsafe?.user?.id || 12345
         };
 
-        // 1. Загрузка данных при старте (синхронизировано с вашим main.py)
         async function loadData() {
-            if (!state.user_id) return;
             try {
-                const response = await fetch(`/api/balance/${state.user_id}`);
-                if (response.ok) {
-                    const res = await response.json();
-                    if (res.status === "ok") {
-                        // Баланс из БД в score игры
-                        state.score = res.data.balance || 0;
-                        state.tap_power = res.data.click_lvl || 1;
-                        updateUI();
-                        console.log("Данные успешно загружены");
-                    }
+                const r = await fetch(`/api/balance/${state.user_id}`);
+                const res = await r.json();
+                if (res.status === "ok") {
+                    state.score = res.data.balance;
+                    state.tap_power = res.data.click_lvl;
+                    updateUI();
                 }
-            } catch (e) { console.error("Ошибка загрузки:", e); }
+            } catch (e) { console.error("Load error", e); }
         }
 
-        // 2. Сохранение данных (синхронизировано с моделью SaveData в main.py)
         async function saveData() {
-            if (!state.user_id) return;
             try {
-                await fetch('/api/save', {
+                const r = await fetch('/api/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         user_id: state.user_id,
-                        score: Math.floor(state.score), // Это попадет в balance в БД
-                        click_lvl: state.tap_power,
-                        bot_lvl: 0
+                        score: Math.floor(state.score),
+                        click_lvl: state.tap_power
                     })
                 });
-            } catch (e) { console.error("Ошибка сохранения:", e); }
+                const res = await r.json();
+                if (res.jackpot) document.getElementById('jackpot-amount').innerText = res.jackpot.toLocaleString();
+                if (res.explosion) tg.showAlert("💥 BOOM! ВЫ ВЫИГРАЛИ ДЖЕКПОТ!");
+            } catch (e) { console.error("Save error", e); }
         }
 
-        // --- Логика клика ---
+        async function claimBonus() {
+            try {
+                const r = await fetch('/api/daily-bonus', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({user_id: state.user_id})
+                });
+                const res = await r.json();
+                if(res.status === 'ok') {
+                    tg.showAlert(`Бонус получен: +${res.reward} NP!`);
+                    loadData();
+                } else { tg.showAlert(res.message); }
+            } catch (e) { console.error(e); }
+        }
+
+        function inviteFriend() {
+            const bot_username = "твой_ник_бота"; // ЗАМЕНИ НА СВОЙ
+            const link = `https://t.me/${bot_username}?start=ref_${state.user_id}`;
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text= Neural Pulse AI: Забирай 5,000 NP за вход! 🚀`);
+        }
+
+        function buyUpgrade() {
+            const cost = state.tap_power * 500;
+            if (state.score >= cost) {
+                state.score -= cost;
+                state.tap_power += 1;
+                updateUI();
+                saveData();
+                tg.HapticFeedback.notificationOccurred('success');
+            } else {
+                tg.showAlert("Недостаточно NP!");
+            }
+        }
+
         const btn = document.getElementById('btn');
         btn.addEventListener('touchstart', (e) => {
             e.preventDefault();
@@ -235,7 +262,7 @@
                 
                 const touch = e.changedTouches[0];
                 createPlusAnim(touch.clientX, touch.clientY, state.tap_power);
-                tg.HapticFeedback.impactOccurred('light');
+                tg.HapticFeedback.impactOccurred('medium');
             } else {
                 tg.HapticFeedback.notificationOccurred('error');
             }
@@ -246,20 +273,24 @@
             document.getElementById('energy-stat').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
             document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
             document.getElementById('user-id-display').innerText = `ID: ${state.user_id}`;
+            document.getElementById('tap-lvl-val').innerText = state.tap_power;
+            document.getElementById('up-cost').innerText = state.tap_power * 500;
+            
+            // Прогресс лиги
+            let progress = (state.score % 100000) / 1000;
+            document.getElementById('league-fill').style.width = progress + '%';
+            document.getElementById('league-percent').innerText = Math.floor(progress) + '%';
         }
 
         function createPlusAnim(x, y, val) {
             const el = document.createElement('div');
             el.className = 'plus-animation';
             el.innerText = '+' + val;
-            el.style.left = x + 'px';
-            el.style.top = y + 'px';
-            el.style.color = 'var(--neon)';
+            el.style.left = x + 'px'; el.style.top = y + 'px';
             document.body.appendChild(el);
             setTimeout(() => el.remove(), 700);
         }
 
-        // Модалки
         function openModal(id) {
             document.getElementById('modal-' + id).classList.add('active');
             document.getElementById('overlay').classList.add('active');
@@ -270,15 +301,13 @@
             document.getElementById('overlay').classList.remove('active');
         }
 
-        // Регенерация энергии (1 в сек)
         setInterval(() => {
             if (state.energy < state.max_energy) {
-                state.energy = Math.min(state.max_energy, state.energy + 1);
+                state.energy = Math.min(state.max_energy, state.energy + 1.5);
                 updateUI();
             }
         }, 1000);
 
-        // Автосохранение каждые 3 секунды
         setInterval(saveData, 3000);
         
         window.onload = () => {
