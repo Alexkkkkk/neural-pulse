@@ -18,7 +18,7 @@ BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 
-# Ультра-логирование
+# Ультра-логирование (вывод в stdout обязателен для Bothost)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -37,18 +37,23 @@ class SaveData(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("🚀 [SYSTEM] Запуск сервера...")
-    # БД
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        conn.execute('''CREATE TABLE IF NOT EXISTS users 
-            (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, 
-             click_lvl INTEGER DEFAULT 1, last_active INTEGER DEFAULT 0, wallet TEXT)''')
-        conn.commit()
-    
-    # Вебхук
+    # Инициализация БД
+    try:
+        with sqlite3.connect(str(DB_PATH)) as conn:
+            conn.execute('''CREATE TABLE IF NOT EXISTS users 
+                (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, 
+                 click_lvl INTEGER DEFAULT 1, last_active INTEGER DEFAULT 0, wallet TEXT)''')
+            conn.commit()
+        logger.info("📂 [DB] База данных готова")
+    except Exception as e:
+        logger.error(f"❌ [DB ERROR] Ошибка БД: {e}")
+
+    # Установка Вебхука
     await bot.delete_webhook(drop_pending_updates=True)
     webhook_url = f"https://{MY_DOMAIN}/webhook"
     await bot.set_webhook(url=webhook_url)
     logger.info(f"✅ [WEBHOOK] Установлен: {webhook_url}")
+    
     yield
     await bot.session.close()
 
@@ -63,7 +68,8 @@ async def get_balance(user_id: str):
         conn.row_factory = sqlite3.Row
         user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         if not user:
-            conn.execute("INSERT INTO users (id, balance, last_active) VALUES (?, 1000, ?)", (user_id, int(time.time())))
+            conn.execute("INSERT INTO users (id, balance, click_lvl, last_active) VALUES (?, 1000, 1, ?)", 
+                         (user_id, int(time.time())))
             conn.commit()
             return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1}}
         return {"status": "ok", "data": dict(user)}
@@ -79,37 +85,49 @@ async def save_game(data: SaveData):
         return {"status": "ok"}
     except Exception as e:
         logger.error(f"❌ [SAVE ERROR]: {e}")
-        return {"status": "error"}
+        return {"status": "error", "detail": str(e)}
 
+# Исправленный обработчик вебхука
 @app.post("/webhook")
 async def bot_webhook(request: Request):
     try:
-        data = await request.json()
-        logger.info(f"📩 [TG UPDATE] ID: {data.get('update_id')}")
-        update = Update.model_validate(data, context={"bot": bot})
+        raw_data = await request.json()
+        logger.info(f"📩 [TG UPDATE] Пришли данные от Telegram")
+        update = Update.model_validate(raw_data, context={"bot": bot})
         await dp.feed_update(bot, update)
         return {"ok": True}
     except Exception as e:
         logger.error(f"❌ [WEBHOOK ERROR]: {e}")
-        return {"ok": False}
+        return JSONResponse(content={"ok": False, "error": str(e)}, status_code=400)
 
 # --- BOT LOGIC ---
 @dp.message(F.text.startswith("/start"))
 async def cmd_start(m: types.Message):
-    logger.info(f"🤖 [START] User: {m.from_user.id}")
+    logger.info(f"🤖 [START] Нажал пользователь: {m.from_user.id}")
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="🚀 ИГРАТЬ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))
     ]])
-    await m.answer(f"<b>Neural Pulse AI</b>\nСистема готова к работе!", reply_markup=kb)
+    await m.answer(
+        f"<b>Neural Pulse AI</b>\n\nСистема инициализирована.\nВаш ID: <code>{m.from_user.id}</code>\n\nНажмите кнопку ниже для запуска терминала:", 
+        reply_markup=kb
+    )
 
 # --- STATIC ---
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+# Сначала монтируем изображения, если они есть
 if (STATIC_DIR / "images").exists():
-    app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images_fix")
+    app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images")
+
+# Затем общую статику
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.get("/")
 async def index():
-    return FileResponse(STATIC_DIR / "index.html")
+    index_path = STATIC_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    return {"error": "index.html not found in static folder"}
 
 if __name__ == "__main__":
+    # Порт 3000 важен для Bothost
     uvicorn.run(app, host="0.0.0.0", port=3000)
