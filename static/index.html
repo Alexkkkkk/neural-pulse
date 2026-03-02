@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse AI | Ultimate Gold</title>
+    <title>Neural Pulse AI | Terminal</title>
     
     <script src="https://telegram.org/js/telegram-web-app.js?5"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
@@ -55,7 +55,7 @@
         #jackpot-amount { font-size: 24px; font-weight: 900; color: #fff; text-shadow: 0 0 10px #ff00d4; }
 
         .balance-container { text-align: center; margin: 10px 0; }
-        #score { font-size: 48px; font-weight: 900; text-shadow: 0 0 20px var(--neon); letter-spacing: -2px; }
+        #score { font-size: 44px; font-weight: 900; text-shadow: 0 0 20px var(--neon); letter-spacing: -1px; }
 
         .play-area { 
             position: relative; width: 100%; flex-grow: 1; 
@@ -63,22 +63,23 @@
         }
         
         #btn { 
-            width: 70vw; height: 70vw; max-width: 280px; max-height: 280px;
+            width: 75vw; height: 75vw; max-width: 280px; max-height: 280px;
             background: url('images/unnamed3.png') no-repeat center/contain;
             border-radius: 50%; border: none; outline: none;
             filter: drop-shadow(0 0 30px var(--neon));
             transition: transform 0.05s;
             z-index: 2;
             -webkit-tap-highlight-color: transparent;
+            cursor: pointer;
         }
-        #btn:active { transform: scale(0.92); }
+        #btn:active { transform: scale(0.94); }
 
         .side-menu { 
             position: absolute; right: 0; top: 50%; transform: translateY(-50%);
             display: flex; flex-direction: column; gap: 10px; z-index: 5; 
         }
         .side-btn { 
-            width: 80px; padding: 10px 5px; background: rgba(10, 25, 47, 0.7); 
+            width: 80px; padding: 10px 5px; background: rgba(10, 25, 47, 0.8); 
             border: 1px solid var(--neon); border-radius: 12px; 
             font-size: 10px; color: white; text-align: center; backdrop-filter: blur(10px);
         }
@@ -97,7 +98,7 @@
         .overlay.active { display: block; }
 
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-        .plus-animation { position: absolute; pointer-events: none; font-weight: 900; animation: float 0.7s ease-out forwards; z-index: 100; text-shadow: 0 0 10px currentColor; }
+        .plus-animation { position: absolute; pointer-events: none; font-weight: 900; animation: float 0.7s ease-out forwards; z-index: 100; text-shadow: 0 0 10px currentColor; font-family: 'Orbitron'; }
         @keyframes float { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.6); } }
         
         .wallet-card { background: rgba(0, 255, 150, 0.05); border: 1px dashed var(--neon-secondary); border-radius: 20px; padding: 20px; text-align: center; margin: 20px 0; }
@@ -107,7 +108,7 @@
             width: 100%; padding: 12px; background: rgba(0,0,0,0.3); 
             border: 1px solid var(--neon-secondary); border-radius: 10px; 
             color: white; margin-bottom: 15px; font-family: 'Orbitron', sans-serif;
-            text-align: center; font-size: 12px; box-sizing: border-box;
+            text-align: center; font-size: 11px; box-sizing: border-box; outline: none;
         }
 
         .task-item {
@@ -119,7 +120,7 @@
 </head>
 <body>
 
-    <div class="game-container" id="game" style="opacity:0">
+    <div class="game-container" id="game" style="opacity:0; transition: opacity 0.5s;">
         <div class="header">
             <div class="logo" id="main-logo" onclick="location.reload()"></div>
             <div class="league-box">
@@ -178,7 +179,7 @@
             <p style="font-size: 10px; opacity: 0.7; margin-bottom: 10px;">ESTIMATED $NP TOKENS</p>
             <div class="token-val"><span id="wallet-tokens">0.00</span></div>
             <p style="font-size: 9px; opacity: 0.5; margin-bottom: 20px;">Rate: 1,000 Score = 1 $NP</p>
-            <input type="text" id="wallet-input" placeholder="Введите ваш TON адрес">
+            <input type="text" id="wallet-input" placeholder="Enter TON Address">
             <button onclick="linkWallet()" style="width: 100%; padding: 15px; background: var(--neon-secondary); color: black; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; font-family: 'Orbitron';">LINK WALLET</button>
         </div>
     </div>
@@ -187,7 +188,7 @@
         <h2 style="color: var(--neon);">UPGRADES</h2>
         <div class="stat-box" style="border: 1px solid var(--neon); padding:15px; border-radius:15px; margin-bottom:10px;">
             <div style="margin-bottom: 10px;">MULTI-TAP (LVL <span id="tap-lvl-val">1</span>)</div>
-            <div style="font-size: 12px; opacity: 0.7; margin-bottom: 10px;">Цена: <span id="up-cost">500</span> NP</div>
+            <div style="font-size: 12px; opacity: 0.7; margin-bottom: 10px;">Cost: <span id="up-cost">500</span> NP</div>
             <button id="upgrade-btn" onclick="buyUpgrade()" style="width: 100%; padding: 12px; background: var(--neon); color: black; border: none; border-radius: 10px; font-weight: bold; cursor: pointer;">UPGRADE</button>
         </div>
     </div>
@@ -204,7 +205,7 @@
                 <div style="font-size: 14px;">Subscribe Channel</div>
                 <div style="font-size: 10px; color: var(--neon-secondary);">+50,000 NP</div>
             </div>
-            <button onclick="tg.openTelegramLink('https://t.me/neural_pulse_channel')" style="background: var(--neon-secondary); border:none; border-radius:8px; padding:8px 15px; font-family:'Orbitron'; font-size:10px;">GO</button>
+            <button onclick="tg.openTelegramLink('https://t.me/neural_pulse_channel')" style="background: var(--neon-secondary); border:none; border-radius:8px; padding:8px 15px; font-family:'Orbitron'; font-size:10px; color: black; font-weight: bold;">GO</button>
         </div>
     </div>
 
@@ -212,73 +213,69 @@
         const tg = window.Telegram.WebApp;
         tg.expand();
         tg.ready();
-        tg.setHeaderColor('#050a1a');
-
-        const log = (msg, data = "") => console.log(`[NP LOG] ${msg}`, data);
 
         let state = {
             score: 0,
             energy: 1000,
             max_energy: 1000,
             tap_power: 1,
-            user_id: String(tg.initDataUnsafe?.user?.id || '476014374'), 
+            user_id: String(tg.initDataUnsafe?.user?.id || '0'), 
             is_saving: false
         };
 
-        // --- ЗАГРУЗКА ДАННЫХ ---
+        const leagues = [
+            { name: "BRONZE", min: 0 },
+            { name: "SILVER", min: 10000 },
+            { name: "GOLD", min: 50000 },
+            { name: "DIAMOND", min: 200000 },
+            { name: "NEURAL MASTER", min: 1000000 }
+        ];
+
         async function loadData() {
             try {
                 const r = await fetch(`/api/balance/${state.user_id}`);
                 const res = await r.json();
                 if (res.status === "ok") {
-                    state.score = res.data.balance;
+                    state.score = res.data.balance || 0;
                     state.tap_power = res.data.click_lvl || 1;
-                    state.energy = res.data.energy !== undefined ? res.data.energy : 1000;
+                    state.energy = (res.data.energy !== undefined) ? res.data.energy : 1000;
                     
                     if (res.data.wallet) {
                         document.getElementById('wallet-input').value = res.data.wallet;
                     }
-                    log("Данные успешно загружены", res.data);
                 }
-            } catch (e) { log("Ошибка загрузки", e); }
+            } catch (e) { console.error("Load error", e); }
             updateUI();
         }
 
-        // --- ТАБЛИЦА ЛИДЕРОВ ---
         async function loadLeaderboard() {
-            const listContainer = document.getElementById('leaderboard-list');
-            listContainer.innerHTML = "<div style='text-align:center; padding:20px; color:var(--neon)'>UPLOADING DATA...</div>";
+            const list = document.getElementById('leaderboard-list');
+            list.innerHTML = "<div style='text-align:center; padding:20px; color:var(--neon)'>SYNCING...</div>";
             try {
                 const r = await fetch('/api/leaderboard');
                 const res = await r.json();
                 if (res.status === "ok") {
-                    listContainer.innerHTML = res.data.map((user, index) => `
+                    list.innerHTML = res.data.map((u, i) => `
                         <div style="display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid rgba(0,212,255,0.1); background: rgba(255,255,255,0.02)">
-                            <span><span style="color:var(--neon)">${index + 1}.</span> ID: ${user.id.slice(0,8)}...</span>
-                            <span style="font-weight:bold; color:var(--neon-secondary)">${user.balance.toLocaleString()} NP</span>
+                            <span><span style="color:var(--neon)">${i + 1}.</span> ID: ${u.id.slice(0,8)}</span>
+                            <span style="font-weight:bold; color:var(--neon-secondary)">${u.balance.toLocaleString()} NP</span>
                         </div>
                     `).join('');
                 }
-            } catch (e) { listContainer.innerHTML = "Leaderboard offline"; }
+            } catch (e) { list.innerHTML = "Offline"; }
         }
 
-        // --- ПОКУПКА АПГРЕЙДА ---
         async function buyUpgrade() {
             const cost = state.tap_power * 500;
             if (state.score < cost) {
-                tg.showAlert("НЕДОСТАТОЧНО NP ДЛЯ МОДЕРНИЗАЦИИ");
+                tg.showAlert("NOT ENOUGH NP");
                 return;
             }
-
             try {
                 const r = await fetch('/api/upgrade', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        user_id: state.user_id,
-                        cost: cost,
-                        new_lvl: state.tap_power + 1
-                    })
+                    body: JSON.stringify({ user_id: state.user_id, cost: cost, new_lvl: state.tap_power + 1 })
                 });
                 const res = await r.json();
                 if (res.status === "ok") {
@@ -286,37 +283,23 @@
                     state.tap_power += 1;
                     tg.HapticFeedback.notificationOccurred('success');
                     updateUI();
-                } else {
-                    tg.showAlert(res.message || "Ошибка сервера");
                 }
-            } catch (e) { log("Ошибка покупки", e); }
+            } catch (e) { console.error(e); }
         }
 
-        // --- ПРИВЯЗКА КОШЕЛЬКА ---
         async function linkWallet() {
             const addr = document.getElementById('wallet-input').value.trim();
-            if (!addr || addr.length < 10) {
-                tg.showAlert("Введите верный TON адрес!");
-                return;
-            }
-
+            if (addr.length < 10) { tg.showAlert("Invalid Address"); return; }
             try {
-                const r = await fetch('/api/save_wallet', {
+                await fetch('/api/save_wallet', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        user_id: state.user_id,
-                        wallet_address: addr
-                    })
+                    body: JSON.stringify({ user_id: state.user_id, wallet_address: addr })
                 });
-                const res = await r.json();
-                if (res.status === "ok") {
-                    tg.showAlert("Wallet linked successfully! 💎");
-                }
-            } catch (e) { tg.showAlert("Error connecting to server"); }
+                tg.showAlert("Linked!");
+            } catch (e) { tg.showAlert("Error"); }
         }
 
-        // --- СОХРАНЕНИЕ ---
         async function saveData() {
             if (state.is_saving) return;
             state.is_saving = true;
@@ -331,11 +314,9 @@
                         energy: Math.floor(state.energy)
                     })
                 });
-            } catch (e) { log("Ошибка синхронизации", e); }
-            finally { state.is_saving = false; }
+            } finally { state.is_saving = false; }
         }
 
-        // --- ИНТЕРФЕЙС ---
         function updateUI() {
             document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
             document.getElementById('energy-stat').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
@@ -345,13 +326,25 @@
             document.getElementById('up-cost').innerText = (state.tap_power * 500).toLocaleString();
             document.getElementById('wallet-tokens').innerText = (state.score / 1000).toFixed(2);
             
-            let progress = (state.score % 10000) / 100;
-            document.getElementById('league-fill').style.width = progress + '%';
-            document.getElementById('league-percent').innerText = Math.floor(progress) + '%';
+            // League Logic
+            let currentLeague = leagues[0];
+            for (let i = leagues.length - 1; i >= 0; i--) {
+                if (state.score >= leagues[i].min) {
+                    currentLeague = leagues[i];
+                    break;
+                }
+            }
+            const nextLeague = leagues[leagues.indexOf(currentLeague) + 1] || currentLeague;
+            const diff = nextLeague.min - currentLeague.min;
+            const progress = diff > 0 ? ((state.score - currentLeague.min) / diff) * 100 : 100;
+
+            document.getElementById('league-name').innerText = currentLeague.name + " LEAGUE";
+            document.getElementById('league-fill').style.width = Math.min(100, progress) + '%';
+            document.getElementById('league-percent').innerText = Math.floor(Math.min(100, progress)) + '%';
         }
 
         function openModal(id) {
-            if (id === 'stats') loadLeaderboard(); 
+            if (id === 'stats') loadLeaderboard();
             document.getElementById('modal-' + id).classList.add('active');
             document.getElementById('overlay').classList.add('active');
         }
@@ -361,11 +354,9 @@
             document.getElementById('overlay').classList.remove('active');
         }
 
-        function claimBonus() {
-            tg.showAlert("Daily Bonus system initializing... Come back tomorrow!");
-        }
+        function claimBonus() { tg.showAlert("Come back later!"); }
 
-        // --- ТАП ОБРАБОТЧИК ---
+        // Touch handling
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (state.energy >= state.tap_power) {
@@ -376,31 +367,27 @@
                 }
                 tg.HapticFeedback.impactOccurred('medium');
                 updateUI();
-            } else {
-                tg.HapticFeedback.notificationOccurred('warning');
             }
-        });
+        }, { passive: false });
 
         function createPlusAnim(x, y, val) {
             const el = document.createElement('div');
             el.className = 'plus-animation';
             el.innerText = '+' + val;
-            el.style.left = x + 'px'; el.style.top = y + 'px';
+            el.style.left = (x - 10) + 'px'; el.style.top = (y - 20) + 'px';
             el.style.color = 'var(--neon-secondary)';
             document.body.appendChild(el);
             setTimeout(() => el.remove(), 700);
         }
 
-        // Регенерация энергии
         setInterval(() => {
             if (state.energy < state.max_energy) {
-                state.energy = Math.min(state.max_energy, state.energy + 2);
+                state.energy = Math.min(state.max_energy, state.energy + 3);
                 updateUI();
             }
         }, 1000);
 
-        // Авто-сохранение каждые 7 секунд
-        setInterval(saveData, 7000);
+        setInterval(saveData, 10000);
 
         window.onload = () => {
             document.getElementById('game').style.opacity = "1";
