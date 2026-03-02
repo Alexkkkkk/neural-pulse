@@ -16,8 +16,9 @@ from aiogram.enums import ParseMode
 TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU"
 MY_DOMAIN = "np.bothost.ru"
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "game.db"  # Упростил путь для Bothost
+DB_PATH = BASE_DIR / "game.db"
 
+# Настройка логирования для Bothost
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,9 @@ class SaveData(BaseModel):
 # --- БАЗА ДАННЫХ ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Гарантируем наличие папки static, чтобы mount не падал
+    (BASE_DIR / "static").mkdir(exist_ok=True)
+    
     # Инициализация БД
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS users 
@@ -44,15 +48,25 @@ async def lifespan(app: FastAPI):
         conn.execute("CREATE TABLE IF NOT EXISTS winners (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, amount INTEGER, ts DATETIME DEFAULT CURRENT_TIMESTAMP)")
         conn.commit()
     
-    # Установка вебхука
+    # Установка вебхука при старте
     webhook_url = f"https://{MY_DOMAIN}/webhook"
-    await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
-    logger.info(f"Webhook set to {webhook_url}")
+    await bot.delete_webhook(drop_pending_updates=True) # Очищаем очередь старых сообщений
+    await bot.set_webhook(url=webhook_url)
+    logger.info(f"🚀 Webhook set to {webhook_url}")
+    
     yield
+    # Закрытие сессии при выключении
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# CORS и доверенные хосты (необходимо для работы Web App)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --- API ---
 
@@ -75,13 +89,11 @@ async def save_game(data: SaveData):
             conn.row_factory = sqlite3.Row
             old = conn.execute("SELECT balance FROM users WHERE id = ?", (str(data.user_id),)).fetchone()
             
-            # Начисление в джекпот (1% от профита)
             if old:
                 profit = data.score - old["balance"]
                 if profit > 0:
                     conn.execute("UPDATE system_stats SET value = value + ? WHERE key='jackpot'", (int(profit*0.01),))
             
-            # Проверка джекпота
             jack_val = conn.execute("SELECT value FROM system_stats WHERE key='jackpot'").fetchone()[0]
             winner_id = None
             if jack_val >= LIMIT:
@@ -125,15 +137,19 @@ async def daily_bonus(data: dict):
 # --- БОТ ---
 @app.post("/webhook")
 async def bot_webhook(request: Request):
-    update = Update.model_validate(await request.json(), context={"bot": bot})
-    await dp.feed_update(bot, update)
-    return {"ok": True}
+    try:
+        body = await request.json()
+        update = Update.model_validate(body, context={"bot": bot})
+        await dp.feed_update(bot, update)
+        return {"ok": True}
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return {"ok": False, "error": str(e)}
 
 @dp.message(F.text.startswith("/start"))
 async def cmd_start(m: types.Message):
     args = m.text.split()
     uid = str(m.from_user.id)
-    # Реферальная ссылка вида t.me/bot?start=ref_12345
     ref = args[1].replace("ref_", "") if len(args) > 1 and "ref_" in args[1] else None
     
     with sqlite3.connect(str(DB_PATH)) as conn:
@@ -155,10 +171,15 @@ async def cmd_start(m: types.Message):
 # --- РОУТИНГ ---
 @app.get("/")
 async def index():
-    return FileResponse(BASE_DIR / "static" / "index.html")
+    # Проверяем существование файла перед отправкой
+    index_path = BASE_DIR / "static" / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    return JSONResponse({"error": "index.html not found in static folder"}, status_code=404)
 
-# Важно: монтируем статику для картинок и скриптов
+# Монтируем статику
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 if __name__ == "__main__":
+    # На Bothost порт обычно 3000
     uvicorn.run(app, host="0.0.0.0", port=3000)
