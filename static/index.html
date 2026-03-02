@@ -1,135 +1,265 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Neural Pulse AI | Ultimate Gold</title>
+    
+    <script src="https://telegram.org/js/telegram-web-app.js?5"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    
     <style>
-        :root { --neon: #00f2ff; --bg: #0a0a0b; }
-        body { background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; user-select: none; }
-        .app { display: flex; flex-direction: column; height: 100vh; align-items: center; justify-content: space-between; padding: 20px 0; }
+        :root { 
+            --neon: #00d4ff; 
+            --neon-secondary: #00ff96; 
+            --crit: #ff4e50;
+            --bg: #050a1a; 
+            --glass: rgba(10, 25, 47, 0.95);
+        }
+
+        body::before {
+            content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.05) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 255, 0, 0.02));
+            z-index: 9999; background-size: 100% 3px, 3px 100%; pointer-events: none;
+        }
+
+        body { 
+            margin: 0; background: radial-gradient(circle at center, #0a192f 0%, #050a1a 100%); 
+            height: 100vh; font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; 
+            user-select: none; display: flex; justify-content: center; 
+        }
+
+        .game-container { 
+            position: relative; width: 100%; max-width: 500px; height: 100vh; 
+            display: flex; flex-direction: column; align-items: center; 
+            padding: 15px; box-sizing: border-box; 
+        }
         
-        #score { font-size: 48px; font-weight: 900; text-shadow: 0 0 20px var(--neon); margin-top: 20px; }
-        #jackpot-ui { font-size: 14px; color: #ff9d00; background: rgba(255,157,0,0.1); padding: 5px 15px; border-radius: 20px; border: 1px solid #ff9d00; }
+        .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .logo { width: 45px; height: 45px; background: url('/static/images/unnamed4.png') no-repeat center/cover; border-radius: 10px; box-shadow: 0 0 15px var(--neon); cursor: pointer; }
+        .league-box { flex-grow: 1; margin: 0 12px; }
+        .league-info { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 4px; font-weight: bold; }
+        .league-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05); }
+        #league-fill { height: 100%; width: 0%; transition: width 0.5s; background: var(--neon); }
 
-        .circle-container { position: relative; width: 280px; height: 280px; }
-        #main-btn { width: 100%; height: 100%; background: radial-gradient(circle, #1a1a1d 0%, #000 100%); border-radius: 50%; border: 8px solid #161618; box-shadow: 0 0 50px rgba(0,242,255,0.1); display: flex; align-items: center; justify-content: center; transition: transform 0.05s; }
-        #main-btn:active { transform: scale(0.95); }
-        #main-btn img { width: 160px; filter: drop-shadow(0 0 10px var(--neon)); }
+        .online-indicator { display: flex; align-items: center; gap: 5px; font-size: 9px; color: var(--neon-secondary); margin-top: 4px; }
+        .online-dot { width: 6px; height: 6px; background: var(--neon-secondary); border-radius: 50%; box-shadow: 0 0 5px var(--neon-secondary); animation: pulse 1.5s infinite; }
 
-        .nav { display: flex; width: 90%; background: #161618; border-radius: 25px; padding: 10px; justify-content: space-around; }
-        .nav-item { text-align: center; font-size: 10px; color: #666; cursor: pointer; }
-        .nav-item.active { color: var(--neon); }
+        .jackpot-container {
+            width: 100%; background: rgba(255, 0, 212, 0.05); 
+            border: 1px solid rgba(255, 0, 212, 0.3); border-radius: 12px; 
+            padding: 8px; margin-bottom: 15px; text-align: center;
+        }
+        #jackpot-amount { font-size: 24px; font-weight: 900; color: #fff; text-shadow: 0 0 10px #ff00d4; }
 
-        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; background: #161618; border-radius: 30px 30px 0 0; padding: 30px 20px; transition: 0.3s; z-index: 1000; box-sizing: border-box; }
+        .balance-container { text-align: center; margin: 10px 0; }
+        #score { font-size: 58px; font-weight: 900; text-shadow: 0 0 20px var(--neon); letter-spacing: -2px; }
+
+        .play-area { 
+            position: relative; width: 100%; flex-grow: 1; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+        }
+        
+        #btn { 
+            width: 70vw; height: 70vw; max-width: 280px; max-height: 280px;
+            background: url('/static/images/unnamed3.png') no-repeat center/contain;
+            border-radius: 50%; border: none; outline: none;
+            filter: drop-shadow(0 0 30px var(--neon));
+            transition: transform 0.05s;
+            z-index: 2;
+        }
+        #btn:active { transform: scale(0.92); }
+
+        .side-menu { 
+            position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+            display: flex; flex-direction: column; gap: 10px; z-index: 5; 
+        }
+        .side-btn { 
+            width: 80px; padding: 10px 5px; background: rgba(10, 25, 47, 0.7); 
+            border: 1px solid var(--neon); border-radius: 12px; 
+            font-size: 10px; color: white; text-align: center; backdrop-filter: blur(10px);
+        }
+
+        .energy-wrapper { width: 85%; margin-top: 25px; }
+        .energy-info { display: flex; justify-content: space-between; font-size: 12px; color: var(--neon); margin-bottom: 6px; font-weight: bold; }
+        .energy-bar { width: 100%; height: 12px; background: rgba(255,255,255,0.05); border-radius: 10px; border: 1px solid var(--neon); overflow: hidden; }
+        #energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--neon), var(--neon-secondary)); transition: width 0.2s; }
+
+        .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; padding-bottom: 20px; }
+        .nav-item { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 18px; text-align: center; font-size: 12px; border: 1px solid rgba(255,255,255,0.1); font-weight: bold; }
+
+        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 80%; background: var(--glass); border-top: 3px solid var(--neon); border-radius: 35px 35px 0 0; z-index: 1000; transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1); padding: 30px; box-sizing: border-box; overflow-y: auto; }
         .modal.active { bottom: 0; }
-        #overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:none; z-index: 999; }
-        #overlay.active { display:block; }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; z-index: 999; backdrop-filter: blur(8px); }
+        .overlay.active { display: block; }
 
-        .floating-text { position: absolute; color: var(--neon); font-weight: bold; pointer-events: none; animation: floatUp 0.8s ease-out forwards; }
-        @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-100px); opacity: 0; } }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .plus-animation { position: absolute; pointer-events: none; font-weight: 900; animation: float 0.7s ease-out forwards; z-index: 100; text-shadow: 0 0 10px currentColor; }
+        @keyframes float { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.6); } }
     </style>
 </head>
 <body>
-    <div id="overlay" onclick="closeModals()"></div>
-    <div class="app">
-        <div id="jackpot-ui">JACKPOT: <span id="jackpot-val">500,000</span> NP</div>
-        <div id="score">0</div>
-        
-        <div class="circle-container">
-            <div id="main-btn" onclick="handleTap(event)">
-                <img src="https://cdn-icons-png.flaticon.com/512/2103/2103633.png">
+
+    <div class="game-container" id="game" style="opacity:0">
+        <div class="header">
+            <div class="logo" id="main-logo"></div>
+            <div class="league-box">
+                <div class="league-info">
+                    <span id="league-name">BRONZE LEAGUE</span>
+                    <span id="league-percent">0%</span>
+                </div>
+                <div class="league-bar"><div id="league-fill"></div></div>
+                <div class="online-indicator">
+                    <div class="online-dot"></div>
+                    <span id="online-count">1,240 ONLINE</span>
+                </div>
+            </div>
+            <div style="font-size: 8px; opacity: 0.4; text-align: right;" id="user-id-display">ID: 0000</div>
+        </div>
+
+        <div class="jackpot-container">
+            <div style="font-size: 9px; letter-spacing: 3px; color: var(--neon); margin-bottom: 3px; font-weight: 900;">GLOBAL JACKPOT</div>
+            <div id="jackpot-amount">500,240</div>
+        </div>
+
+        <div class="balance-container">
+            <div id="score">0</div>
+        </div>
+
+        <div class="play-area">
+            <div class="side-menu">
+                <div class="side-btn" onclick="openModal('friends')">FRIENDS</div>
+                <div class="side-btn" onclick="openModal('tasks')">TASKS</div>
+                <div class="side-btn" style="border-color: #ff9d00;" onclick="openModal('daily')">BONUS</div>
+            </div>
+            <button id="btn"></button>
+
+            <div class="energy-wrapper">
+                <div class="energy-info">
+                    <span>⚡ ENERGY</span>
+                    <span id="energy-stat">1000/1000</span>
+                </div>
+                <div class="energy-bar"><div id="energy-fill"></div></div>
             </div>
         </div>
 
-        <div class="nav">
-            <div class="nav-item" onclick="openModal('friends')">👥 FRIENDS</div>
-            <div class="nav-item" onclick="openModal('tasks')">⚡ TASKS</div>
-            <div class="nav-item" onclick="openModal('daily')">🎁 DAILY</div>
-            <div class="nav-item" onclick="openModal('upgrades')">🚀 UPGRADES</div>
+        <div class="bottom-nav">
+            <div class="nav-item" onclick="openModal('boost')">🚀 BOOST</div>
+            <div class="nav-item" onclick="openModal('tasks')">⛏️ MINE</div>
+            <div class="nav-item" onclick="openModal('stats')">📊 STATS</div>
         </div>
     </div>
 
-    <div id="modal-friends" class="modal">
-        <h2>FRIENDS</h2>
-        <p>Приглашай друзей и получай 5,000 NP!</p>
-        <button onclick="shareInvite()" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:15px; font-weight:bold;">INVITE FRIEND</button>
-    </div>
+    <div class="overlay" id="overlay" onclick="closeModals()"></div>
 
-    <div id="modal-daily" class="modal">
-        <h2>DAILY BONUS</h2>
-        <button onclick="claimBonus()" style="width:100%; padding:15px; background:#ff9d00; border:none; border-radius:15px; font-weight:bold;">CLAIM REWARD</button>
-    </div>
-
-    <div id="modal-upgrades" class="modal">
-        <h2>UPGRADES</h2>
-        <div onclick="buyUpgrade('click')" style="background:#222; padding:15px; border-radius:15px; margin-bottom:10px;">
-            Multitap (Lvl <span id="click-lvl">1</span>) <br> <small id="click-cost">Cost: 500</small>
+    <div id="modal-boost" class="modal">
+        <h2 style="color: var(--neon);">UPGRADES</h2>
+        <div class="stat-box" style="border: 1px solid var(--crit); padding:15px; border-radius:15px; margin-bottom:10px;">
+            <div style="color: var(--crit); font-weight: 900;">🚀 TURBO ROCKET (x5)</div>
+            <button class="buy-btn" style="background: var(--crit); color: white; width: 100%; padding: 10px; border: none; border-radius: 10px; margin-top: 10px;">LAUNCH (1000 NP)</button>
         </div>
-        <div onclick="buyUpgrade('bot')" style="background:#222; padding:15px; border-radius:15px;">
-            Auto-Bot (Lvl <span id="bot-lvl">0</span>) <br> <small id="bot-cost">Cost: 2000</small>
+        <div class="stat-box" style="border: 1px solid var(--neon); padding:15px; border-radius:15px; margin-bottom:10px;">
+            <div>MULTI-TAP (LVL <span id="tap-lvl-val">1</span>)</div>
+            <button class="buy-btn" style="width: 100%; padding: 10px; background: var(--neon); border: none; border-radius: 10px; margin-top: 10px;">UPGRADE</button>
         </div>
     </div>
+
+    <div id="modal-stats" class="modal">
+        <h2 style="text-align: center; color: var(--neon);">🏆 LEADERBOARD</h2>
+        <div id="leaderboard-list">Загрузка...</div>
+    </div>
+    
+    <div id="modal-friends" class="modal"><h2>FRIENDS</h2><p>Invite friends coming soon...</p></div>
+    <div id="modal-tasks" class="modal"><h2>TASKS</h2><p>Coming Soon...</p></div>
+    <div id="modal-daily" class="modal"><h2>DAILY BONUS</h2><p>Coming Soon...</p></div>
 
     <script>
+        // Инициализация Telegram
         const tg = window.Telegram.WebApp;
         tg.expand();
-        let state = { user_id: tg.initDataUnsafe.user?.id || 123, score: 0, click_lvl: 1, bot_lvl: 0 };
+        tg.ready();
 
+        let state = {
+            score: 0,
+            energy: 1000,
+            max_energy: 1000,
+            tap_power: 1,
+            user_id: tg.initDataUnsafe?.user?.id || 0
+        };
+
+        // 1. Загрузка данных при старте (синхронизировано с вашим main.py)
         async function loadData() {
-            const r = await fetch(`/api/balance/${state.user_id}`);
-            const res = await r.json();
-            state = { ...state, ...res.data };
-            updateUI();
+            if (!state.user_id) return;
+            try {
+                const response = await fetch(`/api/balance/${state.user_id}`);
+                if (response.ok) {
+                    const res = await response.json();
+                    if (res.status === "ok") {
+                        // Баланс из БД в score игры
+                        state.score = res.data.balance || 0;
+                        state.tap_power = res.data.click_lvl || 1;
+                        updateUI();
+                        console.log("Данные успешно загружены");
+                    }
+                }
+            } catch (e) { console.error("Ошибка загрузки:", e); }
         }
+
+        // 2. Сохранение данных (синхронизировано с моделью SaveData в main.py)
+        async function saveData() {
+            if (!state.user_id) return;
+            try {
+                await fetch('/api/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: state.user_id,
+                        score: Math.floor(state.score), // Это попадет в balance в БД
+                        click_lvl: state.tap_power,
+                        bot_lvl: 0
+                    })
+                });
+            } catch (e) { console.error("Ошибка сохранения:", e); }
+        }
+
+        // --- Логика клика ---
+        const btn = document.getElementById('btn');
+        btn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (state.energy >= state.tap_power) {
+                state.score += state.tap_power;
+                state.energy -= state.tap_power;
+                updateUI();
+                
+                const touch = e.changedTouches[0];
+                createPlusAnim(touch.clientX, touch.clientY, state.tap_power);
+                tg.HapticFeedback.impactOccurred('light');
+            } else {
+                tg.HapticFeedback.notificationOccurred('error');
+            }
+        });
 
         function updateUI() {
             document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
-            document.getElementById('click-lvl').innerText = state.click_lvl;
-            document.getElementById('bot-lvl').innerText = state.bot_lvl;
-            document.getElementById('click-cost').innerText = `Cost: ${state.click_lvl * 500}`;
-            document.getElementById('bot-cost').innerText = `Cost: ${(state.bot_lvl + 1) * 2000}`;
+            document.getElementById('energy-stat').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
+            document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
+            document.getElementById('user-id-display').innerText = `ID: ${state.user_id}`;
         }
 
-        function handleTap(e) {
-            state.score += state.click_lvl;
-            updateUI();
-            tg.HapticFeedback.impactOccurred('medium');
-            createFloatingText(e.clientX, e.clientY, `+${state.click_lvl}`);
-            saveData();
-        }
-
-        function createFloatingText(x, y, text) {
+        function createPlusAnim(x, y, val) {
             const el = document.createElement('div');
-            el.className = 'floating-text';
-            el.style.left = `${x}px`;
-            el.style.top = `${y}px`;
-            el.innerText = text;
+            el.className = 'plus-animation';
+            el.innerText = '+' + val;
+            el.style.left = x + 'px';
+            el.style.top = y + 'px';
+            el.style.color = 'var(--neon)';
             document.body.appendChild(el);
-            setTimeout(() => el.remove(), 800);
+            setTimeout(() => el.remove(), 700);
         }
 
-        async function saveData() {
-            await fetch('/api/save', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ user_id: state.user_id, score: state.score, click_lvl: state.click_lvl, bot_lvl: state.bot_lvl })
-            });
-        }
-
-        function buyUpgrade(type) {
-            let cost = type === 'click' ? state.click_lvl * 500 : (state.bot_lvl + 1) * 2000;
-            if (state.score >= cost) {
-                state.score -= cost;
-                if (type === 'click') state.click_lvl++;
-                else state.bot_lvl++;
-                updateUI();
-                saveData();
-            } else {
-                tg.showAlert("Недостаточно NP!");
-            }
-        }
-
+        // Модалки
         function openModal(id) {
             document.getElementById('modal-' + id).classList.add('active');
             document.getElementById('overlay').classList.add('active');
@@ -140,26 +270,21 @@
             document.getElementById('overlay').classList.remove('active');
         }
 
-        function shareInvite() {
-            tg.openTelegramLink(`https://t.me/share/url?url=https://t.me/NeuralPulseBot?start=ref_${state.user_id}`);
-        }
-
-        async function claimBonus() {
-            const r = await fetch('/api/daily-bonus', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user_id: state.user_id})});
-            const res = await r.json();
-            if (res.status === "ok") { loadData(); tg.showAlert(`Получено ${res.reward} NP!`); }
-            else tg.showAlert(res.message);
-        }
-
-        // Авто-майнинг раз в 5 секунд
+        // Регенерация энергии (1 в сек)
         setInterval(() => {
-            if (state.bot_lvl > 0) {
-                state.score += (state.bot_lvl * 0.5);
+            if (state.energy < state.max_energy) {
+                state.energy = Math.min(state.max_energy, state.energy + 1);
                 updateUI();
             }
-        }, 5000);
+        }, 1000);
 
-        loadData();
+        // Автосохранение каждые 3 секунды
+        setInterval(saveData, 3000);
+        
+        window.onload = () => {
+            document.getElementById('game').style.opacity = "1";
+            loadData();
+        };
     </script>
 </body>
 </html>
