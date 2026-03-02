@@ -21,6 +21,10 @@ BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 
+# Автоматическое создание необходимых папок
+STATIC_DIR.mkdir(exist_ok=True)
+(STATIC_DIR / "images").mkdir(exist_ok=True)
+
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
@@ -45,19 +49,21 @@ class WalletData(BaseModel):
 # --- БАЗА ДАННЫХ ---
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
-        # Добавляем новые колонки для рефералов
         await db.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, 
              click_lvl INTEGER DEFAULT 1, energy INTEGER DEFAULT 1000,
              pnl INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0,
              wallet TEXT, referrer_id TEXT, referrals_count INTEGER DEFAULT 0)''')
         await db.commit()
-    logging.info("Database initialized with Referral System.")
+    logging.info("Database initialized.")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    await bot.set_webhook(url=f"https://{MY_DOMAIN}/webhook")
+    # Установка вебхука
+    webhook_url = f"https://{MY_DOMAIN}/webhook"
+    await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+    logging.info(f"Webhook set to {webhook_url}")
     yield
     await bot.session.close()
 
@@ -80,6 +86,7 @@ async def get_balance(user_id: str):
             return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "energy": 1000, "pnl": 0}}
 
         u = dict(user)
+        # Пассивный доход
         if u['pnl'] > 0 and u['last_active'] > 0:
             diff = now - u['last_active']
             earned = int((min(diff, 28800) / 3600) * u['pnl']) 
@@ -125,12 +132,12 @@ async def save_wallet(data: WalletData):
         await db.commit()
     return {"status": "ok"}
 
-# --- ЛОГИКА БОТА И РЕФЕРАЛОВ ---
+# --- BOT LOGIC ---
 
 @dp.message(Command("start"))
 async def cmd_start(m: types.Message, command: CommandObject):
     user_id = str(m.from_user.id)
-    args = command.args  # ID пригласившего
+    args = command.args 
     
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("SELECT id FROM users WHERE id = ?", (user_id,)) as cursor:
@@ -142,7 +149,6 @@ async def cmd_start(m: types.Message, command: CommandObject):
                              (user_id, 1000, ref_id, int(time.time())))
             
             if ref_id:
-                # Бонус пригласившему (50,000 NP)
                 await db.execute("UPDATE users SET balance = balance + 50000, referrals_count = referrals_count + 1 WHERE id = ?", (ref_id,))
                 try:
                     await bot.send_message(ref_id, f"<b>🎉 Новый реферал!</b>\nВам начислено 50,000 NP.")
@@ -151,9 +157,9 @@ async def cmd_start(m: types.Message, command: CommandObject):
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))],
-        [InlineKeyboardButton(text="🔗 ПРИГЛАСИТЬ ДРУГА", switch_inline_query=f"\nПрисоединяйся к Neural Pulse! Моя ссылка: https://t.me/neural_pulse_bot?start={user_id}")]
+        [InlineKeyboardButton(text="🔗 ПРИГЛАСИТЬ ДРУГА", switch_inline_query=f"Играй со мной! Ссылка: https://t.me/neural_pulse_bot?start={user_id}")]
     ])
-    await m.answer(f"<b>Система Neural Pulse активна.</b>\nВаш ID: <code>{user_id}</code>\nПриглашайте друзей и получайте бонусы!", reply_markup=kb)
+    await m.answer(f"<b>Система Neural Pulse активна.</b>\nВаш ID: <code>{user_id}</code>\nПриглашайте друзей!", reply_markup=kb)
 
 # --- WEBHOOK & STATIC ---
 
@@ -166,9 +172,14 @@ async def bot_webhook(request: Request):
 
 @app.get("/")
 async def index():
-    return FileResponse(STATIC_DIR / "index.html")
+    index_file = STATIC_DIR / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    return JSONResponse({"error": "index.html not found in /static"}, status_code=404)
 
+# Важно: монтируем /images отдельно, если они нужны
 app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images")
+# Монтируем корень статики последним
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
