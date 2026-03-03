@@ -13,11 +13,16 @@ from pydantic import BaseModel
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, Update
 
-# --- НАСТРОЙКИ (ЗАПОМНЕНО: index.html в static/) ---
+# --- НАСТРОЙКИ (ЗАПОМНЕНО: index.html в static/, дизайн не менять) ---
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 IMAGES_DIR = BASE_DIR / "images"
+
+# ПРОВЕРКА И СОЗДАНИЕ ПАПОК (Делаем это ДО запуска сервера)
+for folder in [STATIC_DIR, IMAGES_DIR]:
+    if not folder.exists():
+        folder.mkdir(parents=True, exist_ok=True)
 
 # ЛОКАЛЬНЫЙ КЭШ ДАННЫХ
 USER_CACHE: Dict[str, dict] = {}
@@ -40,7 +45,7 @@ class SaveData(BaseModel):
 # --- СИНХРОНИЗАЦИЯ КЭША ---
 async def sync_cache_to_db():
     while True:
-        await asyncio.sleep(30) # Сохраняем на диск каждые 30 сек
+        await asyncio.sleep(30)
         if USER_CACHE and db_conn:
             try:
                 for uid, info in USER_CACHE.items():
@@ -95,18 +100,14 @@ async def save_game(data: SaveData):
     USER_CACHE[data.user_id] = {"data": data.model_dump(), "last_save": time.time()}
     return {"status": "ok"}
 
-# --- ТУРБО-КЭШ ДЛЯ СТАТИКИ ---
-# Применяем заголовки кэширования для всех файлов в /images и /static
+# --- КЭШИРОВАННАЯ СТАТИКА ---
 class CachedStaticFiles(StaticFiles):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
     async def get_response(self, path: str, scope):
         response = await super().get_response(path, scope)
-        # Кэшируем картинки и скрипты на 7 дней (604800 секунд)
         response.headers["Cache-Control"] = "public, max-age=604800, immutable"
         return response
 
+# Монтируем папки (теперь они точно существуют)
 app.mount("/images", CachedStaticFiles(directory=str(IMAGES_DIR)), name="images")
 app.mount("/static", CachedStaticFiles(directory=str(STATIC_DIR)), name="static")
 
@@ -114,13 +115,10 @@ app.mount("/static", CachedStaticFiles(directory=str(STATIC_DIR)), name="static"
 
 @app.get("/")
 async def index():
-    return FileResponse(
-        STATIC_DIR / "index.html", 
-        headers={
-            "Cache-Control": "public, max-age=3600", # Индекс кэшируем на час
-            "X-Turbo": "Enabled"
-        }
-    )
+    index_file = STATIC_DIR / "index.html"
+    if not index_file.exists():
+        return JSONResponse({"error": "index.html missing in static folder"}, status_code=404)
+    return FileResponse(index_file, headers={"Cache-Control": "public, max-age=3600"})
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000, access_log=False)
