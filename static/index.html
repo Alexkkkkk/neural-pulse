@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse Online</title>
-    <script src="https://telegram.org/js/telegram-web-app.js?5"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js?v=2026.03.04"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         :root { --neon-blue: #00d4ff; --neon-purp: #b026ff; --neon-green: #00ffcc; --bg: #050a1a; --glass: rgba(10, 25, 47, 0.95); }
@@ -160,7 +160,7 @@
 <script>
     const tg = window.Telegram.WebApp;
 
-    // --- [ИНИЦИАЛИЗАЦИЯ TELEGRAM SDK] ---
+    // --- [НАСТРОЙКИ TG] ---
     tg.ready();
     tg.expand();
     tg.enableClosingConfirmation();
@@ -170,7 +170,6 @@
         score: 0, energy: 1000, max_energy: 1000, tap_power: 1, pnl: 0, 
         level: 1, exp: 0, 
         user_id: String(tg.initDataUnsafe?.user?.id || '476014374'),
-        username: tg.initDataUnsafe?.user?.username || 'Guest',
         jackpot: 500052
     };
 
@@ -182,12 +181,16 @@
     ];
 
     async function init() {
+        // Очистка всех старых обработчиков MainButton во избежание дублей
+        tg.MainButton.offClick(closeModals);
+        
         let attempts = 0;
         const maxAttempts = 3;
 
         while (attempts < maxAttempts) {
             try {
-                const r = await fetch(`/api/balance/${state.user_id}`);
+                // Добавляем квери-параметр к запросу, чтобы API не отдало кэшированные данные
+                const r = await fetch(`/api/balance/${state.user_id}?t=${Date.now()}`);
                 if (!r.ok) throw new Error("API Offline");
                 
                 const res = await r.json();
@@ -203,7 +206,7 @@
                 }
             } catch(e) {
                 attempts++;
-                await new Promise(res => setTimeout(res, 1500));
+                await new Promise(res => setTimeout(res, 1000));
             }
         }
         document.getElementById('reloading-screen').style.display = 'none';
@@ -235,7 +238,7 @@
         if(document.getElementById('tap-lvl')) {
             document.getElementById('tap-lvl').innerText = state.tap_power;
             document.getElementById('tap-cost').innerText = (state.tap_power * 1000).toLocaleString();
-            document.getElementById('energy-lvl').innerText = Math.floor((state.max_energy - 500)/500);
+            document.getElementById('energy-lvl').innerText = Math.floor((state.max_energy - 1000)/500 + 1);
             document.getElementById('energy-cost').innerText = (state.max_energy * 2).toLocaleString();
         }
 
@@ -299,8 +302,6 @@
         
         const t = e.touches[0];
         createFlyText(t.clientX, t.clientY, `+${state.tap_power}`);
-        
-        // Вибрация при каждом клике
         tg.HapticFeedback.impactOccurred('light');
         render();
     });
@@ -318,9 +319,10 @@
         document.getElementById('modal-' + id).classList.add('active');
         document.getElementById('overlay').classList.add('active');
         
-        // Показываем кнопку закрытия в интерфейсе Telegram
+        // Показываем кнопку внизу
         tg.MainButton.setText('CLOSE');
         tg.MainButton.show();
+        // Привязываем функцию закрытия (offClick внутри init гарантирует, что она одна)
         tg.MainButton.onClick(closeModals);
     }
 
@@ -328,6 +330,7 @@
         document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
         document.getElementById('overlay').classList.remove('active');
         tg.MainButton.hide();
+        tg.MainButton.offClick(closeModals); // Снимаем обработчик после закрытия
     }
 
     async function uiAction(btn, id) {
@@ -343,14 +346,12 @@
         tg.showAlert(`Invite friends! Your link:\n${link}`);
     }
 
-    // Пассивный доход и энергия
     setInterval(() => {
         if(state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.5);
         if(state.pnl > 0) state.score += (state.pnl / 3600);
         render();
     }, 1000);
 
-    // Автосохранение раз в 10 секунд
     setInterval(saveData, 10000);
     window.onload = init;
 </script>
