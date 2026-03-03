@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-# --- [НОВОЕ: ИМПОРТЫ ДЛЯ TG] ---
+# --- [ИМПОРТЫ ДЛЯ TG] ---
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import Update
 
@@ -22,8 +22,9 @@ STATIC_DIR = BASE_DIR / "static"
 IMAGES_DIR = BASE_DIR / "images"
 BACKUP_DIR = BASE_DIR / "backups"
 
-# ВСТАВЬ СВОЙ ТОКЕН СЮДА:
+# ТВОЙ ТОКЕН И ДОМЕН
 API_TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU" 
+WEBHOOK_URL = "https://np.bothost.ru/webhook"
 
 C = {"G": "\033[92m", "Y": "\033[93m", "R": "\033[91m", "C": "\033[96m", "B": "\033[1m", "E": "\033[0m"}
 
@@ -56,12 +57,10 @@ class SaveData(BaseModel):
 
 @dp.message()
 async def handle_message(message: types.Message):
-    """Этот код будет писать в логи Bothost каждое сообщение"""
     user = message.from_user
     log_step("TG_MSG", f"От: {user.full_name} (@{user.username}) | Текст: {message.text}", C["B"] + C["C"])
-    
     if message.text == "/start":
-        await message.answer(f"Привет, {user.first_name}! Я тебя вижу в логах Bothost.")
+        await message.answer(f"Привет, {user.first_name}! Бот на связи и готов к работе.")
 
 # --- [STAGE 3] ОБСЛУЖИВАНИЕ ---
 
@@ -99,14 +98,13 @@ async def maintenance_loop():
                 log_step("DB_SYNC", f"Сохранено игроков: {len(current_cache)}")
                 if len(USER_CACHE) > 500:
                     USER_CACHE.clear()
-                    log_step("MEMORY", "Очистка кэша", C["Y"])
             if time.time() - last_backup_time > 43200:
                 await create_backup()
                 last_backup_time = time.time()
         except Exception as e:
             log_step("LOOP_ERR", f"Сбой цикла: {e}", C["R"])
 
-# --- [STAGE 4] LIFESPAN ---
+# --- [STAGE 4] LIFESPAN (ИСПРАВЛЕН) ---
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -123,21 +121,20 @@ async def lifespan(app: FastAPI):
     
     await create_backup()
     
-    # Установка Webhook
-    webhook_url = "https://np.bothost.ru/webhook"
-    await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
-    log_step("TG_SYSTEM", f"Webhook установлен: {webhook_url}", C["C"])
+    # Установка Webhook без удаления при выходе
+    await bot.set_webhook(url=WEBHOOK_URL, drop_pending_updates=True, allowed_updates=["message"])
+    log_step("TG_SYSTEM", f"Webhook стабилен: {WEBHOOK_URL}", C["C"])
     
     m_task = asyncio.create_task(maintenance_loop())
     log_step("SYSTEM", "Neural Pulse Engine готов!", C["B"] + C["G"])
     
     yield
     
+    # ПРАВКА: Убрали delete_webhook, чтобы адрес не "слетал"
     m_task.cancel()
-    await bot.delete_webhook()
     if db_conn:
         await db_conn.close()
-    log_step("SYSTEM", "Сервер остановлен", C["Y"])
+    log_step("SYSTEM", "Сервер в режиме ожидания", C["Y"])
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=500)
@@ -147,14 +144,13 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
-    """Принимает сигналы от Telegram"""
     try:
         data = await request.json()
         update = Update.model_validate(data, context={"bot": bot})
         await dp.feed_update(bot, update)
         return {"status": "ok"}
     except Exception as e:
-        log_step("TG_ERR", f"Ошибка обработки вебхука: {e}", C["R"])
+        log_step("TG_ERR", f"Сбой вебхука: {e}", C["R"])
         return JSONResponse({"status": "error"}, status_code=500)
 
 @app.get("/health")
@@ -190,15 +186,22 @@ class CachedStaticFiles(StaticFiles):
 app.mount("/images", CachedStaticFiles(directory=str(IMAGES_DIR)), name="images")
 app.mount("/static", CachedStaticFiles(directory=str(STATIC_DIR)), name="static")
 
-
-
 @app.get("/")
 async def index():
     index_file = STATIC_DIR / "index.html"
     if not index_file.exists():
-        log_step("ERROR", "index.html не найден!", C["R"])
         return JSONResponse({"error": "File missing"}, status_code=404)
-    return FileResponse(index_file, headers={"Cache-Control": "public, max-age=3600"})
+    return FileResponse(index_file)
 
+# --- [ЗАПУСК С ПАРАМЕТРАМИ ПРОКСИ] ---
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=3000, access_log=False, workers=1)
+    uvicorn.run(
+        "main:app", 
+        host="0.0.0.0", 
+        port=3000, 
+        access_log=False, 
+        workers=1,
+        timeout_keep_alive=30,
+        proxy_headers=True,
+        forwarded_allow_ips="*"
+    )
