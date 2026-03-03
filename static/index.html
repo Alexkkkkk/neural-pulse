@@ -56,7 +56,8 @@
         .lb-item { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 14px; }
         
         /* Кнопка бонуса */
-        .bonus-btn { background: linear-gradient(90deg, #ff9600, #ff5e00); border: none; padding: 15px; border-radius: 15px; color: black; font-weight: bold; width: 100%; margin-top: 20px; font-family: 'Orbitron'; cursor: pointer; box-shadow: 0 0 15px rgba(255, 150, 0, 0.4); }
+        .bonus-btn { background: linear-gradient(90deg, #ff9600, #ff5e00); border: none; padding: 15px; border-radius: 15px; color: black; font-weight: bold; width: 100%; margin-top: 20px; font-family: 'Orbitron'; cursor: pointer; box-shadow: 0 0 15px rgba(255, 150, 0, 0.4); transition: 0.2s; }
+        .bonus-btn:active { transform: scale(0.98); filter: brightness(1.2); }
     </style>
 </head>
 <body>
@@ -127,16 +128,13 @@
 
     <div id="modal-tasks" class="modal">
         <h2 style="text-align:center;">MINING CENTER</h2>
-        
         <div style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 15px; border: 1px solid var(--neon); margin-bottom: 15px;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div>
                     <b style="color:var(--neon);">Neural Node v1</b><br>
                     <small>Доход: +100/час</small>
                 </div>
-                <button onclick="buyMiner(1000, 100)" style="padding: 10px; background:var(--neon); border:none; border-radius:10px; color:black; font-weight:bold; font-family:'Orbitron'; cursor:pointer;">
-                    BUY (1k)
-                </button>
+                <button onclick="buyMiner(1000, 100)" style="padding: 10px; background:var(--neon); border:none; border-radius:10px; color:black; font-weight:bold; font-family:'Orbitron'; cursor:pointer;">BUY (1k)</button>
             </div>
         </div>
 
@@ -146,16 +144,11 @@
                     <b style="color:var(--neon-sec);">Data Core</b><br>
                     <small>Доход: +550/час</small>
                 </div>
-                <button onclick="buyMiner(5000, 550)" style="padding: 10px; background:var(--neon-sec); border:none; border-radius:10px; color:black; font-weight:bold; font-family:'Orbitron'; cursor:pointer;">
-                    BUY (5k)
-                </button>
+                <button onclick="buyMiner(5000, 550)" style="padding: 10px; background:var(--neon-sec); border:none; border-radius:10px; color:black; font-weight:bold; font-family:'Orbitron'; cursor:pointer;">BUY (5k)</button>
             </div>
         </div>
-
         <hr style="opacity:0.1; margin: 20px 0;">
-        <button onclick="tg.openTelegramLink('https://t.me/neural_pulse_channel')" style="width:100%; padding:15px; background:rgba(255,255,255,0.1); border:none; border-radius:10px; color:white; font-weight:bold; cursor:pointer;">
-            📢 JOIN CHANNEL (+50k)
-        </button>
+        <button onclick="tg.openTelegramLink('https://t.me/neural_pulse_channel')" style="width:100%; padding:15px; background:rgba(255,255,255,0.1); border:none; border-radius:10px; color:white; font-weight:bold; cursor:pointer;">📢 JOIN CHANNEL (+50k)</button>
     </div>
 
     <script>
@@ -191,8 +184,12 @@
                     state.tap_power = res.data.click_lvl || 1;
                     state.energy = res.data.energy || 1000;
                     state.pnl = res.data.pnl || 0;
-                    // Рассчитываем макс. энергию на основе уровня из БД (если бы он там был) или по умолчанию
-                    state.max_energy = 1000 + ((state.energy_lvl - 1) * 500);
+                    
+                    // Рассчитываем уровень на основе сохраненного лимита (если в БД лимит 1500, значит уровень 2)
+                    let savedMax = res.data.max_energy || 1000;
+                    state.max_energy = savedMax;
+                    state.energy_lvl = Math.max(1, ((savedMax - 1000) / 500) + 1);
+                    
                     updateUI();
                 }
             } catch (e) { console.error("API Load Error", e); }
@@ -210,6 +207,7 @@
                         score: Math.floor(state.score),
                         click_lvl: state.tap_power,
                         energy: Math.floor(state.energy),
+                        max_energy: state.max_energy, // Отправляем лимит для сохранения
                         pnl: Math.floor(state.pnl)
                     })
                 });
@@ -225,8 +223,8 @@
             document.getElementById('tap-lvl-val').innerText = state.tap_power;
             document.getElementById('up-cost').innerText = (state.tap_power * 500).toLocaleString();
             
-            document.getElementById('energy-lvl-val').innerText = state.energy_lvl;
-            document.getElementById('energy-up-cost').innerText = (state.energy_lvl * 1000).toLocaleString();
+            document.getElementById('energy-lvl-val').innerText = Math.floor(state.energy_lvl);
+            document.getElementById('energy-up-cost').innerText = (Math.floor(state.energy_lvl) * 1000).toLocaleString();
             
             document.getElementById('user-id-display').innerText = `ID: ${state.user_id}`;
             document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl)}/hr`;
@@ -258,18 +256,30 @@
                     updateUI();
                     tg.showAlert(res.message);
                     saveData();
+                } else {
+                    tg.showAlert(res.message || "Бонус пока недоступен");
                 }
             } catch(e) { tg.showAlert("Ошибка получения бонуса"); }
         }
 
+        async function buyUpgrade() {
+            const cost = state.tap_power * 500;
+            if (state.score < cost) return tg.showAlert("Недостаточно NP!");
+            state.score -= cost;
+            state.tap_power++;
+            updateUI();
+            if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+            await saveData();
+        }
+
         async function buyEnergyUpgrade() {
-            const cost = state.energy_lvl * 1000;
+            const cost = Math.floor(state.energy_lvl) * 1000;
             if (state.score < cost) return tg.showAlert("Недостаточно NP!");
             
             state.score -= cost;
             state.energy_lvl++;
             state.max_energy += 500;
-            state.energy = state.max_energy; // Восполняем при покупке
+            state.energy = state.max_energy; 
             updateUI();
             
             if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
@@ -320,16 +330,6 @@
             document.getElementById('overlay').classList.remove('active');
         }
 
-        async function buyUpgrade() {
-            const cost = state.tap_power * 500;
-            if (state.score < cost) return tg.showAlert("Недостаточно NP!");
-            state.score -= cost;
-            state.tap_power++;
-            updateUI();
-            if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-            await saveData();
-        }
-
         async function loadLeaderboard() {
             const list = document.getElementById('leaderboard-list');
             list.innerHTML = "<div style='text-align:center;'>Загрузка данных...</div>";
@@ -348,7 +348,7 @@
         // Тики: регенерация энергии и пассивный доход
         setInterval(() => {
             if (state.energy < state.max_energy) {
-                state.energy = Math.min(state.max_energy, state.energy + 1.5); // Реген чуть быстрее
+                state.energy = Math.min(state.max_energy, state.energy + 1.5);
             }
             if (state.pnl > 0) {
                 state.score += (state.pnl / 3600);
@@ -356,6 +356,7 @@
             updateUI();
         }, 1000);
 
+        // Автосохранение каждые 15 сек
         setInterval(saveData, 15000);
 
         window.onload = () => {
