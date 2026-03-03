@@ -10,6 +10,35 @@
         :root { --neon-blue: #00d4ff; --neon-purp: #b026ff; --neon-green: #00ffcc; --bg: #050a1a; --glass: rgba(10, 25, 47, 0.95); }
         body { margin: 0; background: var(--bg); height: 100vh; font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; display: flex; justify-content: center; touch-action: manipulation; }
         
+        /* ЭКРАН ПЕРЕЗАГРУЗКИ */
+        #reloading-screen {
+            position: fixed;
+            inset: 0;
+            background: var(--bg);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .loader-logo {
+            width: 80px; height: 80px;
+            border-radius: 20px;
+            border: 2px solid var(--neon-purp);
+            box-shadow: 0 0 20px rgba(176, 38, 255, 0.5);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .loader-logo img { width: 100%; height: 100%; object-fit: cover; }
+        .loader-text {
+            color: var(--neon-blue);
+            font-weight: 900;
+            letter-spacing: 3px;
+            text-shadow: 0 0 10px var(--neon-blue);
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
         .game-container { position: relative; width: 100%; max-width: 500px; height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 10px 15px; box-sizing: border-box; }
 
         /* HEADER */
@@ -71,6 +100,14 @@
     </style>
 </head>
 <body>
+
+<div id="reloading-screen">
+    <div class="loader-logo">
+        <img src="/images/unnamed4.png" alt="Logo">
+    </div>
+    <div class="loader-text">BOT REBOOTING...</div>
+    <div style="margin-top: 15px; font-size: 10px; color: rgba(255,255,255,0.3); letter-spacing: 1px;">INITIALIZING NEURAL NETWORK</div>
+</div>
 
 <div class="game-container">
     <div class="header-top">
@@ -189,7 +226,15 @@
                 state.energy_lvl = Math.max(1, Math.floor((state.max_energy - 1000) / 500) + 1);
                 render();
             }
-        } catch(e) { console.error("Load error"); }
+        } catch(e) { 
+            console.error("Load error"); 
+        } finally {
+            // УДАЛЯЕМ ЭКРАН ЗАГРУЗКИ ПОСЛЕ ПОЛУЧЕНИЯ ДАННЫХ
+            setTimeout(() => {
+                const loader = document.getElementById('reloading-screen');
+                if(loader) loader.style.display = 'none';
+            }, 500);
+        }
     }
 
     function render() {
@@ -206,7 +251,6 @@
 
         let leagueIndex = LEAGUES.findIndex(l => state.score >= l.min && state.score < l.max);
         if (leagueIndex === -1) leagueIndex = LEAGUES.length - 1;
-        
         let league = LEAGUES[leagueIndex];
         
         document.getElementById('display-level').innerText = `LVL ${leagueIndex + 1}`;
