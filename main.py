@@ -1,4 +1,4 @@
-import os, sys, asyncio, logging, time
+import os, asyncio, logging, time
 import aiosqlite
 import uvicorn
 from pathlib import Path
@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel, ConfigDict # Используем ConfigDict для V2
+from pydantic import BaseModel, ConfigDict
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from aiogram.client.default import DefaultBotProperties
@@ -21,32 +21,31 @@ MY_DOMAIN = "np.bothost.ru"
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 
-# Подготовка структуры
-(BASE_DIR / "static").mkdir(exist_ok=True)
-(BASE_DIR / "images").mkdir(exist_ok=True)
-
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-# --- СХЕМЫ ДАННЫХ (ОБНОВЛЕНО ПОД PYDANTIC V2) ---
+# --- SCHEMAS ---
 class SaveData(BaseModel):
-    model_config = ConfigDict(extra="allow") # Разрешаем лишние поля от JS
-    
+    model_config = ConfigDict(extra="allow")
     user_id: str
-    score: Optional[float] = 0.0
-    click_lvl: Optional[float] = 1.0
-    energy: Optional[float] = 0.0
-    pnl: Optional[float] = 0.0
+    score: float
+    click_lvl: int
+    energy: float
+    pnl: float
 
 class UpgradeData(BaseModel):
     user_id: str
     cost: float
     new_lvl: int
 
-# --- БАЗА ДАННЫХ ---
+class WalletData(BaseModel):
+    user_id: str
+    wallet_address: str
+
+# --- DATABASE ---
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute('''CREATE TABLE IF NOT EXISTS users 
@@ -60,20 +59,17 @@ async def init_db():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    webhook_url = f"https://{MY_DOMAIN}/webhook"
-    await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
-    logger.info(f"Webhook set to {webhook_url}")
+    await bot.set_webhook(url=f"https://{MY_DOMAIN}/webhook", drop_pending_updates=True)
     yield
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- API ENDPOINTS ---
+# --- API ---
 
 @app.get("/favicon.ico", include_in_schema=False)
-async def favicon():
-    return JSONResponse(content={})
+async def favicon(): return JSONResponse({})
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
@@ -84,100 +80,82 @@ async def get_balance(user_id: str):
         
         now = int(time.time())
         if not user:
-            await db.execute("INSERT INTO users (id, balance, last_active, energy) VALUES (?, ?, ?, ?)", 
-                             (user_id, 1000.0, now, 1000.0))
+            await db.execute("INSERT INTO users (id, balance, last_active, energy) VALUES (?, 1000, ?, 1000)", (user_id, now))
             await db.commit()
             return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "energy": 1000, "pnl": 0}}
-
+        
         u = dict(user)
+        # Начисление офлайн дохода
         if u['pnl'] > 0 and u['last_active'] > 0:
-            diff = now - u['last_active']
-            earned = (min(diff, 28800) / 3600) * u['pnl']
+            earned = (min(now - u['last_active'], 28800) / 3600) * u['pnl']
             if earned > 0:
                 u['balance'] += earned
-                await db.execute("UPDATE users SET balance=?, last_active=? WHERE id=?", 
-                                 (u['balance'], now, user_id))
+                await db.execute("UPDATE users SET balance=?, last_active=? WHERE id=?", (u['balance'], now, user_id))
                 await db.commit()
         return {"status": "ok", "data": u}
 
 @app.post("/api/save")
-async def save_game(request: Request):
-    try:
-        body = await request.json()
-        data = SaveData(**body)
-        
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute(
-                "UPDATE users SET balance=?, click_lvl=?, energy=?, pnl=?, last_active=? WHERE id=?", 
-                (
-                    float(data.score or 0), 
-                    int(data.click_lvl or 1), 
-                    float(data.energy or 0), 
-                    float(data.pnl or 0), 
-                    int(time.time()), 
-                    data.user_id
-                )
-            )
-            await db.commit()
-        return {"status": "ok"}
-    except Exception as e:
-        logger.error(f"Error in /api/save: {e}")
-        return JSONResponse({"status": "error", "message": str(e)}, status_code=400)
+async def save_game(data: SaveData):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET balance=?, click_lvl=?, energy=?, pnl=?, last_active=? WHERE id=?", 
+            (data.score, data.click_lvl, data.energy, data.pnl, int(time.time()), data.user_id)
+        )
+        await db.commit()
+    return {"status": "ok"}
+
+@app.post("/api/upgrade")
+async def upgrade(data: UpgradeData):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE users SET balance = balance - ?, click_lvl = ? WHERE id = ?", 
+                         (data.cost, data.new_lvl, data.user_id))
+        await db.commit()
+    return {"status": "ok"}
+
+@app.post("/api/save_wallet")
+async def save_wallet(data: WalletData):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE users SET wallet = ? WHERE id = ?", (data.wallet_address, data.user_id))
+        await db.commit()
+    return {"status": "ok"}
 
 @app.get("/api/leaderboard")
-async def get_leaderboard():
+async def leaderboard():
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10") as cursor:
-            rows = await cursor.fetchall()
+        async with db.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10") as c:
+            rows = await c.fetchall()
             return {"status": "ok", "data": [dict(r) for r in rows]}
 
-# --- BOT LOGIC ---
-
+# --- BOT ---
 @dp.message(Command("start"))
 async def cmd_start(m: types.Message, command: CommandObject):
     user_id = str(m.from_user.id)
-    args = command.args 
-    
     async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("SELECT id FROM users WHERE id = ?", (user_id,)) as cursor:
-            exists = await cursor.fetchone()
-        
-        if not exists:
-            ref_id = args if args and args != user_id else None
-            await db.execute(
-                "INSERT INTO users (id, balance, referrer_id, last_active, energy) VALUES (?, ?, ?, ?, ?)", 
-                (user_id, 1000.0, ref_id, int(time.time()), 1000.0)
-            )
-            if ref_id:
-                await db.execute("UPDATE users SET balance = balance + 50000 WHERE id = ?", (ref_id,))
-                try: await bot.send_message(ref_id, "<b>🎉 У вас новый реферал!</b>\nНачислено 50,000 NP.")
-                except: pass
-            await db.commit()
-
+        async with db.execute("SELECT id FROM users WHERE id=?", (user_id,)) as c:
+            if not await c.fetchone():
+                ref = command.args if command.args and command.args != user_id else None
+                await db.execute("INSERT INTO users (id, balance, referrer_id, last_active) VALUES (?, 1000, ?, ?)", 
+                                 (user_id, ref, int(time.time())))
+                if ref: 
+                    await db.execute("UPDATE users SET balance=balance+50000 WHERE id=?", (ref,))
+                await db.commit()
+    
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))],
-        [InlineKeyboardButton(text="🔗 ПРИГЛАСИТЬ", switch_inline_query=f"https://t.me/neural_pulse_bot?start={user_id}")]
+        [InlineKeyboardButton(text="🚀 ЗАПУСТИТЬ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))]
     ])
-    await m.answer(f"<b>Neural Pulse Online.</b>\nВаш ID: <code>{user_id}</code>\n\nСистема готова к работе.", reply_markup=kb)
-
-# --- WEBHOOK & STATIC ---
+    await m.answer("<b>Neural Pulse Terminal v1.0</b>\nСистема готова к работе.", reply_markup=kb)
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
-    update_data = await request.json()
-    update = Update.model_validate(update_data, context={"bot": bot})
+    update = Update.model_validate(await request.json(), context={"bot": bot})
     await dp.feed_update(bot, update)
     return {"ok": True}
 
 @app.get("/")
-async def index():
-    for p in [BASE_DIR / "index.html", BASE_DIR / "static" / "index.html"]:
-        if p.exists(): return FileResponse(p)
-    return JSONResponse({"error": "index.html not found"}, status_code=404)
+async def index(): return FileResponse(BASE_DIR / "index.html")
 
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
-app.mount("/images", StaticFiles(directory=str(BASE_DIR / "images")), name="images")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
