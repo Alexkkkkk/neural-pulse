@@ -84,7 +84,8 @@
 
         /* NAV */
         .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; padding-bottom: 25px; }
-        .nav-link { height: 55px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; color: white; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; cursor: pointer; }
+        .nav-link { height: 55px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; color: white; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+        .nav-link.syncing { border-color: var(--neon-green); color: var(--neon-green); transform: scale(0.95); }
 
         /* MODALS */
         .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 80%; background: var(--glass); border-top: 3px solid var(--neon-blue); border-radius: 35px 35px 0 0; z-index: 1000; transition: 0.4s; padding: 30px 25px; box-sizing: border-box; overflow-y: auto; backdrop-filter: blur(20px); }
@@ -105,7 +106,7 @@
     <div class="loader-logo">
         <img src="/images/unnamed4.png" alt="Logo">
     </div>
-    <div class="loader-text">BOT REBOOTING...</div>
+    <div class="loader-text" id="loader-status">BOT REBOOTING...</div>
     <div style="margin-top: 15px; font-size: 10px; color: rgba(255,255,255,0.3); letter-spacing: 1px;">INITIALIZING NEURAL NETWORK</div>
 </div>
 
@@ -150,9 +151,9 @@
     </div>
 
     <div class="bottom-nav">
-        <div class="nav-link" onclick="openModal('boost')">🚀 BOOST</div>
-        <div class="nav-link" onclick="openModal('mine')">⛏️ MINE</div>
-        <div class="nav-link" onclick="openModal('stats')">📊 STATS</div>
+        <div class="nav-link" onclick="uiAction(this, 'boost')">🚀 BOOST</div>
+        <div class="nav-link" onclick="uiAction(this, 'mine')">⛏️ MINE</div>
+        <div class="nav-link" onclick="uiAction(this, 'stats')">📊 STATS</div>
     </div>
 </div>
 
@@ -187,14 +188,6 @@
     <div id="leaderboard-list"></div>
 </div>
 
-<div id="modal-tasks" class="modal">
-    <h2 style="text-align:center;">TASKS</h2>
-    <div class="upgrade-card">
-        <div><b>Join Channel</b><br><small>+50,000 NP</small></div>
-        <button class="buy-btn" onclick="tg.openTelegramLink('https://t.me/your_channel')">GO</button>
-    </div>
-</div>
-
 <script>
     const tg = window.Telegram.WebApp;
     tg.expand();
@@ -213,8 +206,25 @@
         { name: "DIAMOND", min: 10000000, max: Infinity }
     ];
 
+    // Функция для кнопок внизу: Показывает обновление и открывает окно
+    async function uiAction(btn, modalId) {
+        const originalText = btn.innerText;
+        btn.classList.add('syncing');
+        btn.innerText = "SYNC..."; // Показываем статус обновления
+        
+        await saveData(); // Логируем сохранение
+        
+        setTimeout(() => {
+            btn.classList.remove('syncing');
+            btn.innerText = originalText;
+            openModal(modalId);
+        }, 400);
+    }
+
     async function init() {
+        const loaderText = document.getElementById('loader-status');
         try {
+            loaderText.innerText = "ОБНОВЛЕНИЕ БОТА..."; // Твой текст при запуске
             const r = await fetch(`/api/balance/${state.user_id}`);
             const res = await r.json();
             if(res.status === 'ok') {
@@ -229,7 +239,6 @@
         } catch(e) { 
             console.error("Load error"); 
         } finally {
-            // УДАЛЯЕМ ЭКРАН ЗАГРУЗКИ (задержка для красоты)
             setTimeout(() => {
                 const loader = document.getElementById('reloading-screen');
                 if(loader) loader.style.display = 'none';
@@ -288,7 +297,7 @@
             if(type === 'tap') state.tap_power++;
             else { state.energy_lvl++; state.max_energy += 500; state.energy = state.max_energy; }
             render(); 
-            await saveData(); // Мгновенное сохранение при покупке
+            await saveData(); 
         } else { tg.showAlert("Not enough NP!"); }
     }
 
@@ -296,25 +305,11 @@
         if(state.score >= cost) {
             state.score -= cost; state.pnl += addPnl;
             render(); 
-            await saveData(); // Мгновенное сохранение при покупке
+            await saveData(); 
         } else { tg.showAlert("Not enough NP!"); }
     }
 
-    async function claimDailyBonus() {
-        try {
-            const r = await fetch('/api/daily-bonus', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({user_id: state.user_id})
-            });
-            const res = await r.json();
-            if(res.status === 'ok') {
-                state.score += res.bonus_amount; render(); tg.showAlert(res.message);
-                await saveData();
-            }
-        } catch(e) { tg.showAlert("Bonus Error"); }
-    }
-
-    function openModal(id) {
+    async function openModal(id) {
         document.getElementById('modal-' + id).classList.add('active');
         document.getElementById('overlay').classList.add('active');
         if(id === 'stats') loadLeaderboard();
@@ -341,8 +336,9 @@
     }
 
     async function saveData() {
-        // Логирование в консоль браузера (можно увидеть в дебагере)
-        console.log("Saving state to server...");
+        // ЛОГИРОВАНИЕ: Это будет видно в панели управления Bothost
+        console.log("ОБНОВЛЕНИЕ БОТА: Отправка данных на сервер..."); 
+        
         await fetch('/api/save', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
@@ -360,7 +356,7 @@
         render();
     }, 1000);
 
-    // СОХРАНЕНИЕ КАЖДЫЕ 3 СЕКУНДЫ (РЕАЛЬНОЕ ВРЕМЯ)
+    // ПОСТОЯННОЕ ЛОГИРОВАНИЕ (каждые 3 секунды)
     setInterval(saveData, 3000);
     
     window.onload = init;
