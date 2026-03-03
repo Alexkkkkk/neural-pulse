@@ -102,14 +102,15 @@ async def bot_webhook(request: Request):
     await dp.feed_update(bot, update)
     return {"ok": True}
 
-# --- ФИНАЛЬНЫЙ ПОИСК ФРОНТЕНДА ---
+# --- ПОИСК ФРОНТЕНДА ---
 @app.get("/")
 async def index():
+    # Пробуем найти файл в разных папках
     search_paths = [
         BASE_DIR / "index.html",
         BASE_DIR / "static" / "index.html",
-        Path("/app/index.html"),
-        Path.cwd() / "index.html"
+        Path.cwd() / "index.html",
+        Path("/app/index.html")
     ]
     
     for path in search_paths:
@@ -117,14 +118,15 @@ async def index():
             logger.info(f"✅ Found index.html at: {path}")
             return FileResponse(path)
 
-    # Список всех файлов для отладки
-    try:
-        all_files = [str(p) for p in Path(BASE_DIR).rglob('*') if p.is_file()][:20]
-    except:
-        all_files = ["Could not list files"]
-        
-    logger.error(f"❌ index.html NOT FOUND. Project root: {BASE_DIR}. Files: {all_files}")
-    return JSONResponse({"error": "File not found", "files_on_server": all_files}, status_code=404)
+    # ДИАГНОСТИКА: если не нашли, пишем в логи всё, что видим
+    files_in_root = [str(f.name) for f in BASE_DIR.iterdir()] if BASE_DIR.exists() else "BASE_DIR not found"
+    logger.error(f"❌ index.html NOT FOUND. Files present in {BASE_DIR}: {files_in_root}")
+    
+    return JSONResponse({
+        "error": "index.html not found",
+        "checked_paths": [str(p) for p in search_paths],
+        "files_on_server": files_in_root
+    }, status_code=404)
 
 # Монтируем статику
 for folder in ["static", "images"]:
