@@ -59,7 +59,10 @@ async def init_db():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    await bot.set_webhook(url=f"https://{MY_DOMAIN}/webhook", drop_pending_updates=True)
+    # Установка вебхука
+    webhook_url = f"https://{MY_DOMAIN}/webhook"
+    await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+    logger.info(f"Webhook set to {webhook_url}")
     yield
     await bot.session.close()
 
@@ -85,7 +88,6 @@ async def get_balance(user_id: str):
             return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "energy": 1000, "pnl": 0}}
         
         u = dict(user)
-        # Начисление офлайн дохода
         if u['pnl'] > 0 and u['last_active'] > 0:
             earned = (min(now - u['last_active'], 28800) / 3600) * u['pnl']
             if earned > 0:
@@ -148,14 +150,31 @@ async def cmd_start(m: types.Message, command: CommandObject):
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
-    update = Update.model_validate(await request.json(), context={"bot": bot})
-    await dp.feed_update(bot, update)
-    return {"ok": True}
+    try:
+        update = Update.model_validate(await request.json(), context={"bot": bot})
+        await dp.feed_update(bot, update)
+        return {"ok": True}
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return {"ok": False}
 
+# --- SERVING HTML ---
 @app.get("/")
-async def index(): return FileResponse(BASE_DIR / "index.html")
+async def index():
+    file_path = BASE_DIR / "index.html"
+    if file_path.exists():
+        logger.info("Serving index.html")
+        return FileResponse(file_path)
+    else:
+        logger.error(f"index.html not found at {file_path}")
+        return JSONResponse({"error": "Frontend file missing", "path": str(file_path)}, status_code=404)
 
-app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+# Монтируем статику только если папка существует
+static_path = BASE_DIR / "static"
+if static_path.exists():
+    app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+    # Bothost может назначать порт через переменную PORT
+    port = int(os.environ.get("PORT", 3000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
