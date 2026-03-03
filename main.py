@@ -60,7 +60,6 @@ async def handle_message(message: types.Message):
     user = message.from_user
     log_step("TG_MSG", f"От: {user.full_name} (@{user.username}) | Текст: {message.text}", C["B"] + C["C"])
     if message.text == "/start":
-        # Кнопка для запуска Mini App
         kb = types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text="Запустить Neural Pulse 🚀", web_app=types.WebAppInfo(url="https://np.bothost.ru/"))]
         ])
@@ -91,21 +90,24 @@ async def maintenance_loop():
         try:
             await asyncio.sleep(60)
             if USER_CACHE and db_conn:
+                # Используем list() чтобы избежать ошибки "RuntimeError: dictionary changed size during iteration"
                 current_cache = list(USER_CACHE.items())
                 for uid, info in current_cache:
                     d = info["data"]
+                    # ИСПРАВЛЕНИЕ: Безопасно берем score или balance, чтобы не упал цикл
+                    score_val = d.get('score', d.get('balance', 0))
+                    
                     await db_conn.execute(
                         "UPDATE users SET balance=?, click_lvl=?, energy=?, max_energy=?, pnl=?, level=?, exp=?, last_active=? WHERE id=?",
-                        (d['score'], d['click_lvl'], d['energy'], d['max_energy'], d['pnl'], d['level'], d['exp'], int(time.time()), uid)
+                        (score_val, d['click_lvl'], d['energy'], d['max_energy'], d['pnl'], d['level'], d['exp'], int(time.time()), uid)
                     )
                 await db_conn.commit()
                 log_step("DB_SYNC", f"Сохранено игроков: {len(current_cache)}")
                 
-                # Очистка старого кэша (если больше 500 юзеров и они не активны более часа)
                 if len(USER_CACHE) > 500:
                     USER_CACHE.clear()
 
-            if time.time() - last_backup_time > 43200: # Каждые 12 часов
+            if time.time() - last_backup_time > 43200:
                 await create_backup()
                 last_backup_time = time.time()
         except Exception as e:
@@ -127,8 +129,6 @@ async def lifespan(app: FastAPI):
     await db_conn.commit()
     
     await create_backup()
-    
-    # Установка Webhook
     await bot.set_webhook(url=WEBHOOK_URL, drop_pending_updates=True, allowed_updates=["message"])
     log_step("TG_SYSTEM", f"Webhook стабилен: {WEBHOOK_URL}", C["C"])
     
@@ -169,52 +169,38 @@ async def get_balance(user_id: str):
         user = await cursor.fetchone()
     
     if not user:
-        # Создаем нового пользователя, если его нет
-        new_data = {"id": user_id, "balance": 1000, "click_lvl": 1, "energy": 1000, "max_energy": 1000, "pnl": 0, "level": 1, "exp": 0}
+        new_data = {"id": user_id, "score": 1000, "click_lvl": 1, "energy": 1000, "max_energy": 1000, "pnl": 0, "level": 1, "exp": 0}
         await db_conn.execute("INSERT INTO users (id, balance) VALUES (?, ?)", (user_id, 1000))
         await db_conn.commit()
         USER_CACHE[user_id] = {"data": new_data, "last_save": time.time()}
         return {"status": "ok", "data": new_data}
     
     u_dict = dict(user)
-    # Переименовываем ключи из БД в ключи для фронтенда, если они отличаются
-    u_dict["score"] = u_dict.pop("balance")
+    u_dict["score"] = u_dict.pop("balance") # Маппинг для фронтенда
     USER_CACHE[user_id] = {"data": u_dict, "last_save": time.time()}
     return {"status": "ok", "data": u_dict}
 
 @app.post("/api/save")
 async def save_game(data: SaveData):
-    # Обновляем кэш. Maintenance_loop запишет это в БД
     USER_CACHE[data.user_id] = {"data": data.model_dump(), "last_save": time.time()}
     return {"status": "ok"}
 
 @app.get("/api/leaderboard")
 async def get_leaderboard():
     db_conn.row_factory = aiosqlite.Row
-    async with db_conn.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10") as cursor:
+    # Маппим balance в score прямо в SQL запросе
+    async with db_conn.execute("SELECT id, balance as score FROM users ORDER BY balance DESC LIMIT 10") as cursor:
         rows = await cursor.fetchall()
         return {"status": "ok", "data": [dict(r) for r in rows]}
 
 # --- [STAGE 6] СТАТИКА И ЗАЩИТА ОТ КЭША ---
 
-class NoCacheStaticFiles(StaticFiles):
-    async def get_response(self, path: str, scope):
-        response = await super().get_response(path, scope)
-        # Для файлов в /static и /images ставим жесткий запрет кэша
-        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-        response.headers["Pragma"] = "no-cache"
-        return response
-
-app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
 @app.get("/")
 async def index():
     index_file = STATIC_DIR / "index.html"
     if not index_file.exists():
-        return JSONResponse({"error": "index.html not found in static/"}, status_code=404)
+        return JSONResponse({"error": "index.html missing"}, status_code=404)
     
-    # Главный файл отдаем с заголовками против кэширования Telegram
     return FileResponse(
         index_file, 
         headers={
@@ -224,13 +210,9 @@ async def index():
         }
     )
 
+# Статика (картинки и js/css)
+app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
 if __name__ == "__main__":
-    uvicorn.run(
-        "main:app", 
-        host="0.0.0.0", 
-        port=3000, 
-        access_log=True, 
-        workers=1,
-        proxy_headers=True,
-        forwarded_allow_ips="*"
-    )
+    uvicorn.run("main:app", host="0.0.0.0", port=3000, proxy_headers=True, forwarded_allow_ips="*")
