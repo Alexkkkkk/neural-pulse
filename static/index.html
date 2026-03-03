@@ -110,14 +110,36 @@
     </div>
 
     <div id="modal-tasks" class="modal">
-        <h2 style="text-align:center;">TASKS</h2>
-        <div style="margin-top: 20px; background: rgba(255,255,255,0.03); padding: 20px; border-radius: 15px; border: 1px solid var(--neon-sec); display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <div style="font-weight:bold;">Join Community</div>
-                <div style="font-size:12px; color: var(--neon-sec);">+50,000 NP</div>
+        <h2 style="text-align:center;">MINING CENTER</h2>
+        
+        <div style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 15px; border: 1px solid var(--neon); margin-bottom: 15px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <b style="color:var(--neon);">Neural Node v1</b><br>
+                    <small>Доход: +100/час</small>
+                </div>
+                <button onclick="buyMiner(1000, 100)" style="padding: 10px; background:var(--neon); border:none; border-radius:10px; color:black; font-weight:bold; font-family:'Orbitron'; cursor:pointer;">
+                    BUY (1k)
+                </button>
             </div>
-            <button onclick="tg.openTelegramLink('https://t.me/neural_pulse_channel')" style="padding: 10px 20px; background:var(--neon-sec); border:none; border-radius:10px; color:black; font-weight:bold; font-family:'Orbitron';">JOIN</button>
         </div>
+
+        <div style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 15px; border: 1px solid var(--neon-sec); margin-bottom: 15px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <b style="color:var(--neon-sec);">Data Core</b><br>
+                    <small>Доход: +550/час</small>
+                </div>
+                <button onclick="buyMiner(5000, 550)" style="padding: 10px; background:var(--neon-sec); border:none; border-radius:10px; color:black; font-weight:bold; font-family:'Orbitron'; cursor:pointer;">
+                    BUY (5k)
+                </button>
+            </div>
+        </div>
+
+        <hr style="opacity:0.1; margin: 20px 0;">
+        <button onclick="tg.openTelegramLink('https://t.me/neural_pulse_channel')" style="width:100%; padding:15px; background:rgba(255,255,255,0.1); border:none; border-radius:10px; color:white; font-weight:bold; cursor:pointer;">
+            📢 JOIN CHANNEL (+50k)
+        </button>
     </div>
 
     <script>
@@ -185,7 +207,6 @@
             document.getElementById('user-id-display').innerText = `ID: ${state.user_id}`;
             document.getElementById('pnl-display').innerText = `PROFIT: +${state.pnl}/hr`;
             
-            // Расчет лиг
             let currentL = leagues[0];
             let nextL = leagues[1];
             for(let i=0; i < leagues.length; i++) {
@@ -200,7 +221,20 @@
             document.getElementById('league-percent').innerText = Math.floor(Math.min(100, prog)) + '%';
         }
 
-        // Обработка клика
+        // Логика покупки в майнинг-центре
+        async function buyMiner(cost, pnlIncrease) {
+            if (state.score < cost) return tg.showAlert("Недостаточно средств для покупки!");
+            
+            state.score -= cost;
+            state.pnl += pnlIncrease;
+            updateUI();
+            
+            if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+            
+            await saveData();
+            tg.showAlert(`Поздравляем! Ваш пассивный доход вырос на ${pnlIncrease}/час`);
+        }
+
         document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (state.energy < state.tap_power) return;
@@ -246,8 +280,6 @@
             updateUI();
             
             if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-            
-            // Сохраняем сразу, чтобы уровень не "откатился"
             await saveData();
         }
 
@@ -266,18 +298,17 @@
             } catch(e) { list.innerHTML = "Ошибка загрузки ТОПа"; }
         }
 
-        // Цикл регенерации и авто-сохранения
         setInterval(() => {
             if (state.energy < state.max_energy) {
-                state.energy = Math.min(state.max_energy, state.energy + 1.2); // Реген +1.2 в сек
+                state.energy = Math.min(state.max_energy, state.energy + 1.2);
             }
             if (state.pnl > 0) {
-                state.score += (state.pnl / 3600); // Почасовой профит
+                state.score += (state.pnl / 3600);
             }
             updateUI();
         }, 1000);
 
-        setInterval(saveData, 15000); // Автосохранение каждые 15 сек
+        setInterval(saveData, 15000);
 
         window.onload = () => {
             document.getElementById('game').style.opacity = "1";
