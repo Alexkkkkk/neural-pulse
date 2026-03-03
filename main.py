@@ -31,19 +31,10 @@ dp = Dispatcher()
 class SaveData(BaseModel):
     model_config = ConfigDict(extra="allow")
     user_id: str
-    score: float
-    click_lvl: int
-    energy: float
-    pnl: float
-
-class UpgradeData(BaseModel):
-    user_id: str
-    cost: float
-    new_lvl: int
-
-class WalletData(BaseModel):
-    user_id: str
-    wallet_address: str
+    score: Optional[float] = 0.0
+    click_lvl: Optional[int] = 1
+    energy: Optional[float] = 1000.0
+    pnl: Optional[float] = 0.0
 
 # --- DATABASE ---
 async def init_db():
@@ -85,8 +76,7 @@ async def get_balance(user_id: str):
             await db.commit()
             return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "energy": 1000, "pnl": 0}}
         
-        u = dict(user)
-        return {"status": "ok", "data": u}
+        return {"status": "ok", "data": dict(user)}
 
 @app.post("/api/save")
 async def save_game(data: SaveData):
@@ -100,7 +90,7 @@ async def save_game(data: SaveData):
 
 # --- BOT HANDLERS ---
 @dp.message(Command("start"))
-async def cmd_start(m: types.Message, command: CommandObject):
+async def cmd_start(m: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🚀 ЗАПУСТИТЬ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))]
     ])
@@ -112,13 +102,13 @@ async def bot_webhook(request: Request):
     await dp.feed_update(bot, update)
     return {"ok": True}
 
-# --- УЛУЧШЕННЫЙ ПОИСК ФРОНТЕНДА ---
+# --- ФИНАЛЬНЫЙ ПОИСК ФРОНТЕНДА ---
 @app.get("/")
 async def index():
-    # Проверяем все возможные места
     search_paths = [
         BASE_DIR / "index.html",
         BASE_DIR / "static" / "index.html",
+        Path("/app/index.html"),
         Path.cwd() / "index.html"
     ]
     
@@ -127,15 +117,20 @@ async def index():
             logger.info(f"✅ Found index.html at: {path}")
             return FileResponse(path)
 
-    # Если не нашли, выводим список всех файлов в лог для диагностики
-    all_files = [str(p.relative_to(BASE_DIR)) for p in BASE_DIR.rglob('*') if p.is_file()]
-    logger.error(f"❌ index.html NOT FOUND. Project files: {all_files}")
-    return JSONResponse({"error": "File not found", "checked": [str(p) for p in search_paths]}, status_code=404)
+    # Список всех файлов для отладки
+    try:
+        all_files = [str(p) for p in Path(BASE_DIR).rglob('*') if p.is_file()][:20]
+    except:
+        all_files = ["Could not list files"]
+        
+    logger.error(f"❌ index.html NOT FOUND. Project root: {BASE_DIR}. Files: {all_files}")
+    return JSONResponse({"error": "File not found", "files_on_server": all_files}, status_code=404)
 
 # Монтируем статику
-static_path = BASE_DIR / "static"
-if static_path.exists():
-    app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
+for folder in ["static", "images"]:
+    path = BASE_DIR / folder
+    if path.exists():
+        app.mount(f"/{folder}", StaticFiles(directory=str(path)), name=folder)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 3000))
