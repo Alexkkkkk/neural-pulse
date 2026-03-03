@@ -21,6 +21,7 @@ MY_DOMAIN = "np.bothost.ru"
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 
+# Создаем папки если их нет
 for folder in ["static", "images"]:
     (BASE_DIR / folder).mkdir(exist_ok=True)
 
@@ -37,14 +38,14 @@ class SaveData(BaseModel):
     score: Optional[float] = 0.0
     click_lvl: Optional[float] = 1.0
     energy: Optional[float] = 1000.0
-    max_energy: Optional[int] = 1000  # ИСПРАВЛЕНИЕ: Поле для приема лимита энергии (убирает 422)
+    max_energy: Optional[int] = 1000
     pnl: Optional[float] = 0.0
 
 # --- DATABASE ---
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("PRAGMA journal_mode=WAL")
-        # ИСПРАВЛЕНИЕ: Добавлена колонка max_energy в создание таблицы
+        # Создаем таблицу с учетом всех полей
         await db.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, 
              click_lvl INTEGER DEFAULT 1, energy REAL DEFAULT 1000,
@@ -52,14 +53,14 @@ async def init_db():
              pnl REAL DEFAULT 0, last_active INTEGER DEFAULT 0,
              wallet TEXT, referrer_id TEXT, referrals_count INTEGER DEFAULT 0)''')
         
-        # Миграция: если база уже создана без max_energy, добавляем колонку
+        # Миграция: проверка наличия колонки max_energy
         try:
             await db.execute("ALTER TABLE users ADD COLUMN max_energy INTEGER DEFAULT 1000")
         except:
             pass
             
         await db.commit()
-    logger.info("Database initialized with WAL mode.")
+    logger.info("Database initialized.")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -71,13 +72,16 @@ async def lifespan(app: FastAPI):
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# CORS настроен для Telegram WebApp
+app.add_middleware(
+    CORSMiddleware, 
+    allow_origins=["*"], 
+    allow_methods=["*"], 
+    allow_headers=["*"]
+)
 
 # --- API ENDPOINTS ---
-
-@app.get("/favicon.ico", include_in_schema=False)
-async def favicon():
-    return JSONResponse({})
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
@@ -94,8 +98,10 @@ async def get_balance(user_id: str):
             return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "energy": 1000, "max_energy": 1000, "pnl": 0}}
 
         u = dict(user)
+        # Оффлайн доход (майнинг)
         if u['pnl'] > 0 and u['last_active'] > 0:
             diff = now - u['last_active']
+            # Лимит оффлайн дохода 8 часов (28800 сек)
             earned = (min(diff, 28800) / 3600) * u['pnl']
             if earned > 0:
                 u['balance'] += earned
@@ -108,7 +114,6 @@ async def get_balance(user_id: str):
 async def save_game(data: SaveData):
     try:
         async with aiosqlite.connect(DB_PATH) as db:
-            # ИСПРАВЛЕНИЕ: Теперь сохраняем и max_energy
             await db.execute(
                 "UPDATE users SET balance=?, click_lvl=?, energy=?, max_energy=?, pnl=?, last_active=? WHERE id=?", 
                 (float(data.score or 0), int(data.click_lvl or 1), float(data.energy or 0), 
@@ -128,22 +133,14 @@ async def get_leaderboard():
             rows = await cursor.fetchall()
             return {"status": "ok", "data": [dict(r) for r in rows]}
 
-@app.post("/")
-async def post_root():
-    return {"status": "ok"}
-
 @app.post("/api/daily-bonus")
 async def daily_bonus(request: Request):
-    try:
-        data = await request.json()
-        user_id = data.get("user_id")
-        return {
-            "status": "ok", 
-            "message": "Бонус 5000 NP получен!", 
-            "bonus_amount": 5000
-        }
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    # Здесь можно добавить проверку даты последнего получения в БД
+    return {
+        "status": "ok", 
+        "message": "Система начислила 5,000 NP!", 
+        "bonus_amount": 5000
+    }
 
 # --- BOT LOGIC ---
 
@@ -163,18 +160,16 @@ async def cmd_start(m: types.Message, command: CommandObject):
                 (user_id, ref_id, int(time.time()))
             )
             if ref_id:
-                async with db.execute("SELECT id FROM users WHERE id = ?", (ref_id,)) as c:
-                    if await c.fetchone():
-                        await db.execute("UPDATE users SET balance = balance + 50000, referrals_count = referrals_count + 1 WHERE id = ?", (ref_id,))
-                        try: await bot.send_message(ref_id, "<b>🎉 Реферал!</b>\n+50,000 NP.")
-                        except: pass
+                await db.execute("UPDATE users SET balance = balance + 50000, referrals_count = referrals_count + 1 WHERE id = ?", (ref_id,))
+                try: await bot.send_message(ref_id, "<b>🎉 Новый реферал!</b>\nВам начислено +50,000 NP.")
+                except: pass
             await db.commit()
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))],
-        [InlineKeyboardButton(text="🔗 ПРИГЛАСИТЬ", switch_inline_query=f"Играй со мной в Neural Pulse! https://t.me/neural_pulse_bot?start={user_id}")]
+        [InlineKeyboardButton(text="⚡ ЗАПУСТИТЬ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))],
+        [InlineKeyboardButton(text="🔗 КАНАЛ", url="https://t.me/neural_pulse")]
     ])
-    await m.answer(f"<b>Neural Pulse Online.</b>\nID: <code>{user_id}</code>\n\nСистема готова.", reply_markup=kb)
+    await m.answer(f"<b>Neural Pulse Terminal.</b>\nСтатус: <code>ONLINE</code>\n\nДобро пожаловать в сеть.", reply_markup=kb)
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
@@ -183,14 +178,18 @@ async def bot_webhook(request: Request):
     await dp.feed_update(bot, update)
     return {"ok": True}
 
+# --- STATIC FILES ---
+
+# Важно: Роуты API должны быть ВЫШЕ маунта статики
+app.mount("/images", StaticFiles(directory=str(BASE_DIR / "images")), name="images")
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
 @app.get("/")
 async def index():
+    # Проверяем index.html в корне или в static
     for p in [BASE_DIR / "index.html", BASE_DIR / "static" / "index.html"]:
         if p.exists(): return FileResponse(p)
     return JSONResponse({"error": "index.html not found"}, status_code=404)
-
-app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
-app.mount("/images", StaticFiles(directory=str(BASE_DIR / "images")), name="images")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 3000))
