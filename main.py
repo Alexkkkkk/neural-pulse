@@ -3,6 +3,7 @@ import aiosqlite
 import uvicorn
 from pathlib import Path
 from contextlib import asynccontextmanager
+from typing import Optional  # Важно для гибких схем
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -20,24 +21,27 @@ MY_DOMAIN = "np.bothost.ru"
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 
-# Настройка логирования
+# Создаем нужные папки, если их нет
+(BASE_DIR / "static").mkdir(exist_ok=True)
+(BASE_DIR / "images").mkdir(exist_ok=True)
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-# --- СХЕМЫ ДАННЫХ ---
+# --- СХЕМЫ ДАННЫХ (ИСПРАВЛЕНО ДЛЯ УСТРАНЕНИЯ ОШИБКИ 422) ---
 class SaveData(BaseModel):
     user_id: str
     score: float   
-    click_lvl: int
+    click_lvl: Optional[float] = 1.0  # Используем float и Optional
     energy: float  
-    pnl: int = 0
+    pnl: Optional[float] = 0.0       # JS часто шлет 0 как float или может не прислать вовсе
 
 class UpgradeData(BaseModel):
     user_id: str
-    cost: int
+    cost: float
     new_lvl: int
 
 class WalletData(BaseModel):
@@ -47,11 +51,10 @@ class WalletData(BaseModel):
 # --- БАЗА ДАННЫХ ---
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
-        # Используем REAL для баланса и энергии, чтобы избежать конфликтов типов
         await db.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, 
              click_lvl INTEGER DEFAULT 1, energy REAL DEFAULT 1000,
-             pnl INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0,
+             pnl REAL DEFAULT 0, last_active INTEGER DEFAULT 0,
              wallet TEXT, referrer_id TEXT, referrals_count INTEGER DEFAULT 0)''')
         await db.commit()
     logger.info("Database initialized with REAL types.")
@@ -66,14 +69,7 @@ async def lifespan(app: FastAPI):
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
-
-# Разрешаем CORS для связи фронтенда и бэкенда
-app.add_middleware(
-    CORSMiddleware, 
-    allow_origins=["*"], 
-    allow_methods=["*"], 
-    allow_headers=["*"]
-)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # --- API ENDPOINTS ---
 
@@ -86,32 +82,29 @@ async def get_balance(user_id: str):
         
         now = int(time.time())
         if not user:
-            # Создаем нового пользователя, если его нет
             await db.execute("INSERT INTO users (id, balance, last_active, energy) VALUES (?, ?, ?, ?)", 
                              (user_id, 1000.0, now, 1000.0))
             await db.commit()
             return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "energy": 1000, "pnl": 0}}
 
         u = dict(user)
-        # Начисление пассивного дохода (PNL)
         if u['pnl'] > 0 and u['last_active'] > 0:
             diff = now - u['last_active']
-            # Лимит пассивного дохода — 8 часов
             earned = (min(diff, 28800) / 3600) * u['pnl']
             if earned > 0:
                 u['balance'] += earned
                 await db.execute("UPDATE users SET balance=?, last_active=? WHERE id=?", 
                                  (u['balance'], now, user_id))
                 await db.commit()
-        
         return {"status": "ok", "data": u}
 
 @app.post("/api/save")
 async def save_game(data: SaveData):
     async with aiosqlite.connect(DB_PATH) as db:
+        # Принудительно приводим к нужным типам перед записью
         await db.execute(
             "UPDATE users SET balance=?, click_lvl=?, energy=?, pnl=?, last_active=? WHERE id=?", 
-            (data.score, data.click_lvl, data.energy, data.pnl, int(time.time()), data.user_id)
+            (float(data.score), int(data.click_lvl), float(data.energy), float(data.pnl), int(time.time()), data.user_id)
         )
         await db.commit()
     return {"status": "ok"}
@@ -159,23 +152,17 @@ async def cmd_start(m: types.Message, command: CommandObject):
                 "INSERT INTO users (id, balance, referrer_id, last_active, energy) VALUES (?, ?, ?, ?, ?)", 
                 (user_id, 1000.0, ref_id, int(time.time()), 1000.0)
             )
-            
             if ref_id:
-                # Бонус рефереру
-                await db.execute(
-                    "UPDATE users SET balance = balance + 50000, referrals_count = referrals_count + 1 WHERE id = ?", 
-                    (ref_id,)
-                )
-                try:
-                    await bot.send_message(ref_id, "<b>🎉 У вас новый реферал!</b>\nНачислено 50,000 NP.")
+                await db.execute("UPDATE users SET balance = balance + 50000 WHERE id = ?", (ref_id,))
+                try: await bot.send_message(ref_id, "<b>🎉 Реферал!</b> +50,000 NP.")
                 except: pass
             await db.commit()
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))],
-        [InlineKeyboardButton(text="🔗 ПРИГЛАСИТЬ ДРУГА", switch_inline_query=f"Присоединяйся к Neural Pulse! Мой ID: {user_id}")]
+        [InlineKeyboardButton(text="🔗 ПРИГЛАСИТЬ", switch_inline_query=f"Присоединяйся! Мой ID: {user_id}")]
     ])
-    await m.answer(f"<b>Система Neural Pulse активна.</b>\nВаш ID: <code>{user_id}</code>\n\nДобро пожаловать в сеть.", reply_markup=kb)
+    await m.answer(f"<b>Neural Pulse Online.</b>\nID: <code>{user_id}</code>", reply_markup=kb)
 
 # --- WEBHOOK & STATIC ---
 
@@ -188,17 +175,12 @@ async def bot_webhook(request: Request):
 
 @app.get("/")
 async def index():
-    # Поиск index.html в корне или папке static
     for p in [BASE_DIR / "index.html", BASE_DIR / "static" / "index.html"]:
-        if p.exists():
-            return FileResponse(p)
-    return JSONResponse({"error": "index.html not found. Check your file location."}, status_code=404)
+        if p.exists(): return FileResponse(p)
+    return JSONResponse({"error": "index.html not found"}, status_code=404)
 
-# Монтирование папок со статикой (картинки, стили)
-if (BASE_DIR / "static").exists():
-    app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
-if (BASE_DIR / "images").exists():
-    app.mount("/images", StaticFiles(directory=str(BASE_DIR / "images")), name="images")
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+app.mount("/images", StaticFiles(directory=str(BASE_DIR / "images")), name="images")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
