@@ -21,6 +21,9 @@ MY_DOMAIN = "np.bothost.ru"
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 
+# Автоматическое создание папки static, чтобы app.mount не ругался
+(BASE_DIR / "static").mkdir(exist_ok=True)
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -57,15 +60,7 @@ async def lifespan(app: FastAPI):
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
-
-# Расширенные настройки CORS для WebApp
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # --- API ---
 @app.get("/favicon.ico", include_in_schema=False)
@@ -74,44 +69,35 @@ async def favicon():
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute("SELECT * FROM users WHERE id = ?", (user_id,)) as cursor:
-                user = await cursor.fetchone()
-            
-            now = int(time.time())
-            if not user:
-                await db.execute("INSERT INTO users (id, balance, last_active, energy) VALUES (?, 1000, ?, 1000)", (user_id, now))
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM users WHERE id = ?", (user_id,)) as cursor:
+            user = await cursor.fetchone()
+        
+        now = int(time.time())
+        if not user:
+            await db.execute("INSERT INTO users (id, balance, last_active, energy) VALUES (?, 1000, ?, 1000)", (user_id, now))
+            await db.commit()
+            return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "energy": 1000, "pnl": 0}}
+        
+        u = dict(user)
+        if u['pnl'] > 0 and u['last_active'] > 0:
+            earned = (min(now - u['last_active'], 28800) / 3600) * u['pnl']
+            if earned > 0:
+                u['balance'] += earned
+                await db.execute("UPDATE users SET balance=?, last_active=? WHERE id=?", (u['balance'], now, user_id))
                 await db.commit()
-                return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "energy": 1000, "pnl": 0}}
-            
-            u = dict(user)
-            # Начисление офлайн дохода
-            if u['pnl'] > 0 and u['last_active'] > 0:
-                earned = (min(now - u['last_active'], 28800) / 3600) * u['pnl']
-                if earned > 0:
-                    u['balance'] += earned
-                    await db.execute("UPDATE users SET balance=?, last_active=? WHERE id=?", (u['balance'], now, user_id))
-                    await db.commit()
-            return {"status": "ok", "data": u}
-    except Exception as e:
-        logger.error(f"Error in get_balance: {e}")
-        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+        return {"status": "ok", "data": u}
 
 @app.post("/api/save")
 async def save_game(data: SaveData):
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute(
-                "UPDATE users SET balance=?, click_lvl=?, energy=?, pnl=?, last_active=? WHERE id=?", 
-                (data.score, data.click_lvl, data.energy, data.pnl, int(time.time()), data.user_id)
-            )
-            await db.commit()
-        return {"status": "ok"}
-    except Exception as e:
-        logger.error(f"Error in save_game: {e}")
-        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET balance=?, click_lvl=?, energy=?, pnl=?, last_active=? WHERE id=?", 
+            (data.score, data.click_lvl, data.energy, data.pnl, int(time.time()), data.user_id)
+        )
+        await db.commit()
+    return {"status": "ok"}
 
 # --- BOT ---
 @dp.message(Command("start"))
@@ -123,27 +109,18 @@ async def cmd_start(m: types.Message):
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
-    try:
-        update_data = await request.json()
-        update = Update.model_validate(update_data, context={"bot": bot})
-        await dp.feed_update(bot, update)
-        return {"ok": True}
-    except Exception as e:
-        logger.error(f"Webhook error: {e}")
-        return {"ok": False}
+    update = Update.model_validate(await request.json(), context={"bot": bot})
+    await dp.feed_update(bot, update)
+    return {"ok": True}
 
 # --- STATIC & FRONTEND ---
 @app.get("/")
 async def index():
-    # Поиск файла в корне или static
     for p in [BASE_DIR / "index.html", BASE_DIR / "static" / "index.html"]:
-        if p.exists():
-            return FileResponse(p)
+        if p.exists(): return FileResponse(p)
     return JSONResponse({"error": "index.html not found"}, status_code=404)
 
-# Монтируем статику если она есть
-if (BASE_DIR / "static").exists():
-    app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 3000))
