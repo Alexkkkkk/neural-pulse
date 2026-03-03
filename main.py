@@ -29,7 +29,6 @@ C_END = "\033[0m"
 def log_step(category: str, message: str, color: str = C_WHITE):
     """Доскональное логирование для Bothost Terminal"""
     curr_time = datetime.datetime.now().strftime("%H:%M:%S")
-    # flush=True гарантирует появление строки в логах Bothost без задержек
     print(f"{C_BOLD}[{curr_time}]{C_END} {color}{category.ljust(12)}{C_END} | {message}", flush=True)
 
 log_step("SYSTEM", "Запуск Neural Pulse Engine...", C_CYAN)
@@ -41,7 +40,6 @@ MY_DOMAIN = "np.bothost.ru"
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 
-# Отключаем лишний шум от сторонних библиотек
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 # --- SCHEMAS ---
@@ -104,7 +102,6 @@ async def init_db():
              wallet TEXT DEFAULT NULL, referrer_id TEXT DEFAULT NULL, referrals_count INTEGER DEFAULT 0,
              ref_balance REAL DEFAULT 0, tasks_completed TEXT DEFAULT "")''')
         
-        # Миграции
         cursor = await db.execute("PRAGMA table_info(users)")
         existing = [row[1] for row in await cursor.fetchall()]
         for col, spec in {"level": "INTEGER DEFAULT 1", "exp": "INTEGER DEFAULT 0", "wallet": "TEXT DEFAULT NULL"}.items():
@@ -145,7 +142,7 @@ async def get_balance(user_id: str):
         
         now = int(time.time())
         if not user:
-            log_step("DB", f"Регистрация нового игрока {user_id}", C_MAGENTA)
+            log_step("DB", f"Регистрация игрока {user_id}", C_MAGENTA)
             await db.execute("INSERT INTO users (id, balance, last_active) VALUES (?, 1000, ?)", (user_id, now))
             await db.commit()
             return {"status": "ok", "data": {"balance": 1000, "level": 1, "energy": 1000}}
@@ -178,10 +175,20 @@ async def save_game(data: SaveData):
         log_step("SAVE_ERR", str(e), C_RED)
         return JSONResponse({"status": "error"}, status_code=400)
 
+@app.get("/api/leaderboard")
+async def get_leaderboard():
+    log_step("API", "Запрос LEADERBOARD", C_MAGENTA)
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT id, balance, level FROM users ORDER BY balance DESC LIMIT 10") as cursor:
+            rows = await cursor.fetchall()
+            log_step("DB", f"Лидеры выгружены (найдено: {len(rows)})", C_GREEN)
+            return {"status": "ok", "data": [dict(r) for r in rows]}
+
 @app.post("/webhook")
 async def bot_webhook(request: Request):
     data = await request.json()
-    log_step("TG_WEBHOOK", "Получен входящий апдейт", C_WHITE)
+    log_step("TG_WEBHOOK", "Входящий апдейт", C_WHITE)
     update = Update.model_validate(data, context={"bot": bot})
     await dp.feed_update(bot, update)
     return {"ok": True}
@@ -196,18 +203,18 @@ async def cmd_start(m: types.Message, command: CommandObject):
         async with db.execute("SELECT id FROM users WHERE id = ?", (user_id,)) as cursor:
             if not await cursor.fetchone():
                 ref_id = str(command.args) if command.args and str(command.args) != user_id else None
-                log_step("DB", f"Новый юзер в базе: {user_id}", C_MAGENTA)
+                log_step("DB", f"Новый юзер: {user_id}", C_MAGENTA)
                 await db.execute("INSERT INTO users (id, balance, referrer_id, last_active) VALUES (?, 1000, ?, ?)", 
                                  (user_id, ref_id, int(time.time())))
                 if ref_id:
                     await db.execute("UPDATE users SET balance=balance+50000 WHERE id=?", (ref_id,))
-                    log_step("REF", f"Реферальный бонус для {ref_id}", C_GREEN)
+                    log_step("REF", f"Бонус рефереру {ref_id}", C_GREEN)
                 await db.commit()
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))]
     ])
-    await m.answer(f"<b>Neural Pulse Online</b>\n\nДобро пожаловать в систему.", reply_markup=kb)
+    await m.answer(f"<b>Neural Pulse Online</b>\n\nСистема инициализирована.", reply_markup=kb)
 
 # --- STATIC ---
 app.mount("/images", StaticFiles(directory=str(BASE_DIR / "images")), name="images")
@@ -215,7 +222,7 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 
 @app.get("/")
 async def index():
-    log_step("WEB", "Загрузка index.html", C_WHITE)
+    log_step("WEB", "Загрузка терминала", C_WHITE)
     return FileResponse(BASE_DIR / "index.html")
 
 # --- START ---
