@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware  # <-- Новое для скорости
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict
@@ -16,7 +16,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandObject, Command
 
-# --- [STAGE 0] НАСТРОЙКИ ПУТЕЙ И ОКРУЖЕНИЯ ---
+# --- [STAGE 0] НАСТРОЙКИ ПУТЕЙ ---
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
@@ -31,7 +31,7 @@ def log_step(category: str, message: str, color: str = C_WHITE):
     curr_time = datetime.datetime.now().strftime("%H:%M:%S")
     print(f"{C_BOLD}[{curr_time}]{C_END} {color}{category.ljust(12)}{C_END} | {message}", flush=True)
 
-# ПРИНУДИТЕЛЬНОЕ СОЗДАНИЕ ПАПОК
+# ПРИНУДИТЕЛЬНОЕ СОЗДАНИЕ ПАПОК (Защита от RuntimeError при mount)
 for folder in [STATIC_DIR, IMAGES_DIR]:
     if not folder.exists():
         folder.mkdir(parents=True, exist_ok=True)
@@ -65,7 +65,7 @@ dp = Dispatcher()
 # --- BACKUP SYSTEM ---
 async def backup_task():
     while True:
-        await asyncio.sleep(86400)
+        await asyncio.sleep(86400) # 24 часа
         try:
             if DB_PATH.exists():
                 file = FSInputFile(DB_PATH, filename=f"backup_{datetime.date.today()}.db")
@@ -73,14 +73,13 @@ async def backup_task():
                 log_step("BACKUP", "Успешно отправлен", C_GREEN)
         except Exception as e: log_step("BACKUP_ERR", str(e), C_RED)
 
-# --- DATABASE (ОПТИМИЗИРОВАНО) ---
+# --- DATABASE (OPTIMIZED) ---
 async def init_db():
     log_step("DB", "Оптимизация SQLite (WAL Mode)...", C_CYAN)
     async with aiosqlite.connect(DB_PATH) as db:
-        # Ускоряем базу данных
         await db.execute("PRAGMA journal_mode=WAL")
         await db.execute("PRAGMA synchronous=NORMAL")
-        await db.execute("PRAGMA cache_size=-64000") # 64MB кэша
+        await db.execute("PRAGMA cache_size=-64000")
         
         await db.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, click_lvl INTEGER DEFAULT 1, 
@@ -97,12 +96,12 @@ async def init_db():
                 await db.execute(f"ALTER TABLE users ADD COLUMN {col} {spec}")
         
         await db.commit()
-        log_step("DB", "База оптимизирована и готова", C_GREEN)
+        log_step("DB", "База готова", C_GREEN)
 
-# --- LIFESPAN (AGRESSIVE) ---
+# --- LIFESPAN ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log_step("SYSTEM", "ЗАПУСК TURBO ENGINE...", C_MAGENTA)
+    log_step("SYSTEM", "ЗАПУСК NEURAL PULSE ENGINE...", C_MAGENTA)
     await init_db()
     asyncio.create_task(backup_task())
     
@@ -118,9 +117,7 @@ async def lifespan(app: FastAPI):
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
-
-# --- MIDDLEWARES (СКОРОСТЬ) ---
-app.add_middleware(GZipMiddleware, minimum_size=1000) # Сжатие данных
+app.add_middleware(GZipMiddleware, minimum_size=1000) # Сжатие для скорости
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # --- API ENDPOINTS ---
@@ -162,6 +159,14 @@ async def save_game(data: SaveData):
         return {"status": "ok"}
     except Exception: return JSONResponse({"status": "error"}, status_code=400)
 
+@app.get("/api/leaderboard")
+async def get_leaderboard():
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT id, balance, level FROM users ORDER BY balance DESC LIMIT 10") as cursor:
+            rows = await cursor.fetchall()
+            return {"status": "ok", "data": [dict(r) for r in rows]}
+
 @app.post("/webhook")
 async def bot_webhook(request: Request):
     try:
@@ -171,7 +176,7 @@ async def bot_webhook(request: Request):
     except: pass
     return {"ok": True}
 
-# --- HANDLERS ---
+# --- BOT HANDLERS ---
 @dp.message(Command("start"))
 async def cmd_start(m: types.Message, command: CommandObject):
     user_id = str(m.from_user.id)
@@ -180,13 +185,19 @@ async def cmd_start(m: types.Message, command: CommandObject):
     ])
     await m.answer(f"<b>Neural Pulse Engine</b>\nСистема онлайн.", reply_markup=kb)
 
-# --- STATIC (ЗАПОМНИЛ: ВСЕГДА ТУТ) ---
+# --- STATIC & INDEX (ЗАПОМНИЛ: ВСЕГДА В static/) ---
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.get("/")
 async def index():
-    return FileResponse(BASE_DIR / "index.html", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+    # Путь исправлен: теперь ищем index.html ВНУТРИ папки static
+    index_path = STATIC_DIR / "index.html"
+    if not index_path.exists():
+        log_step("WEB_ERR", f"Файл не найден в static: {index_path}", C_RED)
+        return JSONResponse({"error": "index.html not found in static folder"}, status_code=404)
+        
+    return FileResponse(index_path, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 # --- START ---
 if __name__ == "__main__":
