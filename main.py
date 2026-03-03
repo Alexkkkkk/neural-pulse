@@ -13,12 +13,11 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.filters import Command
+from aiogram.filters import Command, CommandObject
 
 # --- CONFIG ---
 TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU"
 MY_DOMAIN = "np.bothost.ru"
-# Фиксируем путь относительно файла
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 
@@ -73,14 +72,16 @@ async def get_balance(user_id: str):
         
         now = int(time.time())
         if not user:
+            # Создаем нового пользователя, если его нет (на всякий случай)
             await db.execute("INSERT INTO users (id, balance, last_active, energy) VALUES (?, 1000, ?, 1000)", (str(user_id), now))
             await db.commit()
             return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "energy": 1000, "pnl": 0}}
         
         u = dict(user)
-        # Офлайн доход
+        # Начисление PNL (офлайн доход)
         if u['pnl'] > 0 and u['last_active'] > 0:
-            earned = (min(now - u['last_active'], 28800) / 3600) * u['pnl']
+            passed = now - u['last_active']
+            earned = (min(passed, 28800) / 3600) * u['pnl']
             if earned > 0:
                 u['balance'] += earned
                 await db.execute("UPDATE users SET balance=?, last_active=? WHERE id=?", (u['balance'], now, str(user_id)))
@@ -97,13 +98,31 @@ async def save_game(data: SaveData):
         await db.commit()
     return {"status": "ok"}
 
-# --- BOT ---
+# --- BOT HANDLERS ---
 @dp.message(Command("start"))
-async def cmd_start(m: types.Message):
+async def cmd_start(m: types.Message, command: CommandObject):
+    user_id = str(m.from_user.id)
+    ref_id = command.args # получаем ID пригласившего из ссылки
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT id FROM users WHERE id = ?", (user_id,)) as cursor:
+            exists = await cursor.fetchone()
+        
+        if not exists:
+            # Новый пользователь
+            await db.execute(
+                "INSERT INTO users (id, balance, last_active, referrer_id) VALUES (?, 1000, ?, ?)",
+                (user_id, int(time.time()), ref_id if ref_id != user_id else None)
+            )
+            if ref_id and ref_id != user_id:
+                # Обновляем счетчик у пригласившего
+                await db.execute("UPDATE users SET referrals_count = referrals_count + 1 WHERE id = ?", (ref_id,))
+            await db.commit()
+
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🚀 ЗАПУСТИТЬ ТЕРМИНАЛ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))]
     ])
-    await m.answer("<b>Neural Pulse Terminal v1.1</b>\nАвторизация успешна. Система запущена.", reply_markup=kb)
+    await m.answer(f"<b>Neural Pulse Terminal v1.2</b>\nДобро пожаловать, {m.from_user.first_name}!\nСистема готова.", reply_markup=kb)
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
@@ -114,15 +133,12 @@ async def bot_webhook(request: Request):
 # --- STATIC ---
 @app.get("/")
 async def index():
-    paths = [BASE_DIR / "index.html", BASE_DIR / "static" / "index.html"]
-    for p in paths:
+    for p in [BASE_DIR / "index.html", BASE_DIR / "static" / "index.html"]:
         if p.exists(): return FileResponse(p)
     return JSONResponse({"error": "index.html not found"}, status_code=404)
 
-static_path = BASE_DIR / "static"
-if static_path.exists():
-    app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
+if (BASE_DIR / "static").exists():
+    app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 3000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 3000)))
