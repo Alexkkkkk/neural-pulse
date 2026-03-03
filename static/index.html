@@ -17,54 +17,58 @@
         .ai-icon-small { width: 48px; height: 48px; background: rgba(176, 38, 255, 0.1); border: 2px solid var(--neon-purp); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px rgba(176, 38, 255, 0.4); overflow: hidden; }
         .ai-icon-small img { width: 100%; height: 100%; object-fit: cover; }
         
-        .league-info { flex-grow: 1; }
+        .league-info { flex-grow: 1; position: relative; }
         .league-header { display: flex; justify-content: space-between; font-size: 10px; font-weight: 900; margin-bottom: 4px; letter-spacing: 1px; }
-        .league-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; box-shadow: inset 0 0 5px rgba(0,0,0,0.5); }
-        #league-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--neon-purp), var(--neon-blue)); transition: width 0.5s; box-shadow: 0 0 10px var(--neon-blue); }
+        .league-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; }
+        #league-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--neon-purp), var(--neon-blue)); transition: width 0.5s; }
+        .user-id-label { position: absolute; right: 0; top: 12px; font-size: 8px; color: rgba(255,255,255,0.3); }
+
+        /* JACKPOT SECTION */
+        .jackpot-box { width: 100%; background: rgba(176, 38, 255, 0.05); border: 1px solid rgba(176, 38, 255, 0.2); border-radius: 18px; padding: 10px; text-align: center; margin-top: 15px; box-shadow: inset 0 0 15px rgba(176, 38, 255, 0.1); }
+        .jackpot-title { font-size: 10px; color: var(--neon-blue); letter-spacing: 2px; font-weight: 700; margin-bottom: 5px; }
+        .jackpot-value { font-size: 28px; font-weight: 900; letter-spacing: 1px; color: #fff; text-shadow: 0 0 15px rgba(255, 255, 255, 0.2); }
 
         /* SCORE */
-        #score { font-size: 58px; font-weight: 900; margin: 15px 0 5px 0; text-shadow: 0 0 25px rgba(0, 212, 255, 0.5); transition: transform 0.1s; }
-        #pnl-display { font-size: 13px; color: var(--neon-green); margin-bottom: 15px; font-weight: 700; letter-spacing: 1px; }
+        #score { font-size: 64px; font-weight: 900; margin: 20px 0 5px 0; text-shadow: 0 0 30px rgba(0, 212, 255, 0.4); }
+        #pnl-display { font-size: 13px; color: var(--neon-green); margin-bottom: 10px; font-weight: 700; }
 
         /* MAIN AREA */
         .game-main { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; flex-grow: 1; }
         #tap-btn { 
-            width: 280px; height: 280px; 
+            width: 300px; height: 300px; 
             background: url('/images/main_logo.png') center/contain no-repeat; 
             border: none; cursor: pointer; z-index: 2; 
-            transition: transform 0.05s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            transition: transform 0.05s; 
             -webkit-tap-highlight-color: transparent; 
-            filter: drop-shadow(0 0 20px rgba(0, 212, 255, 0.3));
         }
-        #tap-btn:active { transform: scale(0.92); }
+        #tap-btn:active { transform: scale(0.95); }
 
         /* SIDE BUTTONS */
         .right-buttons { position: absolute; right: -5px; display: flex; flex-direction: column; gap: 10px; z-index: 3; }
-        .btn-side { width: 95px; height: 38px; background: var(--glass); border: 1px solid var(--neon-blue); border-radius: 12px; color: white; font-family: 'Orbitron'; font-size: 9px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        .btn-side { width: 100px; height: 42px; background: rgba(10, 25, 47, 0.8); border: 1px solid var(--neon-blue); border-radius: 14px; color: white; font-family: 'Orbitron'; font-size: 10px; font-weight: 700; cursor: pointer; backdrop-filter: blur(5px); }
         .btn-side.wallet { border-color: var(--neon-green); color: var(--neon-green); }
         .btn-side.bonus { border-color: #ff9600; color: #ff9600; }
 
         /* ENERGY */
         .energy-box { width: 100%; margin-bottom: 25px; }
-        .energy-bar-bg { width: 100%; height: 16px; background: rgba(255,255,255,0.05); border-radius: 20px; border: 1px solid rgba(0, 212, 255, 0.3); overflow: hidden; }
+        .energy-bar-bg { width: 100%; height: 16px; background: rgba(255,255,255,0.05); border-radius: 20px; border: 1px solid var(--neon-blue); overflow: hidden; }
         #energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--neon-blue), var(--neon-green)); transition: width 0.2s; }
 
         /* NAV */
         .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; padding-bottom: 25px; }
-        .nav-link { height: 55px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; color: white; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; cursor: pointer; transition: 0.3s; }
-        .nav-link:active { background: rgba(255,255,255,0.15); }
+        .nav-link { height: 55px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; color: white; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; cursor: pointer; }
 
         /* MODALS */
-        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 80%; background: var(--glass); border-top: 2px solid var(--neon-blue); border-radius: 35px 35px 0 0; z-index: 1000; transition: 0.4s; padding: 30px 25px; box-sizing: border-box; overflow-y: auto; backdrop-filter: blur(20px); }
+        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 80%; background: var(--glass); border-top: 3px solid var(--neon-blue); border-radius: 35px 35px 0 0; z-index: 1000; transition: 0.4s; padding: 30px 25px; box-sizing: border-box; overflow-y: auto; backdrop-filter: blur(20px); }
         .modal.active { bottom: 0; }
         .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; z-index: 999; }
         .overlay.active { display: block; }
         
-        .upgrade-card { background: rgba(255,255,255,0.04); padding: 18px; border-radius: 20px; border: 1px solid rgba(0, 212, 255, 0.15); margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
-        .buy-btn { padding: 12px 18px; background: var(--neon-blue); border: none; border-radius: 12px; color: #000; font-weight: 900; font-family: 'Orbitron'; cursor: pointer; font-size: 11px; }
+        .upgrade-card { background: rgba(255,255,255,0.03); padding: 18px; border-radius: 20px; border: 1px solid rgba(0, 212, 255, 0.2); margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .buy-btn { padding: 12px 18px; background: var(--neon-blue); border: none; border-radius: 12px; color: #000; font-weight: 900; font-family: 'Orbitron'; cursor: pointer; }
         
-        .floating-text { position: absolute; pointer-events: none; font-weight: 900; font-size: 32px; color: white; animation: floatUp 0.7s ease-out forwards; text-shadow: 0 0 15px var(--neon-blue); z-index: 10; }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-150px) scale(1.2); } }
+        .floating-text { position: absolute; pointer-events: none; font-weight: 900; font-size: 32px; color: white; animation: floatUp 0.8s forwards; text-shadow: 0 0 15px var(--neon-blue); z-index: 10; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-130px); } }
     </style>
 </head>
 <body>
@@ -74,12 +78,18 @@
         <div class="ai-icon-small"><img src="/images/ai_mini.png" alt="AI"></div>
         <div class="league-info">
             <div class="league-header">
-                <span id="league-name">LOADING...</span>
+                <span id="league-name">BRONZE LEAGUE</span>
                 <span id="league-pct">0%</span>
             </div>
             <div class="league-bar"><div id="league-fill"></div></div>
-            <div style="font-size: 9px; color: var(--neon-green); margin-top: 4px; font-weight: 700;">● SYSTEM ONLINE</div>
+            <div class="user-id-label" id="display-user-id">ID: 00000000</div>
+            <div style="font-size: 9px; color: var(--neon-green); margin-top: 4px;">● 1,240 ONLINE</div>
         </div>
+    </div>
+
+    <div class="jackpot-box">
+        <div class="jackpot-title">GLOBAL JACKPOT</div>
+        <div class="jackpot-value" id="jackpot-amount">500,052</div>
     </div>
 
     <div id="score">0</div>
@@ -88,64 +98,64 @@
     <div class="game-main">
         <button id="tap-btn"></button>
         <div class="right-buttons">
-            <button class="btn-side" onclick="tg.showAlert('Invite friends to get +50,000 NP!')">INVITE</button>
+            <button class="btn-side" onclick="tg.showAlert('Coming Soon: Referral System')">INVITE</button>
             <button class="btn-side" onclick="openModal('tasks')">TASKS</button>
-            <button class="btn-side wallet" onclick="tg.showAlert('TON Wallet integration coming soon!')">WALLET</button>
+            <button class="btn-side wallet" onclick="tg.showAlert('Wallet connection in next update!')">WALLET</button>
             <button class="btn-side bonus" onclick="claimDailyBonus()">BONUS</button>
         </div>
     </div>
 
     <div class="energy-box">
-        <div style="display:flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; font-weight: 700; color: var(--neon-blue);">
-            <span>⚡ POWER RESERVE</span>
+        <div style="display:flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px; color: var(--neon-blue); font-weight: 700;">
+            <span>⚡ ENERGY</span>
             <span id="energy-text">1000/1000</span>
         </div>
         <div class="energy-bar-bg"><div id="energy-fill"></div></div>
     </div>
 
     <div class="bottom-nav">
-        <div class="nav-link" onclick="openModal('boost')">🚀 UPGRADE</div>
-        <div class="nav-link" onclick="openModal('mine')">⛏️ NODES</div>
-        <div class="nav-link" onclick="openModal('stats')">📊 TOP</div>
+        <div class="nav-link" onclick="openModal('boost')">🚀 BOOST</div>
+        <div class="nav-link" onclick="openModal('mine')">⛏️ MINE</div>
+        <div class="nav-link" onclick="openModal('stats')">📊 STATS</div>
     </div>
 </div>
 
 <div class="overlay" id="overlay" onclick="closeModals()"></div>
 
 <div id="modal-boost" class="modal">
-    <h2 style="text-align:center; color: var(--neon-blue); margin-bottom: 25px;">CAPACITY UPGRADES</h2>
+    <h2 style="text-align:center; color: var(--neon-blue);">UPGRADES</h2>
     <div class="upgrade-card">
-        <div><b>Multi-Tap</b><br><small style="color: #aaa;">Level: <span id="tap-lvl">1</span></small></div>
+        <div><b>Multi-Tap</b><br><small>Level: <span id="tap-lvl">1</span></small></div>
         <button class="buy-btn" onclick="buyUpgrade('tap')"><span id="tap-cost">500</span> NP</button>
     </div>
     <div class="upgrade-card">
-        <div><b>Energy Core</b><br><small style="color: #aaa;">Level: <span id="energy-lvl">1</span></small></div>
+        <div><b>Energy Limit</b><br><small>Level: <span id="energy-lvl">1</span></small></div>
         <button class="buy-btn" onclick="buyUpgrade('energy')"><span id="energy-cost">1000</span> NP</button>
     </div>
 </div>
 
 <div id="modal-mine" class="modal">
-    <h2 style="text-align:center; color: var(--neon-green); margin-bottom: 25px;">NEURAL NODES</h2>
+    <h2 style="text-align:center; color: var(--neon-green);">MINING NODES</h2>
     <div class="upgrade-card">
-        <div><b>Data Node v1</b><br><small style="color: var(--neon-green);">Income: +100/hr</small></div>
+        <div><b>Neural Node v1</b><br><small>Income: +100/hr</small></div>
         <button class="buy-btn" onclick="buyMiner(1000, 100)">1,000 NP</button>
     </div>
     <div class="upgrade-card">
-        <div><b>Quantum Core</b><br><small style="color: var(--neon-green);">Income: +550/hr</small></div>
+        <div><b>Data Core</b><br><small>Income: +550/hr</small></div>
         <button class="buy-btn" onclick="buyMiner(5000, 550)">5,000 NP</button>
     </div>
 </div>
 
 <div id="modal-stats" class="modal">
-    <h2 style="text-align:center; margin-bottom: 25px;">GLOBAL LEADERBOARD</h2>
+    <h2 style="text-align:center;">LEADERBOARD</h2>
     <div id="leaderboard-list"></div>
 </div>
 
 <div id="modal-tasks" class="modal">
-    <h2 style="text-align:center; margin-bottom: 25px;">NETWORK TASKS</h2>
+    <h2 style="text-align:center;">TASKS</h2>
     <div class="upgrade-card">
-        <div><b>Join Community</b><br><small>+50,000 NP</small></div>
-        <button class="buy-btn" onclick="tg.openTelegramLink('https://t.me/neural_pulse')">JOIN</button>
+        <div><b>Join Channel</b><br><small>+50,000 NP</small></div>
+        <button class="buy-btn" onclick="tg.openTelegramLink('https://t.me/your_channel')">GO</button>
     </div>
 </div>
 
@@ -155,6 +165,7 @@
 
     let state = {
         score: 0, energy: 1000, max_energy: 1000, tap_power: 1, pnl: 0, energy_lvl: 1,
+        jackpot: 500052,
         user_id: String(tg.initDataUnsafe?.user?.id || '476014374')
     };
 
@@ -162,11 +173,11 @@
         { name: "IRON", min: 0, max: 10000 },
         { name: "BRONZE", min: 10000, max: 100000 },
         { name: "SILVER", min: 100000, max: 1000000 },
-        { name: "GOLD", min: 1000000, max: 10000000 },
-        { name: "DIAMOND", min: 10000000, max: Infinity }
+        { name: "GOLD", min: 1000000, max: 10000000 }
     ];
 
     async function init() {
+        document.getElementById('display-user-id').innerText = `ID: ${state.user_id}`;
         try {
             const r = await fetch(`/api/balance/${state.user_id}`);
             const res = await r.json();
@@ -179,11 +190,12 @@
                 state.energy_lvl = Math.max(1, Math.floor((state.max_energy - 1000) / 500) + 1);
                 render();
             }
-        } catch(e) { console.error("Init Error", e); }
+        } catch(e) { console.error("Load error"); }
     }
 
     function render() {
         document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
+        document.getElementById('jackpot-amount').innerText = Math.floor(state.jackpot).toLocaleString();
         document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
         document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
@@ -193,9 +205,8 @@
         document.getElementById('energy-lvl').innerText = state.energy_lvl;
         document.getElementById('energy-cost').innerText = (state.energy_lvl * 1000).toLocaleString();
 
-        // League Logic
         let league = LEAGUES.find(l => state.score >= l.min && state.score < l.max) || LEAGUES[LEAGUES.length-1];
-        document.getElementById('league-name').innerText = league.name + " NODE";
+        document.getElementById('league-name').innerText = league.name + " LEAGUE";
         let prog = league.max === Infinity ? 100 : ((state.score - league.min) / (league.max - league.min)) * 100;
         document.getElementById('league-fill').style.width = Math.min(100, prog) + '%';
         document.getElementById('league-pct').innerText = Math.floor(prog) + '%';
@@ -204,13 +215,11 @@
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
         if(state.energy < state.tap_power) return;
-        
         state.score += state.tap_power;
         state.energy -= state.tap_power;
-        
+        state.jackpot += 0.01; // Небольшой прирост джекпота от тапов
         const touch = e.touches[0];
         createFlyText(touch.clientX, touch.clientY, `+${state.tap_power}`);
-        
         if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
         render();
     });
@@ -220,7 +229,7 @@
         el.className = 'floating-text'; el.innerText = txt;
         el.style.left = (x - 20) + 'px'; el.style.top = (y - 40) + 'px';
         document.body.appendChild(el);
-        setTimeout(() => el.remove(), 700);
+        setTimeout(() => el.remove(), 800);
     }
 
     async function buyUpgrade(type) {
@@ -230,14 +239,14 @@
             if(type === 'tap') state.tap_power++;
             else { state.energy_lvl++; state.max_energy += 500; state.energy = state.max_energy; }
             render(); await saveData();
-        } else { tg.showAlert("Not enough NP tokens!"); }
+        } else { tg.showAlert("Not enough NP!"); }
     }
 
     async function buyMiner(cost, addPnl) {
         if(state.score >= cost) {
             state.score -= cost; state.pnl += addPnl;
             render(); await saveData();
-        } else { tg.showAlert("Insufficient balance for Node!"); }
+        } else { tg.showAlert("Not enough NP!"); }
     }
 
     async function claimDailyBonus() {
@@ -250,8 +259,8 @@
             if(res.status === 'ok') {
                 state.score += res.bonus_amount; render(); tg.showAlert(res.message);
                 await saveData();
-            }
-        } catch(e) { console.error(e); }
+            } else { tg.showAlert(res.message); }
+        } catch(e) { tg.showAlert("Bonus Error"); }
     }
 
     function openModal(id) {
@@ -267,17 +276,17 @@
 
     async function loadLeaderboard() {
         const list = document.getElementById('leaderboard-list');
-        list.innerHTML = "<p style='text-align:center;'>Accessing database...</p>";
+        list.innerHTML = "Loading...";
         try {
             const r = await fetch('/api/leaderboard');
             const res = await r.json();
             list.innerHTML = res.data.map((u, i) => `
-                <div style="display:flex; justify-content:space-between; padding:15px; border-bottom:1px solid rgba(255,255,255,0.05); font-size: 13px;">
-                    <span><b style="color:var(--neon-blue)">#${i+1}</b> ID:${u.id.slice(0,8)}</span>
-                    <span style="color:var(--neon-green)">${Math.floor(u.balance).toLocaleString()} NP</span>
+                <div style="display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <span>#${i+1} ID: ${u.id.slice(0,8)}...</span>
+                    <span style="color:var(--neon-blue)">${Math.floor(u.balance).toLocaleString()}</span>
                 </div>
             `).join('');
-        } catch(e) { list.innerHTML = "Network Error"; }
+        } catch(e) { list.innerHTML = "Error loading TOP"; }
     }
 
     async function saveData() {
@@ -291,10 +300,10 @@
         });
     }
 
-    // GAME LOOP
     setInterval(() => {
-        if(state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.5);
+        if(state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.2);
         if(state.pnl > 0) state.score += (state.pnl / 3600);
+        state.jackpot += 0.005; // Постепенный рост джекпота
         render();
     }, 1000);
 
