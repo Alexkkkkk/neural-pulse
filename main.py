@@ -19,21 +19,19 @@ TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU"
 MY_DOMAIN = "np.bothost.ru"
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
-STATIC_DIR = BASE_DIR / "static"
-
-STATIC_DIR.mkdir(exist_ok=True)
-(STATIC_DIR / "images").mkdir(exist_ok=True)
+# Ставим статику в корень, если папки static нет
+STATIC_DIR = BASE_DIR / "static" if (BASE_DIR / "static").exists() else BASE_DIR
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-# --- СХЕМЫ ДАННЫХ (ИСПРАВЛЕНО) ---
+# --- СХЕМЫ ДАННЫХ ---
 class SaveData(BaseModel):
     user_id: str
-    score: float   # Было int, стало float (решает ошибку 422)
+    score: float   
     click_lvl: int
-    energy: float  # Было int, стало float (решает ошибку 422)
+    energy: float  
     pnl: int = 0
 
 class UpgradeData(BaseModel):
@@ -49,8 +47,8 @@ class WalletData(BaseModel):
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute('''CREATE TABLE IF NOT EXISTS users 
-            (id TEXT PRIMARY KEY, balance INTEGER DEFAULT 1000, 
-             click_lvl INTEGER DEFAULT 1, energy INTEGER DEFAULT 1000,
+            (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, 
+             click_lvl INTEGER DEFAULT 1, energy REAL DEFAULT 1000,
              pnl INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0,
              wallet TEXT, referrer_id TEXT, referrals_count INTEGER DEFAULT 0)''')
         await db.commit()
@@ -66,7 +64,12 @@ async def lifespan(app: FastAPI):
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware, 
+    allow_origins=["*"], 
+    allow_methods=["*"], 
+    allow_headers=["*"]
+)
 
 # --- API ENDPOINTS ---
 
@@ -79,19 +82,21 @@ async def get_balance(user_id: str):
         
         now = int(time.time())
         if not user:
-            await db.execute("INSERT INTO users (id, balance, last_active) VALUES (?, ?, ?)", (user_id, 1000, now))
+            await db.execute("INSERT INTO users (id, balance, last_active, energy) VALUES (?, ?, ?, ?)", 
+                             (user_id, 1000.0, now, 1000.0))
             await db.commit()
             return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "energy": 1000, "pnl": 0}}
 
         u = dict(user)
-        # Пассивный доход
+        # Расчет пассивного дохода при входе
         if u['pnl'] > 0 and u['last_active'] > 0:
             diff = now - u['last_active']
-            # Лимит 8 часов
-            earned = int((min(diff, 28800) / 3600) * u['pnl']) 
+            # Лимит накопления - 8 часов (28800 сек)
+            earned = (min(diff, 28800) / 3600) * u['pnl']
             if earned > 0:
                 u['balance'] += earned
-                await db.execute("UPDATE users SET balance=?, last_active=? WHERE id=?", (u['balance'], now, user_id))
+                await db.execute("UPDATE users SET balance=?, last_active=? WHERE id=?", 
+                                 (u['balance'], now, user_id))
                 await db.commit()
         
         return {"status": "ok", "data": u}
@@ -99,23 +104,29 @@ async def get_balance(user_id: str):
 @app.post("/api/save")
 async def save_game(data: SaveData):
     async with aiosqlite.connect(DB_PATH) as db:
-        # Приводим к int перед сохранением в INTEGER колонки
+        # Используем REAL (float) в БД для точности дробного PNL
         await db.execute("UPDATE users SET balance=?, click_lvl=?, energy=?, pnl=?, last_active=? WHERE id=?", 
-                         (int(data.score), data.click_lvl, int(data.energy), data.pnl, int(time.time()), data.user_id))
+                         (data.score, data.click_lvl, data.energy, data.pnl, int(time.time()), data.user_id))
         await db.commit()
     return {"status": "ok"}
 
 @app.post("/api/upgrade")
 async def upgrade_tap(data: UpgradeData):
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "UPDATE users SET balance = balance - ?, click_lvl = ? WHERE id = ? AND balance >= ?",
-            (data.cost, data.new_lvl, data.user_id, data.cost)
-        )
-        await db.commit()
         async with db.execute("SELECT balance FROM users WHERE id = ?", (data.user_id,)) as cursor:
             row = await cursor.fetchone()
-            return {"status": "ok", "new_balance": row[0] if row else 0}
+            if not row or row[0] < data.cost:
+                return {"status": "error", "message": "Low balance"}
+
+        await db.execute(
+            "UPDATE users SET balance = balance - ?, click_lvl = ? WHERE id = ?",
+            (data.cost, data.new_lvl, data.user_id)
+        )
+        await db.commit()
+        
+        async with db.execute("SELECT balance FROM users WHERE id = ?", (data.user_id,)) as cursor:
+            new_row = await cursor.fetchone()
+            return {"status": "ok", "new_balance": new_row[0]}
 
 @app.get("/api/leaderboard")
 async def get_leaderboard():
@@ -145,8 +156,8 @@ async def cmd_start(m: types.Message, command: CommandObject):
         
         if not exists:
             ref_id = args if args and args != user_id else None
-            await db.execute("INSERT INTO users (id, balance, referrer_id, last_active) VALUES (?, ?, ?, ?)", 
-                             (user_id, 1000, ref_id, int(time.time())))
+            await db.execute("INSERT INTO users (id, balance, referrer_id, last_active, energy) VALUES (?, ?, ?, ?, ?)", 
+                             (user_id, 1000.0, ref_id, int(time.time()), 1000.0))
             
             if ref_id:
                 await db.execute("UPDATE users SET balance = balance + 50000, referrals_count = referrals_count + 1 WHERE id = ?", (ref_id,))
@@ -157,9 +168,9 @@ async def cmd_start(m: types.Message, command: CommandObject):
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))],
-        [InlineKeyboardButton(text="🔗 ПРИГЛАСИТЬ ДРУГА", switch_inline_query=f"Играй со мной! Ссылка: https://t.me/neural_pulse_bot?start={user_id}")]
+        [InlineKeyboardButton(text="🔗 ПРИГЛАСИТЬ ДРУГА", switch_inline_query=f"https://t.me/neural_pulse_bot?start={user_id}")]
     ])
-    await m.answer(f"<b>Система Neural Pulse активна.</b>\nВаш ID: <code>{user_id}</code>\nПриглашайте друзей!", reply_markup=kb)
+    await m.answer(f"<b>Система Neural Pulse активна.</b>\nВаш ID: <code>{user_id}</code>\nПриглашайте друзей и зарабатывайте!", reply_markup=kb)
 
 # --- WEBHOOK & STATIC ---
 
@@ -172,13 +183,16 @@ async def bot_webhook(request: Request):
 
 @app.get("/")
 async def index():
-    index_file = STATIC_DIR / "index.html"
-    if index_file.exists():
-        return FileResponse(index_file)
-    return JSONResponse({"error": "index.html not found in /static"}, status_code=404)
+    # Проверяем файл в корне или в static
+    paths = [BASE_DIR / "index.html", BASE_DIR / "static" / "index.html"]
+    for p in paths:
+        if p.exists():
+            return FileResponse(p)
+    return JSONResponse({"error": "index.html not found"}, status_code=404)
 
-app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images")
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+# Монтируем статику только если папки существуют
+if (BASE_DIR / "static").exists():
+    app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
