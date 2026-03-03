@@ -37,17 +37,27 @@ class SaveData(BaseModel):
     score: Optional[float] = 0.0
     click_lvl: Optional[float] = 1.0
     energy: Optional[float] = 1000.0
+    max_energy: Optional[int] = 1000  # ИСПРАВЛЕНИЕ: Поле для приема лимита энергии (убирает 422)
     pnl: Optional[float] = 0.0
 
 # --- DATABASE ---
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("PRAGMA journal_mode=WAL")
+        # ИСПРАВЛЕНИЕ: Добавлена колонка max_energy в создание таблицы
         await db.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, 
              click_lvl INTEGER DEFAULT 1, energy REAL DEFAULT 1000,
+             max_energy INTEGER DEFAULT 1000,
              pnl REAL DEFAULT 0, last_active INTEGER DEFAULT 0,
              wallet TEXT, referrer_id TEXT, referrals_count INTEGER DEFAULT 0)''')
+        
+        # Миграция: если база уже создана без max_energy, добавляем колонку
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN max_energy INTEGER DEFAULT 1000")
+        except:
+            pass
+            
         await db.commit()
     logger.info("Database initialized with WAL mode.")
 
@@ -78,10 +88,10 @@ async def get_balance(user_id: str):
         
         now = int(time.time())
         if not user:
-            await db.execute("INSERT INTO users (id, balance, last_active, energy) VALUES (?, 1000.0, ?, 1000.0)", 
+            await db.execute("INSERT INTO users (id, balance, last_active, energy, max_energy) VALUES (?, 1000.0, ?, 1000.0, 1000)", 
                              (str(user_id), now))
             await db.commit()
-            return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "energy": 1000, "pnl": 0}}
+            return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "energy": 1000, "max_energy": 1000, "pnl": 0}}
 
         u = dict(user)
         if u['pnl'] > 0 and u['last_active'] > 0:
@@ -98,10 +108,11 @@ async def get_balance(user_id: str):
 async def save_game(data: SaveData):
     try:
         async with aiosqlite.connect(DB_PATH) as db:
+            # ИСПРАВЛЕНИЕ: Теперь сохраняем и max_energy
             await db.execute(
-                "UPDATE users SET balance=?, click_lvl=?, energy=?, pnl=?, last_active=? WHERE id=?", 
+                "UPDATE users SET balance=?, click_lvl=?, energy=?, max_energy=?, pnl=?, last_active=? WHERE id=?", 
                 (float(data.score or 0), int(data.click_lvl or 1), float(data.energy or 0), 
-                 float(data.pnl or 0), int(time.time()), str(data.user_id))
+                 int(data.max_energy or 1000), float(data.pnl or 0), int(time.time()), str(data.user_id))
             )
             await db.commit()
         return {"status": "ok"}
@@ -117,20 +128,15 @@ async def get_leaderboard():
             rows = await cursor.fetchall()
             return {"status": "ok", "data": [dict(r) for r in rows]}
 
-# --- НОВЫЕ ИСПРАВЛЕНИЯ (405 и 404) ---
-
 @app.post("/")
 async def post_root():
-    """Исправляет '405 Method Not Allowed' при POST запросах на главную"""
     return {"status": "ok"}
 
 @app.post("/api/daily-bonus")
 async def daily_bonus(request: Request):
-    """Исправляет '404 Not Found' для ежедневного бонуса"""
     try:
         data = await request.json()
         user_id = data.get("user_id")
-        # Для начала просто выдаем бонус 5000 без сложной проверки времени
         return {
             "status": "ok", 
             "message": "Бонус 5000 NP получен!", 
@@ -153,7 +159,7 @@ async def cmd_start(m: types.Message, command: CommandObject):
         if not exists:
             ref_id = str(args) if args and str(args) != user_id else None
             await db.execute(
-                "INSERT INTO users (id, balance, referrer_id, last_active, energy) VALUES (?, 1000.0, ?, ?, 1000.0)", 
+                "INSERT INTO users (id, balance, referrer_id, last_active, energy, max_energy) VALUES (?, 1000.0, ?, ?, 1000.0, 1000)", 
                 (user_id, ref_id, int(time.time()))
             )
             if ref_id:
