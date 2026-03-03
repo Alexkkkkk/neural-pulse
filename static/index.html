@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>AI Neural Network</title>
+    <title>Neural Pulse Online</title>
     <script src="https://telegram.org/js/telegram-web-app.js?5"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
@@ -14,68 +14,72 @@
 
         /* HEADER */
         .header-top { width: 100%; display: flex; align-items: center; gap: 12px; margin-top: 5px; }
-        .ai-icon-small { width: 48px; height: 48px; background: rgba(176, 38, 255, 0.1); border: 2px solid var(--neon-purp); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px rgba(176, 38, 255, 0.4); }
+        .ai-icon-small { width: 48px; height: 48px; background: rgba(176, 38, 255, 0.1); border: 2px solid var(--neon-purp); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px rgba(176, 38, 255, 0.4); overflow: hidden; }
+        .ai-icon-small img { width: 100%; height: 100%; object-fit: cover; }
+        
         .league-info { flex-grow: 1; }
-        .league-header { display: flex; justify-content: space-between; font-size: 10px; font-weight: 900; margin-bottom: 4px; }
-        .league-bar { width: 100%; height: 5px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; }
-        #league-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ff9600, #ff5e00); transition: width 0.5s; }
+        .league-header { display: flex; justify-content: space-between; font-size: 10px; font-weight: 900; margin-bottom: 4px; letter-spacing: 1px; }
+        .league-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; box-shadow: inset 0 0 5px rgba(0,0,0,0.5); }
+        #league-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--neon-purp), var(--neon-blue)); transition: width 0.5s; box-shadow: 0 0 10px var(--neon-blue); }
 
-        /* JACKPOT & SCORE */
-        .jackpot-container { width: 100%; background: rgba(176, 38, 255, 0.05); border: 1px solid rgba(176, 38, 255, 0.2); border-radius: 18px; padding: 10px; text-align: center; margin-top: 15px; }
-        #score { font-size: 64px; font-weight: 900; margin: 20px 0; text-shadow: 0 0 20px rgba(0, 212, 255, 0.3); }
-        #pnl-display { font-size: 12px; color: var(--neon-green); margin-top: -15px; margin-bottom: 15px; }
+        /* SCORE */
+        #score { font-size: 58px; font-weight: 900; margin: 15px 0 5px 0; text-shadow: 0 0 25px rgba(0, 212, 255, 0.5); transition: transform 0.1s; }
+        #pnl-display { font-size: 13px; color: var(--neon-green); margin-bottom: 15px; font-weight: 700; letter-spacing: 1px; }
 
         /* MAIN AREA */
         .game-main { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; flex-grow: 1; }
-        #tap-btn { width: 300px; height: 300px; background: url('/images/main_logo.png') center/contain no-repeat; border: none; cursor: pointer; z-index: 2; transition: transform 0.05s; -webkit-tap-highlight-color: transparent; }
-        #tap-btn:active { transform: scale(0.95); }
+        #tap-btn { 
+            width: 280px; height: 280px; 
+            background: url('/images/main_logo.png') center/contain no-repeat; 
+            border: none; cursor: pointer; z-index: 2; 
+            transition: transform 0.05s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            -webkit-tap-highlight-color: transparent; 
+            filter: drop-shadow(0 0 20px rgba(0, 212, 255, 0.3));
+        }
+        #tap-btn:active { transform: scale(0.92); }
 
         /* SIDE BUTTONS */
-        .right-buttons { position: absolute; right: -5px; display: flex; flex-direction: column; gap: 8px; z-index: 3; }
-        .btn-side { width: 90px; height: 36px; background: rgba(10, 25, 47, 0.85); border: 1px solid var(--neon-blue); border-radius: 12px; color: white; font-family: 'Orbitron'; font-size: 9px; font-weight: 700; cursor: pointer; }
+        .right-buttons { position: absolute; right: -5px; display: flex; flex-direction: column; gap: 10px; z-index: 3; }
+        .btn-side { width: 95px; height: 38px; background: var(--glass); border: 1px solid var(--neon-blue); border-radius: 12px; color: white; font-family: 'Orbitron'; font-size: 9px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
         .btn-side.wallet { border-color: var(--neon-green); color: var(--neon-green); }
         .btn-side.bonus { border-color: #ff9600; color: #ff9600; }
 
         /* ENERGY */
-        .energy-box { width: 100%; margin-bottom: 20px; }
-        .energy-bar-bg { width: 100%; height: 14px; background: rgba(255,255,255,0.05); border-radius: 20px; border: 1px solid var(--neon-blue); overflow: hidden; }
-        #energy-fill { height: 100%; width: 100%; background: var(--neon-green); transition: width 0.2s; }
+        .energy-box { width: 100%; margin-bottom: 25px; }
+        .energy-bar-bg { width: 100%; height: 16px; background: rgba(255,255,255,0.05); border-radius: 20px; border: 1px solid rgba(0, 212, 255, 0.3); overflow: hidden; }
+        #energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--neon-blue), var(--neon-green)); transition: width 0.2s; }
 
         /* NAV */
-        .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; padding-bottom: 20px; }
-        .nav-link { height: 50px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 15px; color: white; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; cursor: pointer; }
+        .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; padding-bottom: 25px; }
+        .nav-link { height: 55px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; color: white; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; cursor: pointer; transition: 0.3s; }
+        .nav-link:active { background: rgba(255,255,255,0.15); }
 
         /* MODALS */
-        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 80%; background: var(--glass); border-top: 3px solid var(--neon-blue); border-radius: 30px 30px 0 0; z-index: 1000; transition: 0.4s; padding: 25px; box-sizing: border-box; overflow-y: auto; backdrop-filter: blur(15px); }
+        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 80%; background: var(--glass); border-top: 2px solid var(--neon-blue); border-radius: 35px 35px 0 0; z-index: 1000; transition: 0.4s; padding: 30px 25px; box-sizing: border-box; overflow-y: auto; backdrop-filter: blur(20px); }
         .modal.active { bottom: 0; }
-        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; z-index: 999; }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; z-index: 999; }
         .overlay.active { display: block; }
         
-        .upgrade-card { background: rgba(255,255,255,0.03); padding: 15px; border-radius: 15px; border: 1px solid rgba(0, 212, 255, 0.2); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
-        .buy-btn { padding: 10px 15px; background: var(--neon-blue); border: none; border-radius: 10px; color: black; font-weight: bold; font-family: 'Orbitron'; cursor: pointer; }
+        .upgrade-card { background: rgba(255,255,255,0.04); padding: 18px; border-radius: 20px; border: 1px solid rgba(0, 212, 255, 0.15); margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .buy-btn { padding: 12px 18px; background: var(--neon-blue); border: none; border-radius: 12px; color: #000; font-weight: 900; font-family: 'Orbitron'; cursor: pointer; font-size: 11px; }
         
-        .floating-text { position: absolute; pointer-events: none; font-weight: 900; font-size: 28px; color: white; animation: floatUp 0.8s forwards; text-shadow: 0 0 10px var(--neon-blue); }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-130px); } }
+        .floating-text { position: absolute; pointer-events: none; font-weight: 900; font-size: 32px; color: white; animation: floatUp 0.7s ease-out forwards; text-shadow: 0 0 15px var(--neon-blue); z-index: 10; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-150px) scale(1.2); } }
     </style>
 </head>
 <body>
 
 <div class="game-container">
     <div class="header-top">
-        <div class="ai-icon-small"><img src="/images/ai_mini.png" width="30"></div>
+        <div class="ai-icon-small"><img src="/images/ai_mini.png" alt="AI"></div>
         <div class="league-info">
             <div class="league-header">
-                <span id="league-name">BRONZE</span>
+                <span id="league-name">LOADING...</span>
                 <span id="league-pct">0%</span>
             </div>
             <div class="league-bar"><div id="league-fill"></div></div>
-            <div style="font-size: 9px; color: #00ff96; margin-top: 4px;">● 1,240 ONLINE</div>
+            <div style="font-size: 9px; color: var(--neon-green); margin-top: 4px; font-weight: 700;">● SYSTEM ONLINE</div>
         </div>
-    </div>
-
-    <div class="jackpot-container">
-        <div style="font-size: 9px; color: var(--neon-blue);">GLOBAL JACKPOT</div>
-        <div style="font-size: 28px; font-weight: 900;">500,000</div>
     </div>
 
     <div id="score">0</div>
@@ -84,72 +88,64 @@
     <div class="game-main">
         <button id="tap-btn"></button>
         <div class="right-buttons">
-            <button class="btn-side" onclick="tg.showAlert('Coming Soon: Referral System')">INVITE</button>
+            <button class="btn-side" onclick="tg.showAlert('Invite friends to get +50,000 NP!')">INVITE</button>
             <button class="btn-side" onclick="openModal('tasks')">TASKS</button>
-            <button class="btn-side wallet" onclick="tg.showAlert('Wallet connection in next update!')">WALLET</button>
+            <button class="btn-side wallet" onclick="tg.showAlert('TON Wallet integration coming soon!')">WALLET</button>
             <button class="btn-side bonus" onclick="claimDailyBonus()">BONUS</button>
         </div>
     </div>
 
     <div class="energy-box">
-        <div style="display:flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px; color: var(--neon-blue);">
-            <span>⚡ ENERGY</span>
+        <div style="display:flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; font-weight: 700; color: var(--neon-blue);">
+            <span>⚡ POWER RESERVE</span>
             <span id="energy-text">1000/1000</span>
         </div>
         <div class="energy-bar-bg"><div id="energy-fill"></div></div>
     </div>
 
     <div class="bottom-nav">
-        <div class="nav-link" onclick="openModal('boost')">🚀 BOOST</div>
-        <div class="nav-link" onclick="openModal('mine')">⛏️ MINE</div>
-        <div class="nav-link" onclick="openModal('stats')">📊 STATS</div>
+        <div class="nav-link" onclick="openModal('boost')">🚀 UPGRADE</div>
+        <div class="nav-link" onclick="openModal('mine')">⛏️ NODES</div>
+        <div class="nav-link" onclick="openModal('stats')">📊 TOP</div>
     </div>
 </div>
 
 <div class="overlay" id="overlay" onclick="closeModals()"></div>
 
 <div id="modal-boost" class="modal">
-    <h2 style="text-align:center; color: var(--neon-blue);">UPGRADES</h2>
+    <h2 style="text-align:center; color: var(--neon-blue); margin-bottom: 25px;">CAPACITY UPGRADES</h2>
     <div class="upgrade-card">
-        <div>
-            <b>Multi-Tap</b><br><small>Level: <span id="tap-lvl">1</span></small>
-        </div>
+        <div><b>Multi-Tap</b><br><small style="color: #aaa;">Level: <span id="tap-lvl">1</span></small></div>
         <button class="buy-btn" onclick="buyUpgrade('tap')"><span id="tap-cost">500</span> NP</button>
     </div>
     <div class="upgrade-card">
-        <div>
-            <b>Energy Limit</b><br><small>Level: <span id="energy-lvl">1</span></small>
-        </div>
+        <div><b>Energy Core</b><br><small style="color: #aaa;">Level: <span id="energy-lvl">1</span></small></div>
         <button class="buy-btn" onclick="buyUpgrade('energy')"><span id="energy-cost">1000</span> NP</button>
     </div>
 </div>
 
 <div id="modal-mine" class="modal">
-    <h2 style="text-align:center; color: var(--neon-green);">MINING NODES</h2>
+    <h2 style="text-align:center; color: var(--neon-green); margin-bottom: 25px;">NEURAL NODES</h2>
     <div class="upgrade-card">
-        <div>
-            <b>Neural Node v1</b><br><small>Income: +100/hr</small>
-        </div>
+        <div><b>Data Node v1</b><br><small style="color: var(--neon-green);">Income: +100/hr</small></div>
         <button class="buy-btn" onclick="buyMiner(1000, 100)">1,000 NP</button>
     </div>
     <div class="upgrade-card">
-        <div>
-            <b>Data Core</b><br><small>Income: +550/hr</small>
-        </div>
+        <div><b>Quantum Core</b><br><small style="color: var(--neon-green);">Income: +550/hr</small></div>
         <button class="buy-btn" onclick="buyMiner(5000, 550)">5,000 NP</button>
     </div>
 </div>
 
 <div id="modal-stats" class="modal">
-    <h2 style="text-align:center;">LEADERBOARD</h2>
+    <h2 style="text-align:center; margin-bottom: 25px;">GLOBAL LEADERBOARD</h2>
     <div id="leaderboard-list"></div>
 </div>
 
 <div id="modal-tasks" class="modal">
-    <h2 style="text-align:center;">TASKS</h2>
+    <h2 style="text-align:center; margin-bottom: 25px;">NETWORK TASKS</h2>
     <div class="upgrade-card">
-        <div><b>Join Channel</b><br><small>+50,000 NP</small></div>
-        <button class="buy-btn" onclick="tg.openTelegramLink('https://t.me/your_channel')">GO</button>
+        <div><b>Join Community</b><br><small>+50,000 NP</small></div>
+        <button class="buy-btn" onclick="tg.openTelegramLink('https://t.me/neural_pulse')">JOIN</button>
     </div>
 </div>
 
@@ -162,6 +158,14 @@
         user_id: String(tg.initDataUnsafe?.user?.id || '476014374')
     };
 
+    const LEAGUES = [
+        { name: "IRON", min: 0, max: 10000 },
+        { name: "BRONZE", min: 10000, max: 100000 },
+        { name: "SILVER", min: 100000, max: 1000000 },
+        { name: "GOLD", min: 1000000, max: 10000000 },
+        { name: "DIAMOND", min: 10000000, max: Infinity }
+    ];
+
     async function init() {
         try {
             const r = await fetch(`/api/balance/${state.user_id}`);
@@ -172,35 +176,41 @@
                 state.max_energy = res.data.max_energy || 1000;
                 state.tap_power = res.data.click_lvl || 1;
                 state.pnl = res.data.pnl || 0;
-                state.energy_lvl = Math.max(1, ((state.max_energy - 1000) / 500) + 1);
+                state.energy_lvl = Math.max(1, Math.floor((state.max_energy - 1000) / 500) + 1);
                 render();
             }
-        } catch(e) { console.error("Load error"); }
+        } catch(e) { console.error("Init Error", e); }
     }
 
     function render() {
         document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
         document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
-        document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl)}/hr`;
+        document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
         
         document.getElementById('tap-lvl').innerText = state.tap_power;
         document.getElementById('tap-cost').innerText = (state.tap_power * 500).toLocaleString();
-        document.getElementById('energy-lvl').innerText = Math.floor(state.energy_lvl);
-        document.getElementById('energy-cost').innerText = (Math.floor(state.energy_lvl) * 1000).toLocaleString();
+        document.getElementById('energy-lvl').innerText = state.energy_lvl;
+        document.getElementById('energy-cost').innerText = (state.energy_lvl * 1000).toLocaleString();
 
-        let prog = Math.min(100, (state.score / 100000) * 100);
-        document.getElementById('league-fill').style.width = prog + '%';
+        // League Logic
+        let league = LEAGUES.find(l => state.score >= l.min && state.score < l.max) || LEAGUES[LEAGUES.length-1];
+        document.getElementById('league-name').innerText = league.name + " NODE";
+        let prog = league.max === Infinity ? 100 : ((state.score - league.min) / (league.max - league.min)) * 100;
+        document.getElementById('league-fill').style.width = Math.min(100, prog) + '%';
         document.getElementById('league-pct').innerText = Math.floor(prog) + '%';
     }
 
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
         if(state.energy < state.tap_power) return;
+        
         state.score += state.tap_power;
         state.energy -= state.tap_power;
+        
         const touch = e.touches[0];
         createFlyText(touch.clientX, touch.clientY, `+${state.tap_power}`);
+        
         if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
         render();
     });
@@ -208,32 +218,26 @@
     function createFlyText(x, y, txt) {
         const el = document.createElement('div');
         el.className = 'floating-text'; el.innerText = txt;
-        el.style.left = x + 'px'; el.style.top = y + 'px';
+        el.style.left = (x - 20) + 'px'; el.style.top = (y - 40) + 'px';
         document.body.appendChild(el);
-        setTimeout(() => el.remove(), 800);
+        setTimeout(() => el.remove(), 700);
     }
 
     async function buyUpgrade(type) {
-        if(type === 'tap') {
-            const cost = state.tap_power * 500;
-            if(state.score >= cost) {
-                state.score -= cost; state.tap_power++;
-            } else { tg.showAlert("Not enough NP!"); }
-        } else {
-            const cost = Math.floor(state.energy_lvl) * 1000;
-            if(state.score >= cost) {
-                state.score -= cost; state.energy_lvl++; state.max_energy += 500; state.energy = state.max_energy;
-            } else { tg.showAlert("Not enough NP!"); }
-        }
-        render();
-        await saveData();
+        let cost = type === 'tap' ? state.tap_power * 500 : state.energy_lvl * 1000;
+        if(state.score >= cost) {
+            state.score -= cost;
+            if(type === 'tap') state.tap_power++;
+            else { state.energy_lvl++; state.max_energy += 500; state.energy = state.max_energy; }
+            render(); await saveData();
+        } else { tg.showAlert("Not enough NP tokens!"); }
     }
 
     async function buyMiner(cost, addPnl) {
         if(state.score >= cost) {
             state.score -= cost; state.pnl += addPnl;
             render(); await saveData();
-        } else { tg.showAlert("Not enough NP!"); }
+        } else { tg.showAlert("Insufficient balance for Node!"); }
     }
 
     async function claimDailyBonus() {
@@ -245,8 +249,9 @@
             const res = await r.json();
             if(res.status === 'ok') {
                 state.score += res.bonus_amount; render(); tg.showAlert(res.message);
-            } else { tg.showAlert(res.message); }
-        } catch(e) { tg.showAlert("Bonus Error"); }
+                await saveData();
+            }
+        } catch(e) { console.error(e); }
     }
 
     function openModal(id) {
@@ -262,17 +267,17 @@
 
     async function loadLeaderboard() {
         const list = document.getElementById('leaderboard-list');
-        list.innerHTML = "Loading...";
+        list.innerHTML = "<p style='text-align:center;'>Accessing database...</p>";
         try {
             const r = await fetch('/api/leaderboard');
             const res = await r.json();
             list.innerHTML = res.data.map((u, i) => `
-                <div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #112233;">
-                    <span>${i+1}. ID: ${u.id.slice(0,6)}...</span>
-                    <span style="color:var(--neon-blue)">${Math.floor(u.balance).toLocaleString()}</span>
+                <div style="display:flex; justify-content:space-between; padding:15px; border-bottom:1px solid rgba(255,255,255,0.05); font-size: 13px;">
+                    <span><b style="color:var(--neon-blue)">#${i+1}</b> ID:${u.id.slice(0,8)}</span>
+                    <span style="color:var(--neon-green)">${Math.floor(u.balance).toLocaleString()} NP</span>
                 </div>
             `).join('');
-        } catch(e) { list.innerHTML = "Error loading TOP"; }
+        } catch(e) { list.innerHTML = "Network Error"; }
     }
 
     async function saveData() {
@@ -286,8 +291,9 @@
         });
     }
 
+    // GAME LOOP
     setInterval(() => {
-        if(state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.2);
+        if(state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.5);
         if(state.pnl > 0) state.score += (state.pnl / 3600);
         render();
     }, 1000);
