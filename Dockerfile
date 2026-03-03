@@ -1,24 +1,35 @@
-# Используем образ Python
-FROM python:3.10-slim
+# Используем более свежий и быстрый образ
+FROM python:3.11-slim
 
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Устанавливаем системные зависимости для SQLite
-RUN apt-get update && apt-get install -y gcc python3-dev && rm -rf /var/lib/apt/lists/*
+# Настройки Python для Docker (отключаем буферизацию логов и создание .pyc)
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-# Сначала копируем зависимости и устанавливаем их
+# Устанавливаем минимальные системные зависимости
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Копируем только файл зависимостей (для кэширования слоев)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-# КОПИРУЕМ ВСЕ ФАЙЛЫ ИЗ ТВОЕГО GITHUB (включая index.html)
+# Устанавливаем библиотеки (wheel ускоряет сборку)
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir wheel && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Копируем весь проект
 COPY . .
 
-# Проверяем наличие файлов (результат будет в логах сборки)
-RUN ls -la /app
+# Проверяем структуру (важно для дебага пути к static/index.html)
+RUN ls -R /app
 
-# Открываем порт 3000
+# Открываем порт
 EXPOSE 3000
 
-# Запускаем бота
-CMD ["python", "main.py"]
+# Запускаем через uvicorn напрямую (это стабильнее, чем через python main.py)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3000", "--workers", "1", "--no-access-log"]
