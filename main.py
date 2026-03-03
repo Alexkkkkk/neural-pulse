@@ -31,10 +31,10 @@ dp = Dispatcher()
 class SaveData(BaseModel):
     model_config = ConfigDict(extra="allow")
     user_id: str
-    score: Optional[float] = 0.0
-    click_lvl: Optional[int] = 1
-    energy: Optional[float] = 1000.0
-    pnl: Optional[float] = 0.0
+    score: float = 0.0
+    click_lvl: int = 1
+    energy: float = 1000.0
+    pnl: float = 0.0
 
 # --- DATABASE ---
 async def init_db():
@@ -60,9 +60,6 @@ app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # --- API ---
-@app.get("/favicon.ico", include_in_schema=False)
-async def favicon(): return JSONResponse({})
-
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     async with aiosqlite.connect(DB_PATH) as db:
@@ -76,7 +73,16 @@ async def get_balance(user_id: str):
             await db.commit()
             return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "energy": 1000, "pnl": 0}}
         
-        return {"status": "ok", "data": dict(user)}
+        u = dict(user)
+        # Начисление офлайн дохода (макс за 8 часов)
+        if u['pnl'] > 0 and u['last_active'] > 0:
+            earned = (min(now - u['last_active'], 28800) / 3600) * u['pnl']
+            if earned > 0:
+                u['balance'] += earned
+                await db.execute("UPDATE users SET balance=?, last_active=? WHERE id=?", (u['balance'], now, user_id))
+                await db.commit()
+        
+        return {"status": "ok", "data": u}
 
 @app.post("/api/save")
 async def save_game(data: SaveData):
@@ -88,13 +94,13 @@ async def save_game(data: SaveData):
         await db.commit()
     return {"status": "ok"}
 
-# --- BOT HANDLERS ---
+# --- BOT ---
 @dp.message(Command("start"))
 async def cmd_start(m: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🚀 ЗАПУСТИТЬ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))]
+        [InlineKeyboardButton(text="🚀 ЗАПУСТИТЬ ТЕРМИНАЛ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))]
     ])
-    await m.answer("<b>Neural Pulse Terminal v1.0</b>\nСистема готова к работе.", reply_markup=kb)
+    await m.answer("<b>Neural Pulse Terminal v1.1</b>\nСоединение установлено. Система готова.", reply_markup=kb)
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
@@ -102,38 +108,14 @@ async def bot_webhook(request: Request):
     await dp.feed_update(bot, update)
     return {"ok": True}
 
-# --- ПОИСК ФРОНТЕНДА ---
+# --- STATIC ---
 @app.get("/")
 async def index():
-    # Пробуем найти файл в разных папках
-    search_paths = [
-        BASE_DIR / "index.html",
-        BASE_DIR / "static" / "index.html",
-        Path.cwd() / "index.html",
-        Path("/app/index.html")
-    ]
-    
-    for path in search_paths:
-        if path.exists():
-            logger.info(f"✅ Found index.html at: {path}")
-            return FileResponse(path)
+    for p in [BASE_DIR / "index.html", BASE_DIR / "static" / "index.html"]:
+        if p.exists(): return FileResponse(p)
+    return JSONResponse({"error": "index.html not found"}, status_code=404)
 
-    # ДИАГНОСТИКА: если не нашли, пишем в логи всё, что видим
-    files_in_root = [str(f.name) for f in BASE_DIR.iterdir()] if BASE_DIR.exists() else "BASE_DIR not found"
-    logger.error(f"❌ index.html NOT FOUND. Files present in {BASE_DIR}: {files_in_root}")
-    
-    return JSONResponse({
-        "error": "index.html not found",
-        "checked_paths": [str(p) for p in search_paths],
-        "files_on_server": files_in_root
-    }, status_code=404)
-
-# Монтируем статику
-for folder in ["static", "images"]:
-    path = BASE_DIR / folder
-    if path.exists():
-        app.mount(f"/{folder}", StaticFiles(directory=str(path)), name=folder)
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 3000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=3000)
