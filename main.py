@@ -17,6 +17,7 @@ from aiogram.enums import ParseMode
 from aiogram.filters import CommandObject, Command
 
 # --- [STAGE 0] НАСТРОЙКИ ПУТЕЙ ---
+# ЗАПОМНЕНО: index.html ВСЕГДА В static/, дизайн и картинки не менять.
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
@@ -31,7 +32,7 @@ def log_step(category: str, message: str, color: str = C_WHITE):
     curr_time = datetime.datetime.now().strftime("%H:%M:%S")
     print(f"{C_BOLD}[{curr_time}]{C_END} {color}{category.ljust(12)}{C_END} | {message}", flush=True)
 
-# ПРИНУДИТЕЛЬНОЕ СОЗДАНИЕ ПАПОК (Защита от RuntimeError при mount)
+# ПРИНУДИТЕЛЬНОЕ СОЗДАНИЕ ПАПОК
 for folder in [STATIC_DIR, IMAGES_DIR]:
     if not folder.exists():
         folder.mkdir(parents=True, exist_ok=True)
@@ -117,7 +118,7 @@ async def lifespan(app: FastAPI):
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
-app.add_middleware(GZipMiddleware, minimum_size=1000) # Сжатие для скорости
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # --- API ENDPOINTS ---
@@ -183,18 +184,18 @@ async def cmd_start(m: types.Message, command: CommandObject):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))]
     ])
-    await m.answer(f"<b>Neural Pulse Engine</b>\nСистема онлайн.", reply_markup=kb)
+    await m.answer(f"<b>Neural Pulse Online</b>\n\nСистема инициализирована.", reply_markup=kb)
 
-# --- STATIC & INDEX (ЗАПОМНИЛ: ВСЕГДА В static/) ---
+# --- STATIC & INDEX (ФИКСИРОВАННО: static/index.html) ---
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.get("/")
 async def index():
-    # Путь исправлен: теперь ищем index.html ВНУТРИ папки static
+    # ЗАПОМНЕНО: index.html всегда в папке static
     index_path = STATIC_DIR / "index.html"
     if not index_path.exists():
-        log_step("WEB_ERR", f"Файл не найден в static: {index_path}", C_RED)
+        log_step("WEB_ERR", f"index.html отсутствует в static: {index_path}", C_RED)
         return JSONResponse({"error": "index.html not found in static folder"}, status_code=404)
         
     return FileResponse(index_path, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
