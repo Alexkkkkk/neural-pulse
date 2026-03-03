@@ -23,7 +23,7 @@ IMAGES_DIR = BASE_DIR / "images"
 BACKUP_DIR = BASE_DIR / "backups"
 
 # ВСТАВЬ СВОЙ ТОКЕН СЮДА:
-API_TOKEN = "ТВОЙ_ТОКЕН_БОТА" 
+API_TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU" 
 
 C = {"G": "\033[92m", "Y": "\033[93m", "R": "\033[91m", "C": "\033[96m", "B": "\033[1m", "E": "\033[0m"}
 
