@@ -1,4 +1,4 @@
-import os, asyncio, logging, time
+import os, asyncio, logging, time, datetime
 import aiosqlite
 import uvicorn
 from pathlib import Path
@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, Update, FSInputFile
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandObject, Command
@@ -26,21 +26,33 @@ C_END = "\033[0m"
 
 # --- CONFIG ---
 TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU"
+ADMIN_ID = 476014374 # Твой ID из логов, сюда будут падать бэкапы
 MY_DOMAIN = "np.bothost.ru"
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 
-# Создаем папки
 for folder in ["static", "images"]:
     (BASE_DIR / folder).mkdir(exist_ok=True)
 
-# Отключаем лишний спам от uvicorn в консоли, оставляя только наши красивые логи
 logging.basicConfig(level=logging.INFO, format='%(message)s')
-logger = logging.getLogger("uvicorn.access")
-logger.disabled = True 
+logging.getLogger("uvicorn.access").disabled = True 
 
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
+
+# --- BACKUP SYSTEM ---
+async def backup_task():
+    """Фоновая задача для отправки бэкапа базы данных админу раз в сутки"""
+    while True:
+        await asyncio.sleep(86400) # 24 часа
+        try:
+            if DB_PATH.exists():
+                print(f"{C_CYAN}[BACKUP]{C_END} Создание резервной копии...")
+                file = FSInputFile(DB_PATH, filename=f"backup_{datetime.date.today()}.db")
+                await bot.send_document(ADMIN_ID, file, caption=f"📦 #BACKUP\nСистемный бэкап базы данных\nДата: {datetime.date.today()}")
+                print(f"{C_GREEN}[SUCCESS]{C_END} Бэкап отправлен админу {ADMIN_ID}")
+        except Exception as e:
+            print(f"{C_RED}[ERR]{C_END} Ошибка бэкапа: {e}")
 
 # --- SCHEMAS ---
 class SaveData(BaseModel):
@@ -71,6 +83,9 @@ async def init_db():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    # Запуск фонового бэкапа
+    asyncio.create_task(backup_task())
+    
     webhook_url = f"https://{MY_DOMAIN}/webhook"
     await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
     print(f"{C_BLUE}{C_BOLD}[TELEGRAM]{C_END} Webhook активен: {webhook_url}")
@@ -86,17 +101,13 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# --- MIDDLEWARE ДЛЯ ЛОГИРОВАНИЯ ТРАФИКА ---
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
     response = await call_next(request)
     process_time = (time.time() - start_time) * 1000
-    formatted_time = f"{process_time:.2f}ms"
-    
-    # Логируем только API и корень
     if "/api/" in request.url.path or request.url.path == "/":
-        print(f"{C_CYAN}[NET]{C_END} {request.method} {request.url.path} | {response.status_code} | {formatted_time}")
+        print(f"{C_CYAN}[NET]{C_END} {request.method} {request.url.path} | {response.status_code} | {process_time:.2f}ms")
     return response
 
 # --- API ENDPOINTS ---
@@ -110,7 +121,7 @@ async def get_balance(user_id: str):
         
         now = int(time.time())
         if not user:
-            print(f"{C_YELLOW}[NEW_USER]{C_END} Создан новый профиль для ID: {user_id}")
+            print(f"{C_YELLOW}[NEW_USER]{C_END} Регистрация ID: {user_id}")
             await db.execute("INSERT INTO users (id, balance, last_active, energy, max_energy) VALUES (?, 1000.0, ?, 1000.0, 1000)", 
                              (str(user_id), now))
             await db.commit()
@@ -121,7 +132,7 @@ async def get_balance(user_id: str):
             diff = now - u['last_active']
             earned = (min(diff, 28800) / 3600) * u['pnl']
             if earned > 0:
-                print(f"{C_GREEN}[FARM]{C_END} Начислено {int(earned)} NP игроку {user_id} (оффлайн доход)")
+                print(f"{C_GREEN}[FARM]{C_END} Оффлайн доход: +{int(earned)} NP для {user_id}")
                 u['balance'] += earned
                 await db.execute("UPDATE users SET balance=?, last_active=? WHERE id=?", (u['balance'], now, str(user_id)))
                 await db.commit()
@@ -130,9 +141,7 @@ async def get_balance(user_id: str):
 @app.post("/api/save")
 async def save_game(data: SaveData):
     try:
-        # ЛОГ СОХРАНЕНИЯ
-        print(f"{C_GREEN}{C_BOLD}[SAVE]{C_END} Игрок: {data.user_id} | Баланс: {int(data.score)} | PnL: {data.pnl}/ч")
-
+        print(f"{C_GREEN}{C_BOLD}[SAVE]{C_END} User: {data.user_id} | Score: {int(data.score)} | PnL: {data.pnl}")
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute(
                 "UPDATE users SET balance=?, click_lvl=?, energy=?, max_energy=?, pnl=?, last_active=? WHERE id=?", 
@@ -142,7 +151,7 @@ async def save_game(data: SaveData):
             await db.commit()
         return {"status": "ok"}
     except Exception as e:
-        print(f"{C_RED}[ERR]{C_END} Ошибка сохранения {data.user_id}: {e}")
+        print(f"{C_RED}[ERR]{C_END} Ошибка в save_game: {e}")
         return JSONResponse({"status": "error", "message": str(e)}, status_code=400)
 
 @app.get("/api/leaderboard")
@@ -161,7 +170,7 @@ async def cmd_start(m: types.Message, command: CommandObject):
     username = m.from_user.username or "Anon"
     args = command.args 
     
-    print(f"{C_YELLOW}[BOT]{C_END} Команда /start от {user_id} (@{username})")
+    print(f"{C_YELLOW}[BOT]{C_END} Команда /start от {user_id}")
     
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("SELECT id FROM users WHERE id = ?", (user_id,)) as cursor:
@@ -174,9 +183,9 @@ async def cmd_start(m: types.Message, command: CommandObject):
                 (user_id, ref_id, int(time.time()))
             )
             if ref_id:
-                print(f"{C_YELLOW}[REF]{C_END} Бонус за реферала для {ref_id}")
+                print(f"{C_YELLOW}[REF]{C_END} Начисление реф-бонуса для {ref_id}")
                 await db.execute("UPDATE users SET balance = balance + 50000, referrals_count = referrals_count + 1 WHERE id = ?", (ref_id,))
-                try: await bot.send_message(ref_id, "<b>🎉 +50,000 NP!</b> У вас новый реферал.")
+                try: await bot.send_message(ref_id, "<b>🎉 +50,000 NP!</b> Реферал присоединился.")
                 except: pass
             await db.commit()
 
@@ -198,7 +207,6 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 
 @app.get("/")
 async def index():
-    print(f"{C_BLUE}[WEB]{C_END} Загрузка интерфейса Web App")
     for p in [BASE_DIR / "index.html", BASE_DIR / "static" / "index.html"]:
         if p.exists(): return FileResponse(p)
     return JSONResponse({"error": "index.html not found"}, status_code=404)
