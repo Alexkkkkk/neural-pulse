@@ -31,11 +31,23 @@ MY_DOMAIN = "np.bothost.ru"
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 
-# Настройка логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
-logger = logging.getLogger("uvicorn.error")
 
-# --- INITIALIZATION LOGS ---
+# --- SCHEMAS (SaveData - Модель для тапалки) ---
+class SaveData(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    user_id: str
+    score: Optional[float] = 0.0          # Баланс
+    click_lvl: Optional[int] = 1          # Сила клика
+    energy: Optional[float] = 1000.0      # Энергия
+    max_energy: Optional[int] = 1000      # Лимит энергии
+    pnl: Optional[float] = 0.0            # Прибыль в час
+    level: Optional[int] = 1              # Уровень игрока
+    exp: Optional[int] = 0                # Опыт
+    wallet: Optional[str] = None          # Кошелек
+    tasks_completed: Optional[str] = ""   # Список выполненных задач
+
+# --- STAGE 1: FILESYSTEM ---
 print(f"{C_CYAN}[STAGE 1] Проверка окружения...{C_END}")
 for folder in ["static", "images"]:
     path = BASE_DIR / folder
@@ -43,7 +55,7 @@ for folder in ["static", "images"]:
         path.mkdir(exist_ok=True)
         print(f" > Папка {folder} создана.")
 
-# --- BOT INIT ---
+# --- STAGE 2: BOT API ---
 print(f"{C_CYAN}[STAGE 2] Подключение Bot API...{C_END}")
 try:
     bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -66,29 +78,49 @@ async def backup_task():
         except Exception as e:
             print(f"{C_RED}[BACKUP ERR] Не удалось выполнить бэкап: {e}{C_END}")
 
-# --- DATABASE ---
+# --- STAGE 3: DATABASE (Extended) ---
 async def init_db():
     print(f"{C_CYAN}[STAGE 3] Работа с базой данных...{C_END}")
     try:
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute("PRAGMA journal_mode=WAL")
-            print(" > Режим WAL активирован.")
-            await db.execute('''CREATE TABLE IF NOT EXISTS users 
-                (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, 
-                 click_lvl INTEGER DEFAULT 1, energy REAL DEFAULT 1000,
-                 max_energy INTEGER DEFAULT 1000,
-                 pnl REAL DEFAULT 0, last_active INTEGER DEFAULT 0,
-                 wallet TEXT, referrer_id TEXT, referrals_count INTEGER DEFAULT 0)''')
             
-            # Миграция (проверка наличия колонки)
+            # Создаем таблицу со всеми параметрами тапалки
+            await db.execute('''CREATE TABLE IF NOT EXISTS users 
+                (id TEXT PRIMARY KEY, 
+                 balance REAL DEFAULT 1000, 
+                 click_lvl INTEGER DEFAULT 1, 
+                 energy REAL DEFAULT 1000,
+                 max_energy INTEGER DEFAULT 1000,
+                 pnl REAL DEFAULT 0, 
+                 level INTEGER DEFAULT 1,
+                 exp INTEGER DEFAULT 0,
+                 last_active INTEGER DEFAULT 0,
+                 wallet TEXT DEFAULT NULL, 
+                 referrer_id TEXT DEFAULT NULL, 
+                 referrals_count INTEGER DEFAULT 0,
+                 ref_balance REAL DEFAULT 0,
+                 tasks_completed TEXT DEFAULT "")''')
+            
+            # Проверка наличия колонок (Миграция)
             cursor = await db.execute("PRAGMA table_info(users)")
-            cols = [row[1] for row in await cursor.fetchall()]
-            if 'max_energy' not in cols:
-                await db.execute("ALTER TABLE users ADD COLUMN max_energy INTEGER DEFAULT 1000")
-                print(" > Миграция: Добавлена колонка max_energy.")
+            existing_cols = [row[1] for row in await cursor.fetchall()]
+            
+            needed_cols = {
+                "level": "INTEGER DEFAULT 1",
+                "exp": "INTEGER DEFAULT 0",
+                "ref_balance": "REAL DEFAULT 0",
+                "tasks_completed": "TEXT DEFAULT ''",
+                "wallet": "TEXT DEFAULT NULL"
+            }
+            
+            for col, spec in needed_cols.items():
+                if col not in existing_cols:
+                    await db.execute(f"ALTER TABLE users ADD COLUMN {col} {spec}")
+                    print(f" > Миграция: Добавлена колонка {col}")
             
             await db.commit()
-            print(f"{C_GREEN} > База данных SQLite готова к запросам.{C_END}")
+            print(f"{C_GREEN} > База данных готова к масштабированию.{C_END}")
     except Exception as e:
         print(f"{C_RED} > ОШИБКА БАЗЫ ДАННЫХ: {e}{C_END}")
         raise
@@ -97,8 +129,6 @@ async def init_db():
 async def lifespan(app: FastAPI):
     print(f"{C_YELLOW}[LIFESPAN] Точка входа: инициализация ресурсов...{C_END}")
     await init_db()
-    
-    # Запуск фонового процесса
     asyncio.create_task(backup_task())
     
     print(f"{C_CYAN}[STAGE 4] Настройка Webhook...{C_END}")
@@ -111,7 +141,6 @@ async def lifespan(app: FastAPI):
         
     print(f"{C_GREEN}{C_BOLD}[READY] Neural Pulse Terminal полностью запущен.{C_END}")
     yield
-    print(f"{C_YELLOW}[LIFESPAN] Точка выхода: закрытие сессий...{C_END}")
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
@@ -127,21 +156,20 @@ app.add_middleware(
 async def log_requests(request: Request, call_next):
     start_time = time.time()
     path = request.url.path
-    print(f"{C_BLUE}[IN] {request.method} {path}{C_END}")
     try:
         response = await call_next(request)
-        process_time = (time.time() - start_time) * 1000
-        print(f"{C_CYAN}[OUT] {path} | Status: {response.status_code} | Time: {process_time:.2f}ms{C_END}")
+        if "/api/" in path or path == "/":
+            process_time = (time.time() - start_time) * 1000
+            print(f"{C_CYAN}[NET]{C_END} {request.method} {path} | {response.status_code} | {process_time:.2f}ms")
         return response
     except Exception as e:
-        print(f"{C_RED}[RUNTIME ERR] Ошибка при обработке {path}: {e}{C_END}")
+        print(f"{C_RED}[RUNTIME ERR] {path}: {e}{C_END}")
         return JSONResponse({"error": "Internal Server Error"}, status_code=500)
 
 # --- API ENDPOINTS ---
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
-    print(f" > DB_REQ: Запрос профиля для {user_id}")
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT * FROM users WHERE id = ?", (str(user_id),)) as cursor:
@@ -149,19 +177,19 @@ async def get_balance(user_id: str):
         
         now = int(time.time())
         if not user:
-            print(f" > DB_REG: Регистрация нового игрока {user_id}")
+            print(f" > DB_REG: Регистрация {user_id}")
             await db.execute("INSERT INTO users (id, balance, last_active, energy, max_energy) VALUES (?, 1000.0, ?, 1000.0, 1000)", 
                              (str(user_id), now))
             await db.commit()
-            return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "energy": 1000, "max_energy": 1000, "pnl": 0}}
+            return {"status": "ok", "data": {"balance": 1000, "level": 1, "energy": 1000}}
 
         u = dict(user)
-        # Обработка PnL (оффлайн доход)
+        # Оффлайн доход (PnL)
         if u['pnl'] > 0 and u['last_active'] > 0:
             diff = now - u['last_active']
             earned = (min(diff, 28800) / 3600) * u['pnl']
             if earned > 0:
-                print(f" > PnL: Начислено {earned:.2f} монет за {diff} сек. отсутствия.")
+                print(f" > PnL: +{earned:.2f} для {user_id}")
                 u['balance'] += earned
                 await db.execute("UPDATE users SET balance=?, last_active=? WHERE id=?", (u['balance'], now, str(user_id)))
                 await db.commit()
@@ -169,49 +197,70 @@ async def get_balance(user_id: str):
 
 @app.post("/api/save")
 async def save_game(data: SaveData):
-    print(f" > DB_SAVE: Синхронизация данных юзера {data.user_id}")
+    print(f" > DB_SAVE: {data.user_id}")
     try:
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute(
-                "UPDATE users SET balance=?, click_lvl=?, energy=?, max_energy=?, pnl=?, last_active=? WHERE id=?", 
+                """UPDATE users SET 
+                   balance=?, click_lvl=?, energy=?, max_energy=?, pnl=?, 
+                   level=?, exp=?, wallet=?, tasks_completed=?, last_active=? 
+                   WHERE id=?""", 
                 (float(data.score or 0), int(data.click_lvl or 1), float(data.energy or 0), 
-                 int(data.max_energy or 1000), float(data.pnl or 0), int(time.time()), str(data.user_id))
+                 int(data.max_energy or 1000), float(data.pnl or 0), int(data.level or 1),
+                 int(data.exp or 0), data.wallet, data.tasks_completed, int(time.time()), str(data.user_id))
             )
             await db.commit()
         return {"status": "ok"}
     except Exception as e:
-        print(f"{C_RED} > DB_SAVE_ERR: Ошибка записи {data.user_id}: {e}{C_END}")
+        print(f"{C_RED} > DB_SAVE_ERR: {e}{C_END}")
         return JSONResponse({"status": "error", "message": str(e)}, status_code=400)
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
-    try:
-        data = await request.json()
-        update = Update.model_validate(data, context={"bot": bot})
-        await dp.feed_update(bot, update)
-        return {"ok": True}
-    except Exception as e:
-        print(f"{C_RED}[WEBHOOK ERR] Сбой входящего апдейта: {e}{C_END}")
-        return {"ok": False}
+    data = await request.json()
+    update = Update.model_validate(data, context={"bot": bot})
+    await dp.feed_update(bot, update)
+    return {"ok": True}
+
+# --- TELEGRAM BOT HANDLERS ---
+@dp.message(Command("start"))
+async def cmd_start(m: types.Message, command: CommandObject):
+    user_id = str(m.from_user.id)
+    username = m.from_user.username or "User"
+    args = command.args
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT id FROM users WHERE id = ?", (user_id,)) as cursor:
+            exists = await cursor.fetchone()
+        
+        if not exists:
+            ref_id = str(args) if args and str(args) != user_id else None
+            await db.execute("INSERT INTO users (id, balance, referrer_id, last_active) VALUES (?, 1000, ?, ?)", 
+                             (user_id, ref_id, int(time.time())))
+            if ref_id:
+                await db.execute("UPDATE users SET balance=balance+50000, referrals_count=referrals_count+1 WHERE id=?", (ref_id,))
+                try: await bot.send_message(ref_id, "<b>🎉 +50k NP!</b> По твоей ссылке зашел новый игрок.")
+                except: pass
+            await db.commit()
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))]
+    ])
+    await m.answer(f"<b>Neural Pulse Engine</b>\n\nДобро пожаловать в терминал, {username}.", reply_markup=kb)
+
+# --- STATIC FILES ---
+app.mount("/images", StaticFiles(directory=str(BASE_DIR / "images")), name="images")
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 @app.get("/")
 async def index():
-    print(f" > WEB: Попытка загрузки index.html")
-    # Проверяем файлы в обеих возможных папках
     paths = [BASE_DIR / "index.html", BASE_DIR / "static" / "index.html"]
     for p in paths:
-        if p.exists():
-            print(f" > WEB: Файл найден в {p}")
-            return FileResponse(p)
-    
-    print(f"{C_RED} > WEB ERR: Файл index.html НЕ НАЙДЕН в {BASE_DIR}{C_END}")
-    return JSONResponse({"error": "Interface file missing"}, status_code=404)
+        if p.exists(): return FileResponse(p)
+    return JSONResponse({"error": "index.html not found"}, status_code=404)
 
 # --- EXECUTION ---
 if __name__ == "__main__":
-    try:
-        port = int(os.environ.get("PORT", 3000))
-        print(f"{C_GREEN}{C_BOLD}[START] Запуск Uvicorn-сервера на порту {port}...{C_END}")
-        uvicorn.run(app, host="0.0.0.0", port=port, access_log=False)
-    except Exception as fatal_e:
-        print(f"{C_RED}[FATAL ERROR] Сервер не смог стартовать: {fatal_e}{C_END}")
+    port = int(os.environ.get("PORT", 3000))
+    print(f"{C_GREEN}[START] Сервер запущен на порту {port}{C_END}")
+    uvicorn.run(app, host="0.0.0.0", port=port, access_log=False)
