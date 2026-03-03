@@ -41,24 +41,20 @@ class SaveData(BaseModel):
     max_energy: Optional[int] = 1000
     pnl: Optional[float] = 0.0
 
-# --- DATABASE ---
+# --- DATABASE INIT ---
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("PRAGMA journal_mode=WAL")
-        # Создаем таблицу с учетом всех полей
         await db.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, 
              click_lvl INTEGER DEFAULT 1, energy REAL DEFAULT 1000,
              max_energy INTEGER DEFAULT 1000,
              pnl REAL DEFAULT 0, last_active INTEGER DEFAULT 0,
              wallet TEXT, referrer_id TEXT, referrals_count INTEGER DEFAULT 0)''')
-        
-        # Миграция: проверка наличия колонки max_energy
         try:
             await db.execute("ALTER TABLE users ADD COLUMN max_energy INTEGER DEFAULT 1000")
         except:
             pass
-            
         await db.commit()
     logger.info("Database initialized.")
 
@@ -73,7 +69,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# CORS настроен для Telegram WebApp
 app.add_middleware(
     CORSMiddleware, 
     allow_origins=["*"], 
@@ -98,10 +93,8 @@ async def get_balance(user_id: str):
             return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "energy": 1000, "max_energy": 1000, "pnl": 0}}
 
         u = dict(user)
-        # Оффлайн доход (майнинг)
         if u['pnl'] > 0 and u['last_active'] > 0:
             diff = now - u['last_active']
-            # Лимит оффлайн дохода 8 часов (28800 сек)
             earned = (min(diff, 28800) / 3600) * u['pnl']
             if earned > 0:
                 u['balance'] += earned
@@ -110,17 +103,29 @@ async def get_balance(user_id: str):
                 await db.commit()
         return {"status": "ok", "data": u}
 
+# --- ОБНОВЛЕННАЯ ФУНКЦИЯ СОХРАНЕНИЯ С ЦВЕТНЫМ ВЫВОДОМ ---
 @app.post("/api/save")
 async def save_game(data: SaveData):
     try:
+        # КРАСИВЫЙ ВЫВОД В КОНСОЛЬ BOTHOST
+        print(f"\033[92m\033[1m[SYSTEM]\033[0m ОБНОВЛЕНИЕ БОТА — User: {data.user_id}")
+        print(f" > Баланс: {int(data.score or 0)} | Прибыль: {data.pnl}/час")
+
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute(
                 "UPDATE users SET balance=?, click_lvl=?, energy=?, max_energy=?, pnl=?, last_active=? WHERE id=?", 
-                (float(data.score or 0), int(data.click_lvl or 1), float(data.energy or 0), 
-                 int(data.max_energy or 1000), float(data.pnl or 0), int(time.time()), str(data.user_id))
+                (
+                    float(data.score or 0), 
+                    int(data.click_lvl or 1), 
+                    float(data.energy or 0), 
+                    int(data.max_energy or 1000), 
+                    float(data.pnl or 0), 
+                    int(time.time()), 
+                    str(data.user_id)
+                )
             )
             await db.commit()
-        return {"status": "ok"}
+        return {"status": "ok", "message": "Данные синхронизированы"}
     except Exception as e:
         logger.error(f"Save error: {e}")
         return JSONResponse({"status": "error", "message": str(e)}, status_code=400)
@@ -132,15 +137,6 @@ async def get_leaderboard():
         async with db.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10") as cursor:
             rows = await cursor.fetchall()
             return {"status": "ok", "data": [dict(r) for r in rows]}
-
-@app.post("/api/daily-bonus")
-async def daily_bonus(request: Request):
-    # Здесь можно добавить проверку даты последнего получения в БД
-    return {
-        "status": "ok", 
-        "message": "Система начислила 5,000 NP!", 
-        "bonus_amount": 5000
-    }
 
 # --- BOT LOGIC ---
 
@@ -178,15 +174,12 @@ async def bot_webhook(request: Request):
     await dp.feed_update(bot, update)
     return {"ok": True}
 
-# --- STATIC FILES ---
-
-# Важно: Роуты API должны быть ВЫШЕ маунта статики
+# --- STATIC ---
 app.mount("/images", StaticFiles(directory=str(BASE_DIR / "images")), name="images")
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 @app.get("/")
 async def index():
-    # Проверяем index.html в корне или в static
     for p in [BASE_DIR / "index.html", BASE_DIR / "static" / "index.html"]:
         if p.exists(): return FileResponse(p)
     return JSONResponse({"error": "index.html not found"}, status_code=404)
