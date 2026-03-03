@@ -16,6 +16,7 @@ BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"  # ЗАПОМНЕНО: index.html всегда здесь
 IMAGES_DIR = BASE_DIR / "images"
+BACKUP_DIR = BASE_DIR / "backups"
 
 C = {"G": "\033[92m", "Y": "\033[93m", "R": "\033[91m", "C": "\033[96m", "B": "\033[1m", "E": "\033[0m"}
 
@@ -24,7 +25,7 @@ def log_step(cat: str, msg: str, col: str = C["G"]):
     print(f"{C['B']}[{curr_time}]{C['E']} {col}{cat.ljust(10)}{C['E']} | {msg}", flush=True)
 
 # --- [STAGE 1] ПОДГОТОВКА ФС ---
-for folder in [STATIC_DIR, IMAGES_DIR]:
+for folder in [STATIC_DIR, IMAGES_DIR, BACKUP_DIR]:
     folder.mkdir(parents=True, exist_ok=True)
 
 USER_CACHE: Dict[str, dict] = {}
@@ -40,12 +41,40 @@ class SaveData(BaseModel):
     level: int
     exp: int
 
-# --- [STAGE 2] ФОНОВАЯ СИНХРОНИЗАЦИЯ ---
-async def sync_cache_to_db():
-    log_step("SYSTEM", "Цикл синхронизации запущен", C["C"])
+# --- [STAGE 2] ОБСЛУЖИВАНИЕ (BACKUP & SYNC) ---
+
+async def create_backup():
+    """Создает защищенную копию базы данных"""
+    try:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
+        backup_file = BACKUP_DIR / f"game_backup_{timestamp}.db"
+        
+        # Безопасное копирование SQLite
+        async with aiosqlite.connect(DB_PATH) as src:
+            async with aiosqlite.connect(backup_file) as dst:
+                await src.backup(dst)
+        
+        log_step("BACKUP", f"Создана копия: {backup_file.name}", C["G"])
+        
+        # Ротация: оставляем только 5 последних бэкапов
+        backups = sorted(list(BACKUP_DIR.glob("*.db")), key=os.path.getmtime)
+        while len(backups) > 5:
+            old_file = backups.pop(0)
+            os.remove(old_file)
+            log_step("CLEANUP", f"Старый бэкап удален: {old_file.name}", C["Y"])
+    except Exception as e:
+        log_step("BK_ERR", f"Ошибка бэкапа: {e}", C["R"])
+
+async def maintenance_loop():
+    """Фоновый цикл: сохранение кэша и бэкапы"""
+    log_step("SYSTEM", "Цикл обслуживания запущен", C["C"])
+    last_backup_time = time.time()
+    
     while True:
         try:
-            await asyncio.sleep(60) # Сохраняем раз в минуту для стабильности
+            await asyncio.sleep(60) # Интервал проверки
+            
+            # 1. Синхронизация кэша в БД
             if USER_CACHE and db_conn:
                 current_cache = USER_CACHE.copy()
                 for uid, info in current_cache.items():
@@ -55,20 +84,26 @@ async def sync_cache_to_db():
                         (d['score'], d['click_lvl'], d['energy'], d['max_energy'], d['pnl'], d['level'], d['exp'], int(time.time()), uid)
                     )
                 await db_conn.commit()
-                log_step("DB_SYNC", f"Данные {len(current_cache)} игроков сброшены на диск")
+                log_step("DB_SYNC", f"Сохранено игроков: {len(current_cache)}")
                 
-                # Защита от утечки памяти (RAM)
                 if len(USER_CACHE) > 500:
                     USER_CACHE.clear()
-                    log_step("MEMORY", "Кэш очищен для экономии ресурсов", C["Y"])
-        except Exception as e:
-            log_step("SYNC_ERR", f"Критический сбой БД: {e}", C["R"])
+                    log_step("MEMORY", "Очистка кэша (RAM Save)", C["Y"])
 
-# --- [STAGE 3] ЖИЗНЕННЫЙ ЦИКЛ ---
+            # 2. Бэкап каждые 12 часов (43200 сек)
+            if time.time() - last_backup_time > 43200:
+                await create_backup()
+                last_backup_time = time.time()
+
+        except Exception as e:
+            log_step("LOOP_ERR", f"Сбой цикла: {e}", C["R"])
+
+# --- [STAGE 3] ЖИЗНЕННЫЙ ЦИКЛ ПРИЛОЖЕНИЯ ---
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_conn
-    log_step("DB_START", "Подключение к SQLite (WAL mode)...")
+    log_step("DB_START", "Запуск SQLite (WAL mode)...")
     db_conn = await aiosqlite.connect(DB_PATH)
     await db_conn.execute("PRAGMA journal_mode=WAL")
     await db_conn.execute("PRAGMA synchronous=NORMAL")
@@ -78,13 +113,16 @@ async def lifespan(app: FastAPI):
          level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0)''')
     await db_conn.commit()
     
-    sync_task = asyncio.create_task(sync_cache_to_db())
-    log_step("SYSTEM", "Neural Pulse Engine запущен!", C["B"] + C["G"])
+    # Сразу создаем бэкап при старте для безопасности
+    await create_backup()
+    
+    m_task = asyncio.create_task(maintenance_loop())
+    log_step("SYSTEM", "Neural Pulse Engine готов!", C["B"] + C["G"])
     yield
-    sync_task.cancel()
+    m_task.cancel()
     if db_conn:
         await db_conn.close()
-    log_step("SYSTEM", "Завершение работы...", C["Y"])
+    log_step("SYSTEM", "Сервер остановлен", C["Y"])
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=500)
@@ -94,7 +132,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "cache_size": len(USER_CACHE)}
+    return {"status": "ok", "cache": len(USER_CACHE)}
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
@@ -118,7 +156,7 @@ async def save_game(data: SaveData):
     return {"status": "ok"}
 
 # --- [STAGE 5] СТАТИКА ---
-# Кэшируем на 7 дней для быстрой загрузки у пользователей
+
 class CachedStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
         response = await super().get_response(path, scope)
@@ -134,10 +172,9 @@ app.mount("/static", CachedStaticFiles(directory=str(STATIC_DIR)), name="static"
 async def index():
     index_file = STATIC_DIR / "index.html"
     if not index_file.exists():
-        log_step("ERROR", "index.html отсутствует в папке static!", C["R"])
-        return JSONResponse({"error": "Static file missing"}, status_code=404)
+        log_step("ERROR", "index.html не найден!", C["R"])
+        return JSONResponse({"error": "File missing"}, status_code=404)
     return FileResponse(index_file, headers={"Cache-Control": "public, max-age=3600"})
 
 if __name__ == "__main__":
-    # Запуск с оптимальными настройками для Pro тарифа
     uvicorn.run("main:app", host="0.0.0.0", port=3000, access_log=False, workers=1)
