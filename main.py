@@ -18,7 +18,6 @@ from aiogram.filters import Command
 # --- CONFIG ---
 TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU"
 MY_DOMAIN = "np.bothost.ru"
-# Используем абсолютный путь для надежности
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 
@@ -46,7 +45,7 @@ async def init_db():
              pnl REAL DEFAULT 0, last_active INTEGER DEFAULT 0,
              wallet TEXT, referrer_id TEXT, referrals_count INTEGER DEFAULT 0)''')
         await db.commit()
-    logger.info(f"Database initialized at {DB_PATH}")
+    logger.info("Database initialized.")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -58,37 +57,67 @@ async def lifespan(app: FastAPI):
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware, 
-    allow_origins=["*"], 
-    allow_credentials=True,
-    allow_methods=["*"], 
-    allow_headers=["*"]
-)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # --- API ---
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute("SELECT * FROM users WHERE id = ?", (user_id,)) as cursor:
-                user = await cursor.fetchone()
-            
-            now = int(time.time())
-            if not user:
-                await db.execute("INSERT INTO users (id, balance, last_active, energy) VALUES (?, 1000, ?, 1000)", (user_id, now))
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM users WHERE id = ?", (user_id,)) as cursor:
+            user = await cursor.fetchone()
+        
+        now = int(time.time())
+        if not user:
+            await db.execute("INSERT INTO users (id, balance, last_active, energy) VALUES (?, 1000, ?, 1000)", (user_id, now))
+            await db.commit()
+            return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "energy": 1000, "pnl": 0}}
+        
+        u = dict(user)
+        if u['pnl'] > 0 and u['last_active'] > 0:
+            earned = (min(now - u['last_active'], 28800) / 3600) * u['pnl']
+            if earned > 0:
+                u['balance'] += earned
+                await db.execute("UPDATE users SET balance=?, last_active=? WHERE id=?", (u['balance'], now, user_id))
                 await db.commit()
-                return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "energy": 1000, "pnl": 0}}
-            
-            u = dict(user)
-            if u['pnl'] > 0 and u['last_active'] > 0:
-                earned = (min(now - u['last_active'], 28800) / 3600) * u['pnl']
-                if earned > 0:
-                    u['balance'] += earned
-                    await db.execute("UPDATE users SET balance=?, last_active=? WHERE id=?", (u['balance'], now, user_id))
-                    await db.commit()
-            return {"status": "ok", "data": u}
-    except Exception as e:
-        logger.error(f"DB Error in get_balance: {e}")
-        return JSONResponse({"status": "error", "message": str(e
+        return {"status": "ok", "data": u}
+
+@app.post("/api/save")
+async def save_game(data: SaveData):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET balance=?, click_lvl=?, energy=?, pnl=?, last_active=? WHERE id=?", 
+            (data.score, data.click_lvl, data.energy, data.pnl, int(time.time()), data.user_id)
+        )
+        await db.commit()
+    return {"status": "ok"}
+
+# --- BOT ---
+@dp.message(Command("start"))
+async def cmd_start(m: types.Message):
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🚀 ЗАПУСТИТЬ ТЕРМИНАЛ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))]
+    ])
+    await m.answer("<b>Neural Pulse Terminal v1.1</b>\nСистема готова к работе.", reply_markup=kb)
+
+@app.post("/webhook")
+async def bot_webhook(request: Request):
+    update = Update.model_validate(await request.json(), context={"bot": bot})
+    await dp.feed_update(bot, update)
+    return {"ok": True}
+
+# --- STATIC & FRONTEND ---
+@app.get("/")
+async def index():
+    # Поиск файла в корне или static
+    for p in [BASE_DIR / "index.html", BASE_DIR / "static" / "index.html"]:
+        if p.exists(): return FileResponse(p)
+    return JSONResponse({"error": "index.html not found"}, status_code=404)
+
+# Монтируем статику если она есть
+if (BASE_DIR / "static").exists():
+    app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 3000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
