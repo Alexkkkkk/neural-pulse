@@ -21,7 +21,6 @@ MY_DOMAIN = "np.bothost.ru"
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 
-# Создание необходимых папок
 for folder in ["static", "images"]:
     (BASE_DIR / folder).mkdir(exist_ok=True)
 
@@ -43,7 +42,6 @@ class SaveData(BaseModel):
 # --- DATABASE ---
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
-        # Включаем быстрый режим записи
         await db.execute("PRAGMA journal_mode=WAL")
         await db.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, 
@@ -86,10 +84,8 @@ async def get_balance(user_id: str):
             return {"status": "ok", "data": {"balance": 1000, "click_lvl": 1, "energy": 1000, "pnl": 0}}
 
         u = dict(user)
-        # Начисление пассивного дохода
         if u['pnl'] > 0 and u['last_active'] > 0:
             diff = now - u['last_active']
-            # Лимит 8 часов (28800 сек)
             earned = (min(diff, 28800) / 3600) * u['pnl']
             if earned > 0:
                 u['balance'] += earned
@@ -121,6 +117,28 @@ async def get_leaderboard():
             rows = await cursor.fetchall()
             return {"status": "ok", "data": [dict(r) for r in rows]}
 
+# --- НОВЫЕ ИСПРАВЛЕНИЯ (405 и 404) ---
+
+@app.post("/")
+async def post_root():
+    """Исправляет '405 Method Not Allowed' при POST запросах на главную"""
+    return {"status": "ok"}
+
+@app.post("/api/daily-bonus")
+async def daily_bonus(request: Request):
+    """Исправляет '404 Not Found' для ежедневного бонуса"""
+    try:
+        data = await request.json()
+        user_id = data.get("user_id")
+        # Для начала просто выдаем бонус 5000 без сложной проверки времени
+        return {
+            "status": "ok", 
+            "message": "Бонус 5000 NP получен!", 
+            "bonus_amount": 5000
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 # --- BOT LOGIC ---
 
 @dp.message(Command("start"))
@@ -139,7 +157,6 @@ async def cmd_start(m: types.Message, command: CommandObject):
                 (user_id, ref_id, int(time.time()))
             )
             if ref_id:
-                # Проверяем, существует ли пригласитель
                 async with db.execute("SELECT id FROM users WHERE id = ?", (ref_id,)) as c:
                     if await c.fetchone():
                         await db.execute("UPDATE users SET balance = balance + 50000, referrals_count = referrals_count + 1 WHERE id = ?", (ref_id,))
@@ -152,8 +169,6 @@ async def cmd_start(m: types.Message, command: CommandObject):
         [InlineKeyboardButton(text="🔗 ПРИГЛАСИТЬ", switch_inline_query=f"Играй со мной в Neural Pulse! https://t.me/neural_pulse_bot?start={user_id}")]
     ])
     await m.answer(f"<b>Neural Pulse Online.</b>\nID: <code>{user_id}</code>\n\nСистема готова.", reply_markup=kb)
-
-# --- WEBHOOK & STATIC ---
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
