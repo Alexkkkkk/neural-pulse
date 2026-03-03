@@ -3,164 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse AI | Terminal</title>
-    
+    <title>Neural Pulse | Terminal</title>
     <script src="https://telegram.org/js/telegram-web-app.js?5"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
-    
     <style>
-        :root { 
-            --neon: #00d4ff; 
-            --neon-secondary: #00ff96; 
-            --crit: #ff4e50;
-            --bg: #050a1a; 
-            --glass: rgba(10, 25, 47, 0.95);
-        }
-
-        /* Эффект сканирующих линий (CRT) */
-        body::before {
-            content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.05) 50%), 
-                        linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 255, 0, 0.02));
-            z-index: 9999; background-size: 100% 3px, 3px 100%; pointer-events: none;
-        }
-
-        body { 
-            margin: 0; background: radial-gradient(circle at center, #0a192f 0%, #050a1a 100%); 
-            height: 100vh; font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; 
-            user-select: none; -webkit-user-select: none; display: flex; justify-content: center; 
-            touch-action: manipulation;
-        }
-
-        .game-container { 
-            position: relative; width: 100%; max-width: 500px; height: 100vh; 
-            display: flex; flex-direction: column; align-items: center; 
-            padding: 15px; box-sizing: border-box; 
-        }
-        
-        .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; z-index: 10; }
-        .logo { width: 45px; height: 45px; background: #111; border-radius: 10px; box-shadow: 0 0 15px var(--neon); cursor: pointer; border: 1px solid var(--neon); }
-        
-        .league-box { flex-grow: 1; margin: 0 12px; }
-        .league-info { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 4px; font-weight: bold; }
+        :root { --neon: #00d4ff; --neon-sec: #00ff96; --bg: #050a1a; --glass: rgba(10, 25, 47, 0.95); }
+        body { margin: 0; background: var(--bg); height: 100vh; font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; display: flex; justify-content: center; touch-action: manipulation; }
+        .game-container { position: relative; width: 100%; max-width: 500px; height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 15px; box-sizing: border-box; }
+        .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         .league-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05); }
         #league-fill { height: 100%; width: 0%; transition: width 0.5s; background: var(--neon); }
-
-        .online-indicator { display: flex; align-items: center; gap: 5px; font-size: 9px; color: var(--neon-secondary); margin-top: 4px; }
-        .online-dot { width: 6px; height: 6px; background: var(--neon-secondary); border-radius: 50%; box-shadow: 0 0 5px var(--neon-secondary); animation: pulse 1.5s infinite; }
-
-        .jackpot-container {
-            width: 100%; background: rgba(255, 0, 212, 0.05); 
-            border: 1px solid rgba(255, 0, 212, 0.3); border-radius: 12px; 
-            padding: 8px; margin-bottom: 15px; text-align: center;
-        }
-        #jackpot-amount { font-size: 24px; font-weight: 900; color: #fff; text-shadow: 0 0 10px #ff00d4; }
-
-        .balance-container { text-align: center; margin: 10px 0; }
-        #score { font-size: 44px; font-weight: 900; text-shadow: 0 0 20px var(--neon); letter-spacing: -1px; }
-
-        .play-area { 
-            position: relative; width: 100%; flex-grow: 1; 
-            display: flex; flex-direction: column; align-items: center; justify-content: center; 
-        }
-        
-        #btn { 
-            width: 70vw; height: 70vw; max-width: 280px; max-height: 280px;
-            background: radial-gradient(circle, var(--neon) 0%, transparent 70%);
-            border-radius: 50%; border: 4px solid var(--neon); outline: none;
-            box-shadow: inset 0 0 30px var(--neon);
-            transition: transform 0.05s;
-            z-index: 2;
-            -webkit-tap-highlight-color: transparent;
-            cursor: pointer;
-            position: relative;
-        }
+        #score { font-size: 40px; font-weight: 900; text-shadow: 0 0 20px var(--neon); margin: 10px 0; }
+        .play-area { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
+        #btn { width: 250px; height: 250px; background: radial-gradient(circle, var(--neon) 0%, transparent 70%); border-radius: 50%; border: 4px solid var(--neon); box-shadow: inset 0 0 30px var(--neon); transition: transform 0.05s; cursor: pointer; outline: none; -webkit-tap-highlight-color: transparent; }
         #btn:active { transform: scale(0.95); }
-
-        .side-menu { 
-            position: absolute; right: 0; top: 50%; transform: translateY(-50%);
-            display: flex; flex-direction: column; gap: 10px; z-index: 5; 
-        }
-        .side-btn { 
-            width: 80px; padding: 10px 5px; background: rgba(10, 25, 47, 0.8); 
-            border: 1px solid var(--neon); border-radius: 12px; 
-            font-size: 10px; color: white; text-align: center; backdrop-filter: blur(10px);
-        }
-
-        .energy-wrapper { width: 85%; margin-top: 25px; }
-        .energy-info { display: flex; justify-content: space-between; font-size: 12px; color: var(--neon); margin-bottom: 6px; font-weight: bold; }
+        .energy-wrapper { width: 85%; margin-top: 20px; }
         .energy-bar { width: 100%; height: 12px; background: rgba(255,255,255,0.05); border-radius: 10px; border: 1px solid var(--neon); overflow: hidden; }
-        #energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--neon), var(--neon-secondary)); transition: width 0.2s; }
-
-        .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; padding-bottom: 25px; }
-        .nav-item { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 18px; text-align: center; font-size: 12px; border: 1px solid rgba(255,255,255,0.1); font-weight: bold; cursor: pointer;}
-
-        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 80%; background: var(--glass); border-top: 3px solid var(--neon); border-radius: 35px 35px 0 0; z-index: 1000; transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1); padding: 30px; box-sizing: border-box; overflow-y: auto; }
+        #energy-fill { height: 100%; width: 100%; background: var(--neon); transition: width 0.2s; }
+        .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; padding-bottom: 20px; }
+        .nav-item { background: rgba(255,255,255,0.05); padding: 12px; border-radius: 15px; text-align: center; font-size: 11px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; }
+        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 70%; background: var(--glass); border-top: 3px solid var(--neon); border-radius: 30px 30px 0 0; z-index: 1000; transition: 0.4s; padding: 25px; box-sizing: border-box; overflow-y: auto; }
         .modal.active { bottom: 0; }
-        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; z-index: 999; backdrop-filter: blur(8px); }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; z-index: 999; backdrop-filter: blur(5px); }
         .overlay.active { display: block; }
-
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-        .plus-animation { position: absolute; pointer-events: none; font-weight: 900; animation: float 0.7s ease-out forwards; z-index: 100; text-shadow: 0 0 10px currentColor; font-family: 'Orbitron'; }
-        @keyframes float { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.6); } }
-        
-        .wallet-card { background: rgba(0, 255, 150, 0.05); border: 1px dashed var(--neon-secondary); border-radius: 20px; padding: 20px; text-align: center; margin: 20px 0; }
-        .token-val { font-size: 32px; font-weight: 900; color: var(--neon-secondary); text-shadow: 0 0 15px rgba(0, 255, 150, 0.3); }
-        
-        #wallet-input {
-            width: 100%; padding: 12px; background: rgba(0,0,0,0.3); 
-            border: 1px solid var(--neon-secondary); border-radius: 10px; 
-            color: white; margin-bottom: 15px; font-family: 'Orbitron', sans-serif;
-            text-align: center; font-size: 11px; box-sizing: border-box; outline: none;
-        }
-
-        .task-item {
-            background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px;
-            display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
+        .plus-animation { position: absolute; pointer-events: none; font-weight: 900; animation: float 0.7s forwards; z-index: 100; text-shadow: 0 0 10px var(--neon); }
+        @keyframes float { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
     </style>
 </head>
 <body>
 
-    <div class="game-container" id="game" style="opacity:0; transition: opacity 0.5s;">
+    <div class="game-container" id="game" style="opacity:0; transition: 0.5s;">
         <div class="header">
-            <div class="logo" id="main-logo" onclick="location.reload()"></div>
-            <div class="league-box">
-                <div class="league-info">
-                    <span id="league-name">BRONZE LEAGUE</span>
+            <div style="flex-grow: 1;">
+                <div style="display:flex; justify-content: space-between; font-size: 10px; margin-bottom: 4px;">
+                    <span id="league-name">BRONZE</span>
                     <span id="league-percent">0%</span>
                 </div>
                 <div class="league-bar"><div id="league-fill"></div></div>
-                <div class="online-indicator">
-                    <div class="online-dot"></div>
-                    <span id="online-count">1,240 ONLINE</span>
-                </div>
             </div>
-            <div style="font-size: 8px; opacity: 0.4; text-align: right;" id="user-id-display">ID: 0000</div>
+            <div id="user-id-display" style="font-size: 8px; opacity: 0.5; margin-left: 15px;">ID: 000</div>
         </div>
 
-        <div class="jackpot-container">
-            <div style="font-size: 9px; letter-spacing: 3px; color: var(--neon); margin-bottom: 3px; font-weight: 900;">GLOBAL JACKPOT</div>
-            <div id="jackpot-amount">500,000</div>
-        </div>
-
-        <div class="balance-container">
-            <div id="score">0</div>
-            <div id="pnl-display" style="font-size: 10px; color: var(--neon-secondary); margin-top: 5px;">PROFIT: +0/hr</div>
-        </div>
+        <div id="score">0</div>
+        <div id="pnl-display" style="font-size: 10px; color: var(--neon-sec);">PROFIT: +0/hr</div>
 
         <div class="play-area">
-            <div class="side-menu">
-                <div class="side-btn" onclick="shareReferral()">INVITE</div>
-                <div class="side-btn" onclick="openModal('tasks')">TASKS</div>
-                <div class="side-btn" style="border-color: var(--neon-secondary); color: var(--neon-secondary);" onclick="openModal('wallet')">WALLET</div>
-                <div class="side-btn" style="border-color: #ff9d00;" onclick="claimBonus()">BONUS</div>
-            </div>
             <button id="btn"></button>
-
             <div class="energy-wrapper">
-                <div class="energy-info">
+                <div style="display:flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px;">
                     <span>⚡ ENERGY</span>
                     <span id="energy-stat">1000/1000</span>
                 </div>
@@ -177,81 +67,46 @@
 
     <div class="overlay" id="overlay" onclick="closeModals()"></div>
 
-    <div id="modal-wallet" class="modal">
-        <h2 style="color: var(--neon-secondary); text-align: center;">CRYPTO WALLET</h2>
-        <div class="wallet-card">
-            <p style="font-size: 10px; opacity: 0.7; margin-bottom: 10px;">ESTIMATED $NP TOKENS</p>
-            <div class="token-val"><span id="wallet-tokens">0.00</span></div>
-            <p style="font-size: 9px; opacity: 0.5; margin-bottom: 20px;">Rate: 1,000 Score = 1 $NP</p>
-            <input type="text" id="wallet-input" placeholder="Enter TON Address">
-            <button onclick="linkWallet()" style="width: 100%; padding: 15px; background: var(--neon-secondary); color: black; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; font-family: 'Orbitron';">LINK WALLET</button>
-        </div>
-    </div>
-
     <div id="modal-boost" class="modal">
-        <h2 style="color: var(--neon);">UPGRADES</h2>
-        <div class="stat-box" style="border: 1px solid var(--neon); padding:15px; border-radius:15px; margin-bottom:10px;">
-            <div style="margin-bottom: 10px;">MULTI-TAP (LVL <span id="tap-lvl-val">1</span>)</div>
-            <div style="font-size: 12px; opacity: 0.7; margin-bottom: 10px;">Cost: <span id="up-cost">500</span> NP</div>
-            <button id="upgrade-btn" onclick="buyUpgrade()" style="width: 100%; padding: 12px; background: var(--neon); color: black; border: none; border-radius: 10px; font-weight: bold; cursor: pointer;">UPGRADE</button>
-        </div>
+        <h3>UPGRADES</h3>
+        <p>Multi-Tap: LVL <span id="tap-lvl-val">1</span></p>
+        <p>Cost: <span id="up-cost">500</span> NP</p>
+        <button onclick="buyUpgrade()" style="width:100%; padding:15px; background:var(--neon); border:none; border-radius:10px; font-weight:bold;">UPGRADE</button>
     </div>
 
     <div id="modal-stats" class="modal">
-        <h2 style="text-align: center; color: var(--neon);">🏆 LEADERBOARD</h2>
-        <div id="leaderboard-list" style="font-size: 14px; line-height: 1.6;"></div>
+        <h3>LEADERBOARD</h3>
+        <div id="leaderboard-list"></div>
     </div>
-    
+
     <div id="modal-tasks" class="modal">
-        <h2 style="color: var(--neon-secondary);">TASKS</h2>
-        <div class="task-item">
-            <div>
-                <div style="font-size: 14px;">Subscribe Channel</div>
-                <div style="font-size: 10px; color: var(--neon-secondary);">+50,000 NP</div>
-            </div>
-            <button onclick="tg.openTelegramLink('https://t.me/neural_pulse_channel')" style="background: var(--neon-secondary); border:none; border-radius:8px; padding:8px 15px; font-family:'Orbitron'; font-size:10px; color: black; font-weight: bold;">GO</button>
-        </div>
+        <h3>TASKS</h3>
+        <button onclick="tg.openTelegramLink('https://t.me/neural_pulse_channel')" style="width:100%; padding:15px; background:var(--neon-sec); border:none; border-radius:10px; color:black; font-weight:bold;">JOIN CHANNEL (+50k)</button>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        tg.ready();
-
+        
         let state = {
-            score: 0,
-            energy: 1000,
-            max_energy: 1000,
-            tap_power: 1,
-            pnl: 0, 
-            user_id: String(tg.initDataUnsafe?.user?.id || 'TEST_USER'), 
+            score: 0, energy: 1000, max_energy: 1000,
+            tap_power: 1, pnl: 0,
+            user_id: String(tg.initDataUnsafe?.user?.id || '476014374'),
             is_saving: false
         };
-
-        const leagues = [
-            { name: "BRONZE", min: 0 },
-            { name: "SILVER", min: 10000 },
-            { name: "GOLD", min: 50000 },
-            { name: "DIAMOND", min: 200000 },
-            { name: "NEURAL MASTER", min: 1000000 }
-        ];
 
         async function loadData() {
             try {
                 const r = await fetch(`/api/balance/${state.user_id}`);
                 const res = await r.json();
-                if (res.status === "ok" && res.data) {
-                    state.score = parseFloat(res.data.balance) || 0;
-                    state.tap_power = parseInt(res.data.click_lvl) || 1;
-                    state.energy = (res.data.energy !== undefined) ? parseFloat(res.data.energy) : 1000;
-                    state.pnl = parseInt(res.data.pnl) || 0;
-                    
-                    if (res.data.wallet) {
-                        document.getElementById('wallet-input').value = res.data.wallet;
-                    }
+                if (res.status === "ok") {
+                    state.score = res.data.balance;
+                    state.tap_power = res.data.click_lvl;
+                    state.energy = res.data.energy;
+                    state.pnl = res.data.pnl;
+                    updateUI();
                 }
-            } catch (e) { console.warn("Using local state (API offline)"); }
-            updateUI();
+            } catch (e) { console.error("Load error"); }
         }
 
         async function saveData() {
@@ -266,91 +121,47 @@
                         score: Math.floor(state.score),
                         click_lvl: state.tap_power,
                         energy: Math.floor(state.energy),
-                        pnl: state.pnl
+                        pnl: Math.floor(state.pnl)
                     })
                 });
-            } catch (e) { console.error("Save Error"); }
-            finally { state.is_saving = false; }
+            } finally { state.is_saving = false; }
         }
 
         function updateUI() {
-            const visualScore = Math.floor(state.score);
-            document.getElementById('score').innerText = visualScore.toLocaleString();
-            document.getElementById('pnl-display').innerText = `PROFIT: +${state.pnl}/hr`;
+            document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
             document.getElementById('energy-stat').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
             document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
-            document.getElementById('user-id-display').innerText = `ID: ${state.user_id}`;
             document.getElementById('tap-lvl-val').innerText = state.tap_power;
-            document.getElementById('up-cost').innerText = (state.tap_power * 500).toLocaleString();
-            document.getElementById('wallet-tokens').innerText = (state.score / 1000).toFixed(2);
-            
-            let currentLeague = leagues[0];
-            for (let i = leagues.length - 1; i >= 0; i--) {
-                if (visualScore >= leagues[i].min) {
-                    currentLeague = leagues[i];
-                    break;
-                }
-            }
-            const nextIdx = leagues.indexOf(currentLeague) + 1;
-            const nextLeague = leagues[nextIdx] || currentLeague;
-            const diff = nextLeague.min - currentLeague.min;
-            const progress = diff > 0 ? ((visualScore - currentLeague.min) / diff) * 100 : 100;
-
-            document.getElementById('league-name').innerText = currentLeague.name + " LEAGUE";
-            document.getElementById('league-fill').style.width = Math.min(100, progress) + '%';
-            document.getElementById('league-percent').innerText = Math.floor(Math.min(100, progress)) + '%';
+            document.getElementById('up-cost').innerText = (state.tap_power * 500);
+            document.getElementById('user-id-display').innerText = `ID: ${state.user_id}`;
+            document.getElementById('pnl-display').innerText = `PROFIT: +${state.pnl}/hr`;
         }
 
-        // Мультитач с защитой
-        const btn = document.getElementById('btn');
-        btn.addEventListener('touchstart', (e) => {
+        document.getElementById('btn').addEventListener('touchstart', (e) => {
             e.preventDefault();
-            const touches = e.changedTouches;
-            
-            for (let i = 0; i < touches.length; i++) {
+            for (let i = 0; i < e.changedTouches.length; i++) {
                 if (state.energy >= state.tap_power) {
                     state.score += state.tap_power;
                     state.energy -= state.tap_power;
-                    createPlusAnim(touches[i].clientX, touches[i].clientY, state.tap_power);
-                    if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-                } else {
-                    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
-                    break;
+                    createPlusAnim(e.changedTouches[i].clientX, e.changedTouches[i].clientY);
                 }
             }
             updateUI();
-        }, { passive: false });
+        });
 
-        // Отключение контекстного меню (защита от читов/багов)
-        window.oncontextmenu = function(event) {
-            event.preventDefault();
-            event.stopPropagation();
-            return false;
-        };
-
-        function createPlusAnim(x, y, val) {
+        function createPlusAnim(x, y) {
             const el = document.createElement('div');
             el.className = 'plus-animation';
-            el.innerText = '+' + val;
-            el.style.left = `${x - 20}px`; 
-            el.style.top = `${y - 40}px`;
-            el.style.color = (val > 1) ? 'var(--neon)' : 'white';
+            el.innerText = `+${state.tap_power}`;
+            el.style.left = `${x}px`; el.style.top = `${y}px`;
             document.body.appendChild(el);
             setTimeout(() => el.remove(), 700);
         }
 
-        function shareReferral() {
-            const inviteUrl = `https://t.me/neural_pulse_bot?start=${state.user_id}`;
-            const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent("Join my Neural Pulse terminal! Get 50,000 NP bonus!")}`;
-            tg.openTelegramLink(shareUrl);
-        }
-
         function openModal(id) {
-            closeModals();
-            if (id === 'stats') loadLeaderboard();
             document.getElementById('modal-' + id).classList.add('active');
             document.getElementById('overlay').classList.add('active');
-            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            if (id === 'stats') loadLeaderboard();
         }
 
         function closeModals() {
@@ -360,88 +171,30 @@
 
         async function buyUpgrade() {
             const cost = state.tap_power * 500;
-            if (state.score < cost) { tg.showAlert("NOT ENOUGH NP"); return; }
-            
-            // Локальный апдейт для мгновенного отклика
+            if (state.score < cost) return tg.showAlert("Low balance");
             state.score -= cost;
-            state.tap_power += 1;
+            state.tap_power++;
             updateUI();
-
-            try {
-                const r = await fetch('/api/upgrade', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        user_id: state.user_id, 
-                        cost: cost, 
-                        new_lvl: state.tap_power 
-                    })
-                });
-                const res = await r.json();
-                if (res.status !== "ok") throw new Error();
-                
-                if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-                closeModals();
-            } catch (e) { 
-                tg.showAlert("Server Error - Syncing..."); 
-                loadData(); // Откат при ошибке
-            }
+            await fetch('/api/upgrade', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: state.user_id, cost: cost, new_lvl: state.tap_power })
+            });
+            closeModals();
         }
 
         async function loadLeaderboard() {
-            const list = document.getElementById('leaderboard-list');
-            list.innerHTML = "<div style='text-align:center; padding:20px; color:var(--neon)'>SYNCING...</div>";
-            try {
-                const r = await fetch('/api/leaderboard');
-                const res = await r.json();
-                if (res.status === "ok" && res.data) {
-                    list.innerHTML = res.data.map((u, i) => `
-                        <div style="display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid rgba(0,212,255,0.1); background: rgba(255,255,255,0.02); border-radius: 8px; margin-bottom: 5px;">
-                            <span><span style="color:var(--neon)">#${i + 1}</span> ID: ${String(u.id).slice(0,8)}...</span>
-                            <span style="font-weight:bold; color:var(--neon-secondary)">${Math.floor(u.balance).toLocaleString()} NP</span>
-                        </div>
-                    `).join('');
-                }
-            } catch (e) { list.innerHTML = "<div style='text-align:center;'>Service Offline</div>"; }
+            const r = await fetch('/api/leaderboard');
+            const res = await r.json();
+            document.getElementById('leaderboard-list').innerHTML = res.data.map(u => `<div>ID ${u.id}: ${Math.floor(u.balance)}</div>`).join('');
         }
 
-        async function linkWallet() {
-            const addr = document.getElementById('wallet-input').value.trim();
-            if (addr.length < 10) { tg.showAlert("Invalid TON Address"); return; }
-            try {
-                const r = await fetch('/api/save_wallet', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: state.user_id, wallet_address: addr })
-                });
-                const res = await r.json();
-                if (res.status === "ok") {
-                    tg.showAlert("Wallet Linked Successfully!");
-                    closeModals();
-                }
-            } catch (e) { tg.showAlert("Error linking wallet"); }
-        }
-
-        function claimBonus() { 
-            tg.showAlert("Bonus available in 24 hours!"); 
-            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-        }
-
-        // Энергия + PNL (раз в секунду)
         setInterval(() => {
-            let changed = false;
-            if (state.energy < state.max_energy) {
-                state.energy = Math.min(state.max_energy, state.energy + 1.5);
-                changed = true;
-            }
-            if (state.pnl > 0) {
-                state.score += (state.pnl / 3600);
-                changed = true;
-            }
-            if (changed) updateUI();
+            if (state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1);
+            if (state.pnl > 0) state.score += (state.pnl / 3600);
+            updateUI();
         }, 1000);
 
-        // Автосохранение
         setInterval(saveData, 15000);
 
         window.onload = () => {
