@@ -21,7 +21,9 @@
         .league-header { display: flex; justify-content: space-between; font-size: 10px; font-weight: 900; margin-bottom: 4px; letter-spacing: 1px; }
         .league-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; }
         #league-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--neon-purp), var(--neon-blue)); transition: width 0.5s; }
-        .user-id-label { position: absolute; right: 0; top: 12px; font-size: 8px; color: rgba(255,255,255,0.3); }
+        
+        /* LVL LABEL - ВМЕСТО ID */
+        .level-label { position: absolute; right: 0; top: 12px; font-size: 10px; color: var(--neon-blue); font-weight: 900; text-shadow: 0 0 5px var(--neon-blue); }
 
         /* JACKPOT SECTION */
         .jackpot-box { width: 100%; background: rgba(176, 38, 255, 0.05); border: 1px solid rgba(176, 38, 255, 0.2); border-radius: 18px; padding: 10px; text-align: center; margin-top: 15px; box-shadow: inset 0 0 15px rgba(176, 38, 255, 0.1); }
@@ -82,7 +84,7 @@
                 <span id="league-pct">0%</span>
             </div>
             <div class="league-bar"><div id="league-fill"></div></div>
-            <div class="user-id-label" id="display-user-id">ID: 00000000</div>
+            <div class="level-label" id="display-level">LVL 1</div>
             <div style="font-size: 9px; color: var(--neon-green); margin-top: 4px;">● 1,240 ONLINE</div>
         </div>
     </div>
@@ -173,11 +175,11 @@
         { name: "IRON", min: 0, max: 10000 },
         { name: "BRONZE", min: 10000, max: 100000 },
         { name: "SILVER", min: 100000, max: 1000000 },
-        { name: "GOLD", min: 1000000, max: 10000000 }
+        { name: "GOLD", min: 1000000, max: 10000000 },
+        { name: "DIAMOND", min: 10000000, max: Infinity }
     ];
 
     async function init() {
-        document.getElementById('display-user-id').innerText = `ID: ${state.user_id}`;
         try {
             const r = await fetch(`/api/balance/${state.user_id}`);
             const res = await r.json();
@@ -205,8 +207,16 @@
         document.getElementById('energy-lvl').innerText = state.energy_lvl;
         document.getElementById('energy-cost').innerText = (state.energy_lvl * 1000).toLocaleString();
 
-        let league = LEAGUES.find(l => state.score >= l.min && state.score < l.max) || LEAGUES[LEAGUES.length-1];
+        // Логика лиг и уровней
+        let leagueIndex = LEAGUES.findIndex(l => state.score >= l.min && state.score < l.max);
+        if (leagueIndex === -1) leagueIndex = LEAGUES.length - 1;
+        
+        let league = LEAGUES[leagueIndex];
+        
+        // Отображаем УРОВЕНЬ (индекс + 1)
+        document.getElementById('display-level').innerText = `LVL ${leagueIndex + 1}`;
         document.getElementById('league-name').innerText = league.name + " LEAGUE";
+        
         let prog = league.max === Infinity ? 100 : ((state.score - league.min) / (league.max - league.min)) * 100;
         document.getElementById('league-fill').style.width = Math.min(100, prog) + '%';
         document.getElementById('league-pct').innerText = Math.floor(prog) + '%';
@@ -217,7 +227,7 @@
         if(state.energy < state.tap_power) return;
         state.score += state.tap_power;
         state.energy -= state.tap_power;
-        state.jackpot += 0.01; // Небольшой прирост джекпота от тапов
+        state.jackpot += 0.01;
         const touch = e.touches[0];
         createFlyText(touch.clientX, touch.clientY, `+${state.tap_power}`);
         if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
@@ -259,7 +269,7 @@
             if(res.status === 'ok') {
                 state.score += res.bonus_amount; render(); tg.showAlert(res.message);
                 await saveData();
-            } else { tg.showAlert(res.message); }
+            }
         } catch(e) { tg.showAlert("Bonus Error"); }
     }
 
@@ -282,7 +292,7 @@
             const res = await r.json();
             list.innerHTML = res.data.map((u, i) => `
                 <div style="display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid rgba(255,255,255,0.05);">
-                    <span>#${i+1} ID: ${u.id.slice(0,8)}...</span>
+                    <span>#${i+1} User...</span>
                     <span style="color:var(--neon-blue)">${Math.floor(u.balance).toLocaleString()}</span>
                 </div>
             `).join('');
@@ -303,12 +313,12 @@
     setInterval(() => {
         if(state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.2);
         if(state.pnl > 0) state.score += (state.pnl / 3600);
-        state.jackpot += 0.005; // Постепенный рост джекпота
+        state.jackpot += 0.005;
         render();
     }, 1000);
 
     setInterval(saveData, 15000);
     window.onload = init;
 </script>
-</body>
+</body> 
 </html>
