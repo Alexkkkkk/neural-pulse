@@ -10,22 +10,14 @@
         :root { --neon-blue: #00d4ff; --neon-purp: #b026ff; --neon-green: #00ffcc; --bg: #050a1a; --glass: rgba(10, 25, 47, 0.95); }
         body { margin: 0; background: var(--bg); height: 100vh; font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; display: flex; justify-content: center; touch-action: manipulation; }
         
-        /* ЭКРАН ПЕРЕЗАГРУЗКИ */
-        #reloading-screen {
-            position: fixed; inset: 0; background: var(--bg); z-index: 9999;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-        }
-        .loader-logo {
-            width: 80px; height: 80px; border-radius: 20px; border: 2px solid var(--neon-purp);
-            box-shadow: 0 0 20px rgba(176, 38, 255, 0.5); margin-bottom: 20px; overflow: hidden;
-        }
+        #reloading-screen { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .loader-logo { width: 80px; height: 80px; border-radius: 20px; border: 2px solid var(--neon-purp); box-shadow: 0 0 20px rgba(176, 38, 255, 0.5); margin-bottom: 20px; overflow: hidden; }
         .loader-logo img { width: 100%; height: 100%; object-fit: cover; }
         .loader-text { color: var(--neon-blue); font-weight: 900; letter-spacing: 3px; text-shadow: 0 0 10px var(--neon-blue); animation: pulse 1.5s infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
         .game-container { position: relative; width: 100%; max-width: 500px; height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 10px 15px; box-sizing: border-box; }
 
-        /* HEADER */
         .header-top { width: 100%; display: flex; align-items: center; gap: 12px; margin-top: 5px; }
         .ai-icon-small { width: 48px; height: 48px; background: rgba(176, 38, 255, 0.1); border: 2px solid var(--neon-purp); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px rgba(176, 38, 255, 0.4); overflow: hidden; }
         .ai-icon-small img { width: 100%; height: 100%; object-fit: cover; }
@@ -36,40 +28,28 @@
         #league-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--neon-purp), var(--neon-blue)); transition: width 0.5s; }
         .level-label { position: absolute; right: 0; top: 12px; font-size: 10px; color: var(--neon-blue); font-weight: 900; text-shadow: 0 0 5px var(--neon-blue); }
 
-        /* JACKPOT */
         .jackpot-box { width: 100%; background: rgba(176, 38, 255, 0.05); border: 1px solid rgba(176, 38, 255, 0.2); border-radius: 18px; padding: 10px; text-align: center; margin-top: 15px; box-shadow: inset 0 0 15px rgba(176, 38, 255, 0.1); }
         .jackpot-title { font-size: 10px; color: var(--neon-blue); letter-spacing: 2px; font-weight: 700; margin-bottom: 5px; }
         .jackpot-value { font-size: 28px; font-weight: 900; letter-spacing: 1px; color: #fff; text-shadow: 0 0 15px rgba(255, 255, 255, 0.2); }
 
-        /* SCORE */
         #score { font-size: 48px; font-weight: 900; margin: 20px 0 5px 0; text-shadow: 0 0 30px rgba(0, 212, 255, 0.4); }
         #pnl-display { font-size: 13px; color: var(--neon-green); margin-bottom: 10px; font-weight: 700; }
 
-        /* MAIN AREA */
         .game-main { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; flex-grow: 1; }
-        #tap-btn { 
-            width: 280px; height: 280px; 
-            background: url('/images/unnamed3.png') center/contain no-repeat; 
-            border: none; cursor: pointer; z-index: 2; 
-            transition: transform 0.05s; -webkit-tap-highlight-color: transparent; 
-        }
+        #tap-btn { width: 280px; height: 280px; background: url('/images/unnamed3.png') center/contain no-repeat; border: none; cursor: pointer; z-index: 2; transition: transform 0.05s; -webkit-tap-highlight-color: transparent; }
         #tap-btn:active { transform: scale(0.92); }
 
-        /* SIDE BUTTONS */
         .right-buttons { position: absolute; right: -5px; display: flex; flex-direction: column; gap: 10px; z-index: 3; }
         .btn-side { width: 100px; height: 42px; background: rgba(10, 25, 47, 0.8); border: 1px solid var(--neon-blue); border-radius: 14px; color: white; font-family: 'Orbitron'; font-size: 10px; font-weight: 700; cursor: pointer; backdrop-filter: blur(5px); }
 
-        /* ENERGY */
         .energy-box { width: 100%; margin-bottom: 25px; }
         .energy-bar-bg { width: 100%; height: 16px; background: rgba(255,255,255,0.05); border-radius: 20px; border: 1px solid var(--neon-blue); overflow: hidden; }
         #energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--neon-blue), var(--neon-green)); transition: width 0.2s; }
 
-        /* NAV */
         .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; padding-bottom: 25px; }
         .nav-link { height: 55px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; color: white; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
         .nav-link.syncing { border-color: var(--neon-green); color: var(--neon-green); transform: scale(0.95); }
 
-        /* MODALS */
         .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 75%; background: var(--glass); border-top: 3px solid var(--neon-blue); border-radius: 35px 35px 0 0; z-index: 1000; transition: 0.4s; padding: 30px 25px; box-sizing: border-box; overflow-y: auto; backdrop-filter: blur(20px); }
         .modal.active { bottom: 0; }
         .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; z-index: 999; }
@@ -77,8 +57,9 @@
         
         .upgrade-card { background: rgba(255,255,255,0.03); padding: 18px; border-radius: 20px; border: 1px solid rgba(0, 212, 255, 0.2); margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
         .buy-btn { padding: 12px 18px; background: var(--neon-blue); border: none; border-radius: 12px; color: #000; font-weight: 900; font-family: 'Orbitron'; cursor: pointer; }
-        .buy-btn:disabled { background: #555; color: #888; cursor: not-allowed; }
         
+        .leader-row { display: flex; justify-content: space-between; padding: 12px; background: rgba(255,255,255,0.05); margin-bottom: 8px; border-radius: 12px; font-size: 12px; border-left: 3px solid var(--neon-blue); }
+
         .floating-text { position: absolute; pointer-events: none; font-weight: 900; font-size: 32px; color: white; animation: floatUp 0.8s forwards; text-shadow: 0 0 15px var(--neon-blue); z-index: 10; }
         @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-130px); } }
     </style>
@@ -87,7 +68,7 @@
 
 <div id="reloading-screen">
     <div class="loader-logo"><img src="/images/unnamed4.png" alt="Logo"></div>
-    <div class="loader-text">ОБНОВЛЕНИЕ СИСТЕМЫ...</div>
+    <div class="loader-text">СИНХРОНИЗАЦИЯ...</div>
 </div>
 
 <div class="game-container">
@@ -162,8 +143,18 @@
 </div>
 
 <div id="modal-stats" class="modal">
-    <h2 style="text-align:center;">LEADERBOARD</h2>
-    <div style="text-align:center; opacity:0.5;">Calculating global rankings...</div>
+    <h2 style="text-align:center; color: var(--neon-blue);">TOP OPERATORS</h2>
+    <div id="leaderboard-list">
+        <div style="text-align:center; opacity:0.5;">Loading database...</div>
+    </div>
+</div>
+
+<div id="modal-tasks" class="modal">
+    <h2 style="text-align:center; color: var(--neon-purp);">ACTIVE TASKS</h2>
+    <div class="upgrade-card">
+        <div><b>Join Community</b><br><small>+10,000 NP</small></div>
+        <button class="buy-btn" onclick="window.open('https://t.me/NeuralPulseCommunity')">JOIN</button>
+    </div>
 </div>
 
 <script>
@@ -200,6 +191,22 @@
         finally { document.getElementById('reloading-screen').style.display = 'none'; }
     }
 
+    async function loadLeaderboard() {
+        const list = document.getElementById('leaderboard-list');
+        try {
+            const r = await fetch('/api/leaderboard');
+            const res = await r.json();
+            if(res.status === 'ok') {
+                list.innerHTML = res.data.map((u, i) => `
+                    <div class="leader-row">
+                        <span>#${i+1} ID: ${u.id.substring(0,6)}...</span>
+                        <span style="color:var(--neon-blue)">${Math.floor(u.balance).toLocaleString()} NP</span>
+                    </div>
+                `).join('');
+            }
+        } catch(e) { list.innerText = "Error loading stats."; }
+    }
+
     function render() {
         document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
         document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
@@ -207,7 +214,6 @@
         document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
         document.getElementById('display-level').innerText = `LVL ${state.level}`;
 
-        // Обновление цен в модалке Boost
         if(document.getElementById('tap-lvl')) {
             document.getElementById('tap-lvl').innerText = state.tap_power;
             document.getElementById('tap-cost').innerText = (state.tap_power * 1000).toLocaleString();
@@ -219,36 +225,24 @@
         document.getElementById('league-name').innerText = league.name + " LEAGUE";
     }
 
-    // --- ЛОГИКА МАГАЗИНА ---
     function buyUpgrade(type) {
-        if (type === 'tap') {
-            let cost = state.tap_power * 1000;
-            if (state.score >= cost) {
-                state.score -= cost;
-                state.tap_power += 1;
-                tg.HapticFeedback.notificationOccurred('success');
-            } else { tg.showAlert("Недостаточно NP!"); }
-        } else if (type === 'energy') {
-            let cost = state.max_energy * 2;
-            if (state.score >= cost) {
-                state.score -= cost;
-                state.max_energy += 500;
-                state.energy = state.max_energy;
-                tg.HapticFeedback.notificationOccurred('success');
-            } else { tg.showAlert("Недостаточно NP!"); }
-        }
-        render();
-        saveData();
+        let cost = (type === 'tap') ? state.tap_power * 1000 : state.max_energy * 2;
+        if (state.score >= cost) {
+            state.score -= cost;
+            if(type === 'tap') state.tap_power++;
+            else { state.max_energy += 500; state.energy = state.max_energy; }
+            tg.HapticFeedback.notificationOccurred('success');
+            render();
+            saveData();
+        } else { tg.showAlert("Low NP balance!"); }
     }
 
     function buyMiner(cost, income) {
         if (state.score >= cost) {
-            state.score -= cost;
-            state.pnl += income;
+            state.score -= cost; state.pnl += income;
             tg.HapticFeedback.notificationOccurred('success');
-            render();
-            saveData();
-        } else { tg.showAlert("Недостаточно NP!"); }
+            render(); saveData();
+        } else { tg.showAlert("Low NP balance!"); }
     }
 
     async function saveData() {
@@ -256,9 +250,8 @@
             await fetch('/api/save', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    user_id: state.user_id, score: state.score,
-                    click_lvl: state.tap_power, energy: state.energy,
-                    max_energy: state.max_energy, pnl: state.pnl, level: state.level
+                    user_id: state.user_id, score: state.score, click_lvl: state.tap_power,
+                    energy: state.energy, max_energy: state.max_energy, pnl: state.pnl, level: state.level
                 })
             });
         } catch(e) {}
@@ -267,8 +260,7 @@
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
         if(state.energy < state.tap_power) return;
-        state.score += state.tap_power;
-        state.energy -= state.tap_power;
+        state.score += state.tap_power; state.energy -= state.tap_power;
         state.exp += 1;
         if(state.exp > state.level * 1000) { state.level++; state.exp = 0; }
         
@@ -287,6 +279,7 @@
     }
 
     function openModal(id) {
+        if(id === 'stats') loadLeaderboard();
         document.getElementById('modal-' + id).classList.add('active');
         document.getElementById('overlay').classList.add('active');
     }
@@ -304,7 +297,8 @@
 
     function copyRefLink() {
         const link = `https://t.me/NeuralPulseBot?start=${state.user_id}`;
-        tg.showAlert("Link copied! Send it to friends to get +50,000 NP");
+        // В WebApp API нет прямого доступа к буферу, используем showAlert с ссылкой
+        tg.showAlert(`Invite friends! Your link:\n${link}`);
     }
 
     setInterval(() => {
