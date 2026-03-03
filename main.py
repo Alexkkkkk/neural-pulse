@@ -11,18 +11,29 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
+# --- [НОВОЕ: ИМПОРТЫ ДЛЯ TG] ---
+from aiogram import Bot, Dispatcher, types
+from aiogram.types import Update
+
 # --- [КОНФИГ И ЦВЕТА] ---
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
-STATIC_DIR = BASE_DIR / "static"  # ЗАПОМНЕНО: index.html всегда здесь
+STATIC_DIR = BASE_DIR / "static"
 IMAGES_DIR = BASE_DIR / "images"
 BACKUP_DIR = BASE_DIR / "backups"
+
+# ВСТАВЬ СВОЙ ТОКЕН СЮДА:
+API_TOKEN = "ТВОЙ_ТОКЕН_БОТА" 
 
 C = {"G": "\033[92m", "Y": "\033[93m", "R": "\033[91m", "C": "\033[96m", "B": "\033[1m", "E": "\033[0m"}
 
 def log_step(cat: str, msg: str, col: str = C["G"]):
     curr_time = datetime.datetime.now().strftime("%H:%M:%S")
     print(f"{C['B']}[{curr_time}]{C['E']} {col}{cat.ljust(10)}{C['E']} | {msg}", flush=True)
+
+# Инициализация TG объектов
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher()
 
 # --- [STAGE 1] ПОДГОТОВКА ФС ---
 for folder in [STATIC_DIR, IMAGES_DIR, BACKUP_DIR]:
@@ -41,22 +52,27 @@ class SaveData(BaseModel):
     level: int
     exp: int
 
-# --- [STAGE 2] ОБСЛУЖИВАНИЕ (BACKUP & SYNC) ---
+# --- [STAGE 2] TG ХЭНДЛЕРЫ ---
+
+@dp.message()
+async def handle_message(message: types.Message):
+    """Этот код будет писать в логи Bothost каждое сообщение"""
+    user = message.from_user
+    log_step("TG_MSG", f"От: {user.full_name} (@{user.username}) | Текст: {message.text}", C["B"] + C["C"])
+    
+    if message.text == "/start":
+        await message.answer(f"Привет, {user.first_name}! Я тебя вижу в логах Bothost.")
+
+# --- [STAGE 3] ОБСЛУЖИВАНИЕ ---
 
 async def create_backup():
-    """Создает защищенную копию базы данных"""
     try:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
         backup_file = BACKUP_DIR / f"game_backup_{timestamp}.db"
-        
-        # Безопасное копирование SQLite
         async with aiosqlite.connect(DB_PATH) as src:
             async with aiosqlite.connect(backup_file) as dst:
                 await src.backup(dst)
-        
         log_step("BACKUP", f"Создана копия: {backup_file.name}", C["G"])
-        
-        # Ротация: оставляем только 5 последних бэкапов
         backups = sorted(list(BACKUP_DIR.glob("*.db")), key=os.path.getmtime)
         while len(backups) > 5:
             old_file = backups.pop(0)
@@ -66,15 +82,11 @@ async def create_backup():
         log_step("BK_ERR", f"Ошибка бэкапа: {e}", C["R"])
 
 async def maintenance_loop():
-    """Фоновый цикл: сохранение кэша и бэкапы"""
     log_step("SYSTEM", "Цикл обслуживания запущен", C["C"])
     last_backup_time = time.time()
-    
     while True:
         try:
-            await asyncio.sleep(60) # Интервал проверки
-            
-            # 1. Синхронизация кэша в БД
+            await asyncio.sleep(60)
             if USER_CACHE and db_conn:
                 current_cache = USER_CACHE.copy()
                 for uid, info in current_cache.items():
@@ -85,20 +97,16 @@ async def maintenance_loop():
                     )
                 await db_conn.commit()
                 log_step("DB_SYNC", f"Сохранено игроков: {len(current_cache)}")
-                
                 if len(USER_CACHE) > 500:
                     USER_CACHE.clear()
-                    log_step("MEMORY", "Очистка кэша (RAM Save)", C["Y"])
-
-            # 2. Бэкап каждые 12 часов (43200 сек)
+                    log_step("MEMORY", "Очистка кэша", C["Y"])
             if time.time() - last_backup_time > 43200:
                 await create_backup()
                 last_backup_time = time.time()
-
         except Exception as e:
             log_step("LOOP_ERR", f"Сбой цикла: {e}", C["R"])
 
-# --- [STAGE 3] ЖИЗНЕННЫЙ ЦИКЛ ПРИЛОЖЕНИЯ ---
+# --- [STAGE 4] LIFESPAN ---
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -113,13 +121,20 @@ async def lifespan(app: FastAPI):
          level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0)''')
     await db_conn.commit()
     
-    # Сразу создаем бэкап при старте для безопасности
     await create_backup()
+    
+    # Установка Webhook
+    webhook_url = "https://np.bothost.ru/webhook"
+    await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+    log_step("TG_SYSTEM", f"Webhook установлен: {webhook_url}", C["C"])
     
     m_task = asyncio.create_task(maintenance_loop())
     log_step("SYSTEM", "Neural Pulse Engine готов!", C["B"] + C["G"])
+    
     yield
+    
     m_task.cancel()
+    await bot.delete_webhook()
     if db_conn:
         await db_conn.close()
     log_step("SYSTEM", "Сервер остановлен", C["Y"])
@@ -128,7 +143,19 @@ app = FastAPI(lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- [STAGE 4] API ---
+# --- [STAGE 5] ЭНДПОИНТЫ ---
+
+@app.post("/webhook")
+async def telegram_webhook(request: Request):
+    """Принимает сигналы от Telegram"""
+    try:
+        data = await request.json()
+        update = Update.model_validate(data, context={"bot": bot})
+        await dp.feed_update(bot, update)
+        return {"status": "ok"}
+    except Exception as e:
+        log_step("TG_ERR", f"Ошибка обработки вебхука: {e}", C["R"])
+        return JSONResponse({"status": "error"}, status_code=500)
 
 @app.get("/health")
 async def health():
@@ -138,14 +165,11 @@ async def health():
 async def get_balance(user_id: str):
     if user_id in USER_CACHE:
         return {"status": "ok", "data": USER_CACHE[user_id]["data"]}
-    
     db_conn.row_factory = aiosqlite.Row
     async with db_conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)) as cursor:
         user = await cursor.fetchone()
-    
     if not user:
         return {"status": "ok", "data": {"balance": 1000, "level": 1}}
-    
     u_dict = dict(user)
     USER_CACHE[user_id] = {"data": u_dict, "last_save": time.time()}
     return {"status": "ok", "data": u_dict}
@@ -155,7 +179,7 @@ async def save_game(data: SaveData):
     USER_CACHE[data.user_id] = {"data": data.model_dump(), "last_save": time.time()}
     return {"status": "ok"}
 
-# --- [STAGE 5] СТАТИКА ---
+# --- [STAGE 6] СТАТИКА ---
 
 class CachedStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
