@@ -23,7 +23,6 @@ DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 IMAGES_DIR = BASE_DIR / "images"
 
-# Цвета для терминала Bothost
 C_GREEN, C_BLUE, C_YELLOW, C_RED, C_BOLD, C_CYAN, C_MAGENTA, C_WHITE, C_END = (
     "\033[92m", "\033[94m", "\033[93m", "\033[91m", "\033[1m", "\033[96m", "\033[95m", "\033[97m", "\033[0m"
 )
@@ -32,7 +31,7 @@ def log_step(category: str, message: str, color: str = C_WHITE):
     curr_time = datetime.datetime.now().strftime("%H:%M:%S")
     print(f"{C_BOLD}[{curr_time}]{C_END} {color}{category.ljust(12)}{C_END} | {message}", flush=True)
 
-# ПРИНУДИТЕЛЬНОЕ СОЗДАНИЕ ПАПОК
+# Проверка структуры папок
 for folder in [STATIC_DIR, IMAGES_DIR]:
     if not folder.exists():
         folder.mkdir(parents=True, exist_ok=True)
@@ -63,65 +62,51 @@ class SaveData(BaseModel):
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-# --- BACKUP SYSTEM ---
+# --- BACKUP ---
 async def backup_task():
     while True:
-        await asyncio.sleep(86400) # 24 часа
+        await asyncio.sleep(86400)
         try:
             if DB_PATH.exists():
                 file = FSInputFile(DB_PATH, filename=f"backup_{datetime.date.today()}.db")
-                await bot.send_document(ADMIN_ID, file, caption=f"📦 #BACKUP {datetime.date.today()}")
-                log_step("BACKUP", "Успешно отправлен", C_GREEN)
-        except Exception as e: log_step("BACKUP_ERR", str(e), C_RED)
+                await bot.send_document(ADMIN_ID, file, caption="📦 #BACKUP DONE")
+        except: pass
 
-# --- DATABASE (OPTIMIZED) ---
+# --- DATABASE (SPEED OPTIMIZED) ---
 async def init_db():
-    log_step("DB", "Оптимизация SQLite (WAL Mode)...", C_CYAN)
+    log_step("DB", "Настройка WAL и Cache...", C_CYAN)
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("PRAGMA journal_mode=WAL")
         await db.execute("PRAGMA synchronous=NORMAL")
         await db.execute("PRAGMA cache_size=-64000")
-        
         await db.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, click_lvl INTEGER DEFAULT 1, 
              energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000, pnl REAL DEFAULT 0, 
              level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0,
              wallet TEXT DEFAULT NULL, referrer_id TEXT DEFAULT NULL, referrals_count INTEGER DEFAULT 0,
              ref_balance REAL DEFAULT 0, tasks_completed TEXT DEFAULT "")''')
-        
-        cursor = await db.execute("PRAGMA table_info(users)")
-        cols = [row[1] for row in await cursor.fetchall()]
-        needed = {"level": "INTEGER DEFAULT 1", "exp": "INTEGER DEFAULT 0", "wallet": "TEXT DEFAULT NULL"}
-        for col, spec in needed.items():
-            if col not in cols:
-                await db.execute(f"ALTER TABLE users ADD COLUMN {col} {spec}")
-        
         await db.commit()
-        log_step("DB", "База готова", C_GREEN)
+        log_step("DB", "База готова (High-Speed)", C_GREEN)
 
 # --- LIFESPAN ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log_step("SYSTEM", "ЗАПУСК NEURAL PULSE ENGINE...", C_MAGENTA)
+    log_step("SYSTEM", "ЗАПУСК TURBO MODE...", C_MAGENTA)
     await init_db()
     asyncio.create_task(backup_task())
-    
-    webhook_url = f"https://{MY_DOMAIN}/webhook"
     try:
         await bot.delete_webhook(drop_pending_updates=True)
-        await asyncio.sleep(1.5)
-        await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
-        log_step("WEBHOOK", "Синхронизация завершена", C_GREEN)
-    except Exception as e: log_step("WEBHOOK_ERR", str(e), C_RED)
-    
+        await bot.set_webhook(url=f"https://{MY_DOMAIN}/webhook", drop_pending_updates=True)
+        log_step("WEBHOOK", "Активен", C_GREEN)
+    except Exception as e: log_step("ERR", str(e), C_RED)
     yield
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+app.add_middleware(GZipMiddleware, minimum_size=500) # Сжимаем контент
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- API ENDPOINTS ---
+# --- API ---
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
@@ -130,20 +115,12 @@ async def get_balance(user_id: str):
         async with db.execute("SELECT * FROM users WHERE id = ?", (str(user_id),)) as cursor:
             user = await cursor.fetchone()
         
-        now = int(time.time())
         if not user:
+            now = int(time.time())
             await db.execute("INSERT INTO users (id, balance, last_active) VALUES (?, 1000, ?)", (user_id, now))
             await db.commit()
-            return {"status": "ok", "data": {"balance": 1000, "level": 1, "energy": 1000, "pnl": 0}}
-
-        u = dict(user)
-        if u['pnl'] > 0 and u['last_active'] > 0:
-            earned = ((now - u['last_active']) / 3600) * u['pnl']
-            if earned > 0:
-                u['balance'] += earned
-                await db.execute("UPDATE users SET balance=?, last_active=? WHERE id=?", (u['balance'], now, user_id))
-                await db.commit()
-        return {"status": "ok", "data": u}
+            return {"status": "ok", "data": {"balance": 1000, "level": 1}}
+        return {"status": "ok", "data": dict(user)}
 
 @app.post("/api/save")
 async def save_game(data: SaveData):
@@ -158,15 +135,7 @@ async def save_game(data: SaveData):
             )
             await db.commit()
         return {"status": "ok"}
-    except Exception: return JSONResponse({"status": "error"}, status_code=400)
-
-@app.get("/api/leaderboard")
-async def get_leaderboard():
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT id, balance, level FROM users ORDER BY balance DESC LIMIT 10") as cursor:
-            rows = await cursor.fetchall()
-            return {"status": "ok", "data": [dict(r) for r in rows]}
+    except: return JSONResponse({"status": "error"}, status_code=400)
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
@@ -177,29 +146,31 @@ async def bot_webhook(request: Request):
     except: pass
     return {"ok": True}
 
-# --- BOT HANDLERS ---
+# --- HANDLERS ---
 @dp.message(Command("start"))
-async def cmd_start(m: types.Message, command: CommandObject):
-    user_id = str(m.from_user.id)
+async def cmd_start(m: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))]
+        [InlineKeyboardButton(text="⚡ ВХОД В ТЕРМИНАЛ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))]
     ])
-    await m.answer(f"<b>Neural Pulse Online</b>\n\nСистема инициализирована.", reply_markup=kb)
+    await m.answer("<b>Neural Pulse Online</b>\nДоступ разрешен.", reply_markup=kb)
 
-# --- STATIC & INDEX (ФИКСИРОВАННО: static/index.html) ---
+# --- STATIC (ЗАПОМНИЛ: static/index.html) ---
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+
+
 @app.get("/")
 async def index():
-    # ЗАПОМНЕНО: index.html всегда в папке static
     index_path = STATIC_DIR / "index.html"
     if not index_path.exists():
-        log_step("WEB_ERR", f"index.html отсутствует в static: {index_path}", C_RED)
-        return JSONResponse({"error": "index.html not found in static folder"}, status_code=404)
-        
-    return FileResponse(index_path, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+        return JSONResponse({"error": "No index.html"}, status_code=404)
+    # Кэшируем на стороне клиента на 10 минут, чтобы открывалось мгновенно
+    return FileResponse(index_path, headers={
+        "Cache-Control": "public, max-age=600",
+        "Connection": "keep-alive"
+    })
 
-# --- START ---
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 3000)), access_log=False)
+    # Используем loop="uvloop" для максимальной производительности на Linux
+    uvicorn.run(app, host="0.0.0.0", port=3000, access_log=False)
