@@ -3,12 +3,12 @@ import aiosqlite
 import uvicorn
 from pathlib import Path
 from contextlib import asynccontextmanager
-from typing import Optional  # Важно для гибких схем
+from typing import Optional, Any
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from aiogram.client.default import DefaultBotProperties
@@ -21,7 +21,7 @@ MY_DOMAIN = "np.bothost.ru"
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 
-# Создаем нужные папки, если их нет
+# Подготовка папок
 (BASE_DIR / "static").mkdir(exist_ok=True)
 (BASE_DIR / "images").mkdir(exist_ok=True)
 
@@ -31,13 +31,17 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-# --- СХЕМЫ ДАННЫХ (ИСПРАВЛЕНО ДЛЯ УСТРАНЕНИЯ ОШИБКИ 422) ---
+# --- СХЕМЫ ДАННЫХ (МАКСИМАЛЬНАЯ ГИБКОСТЬ) ---
 class SaveData(BaseModel):
     user_id: str
-    score: float   
-    click_lvl: Optional[float] = 1.0  # Используем float и Optional
-    energy: float  
-    pnl: Optional[float] = 0.0       # JS часто шлет 0 как float или может не прислать вовсе
+    score: Optional[float] = 0.0
+    click_lvl: Optional[float] = 1.0
+    energy: Optional[float] = 0.0
+    pnl: Optional[float] = 0.0
+
+    class Config:
+        # Позволяет принимать поля, не описанные в схеме, без ошибки 422
+        extra = "allow"
 
 class UpgradeData(BaseModel):
     user_id: str
@@ -57,7 +61,7 @@ async def init_db():
              pnl REAL DEFAULT 0, last_active INTEGER DEFAULT 0,
              wallet TEXT, referrer_id TEXT, referrals_count INTEGER DEFAULT 0)''')
         await db.commit()
-    logger.info("Database initialized with REAL types.")
+    logger.info("Database initialized.")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -99,12 +103,27 @@ async def get_balance(user_id: str):
         return {"status": "ok", "data": u}
 
 @app.post("/api/save")
-async def save_game(data: SaveData):
+async def save_game(request: Request):
+    # Прямое чтение JSON для отладки, если валидация через SaveData не пройдет
+    try:
+        body = await request.json()
+        # Пытаемся распарсить через схему
+        data = SaveData(**body)
+    except Exception as e:
+        logger.error(f"Save error: {e} | Body: {await request.body()}")
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=422)
+
     async with aiosqlite.connect(DB_PATH) as db:
-        # Принудительно приводим к нужным типам перед записью
         await db.execute(
             "UPDATE users SET balance=?, click_lvl=?, energy=?, pnl=?, last_active=? WHERE id=?", 
-            (float(data.score), int(data.click_lvl), float(data.energy), float(data.pnl), int(time.time()), data.user_id)
+            (
+                float(data.score or 0), 
+                int(data.click_lvl or 1), 
+                float(data.energy or 0), 
+                float(data.pnl or 0), 
+                int(time.time()), 
+                data.user_id
+            )
         )
         await db.commit()
     return {"status": "ok"}
@@ -122,7 +141,6 @@ async def upgrade_tap(data: UpgradeData):
             (data.cost, data.new_lvl, data.user_id)
         )
         await db.commit()
-        
         async with db.execute("SELECT balance FROM users WHERE id = ?", (data.user_id,)) as cursor:
             new_row = await cursor.fetchone()
             return {"status": "ok", "new_balance": new_row[0]}
@@ -160,7 +178,7 @@ async def cmd_start(m: types.Message, command: CommandObject):
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))],
-        [InlineKeyboardButton(text="🔗 ПРИГЛАСИТЬ", switch_inline_query=f"Присоединяйся! Мой ID: {user_id}")]
+        [InlineKeyboardButton(text="🔗 ПРИГЛАСИТЬ", switch_inline_query=f"https://t.me/neural_pulse_bot?start={user_id}")]
     ])
     await m.answer(f"<b>Neural Pulse Online.</b>\nID: <code>{user_id}</code>", reply_markup=kb)
 
