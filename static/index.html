@@ -160,9 +160,17 @@
 <script>
     const tg = window.Telegram.WebApp;
 
+    // --- [ИНИЦИАЛИЗАЦИЯ TELEGRAM SDK] ---
+    tg.ready();
+    tg.expand();
+    tg.enableClosingConfirmation();
+    tg.setHeaderColor('#050a1a');
+
     let state = {
         score: 0, energy: 1000, max_energy: 1000, tap_power: 1, pnl: 0, 
-        level: 1, exp: 0, user_id: String(tg.initDataUnsafe?.user?.id || '476014374'),
+        level: 1, exp: 0, 
+        user_id: String(tg.initDataUnsafe?.user?.id || '476014374'),
+        username: tg.initDataUnsafe?.user?.username || 'Guest',
         jackpot: 500052
     };
 
@@ -173,13 +181,9 @@
         { name: "GOLD", min: 1000000, max: Infinity }
     ];
 
-    // УЛУЧШЕННАЯ ИНИЦИАЛИЗАЦИЯ
     async function init() {
-        tg.ready();
-        tg.expand();
-        
         let attempts = 0;
-        const maxAttempts = 5;
+        const maxAttempts = 3;
 
         while (attempts < maxAttempts) {
             try {
@@ -195,16 +199,13 @@
                     state.pnl = res.data.pnl || 0;
                     state.level = res.data.level || 1;
                     render();
-                    break; // Успешно загрузились
+                    break;
                 }
             } catch(e) {
                 attempts++;
-                console.log(`Connection attempt ${attempts} failed. Retrying...`);
-                await new Promise(res => setTimeout(res, 1500)); // Ждем 1.5 сек перед ретраем
+                await new Promise(res => setTimeout(res, 1500));
             }
         }
-        
-        // В любом случае скрываем экран через попытки, чтобы не висел вечно
         document.getElementById('reloading-screen').style.display = 'none';
     }
 
@@ -216,7 +217,7 @@
             if(res.status === 'ok') {
                 list.innerHTML = res.data.map((u, i) => `
                     <div class="leader-row">
-                        <span>#${i+1} ID: ${u.id.substring(0,6)}...</span>
+                        <span>#${i+1} ${u.id.substring(0,8)}</span>
                         <span style="color:var(--neon-blue)">${Math.floor(u.balance).toLocaleString()} NP</span>
                     </div>
                 `).join('');
@@ -251,7 +252,10 @@
             tg.HapticFeedback.notificationOccurred('success');
             render();
             saveData();
-        } else { tg.showAlert("Low NP balance!"); }
+        } else { 
+            tg.HapticFeedback.notificationOccurred('error');
+            tg.showAlert("Low NP balance!"); 
+        }
     }
 
     function buyMiner(cost, income) {
@@ -259,7 +263,10 @@
             state.score -= cost; state.pnl += income;
             tg.HapticFeedback.notificationOccurred('success');
             render(); saveData();
-        } else { tg.showAlert("Low NP balance!"); }
+        } else { 
+            tg.HapticFeedback.notificationOccurred('error');
+            tg.showAlert("Low NP balance!"); 
+        }
     }
 
     async function saveData() {
@@ -268,7 +275,7 @@
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
                     user_id: state.user_id, score: state.score, click_lvl: state.tap_power,
-                    energy: state.energy, max_energy: state.max_energy, pnl: state.pnl, level: state.level
+                    energy: state.energy, max_energy: state.max_energy, pnl: state.pnl, level: state.level, exp: state.exp
                 })
             });
         } catch(e) {}
@@ -276,14 +283,25 @@
 
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
-        if(state.energy < state.tap_power) return;
-        state.score += state.tap_power; state.energy -= state.tap_power;
+        if(state.energy < state.tap_power) {
+            tg.HapticFeedback.notificationOccurred('warning');
+            return;
+        }
+        state.score += state.tap_power; 
+        state.energy -= state.tap_power;
         state.exp += 1;
-        if(state.exp > state.level * 1000) { state.level++; state.exp = 0; }
+        
+        if(state.exp > state.level * 1000) { 
+            state.level++; 
+            state.exp = 0; 
+            tg.showAlert("Level Up!");
+        }
         
         const t = e.touches[0];
         createFlyText(t.clientX, t.clientY, `+${state.tap_power}`);
-        tg.HapticFeedback.impactOccurred('medium');
+        
+        // Вибрация при каждом клике
+        tg.HapticFeedback.impactOccurred('light');
         render();
     });
 
@@ -299,31 +317,41 @@
         if(id === 'stats') loadLeaderboard();
         document.getElementById('modal-' + id).classList.add('active');
         document.getElementById('overlay').classList.add('active');
+        
+        // Показываем кнопку закрытия в интерфейсе Telegram
+        tg.MainButton.setText('CLOSE');
+        tg.MainButton.show();
+        tg.MainButton.onClick(closeModals);
     }
 
     function closeModals() {
         document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
         document.getElementById('overlay').classList.remove('active');
+        tg.MainButton.hide();
     }
 
     async function uiAction(btn, id) {
         btn.classList.add('syncing');
+        tg.HapticFeedback.impactOccurred('medium');
         await saveData();
         setTimeout(() => { btn.classList.remove('syncing'); openModal(id); }, 300);
     }
 
     function copyRefLink() {
         const link = `https://t.me/NeuralPulseBot?start=${state.user_id}`;
+        tg.HapticFeedback.impactOccurred('medium');
         tg.showAlert(`Invite friends! Your link:\n${link}`);
     }
 
+    // Пассивный доход и энергия
     setInterval(() => {
         if(state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.5);
         if(state.pnl > 0) state.score += (state.pnl / 3600);
         render();
     }, 1000);
 
-    setInterval(saveData, 5000);
+    // Автосохранение раз в 10 секунд
+    setInterval(saveData, 10000);
     window.onload = init;
 </script>
 </body>
