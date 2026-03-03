@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware  # <-- Новое для скорости
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict
@@ -30,11 +31,11 @@ def log_step(category: str, message: str, color: str = C_WHITE):
     curr_time = datetime.datetime.now().strftime("%H:%M:%S")
     print(f"{C_BOLD}[{curr_time}]{C_END} {color}{category.ljust(12)}{C_END} | {message}", flush=True)
 
-# ПРИНУДИТЕЛЬНОЕ СОЗДАНИЕ ПАПОК (Чтобы избежать RuntimeError при mount)
+# ПРИНУДИТЕЛЬНОЕ СОЗДАНИЕ ПАПОК
 for folder in [STATIC_DIR, IMAGES_DIR]:
     if not folder.exists():
         folder.mkdir(parents=True, exist_ok=True)
-        log_step("FS", f"Создана отсутствующая папка: {folder.name}", C_YELLOW)
+        log_step("FS", f"Создана папка: {folder.name}", C_YELLOW)
 
 # --- CONFIG ---
 TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU"
@@ -63,22 +64,24 @@ dp = Dispatcher()
 
 # --- BACKUP SYSTEM ---
 async def backup_task():
-    log_step("TASK", "Модуль бэкапа активен", C_BLUE)
     while True:
-        await asyncio.sleep(86400) # 24 часа
+        await asyncio.sleep(86400)
         try:
             if DB_PATH.exists():
                 file = FSInputFile(DB_PATH, filename=f"backup_{datetime.date.today()}.db")
                 await bot.send_document(ADMIN_ID, file, caption=f"📦 #BACKUP {datetime.date.today()}")
-                log_step("BACKUP", "Бэкап успешно отправлен", C_GREEN)
-        except Exception as e:
-            log_step("BACKUP_ERR", str(e), C_RED)
+                log_step("BACKUP", "Успешно отправлен", C_GREEN)
+        except Exception as e: log_step("BACKUP_ERR", str(e), C_RED)
 
-# --- DATABASE ---
+# --- DATABASE (ОПТИМИЗИРОВАНО) ---
 async def init_db():
-    log_step("DB", "Проверка таблиц и миграций...", C_CYAN)
+    log_step("DB", "Оптимизация SQLite (WAL Mode)...", C_CYAN)
     async with aiosqlite.connect(DB_PATH) as db:
+        # Ускоряем базу данных
         await db.execute("PRAGMA journal_mode=WAL")
+        await db.execute("PRAGMA synchronous=NORMAL")
+        await db.execute("PRAGMA cache_size=-64000") # 64MB кэша
+        
         await db.execute('''CREATE TABLE IF NOT EXISTS users 
             (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, click_lvl INTEGER DEFAULT 1, 
              energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000, pnl REAL DEFAULT 0, 
@@ -86,44 +89,38 @@ async def init_db():
              wallet TEXT DEFAULT NULL, referrer_id TEXT DEFAULT NULL, referrals_count INTEGER DEFAULT 0,
              ref_balance REAL DEFAULT 0, tasks_completed TEXT DEFAULT "")''')
         
-        # Авто-миграция колонок
         cursor = await db.execute("PRAGMA table_info(users)")
         cols = [row[1] for row in await cursor.fetchall()]
         needed = {"level": "INTEGER DEFAULT 1", "exp": "INTEGER DEFAULT 0", "wallet": "TEXT DEFAULT NULL"}
         for col, spec in needed.items():
             if col not in cols:
                 await db.execute(f"ALTER TABLE users ADD COLUMN {col} {spec}")
-                log_step("DB_MIGRATE", f"Добавлена колонка {col}", C_MAGENTA)
         
         await db.commit()
-        log_step("DB", "База готова к работе", C_GREEN)
+        log_step("DB", "База оптимизирована и готова", C_GREEN)
 
-# --- LIFESPAN (AGRESSIVE WEBHOOK) ---
+# --- LIFESPAN (AGRESSIVE) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log_step("SYSTEM", "ЗАПУСК NEURAL PULSE ENGINE...", C_CYAN)
+    log_step("SYSTEM", "ЗАПУСК TURBO ENGINE...", C_MAGENTA)
     await init_db()
     asyncio.create_task(backup_task())
     
-    # Агрессивный сброс вебхука
     webhook_url = f"https://{MY_DOMAIN}/webhook"
     try:
-        log_step("WEBHOOK", "Полная перезагрузка хука...", C_YELLOW)
         await bot.delete_webhook(drop_pending_updates=True)
-        await asyncio.sleep(2) # Техническая пауза
-        await bot.set_webhook(
-            url=webhook_url, 
-            drop_pending_updates=True,
-            allowed_updates=["message", "callback_query", "my_chat_member"]
-        )
-        log_step("WEBHOOK", f"Активен: {webhook_url}", C_GREEN)
-    except Exception as e:
-        log_step("WEBHOOK_ERR", str(e), C_RED)
+        await asyncio.sleep(1.5)
+        await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+        log_step("WEBHOOK", "Синхронизация завершена", C_GREEN)
+    except Exception as e: log_step("WEBHOOK_ERR", str(e), C_RED)
     
     yield
     await bot.session.close()
 
 app = FastAPI(lifespan=lifespan)
+
+# --- MIDDLEWARES (СКОРОСТЬ) ---
+app.add_middleware(GZipMiddleware, minimum_size=1000) # Сжатие данных
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # --- API ENDPOINTS ---
@@ -163,46 +160,27 @@ async def save_game(data: SaveData):
             )
             await db.commit()
         return {"status": "ok"}
-    except Exception as e:
-        log_step("SAVE_ERR", str(e), C_RED)
-        return JSONResponse({"status": "error"}, status_code=400)
-
-@app.get("/api/leaderboard")
-async def get_leaderboard():
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT id, balance, level FROM users ORDER BY balance DESC LIMIT 10") as cursor:
-            rows = await cursor.fetchall()
-            return {"status": "ok", "data": [dict(r) for r in rows]}
+    except Exception: return JSONResponse({"status": "error"}, status_code=400)
 
 @app.post("/webhook")
 async def bot_webhook(request: Request):
-    data = await request.json()
-    update = Update.model_validate(data, context={"bot": bot})
-    await dp.feed_update(bot, update)
+    try:
+        data = await request.json()
+        update = Update.model_validate(data, context={"bot": bot})
+        await dp.feed_update(bot, update)
+    except: pass
     return {"ok": True}
 
-# --- BOT HANDLERS ---
+# --- HANDLERS ---
 @dp.message(Command("start"))
 async def cmd_start(m: types.Message, command: CommandObject):
     user_id = str(m.from_user.id)
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("SELECT id FROM users WHERE id = ?", (user_id,)) as cursor:
-            if not await cursor.fetchone():
-                ref_id = str(command.args) if command.args and str(command.args) != user_id else None
-                await db.execute("INSERT INTO users (id, balance, referrer_id, last_active) VALUES (?, 1000, ?, ?)", 
-                                 (user_id, ref_id, int(time.time())))
-                if ref_id:
-                    await db.execute("UPDATE users SET balance=balance+50000 WHERE id=?", (ref_id,))
-                await db.commit()
-
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", web_app=WebAppInfo(url=f"https://{MY_DOMAIN}/"))]
     ])
-    await m.answer(f"<b>Neural Pulse Online</b>\n\nСистема инициализирована.", reply_markup=kb)
+    await m.answer(f"<b>Neural Pulse Engine</b>\nСистема онлайн.", reply_markup=kb)
 
-# --- STATIC ---
-# Монтируем папки только после того, как убедились в их существовании (Stage 0)
+# --- STATIC (ЗАПОМНИЛ: ВСЕГДА ТУТ) ---
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
@@ -212,6 +190,4 @@ async def index():
 
 # --- START ---
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 3000))
-    log_step("SERVER", f"Запуск на порту {port}", C_BOLD + C_GREEN)
-    uvicorn.run(app, host="0.0.0.0", port=port, access_log=False)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 3000)), access_log=False)
