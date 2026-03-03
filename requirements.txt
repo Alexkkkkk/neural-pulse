@@ -3,3 +3,5 @@ uvicorn[standard]
 aiosqlite
 pydantic
 aiogram
+httptools
+uvloop; sys_platform != 'win32'
