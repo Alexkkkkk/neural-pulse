@@ -1,24 +1,12 @@
-# ИСПОЛЬЗУЕМ ЯВНЫЙ ОБРАЗ ПИТОНА
-FROM python:3.11-slim
-
-# Установка системных зависимостей
-RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
-
+FROM python:3.10-slim
 WORKDIR /app
-
-# Отключаем создание лишних файлов
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
-
-# Ставим библиотеки
+# Системные зависимости
+RUN apt-get update && apt-get install -y gcc python3-dev && rm -rf /var/lib/apt/lists/*
+# Питон-зависимости
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Копируем проект
+# КОПИРУЕМ ВСЁ (включая index.html)
 COPY . .
-
-# Открываем порт
+# Порт и запуск
 EXPOSE 3000
-
-# ГЛАВНОЕ: Используем ENTRYPOINT в формате списка
-ENTRYPOINT ["python3", "main.py"]
+CMD ["python", "main.py"]
