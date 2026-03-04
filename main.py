@@ -1,7 +1,7 @@
 import os, asyncio, logging, time, datetime, sys, json, traceback, shutil
 import aiosqlite
 import uvicorn
-import psutil  # Не забудь добавить в requirements.txt
+import psutil  # Не забудь добавить в requirements.txt!
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Optional, Dict
@@ -93,10 +93,10 @@ async def admin_calls(call: types.CallbackQuery):
                     shutil.rmtree(os.path.join(root, d)); count += 1
         await call.answer(f"Очищено {count} папок кэша", show_alert=True)
     elif action == "reboot":
-        await call.message.edit_text("🔄 Рестарт...")
+        await call.message.edit_text("🔄 Перезагрузка системы...")
+        log_step("SYSTEM", "Перезагрузка по команде админа", C["R"])
         os.execv(sys.executable, ['python'] + sys.argv)
     elif action == "stop":
-        await call.message.edit_text("⛔ Стоп.")
         sys.exit()
 
 # --- [ОБЫЧНЫЕ КОМАНДЫ] ---
@@ -105,12 +105,12 @@ async def start_cmd(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Запустить Neural Pulse 🚀", web_app=types.WebAppInfo(url="https://np.bothost.ru/"))]
     ])
-    await message.answer(f"Привет, {message.from_user.first_name}!\nЖми на кнопку ниже!", reply_markup=kb)
+    await message.answer(f"Привет, {message.from_user.first_name}! Твоя нейросеть готова.\nЖми на кнопку ниже!", reply_markup=kb)
     log_step("TG_SEND", f"WebApp отправлен {message.from_user.id}")
 
 # --- [ФОНОВЫЕ ЗАДАЧИ И БД] ---
 async def maintenance_loop():
-    log_step("SYSTEM", "Синхронизация БД активна (60с)", C["C"])
+    log_step("SYSTEM", "Цикл синхронизации БД активен (60 сек)", C["C"])
     while True:
         try:
             await asyncio.sleep(60)
@@ -124,7 +124,7 @@ async def maintenance_loop():
                          d.get('pnl'), d.get('level'), d.get('exp'), int(time.time()), str(uid))
                     )
                 await db_conn.commit()
-                log_step("DB_SAVE", f"Сохранено {len(USER_CACHE)} игроков", C["P"])
+                log_step("DB_SAVE", f"Синхронизировано {len(USER_CACHE)} игроков", C["P"])
         except Exception as e:
             log_step("DB_ERR", f"Ошибка сохранения: {e}", C["R"])
 
@@ -137,33 +137,31 @@ async def lifespan(app: FastAPI):
     await db_conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, click_lvl INTEGER DEFAULT 1, energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000, pnl REAL DEFAULT 0, level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0)")
     await db_conn.commit()
     await bot.delete_webhook(drop_pending_updates=True)
-    asyncio.create_task(dp.start_polling(bot))
-    asyncio.create_task(maintenance_loop())
+    polling_task = asyncio.create_task(dp.start_polling(bot))
+    sync_task = asyncio.create_task(maintenance_loop())
     yield
+    polling_task.cancel()
+    sync_task.cancel()
     await db_conn.close()
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- [API ЭНДПОИНТЫ] ---
+# --- [API] ---
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     uid = str(user_id)
-    log_step("API_GET", f"Запрос баланса: {uid}", C["Y"])
     if uid in USER_CACHE: return {"status": "ok", "data": USER_CACHE[uid]["data"]}
-    
     db_conn.row_factory = aiosqlite.Row
     async with db_conn.execute("SELECT * FROM users WHERE id = ?", (uid,)) as cursor:
         user = await cursor.fetchone()
-    
     if not user:
         new_d = {"score": 1000, "click_lvl": 1, "energy": 1000, "max_energy": 1000, "pnl": 0, "level": 1, "exp": 0}
-        await db_conn.execute("INSERT INTO users (id, balance) VALUES (?, 1000)", (uid,))
+        await db_conn.execute("INSERT INTO users (id, balance) VALUES (?, ?)", (uid, 1000))
         await db_conn.commit()
         USER_CACHE[uid] = {"data": new_d}
         return {"status": "ok", "data": new_d}
-    
     res = dict(user)
     res["score"] = res.pop("balance")
     USER_CACHE[uid] = {"data": res}
@@ -172,18 +170,23 @@ async def get_balance(user_id: str):
 @app.post("/api/save")
 async def save_game(data: SaveData):
     uid = str(data.user_id)
-    log_step("API_SAVE", f"Синхронизация кэша: {uid}", C["P"])
     if uid not in USER_CACHE: USER_CACHE[uid] = {"data": {}}
     USER_CACHE[uid]["data"].update(data.model_dump(exclude_unset=True))
+    log_step("API_SAVE", f"Данные пользователя {uid} обновлены в кэше", C["Y"])
     return {"status": "ok"}
 
 @app.get("/api/leaderboard")
 async def get_leaderboard():
-    log_step("API_TOP", "Запрос таблицы лидеров", C["C"])
-    db_conn.row_factory = aiosqlite.Row
-    async with db_conn.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10") as cursor:
-        rows = await cursor.fetchall()
-        return {"status": "ok", "data": [dict(r) for r in rows]}
+    try:
+        log_step("API_TOP", "Запрос таблицы лидеров", C["C"])
+        db_conn.row_factory = aiosqlite.Row
+        async with db_conn.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10") as cursor:
+            rows = await cursor.fetchall()
+            data = [dict(r) for r in rows]
+            return {"status": "ok", "data": data}
+    except Exception as e:
+        log_step("API_ERR", f"Ошибка лидерборда: {e}", C["R"])
+        return {"status": "error", "message": str(e)}
 
 @app.get("/")
 async def index():
