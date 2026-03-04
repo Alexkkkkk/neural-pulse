@@ -22,10 +22,11 @@ IMAGES_DIR = STATIC_DIR / "images"
 # ID Администратора
 ADMIN_ID = 476014374 
 
+# Создание структуры папок
 for folder in [STATIC_DIR, IMAGES_DIR]:
     folder.mkdir(parents=True, exist_ok=True)
 
-# Токен
+# Токен бота
 API_TOKEN = "8257287930:AAGMADWoM4PUoZu8OhmnOOtKyaDlTLRWUn4" 
 
 # --- [ЦВЕТНОЕ ЛОГИРОВАНИЕ] ---
@@ -35,13 +36,14 @@ C = {
 }
 
 def log_step(cat: str, msg: str, col: str = C["G"]):
+    """Логирование каждой операции сервера"""
     curr_time = datetime.datetime.now().strftime("%H:%M:%S")
     print(f"{C['B']}[{curr_time}]{C['E']} {col}{cat.ljust(12)}{C['E']} | {msg}", flush=True)
 
 # --- [БОТ И ДИСПЕТЧЕР] ---
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
-USER_CACHE: Dict[str, dict] = {}
+USER_CACHE: Dict[str, dict] = {} # Оперативный кэш игроков в RAM
 db_conn: Optional[aiosqlite.Connection] = None
 
 class SaveData(BaseModel):
@@ -66,24 +68,23 @@ def get_admin_kb():
 @dp.message(F.text == "/admin")
 async def admin_cmd(message: types.Message):
     if message.from_user.id != ADMIN_ID: return
+    log_step("ADMIN", f"Вход в админку: {message.from_user.id}", C["Y"])
     await message.answer("<b>⚡ NEURAL PULSE ADMIN</b>\nВыбери действие:", 
                          parse_mode="HTML", reply_markup=get_admin_kb())
 
 @dp.callback_query(F.data.startswith("adm_"))
 async def admin_calls(call: types.CallbackQuery):
-    if call.from_user.id != ADMIN_ID: 
-        await call.answer("Доступ запрещен", show_alert=True)
-        return
+    if call.from_user.id != ADMIN_ID: return
     action = call.data.split("_")[1]
+    
     if action == "status":
         process = psutil.Process(os.getpid())
         mem = process.memory_info().rss / 1024 / 1024
         db_size = os.path.getsize(DB_PATH) / 1024 if DB_PATH.exists() else 0
-        txt = (f"<b>Статус:</b> Online ✅\n"
-               f"<b>RAM:</b> {mem:.1f} MB\n"
-               f"<b>DB:</b> {db_size:.1f} KB\n"
-               f"<b>В кэше:</b> {len(USER_CACHE)} чел.")
+        txt = (f"<b>Статус:</b> Online ✅\n<b>RAM:</b> {mem:.1f} MB\n"
+               f"<b>DB:</b> {db_size:.1f} KB\n<b>В кэше:</b> {len(USER_CACHE)} чел.")
         await call.message.edit_text(txt, parse_mode="HTML", reply_markup=get_admin_kb())
+    
     elif action == "clear":
         count = 0
         for root, dirs, files in os.walk('.'):
@@ -91,14 +92,12 @@ async def admin_calls(call: types.CallbackQuery):
                 if d == '__pycache__':
                     shutil.rmtree(os.path.join(root, d)); count += 1
         await call.answer(f"Очищено {count} папок кэша", show_alert=True)
+    
     elif action == "reboot":
-        await call.message.edit_text("🔄 Перезагрузка системы...")
+        log_step("SYSTEM", "Перезагрузка по команде ADMIN", C["R"])
         os.execv(sys.executable, ['python'] + sys.argv)
-    elif action == "stop":
-        await call.message.edit_text("⛔ Сервер остановлен.")
-        sys.exit()
 
-# --- [ОБЫЧНЫЕ КОМАНДЫ] ---
+# --- [ОБЫЧНЫЕ КОМАНДЫ БОТА] ---
 @dp.message(F.text == "/start")
 async def start_cmd(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -108,11 +107,11 @@ async def start_cmd(message: types.Message):
         f"Привет, {message.from_user.first_name}! Твоя нейросеть готова.\nЖми на кнопку ниже!", 
         reply_markup=kb
     )
-    log_step("TG_SEND", f"WebApp отправлен {message.from_user.id}")
+    log_step("TG_BOT", f"Команда /start от {message.from_user.id}")
 
-# --- [ФОНОВЫЕ ЗАДАЧИ И БД] ---
+# --- [ФОНОВАЯ СИНХРОНИЗАЦИЯ С БД] ---
 async def maintenance_loop():
-    log_step("SYSTEM", "Цикл синхронизации БД активен (60 сек)", C["C"])
+    log_step("DB_LOOP", "Цикл записи кэша в БД запущен (60 сек)", C["C"])
     while True:
         try:
             await asyncio.sleep(60)
@@ -126,45 +125,64 @@ async def maintenance_loop():
                          d.get('pnl'), d.get('level'), d.get('exp'), int(time.time()), str(uid))
                     )
                 await db_conn.commit()
-                log_step("DB_SAVE", f"Синхронизировано {len(USER_CACHE)} игроков", C["P"])
+                log_step("DB_SYNC", f"Данные {len(USER_CACHE)} игроков сохранены в файл", C["P"])
         except Exception as e:
-            log_step("DB_ERR", f"Ошибка сохранения: {e}", C["R"])
+            log_step("DB_ERR", f"Ошибка синхронизации: {e}", C["R"])
 
+# --- [LIFESPAN: ЗАПУСК И ОСТАНОВКА] ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_conn
-    log_step("STARTUP", ">>> Инициализация Neural Pulse <<<", C["B"])
+    log_step("STARTUP", ">>> Инициализация сервера Neural Pulse <<<", C["B"])
+    
+    # Подключение к БД
     db_conn = await aiosqlite.connect(DB_PATH)
     await db_conn.execute("PRAGMA journal_mode=WAL")
-    await db_conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, click_lvl INTEGER DEFAULT 1, energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000, pnl REAL DEFAULT 0, level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0)")
+    await db_conn.execute("""CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, click_lvl INTEGER DEFAULT 1, 
+        energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000, 
+        pnl REAL DEFAULT 0, level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, 
+        last_active INTEGER DEFAULT 0)""")
     await db_conn.commit()
+    log_step("DATABASE", "Соединение с game.db установлено", C["G"])
     
+    # Запуск бота и фоновых задач
     await bot.delete_webhook(drop_pending_updates=True)
     polling_task = asyncio.create_task(dp.start_polling(bot))
     sync_task = asyncio.create_task(maintenance_loop())
+    log_step("TG_BOT", "Polling запущен", C["G"])
     
-    yield
-    polling_task.cancel()
-    sync_task.cancel()
+    yield # Сервер работает
+    
+    log_step("SHUTDOWN", "Остановка сервера...", C["R"])
+    polling_task.cancel(); sync_task.cancel()
     await db_conn.close()
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- [API] ---
+# --- [API ЭНДПОИНТЫ] ---
+
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     uid = str(user_id)
-    if uid in USER_CACHE: return {"status": "ok", "data": USER_CACHE[uid]["data"]}
+    log_step("API_GET", f"Запрос баланса: {uid}", C["C"])
+    
+    if uid in USER_CACHE: 
+        return {"status": "ok", "data": USER_CACHE[uid]["data"]}
+    
     db_conn.row_factory = aiosqlite.Row
     async with db_conn.execute("SELECT * FROM users WHERE id = ?", (uid,)) as cursor:
         user = await cursor.fetchone()
+    
     if not user:
+        log_step("API_DB", f"Новый игрок создан: {uid}", C["Y"])
         new_d = {"score": 1000, "click_lvl": 1, "energy": 1000, "max_energy": 1000, "pnl": 0, "level": 1, "exp": 0}
         await db_conn.execute("INSERT INTO users (id, balance) VALUES (?, ?)", (uid, 1000))
         await db_conn.commit()
         USER_CACHE[uid] = {"data": new_d}
         return {"status": "ok", "data": new_d}
+    
     res = dict(user)
     res["score"] = res.pop("balance")
     USER_CACHE[uid] = {"data": res}
@@ -175,11 +193,12 @@ async def save_game(data: SaveData):
     uid = str(data.user_id)
     if uid not in USER_CACHE: USER_CACHE[uid] = {"data": {}}
     USER_CACHE[uid]["data"].update(data.model_dump(exclude_unset=True))
+    # Логируем только значимые изменения, чтобы не спамить в консоль
     return {"status": "ok"}
 
-# Добавляем лидерборд СЮДА (до статических файлов и запуска)
 @app.get("/api/leaderboard")
 async def get_leaderboard():
+    log_step("API_LEAD", "Запрос списка лидеров", C["P"])
     try:
         db_conn.row_factory = aiosqlite.Row
         async with db_conn.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10") as cursor:
@@ -187,14 +206,18 @@ async def get_leaderboard():
             data = [dict(r) for r in rows]
             return {"status": "ok", "data": data}
     except Exception as e:
-        log_step("API_ERR", f"Ошибка лидерборда: {e}", C["R"])
-        return {"status": "error", "message": str(e)}
+        log_step("API_ERR", f"Лидерборд упал: {e}", C["R"])
+        return {"status": "error"}
 
 @app.get("/")
 async def index():
+    # Твой index.html всегда в папке static
     return FileResponse(STATIC_DIR / "index.html")
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+# --- [ЗАПУСК] ---
 if __name__ == "__main__":
+    log_step("UVICORN", "Запуск сервера на порту 3000", C["B"])
     uvicorn.run("main:app", host="0.0.0.0", port=3000, proxy_headers=True, forwarded_allow_ips="*")
+    
