@@ -19,7 +19,7 @@ DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 IMAGES_DIR = STATIC_DIR / "images"
 
-# Гарантируем наличие папок
+# Гарантируем наличие папок (дизайн и index.html в папке static не трогаем)
 for folder in [STATIC_DIR, IMAGES_DIR]:
     folder.mkdir(parents=True, exist_ok=True)
 
@@ -33,7 +33,7 @@ def log_step(cat: str, msg: str, col: str = C["G"]):
     curr_time = datetime.datetime.now().strftime("%H:%M:%S")
     print(f"{C['B']}[{curr_time}]{C['E']} {col}{cat.ljust(12)}{C['E']} | {msg}", flush=True)
 
-# Включаем логирование уровней INFO и выше
+# Глобальное логирование для aiogram
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
@@ -57,10 +57,10 @@ class SaveData(BaseModel):
 async def handle_message(message: types.Message):
     try:
         user_info = f"ID: {message.from_user.id} (@{message.from_user.username or 'no_user'})"
-        log_step("AIOGRAM", f"Обработка сообщения от {user_info}", C["C"])
+        log_step("AIOGRAM", f"Получено сообщение от {user_info}: {message.text or '[content]'}", C["C"])
         
         if message.text == "/start":
-            log_step("ACTION", f"Формирую ответ на /start для {message.from_user.id}")
+            log_step("ACTION", f"Генерация кнопки WebApp для {message.from_user.id}")
             kb = types.InlineKeyboardMarkup(inline_keyboard=[
                 [types.InlineKeyboardButton(text="Запустить Neural Pulse 🚀", web_app=types.WebAppInfo(url="https://np.bothost.ru/"))]
             ])
@@ -68,19 +68,19 @@ async def handle_message(message: types.Message):
                 f"Привет, {message.from_user.first_name}! Твоя нейросеть готова к майнингу.", 
                 reply_markup=kb
             )
-            log_step("ACTION", "Ответ успешно отправлен в Telegram ✅")
+            log_step("ACTION", "Сообщение с кнопкой отправлено в API Telegram ✅")
     except Exception as e:
-        log_step("AIOGRAM_ERR", f"Ошибка в хэндлере: {e}", C["R"])
+        log_step("AIOGRAM_ERR", f"Сбой внутри хэндлера: {e}", C["R"])
         print(traceback.format_exc())
 
 # --- [ЦИКЛ СОХРАНЕНИЯ] ---
 async def maintenance_loop():
-    log_step("SYSTEM", "Фоновый цикл обслуживания БД запущен", C["C"])
+    log_step("SYSTEM", "Цикл обслуживания БД запущен", C["C"])
     while True:
         try:
             await asyncio.sleep(60)
             if USER_CACHE and db_conn:
-                log_step("DB_SYNC", f"Синхронизация {len(USER_CACHE)} игроков...")
+                log_step("DB_SYNC", f"Синхронизация {len(USER_CACHE)} активных игроков...")
                 uids = list(USER_CACHE.keys())
                 for uid in uids:
                     d = USER_CACHE[uid].get("data")
@@ -99,14 +99,14 @@ async def maintenance_loop():
                          d.get('pnl'), d.get('level'), d.get('exp'), int(time.time()), uid)
                     )
                 await db_conn.commit()
-                log_step("DB_SYNC", "Успешно сохранено.")
+                log_step("DB_SYNC", "Данные успешно сброшены на диск.")
         except Exception as e:
-            log_step("LOOP_ERR", f"Ошибка цикла: {e}", C["R"])
+            log_step("LOOP_ERR", f"Сбой цикла обслуживания: {e}", C["R"])
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_conn
-    log_step("DB_START", "Подключение к SQLite...")
+    log_step("DB_START", "Инициализация SQLite...")
     db_conn = await aiosqlite.connect(DB_PATH)
     await db_conn.execute("PRAGMA journal_mode=WAL")
     await db_conn.execute('''CREATE TABLE IF NOT EXISTS users 
@@ -116,24 +116,25 @@ async def lifespan(app: FastAPI):
     await db_conn.commit()
     
     try:
-        log_step("SYSTEM", "Обновление вебхука...")
+        log_step("SYSTEM", "Переустановка вебхука...")
         await bot.delete_webhook(drop_pending_updates=True)
         await asyncio.sleep(1)
+        # Устанавливаем вебхук со слэшем в конце для лучшей совместимости
         await bot.set_webhook(
-            url=WEBHOOK_URL, 
+            url=f"{WEBHOOK_URL}/", 
             allowed_updates=["message", "callback_query", "web_app_data"],
             drop_pending_updates=True
         )
         info = await bot.get_webhook_info()
-        log_step("WEBHOOK", f"Статус: {info.url}")
+        log_step("WEBHOOK", f"Активный URL: {info.url}")
         if info.last_error_message:
-            log_step("WEB_ERR", f"Ошибка TG: {info.last_error_message}", C["R"])
+            log_step("WEB_ERR", f"Предыдущая ошибка TG: {info.last_error_message}", C["R"])
     except Exception as e:
-        log_step("TG_CRITICAL", f"Ошибка запуска TG: {e}", C["R"])
+        log_step("TG_CRITICAL", f"Критическая ошибка при настройке TG: {e}", C["R"])
     
     m_task = asyncio.create_task(maintenance_loop())
     yield
-    log_step("SYSTEM", "Остановка сервера...")
+    log_step("SYSTEM", "Выключение сервера...")
     m_task.cancel()
     await db_conn.close()
 
@@ -143,37 +144,40 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 @app.get("/check")
 async def check_status():
-    log_step("HTTP_GET", "Ручная проверка /check")
+    log_step("HTTP_GET", "Запрос статуса /check")
     try:
         info = await bot.get_webhook_info()
-        return {"status": "online", "webhook": info.url, "pending": info.pending_update_count}
+        return {"status": "online", "webhook": info.url, "pending": info.pending_update_count, "last_err": info.last_error_message}
     except Exception as e:
         return {"status": "error", "msg": str(e)}
 
+# Обработка вебхука с поддержкой обоих вариантов пути
 @app.post("/webhook")
+@app.post("/webhook/")
 async def telegram_webhook(request: Request):
     try:
-        log_step("TG_HOOK", "--- НОВЫЙ ЗАПРОС ОТ TELEGRAM ---", C["Y"])
+        log_step("TG_HOOK", "--- ВХОДЯЩИЙ POST ЗАПРОС ---", C["Y"])
         body = await request.body()
-        log_step("TG_HOOK", f"Принято байт: {len(body)}")
+        log_step("TG_HOOK", f"Размер тела запроса: {len(body)} байт")
         
         data = json.loads(body)
+        log_step("TG_HOOK", f"Update ID: {data.get('update_id')} (Тип: {list(data.keys())[-1]})")
+        
         update = Update.model_validate(data, context={"bot": bot})
         
         # Передаем обновление в диспетчер aiogram
-        log_step("TG_HOOK", f"Запуск обработки Update ID: {update.update_id}")
         await dp.feed_update(bot, update)
         
-        log_step("TG_HOOK", "Обработка Update завершена. Ответ 200 OK отправлен.", C["G"])
+        log_step("TG_HOOK", "Обработка завершена, возвращаю 200 OK", C["G"])
         return {"status": "ok"}
     except Exception as e:
-        log_step("TG_ERR", f"Сбой в эндпоинте вебхука: {e}", C["R"])
+        log_step("TG_ERR", f"Ошибка обработки вебхука: {e}", C["R"])
         print(traceback.format_exc())
-        return JSONResponse(content={"status": "error"}, status_code=500)
+        return JSONResponse(content={"status": "error", "detail": str(e)}, status_code=500)
 
 @app.post("/api/save")
 async def save_game(data: SaveData):
-    log_step("API_SAVE", f"Запрос на сохранение: {data.user_id}")
+    log_step("API_SAVE", f"Получены данные от игрока {data.user_id}")
     uid = data.user_id
     new_payload = data.model_dump(exclude_unset=True)
     if uid not in USER_CACHE:
@@ -192,7 +196,7 @@ async def get_balance(user_id: str):
         user = await cursor.fetchone()
         
     if not user:
-        log_step("API_GET", f"Создаю нового пользователя {user_id}")
+        log_step("API_GET", f"Регистрация нового игрока: {user_id}")
         new_data = {"score": 1000, "click_lvl": 1, "energy": 1000, "max_energy": 1000, "pnl": 0, "level": 1, "exp": 0}
         await db_conn.execute("INSERT INTO users (id, balance) VALUES (?, ?)", (user_id, 1000))
         await db_conn.commit()
@@ -206,12 +210,12 @@ async def get_balance(user_id: str):
 
 @app.get("/")
 async def index():
-    log_step("HTTP_GET", "Отдача index.html")
+    log_step("HTTP_GET", "Загрузка главной страницы игры")
     return FileResponse(STATIC_DIR / "index.html")
 
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
-    log_step("SYSTEM", "Запуск Uvicorn (Порт 3000)...")
+    log_step("SYSTEM", "Запуск основного процесса Uvicorn...")
     uvicorn.run("main:app", host="0.0.0.0", port=3000, proxy_headers=True, forwarded_allow_ips="*")
