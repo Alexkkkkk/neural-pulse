@@ -22,7 +22,6 @@ for folder in [STATIC_DIR, IMAGES_DIR]:
     folder.mkdir(parents=True, exist_ok=True)
 
 API_TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU" 
-# Ссылка остается прежней, так как внешний домен np.bothost.ru проксирует на твой порт
 WEBHOOK_URL = "https://np.bothost.ru/webhook"
 
 C = {"G": "\033[92m", "Y": "\033[93m", "R": "\033[91m", "C": "\033[96m", "B": "\033[1m", "E": "\033[0m"}
@@ -84,19 +83,19 @@ async def maintenance_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_conn
-    log_step("STARTUP", f"Запуск на порту 8080...")
+    log_step("STARTUP", "Инициализация БД...")
     db_conn = await aiosqlite.connect(DB_PATH)
     await db_conn.execute("PRAGMA journal_mode=WAL")
     await db_conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, click_lvl INTEGER DEFAULT 1, energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000, pnl REAL DEFAULT 0, level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0)")
     await db_conn.commit()
     
-    # Обновляем вебхук
+    # В гибридном режиме удаляем вебхук, чтобы работал Polling
     await bot.delete_webhook(drop_pending_updates=True)
-    await asyncio.sleep(1)
-    await bot.set_webhook(url=WEBHOOK_URL, drop_pending_updates=True)
+    log_step("SYSTEM", "Webhook удален для работы Polling")
     
-    info = await bot.get_webhook_info()
-    log_step("WEBHOOK", f"Адрес в TG: {info.url} ✅")
+    # Запускаем фоновый опрос Telegram
+    asyncio.create_task(dp.start_polling(bot))
+    log_step("POLLING", "Бот запущен в режиме прямого опроса ✅")
     
     m_task = asyncio.create_task(maintenance_loop())
     yield
@@ -106,29 +105,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-@app.api_route("/webhook", methods=["GET", "POST"])
-@app.api_route("/webhook/", methods=["GET", "POST"])
-async def telegram_webhook(request: Request):
-    log_step("!!! HIT !!!", f"Метод: {request.method} | IP: {request.client.host}", C["G"])
-    
-    if request.method == "GET":
-        return {"status": "Webhook active on 8080"}
-
-    try:
-        body = await request.body()
-        data = json.loads(body)
-        update = Update.model_validate(data, context={"bot": bot})
-        await dp.feed_update(bot, update)
-        log_step("HIT_DONE", "Обработано", C["C"])
-        return {"status": "ok"}
-    except Exception as e:
-        log_step("WEBHOOK_ERR", str(e), C["R"])
-        return JSONResponse({"status": "error"}, status_code=200)
-
 @app.get("/ping")
 async def ping():
-    log_step("PING", "Проверка связи на 8080")
-    return {"status": "alive", "port": 8080, "time": str(datetime.datetime.now())}
+    return {"status": "alive", "mode": "hybrid", "time": str(datetime.datetime.now())}
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
@@ -161,5 +140,6 @@ async def index():
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
-    # Запускаем на 8080
+    # Оставляем 8080, если ты его настроил в панели, иначе смени на 3000
+    log_step("SERVER", "Запуск веб-сервера...")
     uvicorn.run("main:app", host="0.0.0.0", port=8080, proxy_headers=True, forwarded_allow_ips="*")
