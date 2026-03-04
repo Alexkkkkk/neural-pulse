@@ -17,13 +17,12 @@ from aiogram.types import Update
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
-IMAGES_DIR = BASE_DIR / "images"
+# Исправлено: картинки находятся внутри папки static в твоем репозитории
+IMAGES_DIR = STATIC_DIR / "images"
 
-# СОЗДАЕМ ПАПКИ ДО ЗАПУСКА FastAPI
+# СОЗДАЕМ ПАПКИ (если Git их не перенес пустыми)
 for folder in [STATIC_DIR, IMAGES_DIR]:
-    if not folder.exists():
-        folder.mkdir(parents=True, exist_ok=True)
-        print(f"Created missing directory: {folder}")
+    folder.mkdir(parents=True, exist_ok=True)
 
 API_TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU" 
 WEBHOOK_URL = "https://np.bothost.ru/webhook"
@@ -160,11 +159,14 @@ async def get_leaderboard():
 async def index():
     return FileResponse(STATIC_DIR / "index.html")
 
-# Монтируем статику только если папки существуют
-if IMAGES_DIR.exists():
-    app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
-if STATIC_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    fav = IMAGES_DIR / "favicon.ico"
+    return FileResponse(fav) if fav.exists() else JSONResponse({"detail": "Not Found"}, status_code=404)
+
+# Монтируем статику
+app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=3000, proxy_headers=True, forwarded_allow_ips="*")
