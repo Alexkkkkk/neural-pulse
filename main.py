@@ -16,16 +16,16 @@ from aiogram.types import Update
 # --- [КОНФИГ] ---
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
-STATIC_DIR = BASE_DIR / "static" # Всегда в папке static по инструкции
+STATIC_DIR = BASE_DIR / "static"
 IMAGES_DIR = STATIC_DIR / "images"
 
 for folder in [STATIC_DIR, IMAGES_DIR]:
     folder.mkdir(parents=True, exist_ok=True)
 
 API_TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU" 
-# Чистый URL без слэша для регистрации
 WEBHOOK_URL = "https://np.bothost.ru/webhook"
 
+# Цвета для консоли
 C = {"G": "\033[92m", "Y": "\033[93m", "R": "\033[91m", "C": "\033[96m", "B": "\033[1m", "E": "\033[0m"}
 
 def log_step(cat: str, msg: str, col: str = C["G"]):
@@ -55,7 +55,6 @@ async def handle_message(message: types.Message):
     try:
         log_step("MSG_IN", f"Текст: {message.text} от {message.from_user.id}", C["Y"])
         if message.text == "/start":
-            # Твой дизайн и кнопки не меняем
             kb = types.InlineKeyboardMarkup(inline_keyboard=[
                 [types.InlineKeyboardButton(text="Запустить Neural Pulse 🚀", web_app=types.WebAppInfo(url="https://np.bothost.ru/"))]
             ])
@@ -65,7 +64,7 @@ async def handle_message(message: types.Message):
             )
             log_step("ACTION", "Кнопка WebApp отправлена ✅")
     except Exception as e:
-        log_step("AIOGRAM_ERR", f"Ошибка: {e}", C["R"])
+        log_step("AIOGRAM_ERR", f"Ошибка хэндлера: {e}", C["R"])
 
 # --- [СИСТЕМА] ---
 async def maintenance_loop():
@@ -91,23 +90,19 @@ async def maintenance_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_conn
-    log_step("STARTUP", "Запуск двигателя...")
+    log_step("STARTUP", "Инициализация...")
     db_conn = await aiosqlite.connect(DB_PATH)
     await db_conn.execute("PRAGMA journal_mode=WAL")
     await db_conn.execute('''CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, click_lvl INTEGER DEFAULT 1, energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000, pnl REAL DEFAULT 0, level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0)''')
     await db_conn.commit()
     
-    # ПЕРЕУСТАНОВКА ВЕБХУКА
-    log_step("WEBHOOK", "Регистрация в Telegram...")
+    log_step("WEBHOOK", "Регистрация вебхука...")
     await bot.delete_webhook(drop_pending_updates=True)
     await asyncio.sleep(1)
-    # Регистрируем без слэша, но принимать будем оба варианта
     await bot.set_webhook(url=WEBHOOK_URL, drop_pending_updates=True)
     
     info = await bot.get_webhook_info()
     log_step("WEBHOOK", f"Адрес установлен: {info.url} ✅")
-    if info.last_error_message:
-        log_step("WEBHOOK_ERR", f"Предыдущая ошибка TG: {info.last_error_message}", C["R"])
     
     m_task = asyncio.create_task(maintenance_loop())
     yield
@@ -115,36 +110,39 @@ async def lifespan(app: FastAPI):
     await db_conn.close()
 
 app = FastAPI(lifespan=lifespan)
-app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- [ВХОД ДЛЯ TELEGRAM] ---
+# --- [ЭКСТРЕМАЛЬНОЕ ЛОГИРОВАНИЕ ВЕБХУКА] ---
 
 @app.post("/webhook")
 @app.post("/webhook/")
 async def telegram_webhook(request: Request):
-    # Этот лог ДОЛЖЕН появиться при любом сообщении боту
-    log_step("HIT", f"Сигнал от Telegram ({request.method})", C["G"])
+    log_step("!!! HIT !!!", f"Запрос получен от {request.client.host}", C["G"])
     try:
         body = await request.body()
-        if not body:
-            log_step("HIT_WARN", "Пустое тело запроса", C["Y"])
-            return {"status": "empty"}
-            
+        log_step("DEBUG", f"Raw body: {body.decode()[:100]}...")
+        
         data = json.loads(body)
         update = Update.model_validate(data, context={"bot": bot})
         
-        # Передаем обновление в диспетчер aiogram
-        asyncio.create_task(dp.feed_update(bot, update))
+        # Обработка
+        await dp.feed_update(bot, update)
         
+        log_step("HIT_DONE", "Update успешно передан в Aiogram", C["G"])
         return {"status": "ok"}
     except Exception as e:
-        log_step("WEBHOOK_ERR", f"Ошибка парсинга: {e}", C["R"])
+        log_step("WEBHOOK_ERR", f"Критический сбой: {str(e)}", C["R"])
+        traceback.print_exc()
         return JSONResponse(content={"status": "error"}, status_code=200)
+
+@app.get("/ping")
+async def ping():
+    log_step("PING", "Проверка доступности сервера снаружи")
+    return {"status": "alive", "time": str(datetime.datetime.now())}
 
 @app.get("/debug")
 async def debug():
-    return {"status": "online", "db": db_conn is not None, "time": str(datetime.datetime.now())}
+    return {"status": "online", "db": db_conn is not None}
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
@@ -177,5 +175,4 @@ async def index():
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
-    # Обязательно port 3000 для Bothost
     uvicorn.run("main:app", host="0.0.0.0", port=3000, proxy_headers=True, forwarded_allow_ips="*")
