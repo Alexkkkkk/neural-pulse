@@ -16,7 +16,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 # --- [КОНФИГУРАЦИЯ ПУТЕЙ] ---
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
-STATIC_DIR = BASE_DIR / "static"  # Папка static всегда здесь
+STATIC_DIR = BASE_DIR / "static"  # Твое правило: index.html всегда здесь
 ADMIN_ID = 476014374 
 API_TOKEN = "8257287930:AAGMADWoM4PUoZu8OhmnOOtKyaDlTLRWUn4"
 
@@ -98,7 +98,7 @@ async def lifespan(app: FastAPI):
     """)
     await db_conn.commit()
     
-    # 2. Сброс вебхука (обязательно для Bothost)
+    # 2. Сброс вебхука (критично для Polling на Bothost)
     await bot.delete_webhook(drop_pending_updates=True)
     
     # 3. Запуск фоновых процессов
