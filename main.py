@@ -25,7 +25,7 @@ ADMIN_ID = 476014374
 for folder in [STATIC_DIR, IMAGES_DIR]:
     folder.mkdir(parents=True, exist_ok=True)
 
-# Токен
+# Токен бота
 API_TOKEN = "8257287930:AAGMADWoM4PUoZu8OhmnOOtKyaDlTLRWUn4" 
 
 # --- [ЦВЕТНОЕ ЛОГИРОВАНИЕ] ---
@@ -95,7 +95,7 @@ async def admin_calls(call: types.CallbackQuery):
 # --- [ОБЫЧНЫЕ КОМАНДЫ] ---
 @dp.message(F.text == "/start")
 async def start_cmd(message: types.Message):
-    log_step("TG_MSG", f"Start received from {message.from_user.id}")
+    log_step("TG_MSG", f"Start received from {message.from_user.id}", C["Y"])
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Запустить Neural Pulse 🚀", web_app=types.WebAppInfo(url="https://np.bothost.ru/"))]
     ])
@@ -130,14 +130,13 @@ async def lifespan(app: FastAPI):
     await db_conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, click_lvl INTEGER DEFAULT 1, energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000, pnl REAL DEFAULT 0, level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0)")
     await db_conn.commit()
     
-    # Сброс вебхука и запуск поллинга
+    # Сброс вебхука и запуск поллинга бота
     await bot.delete_webhook(drop_pending_updates=True)
     polling_task = asyncio.create_task(dp.start_polling(bot))
     sync_task = asyncio.create_task(maintenance_loop())
     
     log_step("SYSTEM", "Бот и задачи запущены успешно", C["G"])
     yield
-    # Завершение
     polling_task.cancel()
     sync_task.cancel()
     await db_conn.close()
@@ -184,10 +183,12 @@ async def get_leaderboard():
         log_step("API_ERR", f"Ошибка лидерборда: {e}", C["R"])
         return {"status": "error", "message": str(e)}
 
+# --- [ОТОБРАЖЕНИЕ САЙТА] ---
 @app.get("/")
 async def index():
     return FileResponse(STATIC_DIR / "index.html")
 
+# Монтируем статику в конце, чтобы не мешать API
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
