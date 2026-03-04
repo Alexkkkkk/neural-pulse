@@ -1,10 +1,6 @@
+aiogram==3.10.0
 fastapi
 uvicorn
 aiosqlite
-aiogram
 psutil
 pydantic
-aiogram==3.10.0
-fastapi
-
-
