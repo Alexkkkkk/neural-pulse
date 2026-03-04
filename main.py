@@ -3,10 +3,9 @@ import aiosqlite
 import uvicorn
 from pathlib import Path
 from contextlib import asynccontextmanager
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -16,7 +15,7 @@ from aiogram.types import Update
 # --- [КОНФИГ] ---
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
-STATIC_DIR = BASE_DIR / "static"
+STATIC_DIR = BASE_DIR / "static" # Индекс всегда здесь
 IMAGES_DIR = STATIC_DIR / "images"
 
 for folder in [STATIC_DIR, IMAGES_DIR]:
@@ -25,17 +24,14 @@ for folder in [STATIC_DIR, IMAGES_DIR]:
 API_TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU" 
 WEBHOOK_URL = "https://np.bothost.ru/webhook"
 
-# Цвета для консоли
 C = {"G": "\033[92m", "Y": "\033[93m", "R": "\033[91m", "C": "\033[96m", "B": "\033[1m", "E": "\033[0m"}
 
 def log_step(cat: str, msg: str, col: str = C["G"]):
     curr_time = datetime.datetime.now().strftime("%H:%M:%S")
     print(f"{C['B']}[{curr_time}]{C['E']} {col}{cat.ljust(12)}{C['E']} | {msg}", flush=True)
 
-logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
-
 USER_CACHE: Dict[str, dict] = {}
 db_conn: Optional[aiosqlite.Connection] = None
 
@@ -59,16 +55,15 @@ async def handle_message(message: types.Message):
                 [types.InlineKeyboardButton(text="Запустить Neural Pulse 🚀", web_app=types.WebAppInfo(url="https://np.bothost.ru/"))]
             ])
             await message.answer(
-                f"Привет, {message.from_user.first_name}! Твоя нейросеть готова.\nЖми на кнопку ниже, чтобы начать!", 
+                f"Привет, {message.from_user.first_name}! Твоя нейросеть готова.\nЖми на кнопку ниже!", 
                 reply_markup=kb
             )
-            log_step("ACTION", "Кнопка WebApp отправлена ✅")
+            log_step("ACTION", "Ответ отправлен ✅")
     except Exception as e:
-        log_step("AIOGRAM_ERR", f"Ошибка хэндлера: {e}", C["R"])
+        log_step("AIOGRAM_ERR", str(e), C["R"])
 
 # --- [СИСТЕМА] ---
 async def maintenance_loop():
-    log_step("SYSTEM", "Цикл фоновой записи активен", C["C"])
     while True:
         try:
             await asyncio.sleep(60)
@@ -77,14 +72,12 @@ async def maintenance_loop():
                     d = cache.get("data")
                     if not d: continue
                     await db_conn.execute(
-                        """UPDATE users SET balance=COALESCE(?, balance), click_lvl=COALESCE(?, click_lvl), 
-                           energy=COALESCE(?, energy), max_energy=COALESCE(?, max_energy), pnl=COALESCE(?, pnl), 
-                           level=COALESCE(?, level), exp=COALESCE(?, exp), last_active=? WHERE id=?""",
+                        "UPDATE users SET balance=?, click_lvl=?, energy=?, max_energy=?, pnl=?, level=?, exp=?, last_active=? WHERE id=?",
                         (d.get('score'), d.get('click_lvl'), d.get('energy'), d.get('max_energy'),
                          d.get('pnl'), d.get('level'), d.get('exp'), int(time.time()), str(uid))
                     )
                 await db_conn.commit()
-                log_step("DB_SYNC", "Данные синхронизированы")
+                log_step("DB_SYNC", "Данные сохранены")
         except Exception: pass
 
 @asynccontextmanager
@@ -93,16 +86,15 @@ async def lifespan(app: FastAPI):
     log_step("STARTUP", "Инициализация...")
     db_conn = await aiosqlite.connect(DB_PATH)
     await db_conn.execute("PRAGMA journal_mode=WAL")
-    await db_conn.execute('''CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, click_lvl INTEGER DEFAULT 1, energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000, pnl REAL DEFAULT 0, level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0)''')
+    await db_conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, click_lvl INTEGER DEFAULT 1, energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000, pnl REAL DEFAULT 0, level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0)")
     await db_conn.commit()
     
-    log_step("WEBHOOK", "Регистрация вебхука...")
     await bot.delete_webhook(drop_pending_updates=True)
     await asyncio.sleep(1)
     await bot.set_webhook(url=WEBHOOK_URL, drop_pending_updates=True)
     
     info = await bot.get_webhook_info()
-    log_step("WEBHOOK", f"Адрес установлен: {info.url} ✅")
+    log_step("WEBHOOK", f"Адрес в TG: {info.url} ✅")
     
     m_task = asyncio.create_task(maintenance_loop())
     yield
@@ -112,37 +104,32 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- [ЭКСТРЕМАЛЬНОЕ ЛОГИРОВАНИЕ ВЕБХУКА] ---
+# --- [ЛОГИРОВАНИЕ ВЕБХУКА] ---
 
-@app.post("/webhook")
-@app.post("/webhook/")
+@app.api_route("/webhook", methods=["GET", "POST"])
+@app.api_route("/webhook/", methods=["GET", "POST"])
 async def telegram_webhook(request: Request):
-    log_step("!!! HIT !!!", f"Запрос получен от {request.client.host}", C["G"])
+    # Этот лог покажет даже GET запросы от прокси
+    log_step("!!! HIT !!!", f"Метод: {request.method} | IP: {request.client.host}", C["G"])
+    
+    if request.method == "GET":
+        return {"status": "Webhook is active. Use POST for updates."}
+
     try:
         body = await request.body()
-        log_step("DEBUG", f"Raw body: {body.decode()[:100]}...")
-        
         data = json.loads(body)
         update = Update.model_validate(data, context={"bot": bot})
-        
-        # Обработка
         await dp.feed_update(bot, update)
-        
-        log_step("HIT_DONE", "Update успешно передан в Aiogram", C["G"])
+        log_step("HIT_DONE", "Обработано", C["C"])
         return {"status": "ok"}
     except Exception as e:
-        log_step("WEBHOOK_ERR", f"Критический сбой: {str(e)}", C["R"])
-        traceback.print_exc()
-        return JSONResponse(content={"status": "error"}, status_code=200)
+        log_step("WEBHOOK_ERR", str(e), C["R"])
+        return JSONResponse({"status": "error"}, status_code=200)
 
 @app.get("/ping")
 async def ping():
-    log_step("PING", "Проверка доступности сервера снаружи")
+    log_step("PING", "Проверка связи")
     return {"status": "alive", "time": str(datetime.datetime.now())}
-
-@app.get("/debug")
-async def debug():
-    return {"status": "online", "db": db_conn is not None}
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
