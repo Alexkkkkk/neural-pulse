@@ -17,10 +17,10 @@ from aiogram.types import Update
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
-# Исправлено: картинки находятся внутри папки static в твоем репозитории
+# Картинки находятся в static/images согласно твоему репозиторию
 IMAGES_DIR = STATIC_DIR / "images"
 
-# СОЗДАЕМ ПАПКИ (если Git их не перенес пустыми)
+# Гарантируем наличие папок
 for folder in [STATIC_DIR, IMAGES_DIR]:
     folder.mkdir(parents=True, exist_ok=True)
 
@@ -52,11 +52,18 @@ class SaveData(BaseModel):
 # --- [TG ХЭНДЛЕРЫ] ---
 @dp.message()
 async def handle_message(message: types.Message):
+    # Логируем текст сообщения
+    user_info = f"ID: {message.from_user.id} (@{message.from_user.username or 'no_user'})"
+    log_step("MSG_IN", f"{user_info} -> {message.text}", C["C"])
+    
     if message.text == "/start":
         kb = types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text="Запустить Neural Pulse 🚀", web_app=types.WebAppInfo(url="https://np.bothost.ru/"))]
         ])
-        await message.answer(f"Привет, {message.from_user.first_name}! Твоя нейросеть готова к майнингу.", reply_markup=kb)
+        await message.answer(
+            f"Привет, {message.from_user.first_name}! Твоя нейросеть готова к майнингу.", 
+            reply_markup=kb
+        )
 
 # --- [ЦИКЛ СОХРАНЕНИЯ] ---
 async def maintenance_loop():
@@ -98,8 +105,11 @@ async def lifespan(app: FastAPI):
          energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000, pnl REAL DEFAULT 0, 
          level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0)''')
     await db_conn.commit()
+    
+    # Установка вебхука
     await bot.set_webhook(url=WEBHOOK_URL, drop_pending_updates=True)
     log_step("WEBHOOK", f"Установлен на {WEBHOOK_URL}")
+    
     m_task = asyncio.create_task(maintenance_loop())
     yield
     m_task.cancel()
@@ -113,13 +123,20 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
     try:
+        # Читаем JSON один раз
         update_data = await request.json()
-        update = Update(**update_data)
+        
+        # Логируем факт входящего запроса для отладки
+        log_step("TG_HOOK", f"Update received (ID: {update_data.get('update_id')})", C["Y"])
+        
+        # Валидируем обновление для aiogram 3.x
+        update = Update.model_validate(update_data, context={"bot": bot})
         await dp.feed_update(bot, update)
+        
         return {"status": "ok"}
     except Exception as e:
         log_step("TG_ERR", f"Ошибка вебхука: {e}", C["R"])
-        return {"status": "error"}
+        return {"status": "error", "detail": str(e)}
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
@@ -157,6 +174,7 @@ async def get_leaderboard():
 
 @app.get("/")
 async def index():
+    # Согласно твоим инструкциям, index.html всегда в папке static
     return FileResponse(STATIC_DIR / "index.html")
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -164,9 +182,11 @@ async def favicon():
     fav = IMAGES_DIR / "favicon.ico"
     return FileResponse(fav) if fav.exists() else JSONResponse({"detail": "Not Found"}, status_code=404)
 
-# Монтируем статику
-app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+# Монтируем статику (проверяем наличие папок для безопасности)
+if IMAGES_DIR.exists():
+    app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=3000, proxy_headers=True, forwarded_allow_ips="*")
