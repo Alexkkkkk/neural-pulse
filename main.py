@@ -85,8 +85,12 @@ async def admin_calls(call: types.CallbackQuery):
                f"<b>В кэше:</b> {len(USER_CACHE)} чел.")
         await call.message.edit_text(txt, parse_mode="HTML", reply_markup=get_admin_kb())
     elif action == "reboot":
-        await call.message.edit_text("🔄 Рестарт...")
+        await call.message.edit_text("🔄 Рестарт системы...")
+        log_step("SYSTEM", "Рестарт по команде админа", C["R"])
         os.execv(sys.executable, ['python'] + sys.argv)
+    elif action == "stop":
+        await call.message.edit_text("⛔ Остановка...")
+        sys.exit()
 
 # --- [ОБЫЧНЫЕ КОМАНДЫ] ---
 @dp.message(F.text == "/start")
@@ -95,11 +99,11 @@ async def start_cmd(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Запустить Neural Pulse 🚀", web_app=types.WebAppInfo(url="https://np.bothost.ru/"))]
     ])
-    await message.answer(f"Привет, {message.from_user.first_name}! Твоя нейросеть готова.", reply_markup=kb)
+    await message.answer(f"Привет, {message.from_user.first_name}! Твоя нейросеть готова к работе.\nЖми кнопку ниже!", reply_markup=kb)
 
 # --- [ФОНОВЫЕ ЗАДАЧИ] ---
 async def maintenance_loop():
-    log_step("SYSTEM", "Цикл синхронизации активен", C["C"])
+    log_step("SYSTEM", "Цикл синхронизации активен (60с)", C["C"])
     while True:
         try:
             await asyncio.sleep(60)
@@ -113,9 +117,9 @@ async def maintenance_loop():
                          d.get('pnl'), d.get('level'), d.get('exp'), int(time.time()), str(uid))
                     )
                 await db_conn.commit()
-                log_step("DB_SAVE", f"Синхронизировано {len(USER_CACHE)} чел.", C["P"])
+                log_step("DB_SAVE", f"Синхронизировано игроков: {len(USER_CACHE)}", C["P"])
         except Exception as e:
-            log_step("DB_ERR", f"Ошибка: {e}", C["R"])
+            log_step("DB_ERR", f"Ошибка БД: {e}", C["R"])
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -126,13 +130,14 @@ async def lifespan(app: FastAPI):
     await db_conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, click_lvl INTEGER DEFAULT 1, energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000, pnl REAL DEFAULT 0, level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0)")
     await db_conn.commit()
     
-    # Сброс вебхука перед поллингом
+    # Сброс вебхука и запуск поллинга
     await bot.delete_webhook(drop_pending_updates=True)
     polling_task = asyncio.create_task(dp.start_polling(bot))
     sync_task = asyncio.create_task(maintenance_loop())
     
-    log_step("SYSTEM", "Бот и задачи запущены", C["G"])
+    log_step("SYSTEM", "Бот и задачи запущены успешно", C["G"])
     yield
+    # Завершение
     polling_task.cancel()
     sync_task.cancel()
     await db_conn.close()
@@ -140,7 +145,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- [API] ---
+# --- [API ЭНДПОИНТЫ] ---
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     uid = str(user_id)
@@ -168,7 +173,7 @@ async def save_game(data: SaveData):
 
 @app.get("/api/leaderboard")
 async def get_leaderboard():
-    log_step("API_REQ", "Leaderboard request")
+    log_step("API_REQ", "Запрос лидерборда", C["Y"])
     try:
         db_conn.row_factory = aiosqlite.Row
         async with db_conn.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10") as cursor:
@@ -176,7 +181,7 @@ async def get_leaderboard():
             data = [dict(r) for r in rows]
             return {"status": "ok", "data": data}
     except Exception as e:
-        log_step("API_ERR", f"LDR error: {e}", C["R"])
+        log_step("API_ERR", f"Ошибка лидерборда: {e}", C["R"])
         return {"status": "error", "message": str(e)}
 
 @app.get("/")
