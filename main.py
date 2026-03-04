@@ -13,14 +13,14 @@ from pydantic import BaseModel
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
-# --- [КОНФИГУРАЦИЯ] ---
+# --- [КОНФИГУРАЦИЯ ПУТЕЙ] ---
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
-STATIC_DIR = BASE_DIR / "static"  # Папка static по твоим правилам
+STATIC_DIR = BASE_DIR / "static"  # Папка static всегда здесь
 ADMIN_ID = 476014374 
 API_TOKEN = "8257287930:AAGMADWoM4PUoZu8OhmnOOtKyaDlTLRWUn4"
 
-# Создаем папки если нет
+# Авто-создание необходимых папок
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
 # --- [ЛОГИРОВАНИЕ] ---
@@ -30,7 +30,7 @@ def log_step(cat: str, msg: str, col: str = C["G"]):
     curr_time = datetime.datetime.now().strftime("%H:%M:%S")
     print(f"{C['B']}[{curr_time}]{C['E']} {col}{cat.ljust(12)}{C['E']} | {msg}", flush=True)
 
-# --- [БОТ] ---
+# --- [БОТ И ДАННЫЕ] ---
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 USER_CACHE: Dict[str, dict] = {}
@@ -46,7 +46,7 @@ class SaveData(BaseModel):
     level: Optional[int] = None
     exp: Optional[int] = None
 
-# --- [ОБРАБОТЧИКИ] ---
+# --- [ОБРАБОТЧИКИ ТЕЛЕГРАМ] ---
 @dp.message(F.text == "/start")
 async def start_cmd(message: types.Message):
     log_step("TG_MSG", f"Start от {message.from_user.id}", C["Y"])
@@ -55,7 +55,7 @@ async def start_cmd(message: types.Message):
     ])
     await message.answer(f"Привет, {message.from_user.first_name}! Твоя нейросеть готова к работе.", reply_markup=kb)
 
-# --- [СЕРВИСНЫЕ ЗАДАЧИ] ---
+# --- [ФОНОВАЯ СИНХРОНИЗАЦИЯ С БД] ---
 async def maintenance_loop():
     while True:
         try:
@@ -70,54 +70,77 @@ async def maintenance_loop():
                          d.get('pnl'), d.get('level'), d.get('exp'), int(time.time()), str(uid))
                     )
                 await db_conn.commit()
-                log_step("DB_SAVE", f"Сохранено игроков: {len(USER_CACHE)}", C["P"])
+                log_step("DB_SAVE", f"Синхронизация кэша завершена ({len(USER_CACHE)} чел.)", C["P"])
         except Exception as e:
-            log_step("DB_ERR", f"Ошибка: {e}", C["R"])
+            log_step("DB_ERR", f"Ошибка БД: {e}", C["R"])
 
+# --- [УПРАВЛЕНИЕ ЖИЗНЕННЫМ ЦИКЛОМ] ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_conn
     log_step("STARTUP", ">>> Инициализация сервера <<<", C["B"])
     
-    # 1. Подключаем БД
+    # 1. Настройка базы данных
     db_conn = await aiosqlite.connect(DB_PATH)
     await db_conn.execute("PRAGMA journal_mode=WAL")
-    await db_conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, click_lvl INTEGER DEFAULT 1, energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000, pnl REAL DEFAULT 0, level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0)")
+    await db_conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY, 
+            balance REAL DEFAULT 1000, 
+            click_lvl INTEGER DEFAULT 1, 
+            energy REAL DEFAULT 1000, 
+            max_energy INTEGER DEFAULT 1000, 
+            pnl REAL DEFAULT 0, 
+            level INTEGER DEFAULT 1, 
+            exp INTEGER DEFAULT 0, 
+            last_active INTEGER DEFAULT 0
+        )
+    """)
     await db_conn.commit()
     
-    # 2. Чистим вебхуки (критично для Bothost!)
+    # 2. Сброс вебхука (обязательно для Bothost)
     await bot.delete_webhook(drop_pending_updates=True)
     
-    # 3. Запускаем фоновые задачи
+    # 3. Запуск фоновых процессов
     polling_task = asyncio.create_task(dp.start_polling(bot))
     sync_task = asyncio.create_task(maintenance_loop())
     
-    log_step("SYSTEM", "Бот и задачи запущены успешно", C["G"])
+    log_step("SYSTEM", "Бот и задачи запущены успешно ✅", C["G"])
     
     yield
     
-    # Завершение
+    # Завершение работы
     polling_task.cancel()
     sync_task.cancel()
     await db_conn.close()
 
+# --- [FASTAPI ПРИЛОЖЕНИЕ] ---
 app = FastAPI(lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware, 
+    allow_origins=["*"], 
+    allow_methods=["*"], 
+    allow_headers=["*"]
+)
 
-# --- [API] ---
+# --- [API ЭНДПОИНТЫ] ---
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     uid = str(user_id)
-    if uid in USER_CACHE: return {"status": "ok", "data": USER_CACHE[uid]["data"]}
+    if uid in USER_CACHE: 
+        return {"status": "ok", "data": USER_CACHE[uid]["data"]}
+    
     db_conn.row_factory = aiosqlite.Row
     async with db_conn.execute("SELECT * FROM users WHERE id = ?", (uid,)) as cursor:
         user = await cursor.fetchone()
+        
     if not user:
         new_d = {"score": 1000, "click_lvl": 1, "energy": 1000, "max_energy": 1000, "pnl": 0, "level": 1, "exp": 0}
         await db_conn.execute("INSERT INTO users (id, balance) VALUES (?, ?)", (uid, 1000))
         await db_conn.commit()
         USER_CACHE[uid] = {"data": new_d}
         return {"status": "ok", "data": new_d}
+    
     res = dict(user)
     res["score"] = res.pop("balance")
     USER_CACHE[uid] = {"data": res}
@@ -126,7 +149,8 @@ async def get_balance(user_id: str):
 @app.post("/api/save")
 async def save_game(data: SaveData):
     uid = str(data.user_id)
-    if uid not in USER_CACHE: USER_CACHE[uid] = {"data": {}}
+    if uid not in USER_CACHE: 
+        USER_CACHE[uid] = {"data": {}}
     USER_CACHE[uid]["data"].update(data.model_dump(exclude_unset=True))
     return {"status": "ok"}
 
@@ -140,11 +164,25 @@ async def get_leaderboard():
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+# --- [ОТОБРАЖЕНИЕ САЙТА] ---
 @app.get("/")
 async def index():
-    return FileResponse(STATIC_DIR / "index.html")
+    index_path = STATIC_DIR / "index.html"
+    if not index_path.exists():
+        return JSONResponse({"status": "error", "message": "index.html not found in static folder"}, status_code=404)
+    return FileResponse(index_path)
 
+# Монтируем статику в конце
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=3000, proxy_headers=True, forwarded_allow_ips="*")
+    # Динамический порт: берет из настроек хостинга или использует 3000
+    target_port = int(os.environ.get("PORT", 3000))
+    log_step("LAUNCH", f"Сервер запускается на порту: {target_port}", C["B"])
+    uvicorn.run(
+        "main:app", 
+        host="0.0.0.0", 
+        port=target_port, 
+        proxy_headers=True, 
+        forwarded_allow_ips="*"
+    )
