@@ -163,19 +163,24 @@
     tg.expand();
     tg.setHeaderColor('#050a1a');
 
-    // --- [СИСТЕМА ЛОГИРОВАНИЯ] ---
+    // Логирование в стиле твоего сервера
     const logger = {
         info: (ctx, msg) => console.log(`%c[${new Date().toLocaleTimeString()}] [${ctx}] %c${msg}`, "color: #00d4ff; font-weight: bold", "color: #fff"),
         error: (ctx, msg) => {
             console.error(`[${ctx}] ERROR: ${msg}`);
-            tg.showAlert(`CRITICAL: ${ctx} -> ${msg}`);
+            tg.showAlert(`Ошибка системы: ${msg}`);
         },
         warn: (ctx, msg) => console.warn(`[${ctx}] ${msg}`)
     };
 
     let state = {
-        score: 0, energy: 1000, max_energy: 1000, tap_power: 1, pnl: 0, 
-        level: 1, exp: 0, 
+        score: 0, 
+        energy: 1000, 
+        max_energy: 1000, 
+        tap_power: 1, 
+        pnl: 0, 
+        level: 1, 
+        exp: 0, 
         user_id: String(tg.initDataUnsafe?.user?.id || '476014374')
     };
 
@@ -187,12 +192,12 @@
     ];
 
     async function init() {
-        logger.info("INIT", "Запуск инициализации игрока...");
+        logger.info("INIT", "Загрузка данных игрока...");
         try {
             const r = await fetch(`/api/balance/${state.user_id}?t=${Date.now()}`);
-            if(!r.ok) throw new Error(`HTTP ${r.status}`);
-            
+            if(!r.ok) throw new Error(`HTTP Error ${r.status}`);
             const res = await r.json();
+            
             if(res.status === 'ok') {
                 state.score = Number(res.data.score || res.data.balance || 0);
                 state.energy = Number(res.data.energy || 1000);
@@ -201,14 +206,11 @@
                 state.pnl = Number(res.data.pnl || 0);
                 state.level = Number(res.data.level || 1);
                 state.exp = Number(res.data.exp || 0);
-                
-                logger.info("INIT", `Данные загружены. Баланс: ${state.score}`);
                 render();
-            } else {
-                logger.error("INIT", "Сервер вернул ошибку статуса");
+                logger.info("INIT", "Синхронизация завершена");
             }
-        } catch(e) { 
-            logger.error("INIT", `Ошибка загрузки: ${e.message}`); 
+        } catch(e) {
+            logger.error("INIT", "Не удалось подключиться к серверу");
         }
         document.getElementById('reloading-screen').style.display = 'none';
     }
@@ -227,6 +229,7 @@
         document.getElementById('league-fill').style.width = pct + '%';
         document.getElementById('league-pct').innerText = pct + '%';
 
+        // Обновление цен в магазине
         if(document.getElementById('tap-lvl')) {
             document.getElementById('tap-lvl').innerText = state.tap_power;
             document.getElementById('tap-cost').innerText = (state.tap_power * 1000).toLocaleString();
@@ -236,25 +239,31 @@
     }
 
     async function saveData() {
-        logger.info("SYNC", "Начало фонового сохранения...");
         try {
-            const res = await fetch('/api/save', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
+            const response = await fetch('/api/save', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    user_id: String(state.user_id), score: Number(state.score), 
-                    click_lvl: Number(state.tap_power), energy: Number(state.energy), 
-                    max_energy: Number(state.max_energy), pnl: Number(state.pnl), 
-                    level: Number(state.level), exp: Number(state.exp)
+                    user_id: String(state.user_id),
+                    score: Number(state.score),
+                    click_lvl: Number(state.tap_power),
+                    energy: Number(state.energy),
+                    max_energy: Number(state.max_energy),
+                    pnl: Number(state.pnl),
+                    level: Number(state.level),
+                    exp: Number(state.exp)
                 })
             });
-            if(res.ok) logger.info("SYNC", "Успешно сохранено на сервере ✅");
-        } catch(e) { logger.warn("SYNC", "Ошибка соединения при сохранении"); }
+            if(response.ok) logger.info("SYNC", "Данные сохранены");
+        } catch(e) {
+            logger.warn("SYNC", "Ошибка сети");
+        }
     }
 
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
         if(state.energy < state.tap_power) {
-            logger.warn("TAP", "Недостаточно энергии");
+            tg.HapticFeedback.notificationOccurred('error');
             return;
         }
         
@@ -262,15 +271,14 @@
         state.energy -= state.tap_power;
         state.exp += 1;
         
-        if(state.exp > state.level * 1000) { 
-            state.level++; 
-            state.exp = 0; 
-            logger.info("LEVEL", `Новый уровень: ${state.level}`);
-            tg.showAlert("Level Up!"); 
+        if(state.exp > state.level * 1000) {
+            state.level++;
+            state.exp = 0;
+            tg.showAlert("LVL UP! Доступны новые мощности.");
         }
         
         createFlyText(e.touches[0].clientX, e.touches[0].clientY, `+${state.tap_power}`);
-        tg.HapticFeedback.impactOccurred('light');
+        tg.HapticFeedback.impactOccurred('medium');
         render();
     });
 
@@ -283,39 +291,36 @@
     }
 
     function openModal(id) {
-        logger.info("UI", `Открытие модалки: ${id}`);
         if(id === 'stats') loadLeaderboard();
         document.getElementById('modal-' + id).classList.add('active');
         document.getElementById('overlay').classList.add('active');
-        tg.MainButton.setText('CLOSE').show().onClick(closeModals);
+        tg.MainButton.setText('ЗАКРЫТЬ').show().onClick(closeModals);
     }
 
     function closeModals() {
         document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
         document.getElementById('overlay').classList.remove('active');
-        tg.MainButton.hide().offClick(closeModals);
+        tg.MainButton.hide();
     }
 
     async function loadLeaderboard() {
         const list = document.getElementById('leaderboard-list');
-        logger.info("DB", "Запрос списка лидеров...");
         try {
             const r = await fetch('/api/leaderboard');
             const res = await r.json();
             if(res.status === 'ok') {
                 list.innerHTML = res.data.map((u, i) => `
                     <div class="leader-row">
-                        <span>#${i+1} ${String(u.id).substring(0,8)}</span>
+                        <span>#${i+1} Оператор ${String(u.id).substring(0,5)}...</span>
                         <span style="color:var(--neon-blue)">${Math.floor(u.balance).toLocaleString()} NP</span>
                     </div>
                 `).join('');
             }
-        } catch(e) { logger.error("DB", "Ошибка при загрузке топа"); }
+        } catch(e) { list.innerText = "Ошибка загрузки данных базы."; }
     }
 
     async function uiAction(btn, id) {
         btn.classList.add('syncing');
-        tg.HapticFeedback.impactOccurred('medium');
         await saveData();
         btn.classList.remove('syncing'); 
         openModal(id);
@@ -323,43 +328,42 @@
 
     function buyUpgrade(type) {
         let cost = (type === 'tap') ? state.tap_power * 1000 : state.max_energy * 2;
-        logger.info("SHOP", `Покупка апгрейда ${type} за ${cost}`);
         if (state.score >= cost) {
             state.score -= cost;
-            if(type === 'tap') state.tap_power++; else { state.max_energy += 500; state.energy = state.max_energy; }
+            if(type === 'tap') state.tap_power++; 
+            else { state.max_energy += 500; state.energy = state.max_energy; }
             tg.HapticFeedback.notificationOccurred('success');
-            render(); saveData();
-        } else { tg.showAlert("Low NP balance!"); }
+            render();
+            saveData();
+        } else { tg.showAlert("Недостаточно Neural Pulse!"); }
     }
 
     function buyMiner(cost, income) {
-        logger.info("SHOP", `Покупка майнера: доход +${income}`);
         if (state.score >= cost) {
-            state.score -= cost; state.pnl += income;
+            state.score -= cost; 
+            state.pnl += income;
             tg.HapticFeedback.notificationOccurred('success');
-            render(); saveData();
-        } else { tg.showAlert("Low NP balance!"); }
+            render();
+            saveData();
+        } else { tg.showAlert("Недостаточно баланса для покупки ноды!"); }
     }
 
     function copyRefLink() {
         const link = `https://t.me/NeuralPulseBot?start=${state.user_id}`;
-        logger.info("REF", "Копирование рефералки");
-        tg.showAlert(`Invite friends! Your link:\n${link}`);
+        tg.showAlert(`Твоя реферальная ссылка (отправь другу):\n${link}`);
     }
 
-    // --- [ТАЙМЕРЫ] ---
+    // Регенерация энергии и пассивный доход
     setInterval(() => {
-        if(state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.5);
+        if(state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.2);
         if(state.pnl > 0) state.score += (state.pnl / 3600);
         render();
     }, 1000);
 
-    setInterval(saveData, 15000); // Сохраняем каждые 15 сек
+    // Авто-сохранение каждые 20 секунд
+    setInterval(saveData, 20000);
 
-    window.onload = () => {
-        logger.info("SYSTEM", "Окно загружено полностью");
-        init();
-    };
+    window.onload = init;
 </script>
 </body>
 </html>
