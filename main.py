@@ -19,7 +19,6 @@ DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 IMAGES_DIR = STATIC_DIR / "images"
 
-# Гарантируем наличие папок
 for folder in [STATIC_DIR, IMAGES_DIR]:
     folder.mkdir(parents=True, exist_ok=True)
 
@@ -38,7 +37,6 @@ dp = Dispatcher()
 USER_CACHE: Dict[str, dict] = {}
 db_conn: Optional[aiosqlite.Connection] = None
 
-# Сделали все поля необязательными, чтобы избежать ошибки 422
 class SaveData(BaseModel):
     user_id: str
     score: Optional[float] = None
@@ -53,7 +51,7 @@ class SaveData(BaseModel):
 @dp.message()
 async def handle_message(message: types.Message):
     user_info = f"ID: {message.from_user.id} (@{message.from_user.username or 'no_user'})"
-    log_step("MSG_IN", f"{user_info} -> {message.text}", C["C"])
+    log_step("MSG_IN", f"{user_info} -> {message.text or 'action'}", C["C"])
     
     if message.text == "/start":
         kb = types.InlineKeyboardMarkup(inline_keyboard=[
@@ -105,10 +103,19 @@ async def lifespan(app: FastAPI):
          level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0)''')
     await db_conn.commit()
     
-    # Сброс и установка вебхука
-    await bot.delete_webhook(drop_pending_updates=True)
-    await bot.set_webhook(url=WEBHOOK_URL)
-    log_step("WEBHOOK", f"Установлен на {WEBHOOK_URL}")
+    # --- ДИАГНОСТИКА И УСТАНОВКА ВЕБХУКА ---
+    try:
+        log_step("SYSTEM", "Обновление вебхука...", C["Y"])
+        await bot.delete_webhook(drop_pending_updates=True)
+        await asyncio.sleep(1)
+        await bot.set_webhook(url=WEBHOOK_URL, allowed_updates=["message", "callback_query"])
+        
+        info = await bot.get_webhook_info()
+        log_step("WEBHOOK", f"URL: {info.url}")
+        if info.last_error_message:
+            log_step("WEB_ERR", f"Ошибка: {info.last_error_message}", C["R"])
+    except Exception as e:
+        log_step("TG_CRITICAL", f"Не удалось связаться с Telegram: {e}", C["R"])
     
     m_task = asyncio.create_task(maintenance_loop())
     yield
@@ -119,34 +126,26 @@ app = FastAPI(lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- [API ЭНДПОИНТЫ] ---
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
     try:
         update_data = await request.json()
-        log_step("TG_HOOK", f"Update received ID: {update_data.get('update_id')}", C["Y"])
+        log_step("TG_HOOK", f"Update ID: {update_data.get('update_id')}", C["Y"])
         update = Update.model_validate(update_data, context={"bot": bot})
         await dp.feed_update(bot, update)
         return {"status": "ok"}
     except Exception as e:
-        log_step("TG_ERR", f"Ошибка вебхука: {e}", C["R"])
+        log_step("TG_ERR", f"Сбой обработки: {e}", C["R"])
         return {"status": "error"}
 
 @app.post("/api/save")
 async def save_game(data: SaveData):
-    try:
-        uid = data.user_id
-        # model_dump(exclude_unset=True) игнорирует пустые поля, предотвращая ошибки
-        new_payload = data.model_dump(exclude_unset=True)
-        
-        if uid not in USER_CACHE:
-            USER_CACHE[uid] = {"data": {}, "last_save": time.time()}
-        
-        USER_CACHE[uid]["data"].update(new_payload)
-        return {"status": "ok"}
-    except Exception as e:
-        log_step("SAVE_ERR", f"Ошибка сохранения: {e}", C["R"])
-        return {"status": "error"}
+    uid = data.user_id
+    new_payload = data.model_dump(exclude_unset=True)
+    if uid not in USER_CACHE:
+        USER_CACHE[uid] = {"data": {}, "last_save": time.time()}
+    USER_CACHE[uid]["data"].update(new_payload)
+    return {"status": "ok"}
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
