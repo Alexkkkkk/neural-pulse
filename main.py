@@ -3,20 +3,21 @@ import aiosqlite
 import uvicorn
 from pathlib import Path
 from contextlib import asynccontextmanager
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
+from aiogram import Bot, Dispatcher, types
+from aiogram.types import Update
 
-# --- [КОНФИГ И ЦВЕТА] ---
+# --- [КОНФИГ] ---
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 IMAGES_DIR = BASE_DIR / "images"
-BACKUP_DIR = BASE_DIR / "backups"
 
 API_TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU" 
 WEBHOOK_URL = "https://np.bothost.ru/webhook"
@@ -27,19 +28,12 @@ def log_step(cat: str, msg: str, col: str = C["G"]):
     curr_time = datetime.datetime.now().strftime("%H:%M:%S")
     print(f"{C['B']}[{curr_time}]{C['E']} {col}{cat.ljust(10)}{C['E']} | {msg}", flush=True)
 
-from aiogram import Bot, Dispatcher, types
-from aiogram.types import Update
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
-
-# --- [STAGE 1] ПОДГОТОВКА ФС ---
-for folder in [STATIC_DIR, IMAGES_DIR, BACKUP_DIR]:
-    folder.mkdir(parents=True, exist_ok=True)
 
 USER_CACHE: Dict[str, dict] = {}
 db_conn: Optional[aiosqlite.Connection] = None
 
-# ИСПРАВЛЕНИЕ: Делаем поля Optional, чтобы избежать ошибки 422, если фронтенд прислал не всё
 class SaveData(BaseModel):
     user_id: str
     score: Optional[float] = None
@@ -50,7 +44,7 @@ class SaveData(BaseModel):
     level: Optional[int] = None
     exp: Optional[int] = None
 
-# --- [STAGE 2] TG ХЭНДЛЕРЫ ---
+# --- [TG ХЭНДЛЕРЫ] ---
 @dp.message()
 async def handle_message(message: types.Message):
     if message.text == "/start":
@@ -59,30 +53,19 @@ async def handle_message(message: types.Message):
         ])
         await message.answer(f"Привет, {message.from_user.first_name}! Твоя нейросеть готова к майнингу.", reply_markup=kb)
 
-# --- [STAGE 3] ОБСЛУЖИВАНИЕ ---
-async def create_backup():
-    try:
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
-        backup_file = BACKUP_DIR / f"game_backup_{timestamp}.db"
-        async with aiosqlite.connect(DB_PATH) as src:
-            async with aiosqlite.connect(backup_file) as dst:
-                await src.backup(dst)
-        log_step("BACKUP", f"Создана копия: {backup_file.name}", C["G"])
-    except Exception as e:
-        log_step("BK_ERR", f"Ошибка бэкапа: {e}", C["R"])
-
+# --- [ЦИКЛ СОХРАНЕНИЯ] ---
 async def maintenance_loop():
     log_step("SYSTEM", "Цикл обслуживания запущен", C["C"])
     while True:
         try:
             await asyncio.sleep(60)
             if USER_CACHE and db_conn:
-                current_cache = list(USER_CACHE.items())
-                for uid, info in current_cache:
-                    d = info.get("data")
+                # Копируем ключи, чтобы избежать ошибки "dict size changed during iteration"
+                uids = list(USER_CACHE.keys())
+                for uid in uids:
+                    d = USER_CACHE[uid].get("data")
                     if not d: continue
                     
-                    # Маппинг и SQL UPDATE с защитой COALESCE (сохраняем старое, если новое None)
                     await db_conn.execute(
                         """UPDATE users SET 
                            balance=COALESCE(?, balance), 
@@ -97,14 +80,10 @@ async def maintenance_loop():
                          d.get('pnl'), d.get('level'), d.get('exp'), int(time.time()), uid)
                     )
                 await db_conn.commit()
-                log_step("DB_SYNC", f"Сохранено игроков: {len(current_cache)}")
-                
-                if len(USER_CACHE) > 500:
-                    USER_CACHE.clear()
+                log_step("DB_SYNC", f"Сохранено игроков: {len(uids)}")
         except Exception as e:
             log_step("LOOP_ERR", f"Сбой цикла: {e}", C["R"])
 
-# --- [STAGE 4] LIFESPAN ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_conn
@@ -116,7 +95,11 @@ async def lifespan(app: FastAPI):
          energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000, pnl REAL DEFAULT 0, 
          level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0)''')
     await db_conn.commit()
+    
+    # Установка вебхука
     await bot.set_webhook(url=WEBHOOK_URL, drop_pending_updates=True)
+    log_step("WEBHOOK", f"Установлен на {WEBHOOK_URL}")
+    
     m_task = asyncio.create_task(maintenance_loop())
     yield
     m_task.cancel()
@@ -126,12 +109,17 @@ app = FastAPI(lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- [STAGE 5] API ---
+# --- [API ЭНДПОИНТЫ] ---
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
-    data = await request.json()
-    await dp.feed_update(bot, Update.model_validate(data, context={"bot": bot}))
-    return {"status": "ok"}
+    try:
+        update_data = await request.json()
+        update = Update(**update_data)
+        await dp.feed_update(bot, update)
+        return {"status": "ok"}
+    except Exception as e:
+        log_step("TG_ERR", f"Ошибка вебхука: {e}", C["R"])
+        return {"status": "error"}
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
@@ -143,12 +131,14 @@ async def get_balance(user_id: str):
         user = await cursor.fetchone()
     
     if not user:
-        new_data = {"id": user_id, "score": 1000, "click_lvl": 1, "energy": 1000, "max_energy": 1000, "pnl": 0, "level": 1, "exp": 0}
+        # Если игрока нет, создаем с дефолтными значениями
+        new_data = {"score": 1000, "click_lvl": 1, "energy": 1000, "max_energy": 1000, "pnl": 0, "level": 1, "exp": 0}
         await db_conn.execute("INSERT INTO users (id, balance) VALUES (?, ?)", (user_id, 1000))
         await db_conn.commit()
         USER_CACHE[user_id] = {"data": new_data, "last_save": time.time()}
         return {"status": "ok", "data": new_data}
     
+    # Преобразуем Row в словарь и мапим balance -> score
     u_dict = dict(user)
     u_dict["score"] = u_dict.pop("balance")
     USER_CACHE[user_id] = {"data": u_dict, "last_save": time.time()}
@@ -157,22 +147,25 @@ async def get_balance(user_id: str):
 @app.post("/api/save")
 async def save_game(data: SaveData):
     uid = data.user_id
-    new_data = data.model_dump(exclude_unset=True)
+    new_payload = data.model_dump(exclude_unset=True)
     
     if uid not in USER_CACHE:
+        # Инициализируем кэш, если его нет (редкий случай)
         USER_CACHE[uid] = {"data": {}, "last_save": time.time()}
     
-    # Обновляем кэш только теми полями, которые пришли
-    USER_CACHE[uid]["data"].update(new_data)
+    USER_CACHE[uid]["data"].update(new_payload)
     return {"status": "ok"}
 
-# --- [STAGE 6] СТАТИКА ---
+@app.get("/api/leaderboard")
+async def get_leaderboard():
+    db_conn.row_factory = aiosqlite.Row
+    async with db_conn.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10") as cursor:
+        rows = await cursor.fetchall()
+        return {"status": "ok", "data": [dict(r) for r in rows]}
+
 @app.get("/")
 async def index():
-    return FileResponse(STATIC_DIR / "index.html", headers={
-        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-        "Pragma": "no-cache", "Expires": "0"
-    })
+    return FileResponse(STATIC_DIR / "index.html")
 
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
