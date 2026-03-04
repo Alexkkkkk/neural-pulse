@@ -13,11 +13,17 @@ from pydantic import BaseModel
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import Update
 
-# --- [КОНФИГ] ---
+# --- [КОНФИГ И ПРОВЕРКА ФС] ---
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 IMAGES_DIR = BASE_DIR / "images"
+
+# СОЗДАЕМ ПАПКИ ДО ЗАПУСКА FastAPI
+for folder in [STATIC_DIR, IMAGES_DIR]:
+    if not folder.exists():
+        folder.mkdir(parents=True, exist_ok=True)
+        print(f"Created missing directory: {folder}")
 
 API_TOKEN = "8257287930:AAH4934ktqBYNlhELudektx9ptxP_5eefTU" 
 WEBHOOK_URL = "https://np.bothost.ru/webhook"
@@ -60,12 +66,10 @@ async def maintenance_loop():
         try:
             await asyncio.sleep(60)
             if USER_CACHE and db_conn:
-                # Копируем ключи, чтобы избежать ошибки "dict size changed during iteration"
                 uids = list(USER_CACHE.keys())
                 for uid in uids:
                     d = USER_CACHE[uid].get("data")
                     if not d: continue
-                    
                     await db_conn.execute(
                         """UPDATE users SET 
                            balance=COALESCE(?, balance), 
@@ -95,11 +99,8 @@ async def lifespan(app: FastAPI):
          energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000, pnl REAL DEFAULT 0, 
          level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0)''')
     await db_conn.commit()
-    
-    # Установка вебхука
     await bot.set_webhook(url=WEBHOOK_URL, drop_pending_updates=True)
     log_step("WEBHOOK", f"Установлен на {WEBHOOK_URL}")
-    
     m_task = asyncio.create_task(maintenance_loop())
     yield
     m_task.cancel()
@@ -125,20 +126,15 @@ async def telegram_webhook(request: Request):
 async def get_balance(user_id: str):
     if user_id in USER_CACHE:
         return {"status": "ok", "data": USER_CACHE[user_id]["data"]}
-    
     db_conn.row_factory = aiosqlite.Row
     async with db_conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)) as cursor:
         user = await cursor.fetchone()
-    
     if not user:
-        # Если игрока нет, создаем с дефолтными значениями
         new_data = {"score": 1000, "click_lvl": 1, "energy": 1000, "max_energy": 1000, "pnl": 0, "level": 1, "exp": 0}
         await db_conn.execute("INSERT INTO users (id, balance) VALUES (?, ?)", (user_id, 1000))
         await db_conn.commit()
         USER_CACHE[user_id] = {"data": new_data, "last_save": time.time()}
         return {"status": "ok", "data": new_data}
-    
-    # Преобразуем Row в словарь и мапим balance -> score
     u_dict = dict(user)
     u_dict["score"] = u_dict.pop("balance")
     USER_CACHE[user_id] = {"data": u_dict, "last_save": time.time()}
@@ -148,11 +144,8 @@ async def get_balance(user_id: str):
 async def save_game(data: SaveData):
     uid = data.user_id
     new_payload = data.model_dump(exclude_unset=True)
-    
     if uid not in USER_CACHE:
-        # Инициализируем кэш, если его нет (редкий случай)
         USER_CACHE[uid] = {"data": {}, "last_save": time.time()}
-    
     USER_CACHE[uid]["data"].update(new_payload)
     return {"status": "ok"}
 
@@ -167,8 +160,11 @@ async def get_leaderboard():
 async def index():
     return FileResponse(STATIC_DIR / "index.html")
 
-app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+# Монтируем статику только если папки существуют
+if IMAGES_DIR.exists():
+    app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=3000, proxy_headers=True, forwarded_allow_ips="*")
