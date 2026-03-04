@@ -17,7 +17,6 @@ from aiogram.types import Update
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
-# Картинки находятся в static/images согласно твоему репозиторию
 IMAGES_DIR = STATIC_DIR / "images"
 
 # Гарантируем наличие папок
@@ -39,6 +38,7 @@ dp = Dispatcher()
 USER_CACHE: Dict[str, dict] = {}
 db_conn: Optional[aiosqlite.Connection] = None
 
+# Сделали все поля необязательными, чтобы избежать ошибки 422
 class SaveData(BaseModel):
     user_id: str
     score: Optional[float] = None
@@ -52,7 +52,6 @@ class SaveData(BaseModel):
 # --- [TG ХЭНДЛЕРЫ] ---
 @dp.message()
 async def handle_message(message: types.Message):
-    # Логируем текст сообщения
     user_info = f"ID: {message.from_user.id} (@{message.from_user.username or 'no_user'})"
     log_step("MSG_IN", f"{user_info} -> {message.text}", C["C"])
     
@@ -106,8 +105,9 @@ async def lifespan(app: FastAPI):
          level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0)''')
     await db_conn.commit()
     
-    # Установка вебхука
-    await bot.set_webhook(url=WEBHOOK_URL, drop_pending_updates=True)
+    # Сброс и установка вебхука
+    await bot.delete_webhook(drop_pending_updates=True)
+    await bot.set_webhook(url=WEBHOOK_URL)
     log_step("WEBHOOK", f"Установлен на {WEBHOOK_URL}")
     
     m_task = asyncio.create_task(maintenance_loop())
@@ -123,20 +123,30 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
     try:
-        # Читаем JSON один раз
         update_data = await request.json()
-        
-        # Логируем факт входящего запроса для отладки
-        log_step("TG_HOOK", f"Update received (ID: {update_data.get('update_id')})", C["Y"])
-        
-        # Валидируем обновление для aiogram 3.x
+        log_step("TG_HOOK", f"Update received ID: {update_data.get('update_id')}", C["Y"])
         update = Update.model_validate(update_data, context={"bot": bot})
         await dp.feed_update(bot, update)
-        
         return {"status": "ok"}
     except Exception as e:
         log_step("TG_ERR", f"Ошибка вебхука: {e}", C["R"])
-        return {"status": "error", "detail": str(e)}
+        return {"status": "error"}
+
+@app.post("/api/save")
+async def save_game(data: SaveData):
+    try:
+        uid = data.user_id
+        # model_dump(exclude_unset=True) игнорирует пустые поля, предотвращая ошибки
+        new_payload = data.model_dump(exclude_unset=True)
+        
+        if uid not in USER_CACHE:
+            USER_CACHE[uid] = {"data": {}, "last_save": time.time()}
+        
+        USER_CACHE[uid]["data"].update(new_payload)
+        return {"status": "ok"}
+    except Exception as e:
+        log_step("SAVE_ERR", f"Ошибка сохранения: {e}", C["R"])
+        return {"status": "error"}
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
@@ -156,15 +166,6 @@ async def get_balance(user_id: str):
     USER_CACHE[user_id] = {"data": u_dict, "last_save": time.time()}
     return {"status": "ok", "data": u_dict}
 
-@app.post("/api/save")
-async def save_game(data: SaveData):
-    uid = data.user_id
-    new_payload = data.model_dump(exclude_unset=True)
-    if uid not in USER_CACHE:
-        USER_CACHE[uid] = {"data": {}, "last_save": time.time()}
-    USER_CACHE[uid]["data"].update(new_payload)
-    return {"status": "ok"}
-
 @app.get("/api/leaderboard")
 async def get_leaderboard():
     db_conn.row_factory = aiosqlite.Row
@@ -174,7 +175,6 @@ async def get_leaderboard():
 
 @app.get("/")
 async def index():
-    # Согласно твоим инструкциям, index.html всегда в папке static
     return FileResponse(STATIC_DIR / "index.html")
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -182,11 +182,8 @@ async def favicon():
     fav = IMAGES_DIR / "favicon.ico"
     return FileResponse(fav) if fav.exists() else JSONResponse({"detail": "Not Found"}, status_code=404)
 
-# Монтируем статику (проверяем наличие папок для безопасности)
-if IMAGES_DIR.exists():
-    app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
-if STATIC_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=3000, proxy_headers=True, forwarded_allow_ips="*")
