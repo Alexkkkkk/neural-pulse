@@ -25,7 +25,7 @@ ADMIN_ID = 476014374
 for folder in [STATIC_DIR, IMAGES_DIR]:
     folder.mkdir(parents=True, exist_ok=True)
 
-# Твой токен
+# Твой НОВЫЙ токен
 API_TOKEN = "8257287930:AAGMADWoM4PUoZu8OhmnOOtKyaDlTLRWUn4" 
 
 # --- [ЦВЕТНОЕ ЛОГИРОВАНИЕ] ---
@@ -55,7 +55,6 @@ class SaveData(BaseModel):
     exp: Optional[int] = None
 
 # --- [АДМИН-ПАНЕЛЬ] ---
-
 def get_admin_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📊 Статус", callback_data="adm_status"),
