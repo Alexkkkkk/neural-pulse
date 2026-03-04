@@ -1,9 +1,6 @@
 fastapi
-uvicorn[standard]
-aiosqlite
-pydantic
-aiogram
-httptools
-uvloop; sys_platform != 'win32'
 uvicorn
+aiosqlite
+aiogram
 psutil
+pydantic
