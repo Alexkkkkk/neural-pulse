@@ -160,7 +160,6 @@
 <script>
     const tg = window.Telegram.WebApp;
 
-    // --- [НАСТРОЙКИ TG] ---
     tg.ready();
     tg.expand();
     tg.enableClosingConfirmation();
@@ -181,7 +180,6 @@
     ];
 
     async function init() {
-        // Очистка всех старых обработчиков MainButton во избежание дублей
         tg.MainButton.offClick(closeModals);
         
         let attempts = 0;
@@ -189,18 +187,18 @@
 
         while (attempts < maxAttempts) {
             try {
-                // Добавляем квери-параметр к запросу, чтобы API не отдало кэшированные данные
                 const r = await fetch(`/api/balance/${state.user_id}?t=${Date.now()}`);
                 if (!r.ok) throw new Error("API Offline");
                 
                 const res = await r.json();
                 if(res.status === 'ok') {
-                    state.score = res.data.balance;
-                    state.energy = res.data.energy;
-                    state.max_energy = res.data.max_energy || 1000;
-                    state.tap_power = res.data.click_lvl || 1;
-                    state.pnl = res.data.pnl || 0;
-                    state.level = res.data.level || 1;
+                    state.score = Number(res.data.score || res.data.balance || 0);
+                    state.energy = Number(res.data.energy || 1000);
+                    state.max_energy = Number(res.data.max_energy || 1000);
+                    state.tap_power = Number(res.data.click_lvl || 1);
+                    state.pnl = Number(res.data.pnl || 0);
+                    state.level = Number(res.data.level || 1);
+                    state.exp = Number(res.data.exp || 0);
                     render();
                     break;
                 }
@@ -220,7 +218,7 @@
             if(res.status === 'ok') {
                 list.innerHTML = res.data.map((u, i) => `
                     <div class="leader-row">
-                        <span>#${i+1} ${u.id.substring(0,8)}</span>
+                        <span>#${i+1} ${String(u.id).substring(0,8)}</span>
                         <span style="color:var(--neon-blue)">${Math.floor(u.balance).toLocaleString()} NP</span>
                     </div>
                 `).join('');
@@ -244,6 +242,11 @@
 
         let league = LEAGUES.find(l => state.score >= l.min && state.score < l.max) || LEAGUES[0];
         document.getElementById('league-name').innerText = league.name + " LEAGUE";
+        
+        let nextL = LEAGUES[LEAGUES.indexOf(league)+1] || league;
+        let pct = league.max === Infinity ? 100 : Math.min(100, Math.floor((state.score - league.min) / (league.max - league.min) * 100));
+        document.getElementById('league-fill').style.width = pct + '%';
+        document.getElementById('league-pct').innerText = pct + '%';
     }
 
     function buyUpgrade(type) {
@@ -277,8 +280,14 @@
             await fetch('/api/save', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    user_id: state.user_id, score: state.score, click_lvl: state.tap_power,
-                    energy: state.energy, max_energy: state.max_energy, pnl: state.pnl, level: state.level, exp: state.exp
+                    user_id: String(state.user_id), 
+                    score: Number(state.score), 
+                    click_lvl: Number(state.tap_power),
+                    energy: Number(state.energy), 
+                    max_energy: Number(state.max_energy), 
+                    pnl: Number(state.pnl), 
+                    level: Number(state.level), 
+                    exp: Number(state.exp)
                 })
             });
         } catch(e) {}
@@ -319,10 +328,8 @@
         document.getElementById('modal-' + id).classList.add('active');
         document.getElementById('overlay').classList.add('active');
         
-        // Показываем кнопку внизу
         tg.MainButton.setText('CLOSE');
         tg.MainButton.show();
-        // Привязываем функцию закрытия (offClick внутри init гарантирует, что она одна)
         tg.MainButton.onClick(closeModals);
     }
 
@@ -330,7 +337,7 @@
         document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
         document.getElementById('overlay').classList.remove('active');
         tg.MainButton.hide();
-        tg.MainButton.offClick(closeModals); // Снимаем обработчик после закрытия
+        tg.MainButton.offClick(closeModals);
     }
 
     async function uiAction(btn, id) {
