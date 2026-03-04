@@ -19,6 +19,7 @@ DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 IMAGES_DIR = STATIC_DIR / "images"
 
+# Гарантируем наличие папок (дизайн и картинки не меняем)
 for folder in [STATIC_DIR, IMAGES_DIR]:
     folder.mkdir(parents=True, exist_ok=True)
 
@@ -105,17 +106,21 @@ async def lifespan(app: FastAPI):
     
     # --- ДИАГНОСТИКА И УСТАНОВКА ВЕБХУКА ---
     try:
-        log_step("SYSTEM", "Обновление вебхука...", C["Y"])
+        log_step("SYSTEM", "Переподключение вебхука...", C["Y"])
         await bot.delete_webhook(drop_pending_updates=True)
-        await asyncio.sleep(1)
-        await bot.set_webhook(url=WEBHOOK_URL, allowed_updates=["message", "callback_query"])
+        await asyncio.sleep(2)
+        await bot.set_webhook(
+            url=WEBHOOK_URL, 
+            allowed_updates=["message", "callback_query", "web_app_data"],
+            drop_pending_updates=True
+        )
         
         info = await bot.get_webhook_info()
         log_step("WEBHOOK", f"URL: {info.url}")
         if info.last_error_message:
-            log_step("WEB_ERR", f"Ошибка: {info.last_error_message}", C["R"])
+            log_step("WEB_ERR", f"Ошибка TG: {info.last_error_message}", C["R"])
     except Exception as e:
-        log_step("TG_CRITICAL", f"Не удалось связаться с Telegram: {e}", C["R"])
+        log_step("TG_CRITICAL", f"Критическая ошибка TG: {e}", C["R"])
     
     m_task = asyncio.create_task(maintenance_loop())
     yield
@@ -125,6 +130,22 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# Эндпоинт для ручной проверки связи
+@app.get("/check")
+async def check_status():
+    try:
+        info = await bot.get_webhook_info()
+        me = await bot.get_me()
+        return {
+            "status": "online",
+            "bot": me.username,
+            "webhook_url": info.url,
+            "pending_updates": info.pending_update_count,
+            "last_tg_error": info.last_error_message
+        }
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
 
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
