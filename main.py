@@ -16,7 +16,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 # --- [КОНФИГУРАЦИЯ ПУТЕЙ] ---
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
-STATIC_DIR = BASE_DIR / "static"  # Твое правило: index.html всегда здесь
+STATIC_DIR = BASE_DIR / "static"
 ADMIN_ID = 476014374 
 API_TOKEN = "8257287930:AAGMADWoM4PUoZu8OhmnOOtKyaDlTLRWUn4"
 
@@ -80,7 +80,6 @@ async def lifespan(app: FastAPI):
     global db_conn
     log_step("STARTUP", ">>> Инициализация сервера <<<", C["B"])
     
-    # 1. Настройка базы данных
     db_conn = await aiosqlite.connect(DB_PATH)
     await db_conn.execute("PRAGMA journal_mode=WAL")
     await db_conn.execute("""
@@ -98,10 +97,10 @@ async def lifespan(app: FastAPI):
     """)
     await db_conn.commit()
     
-    # 2. Сброс вебхука (критично для Polling на Bothost)
+    # Сброс вебхука
     await bot.delete_webhook(drop_pending_updates=True)
     
-    # 3. Запуск фоновых процессов
+    # Запуск фоновых задач
     polling_task = asyncio.create_task(dp.start_polling(bot))
     sync_task = asyncio.create_task(maintenance_loop())
     
@@ -109,7 +108,6 @@ async def lifespan(app: FastAPI):
     
     yield
     
-    # Завершение работы
     polling_task.cancel()
     sync_task.cancel()
     await db_conn.close()
@@ -123,7 +121,6 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# --- [API ЭНДПОИНТЫ] ---
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     uid = str(user_id)
@@ -164,7 +161,6 @@ async def get_leaderboard():
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-# --- [ОТОБРАЖЕНИЕ САЙТА] ---
 @app.get("/")
 async def index():
     index_path = STATIC_DIR / "index.html"
@@ -172,17 +168,9 @@ async def index():
         return JSONResponse({"status": "error", "message": "index.html not found in static folder"}, status_code=404)
     return FileResponse(index_path)
 
-# Монтируем статику в конце
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
-    # Динамический порт: берет из настроек хостинга или использует 3000
     target_port = int(os.environ.get("PORT", 3000))
     log_step("LAUNCH", f"Сервер запускается на порту: {target_port}", C["B"])
-    uvicorn.run(
-        "main:app", 
-        host="0.0.0.0", 
-        port=target_port, 
-        proxy_headers=True, 
-        forwarded_allow_ips="*"
-    )
+    uvicorn.run("main:app", host="0.0.0.0", port=target_port, proxy_headers=True, forwarded_allow_ips="*")
