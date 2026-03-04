@@ -1,7 +1,7 @@
 import os, asyncio, logging, time, datetime, sys, json, traceback, shutil
 import aiosqlite
 import uvicorn
-import psutil  # Не забудь добавить в requirements.txt!
+import psutil  # Добавь в requirements.txt!
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Optional, Dict
@@ -25,7 +25,7 @@ ADMIN_ID = 476014374
 for folder in [STATIC_DIR, IMAGES_DIR]:
     folder.mkdir(parents=True, exist_ok=True)
 
-# Токен бота
+# Токен
 API_TOKEN = "8257287930:AAGMADWoM4PUoZu8OhmnOOtKyaDlTLRWUn4" 
 
 # --- [ЦВЕТНОЕ ЛОГИРОВАНИЕ] ---
@@ -75,7 +75,6 @@ async def admin_calls(call: types.CallbackQuery):
         await call.answer("Доступ запрещен", show_alert=True)
         return
     action = call.data.split("_")[1]
-    
     if action == "status":
         process = psutil.Process(os.getpid())
         mem = process.memory_info().rss / 1024 / 1024
@@ -94,18 +93,21 @@ async def admin_calls(call: types.CallbackQuery):
         await call.answer(f"Очищено {count} папок кэша", show_alert=True)
     elif action == "reboot":
         await call.message.edit_text("🔄 Перезагрузка системы...")
-        log_step("SYSTEM", "Перезагрузка по команде админа", C["R"])
         os.execv(sys.executable, ['python'] + sys.argv)
     elif action == "stop":
+        await call.message.edit_text("⛔ Сервер остановлен.")
         sys.exit()
 
 # --- [ОБЫЧНЫЕ КОМАНДЫ] ---
-@dp.message(F.text == "/start")
+@dp.message(F.command("start"))
 async def start_cmd(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Запустить Neural Pulse 🚀", web_app=types.WebAppInfo(url="https://np.bothost.ru/"))]
     ])
-    await message.answer(f"Привет, {message.from_user.first_name}! Твоя нейросеть готова.\nЖми на кнопку ниже!", reply_markup=kb)
+    await message.answer(
+        f"Привет, {message.from_user.first_name}! Твоя нейросеть готова.\nЖми на кнопку ниже!", 
+        reply_markup=kb
+    )
     log_step("TG_SEND", f"WebApp отправлен {message.from_user.id}")
 
 # --- [ФОНОВЫЕ ЗАДАЧИ И БД] ---
@@ -136,9 +138,11 @@ async def lifespan(app: FastAPI):
     await db_conn.execute("PRAGMA journal_mode=WAL")
     await db_conn.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, click_lvl INTEGER DEFAULT 1, energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000, pnl REAL DEFAULT 0, level INTEGER DEFAULT 1, exp INTEGER DEFAULT 0, last_active INTEGER DEFAULT 0)")
     await db_conn.commit()
+    
     await bot.delete_webhook(drop_pending_updates=True)
     polling_task = asyncio.create_task(dp.start_polling(bot))
     sync_task = asyncio.create_task(maintenance_loop())
+    
     yield
     polling_task.cancel()
     sync_task.cancel()
@@ -147,7 +151,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- [API] ---
+# --- [API ЭНДПОИНТЫ] ---
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
@@ -172,13 +176,11 @@ async def save_game(data: SaveData):
     uid = str(data.user_id)
     if uid not in USER_CACHE: USER_CACHE[uid] = {"data": {}}
     USER_CACHE[uid]["data"].update(data.model_dump(exclude_unset=True))
-    log_step("API_SAVE", f"Данные пользователя {uid} обновлены в кэше", C["Y"])
     return {"status": "ok"}
 
 @app.get("/api/leaderboard")
 async def get_leaderboard():
     try:
-        log_step("API_TOP", "Запрос таблицы лидеров", C["C"])
         db_conn.row_factory = aiosqlite.Row
         async with db_conn.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10") as cursor:
             rows = await cursor.fetchall()
