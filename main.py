@@ -11,10 +11,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-# --- [ИМПОРТЫ ДЛЯ TG] ---
-from aiogram import Bot, Dispatcher, types
-from aiogram.types import Update
-
 # --- [КОНФИГ И ЦВЕТА] ---
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
@@ -31,6 +27,8 @@ def log_step(cat: str, msg: str, col: str = C["G"]):
     curr_time = datetime.datetime.now().strftime("%H:%M:%S")
     print(f"{C['B']}[{curr_time}]{C['E']} {col}{cat.ljust(10)}{C['E']} | {msg}", flush=True)
 
+from aiogram import Bot, Dispatcher, types
+from aiogram.types import Update
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
@@ -41,25 +39,25 @@ for folder in [STATIC_DIR, IMAGES_DIR, BACKUP_DIR]:
 USER_CACHE: Dict[str, dict] = {}
 db_conn: Optional[aiosqlite.Connection] = None
 
+# ИСПРАВЛЕНИЕ: Делаем поля Optional, чтобы избежать ошибки 422, если фронтенд прислал не всё
 class SaveData(BaseModel):
     user_id: str
-    score: float
-    click_lvl: int
-    energy: float
-    max_energy: int
-    pnl: float
-    level: int
-    exp: int
+    score: Optional[float] = None
+    click_lvl: Optional[int] = None
+    energy: Optional[float] = None
+    max_energy: Optional[int] = None
+    pnl: Optional[float] = None
+    level: Optional[int] = None
+    exp: Optional[int] = None
 
 # --- [STAGE 2] TG ХЭНДЛЕРЫ ---
 @dp.message()
 async def handle_message(message: types.Message):
-    user = message.from_user
     if message.text == "/start":
         kb = types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text="Запустить Neural Pulse 🚀", web_app=types.WebAppInfo(url="https://np.bothost.ru/"))]
         ])
-        await message.answer(f"Привет, {user.first_name}! Твоя нейросеть готова к майнингу.", reply_markup=kb)
+        await message.answer(f"Привет, {message.from_user.first_name}! Твоя нейросеть готова к майнингу.", reply_markup=kb)
 
 # --- [STAGE 3] ОБСЛУЖИВАНИЕ ---
 async def create_backup():
@@ -84,13 +82,19 @@ async def maintenance_loop():
                     d = info.get("data")
                     if not d: continue
                     
-                    # Маппинг score/balance для безопасности
-                    score_val = d.get('score', d.get('balance', 0))
-                    
+                    # Маппинг и SQL UPDATE с защитой COALESCE (сохраняем старое, если новое None)
                     await db_conn.execute(
-                        "UPDATE users SET balance=?, click_lvl=?, energy=?, max_energy=?, pnl=?, level=?, exp=?, last_active=? WHERE id=?",
-                        (score_val, d.get('click_lvl', 1), d.get('energy', 1000), d.get('max_energy', 1000), 
-                         d.get('pnl', 0), d.get('level', 1), d.get('exp', 0), int(time.time()), uid)
+                        """UPDATE users SET 
+                           balance=COALESCE(?, balance), 
+                           click_lvl=COALESCE(?, click_lvl), 
+                           energy=COALESCE(?, energy), 
+                           max_energy=COALESCE(?, max_energy), 
+                           pnl=COALESCE(?, pnl), 
+                           level=COALESCE(?, level), 
+                           exp=COALESCE(?, exp), 
+                           last_active=? WHERE id=?""",
+                        (d.get('score'), d.get('click_lvl'), d.get('energy'), d.get('max_energy'),
+                         d.get('pnl'), d.get('level'), d.get('exp'), int(time.time()), uid)
                     )
                 await db_conn.commit()
                 log_step("DB_SYNC", f"Сохранено игроков: {len(current_cache)}")
@@ -142,6 +146,7 @@ async def get_balance(user_id: str):
         new_data = {"id": user_id, "score": 1000, "click_lvl": 1, "energy": 1000, "max_energy": 1000, "pnl": 0, "level": 1, "exp": 0}
         await db_conn.execute("INSERT INTO users (id, balance) VALUES (?, ?)", (user_id, 1000))
         await db_conn.commit()
+        USER_CACHE[user_id] = {"data": new_data, "last_save": time.time()}
         return {"status": "ok", "data": new_data}
     
     u_dict = dict(user)
@@ -151,7 +156,14 @@ async def get_balance(user_id: str):
 
 @app.post("/api/save")
 async def save_game(data: SaveData):
-    USER_CACHE[data.user_id] = {"data": data.model_dump(), "last_save": time.time()}
+    uid = data.user_id
+    new_data = data.model_dump(exclude_unset=True)
+    
+    if uid not in USER_CACHE:
+        USER_CACHE[uid] = {"data": {}, "last_save": time.time()}
+    
+    # Обновляем кэш только теми полями, которые пришли
+    USER_CACHE[uid]["data"].update(new_data)
     return {"status": "ok"}
 
 # --- [STAGE 6] СТАТИКА ---
