@@ -32,11 +32,12 @@
         .jackpot-title { font-size: 10px; color: var(--neon-blue); letter-spacing: 2px; font-weight: 700; margin-bottom: 5px; }
         .jackpot-value { font-size: 28px; font-weight: 900; letter-spacing: 1px; color: #fff; text-shadow: 0 0 15px rgba(255, 255, 255, 0.2); }
 
-        #score { font-size: 48px; font-weight: 900; margin: 20px 0 5px 0; text-shadow: 0 0 30px rgba(0, 212, 255, 0.4); }
+        #score { font-size: 40px; font-weight: 900; margin: 20px 0 5px 0; text-shadow: 0 0 30px rgba(0, 212, 255, 0.4); }
         #pnl-display { font-size: 13px; color: var(--neon-green); margin-bottom: 10px; font-weight: 700; }
 
         .game-main { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; flex-grow: 1; }
-        #tap-btn { width: 280px; height: 280px; background: url('/static/images/unnamed3.png') center/contain no-repeat; border: none; cursor: pointer; z-index: 2; transition: transform 0.05s; -webkit-tap-highlight-color: transparent; }
+        /* ЗАМЕНИЛ КАРТИНКУ НА logo.png */
+        #tap-btn { width: 250px; height: 250px; background: url('/static/logo.png') center/contain no-repeat; border: none; cursor: pointer; z-index: 2; transition: transform 0.05s; -webkit-tap-highlight-color: transparent; filter: drop-shadow(0 0 15px var(--neon-blue)); }
         #tap-btn:active { transform: scale(0.92); }
 
         .right-buttons { position: absolute; right: -5px; display: flex; flex-direction: column; gap: 10px; z-index: 3; }
@@ -67,13 +68,13 @@
 <body>
 
 <div id="reloading-screen">
-    <div class="loader-logo"><img src="/static/images/unnamed4.png" alt="Logo"></div>
+    <div class="loader-logo"><img src="/static/logo.png" alt="Logo"></div>
     <div class="loader-text" id="sync-text">СИНХРОНИЗАЦИЯ...</div>
 </div>
 
 <div class="game-container">
     <div class="header-top">
-        <div class="ai-icon-small"><img src="/static/images/unnamed4.png" alt="AI"></div>
+        <div class="ai-icon-small"><img src="/static/logo.png" alt="AI"></div>
         <div class="league-info">
             <div class="league-header">
                 <span id="league-name">IRON LEAGUE</span>
@@ -163,13 +164,11 @@
     tg.expand();
     tg.setHeaderColor('#050a1a');
 
-    // ТОТАЛЬНОЕ ЛОГИРОВАНИЕ
     const logger = {
         info: (ctx, msg) => console.log(`%c[${new Date().toLocaleTimeString()}] [${ctx}] %c${msg}`, "color: #00d4ff; font-weight: bold", "color: #fff"),
         api: (method, url, status) => console.log(`%c[API] %c${method} %c${url} %c=> ${status}`, "color: #b026ff; font-weight: bold", "color: #fff", "color: #00d4ff", status === 200 ? "color: #00ffcc" : "color: #ff3e3e"),
         error: (ctx, msg) => {
             console.error(`%c[ERROR] [${ctx}] %c${msg}`, "color: #ff3e3e; font-weight: bold", "color: #fff");
-            tg.showAlert(`Системный сбой: ${msg}`);
         },
         game: (msg) => console.log(`%c[GAME] %c${msg}`, "color: #00ffcc; font-weight: bold", "color: #fff")
     };
@@ -202,7 +201,8 @@
             const res = await r.json();
             
             if(res.status === 'ok') {
-                state.score = Number(res.data.score || res.data.balance || 0);
+                // ПРИНУДИТЕЛЬНОЕ ПРЕОБРАЗОВАНИЕ В ЧИСЛА
+                state.score = Number(res.data.score || 0);
                 state.energy = Number(res.data.energy || 1000);
                 state.max_energy = Number(res.data.max_energy || 1000);
                 state.tap_power = Number(res.data.click_lvl || 1);
@@ -210,18 +210,20 @@
                 state.level = Number(res.data.level || 1);
                 state.exp = Number(res.data.exp || 0);
                 
-                logger.game(`Данные загружены. Баланс: ${state.score}, Сила клика: ${state.tap_power}`);
+                logger.game("Данные загружены корректно.");
                 render();
             }
         } catch(e) {
             logger.error("INIT", e.message);
         }
         document.getElementById('reloading-screen').style.display = 'none';
-        logger.info("INIT", "Загрузочный экран убран");
     }
 
     function render() {
-        document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
+        // ЗАЩИТА ОТ NaN
+        const displayScore = isNaN(state.score) ? 0 : Math.floor(state.score);
+        document.getElementById('score').innerText = displayScore.toLocaleString();
+        
         document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
         document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
@@ -243,7 +245,7 @@
     }
 
     async function saveData() {
-        logger.info("SYNC", "Начало отправки пакета на сервер...");
+        // ФОРМИРУЕМ ПАКЕТ СТРОГО ПО ТИПАМ ДАННЫХ
         const payload = {
             user_id: String(state.user_id),
             score: Number(state.score),
@@ -262,16 +264,14 @@
                 body: JSON.stringify(payload)
             });
             logger.api("POST", "/api/save", response.status);
-            if(response.ok) logger.game("Прогресс успешно синхронизирован с БД");
         } catch(e) {
-            logger.error("SYNC", "Разрыв соединения при сохранении");
+            logger.error("SYNC", "Ошибка сети");
         }
     }
 
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
         if(state.energy < state.tap_power) {
-            logger.game("Отказ: Недостаточно энергии");
             tg.HapticFeedback.notificationOccurred('error');
             return;
         }
@@ -283,8 +283,7 @@
         if(state.exp > state.level * 1000) {
             state.level++;
             state.exp = 0;
-            logger.game(`LEVEL UP! Новый уровень: ${state.level}`);
-            tg.showAlert("LVL UP! Доступны новые мощности.");
+            tg.showAlert("LVL UP! Твоя нейросеть эволюционировала.");
         }
         
         createFlyText(e.touches[0].clientX, e.touches[0].clientY, `+${state.tap_power}`);
@@ -301,22 +300,17 @@
     }
 
     function openModal(id) {
-        logger.info("UI", `Открытие модального окна: ${id}`);
         if(id === 'stats') loadLeaderboard();
         document.getElementById('modal-' + id).classList.add('active');
         document.getElementById('overlay').classList.add('active');
-        tg.MainButton.setText('ЗАКРЫТЬ').show().onClick(closeModals);
     }
 
     function closeModals() {
-        logger.info("UI", "Закрытие всех окон");
         document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
         document.getElementById('overlay').classList.remove('active');
-        tg.MainButton.hide();
     }
 
     async function loadLeaderboard() {
-        logger.info("API", "Загрузка таблицы лидеров...");
         const list = document.getElementById('leaderboard-list');
         try {
             const r = await fetch('/api/leaderboard');
@@ -328,16 +322,13 @@
                         <span style="color:var(--neon-blue)">${Math.floor(u.balance).toLocaleString()} NP</span>
                     </div>
                 `).join('');
-                logger.game("Таблица лидеров успешно отрисована");
             }
         } catch(e) { 
-            logger.error("STATS", "Не удалось загрузить топ");
-            list.innerText = "Ошибка загрузки данных базы."; 
+            list.innerText = "Ошибка загрузки данных."; 
         }
     }
 
     async function uiAction(btn, id) {
-        logger.info("UI", `Действие в нижнем меню: ${id}`);
         btn.classList.add('syncing');
         await saveData();
         btn.classList.remove('syncing'); 
@@ -346,58 +337,46 @@
 
     function buyUpgrade(type) {
         let cost = (type === 'tap') ? state.tap_power * 1000 : state.max_energy * 2;
-        logger.info("SHOP", `Попытка покупки ${type}. Цена: ${cost}`);
-        
         if (state.score >= cost) {
             state.score -= cost;
             if(type === 'tap') {
                 state.tap_power++;
-                logger.game(`Куплен Multi-Tap. Теперь клик: ${state.tap_power}`);
             } else { 
                 state.max_energy += 500; 
                 state.energy = state.max_energy; 
-                logger.game(`Куплен лимит энергии. Теперь: ${state.max_energy}`);
             }
             tg.HapticFeedback.notificationOccurred('success');
             render();
             saveData();
         } else { 
-            logger.game("Покупка отклонена: Недостаточно средств");
             tg.showAlert("Недостаточно Neural Pulse!"); 
         }
     }
 
     function buyMiner(cost, income) {
-        logger.info("MINE", `Попытка покупки майнера за ${cost}`);
         if (state.score >= cost) {
             state.score -= cost; 
             state.pnl += income;
-            logger.game(`Майнер куплен. Доход в час: +${state.pnl}`);
             tg.HapticFeedback.notificationOccurred('success');
             render();
             saveData();
         } else { 
-            logger.game("Майнинг: Недостаточно баланса");
-            tg.showAlert("Недостаточно баланса для покупки ноды!"); 
+            tg.showAlert("Недостаточно баланса!"); 
         }
     }
 
     function copyRefLink() {
-        const link = `https://t.me/NeuralPulseBot?start=${state.user_id}`;
-        logger.info("SOCIAL", "Генерация реферальной ссылки");
+        const link = `https://t.me/UltraMind_AI_bot?start=${state.user_id}`;
         tg.showAlert(`Твоя реферальная ссылка:\n${link}`);
     }
 
-    // Регенерация и пассивный доход (1 раз в секунду)
     setInterval(() => {
         if(state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.2);
         if(state.pnl > 0) state.score += (state.pnl / 3600);
         render();
     }, 1000);
 
-    // Авто-сохранение каждые 20 секунд
     setInterval(() => {
-        logger.info("AUTO-SAVE", "Запуск плановой синхронизации...");
         saveData();
     }, 20000);
 
