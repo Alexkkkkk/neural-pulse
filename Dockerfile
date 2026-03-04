@@ -1,35 +1,40 @@
-# Используем более свежий и быстрый образ
+# Используем стабильный и легкий образ Python
 FROM python:3.11-slim
 
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Настройки Python для Docker (отключаем буферизацию логов и создание .pyc)
+# Настройки Python: 
+# 1. Отключаем кэш .pyc (меньше мусора)
+# 2. Отключаем буферизацию (логи появляются в панели Bothost мгновенно)
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Устанавливаем минимальные системные зависимости
+# Устанавливаем системные зависимости для сборки библиотек
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Копируем только файл зависимостей (для кэширования слоев)
+# Копируем зависимости
 COPY requirements.txt .
 
-# Устанавливаем библиотеки (wheel ускоряет сборку)
+# Устанавливаем библиотеки
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir wheel && \
     pip install --no-cache-dir -r requirements.txt
 
-# Копируем весь проект
+# Копируем весь проект (включая папку static с твоим дизайном)
 COPY . .
 
-# Проверяем структуру (важно для дебага пути к static/index.html)
+# Проверяем структуру файлов в логах сборки. 
+# ВАЖНО: убедись в логах, что index.html лежит по адресу /app/static/index.html
 RUN ls -R /app
 
-# Открываем порт
+# Выставляем порт 3000 (стандарт Bothost)
 EXPOSE 3000
 
-# Запускаем через uvicorn напрямую (это стабильнее, чем через python main.py)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3000", "--workers", "1", "--no-access-log"]
+# ЗАПУСК:
+# 1. Убрали --no-access-log, чтобы видеть подключения в реальном времени.
+# 2. Добавили --proxy-headers и --forwarded-allow-ips для корректной работы с доменом np.bothost.ru.
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3000", "--proxy-headers", "--forwarded-allow-ips", "*"]
