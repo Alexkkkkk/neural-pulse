@@ -25,7 +25,7 @@ ADMIN_ID = 476014374
 for folder in [STATIC_DIR, IMAGES_DIR]:
     folder.mkdir(parents=True, exist_ok=True)
 
-# Токен
+# Твой токен
 API_TOKEN = "8257287930:AAGMADWoM4PUoZu8OhmnOOtKyaDlTLRWUn4" 
 
 # --- [ЦВЕТНОЕ ЛОГИРОВАНИЕ] ---
@@ -55,6 +55,7 @@ class SaveData(BaseModel):
     exp: Optional[int] = None
 
 # --- [АДМИН-ПАНЕЛЬ] ---
+
 def get_admin_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📊 Статус", callback_data="adm_status"),
@@ -65,7 +66,8 @@ def get_admin_kb():
 
 @dp.message(F.text == "/admin")
 async def admin_cmd(message: types.Message):
-    if message.from_user.id != ADMIN_ID: return
+    if message.from_user.id != ADMIN_ID:
+        return
     await message.answer("<b>⚡ NEURAL PULSE ADMIN</b>\nВыбери действие:", 
                          parse_mode="HTML", reply_markup=get_admin_kb())
 
@@ -74,7 +76,9 @@ async def admin_calls(call: types.CallbackQuery):
     if call.from_user.id != ADMIN_ID: 
         await call.answer("Доступ запрещен", show_alert=True)
         return
+    
     action = call.data.split("_")[1]
+    
     if action == "status":
         process = psutil.Process(os.getpid())
         mem = process.memory_info().rss / 1024 / 1024
@@ -84,22 +88,28 @@ async def admin_calls(call: types.CallbackQuery):
                f"<b>DB:</b> {db_size:.1f} KB\n"
                f"<b>В кэше:</b> {len(USER_CACHE)} чел.")
         await call.message.edit_text(txt, parse_mode="HTML", reply_markup=get_admin_kb())
+
     elif action == "clear":
         count = 0
         for root, dirs, files in os.walk('.'):
             for d in dirs:
                 if d == '__pycache__':
-                    shutil.rmtree(os.path.join(root, d)); count += 1
+                    shutil.rmtree(os.path.join(root, d))
+                    count += 1
         await call.answer(f"Очищено {count} папок кэша", show_alert=True)
+
     elif action == "reboot":
         await call.message.edit_text("🔄 Перезагрузка системы...")
+        log_step("SYSTEM", "Перезагрузка по команде админа", C["R"])
         os.execv(sys.executable, ['python'] + sys.argv)
+
     elif action == "stop":
         await call.message.edit_text("⛔ Сервер остановлен.")
+        log_step("SYSTEM", "SHUTDOWN по команде админа", C["R"])
         sys.exit()
 
 # --- [ОБЫЧНЫЕ КОМАНДЫ] ---
-@dp.message(F.command("start"))
+@dp.message(F.text == "/start")
 async def start_cmd(message: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Запустить Neural Pulse 🚀", web_app=types.WebAppInfo(url="https://np.bothost.ru/"))]
@@ -151,8 +161,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- [API ЭНДПОИНТЫ] ---
-
+# --- [API] ---
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     uid = str(user_id)
