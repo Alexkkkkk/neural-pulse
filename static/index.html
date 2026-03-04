@@ -68,7 +68,7 @@
 
 <div id="reloading-screen">
     <div class="loader-logo"><img src="/images/unnamed4.png" alt="Logo"></div>
-    <div class="loader-text">СИНХРОНИЗАЦИЯ...</div>
+    <div class="loader-text" id="sync-text">СИНХРОНИЗАЦИЯ...</div>
 </div>
 
 <div class="game-container">
@@ -163,6 +163,16 @@
     tg.expand();
     tg.setHeaderColor('#050a1a');
 
+    // --- [СИСТЕМА ЛОГИРОВАНИЯ] ---
+    const logger = {
+        info: (ctx, msg) => console.log(`%c[${new Date().toLocaleTimeString()}] [${ctx}] %c${msg}`, "color: #00d4ff; font-weight: bold", "color: #fff"),
+        error: (ctx, msg) => {
+            console.error(`[${ctx}] ERROR: ${msg}`);
+            tg.showAlert(`CRITICAL: ${ctx} -> ${msg}`);
+        },
+        warn: (ctx, msg) => console.warn(`[${ctx}] ${msg}`)
+    };
+
     let state = {
         score: 0, energy: 1000, max_energy: 1000, tap_power: 1, pnl: 0, 
         level: 1, exp: 0, 
@@ -177,8 +187,11 @@
     ];
 
     async function init() {
+        logger.info("INIT", "Запуск инициализации игрока...");
         try {
             const r = await fetch(`/api/balance/${state.user_id}?t=${Date.now()}`);
+            if(!r.ok) throw new Error(`HTTP ${r.status}`);
+            
             const res = await r.json();
             if(res.status === 'ok') {
                 state.score = Number(res.data.score || res.data.balance || 0);
@@ -188,9 +201,15 @@
                 state.pnl = Number(res.data.pnl || 0);
                 state.level = Number(res.data.level || 1);
                 state.exp = Number(res.data.exp || 0);
+                
+                logger.info("INIT", `Данные загружены. Баланс: ${state.score}`);
                 render();
+            } else {
+                logger.error("INIT", "Сервер вернул ошибку статуса");
             }
-        } catch(e) { console.error("Init error"); }
+        } catch(e) { 
+            logger.error("INIT", `Ошибка загрузки: ${e.message}`); 
+        }
         document.getElementById('reloading-screen').style.display = 'none';
     }
 
@@ -217,8 +236,9 @@
     }
 
     async function saveData() {
+        logger.info("SYNC", "Начало фонового сохранения...");
         try {
-            await fetch('/api/save', {
+            const res = await fetch('/api/save', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
                     user_id: String(state.user_id), score: Number(state.score), 
@@ -227,16 +247,28 @@
                     level: Number(state.level), exp: Number(state.exp)
                 })
             });
-        } catch(e) {}
+            if(res.ok) logger.info("SYNC", "Успешно сохранено на сервере ✅");
+        } catch(e) { logger.warn("SYNC", "Ошибка соединения при сохранении"); }
     }
 
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
-        if(state.energy < state.tap_power) return;
+        if(state.energy < state.tap_power) {
+            logger.warn("TAP", "Недостаточно энергии");
+            return;
+        }
+        
         state.score += state.tap_power; 
         state.energy -= state.tap_power;
         state.exp += 1;
-        if(state.exp > state.level * 1000) { state.level++; state.exp = 0; tg.showAlert("Level Up!"); }
+        
+        if(state.exp > state.level * 1000) { 
+            state.level++; 
+            state.exp = 0; 
+            logger.info("LEVEL", `Новый уровень: ${state.level}`);
+            tg.showAlert("Level Up!"); 
+        }
+        
         createFlyText(e.touches[0].clientX, e.touches[0].clientY, `+${state.tap_power}`);
         tg.HapticFeedback.impactOccurred('light');
         render();
@@ -251,6 +283,7 @@
     }
 
     function openModal(id) {
+        logger.info("UI", `Открытие модалки: ${id}`);
         if(id === 'stats') loadLeaderboard();
         document.getElementById('modal-' + id).classList.add('active');
         document.getElementById('overlay').classList.add('active');
@@ -265,6 +298,7 @@
 
     async function loadLeaderboard() {
         const list = document.getElementById('leaderboard-list');
+        logger.info("DB", "Запрос списка лидеров...");
         try {
             const r = await fetch('/api/leaderboard');
             const res = await r.json();
@@ -276,7 +310,7 @@
                     </div>
                 `).join('');
             }
-        } catch(e) { list.innerText = "Error loading stats."; }
+        } catch(e) { logger.error("DB", "Ошибка при загрузке топа"); }
     }
 
     async function uiAction(btn, id) {
@@ -289,6 +323,7 @@
 
     function buyUpgrade(type) {
         let cost = (type === 'tap') ? state.tap_power * 1000 : state.max_energy * 2;
+        logger.info("SHOP", `Покупка апгрейда ${type} за ${cost}`);
         if (state.score >= cost) {
             state.score -= cost;
             if(type === 'tap') state.tap_power++; else { state.max_energy += 500; state.energy = state.max_energy; }
@@ -298,6 +333,7 @@
     }
 
     function buyMiner(cost, income) {
+        logger.info("SHOP", `Покупка майнера: доход +${income}`);
         if (state.score >= cost) {
             state.score -= cost; state.pnl += income;
             tg.HapticFeedback.notificationOccurred('success');
@@ -307,17 +343,23 @@
 
     function copyRefLink() {
         const link = `https://t.me/NeuralPulseBot?start=${state.user_id}`;
+        logger.info("REF", "Копирование рефералки");
         tg.showAlert(`Invite friends! Your link:\n${link}`);
     }
 
+    // --- [ТАЙМЕРЫ] ---
     setInterval(() => {
         if(state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.5);
         if(state.pnl > 0) state.score += (state.pnl / 3600);
         render();
     }, 1000);
 
-    setInterval(saveData, 10000);
-    window.onload = init;
+    setInterval(saveData, 15000); // Сохраняем каждые 15 сек
+
+    window.onload = () => {
+        logger.info("SYSTEM", "Окно загружено полностью");
+        init();
+    };
 </script>
 </body>
 </html>
