@@ -36,7 +36,6 @@
         #pnl-display { font-size: 13px; color: var(--neon-green); margin-bottom: 10px; font-weight: 700; }
 
         .game-main { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; flex-grow: 1; }
-        /* ЗАМЕНИЛ КАРТИНКУ НА logo.png */
         #tap-btn { width: 250px; height: 250px; background: url('/static/logo.png') center/contain no-repeat; border: none; cursor: pointer; z-index: 2; transition: transform 0.05s; -webkit-tap-highlight-color: transparent; filter: drop-shadow(0 0 15px var(--neon-blue)); }
         #tap-btn:active { transform: scale(0.92); }
 
@@ -164,12 +163,11 @@
     tg.expand();
     tg.setHeaderColor('#050a1a');
 
+    // ЛОГГЕР С ПОДСВЕТКОЙ
     const logger = {
         info: (ctx, msg) => console.log(`%c[${new Date().toLocaleTimeString()}] [${ctx}] %c${msg}`, "color: #00d4ff; font-weight: bold", "color: #fff"),
-        api: (method, url, status) => console.log(`%c[API] %c${method} %c${url} %c=> ${status}`, "color: #b026ff; font-weight: bold", "color: #fff", "color: #00d4ff", status === 200 ? "color: #00ffcc" : "color: #ff3e3e"),
-        error: (ctx, msg) => {
-            console.error(`%c[ERROR] [${ctx}] %c${msg}`, "color: #ff3e3e; font-weight: bold", "color: #fff");
-        },
+        api: (method, url, status, type = "") => console.log(`%c[API] %c${method} %c${url} %c=> ${status} ${type}`, "color: #b026ff; font-weight: bold", "color: #fff", "color: #00d4ff", status === 200 ? "color: #00ffcc" : "color: #ff3e3e"),
+        error: (ctx, msg) => console.error(`%c[ERROR] [${ctx}] %c${msg}`, "color: #ff3e3e; font-weight: bold", "color: #fff"),
         game: (msg) => console.log(`%c[GAME] %c${msg}`, "color: #00ffcc; font-weight: bold", "color: #fff")
     };
 
@@ -192,16 +190,15 @@
     ];
 
     async function init() {
-        logger.info("INIT", `Запуск для UserID: ${state.user_id}`);
+        logger.info("INIT", `Вход в систему: ID ${state.user_id}`);
         try {
             const r = await fetch(`/api/balance/${state.user_id}?t=${Date.now()}`);
             logger.api("GET", `/api/balance/${state.user_id}`, r.status);
             
-            if(!r.ok) throw new Error(`Ошибка сервера: ${r.status}`);
+            if(!r.ok) throw new Error(`Server Error: ${r.status}`);
             const res = await r.json();
             
             if(res.status === 'ok') {
-                // ПРИНУДИТЕЛЬНОЕ ПРЕОБРАЗОВАНИЕ В ЧИСЛА
                 state.score = Number(res.data.score || 0);
                 state.energy = Number(res.data.energy || 1000);
                 state.max_energy = Number(res.data.max_energy || 1000);
@@ -210,7 +207,7 @@
                 state.level = Number(res.data.level || 1);
                 state.exp = Number(res.data.exp || 0);
                 
-                logger.game("Данные загружены корректно.");
+                logger.game("Синхронизация с сервером прошла успешно.");
                 render();
             }
         } catch(e) {
@@ -220,7 +217,6 @@
     }
 
     function render() {
-        // ЗАЩИТА ОТ NaN
         const displayScore = isNaN(state.score) ? 0 : Math.floor(state.score);
         document.getElementById('score').innerText = displayScore.toLocaleString();
         
@@ -244,17 +240,17 @@
         }
     }
 
-    async function saveData() {
-        // ФОРМИРУЕМ ПАКЕТ СТРОГО ПО ТИПАМ ДАННЫХ
+    async function saveData(type = "manual") {
+        // Округляем всё перед отправкой для исключения ошибок бэкенда
         const payload = {
             user_id: String(state.user_id),
-            score: Number(state.score),
-            click_lvl: Number(state.tap_power),
-            energy: Number(state.energy),
-            max_energy: Number(state.max_energy),
-            pnl: Number(state.pnl),
-            level: Number(state.level),
-            exp: Number(state.exp)
+            score: Math.floor(state.score),
+            click_lvl: Math.floor(state.tap_power),
+            energy: Math.floor(state.energy),
+            max_energy: Math.floor(state.max_energy),
+            pnl: Math.floor(state.pnl),
+            level: Math.floor(state.level),
+            exp: Math.floor(state.exp)
         };
 
         try {
@@ -263,9 +259,9 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(payload)
             });
-            logger.api("POST", "/api/save", response.status);
+            logger.api("POST", "/api/save", response.status, type === "auto" ? "[AUTO]" : "");
         } catch(e) {
-            logger.error("SYNC", "Ошибка сети");
+            logger.error("SYNC", "Сбой при сохранении данных.");
         }
     }
 
@@ -284,6 +280,7 @@
             state.level++;
             state.exp = 0;
             tg.showAlert("LVL UP! Твоя нейросеть эволюционировала.");
+            logger.game(`Новый уровень достигнут: ${state.level}`);
         }
         
         createFlyText(e.touches[0].clientX, e.touches[0].clientY, `+${state.tap_power}`);
@@ -325,12 +322,13 @@
             }
         } catch(e) { 
             list.innerText = "Ошибка загрузки данных."; 
+            logger.error("STATS", e.message);
         }
     }
 
     async function uiAction(btn, id) {
         btn.classList.add('syncing');
-        await saveData();
+        await saveData("ui_nav");
         btn.classList.remove('syncing'); 
         openModal(id);
     }
@@ -345,9 +343,10 @@
                 state.max_energy += 500; 
                 state.energy = state.max_energy; 
             }
+            logger.game(`Куплено улучшение: ${type}`);
             tg.HapticFeedback.notificationOccurred('success');
             render();
-            saveData();
+            saveData("upgrade");
         } else { 
             tg.showAlert("Недостаточно Neural Pulse!"); 
         }
@@ -357,9 +356,10 @@
         if (state.score >= cost) {
             state.score -= cost; 
             state.pnl += income;
+            logger.game(`Куплена нода. Доход: +${income}/hr`);
             tg.HapticFeedback.notificationOccurred('success');
             render();
-            saveData();
+            saveData("mining");
         } else { 
             tg.showAlert("Недостаточно баланса!"); 
         }
@@ -376,8 +376,9 @@
         render();
     }, 1000);
 
+    // Авто-сохранение каждые 20 секунд (теперь с логами)
     setInterval(() => {
-        saveData();
+        saveData("auto");
     }, 20000);
 
     window.onload = init;
