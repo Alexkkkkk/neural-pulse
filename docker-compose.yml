@@ -6,11 +6,12 @@ services:
     container_name: tg_bot
     restart: always
     ports:
-      - "8080:8080"  # Внешний порт 8080 : Внутренний порт 8080
+      - "3000:3000"  # Совпадаем с Dockerfile и ожиданиями Bothost
     env_file: .env
     volumes:
       - ./game.db:/app/game.db
-      - ./images:/app/images
+      # Пробрасываем картинки внутрь папки static, чтобы они были доступны WebApp
+      - ./images:/app/static/images 
     networks:
       - bot_net
 
