@@ -58,6 +58,7 @@
         .game-main { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; flex-grow: 1; }
         #tap-btn { width: 260px; height: 260px; background: url('/static/images/logo.png?v=2.0') center/cover no-repeat, radial-gradient(circle, var(--neon-purp) 0%, transparent 75%); border: 4px solid rgba(176, 38, 255, 0.3); border-radius: 50%; cursor: pointer; z-index: 2; transition: transform 0.05s; -webkit-tap-highlight-color: transparent; filter: drop-shadow(0 0 20px var(--neon-blue)); box-shadow: inset 0 0 40px rgba(0, 212, 255, 0.2); }
         #tap-btn:active { transform: scale(0.92); }
+        #tap-btn:disabled { opacity: 0.5; filter: grayscale(1); }
         .right-buttons { position: absolute; right: -5px; display: flex; flex-direction: column; gap: 10px; z-index: 3; }
         .btn-side { width: 100px; height: 42px; background: rgba(10, 25, 47, 0.8); border: 1px solid var(--neon-blue); border-radius: 14px; color: white; font-family: 'Orbitron'; font-size: 10px; font-weight: 700; cursor: pointer; backdrop-filter: blur(5px); }
         .energy-box { width: 100%; margin-bottom: 25px; }
@@ -84,7 +85,7 @@
     <div class="loader-logo">
         <img src="/static/images/logo.png?v=2.0" onerror="this.style.display='none'">
     </div>
-    <div class="loader-text">ОБНОВЛЯЕТСЯ...</div>
+    <div class="loader-text">СИНХРОНИЗАЦИЯ...</div>
     <div style="margin-top: 15px; font-size: 10px; color: rgba(0, 212, 255, 0.5); letter-spacing: 1px; font-family: 'Orbitron';">
         CONNECTING TO NEURAL NETWORK
     </div>
@@ -95,24 +96,24 @@
         <div class="ai-icon-small"><img src="/static/images/logo.png?v=2.0" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'"></div>
         <div class="league-info">
             <div class="league-header">
-                <span id="league-name">IRON LEAGUE</span>
+                <span id="league-name">---</span>
                 <span id="league-pct">0%</span>
             </div>
             <div class="league-bar"><div id="league-fill"></div></div>
-            <div class="level-label" id="display-level">LVL 1</div>
+            <div class="level-label" id="display-level">LVL -</div>
         </div>
     </div>
 
     <div class="jackpot-box">
         <div class="jackpot-title">GLOBAL JACKPOT</div>
-        <div class="jackpot-value" id="jackpot-amount">0</div>
+        <div class="jackpot-value" id="jackpot-amount">LOADING...</div>
     </div>
 
-    <div id="score">0</div>
+    <div id="score">...</div>
     <div id="pnl-display">PROFIT: +0/hr</div>
 
     <div class="game-main">
-        <button id="tap-btn"></button>
+        <button id="tap-btn" disabled></button>
         <div class="right-buttons">
             <button class="btn-side" onclick="copyRefLink()">INVITE</button>
             <button class="btn-side" onclick="openModal('tasks')">TASKS</button>
@@ -123,7 +124,7 @@
     <div class="energy-box">
         <div style="display:flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px; color: var(--neon-blue); font-weight: 700;">
             <span>⚡ ENERGY</span>
-            <span id="energy-text">1000/1000</span>
+            <span id="energy-text">---/---</span>
         </div>
         <div class="energy-bar-bg"><div id="energy-fill"></div></div>
     </div>
@@ -179,9 +180,8 @@
     tg.ready();
     tg.expand();
 
-    // Начальное состояние
     let state = {
-        score: 0, 
+        score: null, // Изначально null, чтобы отличить загрузку от 0
         energy: 1000, 
         max_energy: 1000, 
         tap_power: 1, 
@@ -201,32 +201,38 @@
 
     async function init() {
         try {
+            // Добавляем timestamp, чтобы избежать кэша старых данных
             const r = await fetch(`/api/balance/${state.user_id}?t=${Date.now()}`);
             const res = await r.json();
             if(res.status === 'ok') {
-                state.score = Number(res.data.score) || 0;
-                state.energy = Number(res.data.energy) || 0;
-                state.max_energy = Number(res.data.max_energy) || 1000;
-                state.tap_power = Number(res.data.click_lvl) || 1;
-                state.pnl = Number(res.data.pnl) || 0;
-                state.level = Number(res.data.level) || 1;
-                state.exp = Number(res.data.exp) || 0;
+                state.score = Number(res.data.score);
+                state.energy = Number(res.data.energy);
+                state.max_energy = Number(res.data.max_energy);
+                state.tap_power = Number(res.data.click_lvl);
+                state.pnl = Number(res.data.pnl);
+                state.level = Number(res.data.level);
+                state.exp = Number(res.data.exp);
+                
+                document.getElementById('tap-btn').disabled = false;
                 render();
+                
+                // Скрываем загрузку ТОЛЬКО после успеха
+                setTimeout(() => {
+                    const screen = document.getElementById('reloading-screen');
+                    screen.style.opacity = '0';
+                    setTimeout(() => screen.style.display = 'none', 500);
+                }, 300);
             }
-        } catch(e) { console.error("Ошибка загрузки профиля"); }
-        
-        // Скрываем экран загрузки после получения данных
-        setTimeout(() => {
-            document.getElementById('reloading-screen').style.opacity = '0';
-            setTimeout(() => {
-                document.getElementById('reloading-screen').style.display = 'none';
-            }, 500);
-        }, 800);
-        
+        } catch(e) { 
+            console.error("Init error"); 
+            document.querySelector('.loader-text').innerText = "ОШИБКА СЕТИ";
+        }
         updateJackpot();
     }
 
     function render() {
+        if(state.score === null) return;
+
         let league = LEAGUES.find(l => state.score >= l.min && state.score < l.max) || LEAGUES[LEAGUES.length-1];
         state.level = league.lvl;
         
@@ -255,6 +261,7 @@
     }
 
     async function saveData() {
+        if(state.score === null) return;
         const payload = {
             user_id: String(state.user_id),
             score: Number(state.score),
@@ -265,28 +272,24 @@
             level: Number(state.level),
             exp: Number(state.exp)
         };
-
         try {
-            const response = await fetch('/api/save', {
+            await fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(payload)
             });
-            if (!response.ok) { console.error("Save failed"); }
-        } catch(e) { console.error("Network error during save"); }
+        } catch(e) {}
     }
 
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
-        if(state.energy < state.tap_power) {
+        if(state.score === null || state.energy < state.tap_power) {
             tg.HapticFeedback?.notificationOccurred('error');
             return;
         }
-        
         state.score += state.tap_power;
         state.energy -= state.tap_power;
         state.exp += 1;
-        
         const touch = e.touches[0];
         createFlyText(touch.clientX, touch.clientY, `+${state.tap_power}`);
         tg.HapticFeedback?.impactOccurred('medium');
@@ -367,16 +370,17 @@
         try {
             const r = await fetch('/api/jackpot');
             const res = await r.json();
-            document.getElementById('jackpot-amount').innerText = Number(res.value).toLocaleString();
+            document.getElementById('jackpot-amount').innerText = Number(res.value).toLocaleString() + " NP";
         } catch(e) {}
     }
 
     function copyRefLink() {
         const link = `https://t.me/neural_pulse_bot?start=${state.user_id}`;
-        tg.showAlert("Ваша ссылка для приглашения:\n" + link);
+        tg.showAlert("Ваша ссылка приглашения:\n" + link);
     }
 
     setInterval(() => {
+        if(state.score === null) return;
         if(state.energy < state.max_energy) {
             state.energy = Math.min(state.max_energy, state.energy + 1.5);
         }
