@@ -13,11 +13,24 @@
         
         /* Стили лоадера */
         #reloading-screen { position: fixed; inset: 0; background: #050a1a; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.5s; }
+        
+        /* ЭКРАН ОШИБКИ (Новое) */
+        #error-screen { 
+            display: none; 
+            position: fixed; 
+            inset: 0; 
+            background: #050a1a; 
+            z-index: 10000; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            text-align: center;
+        }
+
         .loader-logo { width: 80px; height: 80px; border-radius: 20px; border: 2px solid var(--neon-purp); box-shadow: 0 0 20px rgba(176, 38, 255, 0.5); margin-bottom: 20px; overflow: hidden; background: #000; }
         .loader-logo img { width: 100%; height: 100%; object-fit: cover; }
         .loader-text { color: var(--neon-blue); font-size: 18px; font-weight: 900; letter-spacing: 4px; text-shadow: 0 0 15px var(--neon-blue); animation: pulse 1.5s infinite; }
         
-        /* Прогресс-бар загрузки */
         .progress-container { width: 200px; height: 4px; background: rgba(0, 212, 255, 0.1); border-radius: 10px; margin-top: 15px; position: relative; overflow: hidden; border: 1px solid rgba(0, 212, 255, 0.2); }
         #loader-progress { position: absolute; left: 0; top: 0; height: 100%; width: 0%; background: linear-gradient(90deg, var(--neon-purp), var(--neon-blue)); box-shadow: 0 0 10px var(--neon-blue); transition: width 0.3s ease; }
 
@@ -78,7 +91,12 @@
     <div style="margin-top: 15px; font-size: 10px; color: rgba(0, 212, 255, 0.5); letter-spacing: 1px; font-family: 'Orbitron'; text-align: center;">
         NEURAL NETWORK STATUS: <span id="node-percent">0%</span>
     </div>
-    <button id="retry-btn" onclick="location.reload()" style="display:none; margin-top: 20px; background: none; border: 1px solid var(--neon-blue); color: var(--neon-blue); padding: 8px 15px; border-radius: 10px; font-family: 'Orbitron'; font-size: 10px; cursor: pointer; text-transform: uppercase;">Повторить попытку</button>
+</div>
+
+<div id="error-screen">
+    <div style="font-size: 24px; font-weight: 900; color: #ff4e4e; letter-spacing: 2px;">NOT FOUND</div>
+    <div style="font-size: 10px; margin-top: 10px; color: rgba(255,255,255,0.3);">SERVER CONNECTION FAILED</div>
+    <button onclick="location.reload()" style="margin-top: 30px; background: none; border: 1px solid #444; color: #888; padding: 8px 20px; border-radius: 8px; font-family: 'Orbitron'; font-size: 10px;">RETRY</button>
 </div>
 
 <div class="game-container" id="main-container">
@@ -170,9 +188,7 @@
 
     const Logger = {
         log: (msg, data = "") => console.log(`[LOG] ${msg}`, data),
-        error: (msg, err = "") => {
-            console.error(`[ERR] ${msg}`, err);
-        }
+        error: (msg, err = "") => console.error(`[ERR] ${msg}`, err)
     };
 
     let debugClicks = 0;
@@ -203,10 +219,10 @@
     ];
 
     async function init() {
-        const statusText = document.getElementById('loader-status');
+        const loader = document.getElementById('reloading-screen');
+        const errorScreen = document.getElementById('error-screen');
         const progressFill = document.getElementById('loader-progress');
         const percentText = document.getElementById('node-percent');
-        const retryBtn = document.getElementById('retry-btn');
         
         let fakeProgress = 0;
         const progressInterval = setInterval(() => {
@@ -219,16 +235,22 @@
         }, 400);
 
         try {
-            // Добавлен таймаут на случай, если сервер долго не отвечает
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            const timeoutId = setTimeout(() => controller.abort(), 12000);
 
             const r = await fetch(`/api/balance/${state.user_id}?t=${Date.now()}`, {
                 signal: controller.signal
             });
             clearTimeout(timeoutId);
 
-            if (!r.ok) throw new Error("Fetch failed");
+            // ЕСЛИ ОШИБКА 404, 500 или другая
+            if (!r.ok) {
+                clearInterval(progressInterval);
+                loader.style.display = 'none'; // Убираем лоадер
+                errorScreen.style.display = 'flex'; // Показываем NOT FOUND
+                return;
+            }
+
             const res = await r.json();
             
             if(res.status === 'ok') {
@@ -248,36 +270,38 @@
                 document.getElementById('main-container').classList.add('visible');
                 
                 setTimeout(() => {
-                    const screen = document.getElementById('reloading-screen');
-                    screen.style.opacity = '0';
-                    setTimeout(() => { screen.style.display = 'none'; }, 500);
+                    loader.style.opacity = '0';
+                    setTimeout(() => { loader.style.display = 'none'; }, 500);
                 }, 500);
+            } else {
+                // Если статус не ok
+                clearInterval(progressInterval);
+                loader.style.display = 'none';
+                errorScreen.style.display = 'flex';
             }
         } catch(e) {
+            // Если сервер вообще не ответил (timeout) или упал
             clearInterval(progressInterval);
-            statusText.innerText = "ОШИБКА СВЯЗИ";
-            statusText.style.color = "#ff4e4e";
-            percentText.innerText = "Сервер недоступен";
-            retryBtn.style.display = 'block';
+            loader.style.display = 'none';
+            errorScreen.style.display = 'flex';
+            Logger.error("Init failed", e);
         }
         updateJackpot();
     }
 
+    // Все остальные твои функции (render, saveData, buyUpgrade и т.д.) остаются прежними
     function render() {
         if(state.score === null) return;
         let league = LEAGUES.find(l => state.score >= l.min && state.score < l.max) || LEAGUES[LEAGUES.length-1];
-        
         document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
         document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
         document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
         document.getElementById('display-level').innerText = `LVL ${league.lvl}`;
         document.getElementById('league-name').innerText = league.name + " LEAGUE";
-
         let pct = league.max === Infinity ? 100 : Math.floor(((state.score - league.min) / (league.max - league.min)) * 100);
         document.getElementById('league-fill').style.width = pct + '%';
         document.getElementById('league-pct').innerText = pct + '%';
-
         if(document.getElementById('modal-boost').classList.contains('active')) {
             document.getElementById('tap-lvl').innerText = state.tap_power;
             document.getElementById('tap-cost').innerText = (state.tap_power * 1000).toLocaleString();
@@ -306,10 +330,8 @@
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
         if(state.score === null || state.energy < state.tap_power) return;
-        
         state.score += state.tap_power;
         state.energy -= state.tap_power;
-        
         const touch = e.touches[0];
         createFlyText(touch.clientX, touch.clientY, `+${state.tap_power}`);
         tg.HapticFeedback?.impactOccurred('medium');
