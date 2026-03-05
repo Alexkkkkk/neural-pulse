@@ -56,8 +56,7 @@
 
         #score { font-size: 48px; font-weight: 900; margin: 15px 0 5px; text-shadow: 0 0 20px var(--neon-blue); }
         
-        /* Стили для контейнера кошелька */
-        #ton-connect-wrapper { margin-bottom: 15px; transform: scale(0.9); }
+        #ton-connect-wrapper { margin-bottom: 10px; transform: scale(0.85); }
 
         .game-main { position: relative; flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
         #tap-btn { 
@@ -90,6 +89,24 @@
             cursor: pointer;
         }
         
+        /* Модалка Mine */
+        .modal {
+            display: none; position: fixed; inset: 0; background: rgba(5, 10, 26, 0.95);
+            z-index: 1000; padding: 20px; flex-direction: column; align-items: center;
+        }
+        .modal.active { display: flex; }
+        .card-list { width: 100%; overflow-y: auto; margin-top: 20px; }
+        .mine-card {
+            background: rgba(255,255,255,0.05); border: 1px solid var(--neon-blue);
+            border-radius: 15px; padding: 15px; margin-bottom: 10px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .buy-btn {
+            background: var(--neon-green); color: black; border: none;
+            padding: 8px 15px; border-radius: 10px; font-weight: 900; font-family: 'Orbitron';
+        }
+        .close-modal { position: absolute; top: 20px; right: 20px; font-size: 24px; color: var(--neon-purp); cursor: pointer; }
+
         .floating-text { 
             position: absolute; 
             pointer-events: none; 
@@ -111,6 +128,12 @@
 <div id="reloading-screen">
     <div class="loader-logo"><img src="/static/images/logo.png?v=3.1"></div>
     <div style="color: var(--neon-blue); font-weight: 900; letter-spacing: 3px; font-size: 12px;">SYNCHRONIZING...</div>
+</div>
+
+<div id="mine-modal" class="modal">
+    <div class="close-modal" id="close-mine">✖</div>
+    <h2 style="color: var(--neon-blue); margin-top: 40px; font-size: 18px;">NEURAL UPGRADES</h2>
+    <div class="card-list" id="card-container"></div>
 </div>
 
 <div class="game-container" id="main-container">
@@ -144,9 +167,9 @@
     </div>
 
     <div class="bottom-nav">
-        <div class="nav-link" style="border-color: var(--neon-purp);">🚀 Boost</div>
+        <div class="nav-link" id="btn-boost" style="border-color: var(--neon-purp);">🚀 Boost</div>
         <div class="nav-link" id="btn-friends" style="border-color: var(--neon-blue);">👥 Friends</div>
-        <div class="nav-link" style="border-color: var(--neon-green);">⛏️ Mine</div>
+        <div class="nav-link" id="btn-mine" style="border-color: var(--neon-green);">⛏️ Mine</div>
     </div>
 </div>
 
@@ -154,12 +177,12 @@
     const tg = window.Telegram.WebApp;
     tg.ready(); tg.expand();
 
-    // Инициализация TON Connect
     const tonConnectUI = new TONConnectUI.TonConnectUI({
         manifestUrl: 'https://np.bothost.ru/static/tonconnect-manifest.json',
         buttonRootId: 'ton-connect-wrapper'
     });
 
+    // Исправленный state (wallet_address: null решает ошибку 422)
     let state = {
         score: 0, 
         energy: 1000, 
@@ -171,14 +194,14 @@
         user_id: String(tg.initDataUnsafe?.user?.id || '476014374')
     };
 
-    // Следим за состоянием кошелька
+    const MINING_CARDS = [
+        {id: 'cpu_1', name: 'Nano Core', cost: 1000, pnl: 50, icon: '🛰️'},
+        {id: 'gpu_1', name: 'Neural GPU', cost: 5000, pnl: 280, icon: '📟'},
+        {id: 'node_1', name: 'Pulse Node', cost: 25000, pnl: 1400, icon: '🖥️'}
+    ];
+
     tonConnectUI.onStatusChange(wallet => {
-        if (wallet) {
-            state.wallet_address = wallet.account.address;
-            console.log("Wallet connected:", state.wallet_address);
-        } else {
-            state.wallet_address = null;
-        }
+        state.wallet_address = wallet ? wallet.account.address : null;
     });
 
     const leagues = [
@@ -193,7 +216,6 @@
         try {
             const urlParams = new URLSearchParams(window.location.search);
             const ref = urlParams.get('tgWebAppStartParam') || '';
-            
             const r = await fetch(`/api/balance/${state.user_id}${ref ? '?ref=' + ref : ''}`);
             const res = await r.json();
             if(res.status === 'ok') {
@@ -203,7 +225,6 @@
                 document.getElementById('main-container').classList.add('visible');
             }
         } catch(e) { 
-            console.error("Init error:", e);
             document.getElementById('reloading-screen').style.display = 'none';
             document.getElementById('main-container').classList.add('visible');
         }
@@ -220,27 +241,17 @@
 
         let currentLeague = leagues[0];
         for(let l of leagues) { if(state.score >= l.min) currentLeague = l; }
-        
-        const leagueNameEl = document.getElementById('league-name');
-        leagueNameEl.innerText = currentLeague.name;
-        leagueNameEl.style.color = currentLeague.color;
-
-        let nextLeague = leagues[leagues.indexOf(currentLeague) + 1] || currentLeague;
-        let progress = nextLeague !== currentLeague ? ((state.score - currentLeague.min) / (nextLeague.min - currentLeague.min)) * 100 : 100;
-        document.getElementById('league-fill').style.width = progress + '%';
-        document.getElementById('league-fill').style.background = currentLeague.color;
+        document.getElementById('league-name').innerText = currentLeague.name;
+        document.getElementById('league-name').style.color = currentLeague.color;
     }
 
+    // Обработка тапа
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
         if(state.energy < state.tap_power) return;
-        
         state.score += state.tap_power;
         state.energy -= state.tap_power;
-        
-        const touch = e.touches[0];
-        createFlyText(touch.clientX, touch.clientY, `+${state.tap_power}`);
-        
+        createFlyText(e.touches[0].clientX, e.touches[0].clientY, `+${state.tap_power}`);
         if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
         render();
     });
@@ -254,36 +265,78 @@
         setTimeout(() => el.remove(), 800);
     }
 
-    document.getElementById('btn-friends').onclick = () => {
-        const botUsername = 'UltraMind_AI_bot';
-        const inviteLink = `https://t.me/${botUsername}?start=${state.user_id}`;
-        const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent('Присоединяйся к Neural Pulse! Получи 5000 бонусов при входе 🚀')}`;
-        tg.openTelegramLink(shareUrl);
+    // ФУНКЦИЯ ОПЛАТЫ BOOST (0.1 TON)
+    document.getElementById('btn-boost').onclick = async () => {
+        if (!tonConnectUI.connected) {
+            tg.showAlert("Сначала подключи кошелек!");
+            return;
+        }
+        const tx = {
+            validUntil: Math.floor(Date.now() / 1000) + 60,
+            messages: [{
+                address: "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI",
+                amount: "100000000" // 0.1 TON
+            }]
+        };
+        try {
+            await tonConnectUI.sendTransaction(tx);
+            state.energy = state.max_energy;
+            render();
+            tg.showAlert("Энергия восстановлена! ⚡");
+        } catch(e) { tg.showAlert("Ошибка оплаты"); }
     };
 
-    // Авто-сохранение (теперь передает и wallet_address)
+    // Логика Mine
+    document.getElementById('btn-mine').onclick = () => {
+        const container = document.getElementById('card-container');
+        container.innerHTML = '';
+        MINING_CARDS.forEach(card => {
+            const div = document.createElement('div');
+            div.className = 'mine-card';
+            div.innerHTML = `
+                <div>
+                    <div style="font-size:14px">${card.icon} ${card.name}</div>
+                    <div style="font-size:10px; color:var(--neon-green)">+${card.pnl}/hr</div>
+                    <div style="font-size:12px">💰 ${card.cost}</div>
+                </div>
+                <button class="buy-btn" onclick="buyCard(${card.cost}, ${card.pnl})">BUY</button>
+            `;
+            container.appendChild(div);
+        });
+        document.getElementById('mine-modal').classList.add('active');
+    };
+
+    window.buyCard = (cost, pnl) => {
+        if(state.score < cost) { tg.showAlert("Мало средств!"); return; }
+        state.score -= cost;
+        state.pnl += pnl;
+        render();
+        tg.HapticFeedback.notificationOccurred('success');
+    };
+
+    document.getElementById('close-mine').onclick = () => document.getElementById('mine-modal').classList.remove('active');
+
+    document.getElementById('btn-friends').onclick = () => {
+        const link = `https://t.me/UltraMind_AI_bot?start=${state.user_id}`;
+        tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Забирай 5000 бонусов!`);
+    };
+
+    // Авто-сохранение
     setInterval(async () => {
         if (document.hidden) return;
-        try {
-            await fetch('/api/save', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(state)
-            });
-        } catch(e) {}
+        await fetch('/api/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(state)
+        });
     }, 10000);
 
+    // Регенерация и доход
     setInterval(() => {
-        let needsRender = false;
-        if(state.energy < state.max_energy) {
-            state.energy = Math.min(state.max_energy, state.energy + 1.5);
-            needsRender = true;
-        }
-        if(state.pnl > 0) {
-            state.score += (state.pnl / 3600);
-            needsRender = true;
-        }
-        if(needsRender) render();
+        let n = false;
+        if(state.energy < state.max_energy) { state.energy = Math.min(state.max_energy, state.energy + 1.5); n = true; }
+        if(state.pnl > 0) { state.score += (state.pnl / 3600); n = true; }
+        if(n) render();
     }, 1000);
 
     window.onload = init;
