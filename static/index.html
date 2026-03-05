@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse Online</title>
-    <script src="https://telegram.org/js/telegram-web-app.js?v=2026.03.05"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js?v=2.0"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         :root { --neon-blue: #00d4ff; --neon-purp: #b026ff; --neon-green: #00ffcc; --bg: #050a1a; --glass: rgba(10, 25, 47, 0.95); }
@@ -39,7 +39,6 @@
         
         #tap-btn { 
             width: 260px; height: 260px; 
-            /* Путь к картинке с версией для сброса кэша */
             background: url('/static/images/logo.png?v=2.0') center/cover no-repeat, radial-gradient(circle, var(--neon-purp) 0%, transparent 75%); 
             border: 4px solid rgba(176, 38, 255, 0.3); 
             border-radius: 50%;
@@ -163,8 +162,11 @@
 
 <script>
     const tg = window.Telegram.WebApp;
-    tg.ready(); tg.expand();
-    tg.setHeaderColor('#050a1a');
+    try {
+        tg.ready(); 
+        tg.expand();
+        tg.setHeaderColor('#050a1a');
+    } catch(e) { console.error("Telegram API Error"); }
 
     const logger = {
         api: (method, url, status, tag = "") => console.log(`%c[API] %c${method} %c${url} %c=> ${status} ${tag}`, "color: #b026ff; font-weight: bold", "color: #fff", "color: #00d4ff", status === 200 ? "color: #00ffcc" : "color: #ff3e3e"),
@@ -177,16 +179,24 @@
     };
 
     const LEAGUES = [
-        { name: "IRON", min: 0, max: 50000 },
-        { name: "BRONZE", min: 50000, max: 250000 },
-        { name: "SILVER", min: 250000, max: 1000000 },
-        { name: "GOLD", min: 1000000, max: Infinity }
+        { name: "IRON", min: 0, max: 50000, lvl: 1 },
+        { name: "BRONZE", min: 50000, max: 250000, lvl: 2 },
+        { name: "SILVER", min: 250000, max: 1000000, lvl: 3 },
+        { name: "GOLD", min: 1000000, max: 5000000, lvl: 4 },
+        { name: "ELITE", min: 5000000, max: Infinity, lvl: 5 }
     ];
+
+    function checkLevelUp() {
+        let currentLeague = LEAGUES.find(l => state.score >= l.min && state.score < l.max) || LEAGUES[0];
+        if (state.level !== currentLeague.lvl) {
+            state.level = currentLeague.lvl;
+            try { tg.HapticFeedback.notificationOccurred('success'); } catch(e){}
+        }
+    }
 
     async function init() {
         try {
             const r = await fetch(`/api/balance/${state.user_id}?t=${Date.now()}`);
-            logger.api("GET", `/api/balance/${state.user_id}`, r.status);
             if(r.ok) {
                 const res = await r.json();
                 if(res.status === 'ok') {
@@ -196,23 +206,23 @@
                     state.tap_power = Number(res.data.click_lvl || 1);
                     state.pnl = Number(res.data.pnl || 0);
                     state.level = Number(res.data.level || 1);
-                    state.exp = Number(res.data.exp || 0);
                     render();
                 }
             }
             updateJackpot();
-        } catch(e) { logger.error("INIT", "Ошибка загрузки данных"); }
+        } catch(e) { logger.error("INIT", "Ошибка загрузки"); }
         document.getElementById('reloading-screen').style.display = 'none';
     }
 
     function render() {
+        checkLevelUp();
         document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
         document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
         document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
         document.getElementById('display-level').innerText = `LVL ${state.level}`;
 
-        let league = LEAGUES.find(l => state.score >= l.min && state.score < l.max) || LEAGUES[0];
+        let league = LEAGUES.find(l => state.score >= l.min && state.score < l.max) || LEAGUES[LEAGUES.length-1];
         document.getElementById('league-name').innerText = league.name + " LEAGUE";
         let pct = league.max === Infinity ? 100 : Math.min(100, Math.floor((state.score - league.min) / (league.max - league.min) * 100));
         document.getElementById('league-fill').style.width = pct + '%';
@@ -228,33 +238,30 @@
 
     async function saveData(type = "manual") {
         const payload = {
-            user_id: String(state.user_id),
+            user_id: state.user_id,
             score: Number(state.score.toFixed(2)),
-            click_lvl: Number(state.tap_power),
+            click_lvl: state.tap_power,
             energy: Number(state.energy.toFixed(2)),
-            max_energy: Number(state.max_energy),
-            pnl: Number(state.pnl),
-            level: Number(state.level),
-            exp: Number(state.exp)
+            max_energy: state.max_energy,
+            pnl: state.pnl,
+            level: state.level,
+            exp: state.exp
         };
         try {
-            const response = await fetch('/api/save', {
+            await fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(payload)
             });
-            logger.api("POST", "/api/save", response.status, `[${type.toUpperCase()}]`);
-        } catch(e) { logger.error("SYNC", "Сбой сети."); }
+        } catch(e) {}
     }
 
     async function updateJackpot() {
         try {
             const r = await fetch('/api/jackpot');
             const res = await r.json();
-            if(res.status === 'ok') {
-                document.getElementById('jackpot-amount').innerText = Number(res.value).toLocaleString();
-            }
-        } catch(e) { console.log("Jackpot offline"); }
+            if(res.status === 'ok') document.getElementById('jackpot-amount').innerText = Number(res.value).toLocaleString();
+        } catch(e) {}
     }
 
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
@@ -264,7 +271,7 @@
         state.energy -= state.tap_power;
         state.exp += 1;
         createFlyText(e.touches[0].clientX, e.touches[0].clientY, `+${state.tap_power}`);
-        tg.HapticFeedback.impactOccurred('medium');
+        try { tg.HapticFeedback.impactOccurred('medium'); } catch(e){}
         render();
     });
 
@@ -316,7 +323,7 @@
             state.score -= cost;
             if(type === 'tap') state.tap_power++;
             else { state.max_energy += 500; state.energy = state.max_energy; }
-            tg.HapticFeedback.notificationOccurred('success');
+            try { tg.HapticFeedback.notificationOccurred('success'); } catch(e){}
             render();
             saveData("upgrade");
         }
@@ -325,14 +332,14 @@
     function buyMiner(cost, income) {
         if (state.score >= cost) {
             state.score -= cost; state.pnl += income;
-            tg.HapticFeedback.notificationOccurred('success');
+            try { tg.HapticFeedback.notificationOccurred('success'); } catch(e){}
             render();
             saveData("miner");
         }
     }
 
     function copyRefLink() {
-        tg.showAlert(`https://t.me/UltraMind_AI_bot?start=${state.user_id}`);
+        tg.showAlert(`https://t.me/neural_pulse_bot?start=${state.user_id}`);
     }
 
     setInterval(() => {
