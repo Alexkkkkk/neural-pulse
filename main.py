@@ -58,22 +58,21 @@ class SaveData(BaseModel):
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message, command: CommandObject):
     uid = str(message.from_user.id)
-    ref_id = command.args # Получаем ID пригласившего из ссылки ?start=ID
-    
+    ref_id = command.args
     log_step("TG_MSG", f"Команда /start от {uid} (Ref: {ref_id})", C["Y"])
     
     if db_conn:
-        # Регистрация игрока если его нет
+        # Проверяем, есть ли пользователь в базе
         async with db_conn.execute("SELECT id FROM users WHERE id = ?", (uid,)) as cur:
             user_exists = await cur.fetchone()
         
         if not user_exists:
+            # Только для новых игроков создаем запись и даем бонусы
             await db_conn.execute("INSERT INTO users (id, balance) VALUES (?, ?)", (uid, 1000.0))
-            # Если пришел по рефералке - даем бонус обоим
             if ref_id and ref_id.isdigit() and ref_id != uid:
                 await db_conn.execute("UPDATE users SET balance = balance + 50000 WHERE id = ?", (ref_id,))
                 await db_conn.execute("UPDATE users SET balance = balance + 10000 WHERE id = ?", (uid,))
-                log_step("REFERRAL", f"Бонус начислен: {ref_id} <- {uid}", C["P"])
+                log_step("REFERRAL", f"Бонусы начислены: {ref_id} -> {uid}", C["P"])
             await db_conn.commit()
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -83,10 +82,9 @@ async def start_cmd(message: types.Message, command: CommandObject):
     
     welcome_text = (
         f"<b>Привет, {message.from_user.first_name}!</b>\n"
-        f"Neural Pulse Online запущен и готов к работе.\n\n"
+        f"Neural Pulse Online запущен.\n\n"
         f"🔗 Твоя реф. ссылка:\n<code>https://t.me/neural_pulse_bot?start={uid}</code>"
     )
-    
     await message.answer(welcome_text, reply_markup=kb, parse_mode="HTML")
 
 # --- [ФОНОВЫЙ ЦИКЛ] ---
@@ -131,14 +129,7 @@ async def lifespan(app: FastAPI):
     if db_conn: await db_conn.close()
 
 app = FastAPI(lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
@@ -152,7 +143,8 @@ async def get_balance(user_id: str):
     
     if not user:
         initial = {"score": 1000.0, "click_lvl": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "exp": 0}
-        await db_conn.execute("INSERT INTO users (id, balance) VALUES (?, ?)", (uid, 1000.0))
+        # Используем INSERT OR IGNORE для безопасности
+        await db_conn.execute("INSERT OR IGNORE INTO users (id, balance) VALUES (?, ?)", (uid, 1000.0))
         await db_conn.commit()
         USER_CACHE[uid] = {"data": initial}
         return {"status": "ok", "data": initial}
@@ -179,10 +171,8 @@ async def serve_index():
     index_path = STATIC_DIR / "index.html"
     return FileResponse(index_path, headers={"Cache-Control": "no-store"}) if index_path.exists() else JSONResponse({"err": "no index"}, 404)
 
-# Монтируем статику
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-# Фантомный монт для картинок (чтобы пути /images/ тоже работали)
 if (STATIC_DIR / "images").exists():
     app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images")
 
