@@ -15,8 +15,8 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 # --- [КОНФИГУРАЦИЯ] ---
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
-# index.html всегда в папке static по твоим правилам
 STATIC_DIR = BASE_DIR / "static"
+# Твой API токен
 API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM"
 
 C = {"G": "\033[92m", "Y": "\033[93m", "R": "\033[91m", "B": "\033[1m", "P": "\033[95m", "E": "\033[0m"}
@@ -88,13 +88,14 @@ async def maintenance_loop():
                     d = cache_entry.get("data")
                     if not d: continue
                     
+                    # ВАЖНО: берем score из кэша и кладем в balance базы
                     await db_conn.execute(
                         """UPDATE users SET 
                            balance=?, click_lvl=?, energy=?, max_energy=?, 
                            pnl=?, level=?, exp=?, last_active=? 
                            WHERE id=?""",
-                        (d.get('score'), d.get('click_lvl'), d.get('energy'), d.get('max_energy'),
-                         d.get('pnl'), d.get('level'), d.get('exp'), int(time.time()), str(uid))
+                        (d.get('score', 0), d.get('click_lvl', 1), d.get('energy', 0), d.get('max_energy', 1000),
+                         d.get('pnl', 0), d.get('level', 1), d.get('exp', 0), int(time.time()), str(uid))
                     )
                     count += 1
                 await db_conn.commit()
@@ -137,7 +138,6 @@ async def lifespan(app: FastAPI):
 # --- [FASTAPI ПРИЛОЖЕНИЕ] ---
 app = FastAPI(lifespan=lifespan)
 
-# CORS настроен максимально широко для Telegram WebApp
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -145,10 +145,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.get("/favicon.ico", include_in_schema=False)
-async def favicon():
-    return JSONResponse({"status": "no_favicon"})
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
@@ -171,6 +167,7 @@ async def get_balance(user_id: str):
             return {"status": "ok", "data": new_d}
         
         res = dict(user)
+        # Маппим balance из базы в score для фронтенда
         res["score"] = res.pop("balance") 
         USER_CACHE[uid] = {"data": res}
         return {"status": "ok", "data": res}
@@ -180,7 +177,11 @@ async def get_balance(user_id: str):
 @app.post("/api/save")
 async def save_game(data: SaveData):
     uid = str(data.user_id)
-    if uid not in USER_CACHE: USER_CACHE[uid] = {"data": {}}
+    # Гарантируем наличие структуры в кэше
+    if uid not in USER_CACHE: 
+        USER_CACHE[uid] = {"data": {}}
+    
+    # Обновляем данные в оперативной памяти
     USER_CACHE[uid]["data"].update(data.model_dump(exclude_unset=True))
     return {"status": "ok"}
 
@@ -210,8 +211,11 @@ async def get_top():
 async def index():
     p = STATIC_DIR / "index.html"
     if p.exists(): 
-        # Добавляем заголовки, чтобы браузер не кэшировал старый дизайн
-        return FileResponse(p, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+        return FileResponse(p, headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        })
     return JSONResponse({"err": "index.html not found in static/"}, 404)
 
 # Монтируем статику ПОСЛЕ всех маршрутов API
@@ -219,5 +223,4 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
     target_port = int(os.environ.get("PORT", 3000))
-    # Запуск с оптимальными настройками для Bothost
     uvicorn.run(app, host="0.0.0.0", port=target_port, proxy_headers=True, forwarded_allow_ips="*")
