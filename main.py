@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandObject, Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
@@ -17,6 +17,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
+# Токен оставляем твой
 API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM"
 
 C = {"G": "\033[92m", "Y": "\033[93m", "R": "\033[91m", "B": "\033[1m", "E": "\033[0m"}
@@ -34,19 +35,7 @@ class SaveData(BaseModel):
     max_energy: int
     pnl: float
     level: int
-    exp: int
-
-    @field_validator('score', 'energy', 'pnl', mode='before')
-    @classmethod
-    def to_float(cls, v):
-        try: return float(v)
-        except: return 0.0
-
-    @field_validator('click_lvl', 'max_energy', 'level', 'exp', mode='before')
-    @classmethod
-    def to_int(cls, v):
-        try: return int(float(v))
-        except: return 1
+    exp: Optional[int] = 0  # Сделали необязательным, чтобы не было ошибки 422
 
 # --- [ИНИЦИАЛИЗАЦИЯ] ---
 bot = Bot(token=API_TOKEN)
@@ -61,15 +50,17 @@ async def start_cmd(message: types.Message, command: CommandObject):
     if db_conn:
         async with db_conn.execute("SELECT id FROM users WHERE id = ?", (uid,)) as cur:
             if not await cur.fetchone():
-                # Безопасная вставка
                 await db_conn.execute("INSERT OR IGNORE INTO users (id, balance) VALUES (?, ?)", (uid, 1000.0))
                 if ref_id and ref_id.isdigit() and ref_id != uid:
                     await db_conn.execute("UPDATE users SET balance = balance + 50000 WHERE id = ?", (ref_id,))
                     await db_conn.execute("UPDATE users SET balance = balance + 10000 WHERE id = ?", (uid,))
                     log_step("REFERRAL", f"Бонус: {ref_id} <- {uid}", C["Y"])
                 await db_conn.commit()
-                # Сразу кладем в кэш, чтобы API не пыталось создать его снова
-                USER_CACHE[uid] = {"data": {"score": 1000.0, "click_lvl": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "exp": 0}}
+                
+                USER_CACHE[uid] = {"data": {
+                    "score": 1000.0, "click_lvl": 1, "energy": 1000.0, 
+                    "max_energy": 1000, "pnl": 0.0, "level": 1, "exp": 0
+                }}
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Запустить Neural Pulse 🚀", web_app=WebAppInfo(url="https://np.bothost.ru/"))]
@@ -140,20 +131,22 @@ async def get_balance(user_id: str):
         return {"status": "ok", "data": d}
     
     res = dict(user)
+    # Переименовываем balance в score для фронтенда
     res["score"] = res.pop("balance")
     USER_CACHE[uid] = {"data": res}
     return {"status": "ok", "data": res}
 
 @app.post("/api/save")
 async def save_game(data: SaveData):
+    # Сохраняем данные в кэш. Метод model_dump() переведет SaveData в словарь.
     USER_CACHE[str(data.user_id)] = {"data": data.model_dump()}
     return {"status": "ok"}
 
 @app.get("/api/jackpot")
 async def get_jackpot():
+    if not db_conn: return {"status": "error", "value": 500000}
     async with db_conn.execute("SELECT SUM(balance) FROM users") as cursor:
         row = await cursor.fetchone()
-        # Защита от None, если база пустая
         val = row[0] if row and row[0] is not None else 0
         return {"status": "ok", "value": int(500000 + val)}
 
@@ -164,6 +157,7 @@ async def index():
         return JSONResponse({"err": "index.html not found"}, 404)
     return FileResponse(path, headers={"Cache-Control": "no-store, must-revalidate"})
 
+# Статика и картинки
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if (STATIC_DIR / "images").exists():
