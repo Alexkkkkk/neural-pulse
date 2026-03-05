@@ -69,7 +69,7 @@
     <div class="loader-logo">
         <img src="/static/images/logo.png?v=2.0" onerror="this.style.display='none'">
     </div>
-    <div class="loader-text" id="loader-status">СИНХРОНИЗАЦИЯ</div>
+    <div class="loader-text" id="loader-status">ОБНОВЛЯЕТСЯ</div>
     
     <div class="progress-container">
         <div id="loader-progress"></div>
@@ -78,7 +78,7 @@
     <div style="margin-top: 15px; font-size: 10px; color: rgba(0, 212, 255, 0.5); letter-spacing: 1px; font-family: 'Orbitron'; text-align: center;">
         NEURAL NETWORK STATUS: <span id="node-percent">0%</span>
     </div>
-    <button id="retry-btn" onclick="location.reload()" style="display:none; margin-top: 20px; background: none; border: 1px solid var(--neon-blue); color: var(--neon-blue); padding: 8px 15px; border-radius: 10px; font-family: 'Orbitron'; font-size: 10px;">RECONNECT</button>
+    <button id="retry-btn" onclick="location.reload()" style="display:none; margin-top: 20px; background: none; border: 1px solid var(--neon-blue); color: var(--neon-blue); padding: 8px 15px; border-radius: 10px; font-family: 'Orbitron'; font-size: 10px; cursor: pointer; text-transform: uppercase;">Повторить попытку</button>
 </div>
 
 <div class="game-container" id="main-container">
@@ -172,7 +172,6 @@
         log: (msg, data = "") => console.log(`[LOG] ${msg}`, data),
         error: (msg, err = "") => {
             console.error(`[ERR] ${msg}`, err);
-            if (msg.includes("API")) tg.showAlert(`API Error: ${msg}`);
         }
     };
 
@@ -207,19 +206,28 @@
         const statusText = document.getElementById('loader-status');
         const progressFill = document.getElementById('loader-progress');
         const percentText = document.getElementById('node-percent');
+        const retryBtn = document.getElementById('retry-btn');
         
         let fakeProgress = 0;
         const progressInterval = setInterval(() => {
-            if (fakeProgress < 90) {
-                fakeProgress += Math.random() * 10;
-                if (fakeProgress > 90) fakeProgress = 90;
+            if (fakeProgress < 95) {
+                fakeProgress += Math.random() * 5;
+                if (fakeProgress > 95) fakeProgress = 95;
                 progressFill.style.width = fakeProgress + '%';
                 percentText.innerText = Math.floor(fakeProgress) + '%';
             }
-        }, 300);
+        }, 400);
 
         try {
-            const r = await fetch(`/api/balance/${state.user_id}?t=${Date.now()}`);
+            // Добавлен таймаут на случай, если сервер долго не отвечает
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+            const r = await fetch(`/api/balance/${state.user_id}?t=${Date.now()}`, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
             if (!r.ok) throw new Error("Fetch failed");
             const res = await r.json();
             
@@ -247,9 +255,10 @@
             }
         } catch(e) {
             clearInterval(progressInterval);
-            statusText.innerText = "ОШИБКА СЕТИ";
+            statusText.innerText = "ОШИБКА СВЯЗИ";
             statusText.style.color = "#ff4e4e";
-            document.getElementById('retry-btn').style.display = 'block';
+            percentText.innerText = "Сервер недоступен";
+            retryBtn.style.display = 'block';
         }
         updateJackpot();
     }
