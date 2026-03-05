@@ -14,7 +14,7 @@
         /* Стили лоадера */
         #reloading-screen { position: fixed; inset: 0; background: #050a1a; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.5s; }
         
-        /* ЭКРАН ОШИБКИ (Новое) */
+        /* ЭКРАН ОЖИДАНИЯ ПРИ ОШИБКЕ (ТЕМНЫЙ ЭКРАН) */
         #error-screen { 
             display: none; 
             position: fixed; 
@@ -24,7 +24,13 @@
             flex-direction: column; 
             align-items: center; 
             justify-content: center; 
-            text-align: center;
+        }
+        .wait-text {
+            color: rgba(0, 212, 255, 0.5);
+            font-size: 14px;
+            letter-spacing: 4px;
+            font-weight: 700;
+            text-transform: uppercase;
         }
 
         .loader-logo { width: 80px; height: 80px; border-radius: 20px; border: 2px solid var(--neon-purp); box-shadow: 0 0 20px rgba(176, 38, 255, 0.5); margin-bottom: 20px; overflow: hidden; background: #000; }
@@ -36,9 +42,9 @@
 
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
+        /* Game UI */
         .game-container { display: none; opacity: 0; position: relative; width: 100%; max-width: 500px; height: 100vh; flex-direction: column; align-items: center; padding: 10px 15px; box-sizing: border-box; transition: opacity 0.4s ease; }
         .game-container.visible { display: flex; opacity: 1; }
-
         .header-top { width: 100%; display: flex; align-items: center; gap: 12px; margin-top: 5px; }
         .ai-icon-small { width: 48px; height: 48px; background: #000; border: 2px solid var(--neon-purp); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px rgba(176, 38, 255, 0.4); overflow: hidden; cursor: pointer; }
         .ai-icon-small img { width: 100%; height: 100%; object-fit: cover; }
@@ -83,20 +89,16 @@
         <img src="/static/images/logo.png?v=2.0" onerror="this.style.display='none'">
     </div>
     <div class="loader-text" id="loader-status">ОБНОВЛЯЕТСЯ</div>
-    
     <div class="progress-container">
         <div id="loader-progress"></div>
     </div>
-
     <div style="margin-top: 15px; font-size: 10px; color: rgba(0, 212, 255, 0.5); letter-spacing: 1px; font-family: 'Orbitron'; text-align: center;">
         NEURAL NETWORK STATUS: <span id="node-percent">0%</span>
     </div>
 </div>
 
 <div id="error-screen">
-    <div style="font-size: 24px; font-weight: 900; color: #ff4e4e; letter-spacing: 2px;">NOT FOUND</div>
-    <div style="font-size: 10px; margin-top: 10px; color: rgba(255,255,255,0.3);">SERVER CONNECTION FAILED</div>
-    <button onclick="location.reload()" style="margin-top: 30px; background: none; border: 1px solid #444; color: #888; padding: 8px 20px; border-radius: 8px; font-family: 'Orbitron'; font-size: 10px;">RETRY</button>
+    <div class="wait-text">PLEASE WAIT...</div>
 </div>
 
 <div class="game-container" id="main-container">
@@ -234,6 +236,13 @@
             }
         }, 400);
 
+        // Вспомогательная функция для переключения на темный экран
+        const showWaitScreen = () => {
+            clearInterval(progressInterval);
+            loader.style.display = 'none';
+            errorScreen.style.display = 'flex';
+        };
+
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 12000);
@@ -243,11 +252,8 @@
             });
             clearTimeout(timeoutId);
 
-            // ЕСЛИ ОШИБКА 404, 500 или другая
             if (!r.ok) {
-                clearInterval(progressInterval);
-                loader.style.display = 'none'; // Убираем лоадер
-                errorScreen.style.display = 'flex'; // Показываем NOT FOUND
+                showWaitScreen();
                 return;
             }
 
@@ -274,22 +280,15 @@
                     setTimeout(() => { loader.style.display = 'none'; }, 500);
                 }, 500);
             } else {
-                // Если статус не ok
-                clearInterval(progressInterval);
-                loader.style.display = 'none';
-                errorScreen.style.display = 'flex';
+                showWaitScreen();
             }
         } catch(e) {
-            // Если сервер вообще не ответил (timeout) или упал
-            clearInterval(progressInterval);
-            loader.style.display = 'none';
-            errorScreen.style.display = 'flex';
+            showWaitScreen();
             Logger.error("Init failed", e);
         }
         updateJackpot();
     }
 
-    // Все остальные твои функции (render, saveData, buyUpgrade и т.д.) остаются прежними
     function render() {
         if(state.score === null) return;
         let league = LEAGUES.find(l => state.score >= l.min && state.score < l.max) || LEAGUES[LEAGUES.length-1];
