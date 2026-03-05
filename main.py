@@ -19,13 +19,13 @@ DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM"
 
-# --- [ЛОГИРОВАНИЕ] ---
 C = {"G": "\033[92m", "Y": "\033[93m", "R": "\033[91m", "B": "\033[1m", "E": "\033[0m"}
+
 def log_step(cat: str, msg: str, col: str = C["G"]):
     curr_time = datetime.datetime.now().strftime("%H:%M:%S")
     print(f"{C['B']}[{curr_time}]{C['E']} {col}{cat.ljust(12)}{C['E']} | {msg}", flush=True)
 
-# --- [МОДЕЛИ ДАННЫХ] ---
+# --- [МОДЕЛИ] ---
 class SaveData(BaseModel):
     user_id: str
     score: float
@@ -58,19 +58,28 @@ db_conn: Optional[aiosqlite.Connection] = None
 async def start_cmd(message: types.Message, command: CommandObject):
     uid = str(message.from_user.id)
     ref_id = command.args
+    
     if db_conn:
+        # Проверяем наличие пользователя перед вставкой
         async with db_conn.execute("SELECT id FROM users WHERE id = ?", (uid,)) as cur:
-            if not await cur.fetchone():
-                await db_conn.execute("INSERT INTO users (id, balance) VALUES (?, ?)", (uid, 1000.0))
-                if ref_id and ref_id.isdigit() and ref_id != uid:
-                    await db_conn.execute("UPDATE users SET balance = balance + 50000 WHERE id = ?", (ref_id,))
-                    await db_conn.execute("UPDATE users SET balance = balance + 10000 WHERE id = ?", (uid,))
-                await db_conn.commit()
+            user = await cur.fetchone()
+        
+        if not user:
+            # INSERT OR IGNORE как вторая линия защиты
+            await db_conn.execute("INSERT OR IGNORE INTO users (id, balance) VALUES (?, ?)", (uid, 1000.0))
+            if ref_id and ref_id.isdigit() and ref_id != uid:
+                await db_conn.execute("UPDATE users SET balance = balance + 50000 WHERE id = ?", (ref_id,))
+                await db_conn.execute("UPDATE users SET balance = balance + 10000 WHERE id = ?", (uid,))
+                log_step("REF_SYSTEM", f"Бонус: {ref_id} <- {uid}")
+            await db_conn.commit()
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Запустить Neural Pulse 🚀", web_app=WebAppInfo(url="https://np.bothost.ru/"))]
     ])
-    await message.answer(f"<b>Neural Pulse готов!</b>\n\nТвоя ссылка: <code>https://t.me/neural_pulse_bot?start={uid}</code>", reply_markup=kb, parse_mode="HTML")
+    await message.answer(
+        f"<b>Neural Pulse готов!</b>\n\nТвоя ссылка: <code>https://t.me/neural_pulse_bot?start={uid}</code>",
+        reply_markup=kb, parse_mode="HTML"
+    )
 
 async def maintenance_loop():
     while True:
@@ -87,7 +96,9 @@ async def maintenance_loop():
                          int(d.get('exp', 0)), int(time.time()), str(uid))
                     )
                 await db_conn.commit()
-            except Exception as e: log_step("DB_ERR", str(e), C["R"])
+                log_step("DB_SYNC", f"Сохранено игроков: {len(USER_CACHE)}")
+            except Exception as e:
+                log_step("DB_ERR", str(e), C["R"])
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -105,33 +116,32 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(dp.start_polling(bot))
     asyncio.create_task(maintenance_loop())
     yield
-    await db_conn.close()
+    if db_conn: await db_conn.close()
 
 app = FastAPI(lifespan=lifespan)
-
-# --- [CORS - МАКСИМАЛЬНЫЙ ДОСТУП] ---
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     uid = str(user_id)
-    if uid in USER_CACHE: return {"status": "ok", "data": USER_CACHE[uid]["data"]}
+    if uid in USER_CACHE:
+        return {"status": "ok", "data": USER_CACHE[uid]["data"]}
+    
     db_conn.row_factory = aiosqlite.Row
     async with db_conn.execute("SELECT * FROM users WHERE id = ?", (uid,)) as cursor:
         user = await cursor.fetchone()
+    
     if not user:
-        d = {"score": 1000.0, "click_lvl": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "exp": 0}
+        initial = {"score": 1000.0, "click_lvl": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "exp": 0}
+        # Используем INSERT OR IGNORE чтобы избежать IntegrityError
         await db_conn.execute("INSERT OR IGNORE INTO users (id, balance) VALUES (?, ?)", (uid, 1000.0))
         await db_conn.commit()
-        return {"status": "ok", "data": d}
+        USER_CACHE[uid] = {"data": initial}
+        return {"status": "ok", "data": initial}
+    
     res = dict(user)
     res["score"] = res.pop("balance")
+    USER_CACHE[uid] = {"data": res}
     return {"status": "ok", "data": res}
 
 @app.post("/api/save")
@@ -143,20 +153,16 @@ async def save_game(data: SaveData):
 async def get_jackpot():
     async with db_conn.execute("SELECT SUM(balance) FROM users") as cursor:
         row = await cursor.fetchone()
-        return {"status": "ok", "value": int(500000 + (row[0] if row and row[0] else 0))}
+        total = row[0] if row and row[0] is not None else 0
+        return {"status": "ok", "value": int(500000 + total)}
 
-# ВАЖНО: сначала корень, потом статика
 @app.get("/")
 async def index():
     path = STATIC_DIR / "index.html"
-    if not path.exists():
-        return JSONResponse({"err": f"index.html not found in {STATIC_DIR}"}, 404)
-    return FileResponse(path, headers={"Cache-Control": "no-store, must-revalidate"})
+    return FileResponse(path, headers={"Cache-Control": "no-store"}) if path.exists() else JSONResponse({"err": "no index"}, 404)
 
-# Монтируем папку static для доступа к .js и .css
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-# Если картинки лежат в static/images, это позволит обращаться к ним как /images/logo.png
 if (STATIC_DIR / "images").exists():
     app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images")
 
