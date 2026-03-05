@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Neural Pulse Online</title>
+    <script src="https://telegram.org/js/telegram-web-app.js?v=2026.03.04"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root { --neon-blue: #00d4ff; --neon-purp: #b026ff; --neon-green: #00ffcc; --bg: #050a1a; --glass: rgba(10, 25, 47, 0.95); }
+        body { margin: 0; background: var(--bg); height: 100vh; font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; display: flex; justify-content: center; touch-action: manipulation; }
+        
+        #reloading-screen { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .loader-logo { width: 80px; height: 80px; border-radius: 20px; border: 2px solid var(--neon-purp); box-shadow: 0 0 20px rgba(176, 38, 255, 0.5); margin-bottom: 20px; overflow: hidden; background: #000; }
+        .loader-logo img { width: 100%; height: 100%; object-fit: cover; }
+        .loader-text { color: var(--neon-blue); font-weight: 900; letter-spacing: 3px; text-shadow: 0 0 10px var(--neon-blue); animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        .game-container { position: relative; width: 100%; max-width: 500px; height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 10px 15px; box-sizing: border-box; }
+
+        .header-top { width: 100%; display: flex; align-items: center; gap: 12px; margin-top: 5px; }
+        .ai-icon-small { width: 48px; height: 48px; background: #000; border: 2px solid var(--neon-purp); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px rgba(176, 38, 255, 0.4); overflow: hidden; }
+        .ai-icon-small img { width: 100%; height: 100%; object-fit: cover; }
+        
+        .league-info { flex-grow: 1; position: relative; }
+        .league-header { display: flex; justify-content: space-between; font-size: 10px; font-weight: 900; margin-bottom: 4px; letter-spacing: 1px; }
+        .league-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; }
+        #league-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--neon-purp), var(--neon-blue)); transition: width 0.5s; }
+        .level-label { position: absolute; right: 0; top: 12px; font-size: 10px; color: var(--neon-blue); font-weight: 900; text-shadow: 0 0 5px var(--neon-blue); }
+
+        .jackpot-box { width: 100%; background: rgba(176, 38, 255, 0.05); border: 1px solid rgba(176, 38, 255, 0.2); border-radius: 18px; padding: 10px; text-align: center; margin-top: 15px; box-shadow: inset 0 0 15px rgba(176, 38, 255, 0.1); }
+        .jackpot-title { font-size: 10px; color: var(--neon-blue); letter-spacing: 2px; font-weight: 700; margin-bottom: 5px; }
+        .jackpot-value { font-size: 28px; font-weight: 900; letter-spacing: 1px; color: #fff; text-shadow: 0 0 15px rgba(255, 255, 255, 0.2); }
+
+        #score { font-size: 44px; font-weight: 900; margin: 20px 0 5px 0; text-shadow: 0 0 30px rgba(0, 212, 255, 0.4); }
+        #pnl-display { font-size: 13px; color: var(--neon-green); margin-bottom: 10px; font-weight: 700; }
+
+        .game-main { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; flex-grow: 1; }
+        
+        #tap-btn { 
+            width: 260px; height: 260px; 
+            background: url('/static/logo.png') center/cover no-repeat, radial-gradient(circle, var(--neon-purp) 0%, transparent 75%); 
+            border: 4px solid rgba(176, 38, 255, 0.3); 
+            border-radius: 50%;
+            cursor: pointer; z-index: 2; transition: transform 0.05s; 
+            -webkit-tap-highlight-color: transparent; 
+            filter: drop-shadow(0 0 20px var(--neon-blue));
+            box-shadow: inset 0 0 40px rgba(0, 212, 255, 0.2);
+        }
+        #tap-btn:active { transform: scale(0.92); }
+
+        .right-buttons { position: absolute; right: -5px; display: flex; flex-direction: column; gap: 10px; z-index: 3; }
+        .btn-side { width: 100px; height: 42px; background: rgba(10, 25, 47, 0.8); border: 1px solid var(--neon-blue); border-radius: 14px; color: white; font-family: 'Orbitron'; font-size: 10px; font-weight: 700; cursor: pointer; backdrop-filter: blur(5px); }
+
+        .energy-box { width: 100%; margin-bottom: 25px; }
+        .energy-bar-bg { width: 100%; height: 16px; background: rgba(255,255,255,0.05); border-radius: 20px; border: 1px solid var(--neon-blue); overflow: hidden; }
+        #energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--neon-blue), var(--neon-green)); transition: width 0.2s; }
+
+        .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; padding-bottom: 25px; }
+        .nav-link { height: 55px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; color: white; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+        .nav-link.syncing { border-color: var(--neon-green); color: var(--neon-green); transform: scale(0.95); }
+
+        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 75%; background: var(--glass); border-top: 3px solid var(--neon-blue); border-radius: 35px 35px 0 0; z-index: 1000; transition: 0.4s; padding: 30px 25px; box-sizing: border-box; overflow-y: auto; backdrop-filter: blur(20px); }
+        .modal.active { bottom: 0; }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; z-index: 999; }
+        .overlay.active { display: block; }
+        
+        .upgrade-card { background: rgba(255,255,255,0.03); padding: 18px; border-radius: 20px; border: 1px solid rgba(0, 212, 255, 0.2); margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .buy-btn { padding: 12px 18px; background: var(--neon-blue); border: none; border-radius: 12px; color: #000; font-weight: 900; font-family: 'Orbitron'; cursor: pointer; }
+        
+        .leader-row { display: flex; justify-content: space-between; padding: 12px; background: rgba(255,255,255,0.05); margin-bottom: 8px; border-radius: 12px; font-size: 12px; border-left: 3px solid var(--neon-blue); }
+        .floating-text { position: absolute; pointer-events: none; font-weight: 900; font-size: 32px; color: white; animation: floatUp 0.8s forwards; text-shadow: 0 0 15px var(--neon-blue); z-index: 10; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-130px); } }
+    </style>
+</head>
+<body>
+
+<div id="reloading-screen">
+    <div class="loader-logo"><img src="/static/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'"></div>
+    <div class="loader-text">ПОДКЛЮЧЕНИЕ...</div>
+</div>
+
+<div class="game-container">
+    <div class="header-top">
+        <div class="ai-icon-small"><img src="/static/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'"></div>
+        <div class="league-info">
+            <div class="league-header">
+                <span id="league-name">IRON LEAGUE</span>
+                <span id="league-pct">0%</span>
+            </div>
+            <div class="league-bar"><div id="league-fill"></div></div>
+            <div class="level-label" id="display-level">LVL 1</div>
+        </div>
+    </div>
+
+    <div class="jackpot-box">
+        <div class="jackpot-title">GLOBAL JACKPOT</div>
+        <div class="jackpot-value" id="jackpot-amount">500,052</div>
+    </div>
+
+    <div id="score">0</div>
+    <div id="pnl-display">PROFIT: +0/hr</div>
+
+    <div class="game-main">
+        <button id="tap-btn"></button>
+        <div class="right-buttons">
+            <button class="btn-side" onclick="copyRefLink()">INVITE</button>
+            <button class="btn-side" onclick="openModal('tasks')">TASKS</button>
+            <button class="btn-side" style="border-color: var(--neon-green); color: var(--neon-green);" onclick="tg.showAlert('Wallet скоро!')">WALLET</button>
+        </div>
+    </div>
+
+    <div class="energy-box">
+        <div style="display:flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px; color: var(--neon-blue); font-weight: 700;">
+            <span>⚡ ENERGY</span>
+            <span id="energy-text">1000/1000</span>
+        </div>
+        <div class="energy-bar-bg"><div id="energy-fill"></div></div>
+    </div>
+
+    <div class="bottom-nav">
+        <div class="nav-link" onclick="uiAction(this, 'boost')">🚀 BOOST</div>
+        <div class="nav-link" onclick="uiAction(this, 'mine')">⛏️ MINE</div>
+        <div class="nav-link" onclick="uiAction(this, 'stats')">📊 STATS</div>
+    </div>
+</div>
+
+<div class="overlay" id="overlay" onclick="closeModals()"></div>
+
+<div id="modal-boost" class="modal">
+    <h2 style="text-align:center; color: var(--neon-blue);">UPGRADES</h2>
+    <div class="upgrade-card">
+        <div><b>Multi-Tap</b><br><small>Level: <span id="tap-lvl">1</span></small></div>
+        <button class="buy-btn" onclick="buyUpgrade('tap')"><span id="tap-cost">500</span> NP</button>
+    </div>
+    <div class="upgrade-card">
+        <div><b>Energy Limit</b><br><small>Level: <span id="energy-lvl">1</span></small></div>
+        <button class="buy-btn" onclick="buyUpgrade('energy')"><span id="energy-cost">1000</span> NP</button>
+    </div>
+</div>
+
+<div id="modal-mine" class="modal">
+    <h2 style="text-align:center; color: var(--neon-green);">MINING</h2>
+    <div class="upgrade-card">
+        <div><b>Neural Node v1</b><br><small>+500/hr</small></div>
+        <button class="buy-btn" onclick="buyMiner(5000, 500)">5,000 NP</button>
+    </div>
+</div>
+
+<div id="modal-stats" class="modal">
+    <h2 style="text-align:center; color: var(--neon-blue);">LEADERBOARD</h2>
+    <div id="leaderboard-list">Загрузка данных...</div>
+</div>
+
+<div id="modal-tasks" class="modal">
+    <h2 style="text-align:center; color: var(--neon-purp);">TASKS</h2>
+    <div class="upgrade-card">
+        <div><b>Community</b><br><small>+10,000 NP</small></div>
+        <button class="buy-btn" onclick="window.open('https://t.me/NeuralPulseCommunity')">JOIN</button>
+    </div>
+</div>
+
+<script>
+    const tg = window.Telegram.WebApp;
+    tg.ready(); tg.expand();
+    tg.setHeaderColor('#050a1a');
+
+    const logger = {
+        api: (method, url, status, tag = "") => console.log(`%c[API] %c${method} %c${url} %c=> ${status} ${tag}`, "color: #b026ff; font-weight: bold", "color: #fff", "color: #00d4ff", status === 200 ? "color: #00ffcc" : "color: #ff3e3e"),
+        error: (cat, msg) => console.error(`%c[${cat}] %c${msg}`, "background: #ff3e3e; color: #fff; padding: 2px 5px; border-radius: 4px", "color: #ff3e3e")
+    };
+
+    let state = {
+        score: 0, energy: 1000, max_energy: 1000, tap_power: 1, pnl: 0, level: 1, exp: 0,
+        user_id: String(tg.initDataUnsafe?.user?.id || '476014374')
+    };
+
+    const LEAGUES = [
+        { name: "IRON", min: 0, max: 50000 },
+        { name: "BRONZE", min: 50000, max: 250000 },
+        { name: "SILVER", min: 250000, max: 1000000 },
+        { name: "GOLD", min: 1000000, max: Infinity }
+    ];
+
+    async function init() {
+        try {
+            const r = await fetch(`/api/balance/${state.user_id}?t=${Date.now()}`);
+            logger.api("GET", `/api/balance/${state.user_id}`, r.status);
+            if(r.ok) {
+                const res = await r.json();
+                if(res.status === 'ok') {
+                    state.score = Number(res.data.score || 0);
+                    state.energy = Number(res.data.energy || 1000);
+                    state.max_energy = Number(res.data.max_energy || 1000);
+                    state.tap_power = Number(res.data.click_lvl || 1);
+                    state.pnl = Number(res.data.pnl || 0);
+                    state.level = Number(res.data.level || 1);
+                    state.exp = Number(res.data.exp || 0);
+                    render();
+                }
+            }
+        } catch(e) { logger.error("INIT", "Ошибка загрузки данных"); }
+        document.getElementById('reloading-screen').style.display = 'none';
+    }
+
+    function render() {
+        document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
+        document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
+        document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
+        document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
+        document.getElementById('display-level').innerText = `LVL ${state.level}`;
+
+        let league = LEAGUES.find(l => state.score >= l.min && state.score < l.max) || LEAGUES[0];
+        document.getElementById('league-name').innerText = league.name + " LEAGUE";
+        let pct = league.max === Infinity ? 100 : Math.min(100, Math.floor((state.score - league.min) / (league.max - league.min) * 100));
+        document.getElementById('league-fill').style.width = pct + '%';
+        document.getElementById('league-pct').innerText = pct + '%';
+
+        if(document.getElementById('tap-lvl')) {
+            document.getElementById('tap-lvl').innerText = state.tap_power;
+            document.getElementById('tap-cost').innerText = (state.tap_power * 1000).toLocaleString();
+            document.getElementById('energy-lvl').innerText = Math.floor((state.max_energy - 1000)/500 + 1);
+            document.getElementById('energy-cost').innerText = (state.max_energy * 2).toLocaleString();
+        }
+    }
+
+    // ТВОЯ НОВАЯ ФУНКЦИЯ SAVE
+    async function saveData(type = "manual") {
+        const payload = {
+            user_id: String(state.user_id),
+            score: Number(state.score.toFixed(2)),
+            click_lvl: Number(state.tap_power),
+            energy: Number(state.energy.toFixed(2)),
+            max_energy: Number(state.max_energy),
+            pnl: Number(state.pnl),
+            level: Number(state.level),
+            exp: Number(state.exp)
+        };
+
+        try {
+            const response = await fetch('/api/save', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                const errData = await response.json();
+                console.error("Save Error Details:", errData);
+            }
+            logger.api("POST", "/api/save", response.status, type === "auto" ? "[AUTO]" : "");
+        } catch(e) {
+            logger.error("SYNC", "Сбой сети при сохранении.");
+        }
+    }
+
+    document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if(state.energy < state.tap_power) return;
+        state.score += state.tap_power; 
+        state.energy -= state.tap_power;
+        state.exp += 1;
+        createFlyText(e.touches[0].clientX, e.touches[0].clientY, `+${state.tap_power}`);
+        tg.HapticFeedback.impactOccurred('medium');
+        render();
+    });
+
+    function createFlyText(x, y, txt) {
+        const el = document.createElement('div');
+        el.className = 'floating-text'; el.innerText = txt;
+        el.style.left = x + 'px'; el.style.top = y + 'px';
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 800);
+    }
+
+    function openModal(id) {
+        if(id === 'stats') loadLeaderboard();
+        document.getElementById('modal-' + id).classList.add('active');
+        document.getElementById('overlay').classList.add('active');
+    }
+
+    function closeModals() {
+        document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+        document.getElementById('overlay').classList.remove('active');
+    }
+
+    async function loadLeaderboard() {
+        const list = document.getElementById('leaderboard-list');
+        try {
+            const r = await fetch('/api/leaderboard');
+            const res = await r.json();
+            if(res.status === 'ok') {
+                list.innerHTML = res.data.map((u, i) => `
+                    <div class="leader-row">
+                        <span>#${i+1} Operator ${String(u.id).substring(0,5)}</span>
+                        <span style="color:var(--neon-blue)">${Math.floor(u.balance).toLocaleString()} NP</span>
+                    </div>
+                `).join('');
+            }
+        } catch(e) { list.innerText = "Error loading stats"; }
+    }
+
+    async function uiAction(btn, id) {
+        btn.classList.add('syncing');
+        await saveData("manual");
+        btn.classList.remove('syncing'); 
+        openModal(id);
+    }
+
+    function buyUpgrade(type) {
+        let cost = (type === 'tap') ? state.tap_power * 1000 : state.max_energy * 2;
+        if (state.score >= cost) {
+            state.score -= cost;
+            if(type === 'tap') state.tap_power++;
+            else { state.max_energy += 500; state.energy = state.max_energy; }
+            tg.HapticFeedback.notificationOccurred('success');
+            render();
+            saveData("upgrade");
+        }
+    }
+
+    function buyMiner(cost, income) {
+        if (state.score >= cost) {
+            state.score -= cost; state.pnl += income;
+            tg.HapticFeedback.notificationOccurred('success');
+            render();
+            saveData("miner");
+        }
+    }
+
+    function copyRefLink() {
+        tg.showAlert(`https://t.me/UltraMind_AI_bot?start=${state.user_id}`);
+    }
+
+    setInterval(() => {
+        if(state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.2);
+        if(state.pnl > 0) state.score += (state.pnl / 3600);
+        render();
+    }, 1000);
+
+    // Автосохранение раз в 20 секунд
+    setInterval(() => saveData("auto"), 20000);
+    window.onload = init;
+</script>
+</body>
+</html>
