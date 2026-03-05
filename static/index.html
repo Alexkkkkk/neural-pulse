@@ -58,7 +58,7 @@
 
         .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; padding-bottom: 25px; }
         .nav-link { height: 55px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; color: white; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
-        .nav-link.syncing { border-color: var(--neon-green); color: var(--neon-green); transform: scale(0.95); }
+        .nav-link:active { background: rgba(255,255,255,0.1); transform: scale(0.95); }
 
         .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 75%; background: var(--glass); border-top: 3px solid var(--neon-blue); border-radius: 35px 35px 0 0; z-index: 1000; transition: 0.4s; padding: 30px 25px; box-sizing: border-box; overflow-y: auto; backdrop-filter: blur(20px); }
         .modal.active { bottom: 0; }
@@ -67,17 +67,18 @@
         
         .upgrade-card { background: rgba(255,255,255,0.03); padding: 18px; border-radius: 20px; border: 1px solid rgba(0, 212, 255, 0.2); margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
         .buy-btn { padding: 12px 18px; background: var(--neon-blue); border: none; border-radius: 12px; color: #000; font-weight: 900; font-family: 'Orbitron'; cursor: pointer; }
+        .buy-btn:disabled { background: #555; cursor: not-allowed; }
         
         .leader-row { display: flex; justify-content: space-between; padding: 12px; background: rgba(255,255,255,0.05); margin-bottom: 8px; border-radius: 12px; font-size: 12px; border-left: 3px solid var(--neon-blue); }
         .floating-text { position: absolute; pointer-events: none; font-weight: 900; font-size: 32px; color: white; animation: floatUp 0.8s forwards; text-shadow: 0 0 15px var(--neon-blue); z-index: 10; }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-130px); } }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-130px) scale(1.2); } }
     </style>
 </head>
 <body>
 
 <div id="reloading-screen">
     <div class="loader-logo"><img src="/static/images/logo.png?v=2.0" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'"></div>
-    <div class="loader-text">ПОДКЛЮЧЕНИЕ...</div>
+    <div class="loader-text">СИНХРОНИЗАЦИЯ...</div>
 </div>
 
 <div class="game-container">
@@ -106,7 +107,7 @@
         <div class="right-buttons">
             <button class="btn-side" onclick="copyRefLink()">INVITE</button>
             <button class="btn-side" onclick="openModal('tasks')">TASKS</button>
-            <button class="btn-side" style="border-color: var(--neon-green); color: var(--neon-green);" onclick="tg.showAlert('Wallet скоро!')">WALLET</button>
+            <button class="btn-side" style="border-color: var(--neon-green); color: var(--neon-green);" onclick="tg.showAlert('Система вывода в разработке!')">WALLET</button>
         </div>
     </div>
 
@@ -119,9 +120,9 @@
     </div>
 
     <div class="bottom-nav">
-        <div class="nav-link" onclick="uiAction(this, 'boost')">🚀 BOOST</div>
-        <div class="nav-link" onclick="uiAction(this, 'mine')">⛏️ MINE</div>
-        <div class="nav-link" onclick="uiAction(this, 'stats')">📊 STATS</div>
+        <div class="nav-link" onclick="openModal('boost')">🚀 BOOST</div>
+        <div class="nav-link" onclick="openModal('mine')">⛏️ MINE</div>
+        <div class="nav-link" onclick="openModal('stats')">📊 STATS</div>
     </div>
 </div>
 
@@ -131,11 +132,11 @@
     <h2 style="text-align:center; color: var(--neon-blue);">UPGRADES</h2>
     <div class="upgrade-card">
         <div><b>Multi-Tap</b><br><small>Level: <span id="tap-lvl">1</span></small></div>
-        <button class="buy-btn" onclick="buyUpgrade('tap')"><span id="tap-cost">500</span> NP</button>
+        <button class="buy-btn" id="btn-upgrade-tap" onclick="buyUpgrade('tap')"><span id="tap-cost">1000</span> NP</button>
     </div>
     <div class="upgrade-card">
         <div><b>Energy Limit</b><br><small>Level: <span id="energy-lvl">1</span></small></div>
-        <button class="buy-btn" onclick="buyUpgrade('energy')"><span id="energy-cost">1000</span> NP</button>
+        <button class="buy-btn" id="btn-upgrade-energy" onclick="buyUpgrade('energy')"><span id="energy-cost">1000</span> NP</button>
     </div>
 </div>
 
@@ -144,6 +145,10 @@
     <div class="upgrade-card">
         <div><b>Neural Node v1</b><br><small>+500/hr</small></div>
         <button class="buy-btn" onclick="buyMiner(5000, 500)">5,000 NP</button>
+    </div>
+    <div class="upgrade-card">
+        <div><b>Cloud Core</b><br><small>+2,500/hr</small></div>
+        <button class="buy-btn" onclick="buyMiner(25000, 2500)">25,000 NP</button>
     </div>
 </div>
 
@@ -155,27 +160,26 @@
 <div id="modal-tasks" class="modal">
     <h2 style="text-align:center; color: var(--neon-purp);">TASKS</h2>
     <div class="upgrade-card">
-        <div><b>Community</b><br><small>+10,000 NP</small></div>
-        <button class="buy-btn" onclick="window.open('https://t.me/NeuralPulseCommunity')">JOIN</button>
+        <div><b>Join Community</b><br><small>+10,000 NP</small></div>
+        <button class="buy-btn" onclick="window.open('https://t.me/neural_pulse_community')">JOIN</button>
     </div>
 </div>
 
 <script>
     const tg = window.Telegram.WebApp;
-    try {
-        tg.ready(); 
-        tg.expand();
-        tg.setHeaderColor('#050a1a');
-    } catch(e) { console.error("Telegram API Error"); }
+    tg.ready();
+    tg.expand();
 
-    const logger = {
-        api: (method, url, status, tag = "") => console.log(`%c[API] %c${method} %c${url} %c=> ${status} ${tag}`, "color: #b026ff; font-weight: bold", "color: #fff", "color: #00d4ff", status === 200 ? "color: #00ffcc" : "color: #ff3e3e"),
-        error: (cat, msg) => console.error(`%c[${cat}] %c${msg}`, "background: #ff3e3e; color: #fff; padding: 2px 5px; border-radius: 4px", "color: #ff3e3e")
-    };
-
+    // Исправленный ID пользователя
     let state = {
-        score: 0, energy: 1000, max_energy: 1000, tap_power: 1, pnl: 0, level: 1, exp: 0,
-        user_id: String(tg.initDataUnsafe?.user?.id || '476014374')
+        score: 0, 
+        energy: 1000, 
+        max_energy: 1000, 
+        tap_power: 1, 
+        pnl: 0, 
+        level: 1, 
+        exp: 0,
+        user_id: tg.initDataUnsafe?.user?.id ? String(tg.initDataUnsafe.user.id) : '476014374'
     };
 
     const LEAGUES = [
@@ -186,99 +190,97 @@
         { name: "ELITE", min: 5000000, max: Infinity, lvl: 5 }
     ];
 
-    function checkLevelUp() {
-        let currentLeague = LEAGUES.find(l => state.score >= l.min && state.score < l.max) || LEAGUES[0];
-        if (state.level !== currentLeague.lvl) {
-            state.level = currentLeague.lvl;
-            try { tg.HapticFeedback.notificationOccurred('success'); } catch(e){}
-        }
-    }
-
     async function init() {
         try {
             const r = await fetch(`/api/balance/${state.user_id}?t=${Date.now()}`);
-            if(r.ok) {
-                const res = await r.json();
-                if(res.status === 'ok') {
-                    state.score = Number(res.data.score || 0);
-                    state.energy = Number(res.data.energy || 1000);
-                    state.max_energy = Number(res.data.max_energy || 1000);
-                    state.tap_power = Number(res.data.click_lvl || 1);
-                    state.pnl = Number(res.data.pnl || 0);
-                    state.level = Number(res.data.level || 1);
-                    render();
-                }
+            const res = await r.json();
+            if(res.status === 'ok') {
+                state.score = Number(res.data.score);
+                state.energy = Number(res.data.energy);
+                state.max_energy = Number(res.data.max_energy);
+                state.tap_power = Number(res.data.click_lvl);
+                state.pnl = Number(res.data.pnl);
+                state.level = Number(res.data.level);
+                render();
             }
-            updateJackpot();
-        } catch(e) { logger.error("INIT", "Ошибка загрузки"); }
+        } catch(e) { console.error("Load error"); }
         document.getElementById('reloading-screen').style.display = 'none';
+        updateJackpot();
     }
 
     function render() {
-        checkLevelUp();
+        // Логика лиг
+        let league = LEAGUES.find(l => state.score >= l.min && state.score < l.max) || LEAGUES[LEAGUES.length-1];
+        state.level = league.lvl;
+        
         document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
         document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
         document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
         document.getElementById('display-level').innerText = `LVL ${state.level}`;
-
-        let league = LEAGUES.find(l => state.score >= l.min && state.score < l.max) || LEAGUES[LEAGUES.length-1];
         document.getElementById('league-name').innerText = league.name + " LEAGUE";
-        let pct = league.max === Infinity ? 100 : Math.min(100, Math.floor((state.score - league.min) / (league.max - league.min) * 100));
+
+        let pct = league.max === Infinity ? 100 : Math.floor(((state.score - league.min) / (league.max - league.min)) * 100);
         document.getElementById('league-fill').style.width = pct + '%';
         document.getElementById('league-pct').innerText = pct + '%';
 
-        if(document.getElementById('tap-lvl')) {
+        // Обновление цен в модалке Boost
+        if(document.getElementById('modal-boost').classList.contains('active')) {
+            const tapCost = state.tap_power * 1000;
+            const energyCost = Math.floor(state.max_energy * 1.5);
             document.getElementById('tap-lvl').innerText = state.tap_power;
-            document.getElementById('tap-cost').innerText = (state.tap_power * 1000).toLocaleString();
-            document.getElementById('energy-lvl').innerText = Math.floor((state.max_energy - 1000)/500 + 1);
-            document.getElementById('energy-cost').innerText = (state.max_energy * 2).toLocaleString();
+            document.getElementById('tap-cost').innerText = tapCost.toLocaleString();
+            document.getElementById('energy-lvl').innerText = Math.floor((state.max_energy-1000)/500 + 1);
+            document.getElementById('energy-cost').innerText = energyCost.toLocaleString();
+            
+            document.getElementById('btn-upgrade-tap').disabled = state.score < tapCost;
+            document.getElementById('btn-upgrade-energy').disabled = state.score < energyCost;
         }
     }
 
-    async function saveData(type = "manual") {
-        const payload = {
-            user_id: state.user_id,
-            score: Number(state.score.toFixed(2)),
-            click_lvl: state.tap_power,
-            energy: Number(state.energy.toFixed(2)),
-            max_energy: state.max_energy,
-            pnl: state.pnl,
-            level: state.level,
-            exp: state.exp
-        };
+    async function saveData() {
         try {
             await fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
+                body: JSON.stringify({
+                    user_id: state.user_id,
+                    score: state.score,
+                    click_lvl: state.tap_power,
+                    energy: state.energy,
+                    max_energy: state.max_energy,
+                    pnl: state.pnl,
+                    level: state.level,
+                    exp: state.exp
+                })
             });
         } catch(e) {}
     }
 
-    async function updateJackpot() {
-        try {
-            const r = await fetch('/api/jackpot');
-            const res = await r.json();
-            if(res.status === 'ok') document.getElementById('jackpot-amount').innerText = Number(res.value).toLocaleString();
-        } catch(e) {}
-    }
-
+    // ТАП обработчик
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
-        if(state.energy < state.tap_power) return;
-        state.score += state.tap_power; 
+        if(state.energy < state.tap_power) {
+            tg.HapticFeedback?.notificationOccurred('error');
+            return;
+        }
+        
+        state.score += state.tap_power;
         state.energy -= state.tap_power;
         state.exp += 1;
-        createFlyText(e.touches[0].clientX, e.touches[0].clientY, `+${state.tap_power}`);
-        try { tg.HapticFeedback.impactOccurred('medium'); } catch(e){}
+        
+        const touch = e.touches[0];
+        createFlyText(touch.clientX, touch.clientY, `+${state.tap_power}`);
+        tg.HapticFeedback?.impactOccurred('medium');
         render();
     });
 
     function createFlyText(x, y, txt) {
         const el = document.createElement('div');
-        el.className = 'floating-text'; el.innerText = txt;
-        el.style.left = x + 'px'; el.style.top = y + 'px';
+        el.className = 'floating-text';
+        el.innerText = txt;
+        el.style.left = (x - 20) + 'px';
+        el.style.top = (y - 40) + 'px';
         document.body.appendChild(el);
         setTimeout(() => el.remove(), 800);
     }
@@ -287,6 +289,7 @@
         if(id === 'stats') loadLeaderboard();
         document.getElementById('modal-' + id).classList.add('active');
         document.getElementById('overlay').classList.add('active');
+        render();
     }
 
     function closeModals() {
@@ -299,57 +302,79 @@
         try {
             const r = await fetch('/api/leaderboard');
             const res = await r.json();
-            if(res.status === 'ok') {
-                list.innerHTML = res.data.map((u, i) => `
-                    <div class="leader-row">
-                        <span>#${i+1} Operator ${String(u.id).substring(0,5)}</span>
-                        <span style="color:var(--neon-blue)">${Math.floor(u.balance).toLocaleString()} NP</span>
-                    </div>
-                `).join('');
-            }
-        } catch(e) { list.innerText = "Error loading stats"; }
-    }
-
-    async function uiAction(btn, id) {
-        btn.classList.add('syncing');
-        await saveData("manual");
-        btn.classList.remove('syncing'); 
-        openModal(id);
+            list.innerHTML = res.data.map((u, i) => `
+                <div class="leader-row">
+                    <span>#${i+1} Operator ${String(u.id).slice(-5)}</span>
+                    <span style="color:var(--neon-blue)">${Math.floor(u.balance).toLocaleString()} NP</span>
+                </div>
+            `).join('');
+        } catch(e) { list.innerText = "Ошибка сети"; }
     }
 
     function buyUpgrade(type) {
-        let cost = (type === 'tap') ? state.tap_power * 1000 : state.max_energy * 2;
-        if (state.score >= cost) {
-            state.score -= cost;
-            if(type === 'tap') state.tap_power++;
-            else { state.max_energy += 500; state.energy = state.max_energy; }
-            try { tg.HapticFeedback.notificationOccurred('success'); } catch(e){}
-            render();
-            saveData("upgrade");
+        if(type === 'tap') {
+            let cost = state.tap_power * 1000;
+            if(state.score >= cost) {
+                state.score -= cost;
+                state.tap_power++;
+                tg.HapticFeedback?.notificationOccurred('success');
+                saveData();
+            }
+        } else {
+            let cost = Math.floor(state.max_energy * 1.5);
+            if(state.score >= cost) {
+                state.score -= cost;
+                state.max_energy += 500;
+                state.energy = state.max_energy;
+                tg.HapticFeedback?.notificationOccurred('success');
+                saveData();
+            }
         }
+        render();
     }
 
     function buyMiner(cost, income) {
         if (state.score >= cost) {
-            state.score -= cost; state.pnl += income;
-            try { tg.HapticFeedback.notificationOccurred('success'); } catch(e){}
+            state.score -= cost;
+            state.pnl += income;
+            tg.HapticFeedback?.notificationOccurred('success');
             render();
-            saveData("miner");
+            saveData();
+        } else {
+            tg.showAlert("Недостаточно NP!");
         }
     }
 
-    function copyRefLink() {
-        tg.showAlert(`https://t.me/neural_pulse_bot?start=${state.user_id}`);
+    async function updateJackpot() {
+        try {
+            const r = await fetch('/api/jackpot');
+            const res = await r.json();
+            document.getElementById('jackpot-amount').innerText = Number(res.value).toLocaleString();
+        } catch(e) {}
     }
 
+    function copyRefLink() {
+        const link = `https://t.me/neural_pulse_bot?start=${state.user_id}`;
+        // В Telegram WebApp лучше использовать showAlert для вывода ссылки
+        tg.showAlert("Ваша ссылка для приглашения:\n" + link);
+    }
+
+    // Игровые циклы
     setInterval(() => {
-        if(state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.2);
-        if(state.pnl > 0) state.score += (state.pnl / 3600);
+        // Регенерация энергии +1.5 в сек
+        if(state.energy < state.max_energy) {
+            state.energy = Math.min(state.max_energy, state.energy + 1.5);
+        }
+        // Доход от майнинга
+        if(state.pnl > 0) {
+            state.score += (state.pnl / 3600);
+        }
         render();
     }, 1000);
 
-    setInterval(() => saveData("auto"), 20000);
-    setInterval(updateJackpot, 15000);
+    setInterval(saveData, 15000); // Автосейв каждые 15 сек
+    setInterval(updateJackpot, 30000); // Джекпот раз в 30 сек
+
     window.onload = init;
 </script>
 </body>
