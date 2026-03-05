@@ -3,10 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
     <title>Neural Pulse Online</title>
+    
     <script src="https://telegram.org/js/telegram-web-app.js?v=2.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    
     <style>
         :root { --neon-blue: #00d4ff; --neon-purp: #b026ff; --neon-green: #00ffcc; --bg: #050a1a; --glass: rgba(10, 25, 47, 0.95); }
         body { margin: 0; background: var(--bg); height: 100vh; font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; display: flex; justify-content: center; touch-action: manipulation; }
@@ -59,9 +66,12 @@
         #score { font-size: 44px; font-weight: 900; margin: 20px 0 5px 0; text-shadow: 0 0 30px rgba(0, 212, 255, 0.4); }
         #pnl-display { font-size: 13px; color: var(--neon-green); margin-bottom: 10px; font-weight: 700; }
         .game-main { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; flex-grow: 1; }
-        #tap-btn { width: 260px; height: 260px; background: url('/static/images/logo.png?v=2.0') center/cover no-repeat, radial-gradient(circle, var(--neon-purp) 0%, transparent 75%); border: 4px solid rgba(176, 38, 255, 0.3); border-radius: 50%; cursor: pointer; z-index: 2; transition: transform 0.05s; -webkit-tap-highlight-color: transparent; filter: drop-shadow(0 0 20px var(--neon-blue)); box-shadow: inset 0 0 40px rgba(0, 212, 255, 0.2); }
+        
+        /* Кнопка с версией в пути картинки для обхода кэша */
+        #tap-btn { width: 260px; height: 260px; background: url('/static/images/logo.png?v=3.1') center/cover no-repeat, radial-gradient(circle, var(--neon-purp) 0%, transparent 75%); border: 4px solid rgba(176, 38, 255, 0.3); border-radius: 50%; cursor: pointer; z-index: 2; transition: transform 0.05s; -webkit-tap-highlight-color: transparent; filter: drop-shadow(0 0 20px var(--neon-blue)); box-shadow: inset 0 0 40px rgba(0, 212, 255, 0.2); }
         #tap-btn:active { transform: scale(0.92); }
         #tap-btn:disabled { opacity: 0.5; filter: grayscale(1); }
+        
         .right-buttons { position: absolute; right: -5px; display: flex; flex-direction: column; gap: 10px; z-index: 3; }
         .btn-side { width: 100px; height: 42px; background: rgba(10, 25, 47, 0.8); border: 1px solid var(--neon-blue); border-radius: 14px; color: white; font-family: 'Orbitron'; font-size: 10px; font-weight: 700; cursor: pointer; backdrop-filter: blur(5px); }
         .energy-box { width: 100%; margin-bottom: 25px; }
@@ -86,7 +96,7 @@
 
 <div id="reloading-screen">
     <div class="loader-logo">
-        <img src="/static/images/logo.png?v=2.0" onerror="this.style.display='none'">
+        <img src="/static/images/logo.png?v=3.1" onerror="this.style.display='none'">
     </div>
     <div class="loader-text" id="loader-status">ОБНОВЛЯЕТСЯ</div>
     <div class="progress-container">
@@ -103,7 +113,7 @@
 
 <div class="game-container" id="main-container">
     <div class="header-top">
-        <div class="ai-icon-small" onclick="activateDebug()"><img src="/static/images/logo.png?v=2.0" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'"></div>
+        <div class="ai-icon-small" onclick="activateDebug()"><img src="/static/images/logo.png?v=3.1" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'"></div>
         <div class="league-info">
             <div class="league-header">
                 <span id="league-name">---</span>
@@ -236,7 +246,6 @@
             }
         }, 400);
 
-        // Вспомогательная функция для переключения на темный экран
         const showWaitScreen = () => {
             clearInterval(progressInterval);
             loader.style.display = 'none';
