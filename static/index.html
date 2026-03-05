@@ -53,7 +53,7 @@
         .league-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin-top: 4px; }
         #league-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--neon-purp), var(--neon-blue)); transition: 0.5s; }
 
-        #score { font-size: 48px; font-weight: 900; margin: 30px 0 10px; text-shadow: 0 0 20px var(--neon-blue); }
+        #score { font-size: 48px; font-weight: 900; margin: 20px 0 5px; text-shadow: 0 0 20px var(--neon-blue); }
         
         .game-main { position: relative; flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
         #tap-btn { 
@@ -65,23 +65,25 @@
             transition: transform 0.05s;
             -webkit-tap-highlight-color: transparent;
             cursor: pointer;
+            outline: none;
         }
         #tap-btn:active { transform: scale(0.92); }
 
-        .energy-box { width: 100%; margin-bottom: 30px; }
+        .energy-box { width: 100%; margin-bottom: 20px; }
         .energy-bar-bg { width: 100%; height: 14px; background: rgba(255,255,255,0.1); border-radius: 10px; border: 1px solid var(--neon-blue); overflow: hidden; }
         #energy-fill { height: 100%; background: linear-gradient(90deg, var(--neon-blue), var(--neon-green)); transition: 0.2s; }
 
-        .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; margin-bottom: 20px; }
+        .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; margin-bottom: 15px; }
         .nav-link { 
             background: rgba(255,255,255,0.05); 
-            padding: 15px; 
+            padding: 15px 5px; 
             border-radius: 15px; 
             text-align: center; 
             font-size: 11px; 
             font-weight: 700; 
             border: 1px solid rgba(255,255,255,0.1); 
-            text-transform: uppercase; 
+            text-transform: uppercase;
+            cursor: pointer;
         }
         
         .floating-text { 
@@ -120,7 +122,7 @@
     </div>
 
     <div id="score">0</div>
-    <div id="pnl-display" style="color: var(--neon-green); font-size: 12px; margin-bottom: 20px; letter-spacing: 1px;">PROFIT: +0/hr</div>
+    <div id="pnl-display" style="color: var(--neon-green); font-size: 12px; margin-bottom: 15px; letter-spacing: 1px;">PROFIT: +0/hr</div>
 
     <div class="game-main">
         <button id="tap-btn"></button>
@@ -136,8 +138,8 @@
 
     <div class="bottom-nav">
         <div class="nav-link" style="border-color: var(--neon-purp);">🚀 Boost</div>
-        <div class="nav-link" style="border-color: var(--neon-blue);">⛏️ Mine</div>
-        <div class="nav-link" style="border-color: var(--neon-green);">📊 Stats</div>
+        <div class="nav-link" id="btn-friends" style="border-color: var(--neon-blue);">👥 Friends</div>
+        <div class="nav-link" style="border-color: var(--neon-green);">⛏️ Mine</div>
     </div>
 </div>
 
@@ -145,7 +147,6 @@
     const tg = window.Telegram.WebApp;
     tg.ready(); tg.expand();
 
-    // Стейт игрока
     let state = {
         score: 0, 
         energy: 1000, 
@@ -166,7 +167,11 @@
 
     async function init() {
         try {
-            const r = await fetch(`/api/balance/${state.user_id}`);
+            // Получаем реферера из стартовых параметров Telegram
+            const urlParams = new URLSearchParams(window.location.search);
+            const ref = urlParams.get('tgWebAppStartParam') || '';
+            
+            const r = await fetch(`/api/balance/${state.user_id}${ref ? '?ref=' + ref : ''}`);
             const res = await r.json();
             if(res.status === 'ok') {
                 state = {...state, ...res.data};
@@ -175,8 +180,7 @@
                 document.getElementById('main-container').classList.add('visible');
             }
         } catch(e) { 
-            console.error("Connection error:", e);
-            // Резервный вход при ошибке сети
+            console.error("Init error:", e);
             document.getElementById('reloading-screen').style.display = 'none';
             document.getElementById('main-container').classList.add('visible');
         }
@@ -188,26 +192,18 @@
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
         document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
         
-        // Расчет уровня (каждые 15к очков)
         state.level = Math.floor(state.score / 15000) + 1;
         document.getElementById('display-level').innerText = `LVL ${state.level}`;
 
-        // Определение текущей лиги
         let currentLeague = leagues[0];
-        for(let l of leagues) {
-            if(state.score >= l.min) currentLeague = l;
-        }
+        for(let l of leagues) { if(state.score >= l.min) currentLeague = l; }
         
         const leagueNameEl = document.getElementById('league-name');
         leagueNameEl.innerText = currentLeague.name;
         leagueNameEl.style.color = currentLeague.color;
 
-        // Полоска прогресса лиги
         let nextLeague = leagues[leagues.indexOf(currentLeague) + 1] || currentLeague;
-        let progress = 100;
-        if(nextLeague !== currentLeague) {
-            progress = ((state.score - currentLeague.min) / (nextLeague.min - currentLeague.min)) * 100;
-        }
+        let progress = nextLeague !== currentLeague ? ((state.score - currentLeague.min) / (nextLeague.min - currentLeague.min)) * 100 : 100;
         document.getElementById('league-fill').style.width = progress + '%';
         document.getElementById('league-fill').style.background = currentLeague.color;
     }
@@ -235,7 +231,15 @@
         setTimeout(() => el.remove(), 800);
     }
 
-    // Сохранение данных (раз в 10 сек, только если вкладка активна)
+    // Логика кнопки Friends
+    document.getElementById('btn-friends').onclick = () => {
+        const botUsername = 'UltraMind_AI_bot'; // Убедись, что это верный юзернейм
+        const inviteLink = `https://t.me/${botUsername}?start=${state.user_id}`;
+        const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent('Присоединяйся к Neural Pulse! Получи 5000 монет при регистрации 🚀')}`;
+        tg.openTelegramLink(shareUrl);
+    };
+
+    // Авто-сохранение
     setInterval(async () => {
         if (document.hidden) return;
         try {
@@ -247,7 +251,7 @@
         } catch(e) {}
     }, 10000);
 
-    // Пассивный доход и регенерация энергии
+    // Пассивные процессы
     setInterval(() => {
         let needsRender = false;
         if(state.energy < state.max_energy) {
