@@ -199,6 +199,8 @@
                     render();
                 }
             }
+            // Вызываем загрузку джекпота сразу при старте
+            updateJackpot();
         } catch(e) { logger.error("INIT", "Ошибка загрузки данных"); }
         document.getElementById('reloading-screen').style.display = 'none';
     }
@@ -224,7 +226,6 @@
         }
     }
 
-    // ТВОЯ НОВАЯ ФУНКЦИЯ SAVE
     async function saveData(type = "manual") {
         const payload = {
             user_id: String(state.user_id),
@@ -243,13 +244,26 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(payload)
             });
+            logger.api("POST", "/api/save", response.status, `[${type.toUpperCase()}]`);
             if (!response.ok) {
                 const errData = await response.json();
                 console.error("Save Error Details:", errData);
             }
-            logger.api("POST", "/api/save", response.status, type === "auto" ? "[AUTO]" : "");
         } catch(e) {
             logger.error("SYNC", "Сбой сети при сохранении.");
+        }
+    }
+
+    // НОВАЯ ФУНКЦИЯ ДЛЯ ДЖЕКПОТА
+    async function updateJackpot() {
+        try {
+            const r = await fetch('/api/jackpot');
+            const res = await r.json();
+            if(res.status === 'ok') {
+                document.getElementById('jackpot-amount').innerText = Number(res.value).toLocaleString();
+            }
+        } catch(e) {
+            console.log("Jackpot API offline");
         }
     }
 
@@ -331,14 +345,19 @@
         tg.showAlert(`https://t.me/UltraMind_AI_bot?start=${state.user_id}`);
     }
 
+    // ТАЙМЕРЫ
     setInterval(() => {
         if(state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.2);
         if(state.pnl > 0) state.score += (state.pnl / 3600);
         render();
     }, 1000);
 
-    // Автосохранение раз в 20 секунд
+    // Автосохранение (20 сек)
     setInterval(() => saveData("auto"), 20000);
+    
+    // Обновление джекпота (15 сек)
+    setInterval(updateJackpot, 15000);
+
     window.onload = init;
 </script>
 </body>
