@@ -17,6 +17,7 @@ BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 LOGO_PATH = STATIC_DIR / "logo.png"
+# Токен и настройки
 API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM"
 
 C = {"G": "\033[92m", "Y": "\033[93m", "R": "\033[91m", "B": "\033[1m", "P": "\033[95m", "E": "\033[0m"}
@@ -32,7 +33,7 @@ dp = Dispatcher()
 USER_CACHE: Dict[str, dict] = {}
 db_conn: Optional[aiosqlite.Connection] = None
 
-# ГИБКАЯ МОДЕЛЬ ДАННЫХ (Защита от 422 ошибки)
+# МОДЕЛЬ ДАННЫХ (Фронтенд -> Бэкенд)
 class SaveData(BaseModel):
     user_id: str
     score: Any = 0.0
@@ -70,39 +71,40 @@ async def start_cmd(message: types.Message):
         [InlineKeyboardButton(text="Поддержка 💬", url="https://t.me/bothost_ru")]
     ])
     await message.answer(
-        f"<b>Привет, {message.from_user.first_name}!</b>\nСистема готова. Входи в нейросеть через кнопку ниже.",
+        f"<b>Привет, {message.from_user.first_name}!</b>\nТвоя персональная нейросеть готова к работе.",
         reply_markup=kb, parse_mode="HTML"
     )
 
-# --- [ФОНОВЫЙ ЦИКЛ] ---
+# --- [ФОНОВЫЙ ЦИКЛ СОХРАНЕНИЯ] ---
 async def maintenance_loop():
     log_step("SYSTEM", "Фоновый цикл синхронизации запущен", C["P"])
     while True:
         try:
-            me = await bot.get_me()
-            log_step("PING", f"Связь с Telegram OK: @{me.username}", C["G"])
-            
             if USER_CACHE and db_conn:
                 count = 0
                 for uid, cache in USER_CACHE.items():
                     d = cache.get("data")
                     if not d: continue
+                    # Мапим score фронтенда в balance базы данных
                     await db_conn.execute(
-                        "UPDATE users SET balance=?, click_lvl=?, energy=?, max_energy=?, pnl=?, level=?, exp=?, last_active=? WHERE id=?",
+                        """UPDATE users SET 
+                           balance=?, click_lvl=?, energy=?, max_energy=?, 
+                           pnl=?, level=?, exp=?, last_active=? 
+                           WHERE id=?""",
                         (d.get('score'), d.get('click_lvl'), d.get('energy'), d.get('max_energy'),
                          d.get('pnl'), d.get('level'), d.get('exp'), int(time.time()), str(uid))
                     )
                     count += 1
                 await db_conn.commit()
                 if count > 0:
-                    log_step("DB_SYNC", f"Данные {count} игроков выгружены в game.db", C["G"])
+                    log_step("DB_SYNC", f"Данные {count} игроков выгружены в БД", C["G"])
             
-            await asyncio.sleep(60)
+            await asyncio.sleep(60) # Сброс кэша раз в минуту
         except Exception as e:
             log_step("LOOP_ERR", f"Ошибка цикла: {e}", C["R"])
             await asyncio.sleep(10)
 
-# --- [LIFESPAN] ---
+# --- [LIFESPAN СЕРВЕРА] ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_conn
@@ -140,6 +142,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     uid = str(user_id)
+    # Сначала ищем в кэше, потом в БД
     if uid in USER_CACHE: 
         return {"status": "ok", "data": USER_CACHE[uid]["data"]}
     
@@ -148,6 +151,7 @@ async def get_balance(user_id: str):
         user = await cursor.fetchone()
     
     if not user:
+        # Если юзера нет в БД, создаем стартовый набор
         new_d = {"score": 1000.0, "click_lvl": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "exp": 0}
         await db_conn.execute("INSERT INTO users (id, balance) VALUES (?, ?)", (uid, 1000.0))
         await db_conn.commit()
@@ -155,7 +159,7 @@ async def get_balance(user_id: str):
         return {"status": "ok", "data": new_d}
     
     res = dict(user)
-    res["score"] = res.pop("balance")
+    res["score"] = res.pop("balance") # Переименовываем для фронтенда
     USER_CACHE[uid] = {"data": res}
     return {"status": "ok", "data": res}
 
@@ -172,12 +176,13 @@ async def get_top():
     db_conn.row_factory = aiosqlite.Row
     async with db_conn.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10") as cursor:
         rows = await cursor.fetchall()
-    return {"status": "ok", "data": [dict(r) for r in rows]}
-
-@app.get("/favicon.ico")
-async def favicon():
-    if LOGO_PATH.exists(): return FileResponse(LOGO_PATH)
-    return JSONResponse({"err": "no logo"}, 404)
+    # Мапим balance в score для фронта
+    data = []
+    for r in rows:
+        d = dict(r)
+        d["balance"] = d.get("balance", 0)
+        data.append(d)
+    return {"status": "ok", "data": data}
 
 @app.get("/")
 async def index():
@@ -185,6 +190,7 @@ async def index():
     if p.exists(): return FileResponse(p)
     return JSONResponse({"err": "index.html not found"}, 404)
 
+# Монтируем статику ПОСЛЕ маршрута "/", чтобы корень работал через FileResponse
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
