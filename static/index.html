@@ -39,7 +39,8 @@
         
         #tap-btn { 
             width: 260px; height: 260px; 
-            background: url('/static/logo.png') center/cover no-repeat, radial-gradient(circle, var(--neon-purp) 0%, transparent 75%); 
+            /* Исправлен путь к фоновой картинке кнопки */
+            background: url('/static/images/logo.png') center/cover no-repeat, radial-gradient(circle, var(--neon-purp) 0%, transparent 75%); 
             border: 4px solid rgba(176, 38, 255, 0.3); 
             border-radius: 50%;
             cursor: pointer; z-index: 2; transition: transform 0.05s; 
@@ -76,13 +77,13 @@
 <body>
 
 <div id="reloading-screen">
-    <div class="loader-logo"><img src="/static/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'"></div>
+    <div class="loader-logo"><img src="/static/images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'"></div>
     <div class="loader-text">ПОДКЛЮЧЕНИЕ...</div>
 </div>
 
 <div class="game-container">
     <div class="header-top">
-        <div class="ai-icon-small"><img src="/static/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'"></div>
+        <div class="ai-icon-small"><img src="/static/images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'"></div>
         <div class="league-info">
             <div class="league-header">
                 <span id="league-name">IRON LEAGUE</span>
@@ -95,7 +96,7 @@
 
     <div class="jackpot-box">
         <div class="jackpot-title">GLOBAL JACKPOT</div>
-        <div class="jackpot-value" id="jackpot-amount">500,052</div>
+        <div class="jackpot-value" id="jackpot-amount">0</div>
     </div>
 
     <div id="score">0</div>
@@ -199,7 +200,6 @@
                     render();
                 }
             }
-            // Вызываем загрузку джекпота сразу при старте
             updateJackpot();
         } catch(e) { logger.error("INIT", "Ошибка загрузки данных"); }
         document.getElementById('reloading-screen').style.display = 'none';
@@ -245,16 +245,9 @@
                 body: JSON.stringify(payload)
             });
             logger.api("POST", "/api/save", response.status, `[${type.toUpperCase()}]`);
-            if (!response.ok) {
-                const errData = await response.json();
-                console.error("Save Error Details:", errData);
-            }
-        } catch(e) {
-            logger.error("SYNC", "Сбой сети при сохранении.");
-        }
+        } catch(e) { logger.error("SYNC", "Сбой сети."); }
     }
 
-    // НОВАЯ ФУНКЦИЯ ДЛЯ ДЖЕКПОТА
     async function updateJackpot() {
         try {
             const r = await fetch('/api/jackpot');
@@ -262,9 +255,7 @@
             if(res.status === 'ok') {
                 document.getElementById('jackpot-amount').innerText = Number(res.value).toLocaleString();
             }
-        } catch(e) {
-            console.log("Jackpot API offline");
-        }
+        } catch(e) { console.log("Jackpot offline"); }
     }
 
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
@@ -345,19 +336,14 @@
         tg.showAlert(`https://t.me/UltraMind_AI_bot?start=${state.user_id}`);
     }
 
-    // ТАЙМЕРЫ
     setInterval(() => {
         if(state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.2);
         if(state.pnl > 0) state.score += (state.pnl / 3600);
         render();
     }, 1000);
 
-    // Автосохранение (20 сек)
     setInterval(() => saveData("auto"), 20000);
-    
-    // Обновление джекпота (15 сек)
     setInterval(updateJackpot, 15000);
-
     window.onload = init;
 </script>
 </body>
