@@ -10,47 +10,14 @@
         :root { --neon-blue: #00d4ff; --neon-purp: #b026ff; --neon-green: #00ffcc; --bg: #050a1a; --glass: rgba(10, 25, 47, 0.95); }
         body { margin: 0; background: var(--bg); height: 100vh; font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; display: flex; justify-content: center; touch-action: manipulation; }
         
-        /* ЭКРАН ЗАГРУЗКИ */
-        #reloading-screen {
-            position: fixed;
-            inset: 0;
-            background: #050a1a;
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            transition: opacity 0.5s;
-        }
-
-        .loader-logo { 
-            width: 80px; height: 80px; border-radius: 20px; border: 2px solid var(--neon-purp); 
-            box-shadow: 0 0 20px rgba(176, 38, 255, 0.5); margin-bottom: 20px; overflow: hidden; background: #000; 
-        }
+        #reloading-screen { position: fixed; inset: 0; background: #050a1a; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.5s; }
+        .loader-logo { width: 80px; height: 80px; border-radius: 20px; border: 2px solid var(--neon-purp); box-shadow: 0 0 20px rgba(176, 38, 255, 0.5); margin-bottom: 20px; overflow: hidden; background: #000; }
         .loader-logo img { width: 100%; height: 100%; object-fit: cover; }
         .loader-text { color: var(--neon-blue); font-size: 18px; font-weight: 900; letter-spacing: 4px; text-shadow: 0 0 15px var(--neon-blue); animation: pulse 1.5s infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
-        /* ОСНОВНОЙ КОНТЕЙНЕР (ЖЕСТКО СКРЫТ) */
-        .game-container { 
-            display: none; 
-            opacity: 0;
-            position: relative; 
-            width: 100%; 
-            max-width: 500px; 
-            height: 100vh; 
-            flex-direction: column; 
-            align-items: center; 
-            padding: 10px 15px; 
-            box-sizing: border-box; 
-            transition: opacity 0.4s ease;
-        }
-
-        /* ПОКАЗЫВАЕМ ТОЛЬКО ПОСЛЕ ЗАГРУЗКИ */
-        .game-container.visible {
-            display: flex;
-            opacity: 1;
-        }
+        .game-container { display: none; opacity: 0; position: relative; width: 100%; max-width: 500px; height: 100vh; flex-direction: column; align-items: center; padding: 10px 15px; box-sizing: border-box; transition: opacity 0.4s ease; }
+        .game-container.visible { display: flex; opacity: 1; }
 
         .header-top { width: 100%; display: flex; align-items: center; gap: 12px; margin-top: 5px; }
         .ai-icon-small { width: 48px; height: 48px; background: #000; border: 2px solid var(--neon-purp); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px rgba(176, 38, 255, 0.4); overflow: hidden; }
@@ -187,8 +154,18 @@
 
 <script>
     const tg = window.Telegram.WebApp;
+
+    // --- LOG MANAGER ---
+    const Logger = {
+        log: (msg, data = "") => console.log(`[LOG][${new Date().toLocaleTimeString()}] ${msg}`, data),
+        error: (msg, err = "") => console.error(`[ERR][${new Date().toLocaleTimeString()}] ${msg}`, err),
+        warn: (msg) => console.warn(`[WARN][${new Date().toLocaleTimeString()}] ${msg}`)
+    };
+
+    Logger.log("Приложение инициализируется");
     tg.ready();
     tg.expand();
+    Logger.log("Telegram WebApp Ready & Expanded");
 
     let state = {
         score: null, 
@@ -200,6 +177,7 @@
         exp: 0,
         user_id: tg.initDataUnsafe?.user?.id ? String(tg.initDataUnsafe.user.id) : '476014374'
     };
+    Logger.log("User ID определен:", state.user_id);
 
     const LEAGUES = [
         { name: "IRON", min: 0, max: 50000, lvl: 1 },
@@ -210,14 +188,18 @@
     ];
 
     async function init() {
-        // Принудительно скрываем всё при старте функции
+        Logger.log("Запуск функции init()");
         document.getElementById('main-container').classList.remove('visible');
-        state.score = null;
-
+        
         try {
-            const r = await fetch(`/api/balance/${state.user_id}?t=${Date.now()}`);
+            const url = `/api/balance/${state.user_id}?t=${Date.now()}`;
+            Logger.log("Запрос баланса по адресу:", url);
+            
+            const r = await fetch(url);
             const res = await r.json();
+            
             if(res.status === 'ok') {
+                Logger.log("Данные от сервера получены успешно", res.data);
                 state.score = Number(res.data.score);
                 state.energy = Number(res.data.energy);
                 state.max_energy = Number(res.data.max_energy);
@@ -227,23 +209,25 @@
                 state.exp = Number(res.data.exp);
                 
                 document.getElementById('tap-btn').disabled = false;
-                
-                // Сначала рендерим данные, пока всё скрыто
                 render();
                 
-                // ВКЛЮЧАЕМ ИНТЕРФЕЙС ПЛАВНО
                 const container = document.getElementById('main-container');
                 container.classList.add('visible');
+                Logger.log("Интерфейс отображен");
                 
-                // Убираем лоадер только когда контейнер начал проявляться
                 setTimeout(() => {
                     const screen = document.getElementById('reloading-screen');
                     screen.style.opacity = '0';
-                    setTimeout(() => screen.style.display = 'none', 500);
+                    setTimeout(() => {
+                        screen.style.display = 'none';
+                        Logger.log("Экран загрузки скрыт");
+                    }, 500);
                 }, 100);
+            } else {
+                Logger.warn("Сервер вернул статус не-ОК при загрузке");
             }
         } catch(e) { 
-            console.error("Init error"); 
+            Logger.error("Ошибка в init():", e); 
             document.querySelector('.loader-text').innerText = "ОШИБКА СЕТИ";
         }
         updateJackpot();
@@ -251,10 +235,12 @@
 
     function render() {
         if(state.score === null) return;
-
+        
+        // Поиск лиги
         let league = LEAGUES.find(l => state.score >= l.min && state.score < l.max) || LEAGUES[LEAGUES.length-1];
         state.level = league.lvl;
         
+        // Обновление DOM
         document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
         document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
@@ -266,6 +252,7 @@
         document.getElementById('league-fill').style.width = pct + '%';
         document.getElementById('league-pct').innerText = pct + '%';
 
+        // Рендер модалки бустов если она открыта
         if(document.getElementById('modal-boost').classList.contains('active')) {
             const tapCost = state.tap_power * 1000;
             const energyCost = Math.floor(state.max_energy * 1.5);
@@ -281,34 +268,53 @@
 
     async function saveData() {
         if(state.score === null) return;
+        
+        // ПРИНУДИТЕЛЬНОЕ ПРИВЕДЕНИЕ ТИПОВ ДЛЯ ИЗБЕЖАНИЯ ОШИБКИ 422
         const payload = {
             user_id: String(state.user_id),
-            score: Number(state.score),
-            click_lvl: Number(state.tap_power),
-            energy: Number(state.energy),
-            max_energy: Number(state.max_energy),
-            pnl: Number(state.pnl),
-            level: Number(state.level),
-            exp: Number(state.exp)
+            score: Math.floor(Number(state.score)),
+            click_lvl: parseInt(state.tap_power),
+            energy: Math.floor(Number(state.energy)),
+            max_energy: parseInt(state.max_energy),
+            pnl: Math.floor(Number(state.pnl)),
+            level: parseInt(state.level),
+            exp: parseInt(state.exp)
         };
+
+        Logger.log("Попытка сохранения данных на сервер...", payload);
+
         try {
-            await fetch('/api/save', {
+            const response = await fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(payload)
             });
-        } catch(e) {}
+            
+            if (response.ok) {
+                Logger.log("Данные успешно сохранены в БД");
+            } else {
+                const errText = await response.text();
+                Logger.error("Ошибка при сохранении (Status: " + response.status + "):", errText);
+            }
+        } catch(e) {
+            Logger.error("Сетевая ошибка при вызове /api/save:", e);
+        }
     }
 
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
-        if(state.score === null || state.energy < state.tap_power) {
+        if(state.score === null) return;
+        
+        if (state.energy < state.tap_power) {
+            Logger.log("Недостаточно энергии для тапа");
             tg.HapticFeedback?.notificationOccurred('error');
             return;
         }
+        
         state.score += state.tap_power;
         state.energy -= state.tap_power;
         state.exp += 1;
+        
         const touch = e.touches[0];
         createFlyText(touch.clientX, touch.clientY, `+${state.tap_power}`);
         tg.HapticFeedback?.impactOccurred('medium');
@@ -326,6 +332,7 @@
     }
 
     function openModal(id) {
+        Logger.log("Открытие модального окна:", id);
         if(id === 'stats') loadLeaderboard();
         document.getElementById('modal-' + id).classList.add('active');
         document.getElementById('overlay').classList.add('active');
@@ -333,11 +340,13 @@
     }
 
     function closeModals() {
+        Logger.log("Закрытие всех модальных окон");
         document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
         document.getElementById('overlay').classList.remove('active');
     }
 
     async function loadLeaderboard() {
+        Logger.log("Загрузка лидерборда...");
         const list = document.getElementById('leaderboard-list');
         try {
             const r = await fetch('/api/leaderboard');
@@ -348,39 +357,49 @@
                     <span style="color:var(--neon-blue)">${Math.floor(u.balance).toLocaleString()} NP</span>
                 </div>
             `).join('');
-        } catch(e) { list.innerText = "Ошибка сети"; }
+            Logger.log("Лидерборд успешно отрисован");
+        } catch(e) { 
+            Logger.error("Ошибка загрузки лидерборда:", e);
+            list.innerText = "Ошибка сети"; 
+        }
     }
 
     function buyUpgrade(type) {
+        Logger.log("Покупка апгрейда:", type);
         if(type === 'tap') {
             let cost = state.tap_power * 1000;
             if(state.score >= cost) {
                 state.score -= cost;
                 state.tap_power++;
+                Logger.log("Улучшен Multi-Tap до уровня:", state.tap_power);
                 tg.HapticFeedback?.notificationOccurred('success');
                 saveData();
-            }
+            } else { Logger.warn("Недостаточно средств для Multi-Tap"); }
         } else {
             let cost = Math.floor(state.max_energy * 1.5);
             if(state.score >= cost) {
                 state.score -= cost;
                 state.max_energy += 500;
                 state.energy = state.max_energy;
+                Logger.log("Улучшен Energy Limit до:", state.max_energy);
                 tg.HapticFeedback?.notificationOccurred('success');
                 saveData();
-            }
+            } else { Logger.warn("Недостаточно средств для Energy Limit"); }
         }
         render();
     }
 
     function buyMiner(cost, income) {
+        Logger.log(`Покупка майнера: цена ${cost}, доход ${income}`);
         if (state.score >= cost) {
             state.score -= cost;
             state.pnl += income;
+            Logger.log("Майнер куплен. Новый PNL:", state.pnl);
             tg.HapticFeedback?.notificationOccurred('success');
             render();
             saveData();
         } else {
+            Logger.warn("Недостаточно средств для покупки майнера");
             tg.showAlert("Недостаточно NP!");
         }
     }
@@ -390,29 +409,40 @@
             const r = await fetch('/api/jackpot');
             const res = await r.json();
             document.getElementById('jackpot-amount').innerText = Number(res.value).toLocaleString() + " NP";
-        } catch(e) {}
+            Logger.log("Джекпот обновлен:", res.value);
+        } catch(e) { Logger.error("Ошибка обновления джекпота", e); }
     }
 
     function copyRefLink() {
         const link = `https://t.me/neural_pulse_bot?start=${state.user_id}`;
+        Logger.log("Создана реф-ссылка:", link);
         tg.showAlert("Ваша ссылка приглашения:\n" + link);
     }
 
+    // ТАЙМЕРЫ
     setInterval(() => {
         if(state.score === null) return;
+        
+        // Регенерация энергии
         if(state.energy < state.max_energy) {
             state.energy = Math.min(state.max_energy, state.energy + 1.5);
         }
+        
+        // Пассивный доход
         if(state.pnl > 0) {
             state.score += (state.pnl / 3600);
         }
         render();
     }, 1000);
 
+    // Интервальное сохранение (15 сек) и обновление джекпота (30 сек)
     setInterval(saveData, 15000); 
     setInterval(updateJackpot, 30000); 
 
-    window.onload = init;
+    window.onload = () => {
+        Logger.log("Window Loaded");
+        init();
+    };
 </script>
 </body>
 </html>
