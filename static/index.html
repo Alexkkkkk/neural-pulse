@@ -89,7 +89,6 @@
             cursor: pointer;
         }
         
-        /* Модалка Mine */
         .modal {
             display: none; position: fixed; inset: 0; background: rgba(5, 10, 26, 0.95);
             z-index: 1000; padding: 20px; flex-direction: column; align-items: center;
@@ -127,12 +126,12 @@
 
 <div id="reloading-screen">
     <div class="loader-logo"><img src="/static/images/logo.png?v=3.1"></div>
-    <div style="color: var(--neon-blue); font-weight: 900; letter-spacing: 3px; font-size: 12px;">SYNCHRONIZING...</div>
+    <div style="color: var(--neon-blue); font-weight: 900; letter-spacing: 3px; font-size: 12px;">SYSTEM BOOTING...</div>
 </div>
 
 <div id="mine-modal" class="modal">
     <div class="close-modal" id="close-mine">✖</div>
-    <h2 style="color: var(--neon-blue); margin-top: 40px; font-size: 18px;">NEURAL UPGRADES</h2>
+    <h2 style="color: var(--neon-blue); margin-top: 40px; font-size: 18px;">MINING RIGS</h2>
     <div class="card-list" id="card-container"></div>
 </div>
 
@@ -177,12 +176,12 @@
     const tg = window.Telegram.WebApp;
     tg.ready(); tg.expand();
 
+    // 1. Инициализация TON Connect с защитой Proof
     const tonConnectUI = new TONConnectUI.TonConnectUI({
         manifestUrl: 'https://np.bothost.ru/static/tonconnect-manifest.json',
         buttonRootId: 'ton-connect-wrapper'
     });
 
-    // Исправленный state (wallet_address: null решает ошибку 422)
     let state = {
         score: 0, 
         energy: 1000, 
@@ -193,6 +192,12 @@
         wallet_address: null,
         user_id: String(tg.initDataUnsafe?.user?.id || '476014374')
     };
+
+    // Настройка Proof для подтверждения кошелька
+    tonConnectUI.setConnectRequestParameters({
+        state: 'ready',
+        value: { tonProof: "np_auth_" + state.user_id }
+    });
 
     const MINING_CARDS = [
         {id: 'cpu_1', name: 'Nano Core', cost: 1000, pnl: 50, icon: '🛰️'},
@@ -245,7 +250,6 @@
         document.getElementById('league-name').style.color = currentLeague.color;
     }
 
-    // Обработка тапа
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
         if(state.energy < state.tap_power) return;
@@ -265,28 +269,45 @@
         setTimeout(() => el.remove(), 800);
     }
 
-    // ФУНКЦИЯ ОПЛАТЫ BOOST (0.1 TON)
+    // --- [WEB3: ПЛАТЕЖ С КОММЕНТАРИЕМ] ---
     document.getElementById('btn-boost').onclick = async () => {
         if (!tonConnectUI.connected) {
             tg.showAlert("Сначала подключи кошелек!");
             return;
         }
+
+        // Комментарий "id:UserID" - так бэкенд поймет, кто платит
+        const body = state.user_id; 
+
         const tx = {
-            validUntil: Math.floor(Date.now() / 1000) + 60,
+            validUntil: Math.floor(Date.now() / 1000) + 120,
             messages: [{
                 address: "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI",
-                amount: "100000000" // 0.1 TON
+                amount: "100000000", // 0.1 TON
+                payload: btoa(body) // Кодируем ID в Base64 для блокчейна
             }]
         };
+
         try {
             await tonConnectUI.sendTransaction(tx);
-            state.energy = state.max_energy;
-            render();
-            tg.showAlert("Энергия восстановлена! ⚡");
-        } catch(e) { tg.showAlert("Ошибка оплаты"); }
+            tg.showConfirm("Транзакция отправлена! Проверить оплату?", async (ok) => {
+                if(ok) {
+                    const check = await fetch('/api/verify-payment', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ user_id: state.user_id, amount: 0.1 })
+                    });
+                    const res = await check.json();
+                    tg.showAlert(res.message);
+                    if(res.status === 'ok') {
+                        state.energy = state.max_energy;
+                        render();
+                    }
+                }
+            });
+        } catch(e) { tg.showAlert("Оплата отменена или ошибка"); }
     };
 
-    // Логика Mine
     document.getElementById('btn-mine').onclick = () => {
         const container = document.getElementById('card-container');
         container.innerHTML = '';
@@ -318,10 +339,9 @@
 
     document.getElementById('btn-friends').onclick = () => {
         const link = `https://t.me/UltraMind_AI_bot?start=${state.user_id}`;
-        tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Забирай 5000 бонусов!`);
+        tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Забирай 5000 бонусов в Neural Pulse!`);
     };
 
-    // Авто-сохранение
     setInterval(async () => {
         if (document.hidden) return;
         await fetch('/api/save', {
@@ -331,7 +351,6 @@
         });
     }, 10000);
 
-    // Регенерация и доход
     setInterval(() => {
         let n = false;
         if(state.energy < state.max_energy) { state.energy = Math.min(state.max_energy, state.energy + 1.5); n = true; }
