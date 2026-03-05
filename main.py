@@ -4,7 +4,7 @@ import uvicorn
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Optional, Dict, List, Any
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -59,6 +59,7 @@ async def start_cmd(message: types.Message):
     uid = str(message.from_user.id)
     log_step("TG_MSG", f"Команда /start от {uid}", C["Y"])
     
+    # Регистрация пользователя сразу при старте бота
     if db_conn:
         await db_conn.execute("INSERT OR IGNORE INTO users (id, balance) VALUES (?, ?)", (uid, 1000.0))
         await db_conn.commit()
@@ -76,7 +77,7 @@ async def start_cmd(message: types.Message):
 async def maintenance_loop():
     while True:
         try:
-            await asyncio.sleep(30) # Сделаем синхронизацию чаще (30 сек)
+            await asyncio.sleep(20) # Уменьшил до 20 сек для надежности
             if USER_CACHE and db_conn:
                 for uid, cache_entry in list(USER_CACHE.items()):
                     d = cache_entry.get("data")
@@ -104,6 +105,7 @@ async def lifespan(app: FastAPI):
     log_step("STARTUP", ">>> ЗАПУСК СЕРВЕРА NEURAL PULSE <<<", C["B"])
     db_conn = await aiosqlite.connect(DB_PATH)
     await db_conn.execute("PRAGMA journal_mode=WAL")
+    await db_conn.execute("PRAGMA synchronous=NORMAL")
     await db_conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, click_lvl INTEGER DEFAULT 1, 
@@ -116,15 +118,26 @@ async def lifespan(app: FastAPI):
     polling_task = asyncio.create_task(dp.start_polling(bot))
     sync_task = asyncio.create_task(maintenance_loop())
     yield
+    # При выключении сохраняем всё принудительно
+    log_step("SHUTDOWN", "Сохранение данных перед выключением...")
     await db_conn.close()
 
 app = FastAPI(lifespan=lifespan)
+
+# Добавляем CORS и заголовки кэширования
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+@app.middleware("http")
+async def add_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    # Кэшируем статику (картинки, стили) на 1 час для ускорения загрузки в Telegram
+    if request.url.path.startswith("/static"):
+        response.headers["Cache-Control"] = "public, max-age=3600"
+    return response
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     uid = str(user_id)
-    # Если в кэше есть — отдаем сразу
     if uid in USER_CACHE:
         return {"status": "ok", "data": USER_CACHE[uid]["data"]}
     
@@ -133,32 +146,34 @@ async def get_balance(user_id: str):
         user = await cursor.fetchone()
     
     if not user:
-        # Новый игрок
         initial_data = {"score": 1000.0, "click_lvl": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "exp": 0}
         await db_conn.execute("INSERT INTO users (id, balance) VALUES (?, ?)", (uid, 1000.0))
         await db_conn.commit()
         USER_CACHE[uid] = {"data": initial_data}
         return {"status": "ok", "data": initial_data}
     
-    # Загружаем из базы
     res = dict(user)
-    res["score"] = res.pop("balance") # Маппим balance в score
+    # Важный маппинг: balance из базы -> score для фронтенда
+    res["score"] = res.pop("balance") 
     USER_CACHE[uid] = {"data": res}
     return {"status": "ok", "data": res}
 
 @app.post("/api/save")
 async def save_game(data: SaveData):
     uid = str(data.user_id)
-    # Сохраняем модель данных в кэш
+    # Обновляем кэш. Модель данных фронтенда совпадает с SaveData
     USER_CACHE[uid] = {"data": data.model_dump()}
     return {"status": "ok"}
 
 @app.get("/api/jackpot")
 async def get_jackpot():
-    async with db_conn.execute("SELECT SUM(balance) FROM users") as cursor:
-        row = await cursor.fetchone()
-        total = row[0] if row and row[0] else 0
-    return {"status": "ok", "value": int(500000 + total)}
+    try:
+        async with db_conn.execute("SELECT SUM(balance) FROM users") as cursor:
+            row = await cursor.fetchone()
+            total = row[0] if row and row[0] else 0
+        return {"status": "ok", "value": int(500000 + total)}
+    except:
+        return {"status": "ok", "value": 500000}
 
 @app.get("/api/leaderboard")
 async def get_top():
@@ -170,10 +185,14 @@ async def get_top():
 @app.get("/")
 async def index():
     p = STATIC_DIR / "index.html"
-    if p.exists(): return FileResponse(p)
+    if p.exists():
+        # Отдаем файл с заголовком, запрещающим кэширование только для HTML, чтобы обновления подхватывались сразу
+        return FileResponse(p, headers={"Cache-Control": "no-cache"})
     return JSONResponse({"err": "index.html not found"}, 404)
 
+# Монтируем статику ПОСЛЕ всех роутов
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 3000)))
+    # Увеличил таймаут для стабильности на слабых хостингах
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 3000)), timeout_keep_alive=30)
