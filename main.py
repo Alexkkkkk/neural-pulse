@@ -16,6 +16,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
+# Твой токен остается прежним
 API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM"
 
 C = {"G": "\033[92m", "Y": "\033[93m", "R": "\033[91m", "B": "\033[1m", "P": "\033[95m", "E": "\033[0m"}
@@ -59,11 +60,12 @@ async def start_cmd(message: types.Message):
     uid = str(message.from_user.id)
     log_step("TG_MSG", f"Команда /start от {uid}", C["Y"])
     
-    # Регистрация пользователя сразу при старте бота
+    # Регистрация пользователя
     if db_conn:
         await db_conn.execute("INSERT OR IGNORE INTO users (id, balance) VALUES (?, ?)", (uid, 1000.0))
         await db_conn.commit()
 
+    # Ссылка должна вести строго на корень https://np.bothost.ru/
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Запустить Neural Pulse 🚀", web_app=WebAppInfo(url="https://np.bothost.ru/"))],
         [InlineKeyboardButton(text="Поддержка 💬", url="https://t.me/bothost_ru")]
@@ -73,12 +75,12 @@ async def start_cmd(message: types.Message):
         reply_markup=kb, parse_mode="HTML"
     )
 
-# --- [ФОНОВЫЙ ЦИКЛ] ---
+# --- [ФОНОВЫЙ ЦИКЛ СОХРАНЕНИЯ] ---
 async def maintenance_loop():
     while True:
-        try:
-            await asyncio.sleep(20) # Уменьшил до 20 сек для надежности
-            if USER_CACHE and db_conn:
+        await asyncio.sleep(15) 
+        if USER_CACHE and db_conn:
+            try:
                 for uid, cache_entry in list(USER_CACHE.items()):
                     d = cache_entry.get("data")
                     if not d: continue
@@ -94,18 +96,18 @@ async def maintenance_loop():
                          int(d.get('exp', 0)), int(time.time()), str(uid))
                     )
                 await db_conn.commit()
-                log_step("DB_SYNC", f"Данные {len(USER_CACHE)} игроков сохранены", C["G"])
-        except Exception as e:
-            log_step("LOOP_ERR", f"Ошибка: {e}", C["R"])
+                log_step("DB_SYNC", f"Данные {len(USER_CACHE)} игроков синхронизированы", C["G"])
+            except Exception as e:
+                log_step("DB_ERR", f"Ошибка сохранения: {e}", C["R"])
 
 # --- [LIFESPAN] ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_conn
     log_step("STARTUP", ">>> ЗАПУСК СЕРВЕРА NEURAL PULSE <<<", C["B"])
+    
     db_conn = await aiosqlite.connect(DB_PATH)
     await db_conn.execute("PRAGMA journal_mode=WAL")
-    await db_conn.execute("PRAGMA synchronous=NORMAL")
     await db_conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY, balance REAL DEFAULT 1000, click_lvl INTEGER DEFAULT 1, 
@@ -115,29 +117,33 @@ async def lifespan(app: FastAPI):
     """)
     await db_conn.commit()
     
-    polling_task = asyncio.create_task(dp.start_polling(bot))
-    sync_task = asyncio.create_task(maintenance_loop())
+    # Запуск бота и цикла
+    asyncio.create_task(dp.start_polling(bot))
+    asyncio.create_task(maintenance_loop())
+    
     yield
-    # При выключении сохраняем всё принудительно
-    log_step("SHUTDOWN", "Сохранение данных перед выключением...")
-    await db_conn.close()
+    
+    if db_conn:
+        await db_conn.close()
+        log_step("SHUTDOWN", "База данных закрыта")
 
 app = FastAPI(lifespan=lifespan)
 
-# Добавляем CORS и заголовки кэширования
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+# Настройка CORS (Важно для Telegram WebApp)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.middleware("http")
-async def add_cache_headers(request: Request, call_next):
-    response = await call_next(request)
-    # Кэшируем статику (картинки, стили) на 1 час для ускорения загрузки в Telegram
-    if request.url.path.startswith("/static"):
-        response.headers["Cache-Control"] = "public, max-age=3600"
-    return response
-
+# API: Получение баланса
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     uid = str(user_id)
+    
+    # Если есть в кэше — отдаем из кэша
     if uid in USER_CACHE:
         return {"status": "ok", "data": USER_CACHE[uid]["data"]}
     
@@ -146,25 +152,24 @@ async def get_balance(user_id: str):
         user = await cursor.fetchone()
     
     if not user:
-        initial_data = {"score": 1000.0, "click_lvl": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "exp": 0}
+        initial = {"score": 1000.0, "click_lvl": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "exp": 0}
         await db_conn.execute("INSERT INTO users (id, balance) VALUES (?, ?)", (uid, 1000.0))
         await db_conn.commit()
-        USER_CACHE[uid] = {"data": initial_data}
-        return {"status": "ok", "data": initial_data}
+        USER_CACHE[uid] = {"data": initial}
+        return {"status": "ok", "data": initial}
     
     res = dict(user)
-    # Важный маппинг: balance из базы -> score для фронтенда
-    res["score"] = res.pop("balance") 
+    res["score"] = res.pop("balance") # Маппинг для фронтенда
     USER_CACHE[uid] = {"data": res}
     return {"status": "ok", "data": res}
 
+# API: Сохранение
 @app.post("/api/save")
 async def save_game(data: SaveData):
-    uid = str(data.user_id)
-    # Обновляем кэш. Модель данных фронтенда совпадает с SaveData
-    USER_CACHE[uid] = {"data": data.model_dump()}
+    USER_CACHE[str(data.user_id)] = {"data": data.model_dump()}
     return {"status": "ok"}
 
+# API: Джекпот
 @app.get("/api/jackpot")
 async def get_jackpot():
     try:
@@ -175,6 +180,7 @@ async def get_jackpot():
     except:
         return {"status": "ok", "value": 500000}
 
+# API: Лидерборд
 @app.get("/api/leaderboard")
 async def get_top():
     db_conn.row_factory = aiosqlite.Row
@@ -182,17 +188,20 @@ async def get_top():
         rows = await cursor.fetchall()
     return {"status": "ok", "data": [{"id": r["id"], "balance": r["balance"]} for r in rows]}
 
+# ГЛАВНАЯ СТРАНИЦА (Корень сайта)
 @app.get("/")
-async def index():
-    p = STATIC_DIR / "index.html"
-    if p.exists():
-        # Отдаем файл с заголовком, запрещающим кэширование только для HTML, чтобы обновления подхватывались сразу
-        return FileResponse(p, headers={"Cache-Control": "no-cache"})
-    return JSONResponse({"err": "index.html not found"}, 404)
+async def serve_index():
+    index_path = STATIC_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path, headers={"Cache-Control": "no-store"})
+    return JSONResponse({"error": "index.html not found in static/"}, status_code=404)
 
-# Монтируем статику ПОСЛЕ всех роутов
+# СТАТИКА (Картинки, Лого)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+# Дополнительный маунт для картинок, если фронт ищет их в /images
+if (STATIC_DIR / "images").exists():
+    app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images")
 
 if __name__ == "__main__":
-    # Увеличил таймаут для стабильности на слабых хостингах
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 3000)), timeout_keep_alive=30)
+    port = int(os.environ.get("PORT", 3000))
+    uvicorn.run(app, host="0.0.0.0", port=port, timeout_keep_alive=30)
