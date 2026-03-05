@@ -16,6 +16,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
+# Токен оставляем твой
 API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM"
 
 C = {"G": "\033[92m", "Y": "\033[93m", "R": "\033[91m", "B": "\033[1m", "P": "\033[95m", "E": "\033[0m"}
@@ -42,11 +43,13 @@ class SaveData(BaseModel):
     exp: int = 0
 
     @field_validator('score', 'energy', 'pnl', mode='before')
+    @classmethod
     def to_float(cls, v):
         try: return float(v) if v is not None else 0.0
         except: return 0.0
 
     @field_validator('click_lvl', 'max_energy', 'level', 'exp', mode='before')
+    @classmethod
     def to_int(cls, v):
         try: return int(float(v)) if v is not None else 1
         except: return 1
@@ -58,49 +61,50 @@ async def start_cmd(message: types.Message):
     log_step("TG_MSG", f"Команда /start от {uid}", C["Y"])
     
     if db_conn:
-        # Использование INSERT OR IGNORE предотвращает IntegrityError (дубликаты)
+        # Регистрируем с начальным балансом 1000
         await db_conn.execute("INSERT OR IGNORE INTO users (id, balance) VALUES (?, ?)", (uid, 1000.0))
         await db_conn.commit()
-        log_step("DB_ACTION", f"Проверка/Регистрация: {uid}", C["G"])
+        log_step("DB_ACTION", f"Регистрация/Вход: {uid}", C["G"])
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Запустить Neural Pulse 🚀", web_app=WebAppInfo(url="https://np.bothost.ru/"))],
-        [InlineKeyboardButton(text="Поддержка 💬", url="https://t.me/bothost_ru")]
+        [InlineKeyboardButton(text="Играть 🚀", web_app=WebAppInfo(url="https://np.bothost.ru/"))],
+        [InlineKeyboardButton(text="Канал проекта 📢", url="https://t.me/NeuralPulseCommunity")]
     ])
     await message.answer(
-        f"<b>Привет, {message.from_user.first_name}!</b>\nСистема Neural Pulse онлайн и готова к работе.",
+        f"<b>Добро пожаловать в Neural Pulse, {message.from_user.first_name}!</b>\n\nТвой нейронный узел готов к майнингу NP.",
         reply_markup=kb, parse_mode="HTML"
     )
 
-# --- [ФОНОВЫЙ ЦИКЛ] ---
+# --- [ФОНОВЫЙ ЦИКЛ СОХРАНЕНИЯ] ---
 async def maintenance_loop():
     log_step("SYSTEM", "Цикл синхронизации запущен", C["P"])
     while True:
         try:
-            await asyncio.sleep(60)
+            await asyncio.sleep(60) # Сохраняем раз в минуту
             if USER_CACHE and db_conn:
+                uids = list(USER_CACHE.keys())
                 count = 0
-                # Создаем копию ключей для безопасной итерации
-                for uid in list(USER_CACHE.keys()):
-                    cache_entry = USER_CACHE.get(uid)
-                    if not cache_entry: continue
-                    d = cache_entry.get("data")
-                    if not d: continue
+                for uid in uids:
+                    data = USER_CACHE[uid].get("data")
+                    if not data: continue
                     
                     await db_conn.execute(
                         """UPDATE users SET 
                            balance=?, click_lvl=?, energy=?, max_energy=?, 
                            pnl=?, level=?, exp=?, last_active=? 
                            WHERE id=?""",
-                        (d.get('score'), d.get('click_lvl'), d.get('energy'), d.get('max_energy'),
-                         d.get('pnl'), d.get('level'), d.get('exp'), int(time.time()), str(uid))
+                        (data.get('score'), data.get('click_lvl'), data.get('energy'), data.get('max_energy'),
+                         data.get('pnl'), data.get('level'), data.get('exp'), int(time.time()), str(uid))
                     )
                     count += 1
+                
                 await db_conn.commit()
                 if count > 0:
-                    log_step("DB_SYNC", f"Обновлено игроков: {count}", C["G"])
+                    log_step("DB_SYNC", f"Данные {count} игроков сохранены", C["G"])
+                    # Очищаем кэш после сохранения для экономии памяти (опционально)
+                    # USER_CACHE.clear() 
         except Exception as e:
-            log_step("LOOP_ERR", f"Ошибка: {e}", C["R"])
+            log_step("LOOP_ERR", f"Ошибка синхронизации: {e}", C["R"])
 
 # --- [LIFESPAN] ---
 @asynccontextmanager
@@ -118,7 +122,7 @@ async def lifespan(app: FastAPI):
             )
         """)
         await db_conn.commit()
-        log_step("DB_READY", "База данных подключена", C["G"])
+        log_step("DB_READY", "База данных SQLite готова", C["G"])
         
         await bot.delete_webhook(drop_pending_updates=True)
         polling_task = asyncio.create_task(dp.start_polling(bot))
@@ -139,6 +143,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     uid = str(user_id)
+    # Если данные свежие в кэше - отдаем их
     if uid in USER_CACHE: 
         return {"status": "ok", "data": USER_CACHE[uid]["data"]}
     
@@ -150,13 +155,15 @@ async def get_balance(user_id: str):
             user = await cursor.fetchone()
         
         if not user:
-            new_d = {"score": 1000.0, "click_lvl": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "exp": 0}
+            # Новый пользователь (если зашел через веб, а не через бота)
+            initial_data = {"score": 1000.0, "click_lvl": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "exp": 0}
             await db_conn.execute("INSERT OR IGNORE INTO users (id, balance) VALUES (?, ?)", (uid, 1000.0))
             await db_conn.commit()
-            USER_CACHE[uid] = {"data": new_d}
-            return {"status": "ok", "data": new_d}
+            USER_CACHE[uid] = {"data": initial_data}
+            return {"status": "ok", "data": initial_data}
         
         res = dict(user)
+        # Маппинг имен: в БД 'balance', на фронте 'score'
         res["score"] = res.pop("balance") 
         USER_CACHE[uid] = {"data": res}
         return {"status": "ok", "data": res}
@@ -167,8 +174,9 @@ async def get_balance(user_id: str):
 async def save_game(data: SaveData):
     uid = str(data.user_id)
     if uid not in USER_CACHE: USER_CACHE[uid] = {"data": {}}
+    
+    # Обновляем кэш данными с фронтенда
     USER_CACHE[uid]["data"].update(data.model_dump(exclude_unset=True))
-    log_step("API_SAVE", f"Прогресс {uid} в кэше", C["P"])
     return {"status": "ok"}
 
 @app.get("/api/jackpot")
@@ -197,11 +205,10 @@ async def get_top():
 async def index():
     p = STATIC_DIR / "index.html"
     if p.exists(): return FileResponse(p)
-    return JSONResponse({"err": "index.html not found in static/"}, 404)
+    return JSONResponse({"err": "index.html не найден в папке static/"}, 404)
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
-    target_port = int(os.environ.get("PORT", 3000))
-    # Прямой запуск объекта app для стабильности на Bothost
-    uvicorn.run(app, host="0.0.0.0", port=target_port, proxy_headers=True, forwarded_allow_ips="*")
+    port = int(os.environ.get("PORT", 3000))
+    uvicorn.run(app, host="0.0.0.0", port=port, proxy_headers=True, forwarded_allow_ips="*")
