@@ -34,8 +34,7 @@ STATIC_DIR = BASE_DIR / "static"
 API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM"
 WEB_APP_URL = "https://np.bothost.ru/"
 ADMIN_WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
-# Вставь ключ от @tonapibot для быстрой проверки
-TONCENTER_API_KEY = "" 
+TONCENTER_API_KEY = "" # Рекомендуется получить ключ на toncenter.com
 
 USER_CACHE: Dict[str, dict] = {}
 db_conn: Optional[aiosqlite.Connection] = None
@@ -48,12 +47,11 @@ class SaveData(BaseModel):
     max_energy: int
     pnl: float
     level: int
-    # Используем Union для корректной обработки null значений из JS
     click_lvl: Optional[int] = 1
     wallet_address: Optional[Union[str, None]] = None  
     referrer_id: Optional[str] = None
     
-    # Ключевая настройка: игнорировать лишние поля и разрешать гибкие типы
+    # Ключевая настройка против ошибки 422: разрешаем любые доп. поля
     model_config = ConfigDict(extra='allow', arbitrary_types_allowed=True)
 
 class PaymentVerify(BaseModel):
@@ -62,7 +60,6 @@ class PaymentVerify(BaseModel):
 
 # --- [ФУНКЦИИ БЛОКЧЕЙНА] ---
 async def verify_ton_tx(user_id: str, expected_ton: float):
-    """Проверяет входящие транзакции в сети TON"""
     url = f"https://toncenter.com/api/v2/getTransactions?address={ADMIN_WALLET}&limit=20"
     headers = {"X-API-Key": TONCENTER_API_KEY} if TONCENTER_API_KEY else {}
     
@@ -71,21 +68,17 @@ async def verify_ton_tx(user_id: str, expected_ton: float):
             async with session.get(url, headers=headers, timeout=10) as resp:
                 if resp.status != 200: return False
                 data = await resp.json()
-                
                 for tx in data.get('result', []):
-                    # Проверка входящего сообщения
                     in_msg = tx.get('in_msg', {})
                     if not in_msg: continue
-                    
                     value = int(in_msg.get('value', 0)) / 1e9
-                    comment = in_msg.get('message', '') # Комментарий пользователя
-                    
-                    # Проверяем сумму и наличие ID пользователя в комментарии
+                    comment = in_msg.get('message', '')
+                    # Проверка по комментарию (user_id)
                     if value >= expected_ton * 0.95 and str(user_id) in comment:
-                        logger.info(f"Платеж подтвержден для {user_id}: {value} TON")
+                        logger.info(f"Платеж найден для {user_id}")
                         return True
     except Exception as e:
-        logger.error(f"Ошибка блокчейн-сервиса: {e}")
+        logger.error(f"TON API Error: {e}")
     return False
 
 # --- [ФОНОВЫЕ ЗАДАЧИ] ---
@@ -99,7 +92,6 @@ async def batch_db_update():
             for uid, entry in list(USER_CACHE.items()):
                 d = entry.get("data")
                 if not d: continue
-                # Подготовка данных для пакетной вставки
                 users_to_update.append((
                     str(uid), float(d.get('score', 0)), int(d.get('click_lvl', 1)), 
                     float(d.get('energy', 0)), int(d.get('max_energy', 1000)), 
@@ -117,26 +109,21 @@ async def batch_db_update():
                         wallet_address=excluded.wallet_address, last_active=excluded.last_active
                 """, users_to_update)
                 await db_conn.commit()
+                logger.info(f"Sync complete: {len(users_to_update)} users.")
         except Exception as e:
-            logger.error(f"Ошибка циклической записи: {e}")
+            logger.error(f"DB Batch Error: {e}")
 
 # --- [LIFESPAN] ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_conn
     db_conn = await aiosqlite.connect(DB_PATH)
-    await db_conn.execute("PRAGMA journal_mode=WAL") # Ускоряет работу БД
+    await db_conn.execute("PRAGMA journal_mode=WAL")
     await db_conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY, balance REAL, click_lvl INTEGER, 
             energy REAL, max_energy INTEGER, pnl REAL, 
             level INTEGER, wallet_address TEXT, last_active INTEGER
-        )
-    """)
-    await db_conn.execute("""
-        CREATE TABLE IF NOT EXISTS inventory (
-            user_id TEXT, item_id TEXT, level INTEGER, 
-            PRIMARY KEY(user_id, item_id)
         )
     """)
     await db_conn.commit()
@@ -151,15 +138,13 @@ async def lifespan(app: FastAPI):
             kb = InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="Вход в Neural Pulse 🚀", web_app=WebAppInfo(url=url))
             ]])
-            await m.answer(f"<b>Neural Pulse</b>\nТвой мозг — это майнер. Начни добычу TON прямо сейчас!", 
-                         reply_markup=kb, parse_mode="HTML")
+            await m.answer(f"<b>Neural Pulse Online</b>\nДобро пожаловать в нейросеть.", reply_markup=kb, parse_mode="HTML")
         asyncio.create_task(dp.start_polling(bot))
     
     asyncio.create_task(batch_db_update())
     yield
     if db_conn: await db_conn.close()
 
-# --- [APP SETUP] ---
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -167,7 +152,6 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 async def get_balance(user_id: str, ref: Optional[str] = None):
     uid = str(user_id)
     if uid in USER_CACHE:
-        USER_CACHE[uid]["last_seen"] = time.time()
         return {"status": "ok", "data": USER_CACHE[uid]["data"]}
     
     db_conn.row_factory = aiosqlite.Row
@@ -176,10 +160,11 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
     
     if row:
         data = dict(row)
-        data["score"] = data.pop("balance") # Совместимость с фронтендом
+        data["score"] = data.pop("balance")
         USER_CACHE[uid] = {"data": data, "last_seen": time.time()}
         return {"status": "ok", "data": data}
     
+    # Реферальная система при первом входе
     start_bal = 5000.0 if (ref and ref != uid and ref != "") else 0.0
     new_data = {"score": start_bal, "click_lvl": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "wallet_address": None}
     USER_CACHE[uid] = {"data": new_data, "last_seen": time.time()}
@@ -187,33 +172,26 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
 
 @app.post("/api/save")
 async def save(data: SaveData):
-    # Теперь extra='allow' предотвратит ошибку 422
-    USER_CACHE[data.user_id] = {
-        "data": data.model_dump(),
-        "last_seen": time.time()
-    }
+    # Данные принимаются корректно благодаря extra='allow'
+    USER_CACHE[data.user_id] = {"data": data.model_dump(), "last_seen": time.time()}
     return {"status": "ok"}
 
 @app.post("/api/verify-payment")
 async def verify_payment(payload: PaymentVerify):
     success = await verify_ton_tx(payload.user_id, payload.amount)
     if success:
-        if payload.amount >= 0.1: # 0.1 TON за Boost
+        if payload.amount >= 0.1:
             if payload.user_id in USER_CACHE:
                 USER_CACHE[payload.user_id]["data"]["energy"] = USER_CACHE[payload.user_id]["data"]["max_energy"]
-                return {"status": "ok", "message": "Энергия полностью восстановлена!"}
-    return {"status": "error", "message": "Транзакция не найдена. Если вы оплатили, подождите 60 сек."}
+            return {"status": "ok", "message": "Энергия восстановлена!"}
+    return {"status": "error", "message": "Транзакция не найдена."}
 
-# Статика
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.get("/")
 async def index():
-    index_file = STATIC_DIR / "index.html"
-    if index_file.exists():
-        return FileResponse(index_file)
-    return {"error": "index.html not found in static/"}
+    return FileResponse(STATIC_DIR / "index.html")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
