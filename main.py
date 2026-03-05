@@ -10,13 +10,13 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, field_validator
 from aiogram import Bot, Dispatcher, types, F
+from aiogram.filters import CommandObject, Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 # --- [КОНФИГУРАЦИЯ] ---
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
-# Твой токен остается прежним
 API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM"
 
 C = {"G": "\033[92m", "Y": "\033[93m", "R": "\033[91m", "B": "\033[1m", "P": "\033[95m", "E": "\033[0m"}
@@ -55,57 +55,66 @@ class SaveData(BaseModel):
         except: return 1
 
 # --- [ОБРАБОТЧИКИ ТЕЛЕГРАМ] ---
-@dp.message(F.text == "/start")
-async def start_cmd(message: types.Message):
+@dp.message(Command("start"))
+async def start_cmd(message: types.Message, command: CommandObject):
     uid = str(message.from_user.id)
-    log_step("TG_MSG", f"Команда /start от {uid}", C["Y"])
+    ref_id = command.args # Получаем ID пригласившего из ссылки ?start=ID
     
-    # Регистрация пользователя
+    log_step("TG_MSG", f"Команда /start от {uid} (Ref: {ref_id})", C["Y"])
+    
     if db_conn:
-        await db_conn.execute("INSERT OR IGNORE INTO users (id, balance) VALUES (?, ?)", (uid, 1000.0))
-        await db_conn.commit()
+        # Регистрация игрока если его нет
+        async with db_conn.execute("SELECT id FROM users WHERE id = ?", (uid,)) as cur:
+            user_exists = await cur.fetchone()
+        
+        if not user_exists:
+            await db_conn.execute("INSERT INTO users (id, balance) VALUES (?, ?)", (uid, 1000.0))
+            # Если пришел по рефералке - даем бонус обоим
+            if ref_id and ref_id.isdigit() and ref_id != uid:
+                await db_conn.execute("UPDATE users SET balance = balance + 50000 WHERE id = ?", (ref_id,))
+                await db_conn.execute("UPDATE users SET balance = balance + 10000 WHERE id = ?", (uid,))
+                log_step("REFERRAL", f"Бонус начислен: {ref_id} <- {uid}", C["P"])
+            await db_conn.commit()
 
-    # Ссылка должна вести строго на корень https://np.bothost.ru/
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Запустить Neural Pulse 🚀", web_app=WebAppInfo(url="https://np.bothost.ru/"))],
         [InlineKeyboardButton(text="Поддержка 💬", url="https://t.me/bothost_ru")]
     ])
-    await message.answer(
-        f"<b>Привет, {message.from_user.first_name}!</b>\nСистема Neural Pulse онлайн.",
-        reply_markup=kb, parse_mode="HTML"
+    
+    welcome_text = (
+        f"<b>Привет, {message.from_user.first_name}!</b>\n"
+        f"Neural Pulse Online запущен и готов к работе.\n\n"
+        f"🔗 Твоя реф. ссылка:\n<code>https://t.me/neural_pulse_bot?start={uid}</code>"
     )
+    
+    await message.answer(welcome_text, reply_markup=kb, parse_mode="HTML")
 
-# --- [ФОНОВЫЙ ЦИКЛ СОХРАНЕНИЯ] ---
+# --- [ФОНОВЫЙ ЦИКЛ] ---
 async def maintenance_loop():
     while True:
-        await asyncio.sleep(15) 
+        await asyncio.sleep(15)
         if USER_CACHE and db_conn:
             try:
                 for uid, cache_entry in list(USER_CACHE.items()):
                     d = cache_entry.get("data")
                     if not d: continue
-                    
                     await db_conn.execute(
-                        """UPDATE users SET 
-                           balance=?, click_lvl=?, energy=?, max_energy=?, 
-                           pnl=?, level=?, exp=?, last_active=? 
-                           WHERE id=?""",
-                        (float(d.get('score', 0)), int(d.get('click_lvl', 1)), 
-                         float(d.get('energy', 0)), int(d.get('max_energy', 1000)),
-                         float(d.get('pnl', 0)), int(d.get('level', 1)), 
+                        """UPDATE users SET balance=?, click_lvl=?, energy=?, max_energy=?, 
+                           pnl=?, level=?, exp=?, last_active=? WHERE id=?""",
+                        (float(d.get('score', 0)), int(d.get('click_lvl', 1)), float(d.get('energy', 0)), 
+                         int(d.get('max_energy', 1000)), float(d.get('pnl', 0)), int(d.get('level', 1)), 
                          int(d.get('exp', 0)), int(time.time()), str(uid))
                     )
                 await db_conn.commit()
-                log_step("DB_SYNC", f"Данные {len(USER_CACHE)} игроков синхронизированы", C["G"])
+                log_step("DB_SYNC", f"Синхронизация {len(USER_CACHE)} игроков")
             except Exception as e:
-                log_step("DB_ERR", f"Ошибка сохранения: {e}", C["R"])
+                log_step("DB_ERR", f"Ошибка: {e}", C["R"])
 
 # --- [LIFESPAN] ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_conn
     log_step("STARTUP", ">>> ЗАПУСК СЕРВЕРА NEURAL PULSE <<<", C["B"])
-    
     db_conn = await aiosqlite.connect(DB_PATH)
     await db_conn.execute("PRAGMA journal_mode=WAL")
     await db_conn.execute("""
@@ -116,20 +125,13 @@ async def lifespan(app: FastAPI):
         )
     """)
     await db_conn.commit()
-    
-    # Запуск бота и цикла
     asyncio.create_task(dp.start_polling(bot))
     asyncio.create_task(maintenance_loop())
-    
     yield
-    
-    if db_conn:
-        await db_conn.close()
-        log_step("SHUTDOWN", "База данных закрыта")
+    if db_conn: await db_conn.close()
 
 app = FastAPI(lifespan=lifespan)
 
-# Настройка CORS (Важно для Telegram WebApp)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -138,12 +140,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# API: Получение баланса
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     uid = str(user_id)
-    
-    # Если есть в кэше — отдаем из кэша
     if uid in USER_CACHE:
         return {"status": "ok", "data": USER_CACHE[uid]["data"]}
     
@@ -159,49 +158,33 @@ async def get_balance(user_id: str):
         return {"status": "ok", "data": initial}
     
     res = dict(user)
-    res["score"] = res.pop("balance") # Маппинг для фронтенда
+    res["score"] = res.pop("balance")
     USER_CACHE[uid] = {"data": res}
     return {"status": "ok", "data": res}
 
-# API: Сохранение
 @app.post("/api/save")
 async def save_game(data: SaveData):
     USER_CACHE[str(data.user_id)] = {"data": data.model_dump()}
     return {"status": "ok"}
 
-# API: Джекпот
 @app.get("/api/jackpot")
 async def get_jackpot():
-    try:
-        async with db_conn.execute("SELECT SUM(balance) FROM users") as cursor:
-            row = await cursor.fetchone()
-            total = row[0] if row and row[0] else 0
+    async with db_conn.execute("SELECT SUM(balance) FROM users") as cursor:
+        row = await cursor.fetchone()
+        total = row[0] if row and row[0] else 0
         return {"status": "ok", "value": int(500000 + total)}
-    except:
-        return {"status": "ok", "value": 500000}
 
-# API: Лидерборд
-@app.get("/api/leaderboard")
-async def get_top():
-    db_conn.row_factory = aiosqlite.Row
-    async with db_conn.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10") as cursor:
-        rows = await cursor.fetchall()
-    return {"status": "ok", "data": [{"id": r["id"], "balance": r["balance"]} for r in rows]}
-
-# ГЛАВНАЯ СТРАНИЦА (Корень сайта)
 @app.get("/")
 async def serve_index():
     index_path = STATIC_DIR / "index.html"
-    if index_path.exists():
-        return FileResponse(index_path, headers={"Cache-Control": "no-store"})
-    return JSONResponse({"error": "index.html not found in static/"}, status_code=404)
+    return FileResponse(index_path, headers={"Cache-Control": "no-store"}) if index_path.exists() else JSONResponse({"err": "no index"}, 404)
 
-# СТАТИКА (Картинки, Лого)
+# Монтируем статику
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-# Дополнительный маунт для картинок, если фронт ищет их в /images
+
+# Фантомный монт для картинок (чтобы пути /images/ тоже работали)
 if (STATIC_DIR / "images").exists():
     app.mount("/images", StaticFiles(directory=str(STATIC_DIR / "images")), name="images")
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 3000))
-    uvicorn.run(app, host="0.0.0.0", port=port, timeout_keep_alive=30)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 3000)), timeout_keep_alive=30)
