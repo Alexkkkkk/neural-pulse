@@ -10,7 +10,6 @@
         :root { --neon-blue: #00d4ff; --neon-purp: #b026ff; --neon-green: #00ffcc; --bg: #050a1a; }
         body { margin: 0; background: var(--bg); font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; touch-action: manipulation; }
         
-        /* Твой дизайн сохранен полностью */
         #reloading-screen { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .loader-logo { width: 80px; height: 80px; border-radius: 20px; border: 2px solid var(--neon-purp); box-shadow: 0 0 20px rgba(176, 38, 255, 0.5); margin-bottom: 20px; overflow: hidden; }
         .loader-logo img { width: 100%; height: 100%; object-fit: cover; }
@@ -61,7 +60,7 @@
         <div class="ai-icon-small"><img src="/static/images/logo.png?v=3.1" style="width:100%"></div>
         <div class="league-info">
             <div style="display:flex; justify-content: space-between; font-size: 10px;">
-                <span id="league-name">IRON LEAGUE</span>
+                <span id="league-name">NEURAL NETWORK</span>
                 <span id="display-level">LVL 1</span>
             </div>
             <div class="league-bar"><div id="league-fill"></div></div>
@@ -94,9 +93,16 @@
     const tg = window.Telegram.WebApp;
     tg.ready(); tg.expand();
 
+    // Начальный стейт, в точности соответствующий модели SaveData на сервере
     let state = {
-        score: 0, energy: 1000, max_energy: 1000, 
-        tap_power: 1, pnl: 0, level: 1,
+        score: 0, 
+        energy: 1000, 
+        max_energy: 1000, 
+        tap_power: 1, 
+        click_lvl: 1, // Добавлено явно
+        pnl: 0, 
+        level: 1,
+        exp: 0,
         user_id: String(tg.initDataUnsafe?.user?.id || '476014374')
     };
 
@@ -105,12 +111,20 @@
             const r = await fetch(`/api/balance/${state.user_id}`);
             const res = await r.json();
             if(res.status === 'ok') {
+                // Синхронизируем полученные данные с текущим стейтом
                 state = {...state, ...res.data};
                 render();
                 document.getElementById('reloading-screen').style.display = 'none';
                 document.getElementById('main-container').classList.add('visible');
             }
-        } catch(e) { console.error("Init error", e); }
+        } catch(e) { 
+            console.error("Init error", e);
+            // Даже если ошибка, пускаем в игру через 2 сек
+            setTimeout(() => {
+                document.getElementById('reloading-screen').style.display = 'none';
+                document.getElementById('main-container').classList.add('visible');
+            }, 2000);
+        }
     }
 
     function render() {
@@ -118,9 +132,9 @@
         document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
         document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
+        document.getElementById('display-level').innerText = `LVL ${state.level}`;
         
-        // Лиги (упрощенно для примера)
-        let progress = (state.score % 50000) / 50000 * 100;
+        let progress = (state.score % 10000) / 10000 * 100;
         document.getElementById('league-fill').style.width = progress + '%';
     }
 
@@ -133,7 +147,10 @@
         
         const touch = e.touches[0];
         createFlyText(touch.clientX, touch.clientY, `+${state.tap_power}`);
-        tg.HapticFeedback.impactOccurred('medium');
+        
+        if (tg.HapticFeedback) {
+            tg.HapticFeedback.impactOccurred('medium');
+        }
         render();
     });
 
@@ -146,13 +163,20 @@
         setTimeout(() => el.remove(), 800);
     }
 
-    // Сохранение раз в 10 секунд (более чем достаточно при пакетной записи на сервере)
+    // БЕЗОПАСНОЕ СОХРАНЕНИЕ
     setInterval(async () => {
-        await fetch('/api/save', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(state)
-        });
+        try {
+            const response = await fetch('/api/save', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(state)
+            });
+            if (!response.ok) {
+                console.warn("Save failed with status:", response.status);
+            }
+        } catch(e) { 
+            console.error("Network save error", e); 
+        }
     }, 10000);
 
     // Регенерация энергии
