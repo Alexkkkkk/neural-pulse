@@ -1,3 +1,179 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Neural Pulse Online</title>
+    <script src="https://telegram.org/js/telegram-web-app.js?v=2.0"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root { --neon-blue: #00d4ff; --neon-purp: #b026ff; --neon-green: #00ffcc; --bg: #050a1a; --glass: rgba(10, 25, 47, 0.95); }
+        body { margin: 0; background: var(--bg); height: 100vh; font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; display: flex; justify-content: center; touch-action: manipulation; }
+        
+        /* ОБНОВЛЕННЫЙ ЭКРАН ЗАГРУЗКИ */
+        #reloading-screen {
+            position: fixed;
+            inset: 0;
+            background: #050a1a;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s;
+        }
+
+        .loader-logo { 
+            width: 80px; height: 80px; border-radius: 20px; border: 2px solid var(--neon-purp); 
+            box-shadow: 0 0 20px rgba(176, 38, 255, 0.5); margin-bottom: 20px; overflow: hidden; background: #000; 
+        }
+        .loader-logo img { width: 100%; height: 100%; object-fit: cover; }
+
+        .loader-text {
+            color: var(--neon-blue);
+            font-size: 18px;
+            font-weight: 900;
+            letter-spacing: 4px;
+            text-shadow: 0 0 15px var(--neon-blue);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        /* ОСТАЛЬНЫЕ СТИЛИ */
+        .game-container { position: relative; width: 100%; max-width: 500px; height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 10px 15px; box-sizing: border-box; }
+        .header-top { width: 100%; display: flex; align-items: center; gap: 12px; margin-top: 5px; }
+        .ai-icon-small { width: 48px; height: 48px; background: #000; border: 2px solid var(--neon-purp); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px rgba(176, 38, 255, 0.4); overflow: hidden; }
+        .ai-icon-small img { width: 100%; height: 100%; object-fit: cover; }
+        .league-info { flex-grow: 1; position: relative; }
+        .league-header { display: flex; justify-content: space-between; font-size: 10px; font-weight: 900; margin-bottom: 4px; letter-spacing: 1px; }
+        .league-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; }
+        #league-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--neon-purp), var(--neon-blue)); transition: width 0.5s; }
+        .level-label { position: absolute; right: 0; top: 12px; font-size: 10px; color: var(--neon-blue); font-weight: 900; text-shadow: 0 0 5px var(--neon-blue); }
+        .jackpot-box { width: 100%; background: rgba(176, 38, 255, 0.05); border: 1px solid rgba(176, 38, 255, 0.2); border-radius: 18px; padding: 10px; text-align: center; margin-top: 15px; box-shadow: inset 0 0 15px rgba(176, 38, 255, 0.1); }
+        .jackpot-title { font-size: 10px; color: var(--neon-blue); letter-spacing: 2px; font-weight: 700; margin-bottom: 5px; }
+        .jackpot-value { font-size: 28px; font-weight: 900; letter-spacing: 1px; color: #fff; text-shadow: 0 0 15px rgba(255, 255, 255, 0.2); }
+        #score { font-size: 44px; font-weight: 900; margin: 20px 0 5px 0; text-shadow: 0 0 30px rgba(0, 212, 255, 0.4); }
+        #pnl-display { font-size: 13px; color: var(--neon-green); margin-bottom: 10px; font-weight: 700; }
+        .game-main { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; flex-grow: 1; }
+        #tap-btn { width: 260px; height: 260px; background: url('/static/images/logo.png?v=2.0') center/cover no-repeat, radial-gradient(circle, var(--neon-purp) 0%, transparent 75%); border: 4px solid rgba(176, 38, 255, 0.3); border-radius: 50%; cursor: pointer; z-index: 2; transition: transform 0.05s; -webkit-tap-highlight-color: transparent; filter: drop-shadow(0 0 20px var(--neon-blue)); box-shadow: inset 0 0 40px rgba(0, 212, 255, 0.2); }
+        #tap-btn:active { transform: scale(0.92); }
+        .right-buttons { position: absolute; right: -5px; display: flex; flex-direction: column; gap: 10px; z-index: 3; }
+        .btn-side { width: 100px; height: 42px; background: rgba(10, 25, 47, 0.8); border: 1px solid var(--neon-blue); border-radius: 14px; color: white; font-family: 'Orbitron'; font-size: 10px; font-weight: 700; cursor: pointer; backdrop-filter: blur(5px); }
+        .energy-box { width: 100%; margin-bottom: 25px; }
+        .energy-bar-bg { width: 100%; height: 16px; background: rgba(255,255,255,0.05); border-radius: 20px; border: 1px solid var(--neon-blue); overflow: hidden; }
+        #energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--neon-blue), var(--neon-green)); transition: width 0.2s; }
+        .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; padding-bottom: 25px; }
+        .nav-link { height: 55px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; color: white; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+        .nav-link:active { background: rgba(255,255,255,0.1); transform: scale(0.95); }
+        .modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 75%; background: var(--glass); border-top: 3px solid var(--neon-blue); border-radius: 35px 35px 0 0; z-index: 1000; transition: 0.4s; padding: 30px 25px; box-sizing: border-box; overflow-y: auto; backdrop-filter: blur(20px); }
+        .modal.active { bottom: 0; }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; z-index: 999; }
+        .overlay.active { display: block; }
+        .upgrade-card { background: rgba(255,255,255,0.03); padding: 18px; border-radius: 20px; border: 1px solid rgba(0, 212, 255, 0.2); margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .buy-btn { padding: 12px 18px; background: var(--neon-blue); border: none; border-radius: 12px; color: #000; font-weight: 900; font-family: 'Orbitron'; cursor: pointer; }
+        .buy-btn:disabled { background: #555; cursor: not-allowed; }
+        .leader-row { display: flex; justify-content: space-between; padding: 12px; background: rgba(255,255,255,0.05); margin-bottom: 8px; border-radius: 12px; font-size: 12px; border-left: 3px solid var(--neon-blue); }
+        .floating-text { position: absolute; pointer-events: none; font-weight: 900; font-size: 32px; color: white; animation: floatUp 0.8s forwards; text-shadow: 0 0 15px var(--neon-blue); z-index: 10; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-130px) scale(1.2); } }
+    </style>
+</head>
+<body>
+
+<div id="reloading-screen">
+    <div class="loader-logo">
+        <img src="/static/images/logo.png?v=2.0" onerror="this.style.display='none'">
+    </div>
+    <div class="loader-text">ОБНОВЛЯЕТСЯ...</div>
+    <div style="margin-top: 15px; font-size: 10px; color: rgba(0, 212, 255, 0.5); letter-spacing: 1px; font-family: 'Orbitron';">
+        CONNECTING TO NEURAL NETWORK
+    </div>
+</div>
+
+<div class="game-container">
+    <div class="header-top">
+        <div class="ai-icon-small"><img src="/static/images/logo.png?v=2.0" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'"></div>
+        <div class="league-info">
+            <div class="league-header">
+                <span id="league-name">IRON LEAGUE</span>
+                <span id="league-pct">0%</span>
+            </div>
+            <div class="league-bar"><div id="league-fill"></div></div>
+            <div class="level-label" id="display-level">LVL 1</div>
+        </div>
+    </div>
+
+    <div class="jackpot-box">
+        <div class="jackpot-title">GLOBAL JACKPOT</div>
+        <div class="jackpot-value" id="jackpot-amount">0</div>
+    </div>
+
+    <div id="score">0</div>
+    <div id="pnl-display">PROFIT: +0/hr</div>
+
+    <div class="game-main">
+        <button id="tap-btn"></button>
+        <div class="right-buttons">
+            <button class="btn-side" onclick="copyRefLink()">INVITE</button>
+            <button class="btn-side" onclick="openModal('tasks')">TASKS</button>
+            <button class="btn-side" style="border-color: var(--neon-green); color: var(--neon-green);" onclick="tg.showAlert('Система вывода в разработке!')">WALLET</button>
+        </div>
+    </div>
+
+    <div class="energy-box">
+        <div style="display:flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px; color: var(--neon-blue); font-weight: 700;">
+            <span>⚡ ENERGY</span>
+            <span id="energy-text">1000/1000</span>
+        </div>
+        <div class="energy-bar-bg"><div id="energy-fill"></div></div>
+    </div>
+
+    <div class="bottom-nav">
+        <div class="nav-link" onclick="openModal('boost')">🚀 BOOST</div>
+        <div class="nav-link" onclick="openModal('mine')">⛏️ MINE</div>
+        <div class="nav-link" onclick="openModal('stats')">📊 STATS</div>
+    </div>
+</div>
+
+<div class="overlay" id="overlay" onclick="closeModals()"></div>
+
+<div id="modal-boost" class="modal">
+    <h2 style="text-align:center; color: var(--neon-blue);">UPGRADES</h2>
+    <div class="upgrade-card">
+        <div><b>Multi-Tap</b><br><small>Level: <span id="tap-lvl">1</span></small></div>
+        <button class="buy-btn" id="btn-upgrade-tap" onclick="buyUpgrade('tap')"><span id="tap-cost">1000</span> NP</button>
+    </div>
+    <div class="upgrade-card">
+        <div><b>Energy Limit</b><br><small>Level: <span id="energy-lvl">1</span></small></div>
+        <button class="buy-btn" id="btn-upgrade-energy" onclick="buyUpgrade('energy')"><span id="energy-cost">1000</span> NP</button>
+    </div>
+</div>
+
+<div id="modal-mine" class="modal">
+    <h2 style="text-align:center; color: var(--neon-green);">MINING</h2>
+    <div class="upgrade-card">
+        <div><b>Neural Node v1</b><br><small>+500/hr</small></div>
+        <button class="buy-btn" onclick="buyMiner(5000, 500)">5,000 NP</button>
+    </div>
+    <div class="upgrade-card">
+        <div><b>Cloud Core</b><br><small>+2,500/hr</small></div>
+        <button class="buy-btn" onclick="buyMiner(25000, 2500)">25,000 NP</button>
+    </div>
+</div>
+
+<div id="modal-stats" class="modal">
+    <h2 style="text-align:center; color: var(--neon-blue);">LEADERBOARD</h2>
+    <div id="leaderboard-list">Загрузка данных...</div>
+</div>
+
+<div id="modal-tasks" class="modal">
+    <h2 style="text-align:center; color: var(--neon-purp);">TASKS</h2>
+    <div class="upgrade-card">
+        <div><b>Join Community</b><br><small>+10,000 NP</small></div>
+        <button class="buy-btn" onclick="window.open('https://t.me/neural_pulse_community')">JOIN</button>
+    </div>
+</div>
+
 <script>
     const tg = window.Telegram.WebApp;
     tg.ready();
@@ -28,7 +204,6 @@
             const r = await fetch(`/api/balance/${state.user_id}?t=${Date.now()}`);
             const res = await r.json();
             if(res.status === 'ok') {
-                // Приведение типов при загрузке
                 state.score = Number(res.data.score) || 0;
                 state.energy = Number(res.data.energy) || 0;
                 state.max_energy = Number(res.data.max_energy) || 1000;
@@ -39,7 +214,15 @@
                 render();
             }
         } catch(e) { console.error("Ошибка загрузки профиля"); }
-        document.getElementById('reloading-screen').style.display = 'none';
+        
+        // Скрываем экран загрузки после получения данных
+        setTimeout(() => {
+            document.getElementById('reloading-screen').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('reloading-screen').style.display = 'none';
+            }, 500);
+        }, 800);
+        
         updateJackpot();
     }
 
@@ -72,7 +255,6 @@
     }
 
     async function saveData() {
-        // Формируем чистый JSON для исключения ошибки 422
         const payload = {
             user_id: String(state.user_id),
             score: Number(state.score),
@@ -90,10 +272,7 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(payload)
             });
-            if (!response.ok) {
-                const err = await response.json();
-                console.error("Save failed:", err);
-            }
+            if (!response.ok) { console.error("Save failed"); }
         } catch(e) { console.error("Network error during save"); }
     }
 
@@ -197,7 +376,6 @@
         tg.showAlert("Ваша ссылка для приглашения:\n" + link);
     }
 
-    // Игровые циклы
     setInterval(() => {
         if(state.energy < state.max_energy) {
             state.energy = Math.min(state.max_energy, state.energy + 1.5);
@@ -213,3 +391,5 @@
 
     window.onload = init;
 </script>
+</body>
+</html>
