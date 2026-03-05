@@ -27,6 +27,8 @@ DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM"
 WEB_APP_URL = "https://np.bothost.ru/"
+# Твой кошелек для получения платежей
+ADMIN_WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
 
 USER_CACHE: Dict[str, dict] = {}
 db_conn: Optional[aiosqlite.Connection] = None
@@ -40,7 +42,8 @@ class SaveData(BaseModel):
     max_energy: int
     pnl: float
     level: int
-    referrer_id: Optional[str] = None # Поле для отслеживания пригласителя
+    wallet_address: Optional[str] = None  # Сохраняем кошелек пользователя
+    referrer_id: Optional[str] = None
     model_config = ConfigDict(extra='allow')
 
 # --- [СИСТЕМА ОЧИСТКИ КЭША] ---
@@ -68,16 +71,18 @@ async def batch_db_update():
                 users_to_update.append((
                     str(uid), float(d.get('score', 0)), int(d.get('click_lvl', 1)), 
                     float(d.get('energy', 0)), int(d.get('max_energy', 1000)), 
-                    float(d.get('pnl', 0)), int(d.get('level', 1)), int(time.time())
+                    float(d.get('pnl', 0)), int(d.get('level', 1)), 
+                    d.get('wallet_address'), int(time.time())
                 ))
             if users_to_update:
                 await db_conn.executemany("""
-                    INSERT INTO users (id, balance, click_lvl, energy, max_energy, pnl, level, last_active)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO users (id, balance, click_lvl, energy, max_energy, pnl, level, wallet_address, last_active)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         balance=excluded.balance, click_lvl=excluded.click_lvl,
                         energy=excluded.energy, max_energy=excluded.max_energy,
-                        pnl=excluded.pnl, level=excluded.level, last_active=excluded.last_active
+                        pnl=excluded.pnl, level=excluded.level, 
+                        wallet_address=excluded.wallet_address, last_active=excluded.last_active
                 """, users_to_update)
                 await db_conn.commit()
         except Exception as e:
@@ -93,7 +98,7 @@ async def lifespan(app: FastAPI):
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY, balance REAL, click_lvl INTEGER, 
             energy REAL, max_energy INTEGER, pnl REAL, 
-            level INTEGER, last_active INTEGER
+            level INTEGER, wallet_address TEXT, last_active INTEGER
         )
     """)
     await db_conn.execute("CREATE INDEX IF NOT EXISTS idx_user_id ON users(id)")
@@ -104,18 +109,13 @@ async def lifespan(app: FastAPI):
     
     @dp.message(Command("start"))
     async def start(m: types.Message, command: CommandObject):
-        # Обработка реферального параметра: /start 12345678
         ref_id = command.args if command.args else ""
-        logger.info(f"Команда /start: {m.from_user.id}, ref: {ref_id}")
-        
-        # Генерируем URL для WebApp с параметром реферала
         url = f"{WEB_APP_URL}?ref={ref_id}" if ref_id else WEB_APP_URL
-        
         kb = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text="Запустить Neural Pulse 🚀", web_app=WebAppInfo(url=url))
         ]])
         await m.answer(
-            f"<b>Neural Pulse Online</b>\n\nПривет, {m.from_user.first_name}! Твой нейро-интерфейс готов к работе.",
+            f"<b>Neural Pulse Online</b>\n\nПривет, {m.from_user.first_name}! Система готова. Подключай кошелек и начинай майнинг.",
             reply_markup=kb, parse_mode="HTML"
         )
 
@@ -127,6 +127,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# Эндпоинт для конфига (кошелек админа)
+@app.get("/api/config")
+async def get_config():
+    return {"admin_wallet": ADMIN_WALLET, "status": "ok"}
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str, ref: Optional[str] = None):
@@ -145,22 +150,18 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
         USER_CACHE[uid] = {"data": data, "last_seen": time.time()}
         return {"status": "ok", "data": data}
     
-    # Регистрация нового игрока с бонусом за реферала
     start_balance = 5000.0 if ref and ref != uid else 0.0
-    new_data = {"score": start_balance, "click_lvl": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1}
+    new_data = {"score": start_balance, "click_lvl": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "wallet_address": None}
     USER_CACHE[uid] = {"data": new_data, "last_seen": time.time()}
-    logger.info(f"Новый игрок {uid}. Реферал: {ref}. Бонус: {start_balance}")
     return {"status": "ok", "data": new_data}
 
 @app.post("/api/save")
 async def save(data: SaveData):
     uid = data.user_id
-    # Динамический Анти-чит (зависит от силы клика)
     if uid in USER_CACHE:
         old_score = USER_CACHE[uid]["data"].get("score", 0)
-        max_possible = data.click_lvl * 500 # Лимит монет за период сохранения (10 сек)
+        max_possible = data.click_lvl * 1000 
         if (data.score - old_score) > max_possible:
-            logger.warning(f"Anti-Cheat: Аномалия у {uid}. Прирост {data.score - old_score} при лимите {max_possible}")
             return {"status": "error", "message": "Anomaly detected"}
 
     USER_CACHE[uid] = {"data": data.model_dump(), "last_seen": time.time()}
