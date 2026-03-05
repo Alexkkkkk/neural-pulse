@@ -7,14 +7,44 @@
     <script src="https://telegram.org/js/telegram-web-app.js?v=2.0"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
-        :root { --neon-blue: #00d4ff; --neon-purp: #b026ff; --neon-green: #00ffcc; --bg: #050a1a; }
-        body { margin: 0; background: var(--bg); font-family: 'Orbitron', sans-serif; color: white; overflow: hidden; touch-action: manipulation; }
+        :root { 
+            --neon-blue: #00d4ff; 
+            --neon-purp: #b026ff; 
+            --neon-green: #00ffcc; 
+            --bg: #050a1a; 
+        }
+        body { 
+            margin: 0; 
+            background: var(--bg); 
+            font-family: 'Orbitron', sans-serif; 
+            color: white; 
+            overflow: hidden; 
+            touch-action: manipulation; 
+        }
         
-        #reloading-screen { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .loader-logo { width: 80px; height: 80px; border-radius: 20px; border: 2px solid var(--neon-purp); box-shadow: 0 0 20px rgba(176, 38, 255, 0.5); margin-bottom: 20px; overflow: hidden; }
+        #reloading-screen { 
+            position: fixed; inset: 0; 
+            background: var(--bg); 
+            z-index: 9999; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+        }
+        .loader-logo { 
+            width: 80px; height: 80px; 
+            border-radius: 20px; 
+            border: 2px solid var(--neon-purp); 
+            box-shadow: 0 0 20px rgba(176, 38, 255, 0.5); 
+            margin-bottom: 20px; 
+            overflow: hidden; 
+        }
         .loader-logo img { width: 100%; height: 100%; object-fit: cover; }
         
-        .game-container { display: none; opacity: 0; width: 100%; max-width: 500px; height: 100vh; flex-direction: column; align-items: center; padding: 15px; box-sizing: border-box; transition: 0.5s; margin: 0 auto; }
+        .game-container { 
+            display: none; opacity: 0; 
+            width: 100%; max-width: 500px; height: 100vh; 
+            flex-direction: column; align-items: center; 
+            padding: 15px; box-sizing: border-box; 
+            transition: 0.5s; margin: 0 auto; 
+        }
         .game-container.visible { display: flex; opacity: 1; }
 
         .header-top { width: 100%; display: flex; align-items: center; gap: 12px; }
@@ -43,10 +73,31 @@
         #energy-fill { height: 100%; background: linear-gradient(90deg, var(--neon-blue), var(--neon-green)); transition: 0.2s; }
 
         .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; margin-bottom: 20px; }
-        .nav-link { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; text-align: center; font-size: 11px; font-weight: 700; border: 1px solid rgba(255,255,255,0.1); text-transform: uppercase; }
+        .nav-link { 
+            background: rgba(255,255,255,0.05); 
+            padding: 15px; 
+            border-radius: 15px; 
+            text-align: center; 
+            font-size: 11px; 
+            font-weight: 700; 
+            border: 1px solid rgba(255,255,255,0.1); 
+            text-transform: uppercase; 
+        }
         
-        .floating-text { position: absolute; pointer-events: none; font-weight: 900; font-size: 32px; color: white; animation: floatUp 0.8s forwards; z-index: 100; text-shadow: 0 0 10px var(--neon-blue); }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.2); } }
+        .floating-text { 
+            position: absolute; 
+            pointer-events: none; 
+            font-weight: 900; 
+            font-size: 32px; 
+            color: white; 
+            animation: floatUp 0.8s forwards; 
+            z-index: 100; 
+            text-shadow: 0 0 10px var(--neon-blue); 
+        }
+        @keyframes floatUp { 
+            0% { opacity: 1; transform: translateY(0) scale(1); } 
+            100% { opacity: 0; transform: translateY(-120px) scale(1.2); } 
+        }
     </style>
 </head>
 <body>
@@ -94,24 +145,23 @@
     const tg = window.Telegram.WebApp;
     tg.ready(); tg.expand();
 
+    // Стейт игрока
     let state = {
         score: 0, 
         energy: 1000, 
         max_energy: 1000, 
         tap_power: 1, 
-        click_lvl: 1, 
         pnl: 0, 
         level: 1,
-        exp: 0,
         user_id: String(tg.initDataUnsafe?.user?.id || '476014374')
     };
 
     const leagues = [
         { name: "IRON LEAGUE", min: 0, color: "#00d4ff" },
-        { name: "BRONZE LEAGUE", min: 5000, color: "#cd7f32" },
-        { name: "SILVER LEAGUE", min: 25000, color: "#c0c0c0" },
-        { name: "GOLD LEAGUE", min: 100000, color: "#ffcc00" },
-        { name: "PLATINUM LEAGUE", min: 500000, color: "#e5e4e2" }
+        { name: "BRONZE LEAGUE", min: 10000, color: "#cd7f32" },
+        { name: "SILVER LEAGUE", min: 50000, color: "#c0c0c0" },
+        { name: "GOLD LEAGUE", min: 250000, color: "#ffcc00" },
+        { name: "NEURAL GOD", min: 1000000, color: "#b026ff" }
     ];
 
     async function init() {
@@ -125,11 +175,10 @@
                 document.getElementById('main-container').classList.add('visible');
             }
         } catch(e) { 
-            console.error("Init error", e);
-            setTimeout(() => {
-                document.getElementById('reloading-screen').style.display = 'none';
-                document.getElementById('main-container').classList.add('visible');
-            }, 1500);
+            console.error("Connection error:", e);
+            // Резервный вход при ошибке сети
+            document.getElementById('reloading-screen').style.display = 'none';
+            document.getElementById('main-container').classList.add('visible');
         }
     }
 
@@ -139,10 +188,11 @@
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
         document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
         
-        // Расчет уровня и лиги
-        state.level = Math.floor(state.score / 10000) + 1;
+        // Расчет уровня (каждые 15к очков)
+        state.level = Math.floor(state.score / 15000) + 1;
         document.getElementById('display-level').innerText = `LVL ${state.level}`;
 
+        // Определение текущей лиги
         let currentLeague = leagues[0];
         for(let l of leagues) {
             if(state.score >= l.min) currentLeague = l;
@@ -152,10 +202,10 @@
         leagueNameEl.innerText = currentLeague.name;
         leagueNameEl.style.color = currentLeague.color;
 
-        // Полоска прогресса до следующей лиги
+        // Полоска прогресса лиги
         let nextLeague = leagues[leagues.indexOf(currentLeague) + 1] || currentLeague;
         let progress = 100;
-        if (nextLeague !== currentLeague) {
+        if(nextLeague !== currentLeague) {
             progress = ((state.score - currentLeague.min) / (nextLeague.min - currentLeague.min)) * 100;
         }
         document.getElementById('league-fill').style.width = progress + '%';
@@ -172,9 +222,7 @@
         const touch = e.touches[0];
         createFlyText(touch.clientX, touch.clientY, `+${state.tap_power}`);
         
-        if (tg.HapticFeedback) {
-            tg.HapticFeedback.impactOccurred('light');
-        }
+        if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
         render();
     });
 
@@ -187,29 +235,30 @@
         setTimeout(() => el.remove(), 800);
     }
 
-    // Сохранение раз в 10 сек
+    // Сохранение данных (раз в 10 сек, только если вкладка активна)
     setInterval(async () => {
+        if (document.hidden) return;
         try {
             await fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(state)
             });
-        } catch(e) { console.error("Auto-save error", e); }
+        } catch(e) {}
     }, 10000);
 
-    // Регенерация и доход
+    // Пассивный доход и регенерация энергии
     setInterval(() => {
-        let changed = false;
+        let needsRender = false;
         if(state.energy < state.max_energy) {
-            state.energy = Math.min(state.max_energy, state.energy + 1.5); // Реген чуть быстрее
-            changed = true;
+            state.energy = Math.min(state.max_energy, state.energy + 1.5);
+            needsRender = true;
         }
         if(state.pnl > 0) {
-            state.score += (state.pnl / 3600); // Начисление пассивного дохода в сек
-            changed = true;
+            state.score += (state.pnl / 3600);
+            needsRender = true;
         }
-        if(changed) render();
+        if(needsRender) render();
     }, 1000);
 
     window.onload = init;
