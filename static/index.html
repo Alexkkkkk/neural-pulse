@@ -34,33 +34,34 @@
             filter: drop-shadow(0 0 20px var(--neon-blue));
             transition: transform 0.05s;
             -webkit-tap-highlight-color: transparent;
+            cursor: pointer;
         }
-        #tap-btn:active { transform: scale(0.95); }
+        #tap-btn:active { transform: scale(0.92); }
 
         .energy-box { width: 100%; margin-bottom: 30px; }
         .energy-bar-bg { width: 100%; height: 14px; background: rgba(255,255,255,0.1); border-radius: 10px; border: 1px solid var(--neon-blue); overflow: hidden; }
         #energy-fill { height: 100%; background: linear-gradient(90deg, var(--neon-blue), var(--neon-green)); transition: 0.2s; }
 
         .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; margin-bottom: 20px; }
-        .nav-link { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; text-align: center; font-size: 12px; font-weight: 700; border: 1px solid rgba(255,255,255,0.1); }
+        .nav-link { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; text-align: center; font-size: 11px; font-weight: 700; border: 1px solid rgba(255,255,255,0.1); text-transform: uppercase; }
         
-        .floating-text { position: absolute; pointer-events: none; font-weight: 900; font-size: 32px; color: white; animation: floatUp 0.8s forwards; z-index: 100; }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
+        .floating-text { position: absolute; pointer-events: none; font-weight: 900; font-size: 32px; color: white; animation: floatUp 0.8s forwards; z-index: 100; text-shadow: 0 0 10px var(--neon-blue); }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.2); } }
     </style>
 </head>
 <body>
 
 <div id="reloading-screen">
     <div class="loader-logo"><img src="/static/images/logo.png?v=3.1"></div>
-    <div style="color: var(--neon-blue); font-weight: 900; letter-spacing: 3px;">CONNECTING...</div>
+    <div style="color: var(--neon-blue); font-weight: 900; letter-spacing: 3px; font-size: 12px;">SYNCHRONIZING...</div>
 </div>
 
 <div class="game-container" id="main-container">
     <div class="header-top">
         <div class="ai-icon-small"><img src="/static/images/logo.png?v=3.1" style="width:100%"></div>
         <div class="league-info">
-            <div style="display:flex; justify-content: space-between; font-size: 10px;">
-                <span id="league-name">NEURAL NETWORK</span>
+            <div style="display:flex; justify-content: space-between; font-size: 10px; font-weight: 700;">
+                <span id="league-name">IRON LEAGUE</span>
                 <span id="display-level">LVL 1</span>
             </div>
             <div class="league-bar"><div id="league-fill"></div></div>
@@ -68,24 +69,24 @@
     </div>
 
     <div id="score">0</div>
-    <div id="pnl-display" style="color: var(--neon-green); font-size: 12px; margin-bottom: 20px;">PROFIT: +0/hr</div>
+    <div id="pnl-display" style="color: var(--neon-green); font-size: 12px; margin-bottom: 20px; letter-spacing: 1px;">PROFIT: +0/hr</div>
 
     <div class="game-main">
         <button id="tap-btn"></button>
     </div>
 
     <div class="energy-box">
-        <div style="display:flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px;">
-            <span>⚡ ENERGY</span>
+        <div style="display:flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; font-weight: 700;">
+            <span style="color: var(--neon-blue);">⚡ ENERGY</span>
             <span id="energy-text">0/0</span>
         </div>
         <div class="energy-bar-bg"><div id="energy-fill"></div></div>
     </div>
 
     <div class="bottom-nav">
-        <div class="nav-link">🚀 BOOST</div>
-        <div class="nav-link">⛏️ MINE</div>
-        <div class="nav-link">📊 STATS</div>
+        <div class="nav-link" style="border-color: var(--neon-purp);">🚀 Boost</div>
+        <div class="nav-link" style="border-color: var(--neon-blue);">⛏️ Mine</div>
+        <div class="nav-link" style="border-color: var(--neon-green);">📊 Stats</div>
     </div>
 </div>
 
@@ -93,25 +94,31 @@
     const tg = window.Telegram.WebApp;
     tg.ready(); tg.expand();
 
-    // Начальный стейт, в точности соответствующий модели SaveData на сервере
     let state = {
         score: 0, 
         energy: 1000, 
         max_energy: 1000, 
         tap_power: 1, 
-        click_lvl: 1, // Добавлено явно
+        click_lvl: 1, 
         pnl: 0, 
         level: 1,
         exp: 0,
         user_id: String(tg.initDataUnsafe?.user?.id || '476014374')
     };
 
+    const leagues = [
+        { name: "IRON LEAGUE", min: 0, color: "#00d4ff" },
+        { name: "BRONZE LEAGUE", min: 5000, color: "#cd7f32" },
+        { name: "SILVER LEAGUE", min: 25000, color: "#c0c0c0" },
+        { name: "GOLD LEAGUE", min: 100000, color: "#ffcc00" },
+        { name: "PLATINUM LEAGUE", min: 500000, color: "#e5e4e2" }
+    ];
+
     async function init() {
         try {
             const r = await fetch(`/api/balance/${state.user_id}`);
             const res = await r.json();
             if(res.status === 'ok') {
-                // Синхронизируем полученные данные с текущим стейтом
                 state = {...state, ...res.data};
                 render();
                 document.getElementById('reloading-screen').style.display = 'none';
@@ -119,11 +126,10 @@
             }
         } catch(e) { 
             console.error("Init error", e);
-            // Даже если ошибка, пускаем в игру через 2 сек
             setTimeout(() => {
                 document.getElementById('reloading-screen').style.display = 'none';
                 document.getElementById('main-container').classList.add('visible');
-            }, 2000);
+            }, 1500);
         }
     }
 
@@ -132,10 +138,28 @@
         document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
         document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
-        document.getElementById('display-level').innerText = `LVL ${state.level}`;
         
-        let progress = (state.score % 10000) / 10000 * 100;
+        // Расчет уровня и лиги
+        state.level = Math.floor(state.score / 10000) + 1;
+        document.getElementById('display-level').innerText = `LVL ${state.level}`;
+
+        let currentLeague = leagues[0];
+        for(let l of leagues) {
+            if(state.score >= l.min) currentLeague = l;
+        }
+        
+        const leagueNameEl = document.getElementById('league-name');
+        leagueNameEl.innerText = currentLeague.name;
+        leagueNameEl.style.color = currentLeague.color;
+
+        // Полоска прогресса до следующей лиги
+        let nextLeague = leagues[leagues.indexOf(currentLeague) + 1] || currentLeague;
+        let progress = 100;
+        if (nextLeague !== currentLeague) {
+            progress = ((state.score - currentLeague.min) / (nextLeague.min - currentLeague.min)) * 100;
+        }
         document.getElementById('league-fill').style.width = progress + '%';
+        document.getElementById('league-fill').style.background = currentLeague.color;
     }
 
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
@@ -149,7 +173,7 @@
         createFlyText(touch.clientX, touch.clientY, `+${state.tap_power}`);
         
         if (tg.HapticFeedback) {
-            tg.HapticFeedback.impactOccurred('medium');
+            tg.HapticFeedback.impactOccurred('light');
         }
         render();
     });
@@ -163,28 +187,29 @@
         setTimeout(() => el.remove(), 800);
     }
 
-    // БЕЗОПАСНОЕ СОХРАНЕНИЕ
+    // Сохранение раз в 10 сек
     setInterval(async () => {
         try {
-            const response = await fetch('/api/save', {
+            await fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(state)
             });
-            if (!response.ok) {
-                console.warn("Save failed with status:", response.status);
-            }
-        } catch(e) { 
-            console.error("Network save error", e); 
-        }
+        } catch(e) { console.error("Auto-save error", e); }
     }, 10000);
 
-    // Регенерация энергии
+    // Регенерация и доход
     setInterval(() => {
+        let changed = false;
         if(state.energy < state.max_energy) {
-            state.energy = Math.min(state.max_energy, state.energy + 1);
-            render();
+            state.energy = Math.min(state.max_energy, state.energy + 1.5); // Реген чуть быстрее
+            changed = true;
         }
+        if(state.pnl > 0) {
+            state.score += (state.pnl / 3600); // Начисление пассивного дохода в сек
+            changed = true;
+        }
+        if(changed) render();
     }, 1000);
 
     window.onload = init;
