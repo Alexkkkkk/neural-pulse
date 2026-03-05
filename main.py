@@ -4,7 +4,7 @@ import uvicorn
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Optional, Dict, List, Any
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -15,9 +15,8 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 # --- [КОНФИГУРАЦИЯ] ---
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
-STATIC_DIR = BASE_DIR / "static"
+STATIC_DIR = BASE_DIR / "static"  # Согласно твоим правилам: index.html всегда здесь
 LOGO_PATH = STATIC_DIR / "logo.png"
-# Токен и настройки
 API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM"
 
 C = {"G": "\033[92m", "Y": "\033[93m", "R": "\033[91m", "B": "\033[1m", "P": "\033[95m", "E": "\033[0m"}
@@ -33,16 +32,16 @@ dp = Dispatcher()
 USER_CACHE: Dict[str, dict] = {}
 db_conn: Optional[aiosqlite.Connection] = None
 
-# МОДЕЛЬ ДАННЫХ (Фронтенд -> Бэкенд)
+# МОДЕЛЬ ДАННЫХ (Исправляет ошибку 422)
 class SaveData(BaseModel):
     user_id: str
-    score: Any = 0.0
-    click_lvl: Any = 1
-    energy: Any = 0.0
-    max_energy: Any = 1000
-    pnl: Any = 0.0
-    level: Any = 1
-    exp: Any = 0
+    score: float = 0.0
+    click_lvl: int = 1
+    energy: float = 0.0
+    max_energy: int = 1000
+    pnl: float = 0.0
+    level: int = 1
+    exp: int = 0
 
     @field_validator('score', 'energy', 'pnl', mode='before')
     def to_float(cls, v):
@@ -75,7 +74,7 @@ async def start_cmd(message: types.Message):
         reply_markup=kb, parse_mode="HTML"
     )
 
-# --- [ФОНОВЫЙ ЦИКЛ СОХРАНЕНИЯ] ---
+# --- [ФОНОВЫЙ ЦИКЛ] ---
 async def maintenance_loop():
     log_step("SYSTEM", "Фоновый цикл синхронизации запущен", C["P"])
     while True:
@@ -85,7 +84,6 @@ async def maintenance_loop():
                 for uid, cache in USER_CACHE.items():
                     d = cache.get("data")
                     if not d: continue
-                    # Мапим score фронтенда в balance базы данных
                     await db_conn.execute(
                         """UPDATE users SET 
                            balance=?, click_lvl=?, energy=?, max_energy=?, 
@@ -98,13 +96,12 @@ async def maintenance_loop():
                 await db_conn.commit()
                 if count > 0:
                     log_step("DB_SYNC", f"Данные {count} игроков выгружены в БД", C["G"])
-            
-            await asyncio.sleep(60) # Сброс кэша раз в минуту
+            await asyncio.sleep(60)
         except Exception as e:
             log_step("LOOP_ERR", f"Ошибка цикла: {e}", C["R"])
             await asyncio.sleep(10)
 
-# --- [LIFESPAN СЕРВЕРА] ---
+# --- [LIFESPAN] ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_conn
@@ -131,7 +128,6 @@ async def lifespan(app: FastAPI):
         polling_task.cancel()
         sync_task.cancel()
         await db_conn.close()
-        log_step("SHUTDOWN", "Сервер успешно остановлен", C["Y"])
     except Exception as e:
         log_step("FATAL", f"Критический сбой: {e}", C["R"])
 
@@ -142,7 +138,6 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str):
     uid = str(user_id)
-    # Сначала ищем в кэше, потом в БД
     if uid in USER_CACHE: 
         return {"status": "ok", "data": USER_CACHE[uid]["data"]}
     
@@ -151,7 +146,6 @@ async def get_balance(user_id: str):
         user = await cursor.fetchone()
     
     if not user:
-        # Если юзера нет в БД, создаем стартовый набор
         new_d = {"score": 1000.0, "click_lvl": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "exp": 0}
         await db_conn.execute("INSERT INTO users (id, balance) VALUES (?, ?)", (uid, 1000.0))
         await db_conn.commit()
@@ -159,13 +153,23 @@ async def get_balance(user_id: str):
         return {"status": "ok", "data": new_d}
     
     res = dict(user)
-    res["score"] = res.pop("balance") # Переименовываем для фронтенда
+    res["score"] = res.pop("balance") 
     USER_CACHE[uid] = {"data": res}
     return {"status": "ok", "data": res}
 
 @app.post("/api/save")
 async def save_game(data: SaveData):
     uid = str(data.user_id)
+    
+    # --- ЗАЩИТА ОТ ВЗЛОМА ---
+    if uid in USER_CACHE:
+        old_score = USER_CACHE[uid]["data"].get("score", 0)
+        # Если игрок пытается прислать на 50,000 больше за один запрос - это подозрительно
+        if data.score > old_score + 50000:
+            log_step("SECURITY", f"Подозрительный скачок очков у {uid}: {old_score} -> {data.score}", C["R"])
+            # Можно либо забанить, либо просто проигнорировать сохранение
+            return JSONResponse({"status": "error", "msg": "Cheat detected"}, 403)
+
     if uid not in USER_CACHE: USER_CACHE[uid] = {"data": {}}
     USER_CACHE[uid]["data"].update(data.model_dump(exclude_unset=True))
     log_step("API_SAVE", f"Прогресс {uid} обновлен в кэше", C["P"])
@@ -176,12 +180,8 @@ async def get_top():
     db_conn.row_factory = aiosqlite.Row
     async with db_conn.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10") as cursor:
         rows = await cursor.fetchall()
-    # Мапим balance в score для фронта
-    data = []
-    for r in rows:
-        d = dict(r)
-        d["balance"] = d.get("balance", 0)
-        data.append(d)
+    # Исправленный маппинг для отображения в UI
+    data = [{"id": r["id"], "balance": r["balance"]} for r in rows]
     return {"status": "ok", "data": data}
 
 @app.get("/")
@@ -190,7 +190,6 @@ async def index():
     if p.exists(): return FileResponse(p)
     return JSONResponse({"err": "index.html not found"}, 404)
 
-# Монтируем статику ПОСЛЕ маршрута "/", чтобы корень работал через FileResponse
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
