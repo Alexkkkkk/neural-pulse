@@ -11,10 +11,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict
 
-# --- [РАСШИРЕННОЕ ЛОГИРОВАНИЕ] ---
+# --- [НАСТРОЙКА ЛОГИРОВАНИЯ] ---
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    format="%(asctime)s | %(levelname)s | %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 logger = logging.getLogger("NeuralPulse")
@@ -25,7 +25,7 @@ DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM" 
 WEB_APP_URL = "https://np.bothost.ru/"
-CHANNEL_ID = "@your_channel_id" # ЗАМЕНИ НА ID СВОЕГО КАНАЛА (например @neural_pulse)
+CHANNEL_ID = "@your_channel_id" 
 
 USER_CACHE: Dict[str, dict] = {}
 db_conn: Optional[aiosqlite.Connection] = None
@@ -35,7 +35,6 @@ AVAILABLE_TASKS = [
     {"id": "follow_x", "name": "Follow Pulse X", "reward": 3000, "link": "https://x.com/your_profile"},
 ]
 
-# --- [МОДЕЛИ] ---
 class SaveData(BaseModel):
     user_id: Union[str, int]
     score: float = 0
@@ -51,9 +50,8 @@ class TaskClaim(BaseModel):
     user_id: str
     task_id: str
 
-# --- [БАЗА ДАННЫХ И ФОНОВЫЕ ЗАДАЧИ] ---
+# --- [ФОНОВЫЕ ЗАДАЧИ] ---
 async def batch_db_update():
-    """Раз в 15 секунд сбрасывает кэш в базу данных"""
     while True:
         await asyncio.sleep(15)
         if not USER_CACHE or not db_conn: continue
@@ -81,13 +79,14 @@ async def batch_db_update():
                         wallet_address=excluded.wallet_address, last_active=excluded.last_active
                 """, users_to_update)
                 await db_conn.commit()
-                logger.info(f"💾 [DB] Пакетное сохранение: {len(users_to_update)} юзеров за {time.time()-start_time:.3f}с")
+                logger.info(f"💾 [DB_SYNC] Синхронизировано {len(users_to_update)} юзеров за {time.time()-start_time:.3f}с")
         except Exception as e:
-            logger.error(f"❌ [DB ERROR] {e}")
+            logger.error(f"❌ [DB_ERROR] Ошибка синхронизации: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_conn
+    logger.info("🚀 [STARTUP] Инициализация системы...")
     db_conn = await aiosqlite.connect(DB_PATH)
     await db_conn.execute("PRAGMA journal_mode=WAL")
     await db_conn.executescript("""
@@ -106,7 +105,6 @@ async def lifespan(app: FastAPI):
         );
     """)
     await db_conn.commit()
-    logger.info("✅ [SYSTEM] База данных готова.")
     
     try:
         from aiogram import Bot, Dispatcher, types
@@ -119,16 +117,18 @@ async def lifespan(app: FastAPI):
         @dp.message(Command("start"))
         async def start(m: types.Message, command: CommandObject):
             ref_id = command.args if command.args else ""
+            logger.info(f"🤖 [TG_BOT] Команда /start от {m.from_user.id} (ref: {ref_id})")
             url = f"{WEB_APP_URL}?tgWebAppStartParam={ref_id}"
             kb = InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="Играть в Neural Pulse 🚀", web_app=WebAppInfo(url=url))
             ]])
-            await m.answer(f"<b>Neural Pulse</b>\nДобро пожаловать, {m.from_user.first_name}!\nНачни добывать токены прямо сейчас.", reply_markup=kb, parse_mode="HTML")
+            await m.answer(f"<b>Neural Pulse</b>\nДобро пожаловать!", reply_markup=kb, parse_mode="HTML")
             
         asyncio.create_task(dp.start_polling(bot))
-        app.state.bot = bot # Сохраняем объект бота для API
+        app.state.bot = bot
+        logger.info("✅ [TG_BOT] Бот успешно запущен")
     except Exception as e:
-        logger.warning(f"⚠️ [BOT] Не запущен: {e}")
+        logger.warning(f"⚠️ [TG_BOT] Ошибка запуска: {e}")
 
     asyncio.create_task(batch_db_update())
     yield
@@ -137,14 +137,16 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- [API ЭНДПОИНТЫ] ---
+# --- [API ЭНДПОИНТЫ С ПОСТРОЧНЫМ ЛОГИРОВАНИЕМ] ---
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str, ref: Optional[str] = None):
     uid = str(user_id)
     now = int(time.time())
+    logger.info(f"📥 [GET_BALANCE] Запрос от {uid} (ref: {ref})")
 
     if uid in USER_CACHE:
+        logger.info(f"⚡ [CACHE_HIT] Данные {uid} взяты из памяти")
         return {"status": "ok", "data": USER_CACHE[uid]["data"]}
     
     db_conn.row_factory = aiosqlite.Row
@@ -155,23 +157,25 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
         data = dict(row)
         data["score"] = data.pop("balance")
         data["tap_power"] = data.pop("click_lvl")
-        # Оффлайн доход от PNL
         passed = now - data.get('last_active', now)
         income = (data['pnl'] / 3600) * passed
         data['score'] += income
         USER_CACHE[uid] = {"data": data, "last_seen": now}
+        logger.info(f"📂 [DB_LOAD] {uid} загружен. Оффлайн доход: +{income:.2f}")
         return {"status": "ok", "data": data}
     
     # Регистрация
     start_bal = 0.0
-    if ref and ref != uid and ref != "":
+    logger.info(f"🆕 [USER_NEW] Регистрация нового игрока: {uid}")
+    if ref and ref != uid:
         try:
-            start_bal = 5000.0
             await db_conn.execute("UPDATE users SET balance = balance + 10000 WHERE id = ?", (ref,))
             await db_conn.execute("INSERT OR IGNORE INTO referrals (referrer_id, friend_id, bonus_given) VALUES (?, ?, 1)", (ref, uid))
             await db_conn.commit()
-            if ref in USER_CACHE: USER_CACHE[ref]["data"]["score"] += 10000
-        except: pass
+            start_bal = 5000.0
+            logger.info(f"🎁 [REF_BONUS] {ref} получил 10к за приглашение {uid}")
+        except Exception as e:
+            logger.error(f"❌ [REF_ERR] Ошибка реферала: {e}")
 
     new_data = {"score": start_bal, "tap_power": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "wallet_address": None}
     USER_CACHE[uid] = {"data": new_data, "last_seen": now}
@@ -180,28 +184,31 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
 @app.post("/api/save")
 async def save(data: SaveData):
     uid = str(data.user_id)
-    # Защита: проверяем, не слишком ли быстро растет баланс
     if uid in USER_CACHE:
         old_score = USER_CACHE[uid]["data"].get("score", 0)
-        if (data.score - old_score) > 5000: # Лимит за один пакет сохранения
-             logger.warning(f"🛡️ [ANTI-CHEAT] Подозрительный скачок баланса у {uid}")
+        diff = data.score - old_score
+        if diff > 10000:
+             logger.warning(f"🛡️ [ANTI_CHEAT] Большой скачок у {uid}: +{diff:.2f} за раз!")
             
     USER_CACHE[uid] = {"data": data.model_dump(), "last_seen": time.time()}
+    # logger.debug(f"💾 [SAVE] Данные {uid} обновлены в кэше")
     return {"status": "ok"}
 
 @app.post("/api/claim-task")
 async def claim_task(payload: TaskClaim):
     uid, tid = payload.user_id, payload.task_id
+    logger.info(f"🎯 [TASK_CLAIM] {uid} пытается забрать {tid}")
     
-    # Реальная проверка подписки на Telegram
     if tid == "sub_tg":
         try:
             member = await app.state.bot.get_chat_member(chat_id=CHANNEL_ID, user_id=int(uid))
             if member.status in ["left", "kicked"]:
-                return {"status": "error", "message": "Вы не подписаны на канал!"}
+                logger.warning(f"🚫 [TASK_FAIL] {uid} не подписан на {CHANNEL_ID}")
+                return {"status": "error", "message": "Подпишитесь на канал!"}
+            logger.info(f"✅ [TASK_SUCCESS] Подписка {uid} подтверждена")
         except Exception as e:
-            logger.error(f"Проверка подписки провалена: {e}")
-            return {"status": "error", "message": "Ошибка проверки подписки"}
+            logger.error(f"❌ [SUB_CHECK_ERR] {e}")
+            return {"status": "error", "message": "Тех. ошибка проверки"}
 
     reward = next((t["reward"] for t in AVAILABLE_TASKS if t["id"] == tid), 0)
     try:
@@ -209,29 +216,19 @@ async def claim_task(payload: TaskClaim):
         await db_conn.commit()
         if uid in USER_CACHE:
             USER_CACHE[uid]["data"]["score"] += reward
+            logger.info(f"💰 [REWARD] {uid} получил {reward} за {tid}")
             return {"status": "ok", "new_balance": USER_CACHE[uid]["data"]["score"]}
-    except: pass
-    return {"status": "error", "message": "Задание уже выполнено"}
-
-# --- [ОСТАЛЬНЫЕ ЭНДПОИНТЫ] ---
-@app.get("/api/friends/{user_id}")
-async def get_friends(user_id: str):
-    async with db_conn.execute("SELECT friend_id FROM referrals WHERE referrer_id = ?", (user_id,)) as cur:
-        rows = await cur.fetchall()
-    return {"status": "ok", "friends": [{"user_id": r[0]} for r in rows]}
+    except Exception:
+        logger.warning(f"⚠️ [TASK_DUP] {uid} уже выполнял {tid}")
+        return {"status": "error", "message": "Уже выполнено"}
 
 @app.get("/api/leaderboard")
 async def leaderboard():
+    logger.info("🏆 [LEADERBOARD] Запрос топа игроков")
     db_conn.row_factory = aiosqlite.Row
     async with db_conn.execute("SELECT id, balance, level FROM users ORDER BY balance DESC LIMIT 10") as cur:
         rows = await cur.fetchall()
     return {"status": "ok", "leaders": [{"rank": i+1, "user_id": r["id"], "score": r["balance"], "level": r["level"]} for i, r in enumerate(rows)]}
-
-@app.get("/api/tasks/{user_id}")
-async def get_tasks(user_id: str):
-    async with db_conn.execute("SELECT task_id FROM completed_tasks WHERE user_id = ?", (user_id,)) as cur:
-        done = [r[0] for r in await cur.fetchall()]
-    return {"status": "ok", "tasks": [{**t, "completed": t["id"] in done} for t in AVAILABLE_TASKS]}
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -241,4 +238,5 @@ async def index():
     return FileResponse(STATIC_DIR / "index.html")
 
 if __name__ == "__main__":
+    logger.info("🌍 [SERVER] Запуск на http://0.0.0.0:3000")
     uvicorn.run(app, host="0.0.0.0", port=3000)
