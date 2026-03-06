@@ -94,7 +94,7 @@
             z-index: 1000; padding: 20px; flex-direction: column; align-items: center;
         }
         .modal.active { display: flex; }
-        .card-list { width: 100%; overflow-y: auto; margin-top: 20px; }
+        .card-list { width: 100%; overflow-y: auto; margin-top: 20px; padding-bottom: 50px; }
         .mine-card {
             background: rgba(255,255,255,0.05); border: 1px solid var(--neon-blue);
             border-radius: 15px; padding: 15px; margin-bottom: 10px;
@@ -134,7 +134,6 @@
 <div id="mine-modal" class="modal"><div class="close-modal" id="close-mine">✖</div><h2 style="color: var(--neon-blue); margin-top: 40px; font-size: 18px;">MINING RIGS</h2><div class="card-list" id="card-container"></div></div>
 <div id="leaderboard-modal" class="modal"><div class="close-modal" id="close-leaderboard">✖</div><h2 style="color: var(--neon-purp); margin-top: 40px; font-size: 18px;">TOP NEURAL AGENTS</h2><div class="card-list" id="leader-container"></div></div>
 <div id="tasks-modal" class="modal"><div class="close-modal" id="close-tasks">✖</div><h2 style="color: var(--neon-green); margin-top: 40px; font-size: 18px;">EARN CREDITS</h2><div class="card-list" id="tasks-container"></div></div>
-
 <div id="friends-modal" class="modal">
     <div class="close-modal" id="close-friends">✖</div>
     <h2 style="color: var(--neon-blue); margin-top: 40px; font-size: 18px;">INVITE FRIENDS</h2>
@@ -192,6 +191,7 @@
         buttonRootId: 'ton-connect-wrapper'
     });
 
+    // Состояние игры (подгрузится из БД)
     let state = {
         score: 0, 
         energy: 1000, 
@@ -199,7 +199,6 @@
         tap_power: 1, 
         pnl: 0, 
         level: 1,
-        wallet_address: null,
         user_id: String(tg.initDataUnsafe?.user?.id || '476014374')
     };
 
@@ -209,7 +208,7 @@
         {id: 'node_1', name: 'Pulse Node', cost: 25000, pnl: 1400, icon: '🖥️'}
     ];
 
-    // --- [INIT] ---
+    // --- [ИНИЦИАЛИЗАЦИЯ] ---
     async function init() {
         try {
             const ref = new URLSearchParams(window.location.search).get('tgWebAppStartParam') || "";
@@ -230,20 +229,26 @@
         }
     }
 
+    // --- [ОТРИСОВКА] ---
     function render() {
         document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
         document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
         document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
         
+        // Система уровней
         const currentLvl = Math.floor(state.score / 50000) + 1;
         document.getElementById('display-level').innerText = `LVL ${currentLvl}`;
         state.level = currentLvl;
+        
+        // Прогресс бар лиги
+        const progress = (state.score % 50000) / 50000 * 100;
+        document.getElementById('league-fill').style.width = progress + '%';
     }
 
-    // --- [FRIENDS LOGIC] ---
+    // --- [ЛОГИКА ДРУЗЕЙ] ---
     document.getElementById('btn-friends').onclick = async () => {
-        const botUsername = 'UltraMind_AI_bot'; // Замените на имя своего бота
+        const botUsername = 'UltraMind_AI_bot'; 
         const refLink = `https://t.me/${botUsername}?start=${state.user_id}`;
         document.getElementById('ref-link').innerText = refLink;
         document.getElementById('friends-modal').classList.add('active');
@@ -257,12 +262,12 @@
             container.innerHTML = '';
             
             if (!res.friends || res.friends.length === 0) {
-                container.innerHTML = '<div style="opacity:0.5; text-align:center; font-size:10px;">No nodes connected yet.</div>';
+                container.innerHTML = '<div style="opacity:0.5; text-align:center; font-size:10px; padding:20px;">No nodes connected yet. Invite friends to earn +5,000 credits!</div>';
             } else {
                 res.friends.forEach(f => {
                     const div = document.createElement('div');
                     div.className = 'mine-card';
-                    div.innerHTML = `<span>ID: ${f.user_id.slice(0,8)}</span> <b style="color:var(--neon-green)">+Bonus</b>`;
+                    div.innerHTML = `<span>ID: ${f.user_id.slice(0,8)}...</span> <b style="color:var(--neon-green)">+5,000</b>`;
                     container.appendChild(div);
                 });
             }
@@ -271,16 +276,12 @@
 
     document.getElementById('copy-ref').onclick = () => {
         const link = document.getElementById('ref-link').innerText;
-        const tempInput = document.createElement('input');
-        tempInput.value = link;
-        document.body.appendChild(tempInput);
-        tempInput.select();
-        document.execCommand('copy');
-        document.body.removeChild(tempInput);
-        tg.showAlert("Link copied to clipboard!");
+        navigator.clipboard.writeText(link).then(() => {
+            tg.showAlert("Link copied to clipboard!");
+        });
     };
 
-    // --- [BOOST LOGIC] ---
+    // --- [ЛОГИКА BOOST (ПРОКАЧКА)] ---
     document.getElementById('btn-boost').onclick = () => {
         const boostCost = 5000 * state.tap_power;
         tg.showConfirm(`Upgrade Tap Power to ${state.tap_power + 1} for ${boostCost.toLocaleString()}?`, (ok) => {
@@ -298,7 +299,7 @@
         });
     };
 
-    // --- [TASKS & MINE] ---
+    // --- [ЛОГИКА ЗАДАНИЙ] ---
     document.getElementById('btn-tasks').onclick = async () => {
         const container = document.getElementById('tasks-container');
         container.innerHTML = 'SCANNING...';
@@ -331,29 +332,36 @@
                 });
                 const res = await r.json();
                 if(res.status === 'ok') {
-                    state.score = res.new_balance; render();
-                    document.getElementById('btn-tasks').click();
-                } else tg.showAlert(res.message);
+                    state.score = res.new_balance; 
+                    render();
+                    document.getElementById('btn-tasks').click(); // Обновляем список
+                } else {
+                    tg.showAlert(res.message);
+                }
             }
         });
     };
 
-    // --- [HELPERS] ---
+    // --- [ЛОГИКА ЛИДЕРБОРДА] ---
     document.getElementById('score').onclick = async () => {
         const container = document.getElementById('leader-container');
         container.innerHTML = 'LOADING...';
         document.getElementById('leaderboard-modal').classList.add('active');
-        const r = await fetch('/api/leaderboard');
-        const res = await r.json();
-        container.innerHTML = '';
-        res.leaders.forEach(u => {
-            const div = document.createElement('div');
-            div.className = 'mine-card';
-            div.innerHTML = `<span>#${u.rank} ID:${u.user_id.slice(0,8)}</span> <b>${Math.floor(u.score).toLocaleString()}</b>`;
-            container.appendChild(div);
-        });
+        try {
+            const r = await fetch('/api/leaderboard');
+            const res = await r.json();
+            container.innerHTML = '';
+            res.leaders.forEach(u => {
+                const div = document.createElement('div');
+                div.className = 'mine-card';
+                div.style.borderLeft = (u.user_id === state.user_id) ? '4px solid var(--neon-purp)' : '';
+                div.innerHTML = `<span>#${u.rank} ID:${u.user_id.slice(0,6)}</span> <b>${Math.floor(u.score).toLocaleString()}</b>`;
+                container.appendChild(div);
+            });
+        } catch(e) { container.innerHTML = 'Leaderboard unavailable.'; }
     };
 
+    // --- [ЛОГИКА МАЙНИНГА] ---
     document.getElementById('btn-mine').onclick = () => {
         const container = document.getElementById('card-container');
         container.innerHTML = '';
@@ -370,9 +378,13 @@
 
     window.buyCard = (id, cost, pnl) => {
         if(state.score < cost) return tg.showAlert("Insufficient credits!");
-        state.score -= cost; state.pnl += pnl; render(); saveData();
+        state.score -= cost; 
+        state.pnl += pnl; 
+        render(); 
+        saveData();
     };
 
+    // --- [ВЗАИМОДЕЙСТВИЕ И СОХРАНЕНИЕ] ---
     async function saveData() {
         await fetch('/api/save', {
             method: 'POST',
@@ -386,6 +398,7 @@
         if(state.energy < state.tap_power) return;
         state.score += state.tap_power; 
         state.energy -= state.tap_power;
+        
         const touch = e.changedTouches[0];
         createFlyText(touch.clientX, touch.clientY, `+${state.tap_power}`);
         render();
@@ -400,15 +413,20 @@
         setTimeout(() => el.remove(), 800);
     }
 
+    // Игровой цикл: начисление пассивного дохода и восстановление энергии
     setInterval(() => {
-        state.energy = Math.min(state.max_energy, state.energy + 1.5);
-        state.score += (state.pnl / 3600);
+        state.energy = Math.min(state.max_energy, state.energy + 1.2); // Энергия растет
+        state.score += (state.pnl / 3600); // PNL в час -> в секунду
         render();
     }, 1000);
 
+    // Автосохранение раз в 15 секунд
     setInterval(saveData, 15000);
 
+    // Запуск
     window.onload = init;
+
+    // Закрытие модалок
     document.getElementById('close-mine').onclick = () => document.getElementById('mine-modal').classList.remove('active');
     document.getElementById('close-leaderboard').onclick = () => document.getElementById('leaderboard-modal').classList.remove('active');
     document.getElementById('close-tasks').onclick = () => document.getElementById('tasks-modal').classList.remove('active');
