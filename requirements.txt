@@ -5,3 +5,4 @@ aiosqlite
 psutil
 pydantic
 aiohttp
+aiogram
