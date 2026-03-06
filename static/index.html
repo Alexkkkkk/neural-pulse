@@ -76,13 +76,14 @@
         .energy-bar-bg { width: 100%; height: 14px; background: rgba(255,255,255,0.1); border-radius: 10px; border: 1px solid var(--neon-blue); overflow: hidden; }
         #energy-fill { height: 100%; background: linear-gradient(90deg, var(--neon-blue), var(--neon-green)); transition: 0.2s; }
 
-        .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; margin-bottom: 15px; }
+        /* Обновленная навигация на 4 кнопки */
+        .bottom-nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: 100%; margin-bottom: 15px; }
         .nav-link { 
             background: rgba(255,255,255,0.05); 
-            padding: 12px 5px; 
-            border-radius: 15px; 
+            padding: 10px 2px; 
+            border-radius: 12px; 
             text-align: center; 
-            font-size: 10px; 
+            font-size: 9px; 
             font-weight: 700; 
             border: 1px solid rgba(255,255,255,0.1); 
             text-transform: uppercase;
@@ -121,7 +122,6 @@
             100% { opacity: 0; transform: translateY(-120px) scale(1.2); } 
         }
 
-        /* Стиль для лидерборда */
         .rank-badge {
             width: 30px; height: 30px; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
@@ -146,6 +146,12 @@
     <div class="close-modal" id="close-leaderboard">✖</div>
     <h2 style="color: var(--neon-purp); margin-top: 40px; font-size: 18px;">TOP NEURAL AGENTS</h2>
     <div class="card-list" id="leader-container"></div>
+</div>
+
+<div id="tasks-modal" class="modal">
+    <div class="close-modal" id="close-tasks">✖</div>
+    <h2 style="color: var(--neon-green); margin-top: 40px; font-size: 18px;">EARN CREDITS</h2>
+    <div class="card-list" id="tasks-container"></div>
 </div>
 
 <div class="game-container" id="main-container">
@@ -179,9 +185,10 @@
     </div>
 
     <div class="bottom-nav">
-        <div class="nav-link" id="btn-boost" style="border-color: var(--neon-purp);">🚀 Boost</div>
-        <div class="nav-link" id="btn-friends" style="border-color: var(--neon-blue);">👥 Friends</div>
         <div class="nav-link" id="btn-mine" style="border-color: var(--neon-green);">⛏️ Mine</div>
+        <div class="nav-link" id="btn-tasks" style="border-color: var(--neon-green);">📝 Tasks</div>
+        <div class="nav-link" id="btn-friends" style="border-color: var(--neon-blue);">👥 Friends</div>
+        <div class="nav-link" id="btn-boost" style="border-color: var(--neon-purp);">🚀 Boost</div>
     </div>
 </div>
 
@@ -205,48 +212,31 @@
         user_id: String(tg.initDataUnsafe?.user?.id || '476014374')
     };
 
+    const TASKS = [
+        { id: 'sub_tg', name: 'Join Channel', reward: 5000, link: 'https://t.me/your_channel' },
+        { id: 'follow_x', name: 'Follow on X', reward: 3000, link: 'https://x.com/your_profile' }
+    ];
+
     const MINING_CARDS = [
         {id: 'cpu_1', name: 'Nano Core', cost: 1000, pnl: 50, icon: '🛰️'},
         {id: 'gpu_1', name: 'Neural GPU', cost: 5000, pnl: 280, icon: '📟'},
         {id: 'node_1', name: 'Pulse Node', cost: 25000, pnl: 1400, icon: '🖥️'}
     ];
 
-    tonConnectUI.onStatusChange(wallet => {
-        if (wallet) {
-            state.wallet_address = wallet.account.address;
-            saveData();
-        } else {
-            state.wallet_address = null;
-        }
-    });
-
-    const leagues = [
-        { name: "IRON LEAGUE", min: 0, color: "#00d4ff" },
-        { name: "BRONZE LEAGUE", min: 10000, color: "#cd7f32" },
-        { name: "SILVER LEAGUE", min: 50000, color: "#c0c0c0" },
-        { name: "GOLD LEAGUE", min: 250000, color: "#ffcc00" },
-        { name: "NEURAL GOD", min: 1000000, color: "#b026ff" }
-    ];
-
+    // --- [INIT & RENDER] ---
     async function init() {
         try {
-            const urlParams = new URLSearchParams(window.location.search);
-            const ref = urlParams.get('tgWebAppStartParam') || '';
-            const r = await fetch(`/api/balance/${state.user_id}${ref ? '?ref=' + ref : ''}`);
+            const r = await fetch(`/api/balance/${state.user_id}`);
             const res = await r.json();
             if(res.status === 'ok') {
                 state = {...state, ...res.data};
                 render();
                 setTimeout(() => {
-                    document.getElementById('reloading-screen').style.opacity = '0';
-                    setTimeout(() => {
-                        document.getElementById('reloading-screen').style.display = 'none';
-                        document.getElementById('main-container').classList.add('visible');
-                    }, 500);
+                    document.getElementById('reloading-screen').style.display = 'none';
+                    document.getElementById('main-container').classList.add('visible');
                 }, 1000);
             }
         } catch(e) { 
-            console.error("Init error:", e);
             document.getElementById('reloading-screen').style.display = 'none';
             document.getElementById('main-container').classList.add('visible');
         }
@@ -257,68 +247,91 @@
         document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
         document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
-        
-        state.level = Math.floor(state.score / 15000) + 1;
-        document.getElementById('display-level').innerText = `LVL ${state.level}`;
-
-        let currentLeague = leagues[0];
-        for(let l of leagues) { if(state.score >= l.min) currentLeague = l; }
-        document.getElementById('league-name').innerText = currentLeague.name;
-        document.getElementById('league-name').style.color = currentLeague.color;
-        document.getElementById('league-fill').style.width = Math.min(100, (state.score / (currentLeague.min + 50000) * 100)) + '%';
     }
 
-    // --- [ЛИДЕРБОРД LOGIC] ---
+    // --- [TASKS LOGIC] ---
+    document.getElementById('btn-tasks').onclick = () => {
+        const container = document.getElementById('tasks-container');
+        container.innerHTML = '';
+        TASKS.forEach(task => {
+            const div = document.createElement('div');
+            div.className = 'mine-card';
+            div.innerHTML = `
+                <div>
+                    <div style="font-size:13px; font-weight:700">${task.name}</div>
+                    <div style="font-size:11px; color:var(--neon-green)">+${task.reward.toLocaleString()} NC</div>
+                </div>
+                <button class="buy-btn" onclick="doTask('${task.id}', '${task.link}', ${task.reward})">GO</button>
+            `;
+            container.appendChild(div);
+        });
+        document.getElementById('tasks-modal').classList.add('active');
+    };
+
+    window.doTask = (id, link, reward) => {
+        tg.openLink(link);
+        setTimeout(async () => {
+            // В идеале тут должен быть запрос к API для проверки подписки
+            state.score += reward;
+            render();
+            tg.showAlert(`Reward ${reward} claimed!`);
+            saveData();
+        }, 2000);
+    };
+
+    document.getElementById('close-tasks').onclick = () => document.getElementById('tasks-modal').classList.remove('active');
+
+    // --- [LEADERBOARD & MINE] ---
+    document.getElementById('score').onclick = openLeaderboard;
     async function openLeaderboard() {
         const container = document.getElementById('leader-container');
-        container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--neon-blue)">FETCHING NEURAL DATA...</div>';
+        container.innerHTML = 'LOADING...';
         document.getElementById('leaderboard-modal').classList.add('active');
-
-        try {
-            const r = await fetch('/api/leaderboard');
-            const res = await r.json();
-            
-            container.innerHTML = '';
-            res.leaders.forEach(user => {
-                const isMe = String(user.user_id) === String(state.user_id);
-                const div = document.createElement('div');
-                div.className = 'mine-card';
-                if(isMe) div.style.border = '1px solid var(--neon-purp)';
-                
-                div.innerHTML = `
-                    <div style="display:flex; align-items:center; gap:12px">
-                        <div class="rank-badge">${user.rank}</div>
-                        <div>
-                            <div style="font-size:12px; font-weight:700">${isMe ? 'YOU' : 'ID: ' + user.user_id.slice(0,8)+'...'}</div>
-                            <div style="font-size:10px; color:gray">LVL ${user.level}</div>
-                        </div>
-                    </div>
-                    <div style="font-weight:900; color:var(--neon-green)">${Math.floor(user.score).toLocaleString()}</div>
-                `;
-                container.appendChild(div);
-            });
-        } catch(e) {
-            container.innerHTML = '<div style="color:red">ERROR LOADING DATA</div>';
-        }
+        const r = await fetch('/api/leaderboard');
+        const res = await r.json();
+        container.innerHTML = '';
+        res.leaders.forEach(u => {
+            const div = document.createElement('div');
+            div.className = 'mine-card';
+            div.innerHTML = `<span>#${u.rank} ID:${u.user_id.slice(0,6)}</span> <b>${Math.floor(u.score)}</b>`;
+            container.appendChild(div);
+        });
     }
-    document.getElementById('score').onclick = openLeaderboard;
-    document.getElementById('close-leaderboard').onclick = () => document.getElementById('leaderboard-modal').classList.remove('active');
 
-    // --- [TAP & GAMEPLAY] ---
+    document.getElementById('btn-mine').onclick = () => {
+        const container = document.getElementById('card-container');
+        container.innerHTML = '';
+        MINING_CARDS.forEach(card => {
+            const div = document.createElement('div');
+            div.className = 'mine-card';
+            div.innerHTML = `
+                <div>${card.icon} ${card.name}<br><small>+${card.pnl}/hr</small></div>
+                <button class="buy-btn" onclick="buyCard('${card.id}', ${card.cost}, ${card.pnl})">${card.cost}</button>
+            `;
+            container.appendChild(div);
+        });
+        document.getElementById('mine-modal').classList.add('active');
+    };
+
+    // --- [HELPERS] ---
+    window.buyCard = (id, cost, pnl) => {
+        if(state.score < cost) return tg.showAlert("No credits!");
+        state.score -= cost; state.pnl += pnl; render(); saveData();
+    };
+
+    async function saveData() {
+        await fetch('/api/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(state)
+        });
+    }
+
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
-        if(state.energy < state.tap_power) {
-            tg.HapticFeedback.notificationOccurred('error');
-            return;
-        }
-        state.score += state.tap_power;
-        state.energy -= state.tap_power;
-        
-        for (let i = 0; i < e.changedTouches.length; i++) {
-            createFlyText(e.changedTouches[i].clientX, e.changedTouches[i].clientY, `+${state.tap_power}`);
-        }
-        
-        if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+        if(state.energy < state.tap_power) return;
+        state.score += state.tap_power; state.energy -= state.tap_power;
+        createFlyText(e.changedTouches[0].clientX, e.changedTouches[0].clientY, `+${state.tap_power}`);
         render();
     });
 
@@ -331,100 +344,15 @@
         setTimeout(() => el.remove(), 800);
     }
 
-    async function saveData() {
-        await fetch('/api/save', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(state)
-        });
-    }
-
-    document.getElementById('btn-boost').onclick = async () => {
-        if (!tonConnectUI.connected) {
-            tg.showAlert("Сначала подключи кошелек!");
-            return;
-        }
-        tg.showConfirm("Восстановить энергию за 0.1 TON?", async (ok) => {
-            if(!ok) return;
-            await saveData();
-            try {
-                const paramsReq = await fetch(`/api/payment-params/${state.user_id}`);
-                const params = await paramsReq.json();
-                tg.showAlert(`ВАЖНО: В комментарии к платежу укажите: ${params.comment}`);
-                
-                const tx = {
-                    validUntil: Math.floor(Date.now() / 1000) + 600,
-                    messages: [{
-                        address: params.address,
-                        amount: (params.boost_price * 1e9).toString(),
-                        payload: "" 
-                    }]
-                };
-                await tonConnectUI.sendTransaction(tx);
-                tg.showProgress();
-                setTimeout(async () => {
-                    const check = await fetch('/api/verify-payment', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ user_id: state.user_id, amount: 0.1 })
-                    });
-                    const res = await check.json();
-                    tg.hideProgress();
-                    tg.showAlert(res.message);
-                    if(res.status === 'ok') {
-                        state.energy = state.max_energy;
-                        render();
-                    }
-                }, 7000);
-            } catch(e) { tg.showAlert("Ошибка транзакции"); }
-        });
-    };
-
-    document.getElementById('btn-mine').onclick = () => {
-        const container = document.getElementById('card-container');
-        container.innerHTML = '';
-        MINING_CARDS.forEach(card => {
-            const div = document.createElement('div');
-            div.className = 'mine-card';
-            div.innerHTML = `
-                <div>
-                    <div style="font-size:14px">${card.icon} ${card.name}</div>
-                    <div style="font-size:10px; color:var(--neon-green)">+${card.pnl}/hr</div>
-                    <div style="font-size:12px">💰 ${card.cost.toLocaleString()}</div>
-                </div>
-                <button class="buy-btn" onclick="buyCard('${card.id}', ${card.cost}, ${card.pnl})">BUY</button>
-            `;
-            container.appendChild(div);
-        });
-        document.getElementById('mine-modal').classList.add('active');
-    };
-
-    window.buyCard = (id, cost, pnl) => {
-        if(state.score < cost) { tg.showAlert("Недостаточно Neural Credits!"); return; }
-        state.score -= cost;
-        state.pnl += pnl;
-        render();
-        tg.HapticFeedback.notificationOccurred('success');
-        saveData();
-    };
-
-    document.getElementById('close-mine').onclick = () => document.getElementById('mine-modal').classList.remove('active');
-
-    document.getElementById('btn-friends').onclick = () => {
-        const link = `https://t.me/UltraMind_AI_bot?start=${state.user_id}`;
-        tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Забирай 5000 бонусов в Neural Pulse! 🧠⚡`);
-    };
-
-    setInterval(() => { if (!document.hidden) saveData(); }, 10000);
-
     setInterval(() => {
-        let changed = false;
-        if(state.energy < state.max_energy) { state.energy = Math.min(state.max_energy, state.energy + 1.2); changed = true; }
-        if(state.pnl > 0) { state.score += (state.pnl / 3600); changed = true; }
-        if(changed) render();
+        state.energy = Math.min(state.max_energy, state.energy + 1.2);
+        state.score += (state.pnl / 3600);
+        render();
     }, 1000);
 
     window.onload = init;
+    document.getElementById('close-mine').onclick = () => document.getElementById('mine-modal').classList.remove('active');
+    document.getElementById('close-leaderboard').onclick = () => document.getElementById('leaderboard-modal').classList.remove('active');
 </script>
 </body>
 </html>
