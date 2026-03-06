@@ -1,8 +1,21 @@
+# Ядро сервера и API
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+pydantic==2.7.4
+pydantic-settings==2.3.4
+
+# Телеграм бот (aiogram 3.x)
 aiogram==3.10.0
-fastapi
-uvicorn
-aiosqlite
-psutil
-pydantic
-aiohttp
-aiogram
+aiohttp==3.9.5
+
+# База данных (Асинхронный SQLite)
+aiosqlite==0.20.0
+
+# Системные утилиты и логирование
+psutil==5.9.8
+python-multipart==0.0.9
+tzdata==2024.1
+
+# Дополнительно для стабильности в Docker
+wheel
+setuptools
