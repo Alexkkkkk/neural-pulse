@@ -40,7 +40,6 @@ USER_CACHE: Dict[str, dict] = {}
 db_conn: Optional[aiosqlite.Connection] = None
 
 # --- [ИСПРАВЛЕННЫЕ МОДЕЛИ] ---
-# Используем Any для числовых полей, чтобы избежать 422, если JS пришлет строку вместо числа
 class SaveData(BaseModel):
     user_id: Union[str, int]
     score: Any = 0
@@ -52,12 +51,7 @@ class SaveData(BaseModel):
     wallet_address: Optional[Any] = None  
     referrer_id: Optional[Any] = None
     
-    # Расширенная настройка для максимальной совместимости
-    model_config = ConfigDict(
-        extra='allow', 
-        arbitrary_types_allowed=True,
-        populate_by_name=True
-    )
+    model_config = ConfigDict(extra='allow', arbitrary_types_allowed=True, populate_by_name=True)
 
 class PaymentVerify(BaseModel):
     user_id: Union[str, int]
@@ -78,6 +72,7 @@ async def verify_ton_tx(user_id: str, expected_ton: float):
                     if not in_msg: continue
                     value = int(in_msg.get('value', 0)) / 1e9
                     comment = in_msg.get('message', '')
+                    # Ищем ID пользователя в комментарии к транзакции
                     if value >= float(expected_ton) * 0.95 and str(user_id) in comment:
                         logger.info(f"Платеж найден для {user_id}")
                         return True
@@ -96,15 +91,10 @@ async def batch_db_update():
             for uid, entry in list(USER_CACHE.items()):
                 d = entry.get("data")
                 if not d: continue
-                # Принудительное приведение к типам перед сохранением в БД
                 users_to_update.append((
-                    str(uid), 
-                    float(d.get('score', 0)), 
-                    int(d.get('click_lvl', 1)), 
-                    float(d.get('energy', 0)), 
-                    int(d.get('max_energy', 1000)), 
-                    float(d.get('pnl', 0)), 
-                    int(d.get('level', 1)), 
+                    str(uid), float(d.get('score', 0)), int(d.get('click_lvl', 1)), 
+                    float(d.get('energy', 0)), int(d.get('max_energy', 1000)), 
+                    float(d.get('pnl', 0)), int(d.get('level', 1)), 
                     str(d.get('wallet_address')) if d.get('wallet_address') else None,
                     int(time.time())
                 ))
@@ -119,7 +109,6 @@ async def batch_db_update():
                         wallet_address=excluded.wallet_address, last_active=excluded.last_active
                 """, users_to_update)
                 await db_conn.commit()
-                logger.info(f"Sync complete: {len(users_to_update)} users.")
         except Exception as e:
             logger.error(f"DB Batch Error: {e}")
 
@@ -148,7 +137,7 @@ async def lifespan(app: FastAPI):
             kb = InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="Вход в Neural Pulse 🚀", web_app=WebAppInfo(url=url))
             ]])
-            await m.answer(f"<b>Neural Pulse Online</b>\nДобро пожаловать в нейросеть.", reply_markup=kb, parse_mode="HTML")
+            await m.answer(f"<b>Neural Pulse Online</b>\nДобро пожаловать. Твой кошелек — твой пропуск.", reply_markup=kb, parse_mode="HTML")
         asyncio.create_task(dp.start_polling(bot))
     
     asyncio.create_task(batch_db_update())
@@ -181,19 +170,39 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
 
 @app.post("/api/save")
 async def save(data: SaveData):
-    # Сохраняем как словарь, Pydantic теперь не будет ругаться на типы
-    USER_CACHE[str(data.user_id)] = {"data": data.model_dump(), "last_seen": time.time()}
+    # Валидация: если адрес кошелька слишком короткий, сбрасываем его
+    clean_wallet = str(data.wallet_address) if data.wallet_address and len(str(data.wallet_address)) > 10 else None
+    
+    # Принудительная очистка типов для кэша
+    payload = data.model_dump()
+    payload['wallet_address'] = clean_wallet
+    
+    USER_CACHE[str(data.user_id)] = {"data": payload, "last_seen": time.time()}
     return {"status": "ok"}
+
+# --- НОВЫЙ ЭНДПОИНТ ДЛЯ КОШЕЛЬКА ---
+@app.get("/api/payment-params/{user_id}")
+async def get_payment_params(user_id: str):
+    """Возвращает данные для формирования платежной ссылки во фронтенде"""
+    return {
+        "address": ADMIN_WALLET,
+        "comment": f"ref_{user_id}", # Уникальный комментарий для проверки
+        "boost_price": 0.1,         # Цена буста в TON
+    }
 
 @app.post("/api/verify-payment")
 async def verify_payment(payload: PaymentVerify):
-    success = await verify_ton_tx(str(payload.user_id), payload.amount)
+    # Проверяем транзакцию (ищем ID пользователя или спец. комментарий)
+    search_comment = f"ref_{payload.user_id}"
+    success = await verify_ton_tx(search_comment, payload.amount)
+    
     if success:
         uid = str(payload.user_id)
         if uid in USER_CACHE:
             USER_CACHE[uid]["data"]["energy"] = USER_CACHE[uid]["data"]["max_energy"]
-        return {"status": "ok", "message": "Энергия восстановлена!"}
-    return {"status": "error", "message": "Транзакция не найдена."}
+            USER_CACHE[uid]["data"]["score"] += 10000 # Бонус за покупку
+            return {"status": "ok", "message": "Оплата подтверждена! Энергия восстановлена + бонус."}
+    return {"status": "error", "message": "Транзакция не найдена. Убедитесь, что указали верный комментарий."}
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
