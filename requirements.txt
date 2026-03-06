@@ -1,21 +1,19 @@
-# Ядро сервера и API
+# --- Core Server & API ---
 fastapi==0.111.0
 uvicorn[standard]==0.30.1
 pydantic==2.7.4
 pydantic-settings==2.3.4
+python-multipart==0.0.9
+ujson==5.10.0
 
-# Телеграм бот (aiogram 3.x)
+# --- Telegram Bot Framework ---
 aiogram==3.10.0
 aiohttp==3.9.5
 
-# База данных (Асинхронный SQLite)
+# --- Database & Cache ---
 aiosqlite==0.20.0
+aiocache==0.12.2
 
-# Системные утилиты и логирование
+# --- System & Timezones ---
 psutil==5.9.8
-python-multipart==0.0.9
 tzdata==2024.1
-
-# Дополнительно для стабильности в Docker
-wheel
-setuptools
