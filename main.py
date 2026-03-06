@@ -72,7 +72,6 @@ async def verify_ton_tx(user_id: str, expected_ton: float):
                     if not in_msg: continue
                     value = int(in_msg.get('value', 0)) / 1e9
                     comment = in_msg.get('message', '')
-                    # Ищем ID пользователя в комментарии к транзакции
                     if value >= float(expected_ton) * 0.95 and str(user_id) in comment:
                         logger.info(f"Платеж найден для {user_id}")
                         return True
@@ -170,29 +169,41 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
 
 @app.post("/api/save")
 async def save(data: SaveData):
-    # Валидация: если адрес кошелька слишком короткий, сбрасываем его
     clean_wallet = str(data.wallet_address) if data.wallet_address and len(str(data.wallet_address)) > 10 else None
-    
-    # Принудительная очистка типов для кэша
     payload = data.model_dump()
     payload['wallet_address'] = clean_wallet
-    
     USER_CACHE[str(data.user_id)] = {"data": payload, "last_seen": time.time()}
     return {"status": "ok"}
 
-# --- НОВЫЙ ЭНДПОИНТ ДЛЯ КОШЕЛЬКА ---
+# --- НОВЫЕ ЭНДПОИНТЫ ДЛЯ КОШЕЛЬКА И ЛИДЕРБОРДА ---
+
+@app.get("/api/leaderboard")
+async def get_leaderboard():
+    """Возвращает топ-10 игроков по балансу"""
+    db_conn.row_factory = aiosqlite.Row
+    async with db_conn.execute("SELECT id, balance, level FROM users ORDER BY balance DESC LIMIT 10") as cur:
+        rows = await cur.fetchall()
+    
+    leaders = []
+    for i, row in enumerate(rows):
+        leaders.append({
+            "rank": i + 1,
+            "user_id": row["id"],
+            "score": row["balance"],
+            "level": row["level"]
+        })
+    return {"status": "ok", "leaders": leaders}
+
 @app.get("/api/payment-params/{user_id}")
 async def get_payment_params(user_id: str):
-    """Возвращает данные для формирования платежной ссылки во фронтенде"""
     return {
         "address": ADMIN_WALLET,
-        "comment": f"ref_{user_id}", # Уникальный комментарий для проверки
-        "boost_price": 0.1,         # Цена буста в TON
+        "comment": f"ref_{user_id}",
+        "boost_price": 0.1,
     }
 
 @app.post("/api/verify-payment")
 async def verify_payment(payload: PaymentVerify):
-    # Проверяем транзакцию (ищем ID пользователя или спец. комментарий)
     search_comment = f"ref_{payload.user_id}"
     success = await verify_ton_tx(search_comment, payload.amount)
     
@@ -200,7 +211,7 @@ async def verify_payment(payload: PaymentVerify):
         uid = str(payload.user_id)
         if uid in USER_CACHE:
             USER_CACHE[uid]["data"]["energy"] = USER_CACHE[uid]["data"]["max_energy"]
-            USER_CACHE[uid]["data"]["score"] += 10000 # Бонус за покупку
+            USER_CACHE[uid]["data"]["score"] += 10000
             return {"status": "ok", "message": "Оплата подтверждена! Энергия восстановлена + бонус."}
     return {"status": "error", "message": "Транзакция не найдена. Убедитесь, что указали верный комментарий."}
 
