@@ -6,26 +6,17 @@ services:
     container_name: tg_bot
     restart: always
     ports:
-      - "3000:3000"  # Совпадаем с Dockerfile и ожиданиями Bothost
+      - "3000:3000"
+    # Переменные окружения лучше брать из конфига хостинга, 
+    # но оставляем для локальных тестов
     env_file: .env
     volumes:
+      # Сохраняем базу данных, чтобы прогресс не удалялся при обновлении
       - ./game.db:/app/game.db
-      # Пробрасываем картинки внутрь папки static, чтобы они были доступны WebApp
-      - ./images:/app/static/images 
-    networks:
-      - bot_net
-
-  redis:
-    image: redis:7-alpine
-    container_name: bot_redis
-    restart: always
-    volumes:
-      - redis_data:/data
+      # КОРРЕКТНЫЙ ПУТЬ: пробрасываем картинки из твоей папки static
+      - ./static/images:/app/static/images
     networks:
       - bot_net
 
 networks:
   bot_net:
-
-volumes:
-  redis_data:
