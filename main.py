@@ -25,6 +25,7 @@ DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM" 
 WEB_APP_URL = "https://np.bothost.ru/"
+CHANNEL_ID = "@your_channel_id" # ЗАМЕНИ НА ID СВОЕГО КАНАЛА (например @neural_pulse)
 
 USER_CACHE: Dict[str, dict] = {}
 db_conn: Optional[aiosqlite.Connection] = None
@@ -89,7 +90,6 @@ async def lifespan(app: FastAPI):
     global db_conn
     db_conn = await aiosqlite.connect(DB_PATH)
     await db_conn.execute("PRAGMA journal_mode=WAL")
-    # Инициализация таблиц
     await db_conn.executescript("""
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY, balance REAL, click_lvl INTEGER, 
@@ -108,7 +108,6 @@ async def lifespan(app: FastAPI):
     await db_conn.commit()
     logger.info("✅ [SYSTEM] База данных готова.")
     
-    # Запуск Telegram-бота (если aiogram установлен)
     try:
         from aiogram import Bot, Dispatcher, types
         from aiogram.filters import Command, CommandObject
@@ -120,16 +119,16 @@ async def lifespan(app: FastAPI):
         @dp.message(Command("start"))
         async def start(m: types.Message, command: CommandObject):
             ref_id = command.args if command.args else ""
-            logger.info(f"🤖 [BOT] Start от {m.from_user.id} (ref: {ref_id})")
             url = f"{WEB_APP_URL}?tgWebAppStartParam={ref_id}"
             kb = InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="Вход в Neural Pulse 🚀", web_app=WebAppInfo(url=url))
+                InlineKeyboardButton(text="Играть в Neural Pulse 🚀", web_app=WebAppInfo(url=url))
             ]])
-            await m.answer(f"<b>Neural Pulse</b>\nДобро пожаловать, {m.from_user.first_name}!", reply_markup=kb, parse_mode="HTML")
+            await m.answer(f"<b>Neural Pulse</b>\nДобро пожаловать, {m.from_user.first_name}!\nНачни добывать токены прямо сейчас.", reply_markup=kb, parse_mode="HTML")
             
         asyncio.create_task(dp.start_polling(bot))
+        app.state.bot = bot # Сохраняем объект бота для API
     except Exception as e:
-        logger.warning(f"⚠️ [BOT] Не удалось запустить бота: {e}")
+        logger.warning(f"⚠️ [BOT] Не запущен: {e}")
 
     asyncio.create_task(batch_db_update())
     yield
@@ -143,6 +142,8 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str, ref: Optional[str] = None):
     uid = str(user_id)
+    now = int(time.time())
+
     if uid in USER_CACHE:
         return {"status": "ok", "data": USER_CACHE[uid]["data"]}
     
@@ -154,69 +155,83 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
         data = dict(row)
         data["score"] = data.pop("balance")
         data["tap_power"] = data.pop("click_lvl")
-        USER_CACHE[uid] = {"data": data, "last_seen": time.time()}
+        # Оффлайн доход от PNL
+        passed = now - data.get('last_active', now)
+        income = (data['pnl'] / 3600) * passed
+        data['score'] += income
+        USER_CACHE[uid] = {"data": data, "last_seen": now}
         return {"status": "ok", "data": data}
     
-    # Новый пользователь
+    # Регистрация
     start_bal = 0.0
     if ref and ref != uid and ref != "":
         try:
-            start_bal = 5000.0 # Бонус новичку
+            start_bal = 5000.0
             await db_conn.execute("UPDATE users SET balance = balance + 10000 WHERE id = ?", (ref,))
             await db_conn.execute("INSERT OR IGNORE INTO referrals (referrer_id, friend_id, bonus_given) VALUES (?, ?, 1)", (ref, uid))
             await db_conn.commit()
-            logger.info(f"🎁 [REF] {ref} пригласил {uid}")
-        except Exception as e: logger.error(f"❌ [REF ERROR] {e}")
+            if ref in USER_CACHE: USER_CACHE[ref]["data"]["score"] += 10000
+        except: pass
 
     new_data = {"score": start_bal, "tap_power": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "wallet_address": None}
-    USER_CACHE[uid] = {"data": new_data, "last_seen": time.time()}
+    USER_CACHE[uid] = {"data": new_data, "last_seen": now}
     return {"status": "ok", "data": new_data}
 
 @app.post("/api/save")
 async def save(data: SaveData):
     uid = str(data.user_id)
-    # Логируем покупки (если PNL вырос)
+    # Защита: проверяем, не слишком ли быстро растет баланс
     if uid in USER_CACHE:
-        if data.pnl > USER_CACHE[uid]["data"].get("pnl", 0):
-            logger.info(f"🛒 [SHOP] Юзер {uid} увеличил PNL до {data.pnl}")
+        old_score = USER_CACHE[uid]["data"].get("score", 0)
+        if (data.score - old_score) > 5000: # Лимит за один пакет сохранения
+             logger.warning(f"🛡️ [ANTI-CHEAT] Подозрительный скачок баланса у {uid}")
             
     USER_CACHE[uid] = {"data": data.model_dump(), "last_seen": time.time()}
     return {"status": "ok"}
 
-@app.get("/api/friends/{user_id}")
-async def get_friends(user_id: str):
-    logger.info(f"👥 [API] Запрос списка друзей для {user_id}")
-    async with db_conn.execute("SELECT friend_id FROM referrals WHERE referrer_id = ?", (user_id,)) as cur:
-        rows = await cur.fetchall()
-    return {"status": "ok", "friends": [{"user_id": r[0]} for r in rows]}
-
-@app.get("/api/tasks/{user_id}")
-async def get_tasks(user_id: str):
-    async with db_conn.execute("SELECT task_id FROM completed_tasks WHERE user_id = ?", (user_id,)) as cur:
-        done = [r[0] for r in await cur.fetchall()]
-    return {"status": "ok", "tasks": [{**t, "completed": t["id"] in done} for t in AVAILABLE_TASKS]}
-
 @app.post("/api/claim-task")
 async def claim_task(payload: TaskClaim):
     uid, tid = payload.user_id, payload.task_id
+    
+    # Реальная проверка подписки на Telegram
+    if tid == "sub_tg":
+        try:
+            member = await app.state.bot.get_chat_member(chat_id=CHANNEL_ID, user_id=int(uid))
+            if member.status in ["left", "kicked"]:
+                return {"status": "error", "message": "Вы не подписаны на канал!"}
+        except Exception as e:
+            logger.error(f"Проверка подписки провалена: {e}")
+            return {"status": "error", "message": "Ошибка проверки подписки"}
+
     reward = next((t["reward"] for t in AVAILABLE_TASKS if t["id"] == tid), 0)
     try:
         await db_conn.execute("INSERT INTO completed_tasks (user_id, task_id, completed_at) VALUES (?, ?, ?)", (uid, tid, int(time.time())))
         await db_conn.commit()
         if uid in USER_CACHE:
             USER_CACHE[uid]["data"]["score"] += reward
-            logger.info(f"💰 [TASK] {uid} выполнил {tid}, +{reward}")
             return {"status": "ok", "new_balance": USER_CACHE[uid]["data"]["score"]}
     except: pass
-    return {"status": "error", "message": "Уже выполнено"}
+    return {"status": "error", "message": "Задание уже выполнено"}
+
+# --- [ОСТАЛЬНЫЕ ЭНДПОИНТЫ] ---
+@app.get("/api/friends/{user_id}")
+async def get_friends(user_id: str):
+    async with db_conn.execute("SELECT friend_id FROM referrals WHERE referrer_id = ?", (user_id,)) as cur:
+        rows = await cur.fetchall()
+    return {"status": "ok", "friends": [{"user_id": r[0]} for r in rows]}
 
 @app.get("/api/leaderboard")
 async def leaderboard():
     db_conn.row_factory = aiosqlite.Row
     async with db_conn.execute("SELECT id, balance, level FROM users ORDER BY balance DESC LIMIT 10") as cur:
         rows = await cur.fetchall()
-    leaders = [{"rank": i+1, "user_id": r["id"], "score": r["balance"], "level": r["level"]} for i, r in enumerate(rows)]
-    return {"status": "ok", "leaders": leaders}
+    return {"status": "ok", "leaders": [{"rank": i+1, "user_id": r["id"], "score": r["balance"], "level": r["level"]} for i, r in enumerate(rows)]}
+
+@app.get("/api/tasks/{user_id}")
+async def get_tasks(user_id: str):
+    async with db_conn.execute("SELECT task_id FROM completed_tasks WHERE user_id = ?", (user_id,)) as cur:
+        done = [r[0] for r in await cur.fetchall()]
+    return {"status": "ok", "tasks": [{**t, "completed": t["id"] in done} for t in AVAILABLE_TASKS]}
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
