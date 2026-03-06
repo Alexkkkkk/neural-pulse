@@ -15,7 +15,8 @@
         }
         body { 
             margin: 0; background: var(--bg); font-family: 'Orbitron', sans-serif; 
-            color: white; overflow: hidden; touch-action: manipulation; 
+            color: white; overflow: hidden; touch-action: none; 
+            user-select: none; -webkit-user-select: none;
         }
         
         /* Лоадер */
@@ -40,54 +41,57 @@
         .game-container.visible { display: flex; opacity: 1; }
 
         /* Элементы интерфейса */
-        .header-top { width: 100%; display: flex; align-items: center; gap: 12px; }
+        .header-top { width: 100%; display: flex; align-items: center; gap: 12px; margin-top: 10px;}
         .ai-icon-small { 
             width: 48px; height: 48px; border: 2px solid var(--neon-purp); 
             border-radius: 12px; display: flex; align-items: center; justify-content: center;
             background: rgba(176, 38, 255, 0.1); font-size: 20px;
+            box-shadow: 0 0 10px rgba(176, 38, 255, 0.3);
         }
         .league-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin-top: 4px; }
         #league-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--neon-purp), var(--neon-blue)); transition: 0.5s; }
 
-        #score { font-size: 40px; font-weight: 900; margin: 15px 0 5px; text-shadow: 0 0 20px var(--neon-blue); white-space: nowrap; }
-        #ton-connect-wrapper { margin-bottom: 10px; transform: scale(0.85); }
+        #score { font-size: 42px; font-weight: 900; margin: 20px 0 5px; text-shadow: 0 0 20px var(--neon-blue); white-space: nowrap; }
+        #ton-connect-wrapper { margin-bottom: 10px; transform: scale(0.9); }
 
         /* Кнопка тапа */
         .game-main { position: relative; flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
         #tap-btn { 
-            width: 260px; height: 260px; border-radius: 50%;
+            width: 280px; height: 280px; border-radius: 50%;
             background: radial-gradient(circle, #1e1e3f 0%, #050a1a 100%);
             border: 4px solid var(--dark-white); display: flex; align-items: center; justify-content: center;
-            font-size: 80px; box-shadow: 0 0 30px rgba(0, 212, 255, 0.2);
+            font-size: 90px; box-shadow: 0 0 40px rgba(0, 212, 255, 0.2);
             transition: transform 0.05s; -webkit-tap-highlight-color: transparent; cursor: pointer; outline: none;
+            position: relative; z-index: 5;
         }
         #tap-btn::after { content: '🧠'; }
-        #tap-btn:active { transform: scale(0.92); border-color: var(--neon-blue); }
+        #tap-btn:active { transform: scale(0.95); border-color: var(--neon-blue); }
 
         .energy-bar-bg { width: 100%; height: 14px; background: rgba(255,255,255,0.1); border-radius: 10px; border: 1px solid var(--neon-blue); overflow: hidden; }
         #energy-fill { height: 100%; background: linear-gradient(90deg, var(--neon-blue), var(--neon-green)); transition: 0.1s; }
 
-        .bottom-nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: 100%; margin-bottom: 15px; }
+        .bottom-nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: 100%; margin-bottom: 20px; }
         .nav-link { 
-            background: rgba(255,255,255,0.05); padding: 10px 2px; border-radius: 12px; 
-            text-align: center; font-size: 9px; font-weight: 700; border: 1px solid rgba(255,255,255,0.1); 
-            text-transform: uppercase; cursor: pointer; color: white;
+            background: rgba(255,255,255,0.05); padding: 12px 2px; border-radius: 12px; 
+            text-align: center; font-size: 10px; font-weight: 700; border: 1px solid rgba(255,255,255,0.1); 
+            text-transform: uppercase; cursor: pointer; color: white; transition: 0.3s;
         }
+        .nav-link:active { background: rgba(255,255,255,0.15); transform: translateY(-2px); }
         
         .modal {
             display: none; position: fixed; inset: 0; background: rgba(5, 10, 26, 0.98);
             z-index: 1000; padding: 20px; flex-direction: column; align-items: center;
         }
         .modal.active { display: flex; }
-        .close-modal { position: absolute; top: 20px; right: 20px; font-size: 24px; color: var(--neon-purp); cursor: pointer; }
+        .close-modal { position: absolute; top: 25px; right: 25px; font-size: 28px; color: var(--neon-purp); cursor: pointer; }
 
         .floating-text { 
-            position: absolute; pointer-events: none; font-weight: 900; font-size: 32px; 
-            color: white; animation: floatUp 0.8s forwards; z-index: 100; text-shadow: 0 0 10px var(--neon-blue); 
+            position: absolute; pointer-events: none; font-weight: 900; font-size: 34px; 
+            color: white; animation: floatUp 0.7s ease-out forwards; z-index: 100; text-shadow: 0 0 10px var(--neon-blue); 
         }
         @keyframes floatUp { 
             0% { opacity: 1; transform: translateY(0) scale(1); } 
-            100% { opacity: 0; transform: translateY(-120px) scale(1.2); } 
+            100% { opacity: 0; transform: translateY(-140px) scale(1.3); } 
         }
     </style>
 </head>
@@ -95,26 +99,27 @@
 
 <div id="reloading-screen">
     <div class="loader-node">
-        <div style="width: 40px; height: 40px; background: var(--dark-white); border-radius: 10px;"></div>
+        <div style="width: 35px; height: 35px; background: var(--neon-blue); border-radius: 8px; box-shadow: 0 0 15px var(--neon-blue);"></div>
     </div>
-    <div id="boot-text" style="color: var(--dark-white); font-weight: 900; letter-spacing: 3px; font-size: 10px;">INITIALIZING CORE...</div>
+    <div id="boot-text" style="color: var(--dark-white); font-weight: 900; letter-spacing: 3px; font-size: 11px; text-transform: uppercase;">CONNECTING TO NODE...</div>
 </div>
 
-<div id="mine-modal" class="modal"><div class="close-modal" id="close-mine">✖</div><h2 style="color: var(--neon-blue); margin-top: 40px;">MINING</h2><div id="card-container" style="width:100%"></div></div>
+<div id="mine-modal" class="modal"><div class="close-modal">✖</div><h2 style="color: var(--neon-blue); margin-top: 40px;">MINING</h2><div id="card-container" style="width:100%"></div></div>
 <div id="friends-modal" class="modal">
-    <div class="close-modal" id="close-friends">✖</div>
+    <div class="close-modal">✖</div>
     <h2 style="color: var(--neon-blue); margin-top: 40px;">FRIENDS</h2>
-    <div id="ref-link" style="font-size: 10px; color: var(--neon-green); margin: 20px 0; word-break: break-all; border: 1px solid; padding: 10px;"></div>
-    <button class="nav-link" id="copy-ref" style="width: 100%; color: white;">COPY LINK</button>
+    <p style="font-size: 12px; opacity: 0.7;">Invite agents to earn +10,000 Pulse</p>
+    <div id="ref-link" style="font-size: 10px; color: var(--neon-green); margin: 20px 0; word-break: break-all; border: 1px solid; padding: 15px; background: rgba(0,255,204,0.05);"></div>
+    <button class="nav-link" id="copy-ref" style="width: 100%; color: white; background: var(--neon-purp);">COPY INVITE LINK</button>
 </div>
 
 <div class="game-container" id="main-container">
     <div class="header-top">
         <div class="ai-icon-small">🧠</div>
         <div style="flex-grow:1">
-            <div style="display:flex; justify-content: space-between; font-size: 10px;">
+            <div style="display:flex; justify-content: space-between; font-size: 10px; letter-spacing: 1px;">
                 <span id="league-name">NEURAL AGENT</span>
-                <span id="display-level">LVL 1</span>
+                <span id="display-level">LEVEL 1</span>
             </div>
             <div class="league-bar"><div id="league-fill"></div></div>
         </div>
@@ -122,38 +127,33 @@
 
     <div id="score">0.00</div>
     <div id="ton-connect-wrapper"></div>
-    <div id="pnl-display" style="color: var(--neon-green); font-size: 11px; margin-bottom: 10px;">PROFIT: +0/hr</div>
+    <div id="pnl-display" style="color: var(--neon-green); font-size: 12px; margin-bottom: 15px; font-weight: bold;">PROFIT: +0/hr</div>
 
     <div class="game-main">
         <button id="tap-btn"></button>
     </div>
 
-    <div class="energy-box" style="width:100%; margin-bottom: 15px;">
-        <div style="display:flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px;">
-            <span>⚡ ENERGY</span>
+    <div class="energy-box" style="width:100%; margin-bottom: 20px;">
+        <div style="display:flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; font-weight: bold;">
+            <span>⚡ NEURAL ENERGY</span>
             <span id="energy-text">0/0</span>
         </div>
         <div class="energy-bar-bg"><div id="energy-fill"></div></div>
     </div>
 
     <div class="bottom-nav">
-        <div class="nav-link" id="btn-mine">⛏️ Mine</div>
+        <div class="nav-link" onclick="openModal('mine-modal')">⛏️ Mine</div>
         <div class="nav-link" id="btn-tasks">📝 Tasks</div>
-        <div class="nav-link" id="btn-friends">👥 Friends</div>
+        <div class="nav-link" onclick="openModal('friends-modal')">👥 Friends</div>
         <div class="nav-link" id="btn-boost">🚀 Boost</div>
     </div>
 </div>
 
 <script>
     const tg = window.Telegram.WebApp;
-    tg.ready(); tg.expand();
-
-    // Защита: если за 10 сек ничего не произошло, пробуем обновить
-    const duckCheck = setTimeout(() => {
-        if (!document.getElementById('main-container').classList.contains('visible')) {
-            console.log("Slow connection, retrying...");
-        }
-    }, 10000);
+    tg.ready();
+    tg.expand();
+    tg.enableClosingConfirmation();
 
     const tonConnectUI = new TONConnectUI.TonConnectUI({
         manifestUrl: 'https://np.bothost.ru/tonconnect-manifest.json',
@@ -162,24 +162,22 @@
 
     let state = {
         score: 0, energy: 1000, max_energy: 1000, 
-        tap_power: 1, pnl: 0, user_id: String(tg.initDataUnsafe?.user?.id || '476014374')
+        tap_power: 1, pnl: 0, level: 1,
+        user_id: String(tg.initDataUnsafe?.user?.id || '476014374')
     };
 
     async function init() {
         const bootText = document.getElementById('boot-text');
         try {
-            // ШАГ 1: Проверяем физическую готовность сервера (main.py)
-            bootText.innerText = "WAITING FOR SERVER...";
+            bootText.innerText = "SYNCHRONIZING CORE...";
             const health = await fetch(`/api/health?t=${Date.now()}`);
             
             if (health.status !== 200) {
-                // Сервер ответил 503 или загружается, ждем и пробуем снова
                 setTimeout(init, 2000);
                 return;
             }
 
-            // ШАГ 2: Только если сервер готов, грузим данные
-            bootText.innerText = "SYNCING NEURAL DATA...";
+            bootText.innerText = "LOADING NEURAL PROFILE...";
             const r = await fetch(`/api/balance/${state.user_id}?t=${Date.now()}`);
             const res = await r.json();
             
@@ -187,11 +185,12 @@
                 state = {...state, ...res.data};
                 render();
                 hideLoader();
-                clearTimeout(duckCheck);
+            } else {
+                throw new Error("Data error");
             }
         } catch(e) {
-            bootText.innerText = "NETWORK ERROR. RETRYING...";
-            setTimeout(init, 2500); 
+            bootText.innerText = "CORE OFFLINE. RETRYING...";
+            setTimeout(init, 3000); 
         }
     }
 
@@ -209,8 +208,10 @@
         document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
         document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
+        document.getElementById('display-level').innerText = `LEVEL ${state.level}`;
         
-        const progress = (state.score % 50000) / 50000 * 100;
+        // Лига: каждые 100к очков новый визуальный этап
+        const progress = (state.score % 100000) / 100000 * 100;
         document.getElementById('league-fill').style.width = progress + '%';
     }
 
@@ -221,20 +222,26 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(state)
             });
-        } catch(e) {}
+            console.log("💾 Cloud Sync Success");
+        } catch(e) {
+            console.error("❌ Cloud Sync Failed");
+        }
     }
 
+    // Обработка тапа
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
-        if(state.energy < state.tap_power) return;
-        
-        state.score += state.tap_power; 
-        state.energy -= state.tap_power;
-        
-        if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-        
-        const touch = e.changedTouches[0];
-        createFlyText(touch.clientX, touch.clientY, `+${state.tap_power}`);
+        // Поддержка мульти-тапа (до 5 пальцев)
+        const touches = e.changedTouches;
+        for(let i=0; i<touches.length; i++) {
+            if(state.energy < state.tap_power) break;
+
+            state.score += state.tap_power; 
+            state.energy -= state.tap_power;
+            
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+            createFlyText(touches[i].clientX, touches[i].clientY, `+${state.tap_power}`);
+        }
         render();
     });
 
@@ -242,35 +249,46 @@
         const el = document.createElement('div');
         el.className = 'floating-text';
         el.innerText = txt;
-        el.style.left = x + 'px'; el.style.top = y + 'px';
+        el.style.left = (x - 20) + 'px'; 
+        el.style.top = (y - 40) + 'px';
         document.body.appendChild(el);
-        setTimeout(() => el.remove(), 800);
+        setTimeout(() => el.remove(), 700);
     }
 
-    document.getElementById('btn-friends').onclick = () => {
-        document.getElementById('ref-link').innerText = `https://t.me/UltraMind_AI_bot?start=${state.user_id}`;
-        document.getElementById('friends-modal').classList.add('active');
-    };
-
-    document.getElementById('copy-ref').onclick = () => {
-        const link = document.getElementById('ref-link').innerText;
-        navigator.clipboard.writeText(link).then(() => tg.showAlert("Link copied!"));
+    // Модальные окна
+    window.openModal = (id) => {
+        if(id === 'friends-modal') {
+            document.getElementById('ref-link').innerText = `https://t.me/neural_pulse_bot?start=${state.user_id}`;
+        }
+        document.getElementById(id).classList.add('active');
     };
 
     document.querySelectorAll('.close-modal').forEach(btn => {
         btn.onclick = () => document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
     });
 
-    // Плавный цикл обновления (100 FPS)
+    document.getElementById('copy-ref').onclick = () => {
+        const link = document.getElementById('ref-link').innerText;
+        navigator.clipboard.writeText(link).then(() => {
+            if(tg.showAlert) tg.showAlert("Invite Link Copied!");
+        });
+    };
+
+    // Игровой цикл: 100 обновлений в секунду
     setInterval(() => {
+        // Регенерация энергии: +1.5 в секунду
         state.energy = Math.min(state.max_energy, state.energy + 0.015);
+        
+        // Начисление пассивного дохода
         if(state.pnl > 0) {
             state.score += (state.pnl / 360000);
         }
         render();
     }, 10); 
 
+    // Автосохранение каждые 15 секунд
     setInterval(saveData, 15000);
+
     window.onload = init;
 </script>
 </body>
