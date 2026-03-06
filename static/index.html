@@ -16,7 +16,6 @@
         body { 
             margin: 0; background: var(--bg); font-family: 'Orbitron', sans-serif; 
             color: white; overflow: hidden; touch-action: none; user-select: none;
-            /* Убрали display: none. Используем только прозрачность для мягкого входа */
             opacity: 0; transition: opacity 0.2s ease-in;
         }
 
@@ -117,16 +116,35 @@
 </div>
 
 <script>
-    // 1. МГНОВЕННЫЙ ОТКЛИК TELEGRAM
+    // --- [СИСТЕМА ЛОГИРОВАНИЯ ДЛЯ BOTHOST] ---
     const tg = window.Telegram.WebApp;
+    const USER_ID = String(tg.initDataUnsafe?.user?.id || 'TEST_USER');
+    const START_PARAM = tg.initDataUnsafe?.start_param || '';
+
+    async function logToServer(msg, type = "INFO") {
+        try {
+            await fetch('/api/log', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ user_id: USER_ID, error: `[${type}] ${msg}` })
+            });
+        } catch(e) { console.warn("Log failed"); }
+    }
+
+    window.onerror = (m, s, l, c, e) => {
+        logToServer(`JS_ERROR: ${m} at ${s}:${l}`, "ERROR");
+        return false;
+    };
+
+    window.onunhandledrejection = (e) => {
+        logToServer(`PROMISE_REJECT: ${e.reason}`, "CRITICAL");
+    };
+
+    // --- [ОСНОВНАЯ ЛОГИКА ИГРЫ] ---
     tg.ready();
     tg.expand();
     tg.setHeaderColor('#050a1a');
 
-    const USER_ID = String(tg.initDataUnsafe?.user?.id || '476014374');
-    const START_PARAM = tg.initDataUnsafe?.start_param || '';
-
-    // 2. ЗАГРУЗКА ИЗ ЛОКАЛЬНОГО КЭША (Для нулевой задержки)
     const cache = JSON.parse(localStorage.getItem('np_state') || '{}');
 
     let state = {
@@ -139,11 +157,9 @@
         user_id: USER_ID
     };
 
-    // Мгновенно показываем то, что есть в памяти телефона
     document.body.style.opacity = '1';
     updateUI();
 
-    // 3. ФОНОВАЯ СИНХРОНИЗАЦИЯ С СЕРВЕРОМ
     async function syncWithServer() {
         try {
             const response = await fetch(`/api/balance/${USER_ID}?ref=${START_PARAM}&t=${Date.now()}`);
@@ -154,8 +170,12 @@
                     saveToLocal();
                     updateUI();
                 }
+            } else {
+                logToServer(`Sync failed: status ${response.status}`, "WARN");
             }
-        } catch(e) { console.warn("Background sync failed, using local data."); }
+        } catch(e) { 
+            logToServer(`Sync error: ${e.message}`, "ERROR");
+        }
     }
 
     function saveToLocal() {
@@ -172,7 +192,6 @@
         document.getElementById('jackpot').innerText = (500052 + Math.floor(Math.random() * 50)).toLocaleString();
     }
 
-    // ТАПЫ (БЕЗ ЗАДЕРЖЕК)
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
         const touches = e.changedTouches;
@@ -196,23 +215,20 @@
         setTimeout(() => el.remove(), 600);
     }
 
-    // Постоянные циклы (раз в 100мс для экономии ресурсов)
     setInterval(() => {
-        state.energy = Math.min(state.max_energy, state.energy + 0.15); // Реген +1.5 в сек
+        state.energy = Math.min(state.max_energy, state.energy + 0.15);
         if(state.pnl > 0) state.score += (state.pnl / 36000); 
         updateUI();
     }, 100);
 
-    // Сохранение на сервер раз в 15 сек
     setInterval(() => {
         fetch('/api/save', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(state)
-        });
+        }).catch(e => logToServer(`Auto-save failed: ${e.message}`, "ERROR"));
     }, 15000);
 
-    // Запуск фоновой синхронизации
     syncWithServer();
 </script>
 </body>
