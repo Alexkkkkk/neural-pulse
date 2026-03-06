@@ -3,7 +3,7 @@ import aiosqlite
 import uvicorn
 from pathlib import Path
 from contextlib import asynccontextmanager
-from typing import Optional, Dict, Any, Union, List
+from typing import Optional, Dict, Any
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -49,11 +49,12 @@ async def batch_db_update():
         if not USER_CACHE or not db_conn: continue
         try:
             users_to_update = []
-            for uid, entry in list(USER_CACHE.items()):
+            current_cache = list(USER_CACHE.items())
+            
+            for uid, entry in current_cache:
                 d = entry.get("data")
                 if not d: continue
                 
-                # Приводим типы данных перед сохранением
                 users_to_update.append((
                     str(uid), 
                     float(d.get('score', 0)), 
@@ -81,15 +82,17 @@ async def batch_db_update():
                         last_active=excluded.last_active
                 """, users_to_update)
                 await db_conn.commit()
-                logger.info(f"💾 [DB_SYNC] Обновлено: {len(users_to_update)} юзеров")
+                logger.info(f"💾 [DB_SYNC] Синхронизировано юзеров: {len(users_to_update)}")
         except Exception as e:
-            logger.error(f"❌ [DB_ERROR] Ошибка синхронизации: {e}")
+            logger.error(f"❌ [DB_ERROR] Ошибка записи: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_conn
-    logger.info("🚀 [INIT] Запуск системы...")
+    app.state.ready = False # Изначально сервер не готов
+    logger.info("🚀 [INIT] Запуск Neural Pulse Server...")
     
+    # 1. Подключение БД
     db_conn = await aiosqlite.connect(DB_PATH)
     await db_conn.execute("PRAGMA journal_mode=WAL")
     await db_conn.executescript("""
@@ -104,8 +107,9 @@ async def lifespan(app: FastAPI):
         );
     """)
     await db_conn.commit()
+    logger.info("📡 [DB] База данных готова")
     
-    # Запуск бота
+    # 2. Запуск бота
     try:
         from aiogram import Bot, Dispatcher, types
         from aiogram.filters import Command, CommandObject
@@ -118,18 +122,23 @@ async def lifespan(app: FastAPI):
         async def start(m: types.Message, command: CommandObject):
             ref_id = command.args if command.args else ""
             url = f"{WEB_APP_URL}/?tgWebAppStartParam={ref_id}" if ref_id else WEB_APP_URL
-            
             kb = InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="Играть 🧠", web_app=WebAppInfo(url=url))
             ]])
             await m.answer(f"<b>Neural Pulse Online</b>\nДобро пожаловать, {m.from_user.first_name}!", reply_markup=kb, parse_mode="HTML")
             
         asyncio.create_task(dp.start_polling(bot))
-        logger.info("✅ [TG_BOT] Бот запущен")
+        logger.info("✅ [TG_BOT] Бот активен")
     except Exception as e:
-        logger.error(f"❌ [TG_ERROR] Ошибка бота: {e}")
+        logger.error(f"❌ [TG_ERROR] Ошибка запуска бота: {e}")
 
+    # 3. Запуск фоновых задач
     asyncio.create_task(batch_db_update())
+    
+    # ФИНАЛ: Ставим флаг готовности
+    app.state.ready = True
+    logger.info("🌟 [SERVER] Все системы загружены и запущены!")
+    
     yield
     if db_conn: await db_conn.close()
 
@@ -138,23 +147,30 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 # --- [API ЭНДПОИНТЫ] ---
 
+@app.get("/api/health")
+async def health_check():
+    """Проверка готовности сервера для фронтенда"""
+    if getattr(app.state, "ready", False):
+        return {"status": "ready"}
+    return JSONResponse({"status": "starting"}, status_code=503)
+
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str, ref: Optional[str] = None):
+    if not getattr(app.state, "ready", False):
+        return JSONResponse({"status": "server_not_ready"}, status_code=503)
+
     uid = str(user_id)
     now = int(time.time())
 
-    # 1. Проверяем кэш
     if uid in USER_CACHE:
         return {"status": "ok", "data": USER_CACHE[uid]["data"]}
     
-    # 2. Ищем в БД
     db_conn.row_factory = aiosqlite.Row
     async with db_conn.execute("SELECT * FROM users WHERE id = ?", (uid,)) as cur:
         row = await cur.fetchone()
     
     if row:
         data = dict(row)
-        # Маппинг полей БД -> Фронтенд
         frontend_data = {
             "score": data["balance"],
             "tap_power": data["click_lvl"],
@@ -165,16 +181,17 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
             "wallet_address": data["wallet_address"]
         }
         
-        # Расчет пассивного дохода
+        # Начисление офлайн дохода
         if data.get('last_active'):
             passed = now - data['last_active']
-            income = (frontend_data['pnl'] / 3600) * passed
-            frontend_data['score'] += income
-            
+            if passed > 0:
+                income = (frontend_data['pnl'] / 3600) * passed
+                frontend_data['score'] += income
+                
         USER_CACHE[uid] = {"data": frontend_data, "last_seen": now}
         return {"status": "ok", "data": frontend_data}
     
-    # 3. Новый юзер
+    # Новый юзер
     start_bal = 0.0
     if ref and ref != uid:
         async with db_conn.execute("SELECT id FROM users WHERE id = ?", (ref,)) as c:
@@ -199,15 +216,15 @@ async def save(data: SaveData):
 
 # --- [СТАТИКА] ---
 
-@app.get("/tonconnect-manifest.json")
-async def get_manifest():
-    return FileResponse(STATIC_DIR / "tonconnect-manifest.json")
-
 @app.get("/")
 async def serve_index():
     return FileResponse(STATIC_DIR / "index.html")
 
-# Раздача всех остальных файлов из /static
+@app.get("/tonconnect-manifest.json")
+async def get_manifest():
+    return FileResponse(STATIC_DIR / "tonconnect-manifest.json")
+
+# Монтируем статику ПОСЛЕ основных маршрутов
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
