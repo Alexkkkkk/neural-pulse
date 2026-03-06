@@ -34,29 +34,34 @@ STATIC_DIR = BASE_DIR / "static"
 API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM"
 WEB_APP_URL = "https://np.bothost.ru/"
 ADMIN_WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"
-TONCENTER_API_KEY = "" # Рекомендуется получить ключ на toncenter.com
+TONCENTER_API_KEY = "" 
 
 USER_CACHE: Dict[str, dict] = {}
 db_conn: Optional[aiosqlite.Connection] = None
 
 # --- [ИСПРАВЛЕННЫЕ МОДЕЛИ] ---
+# Используем Any для числовых полей, чтобы избежать 422, если JS пришлет строку вместо числа
 class SaveData(BaseModel):
-    user_id: str
-    score: float
-    energy: float
-    max_energy: int
-    pnl: float
-    level: int
-    click_lvl: Optional[int] = 1
-    wallet_address: Optional[Union[str, None]] = None  
-    referrer_id: Optional[str] = None
+    user_id: Union[str, int]
+    score: Any = 0
+    energy: Any = 0
+    max_energy: Any = 1000
+    pnl: Any = 0
+    level: Any = 1
+    click_lvl: Any = 1
+    wallet_address: Optional[Any] = None  
+    referrer_id: Optional[Any] = None
     
-    # Ключевая настройка против ошибки 422: разрешаем любые доп. поля
-    model_config = ConfigDict(extra='allow', arbitrary_types_allowed=True)
+    # Расширенная настройка для максимальной совместимости
+    model_config = ConfigDict(
+        extra='allow', 
+        arbitrary_types_allowed=True,
+        populate_by_name=True
+    )
 
 class PaymentVerify(BaseModel):
-    user_id: str
-    amount: float
+    user_id: Union[str, int]
+    amount: Any
 
 # --- [ФУНКЦИИ БЛОКЧЕЙНА] ---
 async def verify_ton_tx(user_id: str, expected_ton: float):
@@ -73,8 +78,7 @@ async def verify_ton_tx(user_id: str, expected_ton: float):
                     if not in_msg: continue
                     value = int(in_msg.get('value', 0)) / 1e9
                     comment = in_msg.get('message', '')
-                    # Проверка по комментарию (user_id)
-                    if value >= expected_ton * 0.95 and str(user_id) in comment:
+                    if value >= float(expected_ton) * 0.95 and str(user_id) in comment:
                         logger.info(f"Платеж найден для {user_id}")
                         return True
     except Exception as e:
@@ -92,11 +96,17 @@ async def batch_db_update():
             for uid, entry in list(USER_CACHE.items()):
                 d = entry.get("data")
                 if not d: continue
+                # Принудительное приведение к типам перед сохранением в БД
                 users_to_update.append((
-                    str(uid), float(d.get('score', 0)), int(d.get('click_lvl', 1)), 
-                    float(d.get('energy', 0)), int(d.get('max_energy', 1000)), 
-                    float(d.get('pnl', 0)), int(d.get('level', 1)), 
-                    d.get('wallet_address'), int(time.time())
+                    str(uid), 
+                    float(d.get('score', 0)), 
+                    int(d.get('click_lvl', 1)), 
+                    float(d.get('energy', 0)), 
+                    int(d.get('max_energy', 1000)), 
+                    float(d.get('pnl', 0)), 
+                    int(d.get('level', 1)), 
+                    str(d.get('wallet_address')) if d.get('wallet_address') else None,
+                    int(time.time())
                 ))
             if users_to_update:
                 await db_conn.executemany("""
@@ -164,7 +174,6 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
         USER_CACHE[uid] = {"data": data, "last_seen": time.time()}
         return {"status": "ok", "data": data}
     
-    # Реферальная система при первом входе
     start_bal = 5000.0 if (ref and ref != uid and ref != "") else 0.0
     new_data = {"score": start_bal, "click_lvl": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "wallet_address": None}
     USER_CACHE[uid] = {"data": new_data, "last_seen": time.time()}
@@ -172,18 +181,18 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
 
 @app.post("/api/save")
 async def save(data: SaveData):
-    # Данные принимаются корректно благодаря extra='allow'
-    USER_CACHE[data.user_id] = {"data": data.model_dump(), "last_seen": time.time()}
+    # Сохраняем как словарь, Pydantic теперь не будет ругаться на типы
+    USER_CACHE[str(data.user_id)] = {"data": data.model_dump(), "last_seen": time.time()}
     return {"status": "ok"}
 
 @app.post("/api/verify-payment")
 async def verify_payment(payload: PaymentVerify):
-    success = await verify_ton_tx(payload.user_id, payload.amount)
+    success = await verify_ton_tx(str(payload.user_id), payload.amount)
     if success:
-        if payload.amount >= 0.1:
-            if payload.user_id in USER_CACHE:
-                USER_CACHE[payload.user_id]["data"]["energy"] = USER_CACHE[payload.user_id]["data"]["max_energy"]
-            return {"status": "ok", "message": "Энергия восстановлена!"}
+        uid = str(payload.user_id)
+        if uid in USER_CACHE:
+            USER_CACHE[uid]["data"]["energy"] = USER_CACHE[uid]["data"]["max_energy"]
+        return {"status": "ok", "message": "Энергия восстановлена!"}
     return {"status": "error", "message": "Транзакция не найдена."}
 
 if STATIC_DIR.exists():
