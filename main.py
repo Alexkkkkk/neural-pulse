@@ -50,7 +50,6 @@ async def batch_db_update():
         if not USER_CACHE or not db_conn:
             continue
             
-        start_time = time.time()
         try:
             users_to_update = []
             current_cache = list(USER_CACHE.items())
@@ -88,7 +87,7 @@ async def batch_db_update():
                 await db_conn.commit()
                 logger.info(f"💾 [DB_SYNC] Успех! Обновлено: {len(users_to_update)} юзеров.")
             
-            # Очистка старых сессий (2 часа)
+            # Очистка старых сессий (2 часа неактивности)
             limit = time.time() - 7200
             inactive = [uid for uid, entry in current_cache if entry.get("last_seen", 0) < limit]
             for uid in inactive:
@@ -105,8 +104,10 @@ async def lifespan(app: FastAPI):
     
     try:
         db_conn = await aiosqlite.connect(DB_PATH)
+        # Настройки для максимальной скорости SQLite
         await db_conn.execute("PRAGMA journal_mode=WAL")
         await db_conn.execute("PRAGMA synchronous=NORMAL")
+        await db_conn.execute("PRAGMA cache_size=-64000") # 64MB кэша
         
         await db_conn.executescript("""
             CREATE TABLE IF NOT EXISTS users (
@@ -121,7 +122,6 @@ async def lifespan(app: FastAPI):
         """)
         await db_conn.commit()
         
-        # Запуск бота
         from aiogram import Bot, Dispatcher, types
         from aiogram.filters import Command, CommandObject
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
@@ -154,25 +154,33 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- [API] ---
+# --- [API ЭНДПОИНТЫ] ---
+
+@app.get("/api/health")
+async def health_check():
+    """Для Docker Healthcheck и Bothost мониторинга"""
+    if getattr(app.state, "ready", False):
+        return {"status": "ok", "time": time.time()}
+    return JSONResponse({"status": "booting"}, status_code=503)
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str, ref: Optional[str] = None):
-    # Если сервер еще не прогрузил БД
     if not getattr(app.state, "ready", False):
         return JSONResponse({"status": "error", "msg": "booting"}, status_code=503)
 
     uid = str(user_id)
     now = int(time.time())
 
-    # Исправление: фильтруем пустых рефералов
+    # Фильтрация рефералов
     if ref in ["undefined", "null", "none", "", "None"]:
         ref = None
 
+    # 1. Сначала ищем в кэше (Мгновенный ответ)
     if uid in USER_CACHE:
         USER_CACHE[uid]["last_seen"] = now
         return {"status": "ok", "data": USER_CACHE[uid]["data"]}
     
+    # 2. Ищем в базе
     db_conn.row_factory = aiosqlite.Row
     async with db_conn.execute("SELECT * FROM users WHERE id = ?", (uid,)) as cur:
         row = await cur.fetchone()
@@ -188,25 +196,32 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
         # Начисление офлайн дохода
         if data.get('last_active'):
             passed = now - data['last_active']
-            if passed > 0 and frontend_data['pnl'] > 0:
+            if passed > 5 and frontend_data['pnl'] > 0: # Считаем доход только если прошло > 5 сек
                 income = (frontend_data['pnl'] / 3600) * passed
                 frontend_data['score'] += income
                 
         USER_CACHE[uid] = {"data": frontend_data, "last_seen": now}
         return {"status": "ok", "data": frontend_data}
     
-    # Новый юзер
+    # 3. Регистрация нового юзера
     start_bal = 5000.0 if ref and ref != uid else 0.0
     new_user = {
         "score": start_bal, "tap_power": 1, "energy": 1000.0, 
         "max_energy": 1000, "pnl": 0.0, "level": 1, "wallet_address": None
     }
     USER_CACHE[uid] = {"data": new_user, "last_seen": now}
+    # Принудительно сохраняем в базу сразу, чтобы реферал не потерялся
+    await db_conn.execute(
+        "INSERT INTO users (id, balance, click_lvl, energy, max_energy, pnl, level, last_active) VALUES (?,?,?,?,?,?,?,?)",
+        (uid, start_bal, 1, 1000.0, 1000, 0.0, 1, now)
+    )
+    await db_conn.commit()
     return {"status": "ok", "data": new_user}
 
 @app.post("/api/save")
 async def save(data: SaveData):
     uid = str(data.user_id)
+    # Обновляем кэш мгновенно
     USER_CACHE[uid] = {"data": data.model_dump(), "last_seen": time.time()}
     return {"status": "ok"}
 
@@ -214,6 +229,7 @@ async def save(data: SaveData):
 async def serve_index():
     return FileResponse(STATIC_DIR / "index.html")
 
+# Монтируем статику ПОСЛЕ всех API методов
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
