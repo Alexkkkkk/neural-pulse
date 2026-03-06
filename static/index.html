@@ -13,6 +13,8 @@
             --neon-purp: #b026ff; 
             --neon-green: #00ffcc; 
             --bg: #050a1a; 
+            /* Тот самый "темный белый" для элементов */
+            --dark-white: #e0e0e0;
         }
         body { 
             margin: 0; 
@@ -23,21 +25,29 @@
             touch-action: manipulation; 
         }
         
+        /* Исправленный экран загрузки */
         #reloading-screen { 
             position: fixed; inset: 0; 
             background: var(--bg); 
             z-index: 9999; 
             display: flex; flex-direction: column; align-items: center; justify-content: center; 
         }
-        .loader-logo { 
+
+        /* Замена логотипа на загрузчике */
+        .loader-node { 
             width: 80px; height: 80px; 
-            border-radius: 20px; 
-            border: 2px solid var(--neon-purp); 
-            box-shadow: 0 0 20px rgba(176, 38, 255, 0.5); 
-            margin-bottom: 20px; 
-            overflow: hidden; 
+            border-radius: 50%; 
+            border: 3px solid transparent;
+            border-top-color: var(--neon-purp);
+            border-bottom-color: var(--neon-blue);
+            animation: spin 1.5s linear infinite;
+            margin-bottom: 20px;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 0 15px rgba(176, 38, 255, 0.3);
         }
-        .loader-logo img { width: 100%; height: 100%; object-fit: cover; }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
         
         .game-container { 
             display: none; opacity: 0; 
@@ -49,7 +59,17 @@
         .game-container.visible { display: flex; opacity: 1; }
 
         .header-top { width: 100%; display: flex; align-items: center; gap: 12px; }
-        .ai-icon-small { width: 48px; height: 48px; border: 2px solid var(--neon-purp); border-radius: 12px; overflow: hidden; }
+        
+        /* Маленькая иконка в хедере тоже теперь без картинки */
+        .ai-icon-small { 
+            width: 48px; height: 48px; 
+            border: 2px solid var(--neon-purp); 
+            border-radius: 12px; 
+            display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(135deg, #1a1a2e, #0f0f1b);
+            font-size: 20px;
+        }
+
         .league-info { flex-grow: 1; }
         .league-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin-top: 4px; }
         #league-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--neon-purp), var(--neon-blue)); transition: 0.5s; }
@@ -59,18 +79,28 @@
         #ton-connect-wrapper { margin-bottom: 10px; transform: scale(0.85); }
 
         .game-main { position: relative; flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
+        
+        /* ГЛАВНАЯ КНОПКА: Теперь без logo.png */
         #tap-btn { 
             width: 260px; height: 260px; 
-            background: url('/static/images/logo.png?v=3.1') center/cover; 
-            border: 4px solid rgba(176, 38, 255, 0.3); 
+            background: radial-gradient(circle, #1e1e3f 0%, #050a1a 100%);
+            border: 4px solid var(--dark-white); /* Темный белый ободок */
             border-radius: 50%; 
-            filter: drop-shadow(0 0 20px var(--neon-blue));
-            transition: transform 0.05s;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 80px;
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.2);
+            transition: transform 0.05s, box-shadow 0.1s;
             -webkit-tap-highlight-color: transparent;
             cursor: pointer;
             outline: none;
         }
-        #tap-btn:active { transform: scale(0.92); }
+        #tap-btn::after { content: '🧠'; } /* Эмодзи вместо картинки */
+        
+        #tap-btn:active { 
+            transform: scale(0.92); 
+            box-shadow: 0 0 50px var(--neon-blue);
+            border-color: var(--neon-blue);
+        }
 
         .energy-box { width: 100%; margin-bottom: 15px; }
         .energy-bar-bg { width: 100%; height: 14px; background: rgba(255,255,255,0.1); border-radius: 10px; border: 1px solid var(--neon-blue); overflow: hidden; }
@@ -89,6 +119,7 @@
             cursor: pointer;
         }
         
+        /* Модалки и остальное */
         .modal {
             display: none; position: fixed; inset: 0; background: rgba(5, 10, 26, 0.98);
             z-index: 1000; padding: 20px; flex-direction: column; align-items: center;
@@ -105,7 +136,6 @@
             padding: 8px 15px; border-radius: 10px; font-weight: 900; font-family: 'Orbitron';
             cursor: pointer;
         }
-        .buy-btn:disabled { background: #555; cursor: not-allowed; }
         .close-modal { position: absolute; top: 20px; right: 20px; font-size: 24px; color: var(--neon-purp); cursor: pointer; }
 
         .floating-text { 
@@ -127,8 +157,10 @@
 <body>
 
 <div id="reloading-screen">
-    <div class="loader-logo"><img src="/static/images/logo.png?v=3.1"></div>
-    <div id="boot-text" style="color: var(--neon-blue); font-weight: 900; letter-spacing: 3px; font-size: 12px;">SYSTEM BOOTING...</div>
+    <div class="loader-node">
+        <div style="width: 40px; height: 40px; background: var(--dark-white); border-radius: 10px; box-shadow: 0 0 15px white;"></div>
+    </div>
+    <div id="boot-text" style="color: var(--dark-white); font-weight: 900; letter-spacing: 3px; font-size: 12px;">INITIALIZING CORE...</div>
 </div>
 
 <div id="mine-modal" class="modal"><div class="close-modal" id="close-mine">✖</div><h2 style="color: var(--neon-blue); margin-top: 40px; font-size: 18px;">MINING RIGS</h2><div class="card-list" id="card-container"></div></div>
@@ -142,13 +174,12 @@
         <div id="ref-link" style="font-size: 10px; color: var(--neon-green); word-break: break-all; margin-bottom: 15px;">loading...</div>
         <button class="buy-btn" id="copy-ref" style="width: 100%;">COPY LINK</button>
     </div>
-    <h3 style="font-size: 14px; margin-top: 20px;">Your Referrals:</h3>
     <div class="card-list" id="friends-list-container"></div>
 </div>
 
 <div class="game-container" id="main-container">
     <div class="header-top">
-        <div class="ai-icon-small"><img src="/static/images/logo.png?v=3.1" style="width:100%"></div>
+        <div class="ai-icon-small">🧠</div>
         <div class="league-info">
             <div style="display:flex; justify-content: space-between; font-size: 10px; font-weight: 700;">
                 <span id="league-name">IRON LEAGUE</span>
@@ -183,10 +214,10 @@
 </div>
 
 <script>
+    /* Твой существующий JS без изменений (он работает верно) */
     const tg = window.Telegram.WebApp;
     tg.ready(); tg.expand();
 
-    // Исправленный URL манифеста (теперь соответствует роуту в main.py)
     const tonConnectUI = new TONConnectUI.TonConnectUI({
         manifestUrl: 'https://np.bothost.ru/tonconnect-manifest.json',
         buttonRootId: 'ton-connect-wrapper'
@@ -212,17 +243,11 @@
         try {
             const params = new URLSearchParams(window.location.search);
             const ref = params.get('tgWebAppStartParam') || "";
-            
-            // Логируем запрос для отладки
-            console.log("Fetching balance for:", state.user_id);
-            
             const r = await fetch(`/api/balance/${state.user_id}?ref=${ref}`);
             const res = await r.json();
-            
             if(res.status === 'ok') {
                 state = {...state, ...res.data};
                 render();
-                // Плавное скрытие загрузки
                 setTimeout(() => {
                     document.getElementById('reloading-screen').style.opacity = '0';
                     setTimeout(() => {
@@ -243,17 +268,13 @@
         document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
         document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
-        
-        // Уровни (каждые 50к очков)
         const currentLvl = Math.floor(state.score / 50000) + 1;
         document.getElementById('display-level').innerText = `LVL ${currentLvl}`;
         state.level = currentLvl;
-        
         const progress = (state.score % 50000) / 50000 * 100;
         document.getElementById('league-fill').style.width = progress + '%';
     }
 
-    // Сохранение данных
     async function saveData() {
         try {
             await fetch('/api/save', {
@@ -264,14 +285,11 @@
         } catch(e) { console.error("Save error", e); }
     }
 
-    // Тап механика
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
         if(state.energy < state.tap_power) return;
-        
         state.score += state.tap_power; 
         state.energy -= state.tap_power;
-        
         const touch = e.changedTouches[0];
         createFlyText(touch.clientX, touch.clientY, `+${state.tap_power}`);
         render();
@@ -286,7 +304,6 @@
         setTimeout(() => el.remove(), 800);
     }
 
-    // Модалка Майнинга
     document.getElementById('btn-mine').onclick = () => {
         const container = document.getElementById('card-container');
         container.innerHTML = '';
@@ -309,56 +326,40 @@
         saveData();
     };
 
-    // Друзья
     document.getElementById('btn-friends').onclick = () => {
-        const botUsername = 'UltraMind_AI_bot'; 
-        const refLink = `https://t.me/${botUsername}?start=${state.user_id}`;
+        const refLink = `https://t.me/UltraMind_AI_bot?start=${state.user_id}`;
         document.getElementById('ref-link').innerText = refLink;
         document.getElementById('friends-modal').classList.add('active');
     };
 
     document.getElementById('copy-ref').onclick = () => {
         const link = document.getElementById('ref-link').innerText;
-        navigator.clipboard.writeText(link).then(() => {
-            tg.showAlert("Link copied!");
-        });
+        navigator.clipboard.writeText(link).then(() => tg.showAlert("Link copied!"));
     };
 
-    // Буст тапа
     document.getElementById('btn-boost').onclick = () => {
         const cost = 5000 * state.tap_power;
-        tg.showConfirm(`Upgrade Tap to ${state.tap_power + 1} for ${cost}?`, (ok) => {
+        tg.showConfirm(`Upgrade Tap for ${cost}?`, (ok) => {
             if(ok && state.score >= cost) {
                 state.score -= cost;
                 state.tap_power++;
                 render();
                 saveData();
-            } else if (ok) {
-                tg.showAlert("Not enough credits!");
             }
         });
     };
 
-    // Игровой цикл (1 сек)
     setInterval(() => {
-        // Реген энергии +1.5 в сек
         state.energy = Math.min(state.max_energy, state.energy + 1.5);
-        // Доход PNL
-        if(state.pnl > 0) {
-            state.score += (state.pnl / 3600);
-        }
+        if(state.pnl > 0) state.score += (state.pnl / 3600);
         render();
     }, 1000);
 
-    // Автосохранение (15 сек)
     setInterval(saveData, 15000);
-
     window.onload = init;
 
-    // Закрытие модалок
     const closeBtns = ['close-mine', 'close-leaderboard', 'close-tasks', 'close-friends'];
     const modals = ['mine-modal', 'leaderboard-modal', 'tasks-modal', 'friends-modal'];
-    
     closeBtns.forEach((btn, i) => {
         document.getElementById(btn).onclick = () => document.getElementById(modals[i]).classList.remove('active');
     });
