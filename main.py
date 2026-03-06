@@ -11,7 +11,6 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict
 
 # --- [ЛОГИРОВАНИЕ] ---
-# Настроено так, чтобы Bothost подхватывал сообщения мгновенно
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
@@ -46,30 +45,24 @@ class ClientLog(BaseModel):
     user_id: str
     error: str
 
-# --- [БАЗА ДАННЫХ И СИНХРОНИЗАЦИЯ] ---
+# --- [БАЗА ДАННЫХ] ---
 async def batch_db_update():
-    """Фоновое сохранение кэша в БД каждые 15 секунд"""
     logger.info("🛠️ [DB_WORKER] Фоновый процесс сохранения запущен.")
     while True:
         await asyncio.sleep(15)
-        if not USER_CACHE or not db_conn:
-            continue
-            
+        if not USER_CACHE or not db_conn: continue
         try:
             users_to_update = []
             current_cache = list(USER_CACHE.items())
-            
             for uid, entry in current_cache:
                 d = entry.get("data")
                 if not d: continue
-                
                 users_to_update.append((
                     str(uid), float(d.get('score', 0)), int(d.get('tap_power', 1)), 
                     float(d.get('energy', 0)), int(d.get('max_energy', 1000)), 
                     float(d.get('pnl', 0)), int(d.get('level', 1)), 
                     d.get('wallet_address'), int(time.time())
                 ))
-            
             if users_to_update:
                 await db_conn.executemany("""
                     INSERT INTO users (id, balance, click_lvl, energy, max_energy, pnl, level, wallet_address, last_active)
@@ -83,11 +76,9 @@ async def batch_db_update():
                 await db_conn.commit()
                 logger.info(f"💾 [DB_SYNC] Обновлено: {len(users_to_update)} юзеров.")
             
-            # Очистка старых сессий (2 часа)
             limit = time.time() - 7200
             inactive = [uid for uid, entry in current_cache if entry.get("last_seen", 0) < limit]
-            for uid in inactive:
-                del USER_CACHE[uid]
+            for uid in inactive: del USER_CACHE[uid]
         except Exception as e:
             logger.error(f"❌ [DB_ERROR] Ошибка записи: {e}")
 
@@ -99,8 +90,6 @@ async def lifespan(app: FastAPI):
         db_conn = await aiosqlite.connect(DB_PATH)
         await db_conn.execute("PRAGMA journal_mode=WAL")
         await db_conn.execute("PRAGMA synchronous=NORMAL")
-        await db_conn.execute("PRAGMA cache_size=-64000")
-        
         await db_conn.executescript("""
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY, balance REAL, click_lvl INTEGER, 
@@ -120,7 +109,13 @@ async def lifespan(app: FastAPI):
         @dp.message(Command("start"))
         async def start_cmd(m: types.Message, command: CommandObject):
             ref_id = command.args if command.args else ""
-            url = f"{WEB_APP_URL}/?ref={ref_id}" if ref_id else WEB_APP_URL
+            # --- ИСПРАВЛЕНИЕ ТУТ: Добавляем v=время для обхода кеша ---
+            v_cache = int(time.time())
+            clean_url = WEB_APP_URL.rstrip('/')
+            url = f"{clean_url}/?v={v_cache}"
+            if ref_id:
+                url += f"&ref={ref_id}"
+            
             kb = InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="Играть 🧠", web_app=WebAppInfo(url=url))
             ]])
@@ -138,11 +133,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- [API] ---
+# --- [API ЭНДПОИНТЫ] ---
 
 @app.post("/api/log")
 async def log_from_client(data: ClientLog):
-    """Принимает ошибки с фронтенда и пишет их в логи Bothost"""
     logger.error(f"📱 [CLIENT_LOG] User {data.user_id}: {data.error}")
     return {"status": "ok"}
 
@@ -175,12 +169,10 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
             passed = now - data['last_active']
             if passed > 5 and f_data['pnl'] > 0:
                 f_data['score'] += (f_data['pnl'] / 3600) * passed
-                
         USER_CACHE[uid] = {"data": f_data, "last_seen": now}
         return {"status": "ok", "data": f_data}
     
-    # Новый юзер
-    start_bal = 5000.0 if ref and ref != "None" and ref != uid else 0.0
+    start_bal = 5000.0 if ref and ref not in ["None", "null", uid] else 0.0
     new_user = {"score": start_bal, "tap_power": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "wallet_address": None}
     USER_CACHE[uid] = {"data": new_user, "last_seen": now}
     await db_conn.execute("INSERT INTO users (id, balance, click_lvl, energy, max_energy, pnl, level, last_active) VALUES (?,?,?,?,?,?,?,?)",
