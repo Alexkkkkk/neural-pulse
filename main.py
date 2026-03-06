@@ -4,10 +4,10 @@ import uvicorn
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Optional, Dict, Any
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, UJSONResponse
 from pydantic import BaseModel, ConfigDict
 
 # --- [ЛОГИРОВАНИЕ] ---
@@ -76,6 +76,7 @@ async def batch_db_update():
                 await db_conn.commit()
                 logger.info(f"💾 [DB_SYNC] Обновлено: {len(users_to_update)} юзеров.")
             
+            # Очистка кэша неактивных (2 часа)
             limit = time.time() - 7200
             inactive = [uid for uid, entry in current_cache if entry.get("last_seen", 0) < limit]
             for uid in inactive: del USER_CACHE[uid]
@@ -109,11 +110,10 @@ async def lifespan(app: FastAPI):
         @dp.message(Command("start"))
         async def start_cmd(m: types.Message, command: CommandObject):
             ref_id = command.args if command.args else ""
-            # --- ИСПРАВЛЕНИЕ ТУТ: Добавляем v=время для обхода кеша ---
             v_cache = int(time.time())
             clean_url = WEB_APP_URL.rstrip('/')
             url = f"{clean_url}/?v={v_cache}"
-            if ref_id:
+            if ref_id and ref_id != str(m.from_user.id):
                 url += f"&ref={ref_id}"
             
             kb = InlineKeyboardMarkup(inline_keyboard=[[
@@ -130,10 +130,14 @@ async def lifespan(app: FastAPI):
     yield
     if db_conn: await db_conn.close()
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan, default_response_class=UJSONResponse)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # --- [API ЭНДПОИНТЫ] ---
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(status_code=204)
 
 @app.post("/api/log")
 async def log_from_client(data: ClientLog):
@@ -172,7 +176,8 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
         USER_CACHE[uid] = {"data": f_data, "last_seen": now}
         return {"status": "ok", "data": f_data}
     
-    start_bal = 5000.0 if ref and ref not in ["None", "null", uid] else 0.0
+    # Реферальная система (5000 бонуса)
+    start_bal = 5000.0 if ref and ref not in ["None", "null", "", uid] else 0.0
     new_user = {"score": start_bal, "tap_power": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "wallet_address": None}
     USER_CACHE[uid] = {"data": new_user, "last_seen": now}
     await db_conn.execute("INSERT INTO users (id, balance, click_lvl, energy, max_energy, pnl, level, last_active) VALUES (?,?,?,?,?,?,?,?)",
@@ -189,6 +194,7 @@ async def save(data: SaveData):
 async def serve_index():
     return FileResponse(STATIC_DIR / "index.html")
 
+# Монтируем статику (картинки, стили)
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
