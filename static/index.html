@@ -5,57 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js?v=2.0"></script>
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         :root { 
-            --neon-blue: #00d4ff; 
-            --neon-purp: #b026ff; 
-            --neon-green: #00ffcc; 
-            --bg: #050a1a; 
-            --dark-white: #e0e0e0;
+            --neon-blue: #00d4ff; --neon-purp: #b026ff; --neon-green: #00ffcc; 
+            --bg: #050a1a;
         }
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+        /* СКРЫВАЕМ ВСЁ ПО УМОЛЧАНИЮ */
         body { 
-            margin: 0; 
-            background: var(--bg); 
-            font-family: 'Orbitron', sans-serif; 
-            color: white; 
-            overflow: hidden; 
-            touch-action: none; 
-            user-select: none;
+            margin: 0; background: var(--bg); font-family: 'Orbitron', sans-serif; 
+            color: white; overflow: hidden; touch-action: none; user-select: none;
+            display: none; /* Бот не покажется, пока данные не загрузятся */
         }
 
-        /* Экран загрузки и синхронизации */
-        #sync-screen {
-            position: fixed; inset: 0; background: var(--bg); z-index: 10000;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            transition: opacity 0.5s ease;
-        }
-        .sync-logo {
-            width: 100px; height: 100px; border: 3px solid var(--neon-purp);
-            border-radius: 25px; display: flex; align-items: center; justify-content: center;
-            font-size: 40px; margin-bottom: 20px; box-shadow: 0 0 30px var(--neon-purp);
-            background: rgba(176, 38, 255, 0.1); color: white;
-            animation: pulse-glow 2s infinite;
-        }
-        @keyframes pulse-glow {
-            0%, 100% { box-shadow: 0 0 20px var(--neon-purp); }
-            50% { box-shadow: 0 0 40px var(--neon-purp); }
-        }
-        .sync-text { color: var(--neon-blue); letter-spacing: 3px; font-weight: 700; font-size: 12px; }
-
-        /* Контент игры */
         .game-content { 
-            display: none; opacity: 0; transition: 0.5s; 
-            padding: 20px; flex-direction: column; align-items: center; 
-            height: 100vh; width: 100%; max-width: 500px; margin: 0 auto;
+            display: flex; flex-direction: column; align-items: center; 
+            height: 100vh; width: 100%; max-width: 500px; margin: 0 auto; padding: 20px;
         }
-        .game-content.active { display: flex; opacity: 1; }
 
-        /* Верхняя панель: Лига и Уровень */
+        /* Дизайн шапки */
         .top-info { width: 100%; display: flex; align-items: center; gap: 12px; margin-bottom: 15px; }
         .mini-logo { 
             width: 45px; height: 45px; border: 2px solid var(--neon-purp); 
@@ -67,96 +38,59 @@
         .progress-container { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; }
         #progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--neon-purp), var(--neon-blue)); transition: width 0.5s; }
 
-        /* Джекпот */
         .jackpot-card {
             width: 100%; background: rgba(0, 212, 255, 0.05); border: 1px solid rgba(0, 212, 255, 0.2);
             border-radius: 15px; padding: 12px; text-align: center; margin-bottom: 15px;
         }
-        .jackpot-title { color: var(--neon-blue); font-size: 9px; letter-spacing: 2px; margin-bottom: 4px; }
         .jackpot-value { font-size: 26px; font-weight: 900; text-shadow: 0 0 15px var(--neon-blue); }
 
-        /* Баланс */
         #main-balance { font-size: 44px; font-weight: 900; margin-bottom: 2px; }
         #pnl-info { color: var(--neon-green); font-size: 12px; margin-bottom: 15px; font-weight: 700; }
 
-        /* Кнопка тапа и Боковое меню */
-        .tap-area { 
-            position: relative; flex-grow: 1; display: flex; 
-            align-items: center; justify-content: center; width: 100%; 
-        }
+        /* Кнопка тапа и боковые кнопки */
+        .tap-area { position: relative; flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
         .main-circle {
             width: 270px; height: 270px; border-radius: 50%;
             background: radial-gradient(circle, #1e1e3f 0%, #050a1a 100%);
             border: 4px solid var(--neon-purp); box-shadow: 0 0 40px rgba(176, 38, 255, 0.3);
             display: flex; align-items: center; justify-content: center; 
             font-size: 100px; cursor: pointer; transition: transform 0.05s;
-            position: relative; z-index: 2;
         }
         .main-circle:active { transform: scale(0.92); }
-        .main-circle::after { content: '🧠'; } /* Здесь можно вставить картинку через background-image */
+        .main-circle::after { content: '🧠'; }
 
-        .side-buttons { 
-            position: absolute; right: -5px; display: flex; 
-            flex-direction: column; gap: 12px; z-index: 3;
-        }
+        .side-buttons { position: absolute; right: -5px; display: flex; flex-direction: column; gap: 12px; }
         .side-btn {
             background: rgba(5, 10, 26, 0.9); border: 1px solid var(--neon-blue);
             border-radius: 12px; padding: 10px; font-size: 9px; color: white;
-            text-transform: uppercase; width: 85px; text-align: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5); font-weight: 700;
+            text-transform: uppercase; width: 85px; text-align: center; font-weight: 700;
         }
 
-        /* Энергия */
         .energy-section { width: 100%; margin-top: 15px; }
         .energy-stats { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; font-weight: 700; }
         .energy-bar { width: 100%; height: 12px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; border: 1px solid var(--neon-blue); }
         #energy-fill { height: 100%; background: linear-gradient(90deg, var(--neon-blue), var(--neon-green)); transition: 0.1s; }
 
-        /* Нижнее меню */
-        .bottom-menu { 
-            width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); 
-            gap: 10px; margin-top: 20px; margin-bottom: 10px;
-        }
-        .menu-item { 
-            background: rgba(255,255,255,0.03); border-radius: 16px; padding: 14px; 
-            text-align: center; font-size: 11px; border: 1px solid rgba(255,255,255,0.08);
-            font-weight: 700; transition: 0.2s;
-        }
-        .menu-item:active { background: rgba(255,255,255,0.1); transform: translateY(-2px); }
+        .bottom-menu { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 20px; }
+        .menu-item { background: rgba(255,255,255,0.03); border-radius: 16px; padding: 14px; text-align: center; font-size: 11px; border: 1px solid rgba(255,255,255,0.08); font-weight: 700; }
 
-        /* Анимация вылетающих цифр */
-        .floating-text {
-            position: absolute; pointer-events: none; font-weight: 900; font-size: 32px;
-            color: white; animation: floatUp 0.6s ease-out forwards; z-index: 100;
-            text-shadow: 0 0 10px var(--neon-blue);
-        }
-        @keyframes floatUp {
-            0% { opacity: 1; transform: translateY(0) scale(1); }
-            100% { opacity: 0; transform: translateY(-120px) scale(1.2); }
-        }
+        .floating-text { position: absolute; pointer-events: none; font-weight: 900; font-size: 32px; color: white; animation: floatUp 0.6s forwards; z-index: 100; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
     </style>
 </head>
 <body>
 
-<div id="sync-screen">
-    <div class="sync-logo">AI</div>
-    <div class="sync-text">СИНХРОНИЗАЦИЯ ДАННЫХ...</div>
-</div>
-
-<div class="game-content" id="game-ui">
+<div class="game-content">
     <div class="top-info">
         <div class="mini-logo">AI</div>
         <div class="league-info">
-            <div class="league-header">
-                <span id="league-name">NEURAL AGENT</span>
-                <span id="user-lvl">LVL 1</span>
-            </div>
+            <div class="league-header"><span>NEURAL AGENT</span><span id="user-lvl">LVL 1</span></div>
             <div class="progress-container"><div id="progress-fill"></div></div>
         </div>
     </div>
 
     <div class="jackpot-card">
-        <div class="jackpot-title">GLOBAL JACKPOT</div>
+        <div style="font-size: 9px; color: var(--neon-blue); letter-spacing: 2px;">GLOBAL JACKPOT</div>
         <div class="jackpot-value" id="jackpot">500,052</div>
     </div>
 
@@ -166,24 +100,21 @@
     <div class="tap-area">
         <div class="main-circle" id="tap-btn"></div>
         <div class="side-buttons">
-            <div class="side-btn" onclick="tg.showAlert('Invite system coming soon!')">INVITE</div>
-            <div class="side-btn" onclick="tg.showAlert('Tasks will be active in Mainnet')">TASKS</div>
-            <div class="side-btn" id="ton-connect-btn">WALLET</div>
+            <div class="side-btn">INVITE</div>
+            <div class="side-btn">TASKS</div>
+            <div class="side-btn">WALLET</div>
         </div>
     </div>
 
     <div class="energy-section">
-        <div class="energy-stats">
-            <span>⚡ ENERGY</span>
-            <span id="energy-val">1000/1000</span>
-        </div>
+        <div class="energy-stats"><span>⚡ ENERGY</span><span id="energy-val">1000/1000</span></div>
         <div class="energy-bar"><div id="energy-fill"></div></div>
     </div>
 
     <div class="bottom-menu">
-        <div class="menu-item" onclick="tg.showAlert('Boosters locked')">🚀 BOOST</div>
-        <div class="menu-item" onclick="tg.showAlert('Mining pool empty')">⛏️ MINE</div>
-        <div class="menu-item" onclick="tg.showAlert('Rankings loading...')">📊 STATS</div>
+        <div class="menu-item">🚀 BOOST</div>
+        <div class="menu-item">⛏️ MINE</div>
+        <div class="menu-item">📊 STATS</div>
     </div>
 </div>
 
@@ -192,19 +123,13 @@
     tg.ready();
     tg.expand();
 
-    // Состояние игры (синхронизируется с сервером)
     let state = {
-        score: 0, 
-        energy: 1000, 
-        max_energy: 1000, 
-        tap_power: 1, 
-        pnl: 0, 
-        level: 1,
+        score: 0, energy: 1000, max_energy: 1000, tap_power: 1, pnl: 0, level: 1,
         user_id: String(tg.initDataUnsafe?.user?.id || '476014374')
     };
 
-    // Функция синхронизации с твоим main.py
-    async function syncData() {
+    // ФУНКЦИЯ ЗАПУСКА
+    async function initGame() {
         try {
             const response = await fetch(`/api/balance/${state.user_id}?t=${Date.now()}`);
             const result = await response.json();
@@ -212,95 +137,54 @@
             if(result.status === 'ok') {
                 state = {...state, ...result.data};
                 updateUI();
-                
-                // Скрываем загрузку только после получения данных
-                setTimeout(() => {
-                    document.getElementById('sync-screen').style.opacity = '0';
-                    setTimeout(() => {
-                        document.getElementById('sync-screen').style.display = 'none';
-                        document.getElementById('game-ui').classList.add('active');
-                    }, 500);
-                }, 1000);
+                // ПОКАЗЫВАЕМ БОТА ТОЛЬКО ЗДЕСЬ
+                document.body.style.display = 'block';
+            } else {
+                // Если сервер не ответил "ok", пробуем еще раз через секунду
+                setTimeout(initGame, 1000);
             }
         } catch(e) {
-            console.error("Sync failed, retrying...");
-            setTimeout(syncData, 2000);
+            // Если сервер еще не запущен (ошибка сети), ждем и пробуем снова
+            setTimeout(initGame, 1000);
         }
     }
 
-    // Обновление всех элементов интерфейса
     function updateUI() {
         document.getElementById('main-balance').innerText = Math.floor(state.score).toLocaleString();
         document.getElementById('energy-val').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
         document.getElementById('pnl-info').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
         document.getElementById('user-lvl').innerText = `LVL ${state.level}`;
-        
-        // Прогресс лиги (каждые 100к очков новый круг)
-        const progress = (state.score % 100000) / 100000 * 100;
-        document.getElementById('progress-fill').style.width = progress + '%';
-        
-        // Маленькая анимация джекпота
-        const jack = 500052 + (Math.random() * 10);
-        document.getElementById('jackpot').innerText = Math.floor(jack).toLocaleString();
+        document.getElementById('progress-fill').style.width = (state.score % 100000 / 1000) + '%';
     }
 
-    // Обработка тапа (Мультитач)
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
-        const touches = e.changedTouches;
-        
-        for(let i=0; i < touches.length; i++) {
-            if(state.energy < state.tap_power) break;
-            
-            state.score += state.tap_power;
-            state.energy -= state.tap_power;
-            
-            showFloatingText(touches[i].clientX, touches[i].clientY, `+${state.tap_power}`);
-            
-            if(tg.HapticFeedback) {
-                tg.HapticFeedback.impactOccurred('medium');
-            }
-        }
+        if(state.energy < state.tap_power) return;
+        state.score += state.tap_power;
+        state.energy -= state.tap_power;
         updateUI();
+        if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
     });
 
-    function showFloatingText(x, y, text) {
-        const el = document.createElement('div');
-        el.className = 'floating-text';
-        el.innerText = text;
-        el.style.left = (x - 20) + 'px';
-        el.style.top = (y - 40) + 'px';
-        document.body.appendChild(el);
-        setTimeout(() => el.remove(), 600);
-    }
-
-    // Фоновое сохранение на сервер (каждые 15 секунд)
     setInterval(async () => {
-        try {
-            await fetch('/api/save', {
+        if(document.body.style.display === 'block') {
+            fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(state)
             });
-        } catch(e) { console.warn("Auto-save failed"); }
+        }
     }, 15000);
 
-    // Внутренний цикл: регенерация энергии и пассивный доход
     setInterval(() => {
-        // Реген: +1.5 энергии в сек
         state.energy = Math.min(state.max_energy, state.energy + 0.015);
-        
-        // PNL: начисление каждую секунду
-        if(state.pnl > 0) {
-            state.score += (state.pnl / 360000); // Делим на 100 (цикл 10мс) и на 3600 сек
-        }
+        if(state.pnl > 0) state.score += (state.pnl / 360000);
         updateUI();
     }, 10);
 
-    // Запуск синхронизации при загрузке
-    window.onload = syncData;
+    // Запускаем проверку готовности
+    window.onload = initGame;
 </script>
-
 </body>
 </html>
