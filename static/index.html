@@ -186,12 +186,12 @@
     const tg = window.Telegram.WebApp;
     tg.ready(); tg.expand();
 
+    // Исправленный URL манифеста (теперь соответствует роуту в main.py)
     const tonConnectUI = new TONConnectUI.TonConnectUI({
-        manifestUrl: 'https://np.bothost.ru/static/tonconnect-manifest.json',
+        manifestUrl: 'https://np.bothost.ru/tonconnect-manifest.json',
         buttonRootId: 'ton-connect-wrapper'
     });
 
-    // Состояние игры (подгрузится из БД)
     let state = {
         score: 0, 
         energy: 1000, 
@@ -208,18 +208,27 @@
         {id: 'node_1', name: 'Pulse Node', cost: 25000, pnl: 1400, icon: '🖥️'}
     ];
 
-    // --- [ИНИЦИАЛИЗАЦИЯ] ---
     async function init() {
         try {
-            const ref = new URLSearchParams(window.location.search).get('tgWebAppStartParam') || "";
+            const params = new URLSearchParams(window.location.search);
+            const ref = params.get('tgWebAppStartParam') || "";
+            
+            // Логируем запрос для отладки
+            console.log("Fetching balance for:", state.user_id);
+            
             const r = await fetch(`/api/balance/${state.user_id}?ref=${ref}`);
             const res = await r.json();
+            
             if(res.status === 'ok') {
                 state = {...state, ...res.data};
                 render();
+                // Плавное скрытие загрузки
                 setTimeout(() => {
-                    document.getElementById('reloading-screen').style.display = 'none';
-                    document.getElementById('main-container').classList.add('visible');
+                    document.getElementById('reloading-screen').style.opacity = '0';
+                    setTimeout(() => {
+                        document.getElementById('reloading-screen').style.display = 'none';
+                        document.getElementById('main-container').classList.add('visible');
+                    }, 500);
                 }, 1000);
             }
         } catch(e) { 
@@ -229,139 +238,55 @@
         }
     }
 
-    // --- [ОТРИСОВКА] ---
     function render() {
         document.getElementById('score').innerText = Math.floor(state.score).toLocaleString();
         document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
         document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
         
-        // Система уровней
+        // Уровни (каждые 50к очков)
         const currentLvl = Math.floor(state.score / 50000) + 1;
         document.getElementById('display-level').innerText = `LVL ${currentLvl}`;
         state.level = currentLvl;
         
-        // Прогресс бар лиги
         const progress = (state.score % 50000) / 50000 * 100;
         document.getElementById('league-fill').style.width = progress + '%';
     }
 
-    // --- [ЛОГИКА ДРУЗЕЙ] ---
-    document.getElementById('btn-friends').onclick = async () => {
-        const botUsername = 'UltraMind_AI_bot'; 
-        const refLink = `https://t.me/${botUsername}?start=${state.user_id}`;
-        document.getElementById('ref-link').innerText = refLink;
-        document.getElementById('friends-modal').classList.add('active');
-        
-        const container = document.getElementById('friends-list-container');
-        container.innerHTML = 'SCANNING NETWORK...';
-        
+    // Сохранение данных
+    async function saveData() {
         try {
-            const r = await fetch(`/api/friends/${state.user_id}`);
-            const res = await r.json();
-            container.innerHTML = '';
-            
-            if (!res.friends || res.friends.length === 0) {
-                container.innerHTML = '<div style="opacity:0.5; text-align:center; font-size:10px; padding:20px;">No nodes connected yet. Invite friends to earn +5,000 credits!</div>';
-            } else {
-                res.friends.forEach(f => {
-                    const div = document.createElement('div');
-                    div.className = 'mine-card';
-                    div.innerHTML = `<span>ID: ${f.user_id.slice(0,8)}...</span> <b style="color:var(--neon-green)">+5,000</b>`;
-                    container.appendChild(div);
-                });
-            }
-        } catch(e) { container.innerHTML = 'Error loading list.'; }
-    };
-
-    document.getElementById('copy-ref').onclick = () => {
-        const link = document.getElementById('ref-link').innerText;
-        navigator.clipboard.writeText(link).then(() => {
-            tg.showAlert("Link copied to clipboard!");
-        });
-    };
-
-    // --- [ЛОГИКА BOOST (ПРОКАЧКА)] ---
-    document.getElementById('btn-boost').onclick = () => {
-        const boostCost = 5000 * state.tap_power;
-        tg.showConfirm(`Upgrade Tap Power to ${state.tap_power + 1} for ${boostCost.toLocaleString()}?`, (ok) => {
-            if(ok) {
-                if(state.score >= boostCost) {
-                    state.score -= boostCost;
-                    state.tap_power += 1;
-                    render();
-                    saveData();
-                    tg.showAlert("System Upgraded!");
-                } else {
-                    tg.showAlert("Insufficient Credits!");
-                }
-            }
-        });
-    };
-
-    // --- [ЛОГИКА ЗАДАНИЙ] ---
-    document.getElementById('btn-tasks').onclick = async () => {
-        const container = document.getElementById('tasks-container');
-        container.innerHTML = 'SCANNING...';
-        document.getElementById('tasks-modal').classList.add('active');
-        try {
-            const r = await fetch(`/api/tasks/${state.user_id}`);
-            const res = await r.json();
-            container.innerHTML = '';
-            res.tasks.forEach(task => {
-                const div = document.createElement('div');
-                div.className = 'mine-card';
-                div.innerHTML = `
-                    <div><b>${task.name}</b><br><small>+${task.reward} NC</small></div>
-                    <button class="buy-btn" ${task.completed ? 'disabled' : ''} onclick="doTask('${task.id}', '${task.link}')">
-                        ${task.completed ? 'DONE' : 'GO'}
-                    </button>`;
-                container.appendChild(div);
+            await fetch('/api/save', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(state)
             });
-        } catch(e) { container.innerHTML = 'Tasks unavailable.'; }
-    };
+        } catch(e) { console.error("Save error", e); }
+    }
 
-    window.doTask = (id, link) => {
-        if(link !== "#") tg.openLink(link);
-        tg.showConfirm("Task completed?", async (ok) => {
-            if(ok) {
-                const r = await fetch('/api/claim-task', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ user_id: state.user_id, task_id: id })
-                });
-                const res = await r.json();
-                if(res.status === 'ok') {
-                    state.score = res.new_balance; 
-                    render();
-                    document.getElementById('btn-tasks').click(); // Обновляем список
-                } else {
-                    tg.showAlert(res.message);
-                }
-            }
-        });
-    };
+    // Тап механика
+    document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if(state.energy < state.tap_power) return;
+        
+        state.score += state.tap_power; 
+        state.energy -= state.tap_power;
+        
+        const touch = e.changedTouches[0];
+        createFlyText(touch.clientX, touch.clientY, `+${state.tap_power}`);
+        render();
+    });
 
-    // --- [ЛОГИКА ЛИДЕРБОРДА] ---
-    document.getElementById('score').onclick = async () => {
-        const container = document.getElementById('leader-container');
-        container.innerHTML = 'LOADING...';
-        document.getElementById('leaderboard-modal').classList.add('active');
-        try {
-            const r = await fetch('/api/leaderboard');
-            const res = await r.json();
-            container.innerHTML = '';
-            res.leaders.forEach(u => {
-                const div = document.createElement('div');
-                div.className = 'mine-card';
-                div.style.borderLeft = (u.user_id === state.user_id) ? '4px solid var(--neon-purp)' : '';
-                div.innerHTML = `<span>#${u.rank} ID:${u.user_id.slice(0,6)}</span> <b>${Math.floor(u.score).toLocaleString()}</b>`;
-                container.appendChild(div);
-            });
-        } catch(e) { container.innerHTML = 'Leaderboard unavailable.'; }
-    };
+    function createFlyText(x, y, txt) {
+        const el = document.createElement('div');
+        el.className = 'floating-text';
+        el.innerText = txt;
+        el.style.left = x + 'px'; el.style.top = y + 'px';
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 800);
+    }
 
-    // --- [ЛОГИКА МАЙНИНГА] ---
+    // Модалка Майнинга
     document.getElementById('btn-mine').onclick = () => {
         const container = document.getElementById('card-container');
         container.innerHTML = '';
@@ -384,53 +309,59 @@
         saveData();
     };
 
-    // --- [ВЗАИМОДЕЙСТВИЕ И СОХРАНЕНИЕ] ---
-    async function saveData() {
-        await fetch('/api/save', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(state)
+    // Друзья
+    document.getElementById('btn-friends').onclick = () => {
+        const botUsername = 'UltraMind_AI_bot'; 
+        const refLink = `https://t.me/${botUsername}?start=${state.user_id}`;
+        document.getElementById('ref-link').innerText = refLink;
+        document.getElementById('friends-modal').classList.add('active');
+    };
+
+    document.getElementById('copy-ref').onclick = () => {
+        const link = document.getElementById('ref-link').innerText;
+        navigator.clipboard.writeText(link).then(() => {
+            tg.showAlert("Link copied!");
         });
-    }
+    };
 
-    document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        if(state.energy < state.tap_power) return;
-        state.score += state.tap_power; 
-        state.energy -= state.tap_power;
-        
-        const touch = e.changedTouches[0];
-        createFlyText(touch.clientX, touch.clientY, `+${state.tap_power}`);
-        render();
-    });
+    // Буст тапа
+    document.getElementById('btn-boost').onclick = () => {
+        const cost = 5000 * state.tap_power;
+        tg.showConfirm(`Upgrade Tap to ${state.tap_power + 1} for ${cost}?`, (ok) => {
+            if(ok && state.score >= cost) {
+                state.score -= cost;
+                state.tap_power++;
+                render();
+                saveData();
+            } else if (ok) {
+                tg.showAlert("Not enough credits!");
+            }
+        });
+    };
 
-    function createFlyText(x, y, txt) {
-        const el = document.createElement('div');
-        el.className = 'floating-text';
-        el.innerText = txt;
-        el.style.left = x + 'px'; el.style.top = y + 'px';
-        document.body.appendChild(el);
-        setTimeout(() => el.remove(), 800);
-    }
-
-    // Игровой цикл: начисление пассивного дохода и восстановление энергии
+    // Игровой цикл (1 сек)
     setInterval(() => {
-        state.energy = Math.min(state.max_energy, state.energy + 1.2); // Энергия растет
-        state.score += (state.pnl / 3600); // PNL в час -> в секунду
+        // Реген энергии +1.5 в сек
+        state.energy = Math.min(state.max_energy, state.energy + 1.5);
+        // Доход PNL
+        if(state.pnl > 0) {
+            state.score += (state.pnl / 3600);
+        }
         render();
     }, 1000);
 
-    // Автосохранение раз в 15 секунд
+    // Автосохранение (15 сек)
     setInterval(saveData, 15000);
 
-    // Запуск
     window.onload = init;
 
     // Закрытие модалок
-    document.getElementById('close-mine').onclick = () => document.getElementById('mine-modal').classList.remove('active');
-    document.getElementById('close-leaderboard').onclick = () => document.getElementById('leaderboard-modal').classList.remove('active');
-    document.getElementById('close-tasks').onclick = () => document.getElementById('tasks-modal').classList.remove('active');
-    document.getElementById('close-friends').onclick = () => document.getElementById('friends-modal').classList.remove('active');
+    const closeBtns = ['close-mine', 'close-leaderboard', 'close-tasks', 'close-friends'];
+    const modals = ['mine-modal', 'leaderboard-modal', 'tasks-modal', 'friends-modal'];
+    
+    closeBtns.forEach((btn, i) => {
+        document.getElementById(btn).onclick = () => document.getElementById(modals[i]).classList.remove('active');
+    });
 </script>
 </body>
 </html>
