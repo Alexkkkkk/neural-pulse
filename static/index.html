@@ -135,6 +135,18 @@
 <div id="leaderboard-modal" class="modal"><div class="close-modal" id="close-leaderboard">✖</div><h2 style="color: var(--neon-purp); margin-top: 40px; font-size: 18px;">TOP NEURAL AGENTS</h2><div class="card-list" id="leader-container"></div></div>
 <div id="tasks-modal" class="modal"><div class="close-modal" id="close-tasks">✖</div><h2 style="color: var(--neon-green); margin-top: 40px; font-size: 18px;">EARN CREDITS</h2><div class="card-list" id="tasks-container"></div></div>
 
+<div id="friends-modal" class="modal">
+    <div class="close-modal" id="close-friends">✖</div>
+    <h2 style="color: var(--neon-blue); margin-top: 40px; font-size: 18px;">INVITE FRIENDS</h2>
+    <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; text-align: center; width: 100%; box-sizing: border-box; border: 1px solid var(--neon-purp);">
+        <div style="font-size: 11px; margin-bottom: 10px; color: #aaa;">Your referral link:</div>
+        <div id="ref-link" style="font-size: 10px; color: var(--neon-green); word-break: break-all; margin-bottom: 15px;">loading...</div>
+        <button class="buy-btn" id="copy-ref" style="width: 100%;">COPY LINK</button>
+    </div>
+    <h3 style="font-size: 14px; margin-top: 20px;">Your Referrals:</h3>
+    <div class="card-list" id="friends-list-container"></div>
+</div>
+
 <div class="game-container" id="main-container">
     <div class="header-top">
         <div class="ai-icon-small"><img src="/static/images/logo.png?v=3.1" style="width:100%"></div>
@@ -224,46 +236,94 @@
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
         document.getElementById('pnl-display').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
         
-        // Уровень на основе очков
         const currentLvl = Math.floor(state.score / 50000) + 1;
         document.getElementById('display-level').innerText = `LVL ${currentLvl}`;
         state.level = currentLvl;
     }
 
-    // --- [СИСТЕМА ЗАДАНИЙ] ---
+    // --- [FRIENDS LOGIC] ---
+    document.getElementById('btn-friends').onclick = async () => {
+        const botUsername = 'UltraMind_AI_bot'; // Замените на имя своего бота
+        const refLink = `https://t.me/${botUsername}?start=${state.user_id}`;
+        document.getElementById('ref-link').innerText = refLink;
+        document.getElementById('friends-modal').classList.add('active');
+        
+        const container = document.getElementById('friends-list-container');
+        container.innerHTML = 'SCANNING NETWORK...';
+        
+        try {
+            const r = await fetch(`/api/friends/${state.user_id}`);
+            const res = await r.json();
+            container.innerHTML = '';
+            
+            if (!res.friends || res.friends.length === 0) {
+                container.innerHTML = '<div style="opacity:0.5; text-align:center; font-size:10px;">No nodes connected yet.</div>';
+            } else {
+                res.friends.forEach(f => {
+                    const div = document.createElement('div');
+                    div.className = 'mine-card';
+                    div.innerHTML = `<span>ID: ${f.user_id.slice(0,8)}</span> <b style="color:var(--neon-green)">+Bonus</b>`;
+                    container.appendChild(div);
+                });
+            }
+        } catch(e) { container.innerHTML = 'Error loading list.'; }
+    };
+
+    document.getElementById('copy-ref').onclick = () => {
+        const link = document.getElementById('ref-link').innerText;
+        const tempInput = document.createElement('input');
+        tempInput.value = link;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand('copy');
+        document.body.removeChild(tempInput);
+        tg.showAlert("Link copied to clipboard!");
+    };
+
+    // --- [BOOST LOGIC] ---
+    document.getElementById('btn-boost').onclick = () => {
+        const boostCost = 5000 * state.tap_power;
+        tg.showConfirm(`Upgrade Tap Power to ${state.tap_power + 1} for ${boostCost.toLocaleString()}?`, (ok) => {
+            if(ok) {
+                if(state.score >= boostCost) {
+                    state.score -= boostCost;
+                    state.tap_power += 1;
+                    render();
+                    saveData();
+                    tg.showAlert("System Upgraded!");
+                } else {
+                    tg.showAlert("Insufficient Credits!");
+                }
+            }
+        });
+    };
+
+    // --- [TASKS & MINE] ---
     document.getElementById('btn-tasks').onclick = async () => {
         const container = document.getElementById('tasks-container');
-        container.innerHTML = '<div style="text-align:center">SCANNING NETWORK...</div>';
+        container.innerHTML = 'SCANNING...';
         document.getElementById('tasks-modal').classList.add('active');
-
         try {
             const r = await fetch(`/api/tasks/${state.user_id}`);
             const res = await r.json();
             container.innerHTML = '';
-            
             res.tasks.forEach(task => {
                 const div = document.createElement('div');
                 div.className = 'mine-card';
-                const isDone = task.completed;
                 div.innerHTML = `
-                    <div>
-                        <div style="font-size:13px; font-weight:700">${task.name}</div>
-                        <div style="font-size:11px; color:var(--neon-green)">+${task.reward.toLocaleString()} NC</div>
-                    </div>
-                    <button class="buy-btn" ${isDone ? 'disabled' : ''} onclick="doTask('${task.id}', '${task.link}')">
-                        ${isDone ? 'DONE' : 'GO'}
-                    </button>
-                `;
+                    <div><b>${task.name}</b><br><small>+${task.reward} NC</small></div>
+                    <button class="buy-btn" ${task.completed ? 'disabled' : ''} onclick="doTask('${task.id}', '${task.link}')">
+                        ${task.completed ? 'DONE' : 'GO'}
+                    </button>`;
                 container.appendChild(div);
             });
-        } catch(e) { container.innerHTML = 'Error loading tasks.'; }
+        } catch(e) { container.innerHTML = 'Tasks unavailable.'; }
     };
 
     window.doTask = (id, link) => {
         if(link !== "#") tg.openLink(link);
-        
-        tg.showConfirm("Did you complete the task?", async (confirmed) => {
-            if(confirmed) {
+        tg.showConfirm("Task completed?", async (ok) => {
+            if(ok) {
                 const r = await fetch('/api/claim-task', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -271,18 +331,14 @@
                 });
                 const res = await r.json();
                 if(res.status === 'ok') {
-                    tg.showAlert("Reward granted!");
-                    if(res.new_balance) state.score = res.new_balance;
-                    render();
-                    document.getElementById('btn-tasks').click(); // Обновить список
-                } else {
-                    tg.showAlert(res.message);
-                }
+                    state.score = res.new_balance; render();
+                    document.getElementById('btn-tasks').click();
+                } else tg.showAlert(res.message);
             }
         });
     };
 
-    // --- [ОСТАЛЬНАЯ ЛОГИКА] ---
+    // --- [HELPERS] ---
     document.getElementById('score').onclick = async () => {
         const container = document.getElementById('leader-container');
         container.innerHTML = 'LOADING...';
@@ -306,8 +362,7 @@
             div.className = 'mine-card';
             div.innerHTML = `
                 <div>${card.icon} ${card.name}<br><small>+${card.pnl}/hr</small></div>
-                <button class="buy-btn" onclick="buyCard('${card.id}', ${card.cost}, ${card.pnl})">${card.cost.toLocaleString()}</button>
-            `;
+                <button class="buy-btn" onclick="buyCard('${card.id}', ${card.cost}, ${card.pnl})">${card.cost.toLocaleString()}</button>`;
             container.appendChild(div);
         });
         document.getElementById('mine-modal').classList.add('active');
@@ -345,19 +400,19 @@
         setTimeout(() => el.remove(), 800);
     }
 
-    // Фоновые процессы
     setInterval(() => {
         state.energy = Math.min(state.max_energy, state.energy + 1.5);
         state.score += (state.pnl / 3600);
         render();
     }, 1000);
 
-    setInterval(saveData, 15000); // Автосохранение раз в 15 сек
+    setInterval(saveData, 15000);
 
     window.onload = init;
     document.getElementById('close-mine').onclick = () => document.getElementById('mine-modal').classList.remove('active');
     document.getElementById('close-leaderboard').onclick = () => document.getElementById('leaderboard-modal').classList.remove('active');
     document.getElementById('close-tasks').onclick = () => document.getElementById('tasks-modal').classList.remove('active');
+    document.getElementById('close-friends').onclick = () => document.getElementById('friends-modal').classList.remove('active');
 </script>
 </body>
 </html>
