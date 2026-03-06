@@ -7,16 +7,22 @@ services:
     restart: always
     ports:
       - "3000:3000"
-    # Переменные окружения лучше брать из конфига хостинга, 
-    # но оставляем для локальных тестов
     env_file: .env
     volumes:
-      # Сохраняем базу данных, чтобы прогресс не удалялся при обновлении
+      # Монтируем корень проекта (опционально) или только базу и статику
+      # Важно: монтируем файл БД так, чтобы рядом могли создаваться -wal файлы
       - ./game.db:/app/game.db
-      # КОРРЕКТНЫЙ ПУТЬ: пробрасываем картинки из твоей папки static
       - ./static/images:/app/static/images
+      # Если планируешь делать бэкапы через скрипт в main.py
+      - ./backups:/app/backups
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10mb"
+        max-file: "3"
     networks:
       - bot_net
 
 networks:
   bot_net:
+    driver: bridge
