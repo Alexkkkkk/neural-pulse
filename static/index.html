@@ -54,7 +54,7 @@
         .league-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin-top: 4px; }
         #league-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--neon-purp), var(--neon-blue)); transition: 0.5s; }
 
-        #score { font-size: 48px; font-weight: 900; margin: 15px 0 5px; text-shadow: 0 0 20px var(--neon-blue); }
+        #score { font-size: 48px; font-weight: 900; margin: 15px 0 5px; text-shadow: 0 0 20px var(--neon-blue); cursor: pointer; }
         
         #ton-connect-wrapper { margin-bottom: 10px; transform: scale(0.85); }
 
@@ -90,7 +90,7 @@
         }
         
         .modal {
-            display: none; position: fixed; inset: 0; background: rgba(5, 10, 26, 0.95);
+            display: none; position: fixed; inset: 0; background: rgba(5, 10, 26, 0.98);
             z-index: 1000; padding: 20px; flex-direction: column; align-items: center;
         }
         .modal.active { display: flex; }
@@ -120,6 +120,13 @@
             0% { opacity: 1; transform: translateY(0) scale(1); } 
             100% { opacity: 0; transform: translateY(-120px) scale(1.2); } 
         }
+
+        /* Стиль для лидерборда */
+        .rank-badge {
+            width: 30px; height: 30px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 900; background: rgba(176, 38, 255, 0.2); border: 1px solid var(--neon-purp);
+        }
     </style>
 </head>
 <body>
@@ -133,6 +140,12 @@
     <div class="close-modal" id="close-mine">✖</div>
     <h2 style="color: var(--neon-blue); margin-top: 40px; font-size: 18px;">MINING RIGS</h2>
     <div class="card-list" id="card-container"></div>
+</div>
+
+<div id="leaderboard-modal" class="modal">
+    <div class="close-modal" id="close-leaderboard">✖</div>
+    <h2 style="color: var(--neon-purp); margin-top: 40px; font-size: 18px;">TOP NEURAL AGENTS</h2>
+    <div class="card-list" id="leader-container"></div>
 </div>
 
 <div class="game-container" id="main-container">
@@ -176,7 +189,6 @@
     const tg = window.Telegram.WebApp;
     tg.ready(); tg.expand();
 
-    // 1. Инициализация TON Connect
     const tonConnectUI = new TONConnectUI.TonConnectUI({
         manifestUrl: 'https://np.bothost.ru/static/tonconnect-manifest.json',
         buttonRootId: 'ton-connect-wrapper'
@@ -199,12 +211,10 @@
         {id: 'node_1', name: 'Pulse Node', cost: 25000, pnl: 1400, icon: '🖥️'}
     ];
 
-    // Отслеживание кошелька
     tonConnectUI.onStatusChange(wallet => {
         if (wallet) {
             state.wallet_address = wallet.account.address;
-            console.log("Wallet connected:", state.wallet_address);
-            saveData(); // Сразу сохраняем адрес в БД
+            saveData();
         } else {
             state.wallet_address = null;
         }
@@ -258,6 +268,43 @@
         document.getElementById('league-fill').style.width = Math.min(100, (state.score / (currentLeague.min + 50000) * 100)) + '%';
     }
 
+    // --- [ЛИДЕРБОРД LOGIC] ---
+    async function openLeaderboard() {
+        const container = document.getElementById('leader-container');
+        container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--neon-blue)">FETCHING NEURAL DATA...</div>';
+        document.getElementById('leaderboard-modal').classList.add('active');
+
+        try {
+            const r = await fetch('/api/leaderboard');
+            const res = await r.json();
+            
+            container.innerHTML = '';
+            res.leaders.forEach(user => {
+                const isMe = String(user.user_id) === String(state.user_id);
+                const div = document.createElement('div');
+                div.className = 'mine-card';
+                if(isMe) div.style.border = '1px solid var(--neon-purp)';
+                
+                div.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:12px">
+                        <div class="rank-badge">${user.rank}</div>
+                        <div>
+                            <div style="font-size:12px; font-weight:700">${isMe ? 'YOU' : 'ID: ' + user.user_id.slice(0,8)+'...'}</div>
+                            <div style="font-size:10px; color:gray">LVL ${user.level}</div>
+                        </div>
+                    </div>
+                    <div style="font-weight:900; color:var(--neon-green)">${Math.floor(user.score).toLocaleString()}</div>
+                `;
+                container.appendChild(div);
+            });
+        } catch(e) {
+            container.innerHTML = '<div style="color:red">ERROR LOADING DATA</div>';
+        }
+    }
+    document.getElementById('score').onclick = openLeaderboard;
+    document.getElementById('close-leaderboard').onclick = () => document.getElementById('leaderboard-modal').classList.remove('active');
+
+    // --- [TAP & GAMEPLAY] ---
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
         if(state.energy < state.tap_power) {
@@ -267,7 +314,6 @@
         state.score += state.tap_power;
         state.energy -= state.tap_power;
         
-        // Мультитач поддержка
         for (let i = 0; i < e.changedTouches.length; i++) {
             createFlyText(e.changedTouches[i].clientX, e.changedTouches[i].clientY, `+${state.tap_power}`);
         }
@@ -293,60 +339,29 @@
         });
     }
 
-    // --- [WEB3: ПЛАТЕЖ С ПРАВИЛЬНЫМ PAYLOAD] ---
     document.getElementById('btn-boost').onclick = async () => {
         if (!tonConnectUI.connected) {
             tg.showAlert("Сначала подключи кошелек!");
             return;
         }
-
         tg.showConfirm("Восстановить энергию за 0.1 TON?", async (ok) => {
             if(!ok) return;
-
-            // Сначала сохраним текущий прогресс
             await saveData();
-
-            // Формируем комментарий, который поймет бэкенд (ref_ID)
-            const comment = `ref_${state.user_id}`;
-
-            const transaction = {
-                validUntil: Math.floor(Date.now() / 1000) + 300,
-                messages: [
-                    {
-                        address: "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI",
-                        amount: "100000000", // 0.1 TON в нанотонах
-                        // Важно: для текстового комментария в TON используется специальный префикс 00000000
-                        payload: "te6ccgEBAQEADgAAGE5VUlBVTFNFX0JPT1NUvS69sA==" // Это пример Cell с текстом, ниже сделаем проще через URL если UI не сработает
-                    }
-                ]
-            };
-
             try {
-                // Более надежный способ отправки комментария через TON Connect UI
-                // Если ты хочешь просто текст, UI сам его закодирует, если передать в правильном формате
-                // Но проще всего использовать наш эндпоинт для параметров
                 const paramsReq = await fetch(`/api/payment-params/${state.user_id}`);
                 const params = await paramsReq.json();
-
+                tg.showAlert(`ВАЖНО: В комментарии к платежу укажите: ${params.comment}`);
+                
                 const tx = {
                     validUntil: Math.floor(Date.now() / 1000) + 600,
                     messages: [{
                         address: params.address,
                         amount: (params.boost_price * 1e9).toString(),
-                        payload: "" // Оставляем пустым, пользователь введет комментарий params.comment или используем deep link
+                        payload: "" 
                     }]
                 };
-
-                // ВНИМАНИЕ: Чтобы не мучаться с Cell на фронте, 
-                // мы просто просим пользователя подтвердить транзакцию.
-                // Самый надежный метод - показать пользователю что вписать в коммент.
-                
-                tg.showAlert(`ВАЖНО: В комментарии к платежу ОБЯЗАТЕЛЬНО укажите: ${params.comment}`);
-                
-                const result = await tonConnectUI.sendTransaction(tx);
-                
+                await tonConnectUI.sendTransaction(tx);
                 tg.showProgress();
-                // Ждем 5 секунд пока блокчейн увидит транзакцию
                 setTimeout(async () => {
                     const check = await fetch('/api/verify-payment', {
                         method: 'POST',
@@ -361,11 +376,7 @@
                         render();
                     }
                 }, 7000);
-
-            } catch(e) { 
-                console.error(e);
-                tg.showAlert("Ошибка или отмена транзакции"); 
-            }
+            } catch(e) { tg.showAlert("Ошибка транзакции"); }
         });
     };
 
@@ -389,10 +400,7 @@
     };
 
     window.buyCard = (id, cost, pnl) => {
-        if(state.score < cost) { 
-            tg.showAlert("Недостаточно Neural Credits!"); 
-            return; 
-        }
+        if(state.score < cost) { tg.showAlert("Недостаточно Neural Credits!"); return; }
         state.score -= cost;
         state.pnl += pnl;
         render();
@@ -407,22 +415,12 @@
         tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Забирай 5000 бонусов в Neural Pulse! 🧠⚡`);
     };
 
-    // Автосохранение каждые 10 сек
-    setInterval(() => {
-        if (!document.hidden) saveData();
-    }, 10000);
+    setInterval(() => { if (!document.hidden) saveData(); }, 10000);
 
-    // Логика заработка и восстановления энергии в секунду
     setInterval(() => {
         let changed = false;
-        if(state.energy < state.max_energy) { 
-            state.energy = Math.min(state.max_energy, state.energy + 1.2); 
-            changed = true; 
-        }
-        if(state.pnl > 0) { 
-            state.score += (state.pnl / 3600); 
-            changed = true; 
-        }
+        if(state.energy < state.max_energy) { state.energy = Math.min(state.max_energy, state.energy + 1.2); changed = true; }
+        if(state.pnl > 0) { state.score += (state.pnl / 3600); changed = true; }
         if(changed) render();
     }, 1000);
 
