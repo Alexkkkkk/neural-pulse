@@ -14,11 +14,11 @@
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-        /* СКРЫВАЕМ ВСЁ ПО УМОЛЧАНИЮ */
         body { 
             margin: 0; background: var(--bg); font-family: 'Orbitron', sans-serif; 
             color: white; overflow: hidden; touch-action: none; user-select: none;
-            display: none; /* Бот не покажется, пока данные не загрузятся */
+            /* Начальное состояние: скрыто и прозрачно для плавности */
+            display: none; opacity: 0; transition: opacity 0.4s ease-in;
         }
 
         .game-content { 
@@ -26,13 +26,14 @@
             height: 100vh; width: 100%; max-width: 500px; margin: 0 auto; padding: 20px;
         }
 
-        /* Дизайн шапки */
         .top-info { width: 100%; display: flex; align-items: center; gap: 12px; margin-bottom: 15px; }
         .mini-logo { 
             width: 45px; height: 45px; border: 2px solid var(--neon-purp); 
             border-radius: 12px; display: flex; align-items: center; justify-content: center; 
             font-size: 20px; background: rgba(176, 38, 255, 0.1);
+            box-shadow: 0 0 15px rgba(176, 38, 255, 0.3);
         }
+        
         .league-info { flex-grow: 1; }
         .league-header { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 6px; letter-spacing: 1px; }
         .progress-container { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; }
@@ -44,38 +45,39 @@
         }
         .jackpot-value { font-size: 26px; font-weight: 900; text-shadow: 0 0 15px var(--neon-blue); }
 
-        #main-balance { font-size: 44px; font-weight: 900; margin-bottom: 2px; }
-        #pnl-info { color: var(--neon-green); font-size: 12px; margin-bottom: 15px; font-weight: 700; }
+        #main-balance { font-size: 48px; font-weight: 900; margin-bottom: 2px; }
+        #pnl-info { color: var(--neon-green); font-size: 12px; margin-bottom: 15px; font-weight: 700; text-shadow: 0 0 5px var(--neon-green); }
 
-        /* Кнопка тапа и боковые кнопки */
         .tap-area { position: relative; flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
         .main-circle {
-            width: 270px; height: 270px; border-radius: 50%;
+            width: 280px; height: 280px; border-radius: 50%;
             background: radial-gradient(circle, #1e1e3f 0%, #050a1a 100%);
-            border: 4px solid var(--neon-purp); box-shadow: 0 0 40px rgba(176, 38, 255, 0.3);
+            border: 4px solid var(--neon-purp); box-shadow: 0 0 50px rgba(176, 38, 255, 0.4);
             display: flex; align-items: center; justify-content: center; 
-            font-size: 100px; cursor: pointer; transition: transform 0.05s;
+            font-size: 110px; cursor: pointer; transition: transform 0.05s;
+            position: relative; z-index: 2;
         }
-        .main-circle:active { transform: scale(0.92); }
+        .main-circle:active { transform: scale(0.94); }
         .main-circle::after { content: '🧠'; }
 
-        .side-buttons { position: absolute; right: -5px; display: flex; flex-direction: column; gap: 12px; }
+        .side-buttons { position: absolute; right: -5px; display: flex; flex-direction: column; gap: 12px; z-index: 3; }
         .side-btn {
-            background: rgba(5, 10, 26, 0.9); border: 1px solid var(--neon-blue);
-            border-radius: 12px; padding: 10px; font-size: 9px; color: white;
+            background: rgba(5, 10, 26, 0.95); border: 1.5px solid var(--neon-blue);
+            border-radius: 12px; padding: 12px 5px; font-size: 10px; color: white;
             text-transform: uppercase; width: 85px; text-align: center; font-weight: 700;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
 
         .energy-section { width: 100%; margin-top: 15px; }
-        .energy-stats { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; font-weight: 700; }
-        .energy-bar { width: 100%; height: 12px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; border: 1px solid var(--neon-blue); }
+        .energy-stats { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; font-weight: 700; }
+        .energy-bar { width: 100%; height: 14px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; border: 1px solid var(--neon-blue); }
         #energy-fill { height: 100%; background: linear-gradient(90deg, var(--neon-blue), var(--neon-green)); transition: 0.1s; }
 
         .bottom-menu { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 20px; }
-        .menu-item { background: rgba(255,255,255,0.03); border-radius: 16px; padding: 14px; text-align: center; font-size: 11px; border: 1px solid rgba(255,255,255,0.08); font-weight: 700; }
+        .menu-item { background: rgba(255,255,255,0.03); border-radius: 16px; padding: 15px; text-align: center; font-size: 11px; border: 1px solid rgba(255,255,255,0.1); font-weight: 700; }
 
-        .floating-text { position: absolute; pointer-events: none; font-weight: 900; font-size: 32px; color: white; animation: floatUp 0.6s forwards; z-index: 100; }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
+        .floating-text { position: absolute; pointer-events: none; font-weight: 900; font-size: 35px; color: white; animation: floatUp 0.6s ease-out forwards; z-index: 100; text-shadow: 0 0 10px var(--neon-blue); }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.2); } }
     </style>
 </head>
 <body>
@@ -90,7 +92,7 @@
     </div>
 
     <div class="jackpot-card">
-        <div style="font-size: 9px; color: var(--neon-blue); letter-spacing: 2px;">GLOBAL JACKPOT</div>
+        <div style="font-size: 9px; color: var(--neon-blue); letter-spacing: 2px; font-weight: 900;">GLOBAL JACKPOT</div>
         <div class="jackpot-value" id="jackpot">500,052</div>
     </div>
 
@@ -100,9 +102,9 @@
     <div class="tap-area">
         <div class="main-circle" id="tap-btn"></div>
         <div class="side-buttons">
-            <div class="side-btn">INVITE</div>
-            <div class="side-btn">TASKS</div>
-            <div class="side-btn">WALLET</div>
+            <div class="side-btn" onclick="tg.HapticFeedback.impactOccurred('light')">INVITE</div>
+            <div class="side-btn" onclick="tg.HapticFeedback.impactOccurred('light')">TASKS</div>
+            <div class="side-btn" style="border-color: #ffaa00;">WALLET</div>
         </div>
     </div>
 
@@ -123,29 +125,36 @@
     tg.ready();
     tg.expand();
 
+    // Параметры для Super Maximal Sync
+    const USER_ID = String(tg.initDataUnsafe?.user?.id || '476014374');
+    const START_PARAM = tg.initDataUnsafe?.start_param || '';
+
     let state = {
         score: 0, energy: 1000, max_energy: 1000, tap_power: 1, pnl: 0, level: 1,
-        user_id: String(tg.initDataUnsafe?.user?.id || '476014374')
+        user_id: USER_ID
     };
 
-    // ФУНКЦИЯ ЗАПУСКА
     async function initGame() {
         try {
-            const response = await fetch(`/api/balance/${state.user_id}?t=${Date.now()}`);
-            const result = await response.json();
+            // Передаем реферальный код в запросе
+            const response = await fetch(`/api/balance/${USER_ID}?ref=${START_PARAM}&t=${Date.now()}`);
             
-            if(result.status === 'ok') {
-                state = {...state, ...result.data};
-                updateUI();
-                // ПОКАЗЫВАЕМ БОТА ТОЛЬКО ЗДЕСЬ
-                document.body.style.display = 'block';
-            } else {
-                // Если сервер не ответил "ok", пробуем еще раз через секунду
-                setTimeout(initGame, 1000);
+            if (response.status === 200) {
+                const result = await response.json();
+                if(result.status === 'ok') {
+                    state = {...state, ...result.data};
+                    updateUI();
+                    
+                    // Швейцарское проявление интерфейса
+                    document.body.style.display = 'block';
+                    setTimeout(() => { document.body.style.opacity = '1'; }, 50);
+                    return;
+                }
             }
-        } catch(e) {
-            // Если сервер еще не запущен (ошибка сети), ждем и пробуем снова
+            // Если сервер грузится (503) или ошибка — повторяем
             setTimeout(initGame, 1000);
+        } catch(e) {
+            setTimeout(initGame, 1500);
         }
     }
 
@@ -155,35 +164,69 @@
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
         document.getElementById('pnl-info').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
         document.getElementById('user-lvl').innerText = `LVL ${state.level}`;
-        document.getElementById('progress-fill').style.width = (state.score % 100000 / 1000) + '%';
+        
+        // Лиги: каждые 100к очков — новый уровень прогресс-бара
+        const leagueProgress = (state.score % 100000) / 1000;
+        document.getElementById('progress-fill').style.width = leagueProgress + '%';
+        
+        // Живой джекпот
+        const jkp = 500052 + (Math.random() * 50);
+        document.getElementById('jackpot').innerText = Math.floor(jkp).toLocaleString();
     }
 
+    // Обработка тапа с мультитачем и анимацией цифр
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
-        if(state.energy < state.tap_power) return;
-        state.score += state.tap_power;
-        state.energy -= state.tap_power;
+        const touches = e.changedTouches;
+        
+        for(let i=0; i < touches.length; i++) {
+            if(state.energy < state.tap_power) break;
+            
+            state.score += state.tap_power;
+            state.energy -= state.tap_power;
+            
+            // Создаем вылетающую цифру
+            const x = touches[i].clientX;
+            const y = touches[i].clientY;
+            createFloatingText(x, y, `+${state.tap_power}`);
+            
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+        }
         updateUI();
-        if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
     });
 
+    function createFloatingText(x, y, text) {
+        const el = document.createElement('div');
+        el.className = 'floating-text';
+        el.innerText = text;
+        el.style.left = `${x - 20}px`;
+        el.style.top = `${y - 40}px`;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 600);
+    }
+
+    // Авто-сохранение (раз в 15 сек)
     setInterval(async () => {
-        if(document.body.style.display === 'block') {
-            fetch('/api/save', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(state)
-            });
+        if(document.body.style.opacity === '1') {
+            try {
+                await fetch('/api/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(state)
+                });
+            } catch(e) { console.error("Sync error"); }
         }
     }, 15000);
 
+    // Внутренняя регенерация и доход
     setInterval(() => {
-        state.energy = Math.min(state.max_energy, state.energy + 0.015);
-        if(state.pnl > 0) state.score += (state.pnl / 360000);
-        updateUI();
+        if(document.body.style.opacity === '1') {
+            state.energy = Math.min(state.max_energy, state.energy + (1.5 / 100)); // +1.5 в сек
+            if(state.pnl > 0) state.score += (state.pnl / 360000); 
+            updateUI();
+        }
     }, 10);
 
-    // Запускаем проверку готовности
     window.onload = initGame;
 </script>
 </body>
