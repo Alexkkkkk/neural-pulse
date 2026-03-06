@@ -11,9 +11,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict
 
 # --- [ЛОГИРОВАНИЕ] ---
+# Настроено так, чтобы в консоли Bothost всё было красиво и понятно
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s",
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 logger = logging.getLogger("NeuralPulse")
@@ -41,14 +42,19 @@ class SaveData(BaseModel):
     wallet_address: Optional[str] = None
     model_config = ConfigDict(extra='allow')
 
-# --- [БАЗА ДАННЫХ] ---
+# --- [БАЗА ДАННЫХ И СИНХРОНИЗАЦИЯ] ---
 async def batch_db_update():
-    """Фоновое сохранение кэша в БД каждые 15 секунд"""
+    """Фоновое сохранение кэша в БД каждые 15 секунд с полной проверкой"""
+    logger.info("🛠️ [DB_WORKER] Фоновый процесс сохранения запущен.")
     while True:
         await asyncio.sleep(15)
-        if not USER_CACHE or not db_conn: continue
+        if not USER_CACHE or not db_conn:
+            continue
+            
+        start_time = time.time()
         try:
             users_to_update = []
+            # Работаем с копией кэша, чтобы не блокировать основной поток
             current_cache = list(USER_CACHE.items())
             
             for uid, entry in current_cache:
@@ -82,35 +88,47 @@ async def batch_db_update():
                         last_active=excluded.last_active
                 """, users_to_update)
                 await db_conn.commit()
-                logger.info(f"💾 [DB_SYNC] Синхронизировано юзеров: {len(users_to_update)}")
+                duration = round(time.time() - start_time, 3)
+                logger.info(f"💾 [DB_SYNC] Успех! Обновлено: {len(users_to_update)} юзеров за {duration} сек.")
+            
+            # Очистка памяти: удаляем юзеров, которые не заходили более 2 часов
+            limit = time.time() - 7200
+            inactive = [uid for uid, entry in current_cache if entry.get("last_seen", 0) < limit]
+            for uid in inactive:
+                del USER_CACHE[uid]
+            if inactive: logger.info(f"🧹 [CLEANUP] Удалено из памяти {len(inactive)} неактивных сессий.")
+
         except Exception as e:
-            logger.error(f"❌ [DB_ERROR] Ошибка записи: {e}")
+            logger.error(f"❌ [DB_ERROR] Критическая ошибка записи: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_conn
-    app.state.ready = False # Изначально сервер не готов
-    logger.info("🚀 [INIT] Запуск Neural Pulse Server...")
+    app.state.ready = False 
+    logger.info("🚀 [INIT] Запуск Neural Pulse Core...")
     
-    # 1. Подключение БД
-    db_conn = await aiosqlite.connect(DB_PATH)
-    await db_conn.execute("PRAGMA journal_mode=WAL")
-    await db_conn.executescript("""
-        CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY, balance REAL, click_lvl INTEGER, 
-            energy REAL, max_energy INTEGER, pnl REAL, 
-            level INTEGER, wallet_address TEXT, last_active INTEGER
-        );
-        CREATE TABLE IF NOT EXISTS referrals (
-            referrer_id TEXT, friend_id TEXT, bonus_given INTEGER DEFAULT 0,
-            PRIMARY KEY (referrer_id, friend_id)
-        );
-    """)
-    await db_conn.commit()
-    logger.info("📡 [DB] База данных готова")
-    
-    # 2. Запуск бота
     try:
+        # 1. Подключение БД с оптимизацией под Bothost (SQLite)
+        db_conn = await aiosqlite.connect(DB_PATH)
+        # WAL режим позволяет читать базу во время записи
+        await db_conn.execute("PRAGMA journal_mode=WAL")
+        await db_conn.execute("PRAGMA synchronous=NORMAL")
+        
+        await db_conn.executescript("""
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY, balance REAL, click_lvl INTEGER, 
+                energy REAL, max_energy INTEGER, pnl REAL, 
+                level INTEGER, wallet_address TEXT, last_active INTEGER
+            );
+            CREATE TABLE IF NOT EXISTS referrals (
+                referrer_id TEXT, friend_id TEXT, bonus_given INTEGER DEFAULT 0,
+                PRIMARY KEY (referrer_id, friend_id)
+            );
+        """)
+        await db_conn.commit()
+        logger.info("📡 [DB] База данных готова и оптимизирована (WAL Mode ON)")
+        
+        # 2. Запуск бота через aiogram
         from aiogram import Bot, Dispatcher, types
         from aiogram.filters import Command, CommandObject
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
@@ -119,27 +137,30 @@ async def lifespan(app: FastAPI):
         dp = Dispatcher()
         
         @dp.message(Command("start"))
-        async def start(m: types.Message, command: CommandObject):
+        async def start_cmd(m: types.Message, command: CommandObject):
             ref_id = command.args if command.args else ""
             url = f"{WEB_APP_URL}/?tgWebAppStartParam={ref_id}" if ref_id else WEB_APP_URL
             kb = InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="Играть 🧠", web_app=WebAppInfo(url=url))
             ]])
-            await m.answer(f"<b>Neural Pulse Online</b>\nДобро пожаловать, {m.from_user.first_name}!", reply_markup=kb, parse_mode="HTML")
+            await m.answer(f"<b>Neural Pulse Online</b>\nДобро пожаловать, {m.from_user.first_name}!\nТвой мозг — твой капитал.", reply_markup=kb, parse_mode="HTML")
+            logger.info(f"🤖 [TG] Команда /start от {m.from_user.id} (ref: {ref_id})")
             
         asyncio.create_task(dp.start_polling(bot))
-        logger.info("✅ [TG_BOT] Бот активен")
-    except Exception as e:
-        logger.error(f"❌ [TG_ERROR] Ошибка запуска бота: {e}")
+        logger.info("✅ [TG_BOT] Бот активен и слушает сообщения")
 
-    # 3. Запуск фоновых задач
-    asyncio.create_task(batch_db_update())
-    
-    # ФИНАЛ: Ставим флаг готовности
-    app.state.ready = True
-    logger.info("🌟 [SERVER] Все системы загружены и запущены!")
+        # 3. Запуск фоновых задач
+        asyncio.create_task(batch_db_update())
+        
+        app.state.ready = True
+        logger.info("🌟 [SERVER] Все системы в норме. ПРИЕМ ТРАФИКА РАЗРЕШЕН.")
+        
+    except Exception as e:
+        logger.critical(f"💥 [FATAL_ERROR] Ошибка инициализации: {e}")
+        app.state.ready = False
     
     yield
+    logger.info("🛑 [SHUTDOWN] Остановка сервера...")
     if db_conn: await db_conn.close()
 
 app = FastAPI(lifespan=lifespan)
@@ -149,22 +170,24 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 @app.get("/api/health")
 async def health_check():
-    """Проверка готовности сервера для фронтенда"""
+    """Синхронизация с Docker HEALTHCHECK"""
     if getattr(app.state, "ready", False):
-        return {"status": "ready"}
+        return {"status": "ready", "timestamp": time.time()}
     return JSONResponse({"status": "starting"}, status_code=503)
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str, ref: Optional[str] = None):
     if not getattr(app.state, "ready", False):
-        return JSONResponse({"status": "server_not_ready"}, status_code=503)
+        return JSONResponse({"status": "error", "msg": "core_booting"}, status_code=503)
 
     uid = str(user_id)
     now = int(time.time())
 
+    # 1. Проверка в кэше
     if uid in USER_CACHE:
         return {"status": "ok", "data": USER_CACHE[uid]["data"]}
     
+    # 2. Загрузка из БД
     db_conn.row_factory = aiosqlite.Row
     async with db_conn.execute("SELECT * FROM users WHERE id = ?", (uid,)) as cur:
         row = await cur.fetchone()
@@ -181,17 +204,19 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
             "wallet_address": data["wallet_address"]
         }
         
-        # Начисление офлайн дохода
+        # Начисление офлайн дохода (PRO логика)
         if data.get('last_active'):
             passed = now - data['last_active']
-            if passed > 0:
+            if passed > 0 and frontend_data['pnl'] > 0:
                 income = (frontend_data['pnl'] / 3600) * passed
                 frontend_data['score'] += income
+                logger.info(f"💰 [ECONOMY] Юзер {uid} получил {round(income, 2)} за простой.")
                 
         USER_CACHE[uid] = {"data": frontend_data, "last_seen": now}
         return {"status": "ok", "data": frontend_data}
     
-    # Новый юзер
+    # 3. Регистрация нового юзера
+    logger.info(f"🆕 [USER] Регистрация нового агента: {uid}")
     start_bal = 0.0
     if ref and ref != uid:
         async with db_conn.execute("SELECT id FROM users WHERE id = ?", (ref,)) as c:
@@ -200,6 +225,7 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
                 await db_conn.execute("INSERT OR IGNORE INTO referrals (referrer_id, friend_id, bonus_given) VALUES (?, ?, 1)", (ref, uid))
                 start_bal = 5000.0
                 await db_conn.commit()
+                logger.info(f"🎁 [REF] {ref} пригласил {uid}. Бонусы начислены.")
 
     new_user = {
         "score": start_bal, "tap_power": 1, "energy": 1000.0, 
@@ -211,6 +237,7 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
 @app.post("/api/save")
 async def save(data: SaveData):
     uid = str(data.user_id)
+    # Быстрое обновление в памяти
     USER_CACHE[uid] = {"data": data.model_dump(), "last_seen": time.time()}
     return {"status": "ok"}
 
@@ -224,9 +251,12 @@ async def serve_index():
 async def get_manifest():
     return FileResponse(STATIC_DIR / "tonconnect-manifest.json")
 
-# Монтируем статику ПОСЛЕ основных маршрутов
+# Монтируем статику ПОСЛЕ всех API маршрутов
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    logger.info(f"📁 [STATIC] Папка /static успешно подключена")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+    # Запуск через uvicorn с настройками для Bothost
+    logger.info("⚙️ [STARTUP] Запуск uvicorn сервера...")
+    uvicorn.run(app, host="0.0.0.0", port=3000, log_config=None)
