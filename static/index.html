@@ -11,17 +11,18 @@
             --neon-blue: #00d4ff; --neon-purp: #b026ff; --neon-green: #00ffcc; 
             --bg: #050a1a;
         }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
 
         body { 
             margin: 0; background: var(--bg); font-family: 'Orbitron', sans-serif; 
-            color: white; overflow: hidden; touch-action: none; user-select: none;
-            opacity: 0; transition: opacity 0.2s ease-in;
+            color: white; overflow: hidden; touch-action: none;
+            opacity: 0; transition: opacity 0.3s ease-in;
         }
 
         .game-content { 
             display: flex; flex-direction: column; align-items: center; 
             height: 100vh; width: 100%; max-width: 500px; margin: 0 auto; padding: 20px;
+            padding-top: env(safe-area-inset-top);
         }
 
         /* Шапка */
@@ -42,7 +43,7 @@
         }
         .jackpot-value { font-size: 26px; font-weight: 900; text-shadow: 0 0 15px var(--neon-blue); }
 
-        #main-balance { font-size: 48px; font-weight: 900; margin-bottom: 2px; }
+        #main-balance { font-size: 48px; font-weight: 900; margin-bottom: 2px; letter-spacing: -1px; }
         #pnl-info { color: var(--neon-green); font-size: 12px; margin-bottom: 15px; font-weight: 700; }
 
         .tap-area { position: relative; flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
@@ -66,13 +67,13 @@
         .energy-section { width: 100%; margin-top: 15px; }
         .energy-stats { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; font-weight: 700; }
         .energy-bar { width: 100%; height: 14px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; border: 1px solid var(--neon-blue); }
-        #energy-fill { height: 100%; background: linear-gradient(90deg, var(--neon-blue), var(--neon-green)); }
+        #energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--neon-blue), var(--neon-green)); transition: width 0.1s linear; }
 
-        .bottom-menu { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 20px; }
+        .bottom-menu { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 20px; padding-bottom: env(safe-area-inset-bottom); }
         .menu-item { background: rgba(255,255,255,0.03); border-radius: 16px; padding: 15px; text-align: center; font-size: 11px; border: 1px solid rgba(255,255,255,0.1); font-weight: 700; }
 
-        .floating-text { position: absolute; pointer-events: none; font-weight: 900; font-size: 35px; color: white; animation: floatUp 0.6s ease-out forwards; z-index: 100; }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.2); } }
+        .floating-text { position: absolute; pointer-events: none; font-weight: 900; font-size: 32px; color: white; animation: floatUp 0.6s ease-out forwards; z-index: 100; text-shadow: 0 0 10px var(--neon-blue); }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.3); } }
     </style>
 </head>
 <body>
@@ -116,50 +117,45 @@
 </div>
 
 <script>
-    // --- [СИСТЕМА ЛОГИРОВАНИЯ ДЛЯ BOTHOST] ---
     const tg = window.Telegram.WebApp;
     const USER_ID = String(tg.initDataUnsafe?.user?.id || 'TEST_USER');
     const START_PARAM = tg.initDataUnsafe?.start_param || '';
 
+    // Логирование на Bothost
     async function logToServer(msg, type = "INFO") {
         try {
-            await fetch('/api/log', {
+            fetch('/api/log', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ user_id: USER_ID, error: `[${type}] ${msg}` })
             });
-        } catch(e) { console.warn("Log failed"); }
+        } catch(e) {}
     }
 
-    window.onerror = (m, s, l, c, e) => {
-        logToServer(`JS_ERROR: ${m} at ${s}:${l}`, "ERROR");
-        return false;
-    };
-
-    window.onunhandledrejection = (e) => {
-        logToServer(`PROMISE_REJECT: ${e.reason}`, "CRITICAL");
-    };
-
-    // --- [ОСНОВНАЯ ЛОГИКА ИГРЫ] ---
     tg.ready();
     tg.expand();
     tg.setHeaderColor('#050a1a');
+    document.body.style.opacity = '1';
 
-    const cache = JSON.parse(localStorage.getItem('np_state') || '{}');
-
+    // Состояние игры
     let state = {
-        score: cache.score || 0,
-        energy: cache.energy || 1000,
-        max_energy: cache.max_energy || 1000,
-        tap_power: cache.tap_power || 1,
-        pnl: cache.pnl || 0,
-        level: cache.level || 1,
+        score: 0,
+        energy: 1000,
+        max_energy: 1000,
+        tap_power: 1,
+        pnl: 0,
+        level: 1,
         user_id: USER_ID
     };
 
-    document.body.style.opacity = '1';
-    updateUI();
+    // Загрузка локального кеша (для мгновенного старта)
+    const localData = localStorage.getItem('np_state');
+    if (localData) {
+        state = {...state, ...JSON.parse(localData)};
+        updateUI();
+    }
 
+    // Синхронизация с сервера
     async function syncWithServer() {
         try {
             const response = await fetch(`/api/balance/${USER_ID}?ref=${START_PARAM}&t=${Date.now()}`);
@@ -167,15 +163,11 @@
                 const result = await response.json();
                 if(result.status === 'ok') {
                     state = {...state, ...result.data};
-                    saveToLocal();
                     updateUI();
+                    saveToLocal();
                 }
-            } else {
-                logToServer(`Sync failed: status ${response.status}`, "WARN");
             }
-        } catch(e) { 
-            logToServer(`Sync error: ${e.message}`, "ERROR");
-        }
+        } catch(e) { logToServer("Sync error: " + e.message, "ERROR"); }
     }
 
     function saveToLocal() {
@@ -188,47 +180,67 @@
         document.getElementById('energy-fill').style.width = (state.energy / state.max_energy * 100) + '%';
         document.getElementById('pnl-info').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
         document.getElementById('user-lvl').innerText = `LVL ${state.level}`;
-        document.getElementById('progress-fill').style.width = ((state.score % 100000) / 1000) + '%';
-        document.getElementById('jackpot').innerText = (500052 + Math.floor(Math.random() * 50)).toLocaleString();
+        
+        // Прогресс до следующего уровня (пример: каждые 100к монет)
+        const progress = (state.score % 100000) / 1000;
+        document.getElementById('progress-fill').style.width = Math.min(progress, 100) + '%';
+        
+        // Фейковый джекпот
+        document.getElementById('jackpot').innerText = (500052 + Math.floor(Date.now()/1000000)).toLocaleString();
     }
 
+    // Обработка тапов (мультитач)
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
         const touches = e.changedTouches;
+        
         for(let i=0; i < touches.length; i++) {
-            if(state.energy < state.tap_power) break;
-            state.score += state.tap_power;
-            state.energy -= state.tap_power;
-            createFloatingText(touches[i].clientX, touches[i].clientY, `+${state.tap_power}`);
+            if(state.energy >= state.tap_power) {
+                state.score += state.tap_power;
+                state.energy -= state.tap_power;
+                createFloatingText(touches[i].clientX, touches[i].clientY, `+${state.tap_power}`);
+            }
         }
+        
         updateUI();
         saveToLocal();
-        if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+        if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
     });
 
     function createFloatingText(x, y, text) {
         const el = document.createElement('div');
         el.className = 'floating-text';
         el.innerText = text;
-        el.style.left = `${x - 20}px`; el.style.top = `${y - 40}px`;
+        el.style.left = `${x - 20}px`; 
+        el.style.top = `${y - 40}px`;
         document.body.appendChild(el);
         setTimeout(() => el.remove(), 600);
     }
 
+    // Регенерация энергии и пассивный доход (каждые 100мс)
     setInterval(() => {
-        state.energy = Math.min(state.max_energy, state.energy + 0.15);
-        if(state.pnl > 0) state.score += (state.pnl / 36000); 
-        updateUI();
+        let changed = false;
+        if (state.energy < state.max_energy) {
+            state.energy = Math.min(state.max_energy, state.energy + 0.1); // +1 в сек
+            changed = true;
+        }
+        if (state.pnl > 0) {
+            state.score += (state.pnl / 36000); // доход в 100мс
+            changed = true;
+        }
+        if (changed) updateUI();
     }, 100);
 
+    // Автосохранение на сервер (раз в 15 сек)
     setInterval(() => {
         fetch('/api/save', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(state)
-        }).catch(e => logToServer(`Auto-save failed: ${e.message}`, "ERROR"));
+        }).catch(() => {});
     }, 15000);
 
+    // Начальная синхронизация
     syncWithServer();
 </script>
 </body>
