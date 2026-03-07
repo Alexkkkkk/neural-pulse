@@ -1,9 +1,9 @@
-import os, asyncio, logging, time, sys, uuid
+import os, asyncio, logging, time, sys, uuid, json
 import aiosqlite, uvicorn, aioredis
 from pathlib import Path
 from contextlib import asynccontextmanager
-from typing import Optional, Dict
-from fastapi import FastAPI, Request
+from typing import Optional, Dict, List
+from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from aiogram import Bot, Dispatcher, types
@@ -17,17 +17,22 @@ STATIC_DIR = BASE_DIR / "static"
 API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM"
 WEB_APP_URL = "https://np.bothost.ru" 
 REDIS_URL = "redis://localhost:6379"
+ADMIN_ID = 476014374 # Твой ID для спец-команд
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(message)s")
-logger = logging.getLogger("NP_PRO_ULTRA")
+logger = logging.getLogger("NP_ULTRA_CORE")
 
+# Кэш и Глобальные переменные
 USER_CACHE = {}
 LAST_SAVE = {}
 db_conn = None
 redis = None
+bot = Bot(token=API_TOKEN)
 
-# --- [DB WORKER - HIGHLOAD READY] ---
+# --- [ФОНОВЫЕ ЗАДАЧИ] ---
+
 async def db_syncer():
+    """Синхронизация кэша в БД и обновление рейтинга"""
     while True:
         await asyncio.sleep(15)
         if not USER_CACHE or not db_conn: continue
@@ -38,7 +43,6 @@ async def db_syncer():
                 entry = USER_CACHE.pop(uid, None)
                 if not entry: continue
                 d = entry.get("data")
-                if not d: continue
                 to_save.append((
                     str(uid), float(d.get('score', 0)), int(d.get('tap_power', 1)), 
                     float(d.get('pnl', 0)), float(d.get('energy', 0)), 
@@ -54,18 +58,20 @@ async def db_syncer():
                         energy=excluded.energy, level=excluded.level, last_active=excluded.last_active
                     """, to_save)
                 await db_conn.commit()
-                # Обновляем лидерборд в Redis после записи в основную БД
+                # Обновляем лидерборд в Redis
+                pipe = redis.pipeline()
                 for user in to_save:
-                    await redis.zadd("global_leaderboard", {user[0]: user[1]})
-                logger.info(f"💾 Highload Sync & Leaderboard Update: {len(to_save)} юзеров")
-        except Exception as e: logger.error(f"DB Error: {e}")
+                    pipe.zadd("global_leaderboard", {user[0]: user[1]})
+                await pipe.execute()
+                logger.info(f"💾 Sync OK: {len(to_save)} users updated.")
+        except Exception as e: logger.error(f"Sync Error: {e}")
+
+# --- [LIFECYCLE] ---
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_conn, redis
-    # Подключаем Redis
     redis = await aioredis.from_url(REDIS_URL, decode_responses=True)
-    # Подключаем SQLite
     db_conn = await aiosqlite.connect(DB_PATH)
     await db_conn.execute("PRAGMA journal_mode=WAL")
     await db_conn.execute("""CREATE TABLE IF NOT EXISTS users (
@@ -76,25 +82,32 @@ async def lifespan(app: FastAPI):
     
     asyncio.create_task(db_syncer())
     
-    bot = Bot(token=API_TOKEN)
     dp = Dispatcher()
     
     @dp.message(Command("start"))
     async def start(m: types.Message, command: CommandObject):
         uid = str(m.from_user.id)
         ref_id = command.args
+        
+        # Реферальная система с защитой от самореферальства
         if ref_id and ref_id != uid:
-            async with db_conn.execute("UPDATE users SET balance = balance + 25000 WHERE id=?", (ref_id,)) as cur:
-                if cur.rowcount > 0:
-                    await db_conn.commit()
-                    try: await bot.send_message(ref_id, "🎁 +25,000 NP! Твой реферал в игре!")
-                    except: pass
+            await redis.setnx(f"ref:{uid}", ref_id) # Запоминаем кто пригласил
+            # Начисление будет произведено при первом сейве или сразу:
+            async with db_conn.execute("UPDATE users SET balance = balance + 50000 WHERE id=?", (ref_id,)):
+                await db_conn.commit()
 
-        game_url = f"{WEB_APP_URL}/?v={int(time.time())}"
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="ИГРАТЬ В NEURAL PULSE 🧠", web_app=WebAppInfo(url=game_url))]
+            [InlineKeyboardButton(text="ВХОД В НЕЙРОСЕТЬ 🧠", web_app=WebAppInfo(url=f"{WEB_APP_URL}/?u={uid}"))],
+            [InlineKeyboardButton(text="СООБЩЕСТВО 👥", url="https://t.me/neural_pulse")]
         ])
-        await m.answer(f"🚀 <b>Neural Pulse Pro</b>\nДобывай токены будущего!", reply_markup=kb, parse_mode="HTML")
+        await m.answer(f"🦾 <b>Neural Pulse: Протокол Запущен</b>\n\nДобро пожаловать, Оператор {uid}.\nТвоя задача — ковать будущее ИИ.", reply_markup=kb, parse_mode="HTML")
+
+    # Админ-команда для запуска Шторма
+    @dp.message(Command("storm"))
+    async def storm_cmd(m: types.Message):
+        if m.from_user.id == ADMIN_ID:
+            await redis.setex("event:storm", 3600, "active")
+            await m.answer("⚡️ <b>НЕЙРО-ШТОРМ АКТИВИРОВАН!</b> (x2 на 1 час)", parse_mode="HTML")
 
     asyncio.create_task(dp.start_polling(bot))
     yield
@@ -102,7 +115,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# --- [API ENDPOINTS] ---
+# --- [API] ---
 
 @app.get("/api/balance/{user_id}")
 async def get_bal(user_id: str):
@@ -111,55 +124,55 @@ async def get_bal(user_id: str):
         row = await cur.fetchone()
     
     now = int(time.time())
-    # Проверка глобального ивента
-    event_active = await redis.get("event:storm")
-    multiplier = 2 if event_active else 1
+    multiplier = 2 if await redis.get("event:storm") else 1
 
     if row:
-        data = dict(row)
-        off_time = min(now - data['last_active'], 10800)
-        earned = (data['pnl'] / 3600) * off_time
+        d = dict(row)
+        off_time = min(now - d['last_active'], 10800)
+        earned = (d['pnl'] / 3600) * off_time
         return {"status": "ok", "data": {
-            "score": data["balance"] + earned, "tap_power": data["click_lvl"],
-            "pnl": data["pnl"], "energy": data["energy"],
-            "max_energy": data["max_energy"], "level": data["level"],
+            "score": d["balance"] + earned, "tap_power": d["click_lvl"],
+            "pnl": d["pnl"], "energy": d["energy"], "level": d["level"],
             "multiplier": multiplier
         }}
     
-    await db_conn.execute("INSERT INTO users VALUES (?,5000,1,0,1000,1000,1,?)", (user_id, now))
+    # Регистрация нового юзера
+    await db_conn.execute("INSERT INTO users VALUES (?,10000,1,0,1000,1000,1,?)", (user_id, now))
     await db_conn.commit()
-    return {"status": "ok", "data": {"score": 5000, "tap_power": 1, "pnl": 0, "energy": 1000, "max_energy": 1000, "level": 1, "multiplier": multiplier}}
+    return {"status": "ok", "data": {"score": 10000, "tap_power": 1, "pnl": 0, "energy": 1000, "level": 1, "multiplier": multiplier}}
 
 @app.get("/api/leaderboard")
-async def get_leaderboard():
-    """Топ-100 игроков из Redis мгновенно"""
-    top = await redis.zrevrange("global_leaderboard", 0, 99, withscores=True)
-    return {"status": "ok", "top": [{"id": x[0], "score": x[1]} for x in top]}
-
-@app.post("/api/fusion")
-async def handle_fusion(request: Request):
-    """Логика слияния модулей"""
-    data = await request.json()
-    # Здесь можно добавить проверку ресурсов и создание артефакта
-    # Для простоты возвращаем успех
-    return {"status": "ok", "artifact_id": str(uuid.uuid4())[:8]}
+async def get_top():
+    top = await redis.zrevrange("global_leaderboard", 0, 49, withscores=True)
+    return {"status": "ok", "leaderboard": [{"id": u, "score": s} for u, s in top]}
 
 @app.post("/api/save")
-async def save(request: Request):
+async def save_state(request: Request):
     try:
         data = await request.json()
         uid = str(data.get("user_id"))
-        if not uid or uid == "None": return {"status": "error"}
+        
+        # Anti-Cheat: простая проверка на лету
+        if float(data.get('score', 0)) > 10**15: return {"status": "ban_risk"}
+        
         now = time.time()
-        if now - LAST_SAVE.get(uid, 0) < 2: return {"status": "throttled"}
+        if now - LAST_SAVE.get(uid, 0) < 1.0: return {"status": "fast"}
+        
         LAST_SAVE[uid] = now
         USER_CACHE[uid] = {"data": data}
         return {"status": "ok"}
     except: return {"status": "error"}
 
+# Эндпоинт для проверки статуса ивентов фронтендом
+@app.get("/api/events")
+async def check_events():
+    storm = await redis.ttl("event:storm")
+    return {"storm_active": storm > 0, "time_left": max(0, storm)}
+
+# Монтирование фронтенда
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 @app.get("/")
 async def index(): return FileResponse(STATIC_DIR / "index.html")
-app.mount("/", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000, access_log=False)
