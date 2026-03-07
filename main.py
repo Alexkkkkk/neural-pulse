@@ -14,6 +14,7 @@ from aiogram.filters import Command, CommandObject
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 # --- [ЛОГИРОВАНИЕ] ---
+# Настраиваем формат так, чтобы в Bothost всё было красиво и читаемо
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
@@ -51,10 +52,12 @@ async def batch_db_update():
         if not USER_CACHE or not db_conn: continue
         try:
             users_to_update = []
-            keys_to_clear = list(USER_CACHE.keys())
+            # Берем текущие ключи, чтобы не было ошибок RuntimeError при изменении словаря
+            keys = list(USER_CACHE.keys())
             
-            for uid in keys_to_clear:
-                entry = USER_CACHE.pop(uid, None) # Используем pop для очистки памяти
+            for uid in keys:
+                # Извлекаем данные и удаляем из кэша (pop атомарен)
+                entry = USER_CACHE.pop(uid, None)
                 if not entry: continue
                 d = entry.get("data")
                 if not d: continue
@@ -67,7 +70,6 @@ async def batch_db_update():
                 ))
             
             if users_to_update:
-                # Используем транзакцию для максимальной скорости
                 async with db_conn.execute("BEGIN TRANSACTION"):
                     await db_conn.executemany("""
                         INSERT INTO users (id, balance, click_lvl, energy, max_energy, pnl, level, wallet_address, last_active)
@@ -79,7 +81,7 @@ async def batch_db_update():
                             wallet_address=excluded.wallet_address, last_active=excluded.last_active
                     """, users_to_update)
                 await db_conn.commit()
-                logger.info(f"💾 [DB_SYNC] Синхронизация: {len(users_to_update)} юзеров.")
+                logger.info(f"💾 [DB_SYNC] Синхронизировано юзеров: {len(users_to_update)}")
         except Exception as e:
             logger.error(f"❌ [DB_ERROR] Ошибка записи: {e}")
 
@@ -88,9 +90,9 @@ async def lifespan(app: FastAPI):
     global db_conn, bot_instance
     app.state.ready = False 
     try:
-        # Подключение к БД с оптимизациями
+        logger.info("📡 [INIT] Подключение к базе данных...")
         db_conn = await aiosqlite.connect(DB_PATH)
-        await db_conn.execute("PRAGMA journal_mode=WAL") # Многократное ускорение чтения/записи
+        await db_conn.execute("PRAGMA journal_mode=WAL")
         await db_conn.execute("PRAGMA synchronous=NORMAL")
         await db_conn.executescript("""
             CREATE TABLE IF NOT EXISTS users (
@@ -101,7 +103,7 @@ async def lifespan(app: FastAPI):
         """)
         await db_conn.commit()
         
-        # Запуск бота
+        logger.info("🤖 [INIT] Запуск Telegram бота...")
         bot_instance = Bot(token=API_TOKEN)
         dp = Dispatcher()
         
@@ -118,13 +120,12 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(batch_db_update())
         
         app.state.ready = True
-        logger.info("🌟 [SERVER] Мозг ИИ активирован.")
+        logger.info("🌟 [SERVER] Мозг ИИ успешно активирован и готов к работе.")
     except Exception as e:
         logger.critical(f"💥 Ошибка старта: {e}")
     
     yield
     
-    # Закрытие ресурсов
     if bot_instance:
         await bot_instance.session.close()
     if db_conn: 
@@ -170,9 +171,7 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
                 "level": int(data["level"]), 
                 "wallet_address": data["wallet_address"]
             }
-            # Обновляем кэш только если там еще нет данных для сохранения
-            if uid not in USER_CACHE:
-                USER_CACHE[uid] = {"data": f_data, "last_seen": now}
+            logger.info(f"📥 [API] Загружен баланс для юзера {uid}")
             return {"status": "ok", "data": f_data}
         
         # Создание нового пользователя
@@ -184,6 +183,7 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
             (uid, start_bal, 1, 1000.0, 1000, 0.0, 1, now)
         )
         await db_conn.commit()
+        logger.info(f"🆕 [API] Зарегистрирован новый юзер {uid} (Бонус: {start_bal})")
         return {"status": "ok", "data": new_user}
         
     except Exception as e:
@@ -192,6 +192,8 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
 
 @app.post("/api/save")
 async def save(data: SaveData):
+    # Логируем сохранение для отладки
+    # logger.info(f"📤 [API] Получены данные сохранения для {data.user_id}")
     USER_CACHE[str(data.user_id)] = {"data": data.model_dump(), "last_seen": time.time()}
     return {"status": "ok"}
 
@@ -205,11 +207,14 @@ async def favicon():
 @app.get("/")
 async def serve_index():
     index_file = STATIC_DIR / "index.html"
-    return FileResponse(index_file) if index_file.exists() else JSONResponse({"error": "Frontend not found"}, 404)
+    if index_file.exists():
+        return FileResponse(index_file)
+    logger.error("🚨 [ERROR] index.html не найден в папке static!")
+    return JSONResponse({"error": "Frontend not found"}, 404)
 
-# Монтируем статику ПОСЛЕ всех API маршрутов
 if STATIC_DIR.exists():
     app.mount("/", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3000, access_log=False) # Отключаем логи запросов для скорости
+    # access_log=True оставляет логи каждого HTTP запроса (GET / API...)
+    uvicorn.run(app, host="0.0.0.0", port=3000, access_log=True)
