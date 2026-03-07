@@ -1,19 +1,18 @@
-FROM python:3.11-slim
+FROM node:18-alpine
+
+# Устанавливаем зависимости для сборки sqlite3
+RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 
-# Устанавливаем зависимости
-COPY services/api/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY package*.json ./
+RUN npm install
 
-# Копируем всё
 COPY . .
 
-# Создаем папку для данных
+# Создаем папку data и даем права
 RUN mkdir -p /app/data && chmod 777 /app/data
 
-# Открываем порт для Bothost
 EXPOSE 3000
 
-# ГАРАНТИЯ ЗАПУСКА PYTHON:
-CMD ["uvicorn", "services.api.main:app", "--host", "0.0.0.0", "--port", "3000"]
+CMD ["npm", "start"]
