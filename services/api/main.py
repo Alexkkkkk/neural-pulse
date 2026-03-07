@@ -1,33 +1,31 @@
-import os, time
-import aiosqlite, uvicorn
-from pathlib import Path
+import os
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-
-# Пути
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-DB_PATH = BASE_DIR / "data" / "game.db"
-STATIC_DIR = BASE_DIR / "static"
+from pathlib import Path
 
 app = FastAPI()
 
-# Создаем базу при старте
-@app.on_event("startup")
-async def startup():
-    os.makedirs(BASE_DIR / "data", exist_ok=True)
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, balance REAL)")
-        await db.commit()
+# Определяем путь к папке со статикой (дизайном)
+# BASE_DIR указывает на корень проекта (/app)
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+STATIC_DIR = BASE_DIR / "static"
 
-# Раздача главной страницы
+# ВАЖНО: Монтируем папку static. 
+# Теперь всё, что лежит в static/, будет доступно по ссылке /static/
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+# Эндпоинт для открытия главной страницы
 @app.get("/")
-async def index():
-    return FileResponse(STATIC_DIR / "index.html")
+async def read_index():
+    index_path = STATIC_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    return {"error": "index.html not found"}
 
-# Монтируем статику (дизайн, лого, скрипты)
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
+# Твой API для баланса
 @app.get("/api/balance/{uid}")
-async def get_bal(uid: str):
+async def get_balance(uid: str):
+    # Тут будет логика базы данных, пока заглушка
     return {"status": "ok", "balance": 1000}
