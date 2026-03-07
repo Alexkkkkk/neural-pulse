@@ -10,9 +10,10 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.json());
+// Раздаем статику: картинки должны быть в static/images/
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
-// --- [БАЗА ДАННЫХ] ---
+// --- [ИНИЦИАЛИЗАЦИЯ БД] ---
 let db;
 (async () => {
     db = await open({
@@ -23,7 +24,7 @@ let db;
         id TEXT PRIMARY KEY, balance REAL, click_lvl INTEGER, 
         pnl REAL DEFAULT 0, energy REAL, max_energy INTEGER, 
         level INTEGER DEFAULT 1, last_active INTEGER)`);
-    console.log("💾 База данных готова");
+    console.log("💾 Database & Tables Ready");
 })();
 
 // --- [API ЭНДПОИНТЫ] ---
@@ -42,11 +43,12 @@ app.get('/api/balance/:userId', async (req, res) => {
                 max_energy: user.max_energy, multiplier: 1
             }});
         } else {
+            // Новый пользователь
             await db.run(`INSERT INTO users (id, balance, click_lvl, pnl, energy, max_energy, level, last_active) 
                           VALUES (?, 1000, 1, 0, 1000, 1000, 1, ?)`, [userId, now]);
             res.json({ status: "ok", data: { score: 1000, tap_power: 1, pnl: 0, energy: 1000, max_energy: 1000, level: 1, multiplier: 1 }});
         }
-    } catch (e) { res.status(500).json({status: "error"}); }
+    } catch (e) { res.status(500).send(e.message); }
 });
 
 app.post('/api/save', async (req, res) => {
@@ -57,15 +59,15 @@ app.post('/api/save', async (req, res) => {
         await db.run(`UPDATE users SET balance=?, click_lvl=?, pnl=?, energy=?, level=?, last_active=? WHERE id=?`,
             [d.score, d.tap_power, d.pnl, d.energy, d.level, now, d.user_id]);
         res.json({status: "ok"});
-    } catch (e) { res.status(500).json({status: "error"}); }
+    } catch (e) { res.status(500).send(e.message); }
 });
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'static', 'index.html')));
 
-// --- [SOCKETS] ---
+// --- [SOCKETS ДЛЯ ТАПОВ] ---
 io.on('connection', (socket) => {
     socket.on('tap', () => socket.emit('tap_ack', { ok: true }));
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Сервер запущен на порту ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Neural Pulse running on port ${PORT}`));
