@@ -3,12 +3,12 @@ import aiosqlite
 import uvicorn
 from pathlib import Path
 from contextlib import asynccontextmanager
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, UJSONResponse
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel, ConfigDict
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandObject
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
@@ -25,14 +25,12 @@ logger = logging.getLogger("NeuralPulse")
 BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
-
 API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM" 
 WEB_APP_URL = "https://np.bothost.ru"
 
 USER_CACHE: Dict[str, dict] = {}
 db_conn: Optional[aiosqlite.Connection] = None
 
-# --- [МОДЕЛИ ДАННЫХ] ---
 class SaveData(BaseModel):
     user_id: str
     score: float = 0.0
@@ -42,7 +40,7 @@ class SaveData(BaseModel):
     level: int = 1
     tap_power: int = 1
     wallet_address: Optional[str] = None
-    model_config = ConfigDict(extra='allow') # Разрешаем лишние поля, чтобы не падать
+    model_config = ConfigDict(extra='allow')
 
 # --- [БАЗА ДАННЫХ] ---
 async def batch_db_update():
@@ -59,15 +57,10 @@ async def batch_db_update():
                 if not d: continue
                 
                 users_to_update.append((
-                    str(uid), 
-                    float(d.get('score', 0)), 
-                    int(d.get('tap_power', 1)), 
-                    float(d.get('energy', 0)), 
-                    int(d.get('max_energy', 1000)), 
-                    float(d.get('pnl', 0)), 
-                    int(d.get('level', 1)), 
-                    d.get('wallet_address'), 
-                    int(time.time())
+                    str(uid), float(d.get('score', 0)), int(d.get('tap_power', 1)), 
+                    float(d.get('energy', 0)), int(d.get('max_energy', 1000)), 
+                    float(d.get('pnl', 0)), int(d.get('level', 1)), 
+                    d.get('wallet_address'), int(time.time())
                 ))
             
             if users_to_update:
@@ -91,8 +84,6 @@ async def lifespan(app: FastAPI):
     app.state.ready = False 
     try:
         db_conn = await aiosqlite.connect(DB_PATH)
-        await db_conn.execute("PRAGMA journal_mode=WAL")
-        await db_conn.execute("PRAGMA synchronous=NORMAL")
         await db_conn.executescript("""
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY, balance REAL, click_lvl INTEGER, 
@@ -107,10 +98,8 @@ async def lifespan(app: FastAPI):
         
         @dp.message(Command("start"))
         async def start_cmd(m: types.Message, command: CommandObject):
-            ref_id = command.args if command.args else ""
             url = f"{WEB_APP_URL}/?v={int(time.time())}"
-            if ref_id: url += f"&ref={ref_id}"
-            
+            if command.args: url += f"&ref={command.args}"
             kb = InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="Играть 🧠", web_app=WebAppInfo(url=url))
             ]])
@@ -118,16 +107,12 @@ async def lifespan(app: FastAPI):
             
         asyncio.create_task(dp.start_polling(bot))
         asyncio.create_task(batch_db_update())
-        
         app.state.ready = True
         logger.info("🌟 [SERVER] Мозг ИИ активирован.")
     except Exception as e:
         logger.critical(f"💥 Ошибка старта: {e}")
-    
     yield
-    if db_conn: 
-        await db_conn.close()
-        logger.info("💤 [SERVER] База данных закрыта.")
+    if db_conn: await db_conn.close()
 
 app = FastAPI(lifespan=lifespan)
 
@@ -138,7 +123,7 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# --- [API ЭНДПОИНТЫ] ---
+# --- [API] ---
 
 @app.get("/api/health")
 async def health():
@@ -147,85 +132,46 @@ async def health():
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str, ref: Optional[str] = None):
     if not getattr(app.state, "ready", False): 
-        return JSONResponse({"status": "error", "message": "Server starting..."}, 503)
+        return JSONResponse({"status": "error", "message": "Starting..."}, 503)
     
     uid = str(user_id)
     now = int(time.time())
-
-    try:
-        db_conn.row_factory = aiosqlite.Row
-        async with db_conn.execute("SELECT * FROM users WHERE id = ?", (uid,)) as cur:
-            row = await cur.fetchone()
-        
-        if row:
-            data = dict(row)
-            offline_bonus = 0
-            if data['last_active'] and data['pnl'] > 0:
-                passed = now - data['last_active']
-                if 10 < passed < 86400:
-                    offline_bonus = (data['pnl'] / 3600) * passed
-            
-            f_data = {
-                "score": data["balance"] + offline_bonus, 
-                "tap_power": data["click_lvl"],
-                "energy": float(data["energy"]), 
-                "max_energy": data["max_energy"],
-                "pnl": data["pnl"], 
-                "level": data["level"], 
-                "wallet_address": data["wallet_address"]
-            }
-            USER_CACHE[uid] = {"data": f_data, "last_seen": now}
-            return {"status": "ok", "data": f_data}
-        
-        start_bal = 5000.0 if (ref and ref != uid) else 0.0
-        new_user = {
-            "score": start_bal, "tap_power": 1, "energy": 1000.0, 
-            "max_energy": 1000, "pnl": 0.0, "level": 1, "wallet_address": None
+    db_conn.row_factory = aiosqlite.Row
+    async with db_conn.execute("SELECT * FROM users WHERE id = ?", (uid,)) as cur:
+        row = await cur.fetchone()
+    
+    if row:
+        data = dict(row)
+        f_data = {
+            "score": float(data["balance"]), "tap_power": int(data["click_lvl"]),
+            "energy": float(data["energy"]), "max_energy": int(data["max_energy"]),
+            "pnl": float(data["pnl"]), "level": int(data["level"]), 
+            "wallet_address": data["wallet_address"]
         }
-        USER_CACHE[uid] = {"data": new_user, "last_seen": now}
-        await db_conn.execute(
-            "INSERT INTO users (id, balance, click_lvl, energy, max_energy, pnl, level, last_active) VALUES (?,?,?,?,?,?,?,?)",
-            (uid, start_bal, 1, 1000.0, 1000, 0.0, 1, now)
-        )
-        await db_conn.commit()
-        return {"status": "ok", "data": new_user}
-    except Exception as e:
-        logger.error(f"Error in get_balance: {e}")
-        return JSONResponse({"status": "error"}, 500)
+        USER_CACHE[uid] = {"data": f_data, "last_seen": now}
+        return {"status": "ok", "data": f_data}
+    
+    # Новый юзер
+    start_bal = 5000.0 if (ref and ref != uid) else 0.0
+    new_user = {"score": start_bal, "tap_power": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "wallet_address": None}
+    USER_CACHE[uid] = {"data": new_user, "last_seen": now}
+    await db_conn.execute("INSERT INTO users (id, balance, click_lvl, energy, max_energy, pnl, level, last_active) VALUES (?,?,?,?,?,?,?,?)",
+        (uid, start_bal, 1, 1000.0, 1000, 0.0, 1, now))
+    await db_conn.commit()
+    return {"status": "ok", "data": new_user}
 
 @app.post("/api/save")
 async def save(data: SaveData):
-    # Сохраняем данные в кэш
-    USER_CACHE[str(data.user_id)] = {
-        "data": data.model_dump(), 
-        "last_seen": time.time()
-    }
+    USER_CACHE[str(data.user_id)] = {"data": data.model_dump(), "last_seen": time.time()}
     return {"status": "ok"}
-
-@app.get("/api/stats")
-async def get_stats():
-    top_players = []
-    for uid, val in USER_CACHE.items():
-        if 'data' in val:
-            top_players.append({"id": uid[:5] + "...", "bal": val['data'].get('score', 0)})
-    
-    top_players = sorted(top_players, key=lambda x: x['bal'], reverse=True)[:10]
-
-    return {
-        "total_users": max(len(USER_CACHE), 1),
-        "total_supply": sum(u['data'].get('score', 0) for u in USER_CACHE.values() if 'data' in u) if USER_CACHE else 0,
-        "top": top_players
-    }
 
 # --- [СТАТИКА] ---
 
 @app.get("/")
 async def serve_index():
-    index_path = STATIC_DIR / "index.html"
-    if index_path.exists():
-        return FileResponse(index_path)
-    return JSONResponse({"error": "index.html not found"}, 404)
+    return FileResponse(STATIC_DIR / "index.html")
 
+# Монтируем всё остальное (картинки, скрипты) в корень
 if STATIC_DIR.exists():
     app.mount("/", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
