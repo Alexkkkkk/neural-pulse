@@ -1,5 +1,6 @@
 version: '3.9'
 services:
+  # Единая точка входа (Nginx)
   gateway:
     image: nginx:alpine
     ports: ["80:80"]
@@ -8,21 +9,25 @@ services:
       - ./deploy/nginx.conf:/etc/nginx/nginx.conf
     depends_on: [api, socket]
 
+  # API сервис (FastAPI + aioredis)
   api:
     build: ./services/api
     environment:
       - REDIS_URL=redis://redis:6379/0
     depends_on: [redis]
 
+  # Real-time движок (Socket.io)
   socket:
     build: ./services/socket
     ports: ["8080:8080"]
     depends_on: [redis]
 
+  # Фоновый воркер (Обработка кликов)
   clicker:
     build: ./services/clicker
     depends_on: [redis]
 
+  # Высокоскоростное хранилище (Redis)
   redis:
     image: redis:7-alpine
     command: redis-server --appendonly yes
