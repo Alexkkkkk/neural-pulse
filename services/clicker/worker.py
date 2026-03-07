@@ -1,20 +1,33 @@
-import asyncio, aioredis, orjson
+import asyncio, os, orjson, aiosqlite
+from redis.asyncio import Redis
 
-async def run_worker():
-    rd = aioredis.from_url("redis://redis:6379/0")
+REDIS_HOST = os.getenv("REDIS_HOST", "redis")
+DB_PATH = "/app/data/game.db"
+
+async def process_taps():
+    rd = Redis(host=REDIS_HOST, port=6379, decode_responses=True)
+    print("🚀 Clicker Worker started...")
+
     while True:
-        batch = await rd.xread({"stream:taps": "0-0"}, count=500, block=100)
-        for _, messages in batch:
-            for m_id, data in messages:
-                uid = data[b'uid'].decode()
-                raw = await rd.get(f"u:{uid}")
-                if raw:
-                    user = orjson.loads(raw)
-                    if user['en'] > 0:
-                        user['bal'] += user['pow']
-                        user['en'] -= 1
-                        await rd.set(f"u:{uid}", orjson.dumps(user))
-                await rd.xdel("stream:taps", m_id)
-        await asyncio.sleep(0.01)
+        # Вытаскиваем задачу из очереди Redis
+        raw_tap = await rd.blpop("queue:taps", timeout=1)
+        if raw_tap:
+            data = orjson.loads(raw_tap[1])
+            uid = data['uid']
+            
+            # Обновляем данные в Redis (атомарно)
+            user_raw = await rd.get(f"u:{uid}")
+            if user_raw:
+                user = orjson.loads(user_raw)
+                if user['energy'] >= user['tap_power']:
+                    user['score'] += user['tap_power']
+                    user['energy'] -= user['tap_power']
+                    await rd.set(f"u:{uid}", orjson.dumps(user))
+        
+        await asyncio.sleep(0.01) # Чтобы не перегружать CPU
 
-asyncio.run(run_worker())
+async def main():
+    await process_taps()
+
+if __name__ == "__main__":
+    asyncio.run(main())
