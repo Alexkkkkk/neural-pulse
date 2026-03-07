@@ -1,1 +1,9 @@
-
+:root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #050505; }
+body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; }
+.content-layer { display: flex; flex-direction: column; align-items: center; height: 100vh; padding-top: 20px; }
+#balance { font-size: 50px; font-weight: 900; text-shadow: 0 0 20px var(--cyan); }
+#main-logo { width: 260px; filter: drop-shadow(0 0 30px var(--cyan)); transition: transform 0.05s; }
+.bar-bg { width: 80vw; height: 12px; background: rgba(255,255,255,0.1); border-radius: 10px; margin-top: 10px; }
+#energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); border-radius: 10px; transition: width 0.2s; }
+.tap-text { position: absolute; color: white; font-size: 30px; font-weight: 900; animation: float 0.7s forwards; pointer-events: none; }
+@keyframes float { to { transform: translateY(-100px); opacity: 0; } }
