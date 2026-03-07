@@ -4,12 +4,12 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, ORJSONResponse # Добавлен ORJSON для скорости
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandObject
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
-# Безопасный импорт Redis
+# Безопасный импорт Redis (поддержка твоего нового requirements.txt)
 try:
     import redis.asyncio as aioredis
 except ImportError:
@@ -24,7 +24,8 @@ WEB_APP_URL = "https://np.bothost.ru"
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 ADMIN_ID = 476014374 
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(message)s")
+# Настройка логирования
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(name)s | %(message)s")
 logger = logging.getLogger("NP_ULTRA_CORE")
 
 USER_CACHE = {}
@@ -35,6 +36,7 @@ bot = Bot(token=API_TOKEN)
 
 # --- [СИНХРОНИЗАЦИЯ] ---
 async def db_syncer():
+    """Фоновая задача для сброса кэша в БД каждые 15 секунд"""
     while True:
         await asyncio.sleep(15)
         if not USER_CACHE or not db_conn: continue
@@ -76,32 +78,40 @@ async def db_syncer():
 async def lifespan(app: FastAPI):
     global db_conn, redis_client
     
-    # БД инициализация
+    # 1. БД Инициализация
     db_conn = await aiosqlite.connect(DB_PATH)
     await db_conn.execute("PRAGMA journal_mode=WAL")
+    await db_conn.execute("PRAGMA synchronous=NORMAL")
     await db_conn.execute("""CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY, balance REAL, click_lvl INTEGER, 
         pnl REAL DEFAULT 0, energy REAL, max_energy INTEGER, 
         level INTEGER DEFAULT 1, last_active INTEGER)""")
     await db_conn.commit()
 
-    # Redis инициализация
+    # 2. Redis Инициализация
     if aioredis:
         try:
             redis_client = await aioredis.from_url(REDIS_URL, decode_responses=True)
             await asyncio.wait_for(redis_client.ping(), timeout=2.0)
             logger.info("🚀 Redis Connected")
         except Exception:
-            logger.warning("⚠️ Redis unavailable. Leaderboard will use SQLite.")
+            logger.warning("⚠️ Redis unavailable. Falling back to SQLite.")
             redis_client = None
 
-    asyncio.create_task(db_syncer())
+    # 3. Запуск фоновых задач
+    sync_task = asyncio.create_task(db_syncer())
     
+    # 4. Бот Инициализация
     dp = Dispatcher()
 
     @dp.message(Command("start"))
     async def start(m: types.Message, command: CommandObject):
         uid = str(m.from_user.id)
+        # Обработка рефералов
+        if command.args and command.args != uid:
+            if redis_client:
+                await redis_client.setnx(f"ref:{uid}", command.args)
+
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="ВХОД В НЕЙРОСЕТЬ 🧠", web_app=WebAppInfo(url=f"{WEB_APP_URL}/?u={uid}"))],
             [InlineKeyboardButton(text="СООБЩЕСТВО 👥", url="https://t.me/neural_pulse")]
@@ -109,12 +119,17 @@ async def lifespan(app: FastAPI):
         await m.answer(f"🦾 <b>Neural Pulse: Протокол Запущен</b>", reply_markup=kb, parse_mode="HTML")
 
     polling_task = asyncio.create_task(dp.start_polling(bot))
+    
     yield
+    
+    # Завершение работы
     polling_task.cancel()
+    sync_task.cancel()
     await db_conn.close()
     if redis_client: await redis_client.close()
 
-app = FastAPI(lifespan=lifespan)
+# Инициализируем FastAPI с поддержкой ORJSON
+app = FastAPI(lifespan=lifespan, default_response_class=ORJSONResponse)
 
 # --- [API] ---
 @app.get("/api/balance/{user_id}")
@@ -141,13 +156,13 @@ async def get_bal(user_id: str):
             "max_energy": d["max_energy"], "multiplier": multiplier
         }}
     
+    # Создание нового профиля
     await db_conn.execute("INSERT INTO users VALUES (?,1000,1,0,1000,1000,1,?)", (user_id, now))
     await db_conn.commit()
     return {"status": "ok", "data": {"score": 1000, "tap_power": 1, "pnl": 0, "energy": 1000, "max_energy": 1000, "level": 1, "multiplier": multiplier}}
 
 @app.get("/api/leaderboard")
 async def get_top():
-    # Пробуем Redis
     if redis_client:
         try:
             top = await redis_client.zrevrange("global_leaderboard", 0, 49, withscores=True)
@@ -155,7 +170,6 @@ async def get_top():
                 return {"status": "ok", "top": [{"id": u, "score": s} for u, s in top]}
         except Exception: pass
     
-    # Если Redis нет, тянем из SQLite
     db_conn.row_factory = aiosqlite.Row
     async with db_conn.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 50") as cur:
         rows = await cur.fetchall()
@@ -167,8 +181,11 @@ async def save_state(request: Request):
         data = await request.json()
         uid = str(data.get("user_id"))
         if not uid or uid == "guest": return {"status": "ignored"}
+        
         now = time.time()
-        if now - LAST_SAVE.get(uid, 0) < 1.0: return {"status": "fast"}
+        if now - LAST_SAVE.get(uid, 0) < 0.5: # Уменьшил лимит для более плавного геймплея
+            return {"status": "fast"}
+            
         LAST_SAVE[uid] = now
         USER_CACHE[uid] = {"data": data}
         return {"status": "ok"}
@@ -184,7 +201,8 @@ async def index():
     index_path = STATIC_DIR / "index.html"
     if index_path.exists():
         return FileResponse(index_path)
-    return JSONResponse({"error": "UI files not found. Check static/ folder."}, status_code=404)
+    return JSONResponse({"error": "Front-end files not found in /static"}, status_code=404)
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3000, access_log=False)
+    # На Linux (Bothost) uvloop будет использован автоматически, если он установлен
+    uvicorn.run(app, host="0.0.0.0", port=3000, access_log=False, loop="auto")
