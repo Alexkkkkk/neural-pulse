@@ -25,7 +25,6 @@
             padding-top: env(safe-area-inset-top);
         }
 
-        /* Окна (Modals) */
         .modal {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
             background: rgba(5,10,26,0.98); z-index: 1000; padding: 25px; overflow-y: auto;
@@ -33,7 +32,6 @@
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .close-btn { background: none; border: none; color: white; font-size: 28px; cursor: pointer; }
 
-        /* Карточки покупок */
         .shop-card {
             background: rgba(255,255,255,0.05); border: 1px solid rgba(0,212,255,0.2);
             border-radius: 15px; padding: 15px; margin-bottom: 12px; display: flex; 
@@ -42,7 +40,6 @@
         .shop-card:active { transform: scale(0.98); background: rgba(255,255,255,0.1); }
         .buy-btn { color: var(--neon-green); font-weight: 700; font-size: 14px; }
 
-        /* Шапка */
         .top-info { width: 100%; display: flex; align-items: center; gap: 12px; margin-bottom: 15px; }
         .mini-logo { 
             width: 45px; height: 45px; border: 2px solid var(--neon-purp); 
@@ -177,7 +174,9 @@
 
 <script>
     const tg = window.Telegram.WebApp;
+    const params = new URLSearchParams(window.location.search);
     const USER_ID = String(tg.initDataUnsafe?.user?.id || 'TEST_USER');
+    const REF_ID = params.get('ref') || '';
 
     tg.ready();
     tg.expand();
@@ -193,11 +192,20 @@
         user_id: USER_ID
     };
 
-    // Загрузка локальных данных
-    const localData = localStorage.getItem('np_state');
-    if (localData) {
-        state = {...state, ...JSON.parse(localData)};
-        updateUI();
+    // 1. Синхронизация с сервером при старте
+    async function syncWithServer() {
+        try {
+            const res = await fetch(`/api/balance/${USER_ID}?ref=${REF_ID}`);
+            if (res.ok) {
+                const result = await res.json();
+                if (result.status === 'ok') {
+                    state = { ...state, ...result.data };
+                    updateUI();
+                }
+            }
+        } catch (e) {
+            console.error("Sync error:", e);
+        }
     }
 
     function updateUI() {
@@ -218,7 +226,6 @@
         }
     }
 
-    // Логика покупки
     function buyUpgrade(type, cost, value, name) {
         if (state.score >= cost) {
             state.score -= cost;
@@ -229,13 +236,12 @@
             tg.HapticFeedback.impactOccurred('medium');
             tg.showAlert(`Success: ${name} upgraded!`);
             updateUI();
-            saveToLocal();
+            saveToLocal(true); // Форсированное сохранение на сервер
         } else {
             tg.showAlert("Not enough Neural Pulse (NP)!");
         }
     }
 
-    // Тап-механика
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
         for (let t of e.changedTouches) {
@@ -249,7 +255,6 @@
             }
         }
         updateUI();
-        saveToLocal();
     });
 
     function createFloatingText(x, y, text, crit) {
@@ -262,25 +267,45 @@
         setTimeout(() => el.remove(), 600);
     }
 
-    // Навигация
     document.getElementById('open-mine').onclick = () => document.getElementById('modal-mine').style.display = 'block';
     document.getElementById('open-boost').onclick = () => document.getElementById('modal-boost').style.display = 'block';
     function closeModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
 
-    // Регенерация и доход
+    // 2. Улучшенная логика дохода и регена
     setInterval(() => {
-        if (state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + (state.max_energy/1500));
-        if (state.pnl > 0) state.score += (state.pnl / 36000);
-        updateUI();
+        let changed = false;
+        if (state.energy < state.max_energy) {
+            state.energy = Math.min(state.max_energy, state.energy + (state.max_energy / 1500));
+            changed = true;
+        }
+        if (state.pnl > 0) {
+            state.score += (state.pnl / 36000); // Доход каждые 100мс
+            changed = true;
+        }
+        if (changed) updateUI();
     }, 100);
 
-    function saveToLocal() { localStorage.setItem('np_state', JSON.stringify(state)); }
-    
+    // 3. Сохранение и синхронизация (каждые 15 сек + локально)
+    function saveToLocal(forceServer = false) {
+        localStorage.setItem('np_state', JSON.stringify(state));
+        if (forceServer) {
+            fetch('/api/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(state)
+            }).catch(e => console.error("Save error:", e));
+        }
+    }
+
+    setInterval(() => saveToLocal(true), 15000);
+
     document.getElementById('invite-btn').onclick = () => {
         const url = `https://t.me/share/url?url=https://t.me/UltraMind_AI_bot?start=${USER_ID}&text=Join my Neural Network!`;
         tg.openTelegramLink(url);
     };
 
+    // Запуск синхронизации
+    syncWithServer();
 </script>
 </body>
 </html>
