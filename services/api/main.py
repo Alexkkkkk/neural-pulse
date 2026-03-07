@@ -1,16 +1,31 @@
+import os, orjson
 from fastapi import FastAPI
-import aioredis, orjson, os
+from redis.asyncio import Redis
 
 app = FastAPI()
-redis = aioredis.from_url(os.getenv("REDIS_URL", "redis://redis:6379/0"), decode_responses=True)
+# Подключаемся к Redis (в Docker-compose имя хоста будет 'redis')
+redis = Redis(host=os.getenv("REDIS_HOST", "redis"), port=6379, decode_responses=True)
 
 @app.get("/api/balance/{uid}")
-async def get_user(uid: str):
-    raw = await redis.get(f"user:{uid}")
-    if raw:
-        return {"status": "ok", "data": orjson.loads(raw)}
+async def get_balance(uid: str):
+    # Пытаемся взять данные из кэша Redis
+    user_data = await redis.get(f"u:{uid}")
     
-    # Новый пользователь (Твой стартовый баланс 1000)
-    user = {"score": 1000.0, "tap_power": 1, "pnl": 0.0, "energy": 1000.0, "max_energy": 1000, "level": 1}
-    await redis.set(f"user:{uid}", orjson.dumps(user))
-    return {"status": "ok", "data": user}
+    if user_data:
+        return {"status": "ok", "data": orjson.loads(user_data)}
+    
+    # Если юзера нет, создаем начальный профиль
+    new_user = {
+        "score": 1000.0,
+        "tap_power": 1,
+        "pnl": 0.0,
+        "energy": 1000.0,
+        "max_energy": 1000,
+        "level": 1
+    }
+    await redis.set(f"u:{uid}", orjson.dumps(new_user))
+    return {"status": "ok", "data": new_user}
+
+@app.get("/api/health")
+async def health():
+    return {"status": "alive"}
