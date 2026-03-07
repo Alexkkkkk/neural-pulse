@@ -1,5 +1,0 @@
-redis==5.0.7
-hiredis==2.3.2
-orjson==3.10.5
-python-dotenv==1.0.1
-aiosqlite==0.20.0  # Оставляем, если будем делать дамп из Redis в БД
