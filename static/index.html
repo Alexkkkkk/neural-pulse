@@ -10,6 +10,7 @@
             --neon-cyan: #00f2ff;
             --neon-purple: #bc13fe;
             --bg-dark: #050505;
+            --glass: rgba(255, 255, 255, 0.1);
         }
 
         body {
@@ -20,148 +21,119 @@
             overflow: hidden;
             display: flex; flex-direction: column; align-items: center;
             height: 100vh;
+            user-select: none;
         }
 
-        /* Header & League */
-        .header {
-            width: 90%; margin-top: 15px;
-            display: flex; align-items: center; gap: 10px;
+        /* Анимация пульсации для Лого */
+        @keyframes logo-pulse {
+            0% { transform: scale(1); box-shadow: 0 0 20px rgba(188, 19, 254, 0.4); }
+            50% { transform: scale(1.02); box-shadow: 0 0 50px rgba(188, 19, 254, 0.7); }
+            100% { transform: scale(1); box-shadow: 0 0 20px rgba(188, 19, 254, 0.4); }
         }
+
+        .header { width: 90%; margin-top: 15px; display: flex; align-items: center; gap: 10px; }
         .league-badge {
-            width: 50px; height: 50px;
-            border: 2px solid var(--neon-purple);
-            border-radius: 12px;
-            display: flex; align-items: center; justify-content: center;
-            background: rgba(188, 19, 254, 0.1);
+            width: 50px; height: 50px; border: 2px solid var(--neon-purple);
+            border-radius: 12px; display: flex; align-items: center; justify-content: center;
+            background: rgba(188, 19, 254, 0.1); font-weight: bold;
         }
         .league-info { flex-grow: 1; }
         .league-name { font-size: 12px; letter-spacing: 1px; color: #aaa; }
-        .progress-container {
-            width: 100%; height: 6px;
-            background: #222; border-radius: 3px; margin-top: 5px;
-        }
-        .progress-fill {
-            width: 0%; height: 100%;
-            background: linear-gradient(90deg, var(--neon-purple), var(--neon-cyan));
-            border-radius: 3px;
-        }
+        .progress-container { width: 100%; height: 6px; background: #222; border-radius: 3px; margin-top: 5px; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, var(--neon-purple), var(--neon-cyan)); border-radius: 3px; transition: width 0.5s; }
 
-        /* Jackpot Area */
-        .jackpot-box {
-            text-align: center; margin-top: 20px;
-        }
-        .jackpot-label { color: var(--neon-cyan); font-size: 14px; letter-spacing: 2px; }
-        .jackpot-value { font-size: 38px; font-weight: bold; margin-top: 5px; }
+        .jackpot-box { text-align: center; margin-top: 10px; }
+        .jackpot-label { color: var(--neon-cyan); font-size: 12px; letter-spacing: 2px; }
+        .jackpot-value { font-size: 28px; font-weight: bold; }
 
-        /* Main Score */
-        .score-container {
-            margin-top: 20px; text-align: center;
-        }
-        #balance { font-size: 54px; font-weight: 800; }
-        .profit-info { color: var(--neon-cyan); font-size: 16px; margin-top: -5px; }
+        .score-container { margin-top: 10px; text-align: center; }
+        #balance { font-size: 48px; font-weight: 800; text-shadow: 0 0 20px var(--neon-cyan); }
+        .profit-info { color: var(--neon-cyan); font-size: 14px; margin-top: -5px; }
 
-        /* Main Pulsing Logo (Cyborg Image) */
         .click-area {
-            position: relative; margin-top: 30px;
-            width: 280px; height: 280px;
+            position: relative; margin-top: 20px;
+            width: 260px; height: 260px;
             display: flex; align-items: center; justify-content: center;
-            cursor: pointer; -webkit-tap-highlight-color: transparent;
         }
         .main-logo {
-            width: 100%; height: 100%;
-            border-radius: 50%;
-            box-shadow: 0 0 40px rgba(188, 19, 254, 0.4);
-            transition: transform 0.05s;
-            z-index: 2;
+            width: 100%; height: 100%; border-radius: 50%;
+            animation: logo-pulse 3s infinite ease-in-out;
+            transition: transform 0.05s; z-index: 2;
         }
-        .main-logo:active { transform: scale(0.95); }
+        .main-logo:active { transform: scale(0.92); }
 
-        /* Sidebar Buttons */
-        .sidebar {
-            position: absolute; right: 5%; top: 50%;
-            transform: translateY(-50%);
-            display: flex; flex-direction: column; gap: 10px;
-            z-index: 3;
-        }
+        .sidebar { position: absolute; right: -20%; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 12px; }
         .side-btn {
-            background: rgba(0,0,0,0.6);
-            border: 1px solid var(--neon-cyan);
-            color: white; padding: 10px 15px;
-            border-radius: 10px; font-size: 12px;
-            width: 80px; text-align: center;
+            background: rgba(0,0,0,0.8); border: 1px solid var(--neon-cyan);
+            color: white; padding: 8px; border-radius: 10px; font-size: 10px; width: 65px; text-align: center;
         }
 
-        /* Energy Bar */
-        .energy-section {
-            width: 90%; margin-top: auto; margin-bottom: 20px;
-        }
-        .energy-header { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px; }
-        .energy-bar {
-            width: 100%; height: 12px;
-            background: #1a1a1a; border-radius: 6px; overflow: hidden;
-            border: 1px solid #333;
-        }
-        #energy-fill {
-            width: 100%; height: 100%;
-            background: linear-gradient(90deg, #00c6ff, #0072ff);
-            transition: width 0.3s;
-        }
+        .energy-section { width: 90%; margin-top: auto; margin-bottom: 15px; }
+        .energy-header { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
+        .energy-bar { width: 100%; height: 10px; background: #1a1a1a; border-radius: 5px; border: 1px solid #333; }
+        #energy-fill { height: 100%; background: linear-gradient(90deg, #00c6ff, #0072ff); transition: width 0.2s; }
 
-        /* Bottom Navigation */
-        .bottom-nav {
-            width: 95%; display: grid; grid-template-columns: 1fr 1fr 1fr;
-            gap: 10px; margin-bottom: 20px;
-        }
+        .bottom-nav { width: 95%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px; }
         .nav-btn {
-            background: #151515; border: 1px solid #333;
-            padding: 15px; border-radius: 15px;
-            text-align: center; font-size: 14px; font-weight: bold;
+            background: #111; border: 1px solid #333; padding: 12px; border-radius: 12px;
+            text-align: center; font-size: 13px; font-weight: bold; transition: 0.2s;
         }
+        .nav-btn:active { background: #222; transform: scale(0.95); }
 
-        /* Floating text animation */
+        /* Окно Апгрейдов (Shop) */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); z-index: 100; display: none;
+            flex-direction: column; align-items: center; justify-content: center;
+        }
+        .modal-content {
+            width: 80%; background: #151515; border: 2px solid var(--neon-purple);
+            padding: 20px; border-radius: 20px; text-align: center;
+        }
+        .upgrade-card {
+            background: #222; padding: 15px; border-radius: 10px; margin: 10px 0;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .buy-btn { background: var(--neon-cyan); color: black; padding: 8px 15px; border-radius: 8px; font-weight: bold; }
+
         .tap-text {
             position: absolute; color: white; font-size: 32px; font-weight: bold;
-            pointer-events: none; animation: floatUp 0.8s ease-out forwards;
-            z-index: 10;
+            pointer-events: none; animation: floatUp 0.8s ease-out forwards; z-index: 10;
         }
-        @keyframes floatUp {
-            0% { opacity: 1; transform: translateY(0); }
-            100% { opacity: 0; transform: translateY(-100px); }
-        }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px); } }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <div class="league-badge">AI</div>
+        <div class="league-badge" id="lvl-badge">1</div>
         <div class="league-info">
             <div style="display: flex; justify-content: space-between;">
-                <span class="league-name">IRON LEAGUE</span>
-                <span style="font-size: 10px; color: var(--neon-cyan);">LVL 1</span>
+                <span class="league-name" id="league-name">IRON LEAGUE</span>
+                <span style="font-size: 10px; color: var(--neon-cyan);" id="next-lvl">TO LVL 2</span>
             </div>
             <div class="progress-container">
-                <div class="progress-fill" style="width: 15%;"></div>
+                <div class="progress-fill" id="exp-bar" style="width: 0%;"></div>
             </div>
         </div>
     </div>
 
     <div class="jackpot-box">
         <div class="jackpot-label">GLOBAL JACKPOT</div>
-        <div class="jackpot-value">500,052</div>
+        <div class="jackpot-value" id="jackpot">500,000</div>
     </div>
 
     <div class="score-container">
         <div id="balance">0</div>
-        <div class="profit-info">PROFIT: +0/hr</div>
+        <div class="profit-info" id="pnl-info">PROFIT: +0/hr</div>
     </div>
 
     <div class="click-area" id="tap-zone">
         <img src="images/logo.png" class="main-logo" alt="Neural AI">
-        
         <div class="sidebar">
-            <div class="side-btn">INVITE</div>
-            <div class="side-btn">TASKS</div>
-            <div class="side-btn">WALLET</div>
+            <div class="side-btn" onclick="showInvite()">INVITE</div>
+            <div class="side-btn" onclick="showTasks()">TASKS</div>
+            <div class="side-btn" onclick="tg.showAlert('Wallet coming soon!')">WALLET</div>
         </div>
     </div>
 
@@ -176,9 +148,17 @@
     </div>
 
     <div class="bottom-nav">
-        <div class="nav-btn">🚀 BOOST</div>
-        <div class="nav-btn">⛏️ MINE</div>
-        <div class="nav-btn">📊 STATS</div>
+        <div class="nav-btn" onclick="openModal('boost')">🚀 BOOST</div>
+        <div class="nav-btn" onclick="openModal('mine')">⛏️ MINE</div>
+        <div class="nav-btn" onclick="showStats()">📊 STATS</div>
+    </div>
+
+    <div id="modal" class="modal" onclick="closeModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h2 id="modal-title">UPGRADES</h2>
+            <div id="modal-list"></div>
+            <button onclick="closeModal()" style="margin-top:15px; background:none; border:1px solid grey; color:white; padding:10px; border-radius:10px;">Close</button>
+        </div>
     </div>
 
     <script>
@@ -190,10 +170,14 @@
             score: 0,
             energy: 1000,
             max_energy: 1000,
-            tap_power: 1
+            tap_power: 1,
+            pnl: 0,
+            level: 1
         };
 
-        // Загрузка данных
+        // Математика прогрессии (как ты просил)
+        const getCost = (lvl) => Math.floor(500 * Math.pow(1.6, lvl));
+
         async function loadData() {
             try {
                 const r = await fetch(`/api/balance/${uid}`);
@@ -209,43 +193,97 @@
             document.getElementById('balance').innerText = Math.floor(state.score).toLocaleString();
             document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
             document.getElementById('energy-fill').style.width = `${(state.energy / state.max_energy) * 100}%`;
+            document.getElementById('pnl-info').innerText = `PROFIT: +${state.pnl.toLocaleString()}/hr`;
+            document.getElementById('lvl-badge').innerText = state.level;
+            
+            // Прогресс лиги (каждые 1,000,000 новый этап)
+            let progress = (state.score % 1000000) / 10000;
+            document.getElementById('exp-bar').style.width = `${progress}%`;
         }
 
-        // Логика клика
+        // Клик
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (state.energy < state.tap_power) return;
 
-            const touch = e.touches[0];
-            createTapAnim(touch.pageX, touch.pageY);
-
-            state.score += state.tap_power;
-            state.energy -= state.tap_power;
+            for(let i=0; i < e.touches.length; i++) {
+                const touch = e.touches[i];
+                createTapAnim(touch.pageX, touch.pageY);
+                state.score += state.tap_power;
+                state.energy -= state.tap_power;
+            }
             updateUI();
-            
-            // Вибрация
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
         });
 
         function createTapAnim(x, y) {
             const el = document.createElement('div');
             el.className = 'tap-text';
             el.innerText = `+${state.tap_power}`;
-            el.style.left = `${x - 15}px`;
-            el.style.top = `${y - 30}px`;
+            el.style.left = `${x - 20}px`;
+            el.style.top = `${y - 40}px`;
             document.body.appendChild(el);
             setTimeout(() => el.remove(), 800);
         }
 
-        // Регенерация энергии
+        // Пассивный доход и реген энергии
         setInterval(() => {
-            if (state.energy < state.max_energy) {
-                state.energy = Math.min(state.max_energy, state.energy + 1);
-                updateUI();
-            }
+            state.score += (state.pnl / 3600); // Доход в секунду
+            if (state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.5);
+            updateUI();
         }, 1000);
 
-        // Сохранение (Highload Ready - раз в 5 секунд)
+        // Магазин
+        function openModal(type) {
+            const modal = document.getElementById('modal');
+            const list = document.getElementById('modal-list');
+            list.innerHTML = '';
+            modal.style.display = 'flex';
+
+            if(type === 'boost') {
+                document.getElementById('modal-title').innerText = "🚀 BOOSTERS";
+                let cost = getCost(state.tap_power);
+                list.innerHTML = `
+                    <div class="upgrade-card">
+                        <div><b>Multitap</b><br><small>+1 per tap</small></div>
+                        <div class="buy-btn" onclick="buyUpgrade('tap', ${cost})">${cost}</div>
+                    </div>`;
+            } else if(type === 'mine') {
+                document.getElementById('modal-title').innerText = "⛏️ MINING";
+                let cost = getCost(state.level);
+                list.innerHTML = `
+                    <div class="upgrade-card">
+                        <div><b>AI Processor</b><br><small>+500 profit/hr</small></div>
+                        <div class="buy-btn" onclick="buyUpgrade('mine', ${cost})">${cost}</div>
+                    </div>`;
+            }
+        }
+
+        function buyUpgrade(type, cost) {
+            if(state.score >= cost) {
+                state.score -= cost;
+                if(type === 'tap') state.tap_power += 1;
+                if(type === 'mine') { state.pnl += 500; state.level += 1; }
+                tg.HapticFeedback.notificationOccurred('success');
+                closeModal();
+                updateUI();
+            } else {
+                tg.showAlert("Need more NP!");
+            }
+        }
+
+        function closeModal() { document.getElementById('modal').style.display = 'none'; }
+
+        function showInvite() {
+            const link = `https://t.me/UltraMind_AI_bot?start=${uid}`;
+            tg.showPopup({
+                title: 'Пригласи друга',
+                message: `Твоя ссылка: ${link}`,
+                buttons: [{type: 'default', text: 'Копировать'}]
+            });
+        }
+
+        // Авто-сейв
         setInterval(async () => {
             await fetch('/api/save', {
                 method: 'POST',
