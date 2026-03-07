@@ -1,28 +1,28 @@
-version: '3.8'
-
+version: '3.9'
 services:
-  bot:
-    build: .
-    container_name: tg_bot
-    restart: always
-    ports:
-      - "3000:3000"
-    env_file: .env
+  gateway:
+    image: nginx:alpine
+    ports: ["80:80"]
     volumes:
-      # Монтируем корень проекта (опционально) или только базу и статику
-      # Важно: монтируем файл БД так, чтобы рядом могли создаваться -wal файлы
-      - ./game.db:/app/game.db
-      - ./static/images:/app/static/images
-      # Если планируешь делать бэкапы через скрипт в main.py
-      - ./backups:/app/backups
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10mb"
-        max-file: "3"
-    networks:
-      - bot_net
+      - ./static:/usr/share/nginx/html
+      - ./deploy/nginx.conf:/etc/nginx/nginx.conf
+    depends_on: [api, socket]
 
-networks:
-  bot_net:
-    driver: bridge
+  api:
+    build: ./services/api
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on: [redis]
+
+  socket:
+    build: ./services/socket
+    ports: ["8080:8080"]
+    depends_on: [redis]
+
+  clicker:
+    build: ./services/clicker
+    depends_on: [redis]
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
