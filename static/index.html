@@ -25,6 +25,23 @@
             padding-top: env(safe-area-inset-top);
         }
 
+        /* Окна (Modals) */
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(5,10,26,0.98); z-index: 1000; padding: 25px; overflow-y: auto;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .close-btn { background: none; border: none; color: white; font-size: 28px; cursor: pointer; }
+
+        /* Карточки покупок */
+        .shop-card {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(0,212,255,0.2);
+            border-radius: 15px; padding: 15px; margin-bottom: 12px; display: flex; 
+            justify-content: space-between; align-items: center;
+        }
+        .shop-card:active { transform: scale(0.98); background: rgba(255,255,255,0.1); }
+        .buy-btn { color: var(--neon-green); font-weight: 700; font-size: 14px; }
+
         /* Шапка */
         .top-info { width: 100%; display: flex; align-items: center; gap: 12px; margin-bottom: 15px; }
         .mini-logo { 
@@ -48,13 +65,13 @@
 
         .tap-area { position: relative; flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
         .main-circle {
-            width: 280px; height: 280px; border-radius: 50%;
+            width: 260px; height: 260px; border-radius: 50%;
             background: radial-gradient(circle, #1e1e3f 0%, #050a1a 100%);
             border: 4px solid var(--neon-purp); box-shadow: 0 0 40px rgba(176, 38, 255, 0.3);
             display: flex; align-items: center; justify-content: center; 
-            font-size: 110px; cursor: pointer; transition: transform 0.05s; z-index: 2;
+            font-size: 100px; cursor: pointer; transition: transform 0.05s; z-index: 2;
         }
-        .main-circle:active { transform: scale(0.94); }
+        .main-circle:active { transform: scale(0.92); }
         .main-circle::after { content: '🧠'; }
 
         .side-buttons { position: absolute; right: -5px; display: flex; flex-direction: column; gap: 12px; z-index: 3; }
@@ -98,7 +115,7 @@
     <div class="tap-area">
         <div class="main-circle" id="tap-btn"></div>
         <div class="side-buttons">
-            <div class="side-btn" onclick="tg.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent('https://t.me/UltraMind_AI_bot?start=' + USER_ID))">INVITE</div>
+            <div class="side-btn" id="invite-btn">INVITE</div>
             <div class="side-btn">TASKS</div>
             <div class="side-btn" id="wallet-btn" style="border-color: #ffaa00;">WALLET</div>
         </div>
@@ -110,20 +127,60 @@
     </div>
 
     <div class="bottom-menu">
-        <div class="menu-item">🚀 BOOST</div>
-        <div class="menu-item">⛏️ MINE</div>
-        <div class="menu-item">📊 STATS</div>
+        <div class="menu-item" id="open-boost">🚀 BOOST</div>
+        <div class="menu-item" id="open-mine">⛏️ MINE</div>
+        <div class="menu-item" id="open-stats">📊 STATS</div>
+    </div>
+</div>
+
+<div id="modal-mine" class="modal">
+    <div class="modal-header">
+        <h2 style="color:var(--neon-blue)">NEURAL MINE</h2>
+        <button class="close-btn" onclick="closeModals()">✕</button>
+    </div>
+    <div class="shop-card" onclick="buyUpgrade('pnl', 500, 50, 'GPT-4 Node')">
+        <div>
+            <div style="font-weight:900">GPT-4 NODE</div>
+            <div style="font-size:10px; color:#aaa">+50 profit/hr</div>
+        </div>
+        <div class="buy-btn">500 NP</div>
+    </div>
+    <div class="shop-card" onclick="buyUpgrade('pnl', 2000, 250, 'Neural Server')">
+        <div>
+            <div style="font-weight:900">NEURAL SERVER</div>
+            <div style="font-size:10px; color:#aaa">+250 profit/hr</div>
+        </div>
+        <div class="buy-btn">2k NP</div>
+    </div>
+</div>
+
+<div id="modal-boost" class="modal">
+    <div class="modal-header">
+        <h2 style="color:var(--neon-purp)">UPGRADES</h2>
+        <button class="close-btn" onclick="closeModals()">✕</button>
+    </div>
+    <div class="shop-card" onclick="buyUpgrade('tap', 1000, 1, 'Multitap')">
+        <div>
+            <div style="font-weight:900">MULTITAP</div>
+            <div style="font-size:10px; color:#aaa">+1 per tap</div>
+        </div>
+        <div class="buy-btn">1k NP</div>
+    </div>
+    <div class="shop-card" onclick="buyUpgrade('energy', 800, 500, 'Battery')">
+        <div>
+            <div style="font-weight:900">BATTERY</div>
+            <div style="font-size:10px; color:#aaa">+500 max energy</div>
+        </div>
+        <div class="buy-btn">800 NP</div>
     </div>
 </div>
 
 <script>
     const tg = window.Telegram.WebApp;
     const USER_ID = String(tg.initDataUnsafe?.user?.id || 'TEST_USER');
-    const START_PARAM = tg.initDataUnsafe?.start_param || '';
 
     tg.ready();
     tg.expand();
-    tg.setHeaderColor('#050a1a');
     document.body.style.opacity = '1';
 
     let state = {
@@ -136,29 +193,11 @@
         user_id: USER_ID
     };
 
-    // Загрузка
+    // Загрузка локальных данных
     const localData = localStorage.getItem('np_state');
     if (localData) {
         state = {...state, ...JSON.parse(localData)};
         updateUI();
-    }
-
-    async function syncWithServer() {
-        try {
-            const response = await fetch(`/api/balance/${USER_ID}?ref=${START_PARAM}&t=${Date.now()}`);
-            if (response.ok) {
-                const result = await response.json();
-                if(result.status === 'ok') {
-                    state = {...state, ...result.data};
-                    updateUI();
-                    saveToLocal();
-                }
-            }
-        } catch(e) {}
-    }
-
-    function saveToLocal() {
-        localStorage.setItem('np_state', JSON.stringify(state));
     }
 
     function updateUI() {
@@ -168,85 +207,80 @@
         document.getElementById('pnl-info').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
         document.getElementById('user-lvl').innerText = `LVL ${state.level}`;
         
-        // Уровни: LVL 1 до 100к, LVL 2 до 200к и т.д.
-        const nextLevelGoal = state.level * 100000;
-        const prevLevelGoal = (state.level - 1) * 100000;
-        const progress = ((state.score - prevLevelGoal) / (nextLevelGoal - prevLevelGoal)) * 100;
+        const nextLvl = state.level * 100000;
+        const prevLvl = (state.level - 1) * 100000;
+        const progress = ((state.score - prevLvl) / (nextLvl - prevLvl)) * 100;
         document.getElementById('progress-fill').style.width = Math.min(Math.max(progress, 0), 100) + '%';
         
-        // Фейковый джекпот
-        document.getElementById('jackpot').innerText = (500052 + Math.floor(Date.now()/1000000)).toLocaleString();
+        if (state.score >= nextLvl) {
+            state.level++;
+            tg.HapticFeedback.notificationOccurred('success');
+        }
     }
 
-    // ТАПЫ С КРИТАМИ
+    // Логика покупки
+    function buyUpgrade(type, cost, value, name) {
+        if (state.score >= cost) {
+            state.score -= cost;
+            if (type === 'pnl') state.pnl += value;
+            if (type === 'tap') state.tap_power += value;
+            if (type === 'energy') state.max_energy += value;
+            
+            tg.HapticFeedback.impactOccurred('medium');
+            tg.showAlert(`Success: ${name} upgraded!`);
+            updateUI();
+            saveToLocal();
+        } else {
+            tg.showAlert("Not enough Neural Pulse (NP)!");
+        }
+    }
+
+    // Тап-механика
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
-        const touches = e.changedTouches;
-        
-        for(let i=0; i < touches.length; i++) {
-            if(state.energy >= state.tap_power) {
-                // 5% шанс крита (x10)
+        for (let t of e.changedTouches) {
+            if (state.energy >= state.tap_power) {
                 const isCrit = Math.random() < 0.05;
-                const multiplier = isCrit ? 10 : 1;
-                const finalPower = state.tap_power * multiplier;
-
-                state.score += finalPower;
+                const power = state.tap_power * (isCrit ? 10 : 1);
+                state.score += power;
                 state.energy -= state.tap_power;
-
-                createFloatingText(touches[i].clientX, touches[i].clientY, `+${finalPower}`, isCrit);
-                
-                if(tg.HapticFeedback) {
-                    tg.HapticFeedback.impactOccurred(isCrit ? 'heavy' : 'light');
-                }
+                createFloatingText(t.clientX, t.clientY, `+${power}`, isCrit);
+                tg.HapticFeedback.impactOccurred(isCrit ? 'heavy' : 'light');
             }
         }
         updateUI();
         saveToLocal();
     });
 
-    function createFloatingText(x, y, text, isCrit) {
+    function createFloatingText(x, y, text, crit) {
         const el = document.createElement('div');
         el.className = 'floating-text';
         el.innerText = text;
-        if(isCrit) {
-            el.style.color = '#ffaa00';
-            el.style.fontSize = '48px';
-            el.style.textShadow = '0 0 20px #ffaa00';
-        }
-        el.style.left = `${x - 20}px`; 
-        el.style.top = `${y - 40}px`;
+        if(crit) { el.style.color = '#ffaa00'; el.style.fontSize = '45px'; }
+        el.style.left = `${x - 20}px`; el.style.top = `${y - 40}px`;
         document.body.appendChild(el);
         setTimeout(() => el.remove(), 600);
     }
 
-    // Реген и PNL
+    // Навигация
+    document.getElementById('open-mine').onclick = () => document.getElementById('modal-mine').style.display = 'block';
+    document.getElementById('open-boost').onclick = () => document.getElementById('modal-boost').style.display = 'block';
+    function closeModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
+
+    // Регенерация и доход
     setInterval(() => {
-        let changed = false;
-        if (state.energy < state.max_energy) {
-            state.energy = Math.min(state.max_energy, state.energy + (state.max_energy / 1000)); 
-            changed = true;
-        }
-        if (state.pnl > 0) {
-            state.score += (state.pnl / 36000);
-            changed = true;
-        }
-        if (changed) updateUI();
+        if (state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + (state.max_energy/1500));
+        if (state.pnl > 0) state.score += (state.pnl / 36000);
+        updateUI();
     }, 100);
 
-    // Автосохранение
-    setInterval(() => {
-        fetch('/api/save', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(state)
-        }).catch(() => {});
-    }, 15000);
-
-    document.getElementById('wallet-btn').onclick = () => {
-        tg.showAlert("Wallet integration coming soon with TON Connect!");
+    function saveToLocal() { localStorage.setItem('np_state', JSON.stringify(state)); }
+    
+    document.getElementById('invite-btn').onclick = () => {
+        const url = `https://t.me/share/url?url=https://t.me/UltraMind_AI_bot?start=${USER_ID}&text=Join my Neural Network!`;
+        tg.openTelegramLink(url);
     };
 
-    syncWithServer();
 </script>
 </body>
 </html>
