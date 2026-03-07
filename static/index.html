@@ -10,7 +10,6 @@
             --neon-cyan: #00f2ff;
             --neon-purple: #bc13fe;
             --bg-dark: #050505;
-            --glass: rgba(255, 255, 255, 0.1);
         }
 
         body {
@@ -22,85 +21,84 @@
             display: flex; flex-direction: column; align-items: center;
             height: 100vh;
             user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
 
-        /* Анимация пульсации для Лого */
-        @keyframes logo-pulse {
-            0% { transform: scale(1); box-shadow: 0 0 20px rgba(188, 19, 254, 0.4); }
-            50% { transform: scale(1.02); box-shadow: 0 0 50px rgba(188, 19, 254, 0.7); }
-            100% { transform: scale(1); box-shadow: 0 0 20px rgba(188, 19, 254, 0.4); }
+        /* Эффект Нейро-Шторма (x2) */
+        .storm-mode .main-logo {
+            box-shadow: 0 0 60px var(--neon-purple) !important;
+            border: 4px solid var(--neon-purple);
         }
+        
+        .storm-badge {
+            display: none; background: var(--neon-purple);
+            padding: 2px 8px; border-radius: 5px; font-size: 10px;
+            font-weight: bold; margin-bottom: 5px; animation: blink 1s infinite;
+        }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
 
         .header { width: 90%; margin-top: 15px; display: flex; align-items: center; gap: 10px; }
         .league-badge {
             width: 50px; height: 50px; border: 2px solid var(--neon-purple);
             border-radius: 12px; display: flex; align-items: center; justify-content: center;
-            background: rgba(188, 19, 254, 0.1); font-weight: bold;
+            background: rgba(188, 19, 254, 0.1); font-weight: bold; box-shadow: 0 0 15px rgba(188, 19, 254, 0.3);
         }
         .league-info { flex-grow: 1; }
         .league-name { font-size: 12px; letter-spacing: 1px; color: #aaa; }
         .progress-container { width: 100%; height: 6px; background: #222; border-radius: 3px; margin-top: 5px; }
         .progress-fill { height: 100%; background: linear-gradient(90deg, var(--neon-purple), var(--neon-cyan)); border-radius: 3px; transition: width 0.5s; }
 
-        .jackpot-box { text-align: center; margin-top: 10px; }
-        .jackpot-label { color: var(--neon-cyan); font-size: 12px; letter-spacing: 2px; }
-        .jackpot-value { font-size: 28px; font-weight: bold; }
-
-        .score-container { margin-top: 10px; text-align: center; }
-        #balance { font-size: 48px; font-weight: 800; text-shadow: 0 0 20px var(--neon-cyan); }
-        .profit-info { color: var(--neon-cyan); font-size: 14px; margin-top: -5px; }
+        .score-container { margin-top: 20px; text-align: center; }
+        #balance { font-size: 44px; font-weight: 800; text-shadow: 0 0 20px var(--neon-cyan); transition: transform 0.1s; }
+        .profit-info { color: var(--neon-cyan); font-size: 14px; margin-top: -5px; opacity: 0.8; }
 
         .click-area {
-            position: relative; margin-top: 20px;
-            width: 260px; height: 260px;
+            position: relative; margin-top: 30px;
+            width: 280px; height: 280px;
             display: flex; align-items: center; justify-content: center;
         }
         .main-logo {
             width: 100%; height: 100%; border-radius: 50%;
-            animation: logo-pulse 3s infinite ease-in-out;
+            box-shadow: 0 0 30px rgba(0, 242, 255, 0.2);
             transition: transform 0.05s; z-index: 2;
         }
-        .main-logo:active { transform: scale(0.92); }
 
-        .sidebar { position: absolute; right: -20%; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 12px; }
+        .sidebar { position: absolute; right: -70px; display: flex; flex-direction: column; gap: 12px; }
         .side-btn {
-            background: rgba(0,0,0,0.8); border: 1px solid var(--neon-cyan);
-            color: white; padding: 8px; border-radius: 10px; font-size: 10px; width: 65px; text-align: center;
+            background: rgba(15, 15, 15, 0.9); border: 1px solid #333;
+            color: white; padding: 10px; border-radius: 12px; font-size: 10px; width: 60px; text-align: center;
+            backdrop-filter: blur(5px);
         }
 
-        .energy-section { width: 90%; margin-top: auto; margin-bottom: 15px; }
-        .energy-header { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
-        .energy-bar { width: 100%; height: 10px; background: #1a1a1a; border-radius: 5px; border: 1px solid #333; }
-        #energy-fill { height: 100%; background: linear-gradient(90deg, #00c6ff, #0072ff); transition: width 0.2s; }
+        .energy-section { width: 90%; margin-top: auto; margin-bottom: 20px; }
+        .energy-header { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; font-weight: bold; }
+        .energy-bar { width: 100%; height: 12px; background: #111; border-radius: 6px; border: 1px solid #222; overflow: hidden; }
+        #energy-fill { height: 100%; background: linear-gradient(90deg, var(--neon-cyan), #0072ff); width: 100%; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
 
-        .bottom-nav { width: 95%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .bottom-nav { width: 95%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px; }
         .nav-btn {
-            background: #111; border: 1px solid #333; padding: 12px; border-radius: 12px;
-            text-align: center; font-size: 13px; font-weight: bold; transition: 0.2s;
+            background: linear-gradient(145deg, #151515, #0a0a0a); border: 1px solid #222; padding: 15px; border-radius: 16px;
+            text-align: center; font-size: 12px; font-weight: bold; color: #fff;
         }
-        .nav-btn:active { background: #222; transform: scale(0.95); }
+        .nav-btn:active { transform: scale(0.95); border-color: var(--neon-cyan); }
 
-        /* Окно Апгрейдов (Shop) */
+        /* Модалки */
         .modal {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); z-index: 100; display: none;
-            flex-direction: column; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.95); z-index: 1000; display: none;
+            flex-direction: column; align-items: center; padding-top: 50px;
         }
         .modal-content {
-            width: 80%; background: #151515; border: 2px solid var(--neon-purple);
-            padding: 20px; border-radius: 20px; text-align: center;
+            width: 85%; max-height: 70vh; overflow-y: auto; background: #111; 
+            border: 1px solid #333; padding: 20px; border-radius: 25px;
         }
-        .upgrade-card {
-            background: #222; padding: 15px; border-radius: 10px; margin: 10px 0;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .buy-btn { background: var(--neon-cyan); color: black; padding: 8px 15px; border-radius: 8px; font-weight: bold; }
 
         .tap-text {
-            position: absolute; color: white; font-size: 32px; font-weight: bold;
-            pointer-events: none; animation: floatUp 0.8s ease-out forwards; z-index: 10;
+            position: absolute; color: var(--neon-cyan); font-size: 28px; font-weight: 900;
+            pointer-events: none; animation: floatUp 0.7s ease-out forwards; z-index: 100;
+            text-shadow: 0 0 10px rgba(0, 242, 255, 0.5);
         }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px); } }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) rotate(0deg); } 100% { opacity: 0; transform: translateY(-150px) rotate(10deg); } }
     </style>
 </head>
 <body>
@@ -108,38 +106,34 @@
     <div class="header">
         <div class="league-badge" id="lvl-badge">1</div>
         <div class="league-info">
-            <div style="display: flex; justify-content: space-between;">
-                <span class="league-name" id="league-name">IRON LEAGUE</span>
-                <span style="font-size: 10px; color: var(--neon-cyan);" id="next-lvl">TO LVL 2</span>
+            <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                <span class="league-name" id="league-name">SILICON NOVICE</span>
+                <span style="font-size: 10px; color: var(--neon-cyan);" id="next-lvl">LEVEL UP IN 80%</span>
             </div>
             <div class="progress-container">
-                <div class="progress-fill" id="exp-bar" style="width: 0%;"></div>
+                <div class="progress-fill" id="exp-bar" style="width: 20%;"></div>
             </div>
         </div>
     </div>
 
-    <div class="jackpot-box">
-        <div class="jackpot-label">GLOBAL JACKPOT</div>
-        <div class="jackpot-value" id="jackpot">500,000</div>
-    </div>
-
     <div class="score-container">
+        <div class="storm-badge" id="storm-badge">STORM X2 ACTIVE</div>
         <div id="balance">0</div>
         <div class="profit-info" id="pnl-info">PROFIT: +0/hr</div>
     </div>
 
     <div class="click-area" id="tap-zone">
-        <img src="images/logo.png" class="main-logo" alt="Neural AI">
+        <img src="images/logo.png" class="main-logo" id="main-logo" alt="Neural AI">
         <div class="sidebar">
             <div class="side-btn" onclick="showInvite()">INVITE</div>
-            <div class="side-btn" onclick="showTasks()">TASKS</div>
-            <div class="side-btn" onclick="tg.showAlert('Wallet coming soon!')">WALLET</div>
+            <div class="side-btn" onclick="openModal('leaderboard')">TOP 100</div>
+            <div class="side-btn" onclick="tg.showAlert('Coming Soon')">GUILDS</div>
         </div>
     </div>
 
     <div class="energy-section">
         <div class="energy-header">
-            <span>⚡ ENERGY</span>
+            <span style="display:flex; align-items:center; gap:5px;">⚡ ENERGY</span>
             <span id="energy-text">1000/1000</span>
         </div>
         <div class="energy-bar">
@@ -148,37 +142,28 @@
     </div>
 
     <div class="bottom-nav">
-        <div class="nav-btn" onclick="openModal('boost')">🚀 BOOST</div>
-        <div class="nav-btn" onclick="openModal('mine')">⛏️ MINE</div>
-        <div class="nav-btn" onclick="showStats()">📊 STATS</div>
+        <div class="nav-btn" onclick="openModal('boost')">🚀 UPGRADE</div>
+        <div class="nav-btn" onclick="openModal('mine')">⛏️ NEURAL MINE</div>
+        <div class="nav-btn" onclick="showInvite()">🎁 FRIENDS</div>
     </div>
 
     <div id="modal" class="modal" onclick="closeModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
-            <h2 id="modal-title">UPGRADES</h2>
+            <h2 id="modal-title" style="color:var(--neon-cyan)">STORE</h2>
             <div id="modal-list"></div>
-            <button onclick="closeModal()" style="margin-top:15px; background:none; border:1px solid grey; color:white; padding:10px; border-radius:10px;">Close</button>
+            <button onclick="closeModal()" style="width:100%; margin-top:20px; background:#222; border:none; color:white; padding:12px; border-radius:12px;">Back to Neural Link</button>
         </div>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        const uid = tg.initDataUnsafe?.user?.id || "test_user";
+        const urlParams = new URLSearchParams(window.location.search);
+        const uid = urlParams.get('u') || tg.initDataUnsafe?.user?.id || "test_user";
 
-        let state = {
-            score: 0,
-            energy: 1000,
-            max_energy: 1000,
-            tap_power: 1,
-            pnl: 0,
-            level: 1
-        };
+        let state = { score: 0, energy: 1000, max_energy: 1000, tap_power: 1, pnl: 0, level: 1, multiplier: 1 };
 
-        // Математика прогрессии (как ты просил)
-        const getCost = (lvl) => Math.floor(500 * Math.pow(1.6, lvl));
-
-        async function loadData() {
+        async function init() {
             try {
                 const r = await fetch(`/api/balance/${uid}`);
                 const res = await r.json();
@@ -186,7 +171,7 @@
                     state = { ...state, ...res.data };
                     updateUI();
                 }
-            } catch(e) { console.error("Load error"); }
+            } catch(e) { console.error("API Error"); }
         }
 
         function updateUI() {
@@ -196,103 +181,99 @@
             document.getElementById('pnl-info').innerText = `PROFIT: +${state.pnl.toLocaleString()}/hr`;
             document.getElementById('lvl-badge').innerText = state.level;
             
-            // Прогресс лиги (каждые 1,000,000 новый этап)
-            let progress = (state.score % 1000000) / 10000;
-            document.getElementById('exp-bar').style.width = `${progress}%`;
+            // Проверка шторма
+            const body = document.body;
+            const badge = document.getElementById('storm-badge');
+            if (state.multiplier > 1) {
+                body.classList.add('storm-mode');
+                badge.style.display = 'inline-block';
+            } else {
+                body.classList.remove('storm-mode');
+                badge.style.display = 'none';
+            }
         }
 
-        // Клик
+        // Логика клика
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
             e.preventDefault();
-            if (state.energy < state.tap_power) return;
+            const power = state.tap_power * state.multiplier;
+            if (state.energy < power) {
+                tg.HapticFeedback.notificationOccurred('error');
+                return;
+            }
 
             for(let i=0; i < e.touches.length; i++) {
                 const touch = e.touches[i];
-                createTapAnim(touch.pageX, touch.pageY);
-                state.score += state.tap_power;
-                state.energy -= state.tap_power;
+                state.score += power;
+                state.energy -= power;
+                createTapAnim(touch.pageX, touch.pageY, power);
             }
+            
             updateUI();
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            tg.HapticFeedback.impactOccurred('medium');
         });
 
-        function createTapAnim(x, y) {
+        function createTapAnim(x, y, val) {
             const el = document.createElement('div');
             el.className = 'tap-text';
-            el.innerText = `+${state.tap_power}`;
+            el.innerText = `+${val}`;
             el.style.left = `${x - 20}px`;
             el.style.top = `${y - 40}px`;
             document.body.appendChild(el);
-            setTimeout(() => el.remove(), 800);
+            setTimeout(() => el.remove(), 700);
         }
 
-        // Пассивный доход и реген энергии
+        // Пассивные процессы
         setInterval(() => {
-            state.score += (state.pnl / 3600); // Доход в секунду
-            if (state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.5);
+            state.score += (state.pnl / 3600);
+            if (state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 2);
             updateUI();
         }, 1000);
 
-        // Магазин
-        function openModal(type) {
-            const modal = document.getElementById('modal');
+        // Работа с модалками
+        async function openModal(type) {
+            const m = document.getElementById('modal');
             const list = document.getElementById('modal-list');
-            list.innerHTML = '';
-            modal.style.display = 'flex';
+            const title = document.getElementById('modal-title');
+            list.innerHTML = '<p style="color:grey">Loading Neural Data...</p>';
+            m.style.display = 'flex';
 
-            if(type === 'boost') {
-                document.getElementById('modal-title').innerText = "🚀 BOOSTERS";
-                let cost = getCost(state.tap_power);
-                list.innerHTML = `
-                    <div class="upgrade-card">
-                        <div><b>Multitap</b><br><small>+1 per tap</small></div>
-                        <div class="buy-btn" onclick="buyUpgrade('tap', ${cost})">${cost}</div>
-                    </div>`;
-            } else if(type === 'mine') {
-                document.getElementById('modal-title').innerText = "⛏️ MINING";
-                let cost = getCost(state.level);
-                list.innerHTML = `
-                    <div class="upgrade-card">
-                        <div><b>AI Processor</b><br><small>+500 profit/hr</small></div>
-                        <div class="buy-btn" onclick="buyUpgrade('mine', ${cost})">${cost}</div>
-                    </div>`;
-            }
-        }
-
-        function buyUpgrade(type, cost) {
-            if(state.score >= cost) {
-                state.score -= cost;
-                if(type === 'tap') state.tap_power += 1;
-                if(type === 'mine') { state.pnl += 500; state.level += 1; }
-                tg.HapticFeedback.notificationOccurred('success');
-                closeModal();
-                updateUI();
-            } else {
-                tg.showAlert("Need more NP!");
+            if(type === 'leaderboard') {
+                title.innerText = "GLOBAL LEADERS";
+                const r = await fetch('/api/leaderboard');
+                const res = await r.json();
+                list.innerHTML = res.top.map((u, i) => `
+                    <div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #222; font-size:14px;">
+                        <span>${i+1}. ID: ${u.id}</span>
+                        <span style="color:var(--neon-cyan)">${Math.floor(u.score).toLocaleString()} NP</span>
+                    </div>
+                `).join('');
+            } else if (type === 'boost') {
+                title.innerText = "UPGRADES";
+                list.innerHTML = `<div class="upgrade-card" style="background:#222; padding:15px; border-radius:15px; display:flex; justify-content:space-between; align-items:center;">
+                    <span>Multitap (Lvl ${state.tap_power})</span>
+                    <button onclick="buy('tap')" style="background:var(--neon-cyan); border:none; padding:8px 15px; border-radius:10px; font-weight:bold;">BUY</button>
+                </div>`;
             }
         }
 
         function closeModal() { document.getElementById('modal').style.display = 'none'; }
 
         function showInvite() {
-            const link = `https://t.me/UltraMind_AI_bot?start=${uid}`;
-            tg.showPopup({
-                title: 'Пригласи друга',
-                message: `Твоя ссылка: ${link}`,
-                buttons: [{type: 'default', text: 'Копировать'}]
-            });
+            const link = `https://t.me/neural_pulse_bot?start=${uid}`;
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my Neural Network!`);
         }
 
-        // Авто-сейв
-        setInterval(async () => {
-            await fetch('/api/save', {
+        // Авто-сохранение
+        setInterval(() => {
+            fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ user_id: uid, ...state })
             });
-        }, 5000);
+        }, 3000);
 
-        loadData();
+        init();
     </script>
 </body>
 </html>
