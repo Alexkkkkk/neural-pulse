@@ -197,16 +197,13 @@
 
 <script>
     const tg = window.Telegram.WebApp;
-    // Безопасное получение ID. Если мы в браузере, используем TEST_USER
     const USER_ID = tg.initDataUnsafe?.user?.id ? String(tg.initDataUnsafe.user.id) : 'TEST_USER';
     const REF_ID = new URLSearchParams(window.location.search).get('ref') || '';
 
-    // Важно: сообщаем Telegram, что мы готовы, до начала тяжелых запросов
     tg.ready();
     tg.expand();
     document.body.style.opacity = '1';
 
-    // Инициализация состояния из localStorage (чтобы игра не была пустой при лагах сервера)
     let state = JSON.parse(localStorage.getItem('np_state')) || {
         score: 0,
         energy: 1000,
@@ -229,7 +226,7 @@
                 }
             }
         } catch (e) { 
-            console.warn("Server offline, using local data");
+            console.warn("Server connection issue, using local data");
             updateUI();
         }
     }
@@ -263,7 +260,7 @@
             }
             tg.HapticFeedback.impactOccurred('medium');
             updateUI();
-            saveToServer(true);
+            saveToServer();
         } else {
             tg.HapticFeedback.notificationOccurred('error');
             tg.showAlert("Not enough Neural Pulse (NP)!");
@@ -302,28 +299,19 @@
         document.getElementById('modal-stats').style.display = 'block';
         try {
             const res = await fetch('/api/stats');
-            const data = await res.json();
-            document.getElementById('stat-users').innerText = data.total_users;
-            document.getElementById('stat-supply').innerText = Math.floor(data.total_supply).toLocaleString();
-            
-            let html = '';
-            data.top.forEach((p, i) => {
-                const isMe = String(p.id).startsWith(USER_ID.slice(0, 3));
-                html += `
-                <div class="shop-card" style="${isMe ? 'border-color:var(--neon-green); background:rgba(0,255,204,0.05)' : ''}">
-                    <div style="font-size:12px;">#${i+1} Agent ${p.id}</div>
-                    <div style="font-weight:900; color:var(--neon-green)">${Math.floor(p.bal).toLocaleString()}</div>
-                </div>`;
-            });
-            document.getElementById('top-list').innerHTML = html;
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById('stat-users').innerText = data.total_users || '...';
+                document.getElementById('stat-supply').innerText = data.total_supply ? Math.floor(data.total_supply).toLocaleString() : '...';
+            }
         } catch (e) {
-            document.getElementById('top-list').innerHTML = '<div style="color:red; text-align:center">Grid offline</div>';
+            console.error("Stats error");
         }
     };
 
     function closeModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
 
-    // Игровой цикл
+    // Игровой цикл (100мс)
     setInterval(() => {
         if (state.energy < state.max_energy) {
             state.energy = Math.min(state.max_energy, state.energy + (state.max_energy / 9000));
@@ -334,16 +322,15 @@
         updateUI();
     }, 100);
 
-    function saveToServer(force = false) {
+    function saveToServer() {
         localStorage.setItem('np_state', JSON.stringify(state));
         fetch('/api/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(state)
-        }).catch(() => {});
+        }).catch(() => console.warn("Save failed"));
     }
 
-    // Сохранение раз в 15 секунд + синхронизация при старте
     setInterval(saveToServer, 15000);
 
     document.getElementById('invite-btn').onclick = () => {
