@@ -1,21 +1,34 @@
-# --- Core Server & API ---
+# --- [ CORE SERVER & API ] ---
+# Используем последние стабильные версии для лучшей безопасности и скорости
 fastapi==0.111.0
 uvicorn[standard]==0.30.1
 pydantic==2.7.4
 pydantic-settings==2.3.4
 python-multipart==0.0.9
-ujson==5.10.0
 
-# --- Telegram Bot Framework ---
+# --- [ PERFORMANCE BOOSTERS ] ---
+# ujson и orjson значительно ускоряют обработку API-ответов
+ujson==5.10.0
+orjson==3.10.5
+# uvloop делает асинхронный цикл в 2-4 раза быстрее (не для Windows)
+uvloop==0.19.0; sys_platform != 'win32'
+# watchfiles нужен uvicorn для быстрой перезагрузки при разработке
+watchfiles==0.21.0
+
+# --- [ TELEGRAM BOT FRAMEWORK ] ---
+# aiogram 3.10 — стандарт индустрии для современных Mini Apps
 aiogram==3.10.0
 aiohttp==3.9.5
+certifi==2024.6.2
 
-# --- Database & Cache (Исправлено под Bothost) ---
+# --- [ DATABASE & STORAGE ] ---
+# aiosqlite для основной БД, redis для кэша и лидербордов
 aiosqlite==0.20.0
-redis>=5.0.4
-# aioredis больше не нужен отдельным пакетом, он внутри redis
+redis==5.0.7
+# Добавляем драйвер для более быстрой работы с типами данных в Redis
+hiredis==2.3.2
 
-# --- System & Performance ---
+# --- [ UTILS & SYSTEM ] ---
 psutil==5.9.8
 tzdata==2024.1
-uvloop==0.19.0; sys_platform != 'win32'
+python-dotenv==1.0.1
