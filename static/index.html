@@ -11,22 +11,34 @@
 <body>
     <canvas id="particles-js"></canvas>
     <div class="content-layer">
-        <div class="top-bar">
-            <div id="ton-connect"></div>
+        <div class="header">
             <div id="lvl-badge">1</div>
+            <div style="flex-grow: 1;">
+                <div class="league-info"><span>NEURAL RANK</span><span id="league-name">SILICON NOVICE</span></div>
+                <div class="exp-bar-wrap"><div id="exp-bar"></div></div>
+            </div>
         </div>
+
         <div class="score-container">
             <div id="balance">0</div>
             <div id="pnl-info">PROFIT: +0/HR</div>
         </div>
+
         <div class="click-area" id="tap-zone">
-            <img src="/static/assets/logo.webp" id="main-logo" alt="Pulse">
+            <img src="/static/assets/logo.webp" class="main-logo" id="main-logo" alt="Pulse">
         </div>
+
         <div class="energy-section">
-            <div id="energy-text">1000/1000</div>
-            <div class="bar-bg"><div id="energy-fill"></div></div>
+            <div class="energy-header"><span>ENERGY CORE</span><span id="energy-text">1000/1000</span></div>
+            <div class="energy-bar-wrap"><div id="energy-fill"></div></div>
+        </div>
+
+        <div class="bottom-nav">
+            <div class="nav-btn" onclick="tg.showAlert('Shop loading...')">🚀 BOOST</div>
+            <div class="nav-btn" onclick="tg.showAlert('Mining starting soon...')">⛏️ MINE</div>
+            <div class="nav-btn" id="invite-btn">🎁 FRIENDS</div>
         </div>
     </div>
-    <script src="/static/js/core.js" type="module"></script>
+    <script src="/static/js/core.js"></script>
 </body>
 </html>
