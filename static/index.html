@@ -98,9 +98,9 @@
     <div class="tap-area">
         <div class="main-circle" id="tap-btn"></div>
         <div class="side-buttons">
-            <div class="side-btn">INVITE</div>
+            <div class="side-btn" onclick="tg.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent('https://t.me/UltraMind_AI_bot?start=' + USER_ID))">INVITE</div>
             <div class="side-btn">TASKS</div>
-            <div class="side-btn" style="border-color: #ffaa00;">WALLET</div>
+            <div class="side-btn" id="wallet-btn" style="border-color: #ffaa00;">WALLET</div>
         </div>
     </div>
 
@@ -121,23 +121,11 @@
     const USER_ID = String(tg.initDataUnsafe?.user?.id || 'TEST_USER');
     const START_PARAM = tg.initDataUnsafe?.start_param || '';
 
-    // Логирование на Bothost
-    async function logToServer(msg, type = "INFO") {
-        try {
-            fetch('/api/log', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ user_id: USER_ID, error: `[${type}] ${msg}` })
-            });
-        } catch(e) {}
-    }
-
     tg.ready();
     tg.expand();
     tg.setHeaderColor('#050a1a');
     document.body.style.opacity = '1';
 
-    // Состояние игры
     let state = {
         score: 0,
         energy: 1000,
@@ -148,14 +136,13 @@
         user_id: USER_ID
     };
 
-    // Загрузка локального кеша (для мгновенного старта)
+    // Загрузка
     const localData = localStorage.getItem('np_state');
     if (localData) {
         state = {...state, ...JSON.parse(localData)};
         updateUI();
     }
 
-    // Синхронизация с сервера
     async function syncWithServer() {
         try {
             const response = await fetch(`/api/balance/${USER_ID}?ref=${START_PARAM}&t=${Date.now()}`);
@@ -167,7 +154,7 @@
                     saveToLocal();
                 }
             }
-        } catch(e) { logToServer("Sync error: " + e.message, "ERROR"); }
+        } catch(e) {}
     }
 
     function saveToLocal() {
@@ -181,57 +168,72 @@
         document.getElementById('pnl-info').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/hr`;
         document.getElementById('user-lvl').innerText = `LVL ${state.level}`;
         
-        // Прогресс до следующего уровня (пример: каждые 100к монет)
-        const progress = (state.score % 100000) / 1000;
-        document.getElementById('progress-fill').style.width = Math.min(progress, 100) + '%';
+        // Уровни: LVL 1 до 100к, LVL 2 до 200к и т.д.
+        const nextLevelGoal = state.level * 100000;
+        const prevLevelGoal = (state.level - 1) * 100000;
+        const progress = ((state.score - prevLevelGoal) / (nextLevelGoal - prevLevelGoal)) * 100;
+        document.getElementById('progress-fill').style.width = Math.min(Math.max(progress, 0), 100) + '%';
         
         // Фейковый джекпот
         document.getElementById('jackpot').innerText = (500052 + Math.floor(Date.now()/1000000)).toLocaleString();
     }
 
-    // Обработка тапов (мультитач)
+    // ТАПЫ С КРИТАМИ
     document.getElementById('tap-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
         const touches = e.changedTouches;
         
         for(let i=0; i < touches.length; i++) {
             if(state.energy >= state.tap_power) {
-                state.score += state.tap_power;
+                // 5% шанс крита (x10)
+                const isCrit = Math.random() < 0.05;
+                const multiplier = isCrit ? 10 : 1;
+                const finalPower = state.tap_power * multiplier;
+
+                state.score += finalPower;
                 state.energy -= state.tap_power;
-                createFloatingText(touches[i].clientX, touches[i].clientY, `+${state.tap_power}`);
+
+                createFloatingText(touches[i].clientX, touches[i].clientY, `+${finalPower}`, isCrit);
+                
+                if(tg.HapticFeedback) {
+                    tg.HapticFeedback.impactOccurred(isCrit ? 'heavy' : 'light');
+                }
             }
         }
-        
         updateUI();
         saveToLocal();
-        if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
     });
 
-    function createFloatingText(x, y, text) {
+    function createFloatingText(x, y, text, isCrit) {
         const el = document.createElement('div');
         el.className = 'floating-text';
         el.innerText = text;
+        if(isCrit) {
+            el.style.color = '#ffaa00';
+            el.style.fontSize = '48px';
+            el.style.textShadow = '0 0 20px #ffaa00';
+        }
         el.style.left = `${x - 20}px`; 
         el.style.top = `${y - 40}px`;
         document.body.appendChild(el);
         setTimeout(() => el.remove(), 600);
     }
 
-    // Регенерация энергии и пассивный доход (каждые 100мс)
+    // Реген и PNL
     setInterval(() => {
         let changed = false;
         if (state.energy < state.max_energy) {
-            state.energy = Math.min(state.max_energy, state.energy + 0.1); // +1 в сек
+            state.energy = Math.min(state.max_energy, state.energy + (state.max_energy / 1000)); 
             changed = true;
         }
         if (state.pnl > 0) {
-            state.score += (state.pnl / 36000); // доход в 100мс
+            state.score += (state.pnl / 36000);
             changed = true;
         }
         if (changed) updateUI();
     }, 100);
 
-    // Автосохранение на сервер (раз в 15 сек)
+    // Автосохранение
     setInterval(() => {
         fetch('/api/save', {
             method: 'POST',
@@ -240,7 +242,10 @@
         }).catch(() => {});
     }, 15000);
 
-    // Начальная синхронизация
+    document.getElementById('wallet-btn').onclick = () => {
+        tg.showAlert("Wallet integration coming soon with TON Connect!");
+    };
+
     syncWithServer();
 </script>
 </body>
