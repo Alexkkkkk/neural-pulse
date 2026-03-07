@@ -5,17 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="/static/styles.css">
     <style>
         :root {
             --neon-cyan: #00f2ff;
             --neon-purple: #bc13fe;
             --bg-dark: #050505;
-            --glass: rgba(255, 255, 255, 0.05);
+            --glass: rgba(255, 255, 255, 0.07);
         }
 
         body {
             margin: 0; padding: 0;
             background-color: var(--bg-dark);
+            /* Твой задний фон */
+            background-image: radial-gradient(circle at 50% 50%, #0a1128 0%, #050505 100%);
             color: white;
             font-family: 'Segoe UI', Roboto, sans-serif;
             overflow: hidden;
@@ -26,98 +29,77 @@
         }
 
         #particles-js {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            z-index: 1;
-            pointer-events: none;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1; pointer-events: none;
         }
 
         .content-layer {
-            position: relative;
-            z-index: 2;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            position: relative; z-index: 2; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center;
         }
 
-        .storm-mode .main-logo {
-            box-shadow: 0 0 60px var(--neon-purple) !important;
-            border: 4px solid var(--neon-purple);
-        }
-        
-        .storm-badge {
-            display: none; background: var(--neon-purple);
-            padding: 4px 12px; border-radius: 20px; font-size: 11px;
-            font-weight: bold; margin-bottom: 10px; animation: blink 1s infinite;
-            box-shadow: 0 0 15px var(--neon-purple);
-        }
-        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
-
-        .header { 
-            width: 90%; margin-top: 15px; 
-            display: flex; align-items: center; gap: 12px; 
-            background: var(--glass); padding: 10px; border-radius: 15px;
-            backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1);
-        }
-        
-        .league-badge {
-            width: 45px; height: 45px; border: 2px solid var(--neon-purple);
-            border-radius: 12px; display: flex; align-items: center; justify-content: center;
-            background: rgba(188, 19, 254, 0.2); font-weight: bold; 
-            box-shadow: 0 0 15px rgba(188, 19, 254, 0.4);
-        }
-
-        .score-container { margin-top: 30px; text-align: center; }
-        #balance { 
-            font-size: 50px; font-weight: 800; 
-            text-shadow: 0 0 30px var(--neon-cyan); 
-            letter-spacing: -1px;
-        }
-
+        /* Стиль твоей главной кнопки-картинки */
         .click-area {
-            position: relative; margin-top: 40px;
-            width: 260px; height: 260px;
+            position: relative; margin-top: 30px;
+            width: 280px; height: 280px;
             display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
         }
         
         .main-logo {
-            width: 240px; height: 240px; border-radius: 50%;
-            box-shadow: 0 0 40px rgba(0, 242, 255, 0.3);
-            transition: transform 0.05s; z-index: 5;
-            object-fit: cover;
+            width: 250px; height: 250px; border-radius: 50%;
+            box-shadow: 0 0 50px rgba(0, 242, 255, 0.2);
+            transition: transform 0.05s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 5; object-fit: cover;
+            border: 2px solid rgba(0, 242, 255, 0.1);
         }
 
-        .energy-section { width: 90%; margin-top: auto; margin-bottom: 25px; }
-        .energy-bar { 
-            width: 100%; height: 12px; background: rgba(255,255,255,0.05); 
-            border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); overflow: hidden; 
+        .storm-mode .main-logo {
+            box-shadow: 0 0 70px var(--neon-purple) !important;
+            border-color: var(--neon-purple);
         }
-        #energy-fill { 
-            height: 100%; background: linear-gradient(90deg, var(--neon-cyan), #0072ff); 
-            width: 100%; transition: width 0.3s ease; 
-            box-shadow: 0 0 10px var(--neon-cyan);
+
+        .score-container { margin-top: 25px; text-align: center; }
+        #balance { 
+            font-size: 56px; font-weight: 900; 
+            text-shadow: 0 0 25px var(--neon-cyan); 
+            letter-spacing: -2px;
+            background: linear-gradient(180deg, #fff 0%, #00f2ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         .bottom-nav { 
-            width: 92%; display: grid; grid-template-columns: 1fr 1fr 1fr; 
-            gap: 12px; margin-bottom: 25px; 
-        }
-        .nav-btn {
-            background: var(--glass); border: 1px solid rgba(255,255,255,0.1); 
-            padding: 14px; border-radius: 18px; backdrop-filter: blur(10px);
-            text-align: center; font-size: 11px; font-weight: bold; color: #fff;
-            cursor: pointer;
+            width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; 
+            gap: 10px; margin-bottom: 30px; 
         }
 
+        .nav-btn {
+            background: var(--glass); border: 1px solid rgba(255,255,255,0.1); 
+            padding: 15px 5px; border-radius: 16px; backdrop-filter: blur(15px);
+            text-align: center; font-size: 10px; font-weight: 800; color: #fff;
+            text-transform: uppercase; letter-spacing: 1px;
+            transition: 0.2s;
+        }
+        .nav-btn:active { transform: scale(0.95); background: rgba(255,255,255,0.1); }
+
         .tap-text {
-            position: absolute; color: white; font-size: 32px; font-weight: 900;
-            pointer-events: none; animation: floatUp 0.8s ease-out forwards; z-index: 100;
+            position: absolute; color: #fff; font-size: 34px; font-weight: 900;
+            pointer-events: none; animation: floatUp 0.7s ease-out forwards; z-index: 100;
             text-shadow: 0 0 15px var(--neon-cyan);
         }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px); } }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-130px) scale(1.2); } }
+
+        /* Энергия */
+        .energy-section { width: 85%; margin-top: auto; margin-bottom: 20px; }
+        .energy-bar-wrap { 
+            width: 100%; height: 14px; background: rgba(255,255,255,0.05); 
+            border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); overflow: hidden; 
+        }
+        #energy-fill { 
+            height: 100%; background: linear-gradient(90deg, #00f2ff, #bc13fe); 
+            width: 100%; transition: width 0.2s; 
+        }
     </style>
 </head>
 <body>
@@ -125,42 +107,42 @@
     <canvas id="particles-js"></canvas>
 
     <div class="content-layer">
-        <div class="header">
-            <div class="league-badge" id="lvl-badge">1</div>
+        <div class="header" style="width: 85%; margin-top: 15px; display: flex; align-items: center; gap: 10px; background: var(--glass); padding: 12px; border-radius: 20px; backdrop-filter: blur(10px);">
+            <div id="lvl-badge" style="width: 40px; height: 40px; background: var(--neon-purple); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; box-shadow: 0 0 15px var(--neon-purple);">1</div>
             <div style="flex-grow: 1;">
-                <div style="display: flex; justify-content: space-between; font-size: 11px; color: #888;">
+                <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; color: #aaa; margin-bottom: 4px;">
+                    <span>NEURAL RANK</span>
                     <span id="league-name">SILICON NOVICE</span>
-                    <span id="next-lvl">XP</span>
                 </div>
-                <div class="energy-bar" style="height: 6px; margin-top: 5px;">
-                    <div id="exp-bar" style="width: 20%; background: var(--neon-purple); height: 100%;"></div>
+                <div class="energy-bar-wrap" style="height: 6px;">
+                    <div id="exp-bar" style="width: 20%; background: #fff; height: 100%; box-shadow: 0 0 10px #fff;"></div>
                 </div>
             </div>
         </div>
 
         <div class="score-container">
-            <div class="storm-badge" id="storm-badge">STORM X2 ACTIVE</div>
+            <div id="storm-badge" style="display: none; background: #fff; color: #000; padding: 2px 10px; border-radius: 5px; font-size: 10px; font-weight: 900; margin-bottom: 5px; animation: blink 0.5s infinite;">STORM X2 ACTIVE</div>
             <div id="balance">0</div>
-            <div style="color: var(--neon-cyan); font-size: 14px; font-weight: bold; opacity: 0.8;" id="pnl-info">PROFIT: +0/HR</div>
+            <div id="pnl-info" style="color: var(--neon-cyan); font-size: 12px; font-weight: bold; letter-spacing: 1px;">PROFIT: +0/HR</div>
         </div>
 
         <div class="click-area" id="tap-zone">
-            <img src="images/logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/240/00f2ff/ffffff?text=NP'" alt="Neural Pulse">
+            <img src="/static/images/logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/250/00f2ff/000000?text=NP'" alt="Pulse">
         </div>
 
         <div class="energy-section">
-            <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px;">
-                <span>⚡ STAMINA</span>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; margin-bottom: 6px; color: #888;">
+                <span>ENERGY CORE</span>
                 <span id="energy-text">1000/1000</span>
             </div>
-            <div class="energy-bar">
+            <div class="energy-bar-wrap">
                 <div id="energy-fill"></div>
             </div>
         </div>
 
         <div class="bottom-nav">
-            <div class="nav-btn" onclick="tg.showAlert('Upgrade System Offline')">🚀 BOOST</div>
-            <div class="nav-btn" onclick="tg.showAlert('Mining starting soon...')">⛏️ MINE</div>
+            <div class="nav-btn" onclick="tg.HapticFeedback.impactOccurred('medium'); tg.showAlert('Shop loading...')">🚀 BOOST</div>
+            <div class="nav-btn" onclick="tg.HapticFeedback.impactOccurred('medium'); tg.showAlert('Mining starting soon...')">⛏️ MINE</div>
             <div class="nav-btn" onclick="showInvite()">🎁 FRIENDS</div>
         </div>
     </div>
@@ -168,17 +150,14 @@
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        // Устанавливаем цвета темы сразу
         tg.setHeaderColor('#050505');
-        tg.setBackgroundColor('#050505');
 
         const urlParams = new URLSearchParams(window.location.search);
-        // Безопасное получение UID
         const uid = urlParams.get('u') || (tg.initDataUnsafe?.user?.id ? String(tg.initDataUnsafe.user.id) : "guest");
 
         let state = { score: 0, energy: 1000, max_energy: 1000, tap_power: 1, pnl: 0, level: 1, multiplier: 1 };
 
-        // --- ДВИЖОК ЧАСТИЦ ---
+        // Частицы фона
         const canvas = document.getElementById('particles-js');
         const ctx = canvas.getContext('2d');
         let particles = [];
@@ -187,55 +166,39 @@
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
             particles = [];
-            for(let i=0; i<40; i++) {
+            for(let i=0; i<30; i++) {
                 particles.push({
                     x: Math.random() * canvas.width,
                     y: Math.random() * canvas.height,
-                    vx: (Math.random() - 0.5) * 0.5,
-                    vy: (Math.random() - 0.5) * 0.5,
-                    size: Math.random() * 2
+                    vx: (Math.random() - 0.5) * 0.3,
+                    vy: (Math.random() - 0.5) * 0.3,
+                    size: Math.random() * 1.5
                 });
             }
         }
 
         function drawParticles() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = 'rgba(0, 242, 255, 0.3)';
-            ctx.strokeStyle = 'rgba(188, 19, 254, 0.1)';
-            particles.forEach((p, i) => {
+            ctx.fillStyle = 'rgba(0, 242, 255, 0.2)';
+            particles.forEach((p) => {
                 p.x += p.vx; p.y += p.vy;
                 if(p.x < 0 || p.x > canvas.width) p.vx *= -1;
                 if(p.y < 0 || p.y > canvas.height) p.vy *= -1;
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
                 ctx.fill();
-                for(let j=i+1; j<particles.length; j++) {
-                    let p2 = particles[j];
-                    let dist = Math.hypot(p.x - p2.x, p.y - p2.y);
-                    if(dist < 100) {
-                        ctx.beginPath(); ctx.moveTo(p.x, p.y);
-                        ctx.lineTo(p2.x, p2.y); ctx.stroke();
-                    }
-                }
             });
             requestAnimationFrame(drawParticles);
         }
 
-        // --- ЛОГИКА ИГРЫ ---
         async function init() {
             initParticles();
             drawParticles();
             try {
-                // Используем относительный путь для Bothost
-                const r = await fetch(`./api/balance/${uid}`);
-                if (!r.ok) throw new Error('Server off');
+                const r = await fetch(`/api/balance/${uid}`);
                 const res = await r.json();
-                if(res.status === 'ok') {
-                    state = { ...state, ...res.data };
-                }
-            } catch(e) { 
-                console.warn("Работаем в автономном режиме");
-            }
+                if(res.status === 'ok') state = { ...state, ...res.data };
+            } catch(e) { console.warn("Offline mode"); }
             updateUI();
         }
 
@@ -275,35 +238,34 @@
                 num.style.left = `${touch.pageX - 20}px`;
                 num.style.top = `${touch.pageY - 50}px`;
                 document.body.appendChild(num);
-                setTimeout(() => num.remove(), 800);
+                setTimeout(() => num.remove(), 700);
             }
             updateUI();
             tg.HapticFeedback.impactOccurred('light');
             const logo = document.getElementById('main-logo');
-            logo.style.transform = 'scale(0.92)';
-            setTimeout(() => logo.style.transform = 'scale(1)', 50);
+            logo.style.transform = 'scale(0.94) rotate(-2deg)';
+            setTimeout(() => logo.style.transform = 'scale(1) rotate(0)', 50);
         });
 
         function showInvite() {
             const link = `https://t.me/neural_pulse_bot?start=${uid}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my Neural Network!`);
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my Neural Network and get 5000 XP!`);
         }
 
         setInterval(() => {
             state.score += (state.pnl / 3600);
-            if (state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.5);
+            if (state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.2);
             updateUI();
         }, 1000);
 
-        // Безопасное сохранение
         setInterval(() => {
             if (uid === "guest") return;
-            fetch('./api/save', {
+            fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ user_id: uid, ...state })
-            }).catch(e => console.error("Save failed"));
-        }, 5000);
+            });
+        }, 4000);
 
         window.addEventListener('resize', initParticles);
         init();
