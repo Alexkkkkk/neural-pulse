@@ -3,12 +3,12 @@ import aiosqlite
 import uvicorn
 from pathlib import Path
 from contextlib import asynccontextmanager
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, UJSONResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandObject
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
@@ -32,16 +32,17 @@ WEB_APP_URL = "https://np.bothost.ru"
 USER_CACHE: Dict[str, dict] = {}
 db_conn: Optional[aiosqlite.Connection] = None
 
+# --- [МОДЕЛИ ДАННЫХ] ---
 class SaveData(BaseModel):
     user_id: str
-    score: float
-    energy: float
-    max_energy: int
-    pnl: float
-    level: int
-    tap_power: int
+    score: float = 0.0
+    energy: float = 0.0
+    max_energy: int = 1000
+    pnl: float = 0.0
+    level: int = 1
+    tap_power: int = 1
     wallet_address: Optional[str] = None
-    model_config = ConfigDict(extra='allow')
+    model_config = ConfigDict(extra='allow') # Разрешаем лишние поля, чтобы не падать
 
 # --- [БАЗА ДАННЫХ] ---
 async def batch_db_update():
@@ -167,7 +168,7 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
             f_data = {
                 "score": data["balance"] + offline_bonus, 
                 "tap_power": data["click_lvl"],
-                "energy": float(data["max_energy"]), 
+                "energy": float(data["energy"]), 
                 "max_energy": data["max_energy"],
                 "pnl": data["pnl"], 
                 "level": data["level"], 
@@ -194,15 +195,26 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
 
 @app.post("/api/save")
 async def save(data: SaveData):
-    USER_CACHE[str(data.user_id)] = {"data": data.model_dump(), "last_seen": time.time()}
+    # Сохраняем данные в кэш
+    USER_CACHE[str(data.user_id)] = {
+        "data": data.model_dump(), 
+        "last_seen": time.time()
+    }
     return {"status": "ok"}
 
 @app.get("/api/stats")
 async def get_stats():
+    top_players = []
+    for uid, val in USER_CACHE.items():
+        if 'data' in val:
+            top_players.append({"id": uid[:5] + "...", "bal": val['data'].get('score', 0)})
+    
+    top_players = sorted(top_players, key=lambda x: x['bal'], reverse=True)[:10]
+
     return {
-        "total_users": len(USER_CACHE) + 1,
-        "total_supply": sum(u['data']['score'] for u in USER_CACHE.values() if 'data' in u) if USER_CACHE else 1000000,
-        "top": []
+        "total_users": max(len(USER_CACHE), 1),
+        "total_supply": sum(u['data'].get('score', 0) for u in USER_CACHE.values() if 'data' in u) if USER_CACHE else 0,
+        "top": top_players
     }
 
 # --- [СТАТИКА] ---
@@ -214,9 +226,8 @@ async def serve_index():
         return FileResponse(index_path)
     return JSONResponse({"error": "index.html not found"}, 404)
 
-# Монтируем статику в последнюю очередь
 if STATIC_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    app.mount("/", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
