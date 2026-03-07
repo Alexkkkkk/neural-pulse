@@ -25,16 +25,14 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* Анимированный фон с частицами */
         #particles-js {
             position: fixed;
             top: 0; left: 0;
             width: 100%; height: 100%;
-            z-index: 1; /* Под всеми элементами */
+            z-index: 1;
             pointer-events: none;
         }
 
-        /* Элементы интерфейса поверх фона */
         .content-layer {
             position: relative;
             z-index: 2;
@@ -45,7 +43,6 @@
             align-items: center;
         }
 
-        /* Эффект Нейро-Шторма */
         .storm-mode .main-logo {
             box-shadow: 0 0 60px var(--neon-purple) !important;
             border: 4px solid var(--neon-purple);
@@ -83,13 +80,14 @@
         .click-area {
             position: relative; margin-top: 40px;
             width: 260px; height: 260px;
+            display: flex; align-items: center; justify-content: center;
         }
         
         .main-logo {
-            width: 100%; height: 100%; border-radius: 50%;
+            width: 240px; height: 240px; border-radius: 50%;
             box-shadow: 0 0 40px rgba(0, 242, 255, 0.3);
             transition: transform 0.05s; z-index: 5;
-            position: relative;
+            object-fit: cover;
         }
 
         .energy-section { width: 90%; margin-top: auto; margin-bottom: 25px; }
@@ -111,6 +109,7 @@
             background: var(--glass); border: 1px solid rgba(255,255,255,0.1); 
             padding: 14px; border-radius: 18px; backdrop-filter: blur(10px);
             text-align: center; font-size: 11px; font-weight: bold; color: #fff;
+            cursor: pointer;
         }
 
         .tap-text {
@@ -146,7 +145,7 @@
         </div>
 
         <div class="click-area" id="tap-zone">
-            <img src="images/logo.png" class="main-logo" id="main-logo" alt="Neural Pulse">
+            <img src="images/logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/240/00f2ff/ffffff?text=NP'" alt="Neural Pulse">
         </div>
 
         <div class="energy-section">
@@ -169,14 +168,17 @@
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        tg.backgroundColor = "#050505";
+        // Устанавливаем цвета темы сразу
+        tg.setHeaderColor('#050505');
+        tg.setBackgroundColor('#050505');
 
         const urlParams = new URLSearchParams(window.location.search);
-        const uid = urlParams.get('u') || tg.initDataUnsafe?.user?.id || "guest";
+        // Безопасное получение UID
+        const uid = urlParams.get('u') || (tg.initDataUnsafe?.user?.id ? String(tg.initDataUnsafe.user.id) : "guest");
 
         let state = { score: 0, energy: 1000, max_energy: 1000, tap_power: 1, pnl: 0, level: 1, multiplier: 1 };
 
-        // --- ДВИЖОК ЧАСТИЦ (Background) ---
+        // --- ДВИЖОК ЧАСТИЦ ---
         const canvas = document.getElementById('particles-js');
         const ctx = canvas.getContext('2d');
         let particles = [];
@@ -200,24 +202,19 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = 'rgba(0, 242, 255, 0.3)';
             ctx.strokeStyle = 'rgba(188, 19, 254, 0.1)';
-            
             particles.forEach((p, i) => {
                 p.x += p.vx; p.y += p.vy;
                 if(p.x < 0 || p.x > canvas.width) p.vx *= -1;
                 if(p.y < 0 || p.y > canvas.height) p.vy *= -1;
-                
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
                 ctx.fill();
-
                 for(let j=i+1; j<particles.length; j++) {
                     let p2 = particles[j];
                     let dist = Math.hypot(p.x - p2.x, p.y - p2.y);
                     if(dist < 100) {
-                        ctx.beginPath();
-                        ctx.moveTo(p.x, p.y);
-                        ctx.lineTo(p2.x, p2.y);
-                        ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(p2.x, p2.y); ctx.stroke();
                     }
                 }
             });
@@ -229,13 +226,17 @@
             initParticles();
             drawParticles();
             try {
-                const r = await fetch(`/api/balance/${uid}`);
+                // Используем относительный путь для Bothost
+                const r = await fetch(`./api/balance/${uid}`);
+                if (!r.ok) throw new Error('Server off');
                 const res = await r.json();
                 if(res.status === 'ok') {
                     state = { ...state, ...res.data };
-                    updateUI();
                 }
-            } catch(e) { console.error("API Error"); }
+            } catch(e) { 
+                console.warn("Работаем в автономном режиме");
+            }
+            updateUI();
         }
 
         function updateUI() {
@@ -278,30 +279,31 @@
             }
             updateUI();
             tg.HapticFeedback.impactOccurred('light');
-            document.getElementById('main-logo').style.transform = 'scale(0.95)';
-            setTimeout(() => document.getElementById('main-logo').style.transform = 'scale(1)', 50);
+            const logo = document.getElementById('main-logo');
+            logo.style.transform = 'scale(0.92)';
+            setTimeout(() => logo.style.transform = 'scale(1)', 50);
         });
 
         function showInvite() {
             const link = `https://t.me/neural_pulse_bot?start=${uid}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Become an AI Operator!`);
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my Neural Network!`);
         }
 
-        // Пассивный доход и реген энергии
         setInterval(() => {
             state.score += (state.pnl / 3600);
             if (state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.5);
             updateUI();
         }, 1000);
 
-        // Сохранение
+        // Безопасное сохранение
         setInterval(() => {
-            fetch('/api/save', {
+            if (uid === "guest") return;
+            fetch('./api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ user_id: uid, ...state })
-            });
-        }, 3000);
+            }).catch(e => console.error("Save failed"));
+        }, 5000);
 
         window.addEventListener('resize', initParticles);
         init();
