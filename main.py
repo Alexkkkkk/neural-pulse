@@ -50,7 +50,9 @@ async def batch_db_update():
         if not USER_CACHE or not db_conn: continue
         try:
             users_to_update = []
-            for uid in list(USER_CACHE.keys()):
+            keys_to_clear = list(USER_CACHE.keys())
+            
+            for uid in keys_to_clear:
                 entry = USER_CACHE.get(uid)
                 if not entry: continue
                 d = entry.get("data")
@@ -116,6 +118,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# CORS должен быть настроен до маршрутов
 app.add_middleware(
     CORSMiddleware, 
     allow_origins=["*"], 
@@ -123,7 +126,7 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# --- [API] ---
+# --- [API ЭНДПОИНТЫ] ---
 
 @app.get("/api/health")
 async def health():
@@ -143,9 +146,12 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
     if row:
         data = dict(row)
         f_data = {
-            "score": float(data["balance"]), "tap_power": int(data["click_lvl"]),
-            "energy": float(data["energy"]), "max_energy": int(data["max_energy"]),
-            "pnl": float(data["pnl"]), "level": int(data["level"]), 
+            "score": float(data["balance"]), 
+            "tap_power": int(data["click_lvl"]),
+            "energy": float(data["energy"]), 
+            "max_energy": int(data["max_energy"]),
+            "pnl": float(data["pnl"]), 
+            "level": int(data["level"]), 
             "wallet_address": data["wallet_address"]
         }
         USER_CACHE[uid] = {"data": f_data, "last_seen": now}
@@ -165,13 +171,24 @@ async def save(data: SaveData):
     USER_CACHE[str(data.user_id)] = {"data": data.model_dump(), "last_seen": time.time()}
     return {"status": "ok"}
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    # Пытаемся отдать из images, если нет — просто 204
+    fav = STATIC_DIR / "images" / "favicon.ico"
+    if fav.exists():
+        return FileResponse(fav)
+    return Response(status_code=204)
+
 # --- [СТАТИКА] ---
 
 @app.get("/")
 async def serve_index():
-    return FileResponse(STATIC_DIR / "index.html")
+    index_file = STATIC_DIR / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    return JSONResponse({"error": "Frontend not found"}, 404)
 
-# Монтируем всё остальное (картинки, скрипты) в корень
+# Монтируем статику в самом конце
 if STATIC_DIR.exists():
     app.mount("/", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
