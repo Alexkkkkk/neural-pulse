@@ -41,9 +41,11 @@ class SaveData(BaseModel):
     wallet_address: Optional[str] = None
     model_config = ConfigDict(extra='allow')
 
-class ClientLog(BaseModel):
+class UpgradeRequest(BaseModel):
     user_id: str
-    error: str
+    upgrade_type: str # 'pnl', 'tap', 'energy'
+    cost: float
+    value: float
 
 # --- [БАЗА ДАННЫХ] ---
 async def batch_db_update():
@@ -53,8 +55,7 @@ async def batch_db_update():
         if not USER_CACHE or not db_conn: continue
         try:
             users_to_update = []
-            current_cache = list(USER_CACHE.items())
-            for uid, entry in current_cache:
+            for uid, entry in list(USER_CACHE.items()):
                 d = entry.get("data")
                 if not d: continue
                 users_to_update.append((
@@ -63,6 +64,7 @@ async def batch_db_update():
                     float(d.get('pnl', 0)), int(d.get('level', 1)), 
                     d.get('wallet_address'), int(time.time())
                 ))
+            
             if users_to_update:
                 await db_conn.executemany("""
                     INSERT INTO users (id, balance, click_lvl, energy, max_energy, pnl, level, wallet_address, last_active)
@@ -74,12 +76,7 @@ async def batch_db_update():
                         wallet_address=excluded.wallet_address, last_active=excluded.last_active
                 """, users_to_update)
                 await db_conn.commit()
-                logger.info(f"💾 [DB_SYNC] Обновлено: {len(users_to_update)} юзеров.")
-            
-            # Очистка кэша неактивных (2 часа)
-            limit = time.time() - 7200
-            inactive = [uid for uid, entry in current_cache if entry.get("last_seen", 0) < limit]
-            for uid in inactive: del USER_CACHE[uid]
+                logger.info(f"💾 [DB_SYNC] Синхронизация: {len(users_to_update)} юзеров.")
         except Exception as e:
             logger.error(f"❌ [DB_ERROR] Ошибка записи: {e}")
 
@@ -90,7 +87,6 @@ async def lifespan(app: FastAPI):
     try:
         db_conn = await aiosqlite.connect(DB_PATH)
         await db_conn.execute("PRAGMA journal_mode=WAL")
-        await db_conn.execute("PRAGMA synchronous=NORMAL")
         await db_conn.executescript("""
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY, balance REAL, click_lvl INTEGER, 
@@ -110,21 +106,18 @@ async def lifespan(app: FastAPI):
         @dp.message(Command("start"))
         async def start_cmd(m: types.Message, command: CommandObject):
             ref_id = command.args if command.args else ""
-            v_cache = int(time.time())
-            clean_url = WEB_APP_URL.rstrip('/')
-            url = f"{clean_url}/?v={v_cache}"
-            if ref_id and ref_id != str(m.from_user.id):
-                url += f"&ref={ref_id}"
+            url = f"{WEB_APP_URL}/?v={int(time.time())}"
+            if ref_id: url += f"&ref={ref_id}"
             
             kb = InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="Играть 🧠", web_app=WebAppInfo(url=url))
             ]])
-            await m.answer(f"<b>Neural Pulse Online</b>\nТвой мозг — твой капитал.", reply_markup=kb, parse_mode="HTML")
+            await m.answer(f"<b>Neural Pulse AI</b>\nМайни токены своим интеллектом!", reply_markup=kb, parse_mode="HTML")
             
         asyncio.create_task(dp.start_polling(bot))
         asyncio.create_task(batch_db_update())
         app.state.ready = True
-        logger.info("🌟 [SERVER] Запущен и готов.")
+        logger.info("🌟 [SERVER] Мозг ИИ активирован.")
     except Exception as e:
         logger.critical(f"💥 Ошибка старта: {e}")
     yield
@@ -135,49 +128,39 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 # --- [API ЭНДПОИНТЫ] ---
 
-@app.get("/favicon.ico", include_in_schema=False)
-async def favicon():
-    return Response(status_code=204)
-
-@app.post("/api/log")
-async def log_from_client(data: ClientLog):
-    logger.error(f"📱 [CLIENT_LOG] User {data.user_id}: {data.error}")
-    return {"status": "ok"}
-
-@app.get("/api/health")
-async def health():
-    return {"status": "ok"} if getattr(app.state, "ready", False) else JSONResponse({"status":"off"}, 503)
-
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str, ref: Optional[str] = None):
     if not getattr(app.state, "ready", False): return JSONResponse({"status": "error"}, 503)
     uid = str(user_id)
     now = int(time.time())
 
-    if uid in USER_CACHE:
-        USER_CACHE[uid]["last_seen"] = now
-        return {"status": "ok", "data": USER_CACHE[uid]["data"]}
-    
     db_conn.row_factory = aiosqlite.Row
     async with db_conn.execute("SELECT * FROM users WHERE id = ?", (uid,)) as cur:
         row = await cur.fetchone()
     
     if row:
         data = dict(row)
-        f_data = {
-            "score": data["balance"], "tap_power": data["click_lvl"],
-            "energy": data["energy"], "max_energy": data["max_energy"],
-            "pnl": data["pnl"], "level": data["level"], "wallet_address": data["wallet_address"]
-        }
-        if data.get('last_active'):
+        # Рассчитываем офлайн доход
+        offline_bonus = 0
+        if data['last_active'] and data['pnl'] > 0:
             passed = now - data['last_active']
-            if passed > 5 and f_data['pnl'] > 0:
-                f_data['score'] += (f_data['pnl'] / 3600) * passed
+            if passed > 10: # Если не было более 10 сек
+                offline_bonus = (data['pnl'] / 3600) * passed
+        
+        f_data = {
+            "score": data["balance"] + offline_bonus, 
+            "tap_power": data["click_lvl"],
+            "energy": data["max_energy"], # Восстанавливаем энергию при входе
+            "max_energy": data["max_energy"],
+            "pnl": data["pnl"], 
+            "level": data["level"], 
+            "wallet_address": data["wallet_address"]
+        }
         USER_CACHE[uid] = {"data": f_data, "last_seen": now}
         return {"status": "ok", "data": f_data}
     
-    # Реферальная система (5000 бонуса)
-    start_bal = 5000.0 if ref and ref not in ["None", "null", "", uid] else 0.0
+    # Новый юзер
+    start_bal = 5000.0 if ref and ref != uid else 0.0
     new_user = {"score": start_bal, "tap_power": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "wallet_address": None}
     USER_CACHE[uid] = {"data": new_user, "last_seen": now}
     await db_conn.execute("INSERT INTO users (id, balance, click_lvl, energy, max_energy, pnl, level, last_active) VALUES (?,?,?,?,?,?,?,?)",
@@ -194,7 +177,6 @@ async def save(data: SaveData):
 async def serve_index():
     return FileResponse(STATIC_DIR / "index.html")
 
-# Монтируем статику (картинки, стили)
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
