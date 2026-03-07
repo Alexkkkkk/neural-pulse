@@ -1,51 +1,71 @@
 const express = require('express');
 const http = require('http');
 const path = require('path');
+const sqlite3 = require('sqlite3');
+const { open } = require('sqlite');
 const { Server } = require('socket.io');
-const apiRoutes = require('./src/routes/api');
 
 const app = express();
 const server = http.createServer(app);
-
-// Настройка Socket.io с поддержкой CORS
-const io = new Server(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    }
-});
+const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.json());
-
-// Раздача статики
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
-// Подключаем API
-app.use('/api', apiRoutes);
-
-// Главная страница
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'static', 'index.html'));
-});
-
-// Логика сокетов
-io.on('connection', (socket) => {
-    socket.on('tap', (data) => {
-        // Просто подтверждаем получение, чтобы клиент не висел
-        socket.emit('tap_ack', { status: 'ok' });
+// --- [БАЗА ДАННЫХ] ---
+let db;
+(async () => {
+    db = await open({
+        filename: path.join(__dirname, 'game.db'),
+        driver: sqlite3.Database
     });
+    await db.exec(`CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY, balance REAL, click_lvl INTEGER, 
+        pnl REAL DEFAULT 0, energy REAL, max_energy INTEGER, 
+        level INTEGER DEFAULT 1, last_active INTEGER)`);
+    console.log("💾 База данных готова");
+})();
+
+// --- [API ЭНДПОИНТЫ] ---
+app.get('/api/balance/:userId', async (req, res) => {
+    try {
+        const userId = req.params.userId;
+        const now = Math.floor(Date.now() / 1000);
+        let user = await db.get('SELECT * FROM users WHERE id = ?', [userId]);
+
+        if (user) {
+            const offTime = Math.min(now - (user.last_active || now), 10800);
+            const earned = (user.pnl / 3600) * offTime;
+            res.json({ status: "ok", data: {
+                score: user.balance + earned, tap_power: user.click_lvl,
+                pnl: user.pnl, energy: user.energy, level: user.level,
+                max_energy: user.max_energy, multiplier: 1
+            }});
+        } else {
+            await db.run(`INSERT INTO users (id, balance, click_lvl, pnl, energy, max_energy, level, last_active) 
+                          VALUES (?, 1000, 1, 0, 1000, 1000, 1, ?)`, [userId, now]);
+            res.json({ status: "ok", data: { score: 1000, tap_power: 1, pnl: 0, energy: 1000, max_energy: 1000, level: 1, multiplier: 1 }});
+        }
+    } catch (e) { res.status(500).json({status: "error"}); }
 });
 
-// На Bothost переменная PORT может назначаться автоматически, 
-// поэтому используем process.env.PORT || 3000
+app.post('/api/save', async (req, res) => {
+    try {
+        const d = req.body;
+        if (!d.user_id || d.user_id === "guest") return res.json({status: "ignored"});
+        const now = Math.floor(Date.now() / 1000);
+        await db.run(`UPDATE users SET balance=?, click_lvl=?, pnl=?, energy=?, level=?, last_active=? WHERE id=?`,
+            [d.score, d.tap_power, d.pnl, d.energy, d.level, now, d.user_id]);
+        res.json({status: "ok"});
+    } catch (e) { res.status(500).json({status: "error"}); }
+});
+
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'static', 'index.html')));
+
+// --- [SOCKETS] ---
+io.on('connection', (socket) => {
+    socket.on('tap', () => socket.emit('tap_ack', { ok: true }));
+});
+
 const PORT = process.env.PORT || 3000;
-
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Neural Pulse Server is running on port ${PORT}`);
-}).on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-        console.error(`Ошибка: Порт ${PORT} занят. Попробуйте перезапустить бота в панели Bothost.`);
-    } else {
-        console.error(err);
-    }
-});
+server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Сервер запущен на порту ${PORT}`));
