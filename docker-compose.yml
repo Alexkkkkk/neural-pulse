@@ -9,25 +9,24 @@ services:
       - ./deploy/nginx.conf:/etc/nginx/nginx.conf
     depends_on: [api, socket]
 
-  # API сервис (FastAPI + aioredis)
+  # API сервис (FastAPI)
   api:
     build: ./services/api
     environment:
       - REDIS_URL=redis://redis:6379/0
+      - BOT_TOKEN=8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM
     depends_on: [redis]
 
   # Real-time движок (Socket.io)
   socket:
     build: ./services/socket
-    ports: ["8080:8080"]
     depends_on: [redis]
 
-  # Фоновый воркер (Обработка кликов)
+  # Фоновый воркер (Обработка экономики)
   clicker:
     build: ./services/clicker
     depends_on: [redis]
 
-  # Высокоскоростное хранилище (Redis)
+  # Хранилище (Redis)
   redis:
     image: redis:7-alpine
-    command: redis-server --appendonly yes
