@@ -1,50 +1,47 @@
-import os, time, asyncio, logging
+import os, time
 import aiosqlite, uvicorn
 from pathlib import Path
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, ORJSONResponse
 
-# Настраиваем пути относительно корня /app
+# Определяем пути относительно /app
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DB_PATH = BASE_DIR / "data" / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 
 app = FastAPI(default_response_class=ORJSONResponse)
 
-# Создаем папку data если её нет
-os.makedirs(BASE_DIR / "data", exist_ok=True)
-
+# Инициализация БД при старте
 @app.on_event("startup")
 async def startup():
+    os.makedirs(BASE_DIR / "data", exist_ok=True)
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY, balance REAL, level INTEGER DEFAULT 1,
             energy REAL, max_energy INTEGER, pnl REAL, last_active INTEGER)""")
         await db.commit()
 
-# --- [API] ---
+# --- [API ЭНДПОИНТЫ] ---
 @app.get("/api/balance/{uid}")
 async def get_bal(uid: str):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT * FROM users WHERE id=?", (uid,)) as cur:
             row = await cur.fetchone()
-            if row:
-                return {"status": "ok", "data": dict(row)}
+            if row: return {"status": "ok", "data": dict(row)}
             
-            # Новый юзер
-            new_u = (uid, 1000.0, 1, 1000.0, 1000, 0.0, int(time.time()))
-            await db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?)", new_u)
+            # Если юзера нет — создаем
+            now = int(time.time())
+            await db.execute("INSERT INTO users VALUES (?,1000,1,1000,1000,0,?)", (uid, now))
             await db.commit()
-            return {"status": "ok", "data": {"score": 1000, "level": 1, "energy": 1000}}
+            return {"status": "ok", "data": {"balance": 1000, "level": 1, "energy": 1000}}
 
-# --- [РАЗДАЧА СТАТИКИ] ---
-# Важно: это должно быть ПОСЛЕ API
+# --- [РАЗДАЧА ФРОНТЕНДА] ---
 @app.get("/")
-async def read_index():
+async def index():
     return FileResponse(STATIC_DIR / "index.html")
 
-# Монтируем папку static для JS/CSS/Images
-if STATIC_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+# Монтируем статику (стили, скрипты, картинки)
+# Теперь они будут доступны по путям /static/js/core.js и т.д.
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
