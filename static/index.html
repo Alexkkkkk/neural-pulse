@@ -197,15 +197,17 @@
 
 <script>
     const tg = window.Telegram.WebApp;
-    const params = new URLSearchParams(window.location.search);
-    const USER_ID = String(tg.initDataUnsafe?.user?.id || 'TEST_USER');
-    const REF_ID = params.get('ref') || '';
+    // Безопасное получение ID. Если мы в браузере, используем TEST_USER
+    const USER_ID = tg.initDataUnsafe?.user?.id ? String(tg.initDataUnsafe.user.id) : 'TEST_USER';
+    const REF_ID = new URLSearchParams(window.location.search).get('ref') || '';
 
+    // Важно: сообщаем Telegram, что мы готовы, до начала тяжелых запросов
     tg.ready();
     tg.expand();
     document.body.style.opacity = '1';
 
-    let state = {
+    // Инициализация состояния из localStorage (чтобы игра не была пустой при лагах сервера)
+    let state = JSON.parse(localStorage.getItem('np_state')) || {
         score: 0,
         energy: 1000,
         max_energy: 1000,
@@ -223,9 +225,13 @@
                 if (result.status === 'ok') {
                     state = { ...state, ...result.data };
                     updateUI();
+                    localStorage.setItem('np_state', JSON.stringify(state));
                 }
             }
-        } catch (e) { console.error("Sync error:", e); }
+        } catch (e) { 
+            console.warn("Server offline, using local data");
+            updateUI();
+        }
     }
 
     function updateUI() {
@@ -289,7 +295,6 @@
         setTimeout(() => el.remove(), 600);
     }
 
-    // Навигация
     document.getElementById('open-mine').onclick = () => document.getElementById('modal-mine').style.display = 'block';
     document.getElementById('open-boost').onclick = () => document.getElementById('modal-boost').style.display = 'block';
     
@@ -303,7 +308,7 @@
             
             let html = '';
             data.top.forEach((p, i) => {
-                const isMe = p.id.startsWith(USER_ID.slice(0, 3));
+                const isMe = String(p.id).startsWith(USER_ID.slice(0, 3));
                 html += `
                 <div class="shop-card" style="${isMe ? 'border-color:var(--neon-green); background:rgba(0,255,204,0.05)' : ''}">
                     <div style="font-size:12px;">#${i+1} Agent ${p.id}</div>
@@ -318,13 +323,11 @@
 
     function closeModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
 
-    // Основной цикл (10 раз в секунду)
+    // Игровой цикл
     setInterval(() => {
-        // Регенерация энергии (полное восстановление за ~15 минут)
         if (state.energy < state.max_energy) {
             state.energy = Math.min(state.max_energy, state.energy + (state.max_energy / 9000));
         }
-        // Начисление PnL (профит в час / 36000 итераций в 100мс)
         if (state.pnl > 0) {
             state.score += (state.pnl / 36000);
         }
@@ -332,19 +335,19 @@
     }, 100);
 
     function saveToServer(force = false) {
+        localStorage.setItem('np_state', JSON.stringify(state));
         fetch('/api/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(state)
-        }).catch(e => console.error("Save error:", e));
+        }).catch(() => {});
     }
 
-    // Сохраняем на сервер каждые 15 секунд
-    setInterval(() => saveToServer(), 15000);
+    // Сохранение раз в 15 секунд + синхронизация при старте
+    setInterval(saveToServer, 15000);
 
     document.getElementById('invite-btn').onclick = () => {
-        const url = `https://t.me/share/url?url=https://t.me/UltraMind_AI_bot?start=${USER_ID}&text=Join my Neural Network and get 5000 NP! 🧠`;
-        tg.openTelegramLink(url);
+        tg.openTelegramLink(`https://t.me/share/url?url=https://t.me/UltraMind_AI_bot?start=${USER_ID}&text=Join my Neural Network! 🧠`);
     };
 
     syncWithServer();
