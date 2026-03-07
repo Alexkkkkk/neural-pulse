@@ -26,14 +26,12 @@ BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 
-# Убедись, что токен верный. Для безопасности лучше использовать os.getenv("BOT_TOKEN")
 API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM" 
 WEB_APP_URL = "https://np.bothost.ru"
 
 USER_CACHE: Dict[str, dict] = {}
 db_conn: Optional[aiosqlite.Connection] = None
 
-# --- [МОДЕЛИ ДАННЫХ] ---
 class SaveData(BaseModel):
     user_id: str
     score: float
@@ -53,7 +51,6 @@ async def batch_db_update():
         if not USER_CACHE or not db_conn: continue
         try:
             users_to_update = []
-            # Используем копию ключей, чтобы избежать ошибок при изменении словаря во время итерации
             for uid in list(USER_CACHE.keys()):
                 entry = USER_CACHE.get(uid)
                 if not entry: continue
@@ -92,7 +89,6 @@ async def lifespan(app: FastAPI):
     global db_conn
     app.state.ready = False 
     try:
-        # Подключение к БД
         db_conn = await aiosqlite.connect(DB_PATH)
         await db_conn.execute("PRAGMA journal_mode=WAL")
         await db_conn.execute("PRAGMA synchronous=NORMAL")
@@ -105,14 +101,12 @@ async def lifespan(app: FastAPI):
         """)
         await db_conn.commit()
         
-        # Запуск Бота
         bot = Bot(token=API_TOKEN)
         dp = Dispatcher()
         
         @dp.message(Command("start"))
         async def start_cmd(m: types.Message, command: CommandObject):
             ref_id = command.args if command.args else ""
-            # Добавляем метку времени для обхода кэша Telegram
             url = f"{WEB_APP_URL}/?v={int(time.time())}"
             if ref_id: url += f"&ref={ref_id}"
             
@@ -121,7 +115,6 @@ async def lifespan(app: FastAPI):
             ]])
             await m.answer(f"<b>Neural Pulse AI</b>\nМайни токены своим интеллектом!", reply_markup=kb, parse_mode="HTML")
             
-        # Важно: запускаем polling без блокировки основного потока
         asyncio.create_task(dp.start_polling(bot))
         asyncio.create_task(batch_db_update())
         
@@ -131,14 +124,12 @@ async def lifespan(app: FastAPI):
         logger.critical(f"💥 Ошибка старта: {e}")
     
     yield
-    
     if db_conn: 
         await db_conn.close()
         logger.info("💤 [SERVER] База данных закрыта.")
 
-app = FastAPI(lifespan=lifespan, default_response_class=UJSONResponse)
+app = FastAPI(lifespan=lifespan)
 
-# Настройка CORS
 app.add_middleware(
     CORSMiddleware, 
     allow_origins=["*"], 
@@ -147,6 +138,10 @@ app.add_middleware(
 )
 
 # --- [API ЭНДПОИНТЫ] ---
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "ready": getattr(app.state, "ready", False)}
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str, ref: Optional[str] = None):
@@ -166,13 +161,13 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
             offline_bonus = 0
             if data['last_active'] and data['pnl'] > 0:
                 passed = now - data['last_active']
-                if 10 < passed < 86400: # Ограничим 24 часами
+                if 10 < passed < 86400:
                     offline_bonus = (data['pnl'] / 3600) * passed
             
             f_data = {
                 "score": data["balance"] + offline_bonus, 
                 "tap_power": data["click_lvl"],
-                "energy": data["max_energy"], 
+                "energy": float(data["max_energy"]), 
                 "max_energy": data["max_energy"],
                 "pnl": data["pnl"], 
                 "level": data["level"], 
@@ -181,7 +176,6 @@ async def get_balance(user_id: str, ref: Optional[str] = None):
             USER_CACHE[uid] = {"data": f_data, "last_seen": now}
             return {"status": "ok", "data": f_data}
         
-        # Новый юзер
         start_bal = 5000.0 if (ref and ref != uid) else 0.0
         new_user = {
             "score": start_bal, "tap_power": 1, "energy": 1000.0, 
@@ -205,10 +199,9 @@ async def save(data: SaveData):
 
 @app.get("/api/stats")
 async def get_stats():
-    # Заглушка для статистики, чтобы фронтенд не падал
     return {
         "total_users": len(USER_CACHE) + 1,
-        "total_supply": sum(u['data']['score'] for u in USER_CACHE.values()) if USER_CACHE else 1000000,
+        "total_supply": sum(u['data']['score'] for u in USER_CACHE.values() if 'data' in u) if USER_CACHE else 1000000,
         "top": []
     }
 
@@ -219,11 +212,11 @@ async def serve_index():
     index_path = STATIC_DIR / "index.html"
     if index_path.exists():
         return FileResponse(index_path)
-    return JSONResponse({"error": "index.html not found in static/"}, 404)
+    return JSONResponse({"error": "index.html not found"}, 404)
 
-# Монтируем статику ПОСЛЕ API роутов
+# Монтируем статику в последнюю очередь
 if STATIC_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3000, log_config=None)
+    uvicorn.run(app, host="0.0.0.0", port=3000)
