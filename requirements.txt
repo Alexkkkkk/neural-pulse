@@ -5,6 +5,7 @@ pydantic==2.7.4
 pydantic-settings==2.3.4
 python-multipart==0.0.9
 ujson==5.10.0
+httptools==0.6.1
 
 # --- Telegram Bot Framework ---
 aiogram==3.10.0
