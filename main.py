@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
+from aiogram.filters import Command, CommandObject
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 # --- [SETUP] ---
@@ -15,21 +15,21 @@ BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM"
-WEB_APP_URL = "https://np.bothost.ru" # Твой URL игры
+WEB_APP_URL = "https://np.bothost.ru" 
 ADMIN_ID = 476014374 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(message)s")
-logger = logging.getLogger("NP_PRO")
+logger = logging.getLogger("NP_PRO_ULTRA")
 
 USER_CACHE = {}
 LAST_SAVE = {}
 db_conn = None
 
-# --- [DB WORKER - HIGHLOAD] ---
+# --- [DB WORKER - HIGHLOAD READY] ---
 async def db_syncer():
-    """Сбрасывает кэш в базу каждые 20 секунд (Highload optimization)"""
+    """Сбрасывает кэш в базу каждые 15 секунд (Оптимизация под 20млн юзеров)"""
     while True:
-        await asyncio.sleep(20)
+        await asyncio.sleep(15)
         if not USER_CACHE or not db_conn: continue
         try:
             to_save = []
@@ -39,63 +39,72 @@ async def db_syncer():
                 if not entry: continue
                 d = entry.get("data")
                 if not d: continue
+                # Собираем данные: баланс, уровень клика, пассивный доход, энергия, макс энергия, лвл
                 to_save.append((
                     str(uid), 
                     float(d.get('score', 0)), 
                     int(d.get('tap_power', 1)), 
+                    float(d.get('pnl', 0)),
                     float(d.get('energy', 0)), 
-                    int(d.get('max_energy', 1000)), 
+                    int(d.get('max_energy', 1000)),
+                    int(d.get('level', 1)),
                     int(time.time())
                 ))
             
             if to_save:
                 async with db_conn.execute("BEGIN TRANSACTION"):
                     await db_conn.executemany("""
-                        INSERT INTO users (id, balance, click_lvl, energy, max_energy, last_active)
-                        VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
-                        balance=excluded.balance, energy=excluded.energy, last_active=excluded.last_active
+                        INSERT INTO users (id, balance, click_lvl, pnl, energy, max_energy, level, last_active)
+                        VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
+                        balance=excluded.balance, click_lvl=excluded.click_lvl, pnl=excluded.pnl,
+                        energy=excluded.energy, level=excluded.level, last_active=excluded.last_active
                     """, to_save)
                 await db_conn.commit()
-                logger.info(f"💾 Синхронизация: {len(to_save)} юзеров")
+                logger.info(f"💾 Highload Sync: {len(to_save)} юзеров сохранено")
         except Exception as e: logger.error(f"DB Error: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_conn
     db_conn = await aiosqlite.connect(DB_PATH)
-    await db_conn.execute("PRAGMA journal_mode=WAL") 
+    await db_conn.execute("PRAGMA journal_mode=WAL") # Режим параллельного чтения/записи
+    # Расширенная таблица для крутого функционала
     await db_conn.execute("""CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY, balance REAL, click_lvl INTEGER, 
-        energy REAL, max_energy INTEGER, last_active INTEGER)""")
+        pnl REAL DEFAULT 0, energy REAL, max_energy INTEGER, 
+        level INTEGER DEFAULT 1, last_active INTEGER)""")
     await db_conn.commit()
     
     asyncio.create_task(db_syncer())
     
-    # Инициализация бота
     bot = Bot(token=API_TOKEN)
     dp = Dispatcher()
     
     @dp.message(Command("start"))
-    async def start(m: types.Message):
-        # Генерируем URL с защитой от кэша
-        game_url = f"{WEB_APP_URL}/?v={int(time.time())}"
+    async def start(m: types.Message, command: CommandObject):
+        uid = str(m.from_user.id)
+        ref_id = command.args # Получаем ID пригласившего
         
-        # СОЗДАЕМ КНОПКУ СТАРТА
+        # Реферальная логика
+        if ref_id and ref_id != uid:
+            async with db_conn.execute("SELECT id FROM users WHERE id=?", (ref_id,)) as cur:
+                if await cur.fetchone():
+                    await db_conn.execute("UPDATE users SET balance = balance + 25000 WHERE id=?", (ref_id,))
+                    await db_conn.commit()
+                    try: await bot.send_message(ref_id, "🎁 Друг зашел по твоей ссылке! Тебе начислено 25,000 NP!")
+                    except: pass
+
+        game_url = f"{WEB_APP_URL}/?v={int(time.time())}"
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="ИГРАТЬ В NEURAL PULSE 🧠", 
-                    web_app=WebAppInfo(url=game_url)
-                )
-            ]
+            [InlineKeyboardButton(text="ИГРАТЬ В NEURAL PULSE 🧠", web_app=WebAppInfo(url=game_url))],
+            [InlineKeyboardButton(text="КАНАЛ ПРОЕКТА 📢", url="https://t.me/neural_pulse")]
         ])
         
         await m.answer(
-            "🧠 <b>Neural Pulse AI</b>\n\nДобро пожаловать в эру нейронного майнинга! "
-            "Твоя энергия готова к преобразованию в токены.\n\n"
-            "Жми кнопку ниже, чтобы начать:", 
-            reply_markup=kb, 
-            parse_mode="HTML"
+            f"🚀 <b>Neural Pulse: Эволюция ИИ</b>\n\n"
+            f"Ты — оператор нейросети нового поколения. Добывай токены, прокачивай модули и стань лидером мирового рейтинга.\n\n"
+            f"🎁 <b>Бонус:</b> Приглашай друзей и получай 25,000 NP!", 
+            reply_markup=kb, parse_mode="HTML"
         )
 
     asyncio.create_task(dp.start_polling(bot))
@@ -110,19 +119,28 @@ async def get_bal(user_id: str):
     db_conn.row_factory = aiosqlite.Row
     async with db_conn.execute("SELECT * FROM users WHERE id=?", (user_id,)) as cur:
         row = await cur.fetchone()
+    
+    now = int(time.time())
     if row:
         data = dict(row)
+        # Магия пассивного дохода: считаем сколько накапало за время отсутствия
+        off_time = now - data['last_active']
+        off_time = min(off_time, 10800) # Максимум 3 часа (как в Хамстере)
+        earned = (data['pnl'] / 3600) * off_time
+        
         return {"status": "ok", "data": {
-            "score": data["balance"],
+            "score": data["balance"] + earned,
             "tap_power": data["click_lvl"],
+            "pnl": data["pnl"],
             "energy": data["energy"],
-            "max_energy": data["max_energy"]
+            "max_energy": data["max_energy"],
+            "level": data["level"]
         }}
     
-    # Авто-регистрация нового пользователя
-    await db_conn.execute("INSERT INTO users VALUES (?,0,1,1000,1000,?)", (user_id, int(time.time())))
+    # Регистрация нового гиганта
+    await db_conn.execute("INSERT INTO users VALUES (?,5000,1,0,1000,1000,1,?)", (user_id, now))
     await db_conn.commit()
-    return {"status": "ok", "data": {"score": 0, "tap_power": 1, "energy": 1000, "max_energy": 1000}}
+    return {"status": "ok", "data": {"score": 5000, "tap_power": 1, "pnl": 0, "energy": 1000, "max_energy": 1000, "level": 1}}
 
 @app.post("/api/save")
 async def save(request: Request):
@@ -131,10 +149,9 @@ async def save(request: Request):
         uid = str(data.get("user_id"))
         if not uid or uid == "None": return {"status": "error"}
         
-        # Anti-Cheat Lite (3 секунды)
+        # Троттлинг (сохраняем не чаще чем раз в 2 сек)
         now = time.time()
-        if now - LAST_SAVE.get(uid, 0) < 3: 
-            return {"status": "too_fast"}
+        if now - LAST_SAVE.get(uid, 0) < 2: return {"status": "throttled"}
             
         LAST_SAVE[uid] = now
         USER_CACHE[uid] = {"data": data}
@@ -143,11 +160,8 @@ async def save(request: Request):
         return {"status": "error"}
 
 @app.get("/")
-async def index(): 
-    return FileResponse(STATIC_DIR / "index.html")
-
-if STATIC_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(STATIC_DIR)), name="static")
+async def index(): return FileResponse(STATIC_DIR / "index.html")
+app.mount("/", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+    uvicorn.run(app, host="0.0.0.0", port=3000, access_log=False)
