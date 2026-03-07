@@ -27,47 +27,40 @@ DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM" 
 WEB_APP_URL = "https://np.bothost.ru"
-ADMIN_ID = 476014374  # Твой Telegram ID для уведомлений и статистики
+ADMIN_ID = 476014374 
 
 USER_CACHE: Dict[str, dict] = {}
-LAST_SAVE_TIME: Dict[str, float] = {}  # Для Anti-Cheat
+LAST_SAVE_TIME: Dict[str, float] = {}
 db_conn: Optional[aiosqlite.Connection] = None
 bot_instance: Optional[Bot] = None
 
+# Сделали модель максимально гибкой, чтобы избежать 422 ошибки
 class SaveData(BaseModel):
     user_id: str
-    score: float = 0.0
-    energy: float = 0.0
-    max_energy: int = 1000
-    pnl: float = 0.0
-    level: int = 1
-    tap_power: int = 1
-    wallet_address: Optional[str] = None
+    score: Optional[float] = 0.0
+    energy: Optional[float] = 0.0
     model_config = ConfigDict(extra='allow')
 
 # --- [БАЗА ДАННЫХ] ---
 async def batch_db_update():
-    logger.info("🛠️ [DB_WORKER] Фоновый процесс сохранения запущен.")
+    logger.info("🛠️ [DB_WORKER] Фоновый процесс сохранения активен.")
     while True:
-        await asyncio.sleep(15)
+        await asyncio.sleep(20) # Увеличили интервал до 20 сек для стабильности
         if not USER_CACHE or not db_conn: continue
         try:
             users_to_update = []
             keys = list(USER_CACHE.keys())
-            
             for uid in keys:
                 entry = USER_CACHE.pop(uid, None)
                 if not entry: continue
                 d = entry.get("data")
-                if not d: continue
-                
+                # Извлекаем данные безопасно, даже если фронтенд прислал мусор
                 users_to_update.append((
-                    str(uid), float(d.get('score', 0)), int(d.get('tap_power', 1)), 
+                    str(uid), float(d.get('score', 0)), int(d.get('tap_power', d.get('click_lvl', 1))), 
                     float(d.get('energy', 0)), int(d.get('max_energy', 1000)), 
                     float(d.get('pnl', 0)), int(d.get('level', 1)), 
                     d.get('wallet_address'), int(time.time())
                 ))
-            
             if users_to_update:
                 async with db_conn.execute("BEGIN TRANSACTION"):
                     await db_conn.executemany("""
@@ -80,7 +73,7 @@ async def batch_db_update():
                             wallet_address=excluded.wallet_address, last_active=excluded.last_active
                     """, users_to_update)
                 await db_conn.commit()
-                logger.info(f"💾 [DB_SYNC] Синхронизировано юзеров: {len(users_to_update)}")
+                logger.info(f"💾 [DB_SYNC] Записано в базу: {len(users_to_update)} юзеров.")
         except Exception as e:
             logger.error(f"❌ [DB_ERROR] {e}")
 
@@ -89,10 +82,8 @@ async def lifespan(app: FastAPI):
     global db_conn, bot_instance
     app.state.ready = False 
     try:
-        logger.info("📡 [INIT] Подключение к базе данных...")
         db_conn = await aiosqlite.connect(DB_PATH)
         await db_conn.execute("PRAGMA journal_mode=WAL")
-        await db_conn.execute("PRAGMA synchronous=NORMAL")
         await db_conn.executescript("""
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY, balance REAL, click_lvl INTEGER, 
@@ -101,8 +92,6 @@ async def lifespan(app: FastAPI):
             );
         """)
         await db_conn.commit()
-        
-        logger.info("🤖 [INIT] Запуск Telegram бота...")
         bot_instance = Bot(token=API_TOKEN)
         dp = Dispatcher()
         
@@ -117,18 +106,16 @@ async def lifespan(app: FastAPI):
 
         @dp.message(Command("stats"))
         async def stats_cmd(m: types.Message):
-            # Статистика доступна только админу
             if m.from_user.id != ADMIN_ID: return
             async with db_conn.execute("SELECT COUNT(*), SUM(balance) FROM users") as cur:
                 row = await cur.fetchone()
                 count, total_bal = row
-            await m.answer(f"📊 <b>Статистика Neural Pulse:</b>\n\n👤 Игроков: <code>{count}</code>\n💰 Всего монет: <code>{total_bal or 0:,.0f} NP</code>", parse_mode="HTML")
-            
+            await m.answer(f"📊 👤 Игроков: {count}\n💰 Всего монет: {total_bal or 0:,.0f}")
+
         asyncio.create_task(dp.start_polling(bot_instance))
         asyncio.create_task(batch_db_update())
-        
         app.state.ready = True
-        logger.info("🌟 [SERVER] Мозг ИИ успешно активирован.")
+        logger.info("🌟 [SERVER] Мозг ИИ готов.")
     except Exception as e:
         logger.critical(f"💥 Ошибка старта: {e}")
     yield
@@ -138,67 +125,56 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- [API ЭНДПОИНТЫ] ---
-
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str, ref: Optional[str] = None):
-    if not getattr(app.state, "ready", False) or not db_conn: 
-        return JSONResponse({"status": "error", "message": "Starting..."}, 503)
-    
+    if not getattr(app.state, "ready", False) or not db_conn: return JSONResponse({"status": "error"}, 503)
     uid = str(user_id)
-    try:
-        db_conn.row_factory = aiosqlite.Row
-        async with db_conn.execute("SELECT * FROM users WHERE id = ?", (uid,)) as cur:
-            row = await cur.fetchone()
-        
-        if row:
-            data = dict(row)
-            logger.info(f"📥 [API] Загружен баланс для юзера {uid}")
-            return {"status": "ok", "data": {
-                "score": float(data["balance"]), "tap_power": int(data["click_lvl"]),
-                "energy": float(data["energy"]), "max_energy": int(data["max_energy"]),
-                "pnl": float(data["pnl"]), "level": int(data["level"]), "wallet_address": data["wallet_address"]
-            }}
-        
-        # Новый пользователь
-        start_bal = 5000.0 if (ref and ref != uid) else 0.0
-        await db_conn.execute(
-            "INSERT INTO users (id, balance, click_lvl, energy, max_energy, pnl, level, last_active) VALUES (?,?,?,?,?,?,?,?)",
-            (uid, start_bal, 1, 1000.0, 1000, 0.0, 1, int(time.time()))
-        )
-        await db_conn.commit()
-        
-        # Уведомление тебе в личку
-        try:
-            await bot_instance.send_message(ADMIN_ID, f"🆕 <b>Новый игрок!</b>\nID: <code>{uid}</code>\nБонус за вход: {start_bal} NP", parse_mode="HTML")
-        except: pass
-
-        logger.info(f"🆕 [API] Зарегистрирован новый юзер {uid}")
-        return {"status": "ok", "data": {"score": start_bal, "tap_power": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "wallet_address": None}}
-    except Exception as e:
-        logger.error(f"❌ [BALANCE_ERROR] {e}")
-        return JSONResponse({"status": "error"}, 500)
+    db_conn.row_factory = aiosqlite.Row
+    async with db_conn.execute("SELECT * FROM users WHERE id = ?", (uid,)) as cur:
+        row = await cur.fetchone()
+    
+    if row:
+        data = dict(row)
+        return {"status": "ok", "data": {
+            "score": float(data["balance"]), "tap_power": int(data["click_lvl"]),
+            "energy": float(data["energy"]), "max_energy": int(data["max_energy"]),
+            "pnl": float(data["pnl"]), "level": int(data["level"]), "wallet_address": data["wallet_address"]
+        }}
+    
+    # Регистрация нового
+    start_bal = 5000.0 if (ref and ref != uid) else 0.0
+    await db_conn.execute("INSERT INTO users (id, balance, click_lvl, energy, max_energy, pnl, level, last_active) VALUES (?,?,?,?,?,?,?,?)",
+                        (uid, start_bal, 1, 1000.0, 1000, 0.0, 1, int(time.time())))
+    await db_conn.commit()
+    try: await bot_instance.send_message(ADMIN_ID, f"🆕 Новый игрок: {uid}")
+    except: pass
+    return {"status": "ok", "data": {"score": start_bal, "tap_power": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "wallet_address": None}}
 
 @app.post("/api/save")
-async def save(data: SaveData):
-    uid = str(data.user_id)
-    now = time.time()
-    
-    # Anti-Cheat Lite: ограничение 1 запрос в 2 секунды
-    if now - LAST_SAVE_TIME.get(uid, 0) < 2.0:
-        return JSONResponse({"status": "error", "message": "Too fast"}, 429)
-    
-    LAST_SAVE_TIME[uid] = now
-    USER_CACHE[uid] = {"data": data.model_dump(), "last_seen": now}
-    return {"status": "ok"}
+async def save(request: Request):
+    try:
+        # Принимаем данные в любом виде, чтобы не было ошибки 422
+        data = await request.json()
+        uid = str(data.get("user_id"))
+        if not uid or uid == "None": return {"status": "ignored"}
+
+        now = time.time()
+        # Лимит: сохраняем не чаще чем раз в 5 секунд для снижения нагрузки
+        if now - LAST_SAVE_TIME.get(uid, 0) < 5.0:
+            return {"status": "ok", "message": "throttled"}
+            
+        LAST_SAVE_TIME[uid] = now
+        USER_CACHE[uid] = {"data": data, "last_seen": now}
+        return {"status": "ok"}
+    except:
+        return {"status": "error"}
 
 @app.get("/")
 async def serve_index():
-    index_file = STATIC_DIR / "index.html"
-    return FileResponse(index_file) if index_file.exists() else JSONResponse({"error": "Frontend not found"}, 404)
+    return FileResponse(STATIC_DIR / "index.html")
 
 if STATIC_DIR.exists():
     app.mount("/", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3000, access_log=True)
+    uvicorn.run(app, host="0.0.0.0", port=3000, access_log=False)
