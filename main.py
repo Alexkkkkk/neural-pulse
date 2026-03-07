@@ -30,6 +30,7 @@ WEB_APP_URL = "https://np.bothost.ru"
 
 USER_CACHE: Dict[str, dict] = {}
 db_conn: Optional[aiosqlite.Connection] = None
+bot_instance: Optional[Bot] = None
 
 class SaveData(BaseModel):
     user_id: str
@@ -53,7 +54,7 @@ async def batch_db_update():
             keys_to_clear = list(USER_CACHE.keys())
             
             for uid in keys_to_clear:
-                entry = USER_CACHE.get(uid)
+                entry = USER_CACHE.pop(uid, None) # Используем pop для очистки памяти
                 if not entry: continue
                 d = entry.get("data")
                 if not d: continue
@@ -66,15 +67,17 @@ async def batch_db_update():
                 ))
             
             if users_to_update:
-                await db_conn.executemany("""
-                    INSERT INTO users (id, balance, click_lvl, energy, max_energy, pnl, level, wallet_address, last_active)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(id) DO UPDATE SET
-                        balance=excluded.balance, click_lvl=excluded.click_lvl,
-                        energy=excluded.energy, max_energy=excluded.max_energy,
-                        pnl=excluded.pnl, level=excluded.level, 
-                        wallet_address=excluded.wallet_address, last_active=excluded.last_active
-                """, users_to_update)
+                # Используем транзакцию для максимальной скорости
+                async with db_conn.execute("BEGIN TRANSACTION"):
+                    await db_conn.executemany("""
+                        INSERT INTO users (id, balance, click_lvl, energy, max_energy, pnl, level, wallet_address, last_active)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(id) DO UPDATE SET
+                            balance=excluded.balance, click_lvl=excluded.click_lvl,
+                            energy=excluded.energy, max_energy=excluded.max_energy,
+                            pnl=excluded.pnl, level=excluded.level, 
+                            wallet_address=excluded.wallet_address, last_active=excluded.last_active
+                    """, users_to_update)
                 await db_conn.commit()
                 logger.info(f"💾 [DB_SYNC] Синхронизация: {len(users_to_update)} юзеров.")
         except Exception as e:
@@ -82,10 +85,13 @@ async def batch_db_update():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global db_conn
+    global db_conn, bot_instance
     app.state.ready = False 
     try:
+        # Подключение к БД с оптимизациями
         db_conn = await aiosqlite.connect(DB_PATH)
+        await db_conn.execute("PRAGMA journal_mode=WAL") # Многократное ускорение чтения/записи
+        await db_conn.execute("PRAGMA synchronous=NORMAL")
         await db_conn.executescript("""
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY, balance REAL, click_lvl INTEGER, 
@@ -95,7 +101,8 @@ async def lifespan(app: FastAPI):
         """)
         await db_conn.commit()
         
-        bot = Bot(token=API_TOKEN)
+        # Запуск бота
+        bot_instance = Bot(token=API_TOKEN)
         dp = Dispatcher()
         
         @dp.message(Command("start"))
@@ -107,18 +114,25 @@ async def lifespan(app: FastAPI):
             ]])
             await m.answer(f"<b>Neural Pulse AI</b>\nМайни токены своим интеллектом!", reply_markup=kb, parse_mode="HTML")
             
-        asyncio.create_task(dp.start_polling(bot))
+        asyncio.create_task(dp.start_polling(bot_instance))
         asyncio.create_task(batch_db_update())
+        
         app.state.ready = True
         logger.info("🌟 [SERVER] Мозг ИИ активирован.")
     except Exception as e:
         logger.critical(f"💥 Ошибка старта: {e}")
+    
     yield
-    if db_conn: await db_conn.close()
+    
+    # Закрытие ресурсов
+    if bot_instance:
+        await bot_instance.session.close()
+    if db_conn: 
+        await db_conn.close()
+    logger.info("💤 [SERVER] Сервер остановлен.")
 
 app = FastAPI(lifespan=lifespan)
 
-# CORS должен быть настроен до маршрутов
 app.add_middleware(
     CORSMiddleware, 
     allow_origins=["*"], 
@@ -134,37 +148,47 @@ async def health():
 
 @app.get("/api/balance/{user_id}")
 async def get_balance(user_id: str, ref: Optional[str] = None):
-    if not getattr(app.state, "ready", False): 
+    if not getattr(app.state, "ready", False) or not db_conn: 
         return JSONResponse({"status": "error", "message": "Starting..."}, 503)
     
     uid = str(user_id)
     now = int(time.time())
-    db_conn.row_factory = aiosqlite.Row
-    async with db_conn.execute("SELECT * FROM users WHERE id = ?", (uid,)) as cur:
-        row = await cur.fetchone()
     
-    if row:
-        data = dict(row)
-        f_data = {
-            "score": float(data["balance"]), 
-            "tap_power": int(data["click_lvl"]),
-            "energy": float(data["energy"]), 
-            "max_energy": int(data["max_energy"]),
-            "pnl": float(data["pnl"]), 
-            "level": int(data["level"]), 
-            "wallet_address": data["wallet_address"]
-        }
-        USER_CACHE[uid] = {"data": f_data, "last_seen": now}
-        return {"status": "ok", "data": f_data}
-    
-    # Новый юзер
-    start_bal = 5000.0 if (ref and ref != uid) else 0.0
-    new_user = {"score": start_bal, "tap_power": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "wallet_address": None}
-    USER_CACHE[uid] = {"data": new_user, "last_seen": now}
-    await db_conn.execute("INSERT INTO users (id, balance, click_lvl, energy, max_energy, pnl, level, last_active) VALUES (?,?,?,?,?,?,?,?)",
-        (uid, start_bal, 1, 1000.0, 1000, 0.0, 1, now))
-    await db_conn.commit()
-    return {"status": "ok", "data": new_user}
+    try:
+        db_conn.row_factory = aiosqlite.Row
+        async with db_conn.execute("SELECT * FROM users WHERE id = ?", (uid,)) as cur:
+            row = await cur.fetchone()
+        
+        if row:
+            data = dict(row)
+            f_data = {
+                "score": float(data["balance"]), 
+                "tap_power": int(data["click_lvl"]),
+                "energy": float(data["energy"]), 
+                "max_energy": int(data["max_energy"]),
+                "pnl": float(data["pnl"]), 
+                "level": int(data["level"]), 
+                "wallet_address": data["wallet_address"]
+            }
+            # Обновляем кэш только если там еще нет данных для сохранения
+            if uid not in USER_CACHE:
+                USER_CACHE[uid] = {"data": f_data, "last_seen": now}
+            return {"status": "ok", "data": f_data}
+        
+        # Создание нового пользователя
+        start_bal = 5000.0 if (ref and ref != uid) else 0.0
+        new_user = {"score": start_bal, "tap_power": 1, "energy": 1000.0, "max_energy": 1000, "pnl": 0.0, "level": 1, "wallet_address": None}
+        
+        await db_conn.execute(
+            "INSERT INTO users (id, balance, click_lvl, energy, max_energy, pnl, level, last_active) VALUES (?,?,?,?,?,?,?,?)",
+            (uid, start_bal, 1, 1000.0, 1000, 0.0, 1, now)
+        )
+        await db_conn.commit()
+        return {"status": "ok", "data": new_user}
+        
+    except Exception as e:
+        logger.error(f"❌ [BALANCE_ERROR] {e}")
+        return JSONResponse({"status": "error"}, 500)
 
 @app.post("/api/save")
 async def save(data: SaveData):
@@ -173,24 +197,19 @@ async def save(data: SaveData):
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
-    # Пытаемся отдать из images, если нет — просто 204
     fav = STATIC_DIR / "images" / "favicon.ico"
-    if fav.exists():
-        return FileResponse(fav)
-    return Response(status_code=204)
+    return FileResponse(fav) if fav.exists() else Response(status_code=204)
 
 # --- [СТАТИКА] ---
 
 @app.get("/")
 async def serve_index():
     index_file = STATIC_DIR / "index.html"
-    if index_file.exists():
-        return FileResponse(index_file)
-    return JSONResponse({"error": "Frontend not found"}, 404)
+    return FileResponse(index_file) if index_file.exists() else JSONResponse({"error": "Frontend not found"}, 404)
 
-# Монтируем статику в самом конце
+# Монтируем статику ПОСЛЕ всех API маршрутов
 if STATIC_DIR.exists():
     app.mount("/", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+    uvicorn.run(app, host="0.0.0.0", port=3000, access_log=False) # Отключаем логи запросов для скорости
