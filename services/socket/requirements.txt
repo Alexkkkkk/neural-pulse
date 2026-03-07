@@ -1,0 +1,6 @@
+python-socketio==5.11.2
+uvicorn[standard]==0.30.1
+redis==5.0.7
+hiredis==2.3.2
+orjson==3.10.5
+python-dotenv==1.0.1
