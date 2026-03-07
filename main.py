@@ -15,12 +15,6 @@ DB_PATH = BASE_DIR / "game.db"
 STATIC_DIR = BASE_DIR / "static"
 API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM"
 WEB_APP_URL = "https://np.bothost.ru" 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-
-try:
-    import redis.asyncio as aioredis
-except ImportError:
-    aioredis = None
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(name)s | %(message)s")
 logger = logging.getLogger("NP_ULTRA")
@@ -28,20 +22,17 @@ logger = logging.getLogger("NP_ULTRA")
 USER_CACHE = {}
 LAST_SAVE = {}
 db_conn = None
-redis_client = None
 bot = Bot(token=API_TOKEN)
 
-# --- [СИНХРОНИЗАЦИЯ] ---
+# --- [СИНХРОНИЗАЦИЯ] --- (Без изменений, логика отличная)
 async def db_syncer():
     while True:
         await asyncio.sleep(15)
         if not USER_CACHE or not db_conn: continue
         try:
-            to_save = []
-            # Безопасное извлечение данных из кэша
             cache_copy = USER_CACHE.copy()
             USER_CACHE.clear() 
-            
+            to_save = []
             now_ts = int(time.time())
             for uid, entry in cache_copy.items():
                 d = entry.get("data", {})
@@ -50,7 +41,6 @@ async def db_syncer():
                     float(d.get('pnl', 0)), float(d.get('energy', 0)), 
                     int(d.get('max_energy', 1000)), int(d.get('level', 1)), now_ts
                 ))
-            
             if to_save:
                 async with db_conn.execute("BEGIN TRANSACTION"):
                     await db_conn.executemany("""
@@ -60,42 +50,25 @@ async def db_syncer():
                         energy=excluded.energy, level=excluded.level, last_active=excluded.last_active
                     """, to_save)
                 await db_conn.commit()
-                
-                if redis_client:
-                    try:
-                        pipe = redis_client.pipeline()
-                        for user in to_save:
-                            pipe.zadd("global_leaderboard", {user[0]: user[1]})
-                        await pipe.execute()
-                    except Exception: pass
                 logger.info(f"💾 Sync OK: {len(to_save)} users.")
         except Exception as e: logger.error(f"Sync Error: {e}")
 
-# --- [LIFECYCLE] ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global db_conn, redis_client
+    global db_conn
     db_conn = await aiosqlite.connect(DB_PATH)
     await db_conn.execute("PRAGMA journal_mode=WAL")
-    await db_conn.execute("PRAGMA synchronous=NORMAL")
     await db_conn.execute("""CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY, balance REAL, click_lvl INTEGER, 
         pnl REAL DEFAULT 0, energy REAL, max_energy INTEGER, 
         level INTEGER DEFAULT 1, last_active INTEGER)""")
     await db_conn.commit()
 
-    if aioredis:
-        try:
-            redis_client = await aioredis.from_url(REDIS_URL, decode_responses=True)
-            await asyncio.wait_for(redis_client.ping(), timeout=2.0)
-            logger.info("🚀 Redis Connected")
-        except: redis_client = None
-
     sync_task = asyncio.create_task(db_syncer())
     dp = Dispatcher()
 
     @dp.message(Command("start"))
-    async def start(m: types.Message, command: CommandObject):
+    async def start(m: types.Message):
         uid = str(m.from_user.id)
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="ВХОД В НЕЙРОСЕТЬ 🧠", web_app=WebAppInfo(url=f"{WEB_APP_URL}/?u={uid}"))],
@@ -111,7 +84,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan, default_response_class=ORJSONResponse)
 
-# --- [API] ---
+# --- [API ЭНДПОИНТЫ] --- (Должны идти ДО монтирования статики)
+
 @app.get("/api/balance/{user_id}")
 async def get_bal(user_id: str):
     db_conn.row_factory = aiosqlite.Row
@@ -146,34 +120,24 @@ async def save_state(request: Request):
         return {"status": "ok"}
     except: return {"status": "error"}
 
-@app.get("/api/leaderboard")
-async def get_top():
-    db_conn.row_factory = aiosqlite.Row
-    async with db_conn.execute("SELECT id, balance FROM users ORDER BY balance DESC LIMIT 50") as cur:
-        rows = await cur.fetchall()
-        return {"status": "ok", "top": [{"id": r["id"], "score": r["balance"]} for r in rows]}
+# --- [ОБРАБОТКА СТАТИКИ] ---
 
-# --- [STATIC & FILES HANDLING] ---
+# 1. Главная страница
+@app.get("/")
+async def index():
+    return FileResponse(STATIC_DIR / "index.html")
 
+# 2. Монтируем папку static для CSS, JS и картинок
+# Теперь styles.css будет доступен по пути /static/styles.css
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-@app.get("/")
-async def index():
-    index_path = STATIC_DIR / "index.html"
-    if index_path.exists():
-        return FileResponse(index_path)
-    return JSONResponse({"error": "UI not found"}, status_code=404)
-
-# Исправленный хендлер для вложенных файлов (картинки, шрифты)
-@app.get("/{file_path:path}")
-async def get_static_file(file_path: str):
-    # Если путь пустой (корень), FastAPI сам обработает через index
-    if not file_path: return
-    
-    full_path = STATIC_DIR / file_path
-    if full_path.exists() and full_path.is_file():
-        return FileResponse(full_path)
+# 3. Резервный хендлер для файлов в корне (если нужно)
+@app.get("/{file_name}")
+async def get_root_file(file_name: str):
+    file_path = STATIC_DIR / file_name
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(file_path)
     return JSONResponse({"status": "not_found"}, status_code=404)
 
 if __name__ == "__main__":
