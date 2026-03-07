@@ -35,7 +35,7 @@
         .shop-card {
             background: rgba(255,255,255,0.05); border: 1px solid rgba(0,212,255,0.2);
             border-radius: 15px; padding: 15px; margin-bottom: 12px; display: flex; 
-            justify-content: space-between; align-items: center;
+            justify-content: space-between; align-items: center; transition: 0.2s;
         }
         .shop-card:active { transform: scale(0.98); background: rgba(255,255,255,0.1); }
         .buy-btn { color: var(--neon-green); font-weight: 700; font-size: 14px; }
@@ -84,12 +84,12 @@
         #energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--neon-blue), var(--neon-green)); transition: width 0.1s linear; }
 
         .bottom-menu { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 20px; padding-bottom: env(safe-area-inset-bottom); }
-        .menu-item { background: rgba(255,255,255,0.03); border-radius: 16px; padding: 15px; text-align: center; font-size: 11px; border: 1px solid rgba(255,255,255,0.1); font-weight: 700; }
+        .menu-item { background: rgba(255,255,255,0.03); border-radius: 16px; padding: 15px; text-align: center; font-size: 11px; border: 1px solid rgba(255,255,255,0.1); font-weight: 700; transition: 0.2s; }
+        .menu-item:active { background: rgba(255,255,255,0.1); }
 
         .floating-text { position: absolute; pointer-events: none; font-weight: 900; font-size: 32px; color: white; animation: floatUp 0.6s ease-out forwards; z-index: 100; text-shadow: 0 0 10px var(--neon-blue); }
         @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.3); } }
 
-        /* Stats Specific */
         .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
         .stat-box { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; text-align: center; border: 1px solid rgba(0,212,255,0.1); }
         .stat-label { font-size: 10px; color: var(--neon-blue); margin-bottom: 5px; }
@@ -136,28 +136,30 @@
     </div>
 </div>
 
-<div id="modal-mine" class="modal">
+<div id="modal-mine" class="modal" onclick="if(event.target==this)closeModals()">
     <div class="modal-header">
         <h2 style="color:var(--neon-blue)">NEURAL MINE</h2>
         <button class="close-btn" onclick="closeModals()">✕</button>
     </div>
-    <div class="shop-card" onclick="buyUpgrade('pnl', 500, 50, 'GPT-4 Node')">
-        <div>
-            <div style="font-weight:900">GPT-4 NODE</div>
-            <div style="font-size:10px; color:#aaa">+50 profit/hr</div>
+    <div id="mine-list">
+        <div class="shop-card" onclick="buyUpgrade('pnl', 500, 50, 'GPT-4 Node')">
+            <div>
+                <div style="font-weight:900">GPT-4 NODE</div>
+                <div style="font-size:10px; color:#aaa">+50 profit/hr</div>
+            </div>
+            <div class="buy-btn">500 NP</div>
         </div>
-        <div class="buy-btn">500 NP</div>
-    </div>
-    <div class="shop-card" onclick="buyUpgrade('pnl', 2000, 250, 'Neural Server')">
-        <div>
-            <div style="font-weight:900">NEURAL SERVER</div>
-            <div style="font-size:10px; color:#aaa">+250 profit/hr</div>
+        <div class="shop-card" onclick="buyUpgrade('pnl', 2000, 250, 'Neural Server')">
+            <div>
+                <div style="font-weight:900">NEURAL SERVER</div>
+                <div style="font-size:10px; color:#aaa">+250 profit/hr</div>
+            </div>
+            <div class="buy-btn">2k NP</div>
         </div>
-        <div class="buy-btn">2k NP</div>
     </div>
 </div>
 
-<div id="modal-boost" class="modal">
+<div id="modal-boost" class="modal" onclick="if(event.target==this)closeModals()">
     <div class="modal-header">
         <h2 style="color:var(--neon-purp)">UPGRADES</h2>
         <button class="close-btn" onclick="closeModals()">✕</button>
@@ -178,7 +180,7 @@
     </div>
 </div>
 
-<div id="modal-stats" class="modal">
+<div id="modal-stats" class="modal" onclick="if(event.target==this)closeModals()">
     <div class="modal-header">
         <h2 style="color:var(--neon-green)">NETWORK STATS</h2>
         <button class="close-btn" onclick="closeModals()">✕</button>
@@ -249,11 +251,15 @@
             state.score -= cost;
             if (type === 'pnl') state.pnl += value;
             if (type === 'tap') state.tap_power += value;
-            if (type === 'energy') state.max_energy += value;
+            if (type === 'energy') {
+                state.max_energy += value;
+                state.energy += value;
+            }
             tg.HapticFeedback.impactOccurred('medium');
             updateUI();
-            saveToLocal(true);
+            saveToServer(true);
         } else {
+            tg.HapticFeedback.notificationOccurred('error');
             tg.showAlert("Not enough Neural Pulse (NP)!");
         }
     }
@@ -263,7 +269,7 @@
         for (let t of e.changedTouches) {
             if (state.energy >= state.tap_power) {
                 const isCrit = Math.random() < 0.05;
-                const power = state.tap_power * (isCrit ? 10 : 1);
+                const power = state.tap_power * (isCrit ? 5 : 1);
                 state.score += power;
                 state.energy -= state.tap_power;
                 createFloatingText(t.clientX, t.clientY, `+${power}`, isCrit);
@@ -277,7 +283,7 @@
         const el = document.createElement('div');
         el.className = 'floating-text';
         el.innerText = text;
-        if(crit) { el.style.color = '#ffaa00'; el.style.fontSize = '45px'; }
+        if(crit) { el.style.color = '#ffaa00'; el.style.fontSize = '48px'; el.style.zIndex = '101'; }
         el.style.left = `${x - 20}px`; el.style.top = `${y - 40}px`;
         document.body.appendChild(el);
         setTimeout(() => el.remove(), 600);
@@ -287,7 +293,6 @@
     document.getElementById('open-mine').onclick = () => document.getElementById('modal-mine').style.display = 'block';
     document.getElementById('open-boost').onclick = () => document.getElementById('modal-boost').style.display = 'block';
     
-    // ЛОГИКА СТАТИСТИКИ
     document.getElementById('open-stats').onclick = async () => {
         document.getElementById('modal-stats').style.display = 'block';
         try {
@@ -298,42 +303,47 @@
             
             let html = '';
             data.top.forEach((p, i) => {
-                const isMe = p.id.startsWith(USER_ID.slice(0, 5));
+                const isMe = p.id.startsWith(USER_ID.slice(0, 3));
                 html += `
-                <div class="shop-card" style="${isMe ? 'border-color:var(--neon-green)' : ''}">
+                <div class="shop-card" style="${isMe ? 'border-color:var(--neon-green); background:rgba(0,255,204,0.05)' : ''}">
                     <div style="font-size:12px;">#${i+1} Agent ${p.id}</div>
                     <div style="font-weight:900; color:var(--neon-green)">${Math.floor(p.bal).toLocaleString()}</div>
                 </div>`;
             });
             document.getElementById('top-list').innerHTML = html;
         } catch (e) {
-            document.getElementById('top-list').innerHTML = '<div style="color:red">Grid offline</div>';
+            document.getElementById('top-list').innerHTML = '<div style="color:red; text-align:center">Grid offline</div>';
         }
     };
 
     function closeModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
 
+    // Основной цикл (10 раз в секунду)
     setInterval(() => {
-        if (state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + (state.max_energy / 1500));
-        if (state.pnl > 0) state.score += (state.pnl / 36000);
+        // Регенерация энергии (полное восстановление за ~15 минут)
+        if (state.energy < state.max_energy) {
+            state.energy = Math.min(state.max_energy, state.energy + (state.max_energy / 9000));
+        }
+        // Начисление PnL (профит в час / 36000 итераций в 100мс)
+        if (state.pnl > 0) {
+            state.score += (state.pnl / 36000);
+        }
         updateUI();
     }, 100);
 
-    function saveToLocal(forceServer = false) {
-        localStorage.setItem('np_state', JSON.stringify(state));
-        if (forceServer) {
-            fetch('/api/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(state)
-            }).catch(e => console.error("Save error:", e));
-        }
+    function saveToServer(force = false) {
+        fetch('/api/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(state)
+        }).catch(e => console.error("Save error:", e));
     }
 
-    setInterval(() => saveToLocal(true), 15000);
+    // Сохраняем на сервер каждые 15 секунд
+    setInterval(() => saveToServer(), 15000);
 
     document.getElementById('invite-btn').onclick = () => {
-        const url = `https://t.me/share/url?url=https://t.me/UltraMind_AI_bot?start=${USER_ID}&text=Join my Neural Network!`;
+        const url = `https://t.me/share/url?url=https://t.me/UltraMind_AI_bot?start=${USER_ID}&text=Join my Neural Network and get 5000 NP! 🧠`;
         tg.openTelegramLink(url);
     };
 
