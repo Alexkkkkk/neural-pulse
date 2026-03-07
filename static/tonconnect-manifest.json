@@ -1,5 +1,7 @@
 {
-  "url": "https://np.bothost.ru/",
-  "name": "Neural Pulse Online",
-  "iconUrl": "https://np.bothost.ru/static/images/logo.png"
+  "url": "https://np.bothost.ru",
+  "name": "Neural Pulse Quantum",
+  "iconUrl": "https://np.bothost.ru/static/assets/logo.webp",
+  "termsOfUseUrl": "https://np.bothost.ru/terms.html",
+  "privacyPolicyUrl": "https://np.bothost.ru/privacy.html"
 }
