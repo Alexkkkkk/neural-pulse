@@ -16,7 +16,7 @@ const server = http.createServer(app);
 const bot = new Telegraf(API_TOKEN);
 
 app.use(cors());
-app.use(express.json({ limit: '10kb' })); // Защита от огромных JSON
+app.use(express.json({ limit: '10kb' })); 
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
 const logger = {
@@ -42,7 +42,6 @@ async function initDB() {
             driver: sqlite3.Database
         });
         
-        // Настройки для максимального FPS базы данных
         await db.exec(`
             PRAGMA journal_mode = WAL;
             PRAGMA synchronous = NORMAL;
@@ -62,7 +61,7 @@ async function initDB() {
                 last_active INTEGER
             );
         `);
-        logger.success("Neural Core Database: ONLINE (High-Performance Mode)");
+        logger.success("Neural Core Database: ONLINE");
     } catch (err) {
         logger.error("Database initialization failed", err);
         process.exit(1);
@@ -73,11 +72,14 @@ async function initDB() {
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'static', 'index.html')));
 
-app.get('/api/balance/:userId', async (req, res) => {
-    const uid = req.params.userId;
-    if (!uid || uid === "undefined") return res.status(400).send("ID_REQUIRED");
+// Эндпоинт для Docker Healthcheck
+app.get('/health', (req, res) => res.status(200).send('OK'));
 
-    // Hot Path: возврат из RAM
+app.get('/api/balance/:userId', async (req, res) => {
+    const uid = String(req.params.userId);
+    if (!uid || uid === "undefined" || uid === "null") return res.status(400).send("ID_REQUIRED");
+
+    // Hot Path из RAM
     if (userCache.has(uid)) {
         return res.json({ status: "ok", data: userCache.get(uid), cache: true });
     }
@@ -87,6 +89,11 @@ app.get('/api/balance/:userId', async (req, res) => {
         const now = Math.floor(Date.now() / 1000);
 
         if (userData) {
+            // Принудительное приведение типов (защита от багов SQLite)
+            userData.balance = parseFloat(userData.balance);
+            userData.pnl = parseFloat(userData.pnl);
+            userData.energy = parseFloat(userData.energy);
+            
             userCache.set(uid, userData);
             res.json({ status: "ok", data: userData });
         } else {
@@ -96,7 +103,8 @@ app.get('/api/balance/:userId', async (req, res) => {
             };
             await db.run(`INSERT INTO users (id, balance, click_lvl, pnl, energy, max_energy, level, last_active) 
                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, 
-                          Object.values(newUser));
+                          [newUser.id, newUser.balance, newUser.click_lvl, newUser.pnl, 
+                           newUser.energy, newUser.max_energy, newUser.level, newUser.last_active]);
             userCache.set(uid, newUser);
             logger.info(`New agent authorized: ${uid}`);
             res.json({ status: "ok", data: newUser });
@@ -111,12 +119,12 @@ app.post('/api/save', (req, res) => {
     const { user_id, score, energy, tap_power, pnl } = req.body;
     const uid = String(user_id);
     
-    if (!user_id || user_id === "guest") return res.json({status: "ignored"});
+    if (!user_id || user_id === "guest" || user_id === "undefined") return res.json({status: "ignored"});
 
     const cachedUser = userCache.get(uid);
     const now = Math.floor(Date.now() / 1000);
 
-    // Логика защиты: не сохраняем, если данные в кэше новее, чем пришедшие
+    // Защита от старых данных (race condition)
     if (cachedUser && cachedUser.last_active > now) return res.json({status: "stale_ignored"});
 
     const updateData = {
@@ -135,9 +143,18 @@ app.post('/api/save', (req, res) => {
 
 app.post('/api/upgrade/click', async (req, res) => {
     const uid = String(req.body.user_id);
-    const user = userCache.get(uid);
+    // Берем данные из кэша, если их там нет - пробуем достать из БД
+    let user = userCache.get(uid);
     
-    if (!user) return res.status(404).json({ status: "error", message: "User not in cache" });
+    if (!user) {
+        user = await db.get('SELECT * FROM users WHERE id = ?', [uid]);
+        if (user) {
+            user.balance = parseFloat(user.balance);
+            userCache.set(uid, user);
+        }
+    }
+
+    if (!user) return res.status(404).json({ status: "error", message: "User not found" });
 
     const cost = Math.floor(500 * Math.pow(1.5, user.click_lvl - 1));
 
@@ -174,21 +191,21 @@ async function flushToDisk() {
 
         await stmt.finalize();
         await db.run('COMMIT');
-        logger.info(`💾 Batch Save: ${toSaveIds.length} agents synced in ${Date.now() - start}ms`);
+        logger.info(`💾 Sync: ${toSaveIds.length} agents in ${Date.now() - start}ms`);
     } catch (e) {
         if (db) await db.run('ROLLBACK');
         logger.error("Disk Write Failure", e);
         toSaveIds.forEach(id => saveQueue.add(id));
     }
 }
-setInterval(flushToDisk, 10000); // Синхронизация каждые 10 секунд
+setInterval(flushToDisk, 10000); 
 
 // --- [BOT PROTOCOL] ---
 bot.start((ctx) => {
     const url = `${WEB_APP_URL}/?u=${ctx.from.id}&v=${Date.now()}`;
     ctx.replyWithHTML(
-        `🦾 <b>NEURAL PULSE SYSTEM</b>\n\nДобро пожаловать в сеть. Твой терминал готов к работе.`,
-        Markup.inlineKeyboard([[Markup.button.webApp("ИНИЦИИРОВАТЬ ВХОД 🧠", url)]])
+        `🦾 <b>NEURAL PULSE SYSTEM</b>\n\nСистема инициализирована. Ожидаю синхронизации терминала.`,
+        Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", url)]])
     );
 });
 
@@ -202,7 +219,7 @@ async function start() {
     bot.launch().catch(err => logger.error("Bot launch failed", err));
 
     const shutdown = async (signal) => {
-        logger.warn(`Shutdown signal [${signal}] received.`);
+        logger.warn(`Signal [${signal}] received. Final sync...`);
         await flushToDisk();
         if (db) await db.close();
         process.exit(0);
@@ -211,7 +228,6 @@ async function start() {
     process.once('SIGINT', () => shutdown('SIGINT'));
     process.once('SIGTERM', () => shutdown('SIGTERM'));
     
-    // Защита от "падений" сервера
     process.on('unhandledRejection', (reason, promise) => {
         logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
     });
