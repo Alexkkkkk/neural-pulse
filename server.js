@@ -19,23 +19,23 @@ const bot = new Telegraf(API_TOKEN);
 app.use(cors());
 app.use(express.json());
 
-// --- [ЛОГИРОВАНИЕ ЗАПРОСОВ] ---
-app.use((req, res, next) => {
-    console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
-    next();
-});
-
+// Логируем только важные ошибки, а не каждый GET запрос (экономим ресурсы)
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
 let db;
 
-// --- [ИНИЦИАЛИЗАЦИЯ БД] ---
+// --- [ИНИЦИАЛИЗАЦИЯ БД С ОПТИМИЗАЦИЕЙ] ---
 async function initDB() {
     try {
         db = await open({
             filename: path.join(__dirname, 'data', 'game.db'),
             driver: sqlite3.Database
         });
+        
+        // Включаем режим WAL для конкурентной работы (чтение + запись)
+        await db.run('PRAGMA journal_mode = WAL');
+        await db.run('PRAGMA synchronous = NORMAL');
+
         await db.exec(`CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY, 
             balance REAL, 
@@ -45,19 +45,21 @@ async function initDB() {
             max_energy INTEGER, 
             level INTEGER DEFAULT 1, 
             last_active INTEGER)`);
-        console.log("💾 Database & Tables Ready");
+
+        // КРИТИЧЕСКИ ВАЖНО для 20 млн пользователей: ИНДЕКС
+        await db.exec(`CREATE INDEX IF NOT EXISTS idx_user_id ON users (id)`);
+        
+        console.log("💾 Database & Tables Ready with WAL Mode");
     } catch (err) {
-        console.error("![DB] Ошибка инициализации базы:", err);
+        console.error("![DB] Ошибка инициализации:", err);
     }
 }
 
 // --- [ЛОГИКА ТЕЛЕГРАМ БОТА] ---
 bot.start(async (ctx) => {
-    const uid = ctx.from.id;
+    const uid = String(ctx.from.id);
     const version = Math.random().toString(36).substring(7);
     const webAppUrlWithCacheReset = `${WEB_APP_URL}/?u=${uid}&v=${version}`;
-    
-    console.log(`[BOT] Команда /start от ${uid}. Ссылка: ${webAppUrlWithCacheReset}`);
 
     try {
         await ctx.replyWithHTML(
@@ -68,23 +70,22 @@ bot.start(async (ctx) => {
             ])
         );
     } catch (e) {
-        console.error("[BOT] Ошибка отправки сообщения:", e);
+        console.error("[BOT] Start Error:", e.message);
     }
 });
 
 // --- [API ЭНДПОИНТЫ] ---
 
-// 1. Получение баланса и расчет офлайн-дохода
+// 1. Баланс и Офлайн-доход
 app.get('/api/balance/:userId', async (req, res) => {
     const userId = String(req.params.userId);
     try {
-        if (!db) return res.status(503).send("Database not ready");
+        if (!db) return res.status(503).send("DB Busy");
         
         const now = Math.floor(Date.now() / 1000);
         let user = await db.get('SELECT * FROM users WHERE id = ?', [userId]);
 
         if (user) {
-            // Лимит офлайн дохода — 3 часа (10800 сек)
             const offTime = Math.min(now - (user.last_active || now), 10800);
             const earned = (user.pnl / 3600) * offTime;
             
@@ -98,14 +99,12 @@ app.get('/api/balance/:userId', async (req, res) => {
                 multiplier: 1
             }});
         } else {
-            console.log(`[API] Новый пользователь: ${userId}`);
             await db.run(`INSERT INTO users (id, balance, click_lvl, pnl, energy, max_energy, level, last_active) 
                           VALUES (?, 1000, 1, 0, 1000, 1000, 1, ?)`, [userId, now]);
             res.json({ status: "ok", data: { score: 1000, tap_power: 1, pnl: 0, energy: 1000, max_energy: 1000, level: 1, multiplier: 1 }});
         }
     } catch (e) { 
-        console.error(`![API] Ошибка в /balance/${userId}:`, e.message);
-        res.status(500).send(e.message); 
+        res.status(500).json({ error: "Internal Error" }); 
     }
 });
 
@@ -113,8 +112,6 @@ app.get('/api/balance/:userId', async (req, res) => {
 app.post('/api/upgrade/click', async (req, res) => {
     const { user_id } = req.body;
     try {
-        if (!db) return res.status(503).send("Database not ready");
-        
         const user = await db.get('SELECT balance, click_lvl FROM users WHERE id = ?', [String(user_id)]);
         if (!user) return res.json({ status: "error", message: "User not found" });
 
@@ -126,75 +123,53 @@ app.post('/api/upgrade/click', async (req, res) => {
             await db.run('UPDATE users SET balance = ?, click_lvl = ? WHERE id = ?', [newBalance, newLvl, String(user_id)]);
             res.json({ status: "ok", newBalance, newLvl });
         } else {
-            res.json({ status: "error", message: "Недостаточно нейро-кредитов" });
+            res.json({ status: "error", message: "Недостаточно ресурсов" });
         }
-    } catch (e) {
-        res.status(500).send(e.message);
-    }
+    } catch (e) { res.status(500).send(e.message); }
 });
 
 // 3. Улучшение майнинга (MINE)
 app.post('/api/upgrade/mine', async (req, res) => {
     const { user_id } = req.body;
     try {
-        if (!db) return res.status(503).send("Database not ready");
-        
         const user = await db.get('SELECT balance, pnl FROM users WHERE id = ?', [String(user_id)]);
         if (!user) return res.json({ status: "error", message: "User not found" });
 
         const currentMineLvl = Math.floor(user.pnl / 150);
         const cost = Math.floor(1000 * Math.pow(1.6, currentMineLvl));
-        const pnlBoost = 150; 
 
         if (user.balance >= cost) {
             const newBalance = user.balance - cost;
-            const newPnl = user.pnl + pnlBoost;
+            const newPnl = user.pnl + 150; 
             await db.run('UPDATE users SET balance = ?, pnl = ? WHERE id = ?', [newBalance, newPnl, String(user_id)]);
             res.json({ status: "ok", newBalance, newPnl });
         } else {
-            res.json({ status: "error", message: "Недостаточно нейро-кредитов" });
+            res.json({ status: "error", message: "Недостаточно ресурсов" });
         }
-    } catch (e) {
-        res.status(500).send(e.message);
-    }
+    } catch (e) { res.status(500).send(e.message); }
 });
 
-// 4. Автосохранение
+// 4. Оптимизированное автосохранение
 app.post('/api/save', async (req, res) => {
     try {
-        if (!db) return res.status(503).send("Database not ready");
         const d = req.body;
         if (!d.user_id || d.user_id === "guest") return res.json({status: "ignored"});
 
         const now = Math.floor(Date.now() / 1000);
         
+        // Валидация данных перед записью
+        const balance = Number.isFinite(parseFloat(d.score)) ? parseFloat(d.score) : 0;
+        const pnl = Number.isFinite(parseFloat(d.pnl)) ? parseFloat(d.pnl) : 0;
+
         await db.run(`UPDATE users SET balance=?, click_lvl=?, pnl=?, energy=?, level=?, last_active=? WHERE id=?`,
-            [
-                parseFloat(d.score), 
-                parseInt(d.tap_power), 
-                parseFloat(d.pnl), 
-                parseFloat(d.energy), 
-                parseInt(d.level), 
-                now, 
-                String(d.user_id)
-            ]
+            [balance, parseInt(d.tap_power), pnl, parseFloat(d.energy), parseInt(d.level), now, String(d.user_id)]
         );
         res.json({status: "ok"});
-    } catch (e) { 
-        console.error(`![API] Ошибка сохранения:`, e.message);
-        res.status(500).send(e.message); 
-    }
+    } catch (e) { res.status(500).send("Save Fail"); }
 });
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'static', 'index.html'));
-});
-
-// --- [SOCKETS] ---
-io.on('connection', (socket) => {
-    socket.on('tap', (data) => {
-        socket.emit('tap_ack', { ok: true });
-    });
 });
 
 // --- [ЗАПУСК СЕРВЕРА] ---
@@ -206,14 +181,12 @@ async function startServer() {
         await bot.telegram.deleteWebhook();
         
         server.listen(PORT, '0.0.0.0', () => {
-            console.log(`🚀 Neural Pulse running on port ${PORT}`);
+            console.log(`🚀 Neural Pulse High-Load Node running on ${PORT}`);
         });
 
         bot.launch();
-        console.log("🤖 Telegram Bot Started and ready for commands");
-
     } catch (err) {
-        console.error("![CRITICAL] Ошибка при запуске:", err);
+        console.error("![CRITICAL] Startup Error:", err);
     }
 }
 
