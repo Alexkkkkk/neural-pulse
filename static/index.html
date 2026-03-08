@@ -5,21 +5,51 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
     <style>
         :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #050505; }
-        body { margin: 0; padding: 0; background-color: var(--bg-dark); background-image: radial-gradient(circle at 50% 50%, #0a1128 0%, #050505 100%); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; touch-action: manipulation; }
+        body { 
+            margin: 0; padding: 0; background-color: var(--bg-dark); 
+            background-image: radial-gradient(circle at 50% 50%, #0a1128 0%, #050505 100%); 
+            color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; 
+            touch-action: none; /* Убираем системные жесты для тапалки */
+            user-select: none;
+        }
         #particles-js { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
         .content-layer { position: relative; z-index: 2; width: 100%; height: 100vh; display: flex; flex-direction: column; align-items: center; }
-        .tap-text { position: absolute; color: #fff; font-size: 34px; font-weight: 900; pointer-events: none; animation: floatUp 0.7s ease-out forwards; z-index: 100; text-shadow: 0 0 15px var(--neon-cyan); }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-130px) scale(1.2); } }
-        .nav-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 15px; border-radius: 15px; text-align: center; font-size: 12px; font-weight: bold; cursor: pointer; }
-        .storm-mode { animation: flashBg 0.2s infinite; }
-        @keyframes flashBg { 0% { background-color: #050505; } 50% { background-color: #0a1a2a; } }
+        
+        .tap-text { 
+            position: absolute; color: #fff; font-size: 34px; font-weight: 900; 
+            pointer-events: none; animation: floatUp 0.7s ease-out forwards; z-index: 100; 
+            text-shadow: 0 0 15px var(--neon-cyan); 
+        }
+        @keyframes floatUp { 
+            0% { opacity: 1; transform: translateY(0) scale(1); } 
+            100% { opacity: 0; transform: translateY(-130px) scale(1.2); } 
+        }
+
+        .main-logo {
+            width: 250px; height: 250px; border-radius: 50%; 
+            box-shadow: 0 0 50px rgba(0, 242, 255, 0.2); 
+            transition: transform 0.05s; object-fit: cover;
+            border: 2px solid rgba(0, 242, 255, 0.1);
+        }
+
+        .nav-btn { 
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); 
+            padding: 15px; border-radius: 15px; text-align: center; font-size: 12px; 
+            font-weight: bold; cursor: pointer; transition: 0.2s;
+        }
+        .nav-btn:active { background: rgba(255,255,255,0.1); transform: scale(0.95); }
+
+        /* Эффект Storm Mode */
+        .storm-active { animation: stormPulse 1.5s infinite; border: 1px solid var(--neon-cyan) !important; }
+        @keyframes stormPulse { 0% { box-shadow: 0 0 10px var(--neon-cyan); } 50% { box-shadow: 0 0 30px var(--neon-purple); } 100% { box-shadow: 0 0 10px var(--neon-cyan); } }
     </style>
 </head>
 <body>
     <canvas id="particles-js"></canvas>
+    
     <div class="content-layer">
         <div class="header" style="width: 85%; margin-top: 15px; display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.07); padding: 12px; border-radius: 20px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1);">
             <div id="lvl-badge" style="width: 40px; height: 40px; background: var(--neon-purple); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; box-shadow: 0 0 15px var(--neon-purple);">1</div>
@@ -27,29 +57,27 @@
                 <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; color: #aaa; margin-bottom: 4px;">
                     <span>NEURAL RANK</span><span id="league-name">SILICON NOVICE</span>
                 </div>
-                <div class="energy-bar-wrap" style="height: 6px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden;">
-                    <div id="exp-bar" style="width: 20%; background: #fff; height: 100%; box-shadow: 0 0 10px #fff;"></div>
+                <div style="height: 6px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden;">
+                    <div id="exp-bar" style="width: 10%; background: #fff; height: 100%; box-shadow: 0 0 10px #fff; transition: width 0.3s;"></div>
                 </div>
             </div>
         </div>
 
         <div class="score-container" style="margin-top: 25px; text-align: center;">
-            <div id="storm-badge" style="display: none; background: #fff; color: #000; padding: 2px 10px; border-radius: 5px; font-size: 10px; font-weight: 900; margin-bottom: 5px;">STORM X2 ACTIVE</div>
+            <div id="storm-badge" style="display: none; background: var(--neon-cyan); color: #000; padding: 2px 10px; border-radius: 5px; font-size: 10px; font-weight: 900; margin-bottom: 5px; text-transform: uppercase;">Storm x2 Active</div>
             <div id="balance" style="font-size: 56px; font-weight: 900; text-shadow: 0 0 25px var(--neon-cyan); letter-spacing: -2px;">0</div>
             <div id="pnl-info" style="color: var(--neon-cyan); font-size: 12px; font-weight: bold; letter-spacing: 1px;">PROFIT: +0/HR</div>
         </div>
 
         <div class="click-area" id="tap-zone" style="position: relative; margin-top: 30px; cursor: pointer;">
-            <img src="/static/images/logo.png" class="main-logo" id="main-logo" 
-                 style="width: 250px; height: 250px; border-radius: 50%; box-shadow: 0 0 50px rgba(0, 242, 255, 0.2); transition: transform 0.05s; object-fit: cover;"
-                 onerror="this.src='https://via.placeholder.com/250/00f2ff/000000?text=NP'">
+            <img src="/static/assets/logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/250/00f2ff/000000?text=NP'">
         </div>
 
         <div class="energy-section" style="width: 85%; margin-top: auto; margin-bottom: 20px;">
             <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; margin-bottom: 6px; color: #888;">
                 <span>ENERGY CORE</span><span id="energy-text">1000/1000</span>
             </div>
-            <div class="energy-bar-wrap" style="width: 100%; height: 14px; background: rgba(255,255,255,0.05); border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); overflow: hidden;">
+            <div style="width: 100%; height: 14px; background: rgba(255,255,255,0.05); border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); overflow: hidden;">
                 <div id="energy-fill" style="height: 100%; background: linear-gradient(90deg, #00f2ff, #bc13fe); width: 100%; transition: width 0.2s;"></div>
             </div>
         </div>
@@ -63,8 +91,9 @@
 
     <script>
         const tg = window.Telegram.WebApp;
-        const socket = io();
+        const socket = io(); // Автоматически подключается к текущему хосту
         tg.expand();
+        tg.setHeaderColor('#050505');
 
         const urlParams = new URLSearchParams(window.location.search);
         const uid = urlParams.get('u') || (tg.initDataUnsafe?.user?.id ? String(tg.initDataUnsafe.user.id) : "guest");
@@ -83,18 +112,27 @@
         function drawParticles() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = 'rgba(0, 242, 255, 0.2)';
-            particles.forEach(p => { p.x+=p.vx; p.y+=p.vy; if(p.x<0||p.x>canvas.width) p.vx*=-1; if(p.y<0||p.y>canvas.height) p.vy*=-1; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); });
+            particles.forEach(p => { 
+                p.x+=p.vx; p.y+=p.vy; 
+                if(p.x<0||p.x>canvas.width) p.vx*=-1; 
+                if(p.y<0||p.y>canvas.height) p.vy*=-1; 
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); 
+            });
             requestAnimationFrame(drawParticles);
         }
 
-        // --- [CORE LOGIC] ---
+        // --- [CORE] ---
         async function init() {
             initParticles(); drawParticles();
             try {
                 const r = await fetch(`/api/balance/${uid}`);
                 const res = await r.json();
-                if(res.status === 'ok') state = { ...state, ...res.data };
-            } catch(e) { console.warn("Offline mode"); }
+                if(res.status === 'ok') {
+                    state = { ...state, ...res.data };
+                    // Синхронизируем уровень с бэкенда
+                    document.getElementById('exp-bar').style.width = `${(state.level % 10) * 10}%`;
+                }
+            } catch(e) { console.warn("API Offline"); }
             updateUI();
         }
 
@@ -104,55 +142,82 @@
             document.getElementById('energy-fill').style.width = `${(state.energy / state.max_energy) * 100}%`;
             document.getElementById('pnl-info').innerText = `PROFIT: +${state.pnl.toLocaleString()}/HR`;
             document.getElementById('lvl-badge').innerText = state.level;
+            
+            const stormBadge = document.getElementById('storm-badge');
+            if(state.multiplier > 1) {
+                stormBadge.style.display = 'inline-block';
+                document.getElementById('main-logo').classList.add('storm-active');
+            } else {
+                stormBadge.style.display = 'none';
+                document.getElementById('main-logo').classList.remove('storm-active');
+            }
         }
 
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
-            e.preventDefault();
+            if (e.cancelable) e.preventDefault();
             const power = state.tap_power * state.multiplier;
-            if (state.energy < power) return tg.HapticFeedback.notificationOccurred('error');
+            
+            if (state.energy < power) {
+                tg.HapticFeedback.notificationOccurred('error');
+                return;
+            }
 
-            for(let i=0; i < e.touches.length; i++) {
+            for(let i=0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
                 state.score += power;
                 state.energy -= power;
-                socket.emit('tap', { uid });
+
+                // Отправляем тап через сокет для real-time валидации (по желанию)
+                socket.emit('tap', { uid, power });
 
                 const num = document.createElement('div');
                 num.className = 'tap-text';
                 num.innerText = `+${power}`;
-                num.style.left = `${e.touches[i].pageX - 20}px`;
-                num.style.top = `${e.touches[i].pageY - 50}px`;
+                num.style.left = `${touch.pageX - 20}px`;
+                num.style.top = `${touch.pageY - 50}px`;
                 document.body.appendChild(num);
                 setTimeout(() => num.remove(), 700);
             }
+            
             updateUI();
             tg.HapticFeedback.impactOccurred('light');
             const logo = document.getElementById('main-logo');
-            logo.style.transform = 'scale(0.94)';
-            setTimeout(() => logo.style.transform = 'scale(1)', 50);
+            logo.style.transform = 'scale(0.94) rotate(-2deg)';
+            setTimeout(() => logo.style.transform = 'scale(1) rotate(0)', 50);
         });
 
         function showInvite() {
             const link = `https://t.me/neural_pulse_bot?start=${uid}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my Neural Network!`);
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my Neural Network! 🧠`);
         }
 
+        // Доход в секунду и реген энергии
         setInterval(() => {
             state.score += (state.pnl / 3600);
-            if (state.energy < state.max_energy) state.energy = Math.min(state.max_energy, state.energy + 1.2);
+            if (state.energy < state.max_energy) {
+                state.energy = Math.min(state.max_energy, state.energy + 1.5);
+            }
             updateUI();
         }, 1000);
 
+        // Сохранение состояния на сервер
         setInterval(() => {
             if (uid === "guest") return;
             fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ user_id: uid, ...state })
-            });
+            }).catch(e => console.error("Save error"));
         }, 4000);
 
         window.addEventListener('resize', initParticles);
         init();
+
+        // Слушаем события от сервера (например, глобальные бонусы)
+        socket.on('storm_start', (data) => {
+            state.multiplier = data.multiplier || 2;
+            updateUI();
+        });
     </script>
 </body>
 </html>
