@@ -19,6 +19,7 @@ app.use(cors());
 app.use(express.json());
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
+// Красивый логгер
 const logger = {
     info: (msg) => console.log(`[${new Date().toLocaleTimeString()}] 🟦 INFO: ${msg}`),
     success: (msg) => console.log(`[${new Date().toLocaleTimeString()}] 🟩 OK: ${msg}`),
@@ -34,6 +35,7 @@ app.get('/', (req, res) => {
 let db;
 const saveQueue = new Map();
 
+// --- [ИНИЦИАЛИЗАЦИЯ БД] ---
 async function initDB() {
     try {
         const dataDir = path.join(__dirname, 'data');
@@ -58,16 +60,19 @@ async function initDB() {
         `);
 
         await db.run('PRAGMA journal_mode = WAL');
-        logger.success("База данных готова к работе");
+        logger.success("База данных готова к работе (WAL mode)");
     } catch (err) {
-        logger.error("Ошибка БД", err);
+        logger.error("Ошибка инициализации БД", err);
     }
 }
 
 // --- [API] ---
 
+// Получение данных пользователя
 app.get('/api/balance/:userId', async (req, res) => {
     const uid = req.params.userId;
+    if (!uid || uid === "undefined") return res.status(400).json({ error: "Invalid ID" });
+    
     logger.api('GET', '/balance', uid);
     
     try {
@@ -80,8 +85,14 @@ app.get('/api/balance/:userId', async (req, res) => {
         } else {
             logger.warn(`Регистрация нового агента: ${uid}`);
             const newUser = {
-                id: uid, balance: 1000, click_lvl: 1, pnl: 0,
-                energy: 1000, max_energy: 1000, level: 1, last_active: now
+                id: uid, 
+                balance: 1000.0, 
+                click_lvl: 1, 
+                pnl: 0.0,
+                energy: 1000.0, 
+                max_energy: 1000, 
+                level: 1, 
+                last_active: now
             };
             await db.run(`INSERT INTO users (id, balance, click_lvl, pnl, energy, max_energy, level, last_active) 
                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, 
@@ -90,27 +101,31 @@ app.get('/api/balance/:userId', async (req, res) => {
             res.json({ status: "ok", data: newUser });
         }
     } catch (e) { 
-        logger.error(`Ошибка авторизации ${uid}`, e.message);
+        logger.error(`Ошибка запроса данных ${uid}`, e.message);
         res.status(500).json({ error: "System Error" }); 
     }
 });
 
+// Сохранение в очередь (для оптимизации записи)
 app.post('/api/save', (req, res) => {
     const { user_id, score, energy, tap_power, pnl } = req.body;
-    if (!user_id || user_id === "guest") return res.json({status: "ignored"});
+    if (!user_id || user_id === "guest" || user_id === "undefined") return res.json({status: "ignored"});
     
     saveQueue.set(String(user_id), {
-        balance: parseFloat(score),
-        energy: parseFloat(energy),
-        click_lvl: parseInt(tap_power),
-        pnl: parseFloat(pnl),
+        balance: parseFloat(score) || 0,
+        energy: parseFloat(energy) || 0,
+        click_lvl: parseInt(tap_power) || 1,
+        pnl: parseFloat(pnl) || 0,
         last_active: Math.floor(Date.now() / 1000)
     });
     res.json({ status: "queued" }); 
 });
 
+// Улучшение клика
 app.post('/api/upgrade/click', async (req, res) => {
     const { user_id } = req.body;
+    if (!user_id) return res.status(400).json({ status: "error" });
+    
     logger.api('POST', '/upgrade/click', user_id);
     
     try {
@@ -123,17 +138,18 @@ app.post('/api/upgrade/click', async (req, res) => {
             const newLvl = user.click_lvl + 1;
             const newBal = user.balance - cost;
             await db.run('UPDATE users SET balance = ?, click_lvl = ? WHERE id = ?', [newBal, newLvl, String(user_id)]);
-            logger.success(`User ${user_id} купил CLICK LVL ${newLvl}`);
+            logger.success(`User ${user_id} купил апгрейд: LVL ${newLvl}`);
             res.json({ status: "ok", newBalance: newBal, newLvl });
         } else {
-            res.json({ status: "error", message: "Недостаточно средств" });
+            res.json({ status: "error", message: "Недостаточно монет" });
         }
     } catch (e) { 
-        logger.error("Upgrade error", e); 
+        logger.error("Ошибка апгрейда", e); 
         res.status(500).json({ status: "error" }); 
     }
 });
 
+// Функция сброса очереди в базу (раз в 15 сек)
 async function flushQueue() {
     if (saveQueue.size === 0) return;
     const count = saveQueue.size;
@@ -147,26 +163,44 @@ async function flushQueue() {
                         [d.balance, d.energy, d.click_lvl, d.pnl, d.last_active, id]);
         }
         await db.run('COMMIT');
-        logger.info(`💾 Синхронизация: ${count} пользователей`);
+        logger.info(`💾 Синхронизация данных: ${count} чел.`);
     } catch (e) {
-        await db.run('ROLLBACK');
-        logger.error("Ошибка очереди", e);
+        if (db) await db.run('ROLLBACK');
+        logger.error("Ошибка при пакетном сохранении", e);
     }
 }
 setInterval(flushQueue, 15000);
 
+// --- [ТЕЛЕГРАМ БОТ] ---
 bot.start((ctx) => {
     const url = `${WEB_APP_URL}/?u=${ctx.from.id}&v=${Date.now()}`;
-    ctx.replyWithHTML(`🦾 <b>Neural Pulse Active</b>\n\nСистема готова. Инициируйте вход.`, Markup.inlineKeyboard([
+    ctx.replyWithHTML(`🦾 <b>Neural Pulse Active</b>\n\nСистема готова к синхронизации.`, Markup.inlineKeyboard([
         [Markup.button.webApp("ВХОД 🧠", url)]
     ]));
 });
 
+// --- [ЗАПУСК И ЗАВЕРШЕНИЕ] ---
 const PORT = process.env.PORT || 3000;
+
 async function start() {
     await initDB();
-    server.listen(PORT, '0.0.0.0', () => logger.success(`СЕРВЕР: PORT ${PORT}`));
-    bot.launch();
+    server.listen(PORT, '0.0.0.0', () => {
+        logger.success(`СЕРВЕР ЗАПУЩЕН | ПОРТ: ${PORT}`);
+    });
+    
+    bot.launch().catch(err => logger.error("Ошибка запуска бота", err));
+
+    // Правильное завершение при перезагрузке хостинга
+    process.once('SIGINT', () => {
+        bot.stop('SIGINT');
+        if (db) db.close();
+        process.exit();
+    });
+    process.once('SIGTERM', () => {
+        bot.stop('SIGTERM');
+        if (db) db.close();
+        process.exit();
+    });
 }
 
 start();
