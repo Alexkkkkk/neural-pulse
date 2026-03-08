@@ -236,6 +236,7 @@
                 return; 
             }
             try {
+                // Здесь x-tg-data не нужен для GET, но мы можем его добавить для единообразия
                 const r = await fetch(`/api/balance/${state.uid}`);
                 const res = await r.json();
                 if(res.status === 'ok') {
@@ -256,7 +257,10 @@
             try {
                 const r = await fetch('/api/save', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-tg-data': tg.initData // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: передаем данные Telegram
+                    },
                     body: JSON.stringify({
                         user_id: state.uid,
                         score: state.balance,
@@ -275,7 +279,10 @@
             try {
                 const r = await fetch(`/api/upgrade/${type}`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-tg-data': tg.initData // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ
+                    },
                     body: JSON.stringify({ user_id: state.uid })
                 });
                 const res = await r.json();
@@ -286,7 +293,7 @@
                     updateUI();
                     tg.HapticFeedback.notificationOccurred('success');
                 } else {
-                    tg.showAlert(res.message || "Insufficient Credits");
+                    tg.showAlert(res.error || "Insufficient Credits");
                 }
             } catch(e) { tg.showAlert("Connection lost"); }
         }
