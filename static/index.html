@@ -26,18 +26,41 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        #particles-js {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 1; pointer-events: none;
+        /* --- LOADER SCREEN STYLES --- */
+        #loader-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #050505;
+            display: flex; align-items: center; justify-content: center;
+            z-index: 10000;
+            transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
         }
-
-        .content-layer {
-            position: relative; z-index: 2; width: 100%; height: 100%;
-            display: flex; flex-direction: column; align-items: center;
-            padding-top: env(safe-area-inset-top);
+        .loader-container { text-align: center; }
+        .loader-logo-wrap { position: relative; width: 150px; height: 150px; margin: 0 auto 30px; }
+        .loader-ring {
+            position: absolute; top: -5px; left: -5px; right: -5px; bottom: -5px;
+            border: 2px solid transparent; border-top: 2px solid var(--neon-cyan);
+            border-right: 2px solid var(--neon-purple); border-radius: 50%;
+            animation: rotate-ring 1.5s linear infinite;
         }
+        .loader-logo-img {
+            width: 100%; height: 100%; border-radius: 50%; background: #111;
+            overflow: hidden; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 0 30px rgba(188, 19, 254, 0.3);
+        }
+        .loader-text {
+            color: #fff; font-size: 14px; font-weight: 900; text-transform: uppercase;
+            letter-spacing: 3px; margin-bottom: 10px;
+        }
+        .loader-percent { color: var(--neon-cyan); font-size: 24px; font-weight: 900; margin-bottom: 20px; }
+        .loader-bar-bg { width: 240px; height: 4px; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 0 auto; overflow: hidden; }
+        .loader-bar-fill { width: 0%; height: 100%; background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); transition: width 0.3s ease; }
+        @keyframes rotate-ring { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-        /* HEADER STYLE */
+        /* --- MAIN UI STYLES --- */
+        #particles-js { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+        .content-layer { position: relative; z-index: 2; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; padding-top: env(safe-area-inset-top); }
+        
         .header-card {
             width: 85%; margin-top: 15px; display: flex; align-items: center; gap: 12px; 
             background: var(--glass); padding: 12px; border-radius: 20px; backdrop-filter: blur(10px);
@@ -50,51 +73,25 @@
             font-weight: 900; color: var(--neon-cyan); font-size: 18px;
         }
 
-        /* SCORE / JACKPOT */
         .score-container {
-            margin-top: 20px; text-align: center;
-            background: rgba(188, 19, 254, 0.05);
-            border: 1px solid rgba(188, 19, 254, 0.2);
-            padding: 10px 40px; border-radius: 20px;
+            margin-top: 20px; text-align: center; background: rgba(188, 19, 254, 0.05);
+            border: 1px solid rgba(188, 19, 254, 0.2); padding: 10px 40px; border-radius: 20px;
         }
         .jackpot-label { color: var(--neon-cyan); font-size: 10px; font-weight: 800; letter-spacing: 1px; margin-bottom: 2px; }
         #balance { font-size: 42px; font-weight: 900; color: #fff; }
 
-        /* CLICK AREA & SIDE NAV */
-        .main-wrapper {
-            position: relative; width: 100%; display: flex; justify-content: center; align-items: center; margin-top: 20px;
-        }
-        .click-area {
-            position: relative; width: 280px; height: 280px;
-            display: flex; align-items: center; justify-content: center; cursor: pointer;
-        }
-        .main-logo {
-            width: 260px; height: 260px; border-radius: 50%;
-            box-shadow: 0 0 60px rgba(188, 19, 254, 0.3);
-            transition: transform 0.05s; z-index: 5; object-fit: cover;
-        }
-        .side-nav {
-            position: absolute; right: 15px; display: flex; flex-direction: column; gap: 10px; z-index: 10;
-        }
-        .side-btn {
-            background: #121212; border: 1px solid rgba(255,255,255,0.1);
-            color: #fff; font-size: 9px; font-weight: 800; padding: 10px 12px;
-            border-radius: 10px; width: 70px; text-align: center;
-        }
+        .main-wrapper { position: relative; width: 100%; display: flex; justify-content: center; align-items: center; margin-top: 20px; }
+        .click-area { position: relative; width: 280px; height: 280px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .main-logo { width: 260px; height: 260px; border-radius: 50%; box-shadow: 0 0 60px rgba(188, 19, 254, 0.3); transition: transform 0.05s; z-index: 5; object-fit: cover; }
+        
+        .side-nav { position: absolute; right: 15px; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
+        .side-btn { background: #121212; border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 9px; font-weight: 800; padding: 10px 12px; border-radius: 10px; width: 70px; text-align: center; }
         .side-btn.gold { color: #ffe600; border-color: rgba(255, 230, 0, 0.3); }
 
-        /* NAV BUTTONS (FOOTER) */
         .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 30px; }
-        .nav-btn {
-            background: none; border: 1.5px solid #444; 
-            padding: 12px 5px; border-radius: 12px;
-            text-align: center; font-size: 11px; font-weight: 800; color: #fff;
-        }
+        .nav-btn { background: none; border: 1.5px solid #444; padding: 12px 5px; border-radius: 12px; text-align: center; font-size: 11px; font-weight: 800; color: #fff; }
 
-        .tap-text {
-            position: absolute; color: #fff; font-size: 32px; font-weight: 900;
-            pointer-events: none; animation: floatUp 0.7s forwards; z-index: 100;
-        }
+        .tap-text { position: absolute; color: #fff; font-size: 32px; font-weight: 900; pointer-events: none; animation: floatUp 0.7s forwards; z-index: 100; }
         @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
 
         .energy-section { width: 85%; margin-top: auto; margin-bottom: 20px; }
@@ -103,6 +100,22 @@
     </style>
 </head>
 <body>
+
+    <div id="loader-screen">
+        <div class="loader-container">
+            <div class="loader-logo-wrap">
+                <div class="loader-ring"></div>
+                <div class="loader-logo-img">
+                    <img src="/static/images/logo.png" style="width: 100%; height: 100%; border-radius: 50%;" onerror="this.src='https://via.placeholder.com/150/bc13fe/fff?text=AI'">
+                </div>
+            </div>
+            <div class="loader-text">Loading Neural Network</div>
+            <div id="loader-percent" class="loader-percent">0%</div>
+            <div class="loader-bar-bg">
+                <div id="loader-fill" class="loader-bar-fill"></div>
+            </div>
+        </div>
+    </div>
 
     <canvas id="particles-js"></canvas>
 
@@ -161,9 +174,32 @@
 
         let state = { 
             balance: 0, energy: 1000, max_energy: 1000, 
-            click_lvl: 1, pnl: 0,
+            click_lvl: 1, pnl: 0, loaded: false,
             uid: new URLSearchParams(window.location.search).get('u') || tg.initDataUnsafe?.user?.id
         };
+
+        // --- Анимация загрузки ---
+        function startLoadingAnimation() {
+            let progress = 0;
+            const percentEl = document.getElementById('loader-percent');
+            const fillEl = document.getElementById('loader-fill');
+            const interval = setInterval(() => {
+                if (state.loaded && progress >= 100) {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        const loader = document.getElementById('loader-screen');
+                        loader.style.opacity = '0';
+                        setTimeout(() => loader.style.display = 'none', 800);
+                    }, 500);
+                    return;
+                }
+                if (progress < 99) progress += Math.floor(Math.random() * 5) + 1;
+                if (progress > 100) progress = 100;
+                percentEl.innerText = `${progress}%`;
+                fillEl.style.width = `${progress}%`;
+            }, 100);
+        }
+        startLoadingAnimation();
 
         // --- Частицы ---
         const canvas = document.getElementById('particles-js');
@@ -195,7 +231,7 @@
         }
 
         async function loadData() {
-            if(!state.uid) return;
+            if(!state.uid) { state.loaded = true; return; }
             try {
                 const r = await fetch(`/api/balance/${state.uid}`);
                 const res = await r.json();
@@ -206,19 +242,21 @@
                     state.energy = res.data.energy;
                     state.max_energy = res.data.max_energy;
                     updateUI();
+                    state.loaded = true; // Сигнал анимации загрузки, что данные получены
                 }
-            } catch(e) { console.error('Load error', e); }
+            } catch(e) { 
+                console.error('Load error', e); 
+                state.loaded = true; 
+            }
         }
 
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (state.energy < state.click_lvl) return;
-
             for(let i=0; i < e.touches.length; i++) {
                 const touch = e.touches[i];
                 state.balance += state.click_lvl;
                 state.energy -= state.click_lvl;
-                
                 const num = document.createElement('div');
                 num.className = 'tap-text';
                 num.innerText = `+${state.click_lvl}`;
@@ -260,7 +298,7 @@
         }, 1000);
 
         setInterval(() => {
-            if (!state.uid) return;
+            if (!state.uid || !state.loaded) return;
             fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
