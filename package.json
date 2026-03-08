@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "postinstall": "npm run rebuild",
     "prod": "pm2 start ecosystem.config.js --env production",
     "stop": "pm2 stop neural-pulse-core",
     "restart": "pm2 restart neural-pulse-core",
