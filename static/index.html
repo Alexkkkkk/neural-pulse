@@ -73,7 +73,10 @@
             text-align: center; font-size: 10px; font-weight: 800; color: #fff;
             text-transform: uppercase; letter-spacing: 1px;
             transition: 0.2s;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 50px;
         }
+        .nav-btn span.cost { font-size: 8px; color: var(--neon-cyan); margin-top: 4px; }
 
         .tap-text {
             position: absolute; color: #fff; font-size: 34px; font-weight: 900;
@@ -132,23 +135,30 @@
         </div>
 
         <div class="bottom-nav">
-            <div class="nav-btn" onclick="tg.HapticFeedback.impactOccurred('medium'); tg.showAlert('Shop loading...')">🚀 BOOST</div>
-            <div class="nav-btn" onclick="tg.HapticFeedback.impactOccurred('medium'); tg.showAlert('Mining starting soon...')">⛏️ MINE</div>
-            <div class="nav-btn" onclick="showInvite()">🎁 FRIENDS</div>
+            <div class="nav-btn" onclick="buyUpgrade()">
+                🚀 BOOST
+                <span id="boost-cost" class="cost">500</span>
+            </div>
+            <div class="nav-btn" onclick="tg.HapticFeedback.impactOccurred('medium'); tg.showAlert('Mining starting soon...')">
+                ⛏️ MINE
+                <span class="cost">COMING SOON</span>
+            </div>
+            <div class="nav-btn" onclick="showInvite()">
+                🎁 FRIENDS
+                <span class="cost">GET XP</span>
+            </div>
         </div>
     </div>
 
     <script>
-        // --- 1. ПЕРВООЧЕРЕДНАЯ ИНИЦИАЛИЗАЦИЯ ---
         const tg = window.Telegram.WebApp;
         
-        // Перехват ошибок для отладки прямо в Telegram
         window.onerror = function(msg, url, line) {
             tg.showAlert(`Ошибка: ${msg}\nЛиния: ${line}`);
             return false;
         };
 
-        tg.ready(); // КРИТИЧЕСКИ ВАЖНО: сообщает ТГ, что приложение загружено
+        tg.ready();
         tg.expand();
         tg.setHeaderColor('#050505');
 
@@ -157,22 +167,18 @@
 
         let state = { score: 0, energy: 1000, max_energy: 1000, tap_power: 1, pnl: 0, level: 1, multiplier: 1 };
 
-        // --- 2. ЧАСТИЦЫ ФОНА ---
+        // Частицы
         const canvas = document.getElementById('particles-js');
         const ctx = canvas.getContext('2d');
         let particles = [];
 
         function initParticles() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
             particles = [];
             for(let i=0; i<30; i++) {
                 particles.push({
-                    x: Math.random() * canvas.width,
-                    y: Math.random() * canvas.height,
-                    vx: (Math.random() - 0.5) * 0.3,
-                    vy: (Math.random() - 0.5) * 0.3,
-                    size: Math.random() * 1.5
+                    x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+                    vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3, size: Math.random() * 1.5
                 });
             }
         }
@@ -184,34 +190,25 @@
                 p.x += p.vx; p.y += p.vy;
                 if(p.x < 0 || p.x > canvas.width) p.vx *= -1;
                 if(p.y < 0 || p.y > canvas.height) p.vy *= -1;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
-                ctx.fill();
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
             });
             requestAnimationFrame(drawParticles);
         }
 
-        // --- 3. ЗАГРУЗКА ДАННЫХ ---
         async function loadData() {
-            console.log("Загрузка данных для UID:", uid);
             initParticles();
             drawParticles();
-            
             try {
                 const response = await fetch(`/api/balance/${uid}`);
-                if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
-                
                 const res = await response.json();
                 if(res.status === 'ok') {
                     state = { ...state, ...res.data };
-                    console.log("Данные успешно загружены");
+                    updateUI();
                 }
             } catch(e) { 
-                console.error("Ошибка при загрузке данных:", e);
-                // Если не гость, пробуем еще раз через 2 секунды
+                console.error("Load error:", e);
                 if(uid !== "guest") setTimeout(loadData, 2000);
             }
-            updateUI();
         }
 
         function updateUI() {
@@ -220,13 +217,39 @@
             document.getElementById('energy-fill').style.width = `${(state.energy / state.max_energy) * 100}%`;
             document.getElementById('pnl-info').innerText = `PROFIT: +${state.pnl.toLocaleString()}/HR`;
             document.getElementById('lvl-badge').innerText = state.level;
+            
+            // Расчет стоимости улучшения клика
+            const nextBoostCost = Math.floor(500 * Math.pow(1.5, state.tap_power - 1));
+            document.getElementById('boost-cost').innerText = nextBoostCost.toLocaleString();
         }
 
-        // --- 4. ОБРАБОТКА ТАПОВ ---
+        // Покупка апгрейда
+        async function buyUpgrade() {
+            tg.HapticFeedback.impactOccurred('medium');
+            try {
+                const response = await fetch('/api/upgrade/click', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ user_id: uid })
+                });
+                const res = await response.json();
+                
+                if (res.status === 'ok') {
+                    state.score = res.newBalance;
+                    state.tap_power = res.newLvl;
+                    updateUI();
+                    tg.HapticFeedback.notificationOccurred('success');
+                } else {
+                    tg.showAlert(res.message || "Недостаточно средств");
+                }
+            } catch (e) {
+                tg.showAlert("Ошибка связи с сервером");
+            }
+        }
+
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
             e.preventDefault();
             const power = state.tap_power * state.multiplier;
-            
             if (state.energy < power) {
                 tg.HapticFeedback.notificationOccurred('error');
                 return;
@@ -245,10 +268,8 @@
                 document.body.appendChild(num);
                 setTimeout(() => num.remove(), 700);
             }
-
             updateUI();
             tg.HapticFeedback.impactOccurred('light');
-            
             const logo = document.getElementById('main-logo');
             logo.style.transform = 'scale(0.94) rotate(-2deg)';
             setTimeout(() => logo.style.transform = 'scale(1) rotate(0)', 50);
@@ -256,10 +277,9 @@
 
         function showInvite() {
             const link = `https://t.me/neural_pulse_bot?start=${uid}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Присоединяйся к моей нейросети и получи 5000 XP!`);
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Присоединяйся к моей нейросети!`);
         }
 
-        // Доход и регенерация
         setInterval(() => {
             state.score += (state.pnl / 3600);
             if (state.energy < state.max_energy) {
@@ -268,21 +288,16 @@
             updateUI();
         }, 1000);
 
-        // Сохранение
         setInterval(() => {
             if (uid === "guest") return;
             fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ 
-                    user_id: uid,
-                    score: state.score,
-                    tap_power: state.tap_power,
-                    pnl: state.pnl,
-                    energy: state.energy,
-                    level: state.level
+                    user_id: uid, score: state.score, tap_power: state.tap_power,
+                    pnl: state.pnl, energy: state.energy, level: state.level
                 })
-            }).catch(err => console.error("Ошибка автосохранения:", err));
+            }).catch(e => console.error("Save error"));
         }, 4000);
 
         window.addEventListener('resize', initParticles);
