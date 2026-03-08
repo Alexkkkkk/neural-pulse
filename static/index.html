@@ -134,11 +134,11 @@
         </div>
 
         <div class="bottom-nav">
-            <div class="nav-btn" onclick="buyUpgrade()">
+            <div class="nav-btn" onclick="buyUpgrade('click')">
                 🚀 BOOST
                 <span id="boost-cost" class="cost">500</span>
             </div>
-            <div class="nav-btn" onclick="buyMine()">
+            <div class="nav-btn" onclick="buyUpgrade('mine')">
                 ⛏️ MINE
                 <span id="mine-cost" class="cost">1000</span>
             </div>
@@ -150,29 +150,21 @@
     </div>
 
     <script>
-        // --- [ЛОГИРОВАНИЕ ИНИЦИАЛИЗАЦИИ] ---
         const tg = window.Telegram.WebApp;
-        console.log('--- [FRONTEND DEBUG START] ---');
-        console.log('SDK Version:', tg.version);
-        console.log('Platform:', tg.platform);
-        
         tg.ready();
         tg.expand();
-        
-        // Цвет шапки под дизайн
         if (tg.setHeaderColor) tg.setHeaderColor('#050505');
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const uid = urlParams.get('u') || (tg.initDataUnsafe?.user?.id ? String(tg.initDataUnsafe.user.id) : "guest");
-        
-        if (tg.initDataUnsafe?.user) {
-            console.log('✅ User Verified:', tg.initDataUnsafe.user.first_name, 'ID:', uid);
-        } else {
-            console.warn('⚠️ No InitData. Running in Guest Mode or Browser.');
-        }
-
-        let state = { score: 0, energy: 1000, max_energy: 1000, tap_power: 1, pnl: 0, level: 1 };
-        let lastSavedScore = 0;
+        // Глобальное состояние (синхронизировано с именами в БД)
+        let state = { 
+            balance: 0, 
+            energy: 1000, 
+            max_energy: 1000, 
+            click_lvl: 1, 
+            pnl: 0, 
+            level: 1,
+            uid: new URLSearchParams(window.location.search).get('u') || tg.initDataUnsafe?.user?.id
+        };
 
         const RANKS = [
             { name: "SILICON NOVICE", min: 0 },
@@ -182,20 +174,20 @@
             { name: "AI GOD", min: 10000000 }
         ];
 
-        // --- Оптимизированные частицы ---
+        // --- Инициализация частиц ---
         const canvas = document.getElementById('particles-js');
         const ctx = canvas.getContext('2d');
         let particles = [];
         function initParticles() {
             canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-            particles = Array.from({length: 25}, () => ({
+            particles = Array.from({length: 20}, () => ({
                 x: Math.random() * canvas.width, y: Math.random() * canvas.height,
-                vx: (Math.random() - 0.5) * 0.2, vy: (Math.random() - 0.5) * 0.2, size: Math.random() * 1.5
+                vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3, size: Math.random() * 2
             }));
         }
         function drawParticles() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = 'rgba(0, 242, 255, 0.15)';
+            ctx.fillStyle = 'rgba(0, 242, 255, 0.2)';
             particles.forEach(p => {
                 p.x += p.vx; p.y += p.vy;
                 if(p.x<0||p.x>canvas.width) p.vx*=-1; if(p.y<0||p.y>canvas.height) p.vy*=-1;
@@ -204,33 +196,18 @@
             requestAnimationFrame(drawParticles);
         }
 
-        async function loadData() {
-            console.log(`[DATA] Loading for UID: ${uid}...`);
-            try {
-                const response = await fetch(`/api/balance/${uid}`);
-                const res = await response.json();
-                if(res.status === 'ok') {
-                    state = { ...state, ...res.data };
-                    lastSavedScore = state.score;
-                    updateUI();
-                    console.log('[DATA] Load Success:', state);
-                }
-            } catch(e) { 
-                console.error('[DATA] Load Failed:', e);
-                setTimeout(loadData, 3000); 
-            }
-        }
-
+        // --- Обновление интерфейса ---
         function updateUI() {
-            document.getElementById('balance').innerText = Math.floor(state.score).toLocaleString();
+            document.getElementById('balance').innerText = Math.floor(state.balance).toLocaleString();
             document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
             document.getElementById('energy-fill').style.width = `${(state.energy / state.max_energy) * 100}%`;
             document.getElementById('pnl-info').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/HR`;
             
+            // Расчет ранга
             let currentRank = RANKS[0];
             let nextRank = RANKS[1];
             for(let i=0; i<RANKS.length; i++) {
-                if(state.score >= RANKS[i].min) {
+                if(state.balance >= RANKS[i].min) {
                     currentRank = RANKS[i];
                     nextRank = RANKS[i+1] || RANKS[i];
                     state.level = i + 1;
@@ -239,113 +216,112 @@
             document.getElementById('league-name').innerText = currentRank.name;
             document.getElementById('lvl-badge').innerText = state.level;
             
-            let progress = nextRank.min === currentRank.min ? 100 : ((state.score - currentRank.min) / (nextRank.min - currentRank.min)) * 100;
+            let progress = nextRank.min === currentRank.min ? 100 : ((state.balance - currentRank.min) / (nextRank.min - currentRank.min)) * 100;
             document.getElementById('exp-bar').style.width = `${Math.min(100, progress)}%`;
 
-            document.getElementById('boost-cost').innerText = Math.floor(500 * Math.pow(1.5, state.tap_power - 1)).toLocaleString();
+            // Обновление цен
+            document.getElementById('boost-cost').innerText = Math.floor(500 * Math.pow(1.5, state.click_lvl - 1)).toLocaleString();
             document.getElementById('mine-cost').innerText = Math.floor(1000 * Math.pow(1.6, Math.floor(state.pnl/150))).toLocaleString();
         }
 
-        async function buyUpgrade() {
-            tg.HapticFeedback.impactOccurred('medium');
-            console.log('[UPGRADE] Click Upgrade Request...');
+        // --- Загрузка данных ---
+        async function loadData() {
+            if(!state.uid) return;
             try {
-                const res = await fetch('/api/upgrade/click', { 
-                    method: 'POST', 
-                    headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({ user_id: uid }) 
-                });
-                const data = await res.json();
-                if(data.status==='ok') { 
-                    state.score=data.newBalance; 
-                    state.tap_power=data.newLvl; 
+                const r = await fetch(`/api/balance/${state.uid}`);
+                const res = await r.json();
+                if(res.status === 'ok') {
+                    // Маппинг данных из БД в состояние фронтенда
+                    state.balance = res.data.balance;
+                    state.click_lvl = res.data.click_lvl;
+                    state.pnl = res.data.pnl;
+                    state.energy = res.data.energy;
+                    state.max_energy = res.data.max_energy;
                     updateUI();
-                    console.log('[UPGRADE] Click Success. New Lvl:', data.newLvl);
-                } else {
-                    tg.showAlert(data.message);
                 }
-            } catch(e) { console.error('[UPGRADE] Click Error:', e); }
+            } catch(e) { console.error('Load error', e); }
         }
 
-        async function buyMine() {
-            tg.HapticFeedback.impactOccurred('heavy');
-            console.log('[UPGRADE] Mine Upgrade Request...');
-            try {
-                const res = await fetch('/api/upgrade/mine', { 
-                    method: 'POST', 
-                    headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({ user_id: uid }) 
-                });
-                const data = await res.json();
-                if(data.status==='ok') { 
-                    state.score=data.newBalance; 
-                    state.pnl=data.newPnl; 
-                    updateUI();
-                    console.log('[UPGRADE] Mine Success. New PNL:', data.newPnl);
-                } else {
-                    tg.showAlert(data.message);
-                }
-            } catch(e) { console.error('[UPGRADE] Mine Error:', e); }
-        }
-
+        // --- Обработка клика ---
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
             e.preventDefault();
-            if (state.energy < state.tap_power) { 
-                tg.HapticFeedback.notificationOccurred('error'); 
-                return; 
+            if (state.energy < state.click_lvl) {
+                tg.HapticFeedback.notificationOccurred('error');
+                return;
             }
 
             for(let i=0; i < e.touches.length; i++) {
                 const touch = e.touches[i];
-                state.score += state.tap_power;
-                state.energy -= state.tap_power;
+                state.balance += state.click_lvl;
+                state.energy -= state.click_lvl;
                 
                 const num = document.createElement('div');
                 num.className = 'tap-text';
-                num.innerText = `+${state.tap_power}`;
+                num.innerText = `+${state.click_lvl}`;
                 num.style.left = `${touch.pageX - 20}px`; num.style.top = `${touch.pageY - 50}px`;
                 document.body.appendChild(num);
                 setTimeout(() => num.remove(), 700);
             }
             updateUI();
             tg.HapticFeedback.impactOccurred('light');
+            
             const logo = document.getElementById('main-logo');
             logo.style.transform = 'scale(0.95)';
             setTimeout(() => logo.style.transform = 'scale(1)', 50);
         });
 
-        function showInvite() {
-            console.log('[ACTION] Invite Friend Clicked');
-            const link = `https://t.me/neural_pulse_bot?start=${uid}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Стань частью Neural Pulse!`);
+        // --- Покупки ---
+        async function buyUpgrade(type) {
+            tg.HapticFeedback.impactOccurred('medium');
+            const path = type === 'click' ? '/api/upgrade/click' : '/api/upgrade/mine';
+            try {
+                const r = await fetch(path, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ user_id: state.uid })
+                });
+                const data = await r.json();
+                if(data.status === 'ok') {
+                    loadData(); // Перезагружаем всё после покупки
+                } else {
+                    tg.showAlert(data.message);
+                }
+            } catch(e) { console.error('Upgrade error', e); }
         }
 
-        // Посекундный доход и реген энергии
+        function showInvite() {
+            const link = `https://t.me/neural_pulse_bot?start=${state.uid}`;
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join me in Neural Pulse!`);
+        }
+
+        // --- Циклы ---
         setInterval(() => {
-            state.score += (state.pnl / 3600);
+            state.balance += (state.pnl / 3600);
             state.energy = Math.min(state.max_energy, state.energy + 1.2);
             updateUI();
         }, 1000);
 
-        // --- КРИТИЧЕСКОЕ ОБНОВЛЕНИЕ: Сохранение раз в 15 секунд ---
-        setInterval(() => {
-            if (uid === "guest" || state.score === lastSavedScore) return;
-            console.log(`[SYNC] Syncing progress to server for ID: ${uid}...`);
-            lastSavedScore = state.score;
+        setInterval(async () => {
+            if (!state.uid) return;
             fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ 
-                    user_id: uid, score: state.score, tap_power: state.tap_power,
-                    pnl: state.pnl, energy: state.energy, level: state.level
+                    user_id: state.uid, 
+                    score: state.balance, 
+                    energy: state.energy,
+                    tap_power: state.click_lvl,
+                    pnl: state.pnl,
+                    level: state.level
                 })
-            }).then(r => r.json()).then(data => console.log('[SYNC] Response:', data.status))
-              .catch(e => console.error('[SYNC] Error:', e));
-        }, 15000);
+            }).catch(e => {});
+        }, 10000);
 
+        // Старт
         window.addEventListener('resize', initParticles);
-        initParticles(); drawParticles(); loadData();
-        console.log('--- [FRONTEND READY] ---');
+        initParticles(); 
+        drawParticles(); 
+        loadData();
     </script>
 </body>
 </html>
