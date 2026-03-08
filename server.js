@@ -14,7 +14,7 @@ const { exec } = require('child_process');
 // --- [1. КОНФИГУРАЦИЯ] ---
 const API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM";
 const WEB_APP_URL = "https://np.bothost.ru"; 
-const ADMIN_ID = "ТВОЙ_ТЕЛЕГРАМ_ID"; // <--- ЗАМЕНИ НА СВОЙ ID
+const ADMIN_ID = "636603814"; // <-- Вставь сюда свой числовой ID (узнать можно в @userinfobot)
 
 const logger = winston.createLogger({
     level: 'info',
@@ -33,9 +33,9 @@ const logger = winston.createLogger({
 
 const app = express();
 
-// --- ИСПРАВЛЕНИЕ ОШИБКИ PROXY ---
+// --- ВАЖНОЕ ИСПРАВЛЕНИЕ ДЛЯ BOTHOST ---
 app.set('trust proxy', 1); 
-// -------------------------------
+// --------------------------------------
 
 const server = http.createServer(app);
 const bot = new Telegraf(API_TOKEN);
@@ -44,6 +44,8 @@ const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 2000, 
     standardHeaders: true,
+    // Настройка для корректного определения IP за прокси
+    validate: { xForwardedForHeader: false }, 
     message: { error: "Neural link unstable. Too many requests." }
 });
 
@@ -81,7 +83,8 @@ function verifyTelegramWebAppData(telegramInitData) {
 const validateUser = (req, res, next) => {
     const initData = req.headers['x-tg-data'];
     if (!initData || !verifyTelegramWebAppData(initData)) {
-        logger.warn(`Unauthorized IP: ${req.ip}`);
+        // Теперь здесь будет реальный IP пользователя, а не прокси
+        logger.warn(`Unauthorized Access Attempt from IP: ${req.ip}`);
         return res.status(403).json({ error: "Invalid Data Signature" });
     }
     next();
@@ -299,17 +302,21 @@ async function start() {
     await initDB();
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, '0.0.0.0', () => logger.info(`CORE ONLINE: PORT ${PORT}`));
-    bot.launch().then(() => logger.info("Bot: ACTIVE"));
+    
+    // Безопасный запуск бота для Docker
+    bot.launch({
+        dropPendingUpdates: true 
+    }).then(() => logger.info("Bot: ACTIVE"));
 
-    const shutdown = async () => {
-        logger.info("Shutdown initiated...");
-        bot.stop('SIGINT');
+    const shutdown = async (signal) => {
+        logger.info(`Received ${signal}. Shutdown initiated...`);
+        bot.stop(signal);
         await flushToDisk();
         process.exit(0);
     };
 
-    process.on('SIGINT', shutdown);
-    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', () => shutdown('SIGINT'));
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 start().catch(e => logger.error("Main crash: " + e.message));
