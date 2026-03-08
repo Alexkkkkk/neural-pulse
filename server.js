@@ -3,7 +3,6 @@ const http = require('http');
 const path = require('path');
 const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
-const { Server } = require('socket.io');
 const cors = require('cors');
 const { Telegraf, Markup } = require('telegraf');
 
@@ -13,18 +12,17 @@ const WEB_APP_URL = "https://np.bothost.ru";
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
 const bot = new Telegraf(API_TOKEN);
 
 app.use(cors());
 app.use(express.json());
-
-// Логируем только важные ошибки, а не каждый GET запрос (экономим ресурсы)
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
 let db;
+// Очередь для пакетного сохранения (InMemory Cache)
+const saveQueue = new Map();
 
-// --- [ИНИЦИАЛИЗАЦИЯ БД С ОПТИМИЗАЦИЕЙ] ---
+// --- [ИНИЦИАЛИЗАЦИЯ БД] ---
 async function initDB() {
     try {
         db = await open({
@@ -32,9 +30,10 @@ async function initDB() {
             driver: sqlite3.Database
         });
         
-        // Включаем режим WAL для конкурентной работы (чтение + запись)
+        // Оптимизация SQLite для параллельной работы
         await db.run('PRAGMA journal_mode = WAL');
         await db.run('PRAGMA synchronous = NORMAL');
+        await db.run('PRAGMA cache_size = -64000'); // 64MB кэша БД
 
         await db.exec(`CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY, 
@@ -46,151 +45,144 @@ async function initDB() {
             level INTEGER DEFAULT 1, 
             last_active INTEGER)`);
 
-        // КРИТИЧЕСКИ ВАЖНО для 20 млн пользователей: ИНДЕКС
         await db.exec(`CREATE INDEX IF NOT EXISTS idx_user_id ON users (id)`);
-        
-        console.log("💾 Database & Tables Ready with WAL Mode");
+        console.log("💾 Database Optimized for High-Load");
     } catch (err) {
-        console.error("![DB] Ошибка инициализации:", err);
+        console.error("![DB] Init Error:", err);
     }
 }
 
-// --- [ЛОГИКА ТЕЛЕГРАМ БОТА] ---
-bot.start(async (ctx) => {
-    const uid = String(ctx.from.id);
-    const version = Math.random().toString(36).substring(7);
-    const webAppUrlWithCacheReset = `${WEB_APP_URL}/?u=${uid}&v=${version}`;
+// --- [ЛОГИКА ПАКЕТНОГО СОХРАНЕНИЯ] ---
+async function flushQueue() {
+    if (saveQueue.size === 0) return;
+
+    const users = Array.from(saveQueue.entries());
+    saveQueue.clear();
 
     try {
-        await ctx.replyWithHTML(
-            `🦾 <b>Neural Pulse: Протокол Запущен</b>\n\nДобро пожаловать в систему, нейро-майнер!`,
-            Markup.inlineKeyboard([
-                [Markup.button.webApp("ВХОД В НЕЙРОСЕТЬ 🧠", webAppUrlWithCacheReset)],
-                [Markup.button.url("КАНАЛ ПРОЕКТА 📢", "https://t.me/neural_pulse")]
-            ])
-        );
+        await db.run('BEGIN TRANSACTION');
+        const stmt = await db.prepare(`
+            UPDATE users SET 
+                balance = ?, click_lvl = ?, pnl = ?, 
+                energy = ?, level = ?, last_active = ? 
+            WHERE id = ?
+        `);
+
+        for (const [id, d] of users) {
+            await stmt.run(d.balance, d.click_lvl, d.pnl, d.energy, d.level, d.last_active, id);
+        }
+
+        await stmt.finalize();
+        await db.run('COMMIT');
+        // Логируем только в режиме отладки, чтобы не забивать диск
     } catch (e) {
-        console.error("[BOT] Start Error:", e.message);
+        await db.run('ROLLBACK');
+        console.error("![BATCH] Save Error:", e.message);
     }
-});
+}
+
+// Сброс данных в БД каждые 15 секунд
+setInterval(flushQueue, 15000);
 
 // --- [API ЭНДПОИНТЫ] ---
 
-// 1. Баланс и Офлайн-доход
 app.get('/api/balance/:userId', async (req, res) => {
     const userId = String(req.params.userId);
     try {
-        if (!db) return res.status(503).send("DB Busy");
+        // Сначала проверяем, нет ли данных в очереди (самые свежие)
+        let userData = saveQueue.get(userId);
         
-        const now = Math.floor(Date.now() / 1000);
-        let user = await db.get('SELECT * FROM users WHERE id = ?', [userId]);
+        if (!userData) {
+            userData = await db.get('SELECT * FROM users WHERE id = ?', [userId]);
+        }
 
-        if (user) {
-            const offTime = Math.min(now - (user.last_active || now), 10800);
-            const earned = (user.pnl / 3600) * offTime;
+        const now = Math.floor(Date.now() / 1000);
+
+        if (userData) {
+            const score = userData.balance || userData.score; // Совместимость имен
+            const offTime = Math.min(now - (userData.last_active || now), 10800);
+            const earned = (userData.pnl / 3600) * offTime;
             
             res.json({ status: "ok", data: {
-                score: user.balance + earned, 
-                tap_power: user.click_lvl,
-                pnl: user.pnl, 
-                energy: user.energy, 
-                level: user.level,
-                max_energy: user.max_energy, 
+                score: score + earned, 
+                tap_power: userData.click_lvl,
+                pnl: userData.pnl, 
+                energy: userData.energy, 
+                level: userData.level,
+                max_energy: userData.max_energy,
                 multiplier: 1
             }});
         } else {
+            // Регистрация нового юзера
             await db.run(`INSERT INTO users (id, balance, click_lvl, pnl, energy, max_energy, level, last_active) 
                           VALUES (?, 1000, 1, 0, 1000, 1000, 1, ?)`, [userId, now]);
-            res.json({ status: "ok", data: { score: 1000, tap_power: 1, pnl: 0, energy: 1000, max_energy: 1000, level: 1, multiplier: 1 }});
+            res.json({ status: "ok", data: { score: 1000, tap_power: 1, pnl: 0, energy: 1000, max_energy: 1000, level: 1 }});
         }
-    } catch (e) { 
-        res.status(500).json({ error: "Internal Error" }); 
-    }
+    } catch (e) { res.status(500).json({ error: "DB Error" }); }
 });
 
-// 2. Улучшение клика (BOOST)
-app.post('/api/upgrade/click', async (req, res) => {
-    const { user_id } = req.body;
-    try {
-        const user = await db.get('SELECT balance, click_lvl FROM users WHERE id = ?', [String(user_id)]);
-        if (!user) return res.json({ status: "error", message: "User not found" });
+app.post('/api/save', (req, res) => {
+    const d = req.body;
+    if (!d.user_id || d.user_id === "guest") return res.json({status: "ignored"});
 
-        const cost = Math.floor(500 * Math.pow(1.5, user.click_lvl - 1));
+    // Мгновенная запись в память (Cache-aside)
+    saveQueue.set(String(d.user_id), {
+        balance: parseFloat(d.score) || 0,
+        click_lvl: parseInt(d.tap_power) || 1,
+        pnl: parseFloat(d.pnl) || 0,
+        energy: parseFloat(d.energy) || 0,
+        level: parseInt(d.level) || 1,
+        last_active: Math.floor(Date.now() / 1000)
+    });
 
-        if (user.balance >= cost) {
-            const newBalance = user.balance - cost;
-            const newLvl = user.click_lvl + 1;
-            await db.run('UPDATE users SET balance = ?, click_lvl = ? WHERE id = ?', [newBalance, newLvl, String(user_id)]);
-            res.json({ status: "ok", newBalance, newLvl });
-        } else {
-            res.json({ status: "error", message: "Недостаточно ресурсов" });
-        }
-    } catch (e) { res.status(500).send(e.message); }
+    res.json({ status: "queued" }); 
 });
 
-// 3. Улучшение майнинга (MINE)
+// Магазин (оставляем прямой записью для безопасности транзакций покупок)
 app.post('/api/upgrade/mine', async (req, res) => {
     const { user_id } = req.body;
     try {
         const user = await db.get('SELECT balance, pnl FROM users WHERE id = ?', [String(user_id)]);
-        if (!user) return res.json({ status: "error", message: "User not found" });
+        if (!user) return res.status(404).send("User not found");
 
-        const currentMineLvl = Math.floor(user.pnl / 150);
-        const cost = Math.floor(1000 * Math.pow(1.6, currentMineLvl));
+        const currentLvl = Math.floor(user.pnl / 150);
+        const cost = Math.floor(1000 * Math.pow(1.6, currentLvl));
 
         if (user.balance >= cost) {
-            const newBalance = user.balance - cost;
-            const newPnl = user.pnl + 150; 
-            await db.run('UPDATE users SET balance = ?, pnl = ? WHERE id = ?', [newBalance, newPnl, String(user_id)]);
-            res.json({ status: "ok", newBalance, newPnl });
+            await db.run('UPDATE users SET balance = balance - ?, pnl = pnl + 150 WHERE id = ?', [cost, String(user_id)]);
+            // Очищаем из очереди, чтобы не затереть старым балансом при следующем батче
+            saveQueue.delete(String(user_id)); 
+            res.json({ status: "ok" });
         } else {
-            res.json({ status: "error", message: "Недостаточно ресурсов" });
+            res.json({ status: "error", message: "Low balance" });
         }
     } catch (e) { res.status(500).send(e.message); }
 });
 
-// 4. Оптимизированное автосохранение
-app.post('/api/save', async (req, res) => {
-    try {
-        const d = req.body;
-        if (!d.user_id || d.user_id === "guest") return res.json({status: "ignored"});
-
-        const now = Math.floor(Date.now() / 1000);
-        
-        // Валидация данных перед записью
-        const balance = Number.isFinite(parseFloat(d.score)) ? parseFloat(d.score) : 0;
-        const pnl = Number.isFinite(parseFloat(d.pnl)) ? parseFloat(d.pnl) : 0;
-
-        await db.run(`UPDATE users SET balance=?, click_lvl=?, pnl=?, energy=?, level=?, last_active=? WHERE id=?`,
-            [balance, parseInt(d.tap_power), pnl, parseFloat(d.energy), parseInt(d.level), now, String(d.user_id)]
-        );
-        res.json({status: "ok"});
-    } catch (e) { res.status(500).send("Save Fail"); }
+bot.start((ctx) => {
+    const url = `${WEB_APP_URL}/?u=${ctx.from.id}&v=${Math.random().toString(36).substring(7)}`;
+    ctx.replyWithHTML(`🦾 <b>Neural Pulse Active</b>`, Markup.inlineKeyboard([
+        [Markup.button.webApp("ВХОД 🧠", url)]
+    ]));
 });
 
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'static', 'index.html'));
-});
-
-// --- [ЗАПУСК СЕРВЕРА] ---
-const PORT = process.env.PORT || 3000;
-
-async function startServer() {
-    try {
-        await initDB();
-        await bot.telegram.deleteWebhook();
-        
-        server.listen(PORT, '0.0.0.0', () => {
-            console.log(`🚀 Neural Pulse High-Load Node running on ${PORT}`);
-        });
-
-        bot.launch();
-    } catch (err) {
-        console.error("![CRITICAL] Startup Error:", err);
-    }
+// --- [ЗАПУСК] ---
+async function start() {
+    await initDB();
+    await bot.telegram.deleteWebhook();
+    server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Cluster Node Active on ${PORT}`));
+    bot.launch();
 }
 
-startServer();
+const PORT = process.env.PORT || 3000;
+start();
 
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+// Обработка корректного завершения (сохраняем кэш перед выходом)
+async function shutdown(signal) {
+    console.log(`[${signal}] Сохранение данных перед выходом...`);
+    await flushQueue();
+    process.exit(0);
+}
+
+process.once('SIGINT', () => shutdown('SIGINT'));
+process.once('SIGTERM', () => shutdown('SIGTERM'));
