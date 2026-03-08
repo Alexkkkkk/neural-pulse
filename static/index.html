@@ -139,9 +139,9 @@
                 🚀 BOOST
                 <span id="boost-cost" class="cost">500</span>
             </div>
-            <div class="nav-btn" onclick="tg.HapticFeedback.impactOccurred('medium'); tg.showAlert('Mining starting soon...')">
+            <div class="nav-btn" onclick="buyMine()">
                 ⛏️ MINE
-                <span class="cost">COMING SOON</span>
+                <span id="mine-cost" class="cost">1000</span>
             </div>
             <div class="nav-btn" onclick="showInvite()">
                 🎁 FRIENDS
@@ -167,7 +167,6 @@
 
         let state = { score: 0, energy: 1000, max_energy: 1000, tap_power: 1, pnl: 0, level: 1, multiplier: 1 };
 
-        // Частицы
         const canvas = document.getElementById('particles-js');
         const ctx = canvas.getContext('2d');
         let particles = [];
@@ -218,12 +217,16 @@
             document.getElementById('pnl-info').innerText = `PROFIT: +${state.pnl.toLocaleString()}/HR`;
             document.getElementById('lvl-badge').innerText = state.level;
             
-            // Расчет стоимости улучшения клика
+            // Расчет стоимости BOOST
             const nextBoostCost = Math.floor(500 * Math.pow(1.5, state.tap_power - 1));
             document.getElementById('boost-cost').innerText = nextBoostCost.toLocaleString();
+
+            // Расчет стоимости MINE
+            const currentMineLvl = Math.floor(state.pnl / 150);
+            const nextMineCost = Math.floor(1000 * Math.pow(1.6, currentMineLvl));
+            document.getElementById('mine-cost').innerText = nextMineCost.toLocaleString();
         }
 
-        // Покупка апгрейда
         async function buyUpgrade() {
             tg.HapticFeedback.impactOccurred('medium');
             try {
@@ -233,10 +236,31 @@
                     body: JSON.stringify({ user_id: uid })
                 });
                 const res = await response.json();
-                
                 if (res.status === 'ok') {
                     state.score = res.newBalance;
                     state.tap_power = res.newLvl;
+                    updateUI();
+                    tg.HapticFeedback.notificationOccurred('success');
+                } else {
+                    tg.showAlert(res.message || "Недостаточно средств");
+                }
+            } catch (e) {
+                tg.showAlert("Ошибка связи с сервером");
+            }
+        }
+
+        async function buyMine() {
+            tg.HapticFeedback.impactOccurred('heavy');
+            try {
+                const response = await fetch('/api/upgrade/mine', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ user_id: uid })
+                });
+                const res = await response.json();
+                if (res.status === 'ok') {
+                    state.score = res.newBalance;
+                    state.pnl = res.newPnl;
                     updateUI();
                     tg.HapticFeedback.notificationOccurred('success');
                 } else {
