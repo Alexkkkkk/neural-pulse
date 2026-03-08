@@ -9,10 +9,12 @@ const cors = require('cors');
 const { Telegraf, Markup } = require('telegraf');
 const rateLimit = require('express-rate-limit');
 const winston = require('winston');
+const { exec } = require('child_process'); // Модуль для запуска скриптов
 
 // --- [1. КОНФИГУРАЦИЯ] ---
 const API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM";
 const WEB_APP_URL = "https://np.bothost.ru"; 
+const ADMIN_ID = "ТВОЙ_ТЕЛЕГРАМ_ID"; // <--- ОБЯЗАТЕЛЬНО ВСТАВЬ СВОЙ ID (например "12345678")
 
 const logger = winston.createLogger({
     level: 'info',
@@ -35,7 +37,7 @@ const bot = new Telegraf(API_TOKEN);
 
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 2000, // Лимит запросов
+    max: 2000, 
     standardHeaders: true,
     message: { error: "Neural link unstable. Too many requests." }
 });
@@ -227,6 +229,39 @@ async function flushToDisk() {
 setInterval(flushToDisk, 20000);
 
 // --- [7. БОТ И РЕФЕРАЛЫ] ---
+
+// Админ-панель для деплоя
+bot.command('admin', (ctx) => {
+    if (String(ctx.from.id) !== ADMIN_ID) return;
+    ctx.reply("🛠 <b>NEURAL ADMIN CORE</b>\nСистема управления деплоем.", {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard([
+            [Markup.button.callback("🚀 ЗАПУСТИТЬ DEPLOY.SH", "run_deploy")]
+        ])
+    });
+});
+
+bot.action('run_deploy', async (ctx) => {
+    if (String(ctx.from.id) !== ADMIN_ID) return ctx.answerCbQuery("Доступ запрещен");
+
+    await ctx.answerCbQuery("Запуск протокола обновления...");
+    await ctx.editMessageText("⏳ <b>Процесс обновления запущен...</b>\n<i>Система запрашивает данные из GitHub и перенастраивает Nginx.</i>", { parse_mode: 'HTML' });
+
+    // Укажите полный путь к вашему deploy.sh
+    const deployScriptPath = path.join(__dirname, 'deploy.sh');
+
+    exec(`bash ${deployScriptPath}`, (error, stdout, stderr) => {
+        if (error) {
+            logger.error(`Deploy Error: ${error.message}`);
+            return ctx.editMessageText(`❌ <b>Ошибка деплоя!</b>\n<code>${error.message}</code>`, { parse_mode: 'HTML' });
+        }
+        
+        logger.info("Deploy Success via Bot");
+        const logOutput = stdout.slice(-400); // Показываем только конец лога
+        ctx.editMessageText(`✅ <b>СИСТЕМА ОБНОВЛЕНА</b>\n\nЛог:\n<code>...${logOutput}</code>`, { parse_mode: 'HTML' });
+    });
+});
+
 bot.start(async (ctx) => {
     const uid = String(ctx.from.id);
     const refId = ctx.startPayload;
