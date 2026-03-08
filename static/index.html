@@ -5,15 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <style>
         :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #050505; }
         body { 
             margin: 0; padding: 0; background-color: var(--bg-dark); 
             background-image: radial-gradient(circle at 50% 50%, #0a1128 0%, #050505 100%); 
             color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; 
-            touch-action: none; /* Убираем системные жесты для тапалки */
-            user-select: none;
+            touch-action: none; user-select: none;
         }
         #particles-js { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
         .content-layer { position: relative; z-index: 2; width: 100%; height: 100vh; display: flex; flex-direction: column; align-items: center; }
@@ -42,7 +41,6 @@
         }
         .nav-btn:active { background: rgba(255,255,255,0.1); transform: scale(0.95); }
 
-        /* Эффект Storm Mode */
         .storm-active { animation: stormPulse 1.5s infinite; border: 1px solid var(--neon-cyan) !important; }
         @keyframes stormPulse { 0% { box-shadow: 0 0 10px var(--neon-cyan); } 50% { box-shadow: 0 0 30px var(--neon-purple); } 100% { box-shadow: 0 0 10px var(--neon-cyan); } }
     </style>
@@ -91,7 +89,7 @@
 
     <script>
         const tg = window.Telegram.WebApp;
-        const socket = io(); // Автоматически подключается к текущему хосту
+        const socket = io(); 
         tg.expand();
         tg.setHeaderColor('#050505');
 
@@ -100,7 +98,7 @@
 
         let state = { score: 0, energy: 1000, max_energy: 1000, tap_power: 1, pnl: 0, level: 1, multiplier: 1 };
 
-        // --- [PARTICLES] ---
+        // --- [PARTICLES BACKGROUND] ---
         const canvas = document.getElementById('particles-js');
         const ctx = canvas.getContext('2d');
         let particles = [];
@@ -121,7 +119,7 @@
             requestAnimationFrame(drawParticles);
         }
 
-        // --- [CORE] ---
+        // --- [INITIALIZATION] ---
         async function init() {
             initParticles(); drawParticles();
             try {
@@ -129,10 +127,8 @@
                 const res = await r.json();
                 if(res.status === 'ok') {
                     state = { ...state, ...res.data };
-                    // Синхронизируем уровень с бэкенда
-                    document.getElementById('exp-bar').style.width = `${(state.level % 10) * 10}%`;
                 }
-            } catch(e) { console.warn("API Offline"); }
+            } catch(e) { console.warn("API Offline, using local state"); }
             updateUI();
         }
 
@@ -142,17 +138,20 @@
             document.getElementById('energy-fill').style.width = `${(state.energy / state.max_energy) * 100}%`;
             document.getElementById('pnl-info').innerText = `PROFIT: +${state.pnl.toLocaleString()}/HR`;
             document.getElementById('lvl-badge').innerText = state.level;
+            document.getElementById('exp-bar').style.width = `${Math.min(100, (state.score / (state.level * 5000)) * 100)}%`;
             
             const stormBadge = document.getElementById('storm-badge');
+            const logo = document.getElementById('main-logo');
             if(state.multiplier > 1) {
                 stormBadge.style.display = 'inline-block';
-                document.getElementById('main-logo').classList.add('storm-active');
+                logo.classList.add('storm-active');
             } else {
                 stormBadge.style.display = 'none';
-                document.getElementById('main-logo').classList.remove('storm-active');
+                logo.classList.remove('storm-active');
             }
         }
 
+        // --- [TAP LOGIC] ---
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
             if (e.cancelable) e.preventDefault();
             const power = state.tap_power * state.multiplier;
@@ -167,7 +166,6 @@
                 state.score += power;
                 state.energy -= power;
 
-                // Отправляем тап через сокет для real-time валидации (по желанию)
                 socket.emit('tap', { uid, power });
 
                 const num = document.createElement('div');
@@ -186,34 +184,42 @@
             setTimeout(() => logo.style.transform = 'scale(1) rotate(0)', 50);
         });
 
-        function showInvite() {
-            const link = `https://t.me/neural_pulse_bot?start=${uid}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my Neural Network! 🧠`);
-        }
-
-        // Доход в секунду и реген энергии
+        // --- [LOOP: INCOME & REGEN] ---
         setInterval(() => {
-            state.score += (state.pnl / 3600);
+            const incomePerSec = state.pnl / 3600;
+            state.score = parseFloat((state.score + incomePerSec).toFixed(4));
+
             if (state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 1.5);
             }
             updateUI();
         }, 1000);
 
-        // Сохранение состояния на сервер
+        // --- [LOOP: SYNC WITH SERVER] ---
         setInterval(() => {
-            if (uid === "guest") return;
+            if (uid === "guest" || !uid) return;
             fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ user_id: uid, ...state })
-            }).catch(e => console.error("Save error"));
-        }, 4000);
+                body: JSON.stringify({ 
+                    user_id: uid,
+                    score: state.score,
+                    energy: state.energy,
+                    tap_power: state.tap_power,
+                    pnl: state.pnl,
+                    level: state.level
+                })
+            }).catch(e => console.warn("Sync failed"));
+        }, 7000);
+
+        function showInvite() {
+            const link = `https://t.me/neural_pulse_bot?start=${uid}`;
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my Neural Network! 🧠`);
+        }
 
         window.addEventListener('resize', initParticles);
         init();
 
-        // Слушаем события от сервера (например, глобальные бонусы)
         socket.on('storm_start', (data) => {
             state.multiplier = data.multiplier || 2;
             updateUI();
