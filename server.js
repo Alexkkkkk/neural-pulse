@@ -19,7 +19,6 @@ app.use(cors());
 app.use(express.json());
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
-// Красивый логгер
 const logger = {
     info: (msg) => console.log(`[${new Date().toLocaleTimeString()}] 🟦 INFO: ${msg}`),
     success: (msg) => console.log(`[${new Date().toLocaleTimeString()}] 🟩 OK: ${msg}`),
@@ -35,7 +34,6 @@ app.get('/', (req, res) => {
 let db;
 const saveQueue = new Map();
 
-// --- [ИНИЦИАЛИЗАЦИЯ БД + ТАБЛИЦЫ] ---
 async function initDB() {
     try {
         const dataDir = path.join(__dirname, 'data');
@@ -60,15 +58,14 @@ async function initDB() {
         `);
 
         await db.run('PRAGMA journal_mode = WAL');
-        logger.success("База данных подключена и таблицы проверены");
+        logger.success("База данных готова к работе");
     } catch (err) {
-        logger.error("Ошибка инициализации БД", err);
+        logger.error("Ошибка БД", err);
     }
 }
 
 // --- [API] ---
 
-// Загрузка баланса
 app.get('/api/balance/:userId', async (req, res) => {
     const uid = req.params.userId;
     logger.api('GET', '/balance', uid);
@@ -78,33 +75,26 @@ app.get('/api/balance/:userId', async (req, res) => {
         const now = Math.floor(Date.now() / 1000);
 
         if (userData) {
+            await db.run('UPDATE users SET last_active = ? WHERE id = ?', [now, uid]);
             res.json({ status: "ok", data: userData });
         } else {
-            logger.warn(`Новый пользователь! Регистрирую ${uid}...`);
-            // Исправлены ключи: balance вместо score, click_lvl вместо tap_power
+            logger.warn(`Регистрация нового агента: ${uid}`);
             const newUser = {
-                id: uid,
-                balance: 1000,
-                click_lvl: 1,
-                pnl: 0,
-                energy: 1000,
-                max_energy: 1000,
-                level: 1,
-                last_active: now
+                id: uid, balance: 1000, click_lvl: 1, pnl: 0,
+                energy: 1000, max_energy: 1000, level: 1, last_active: now
             };
             await db.run(`INSERT INTO users (id, balance, click_lvl, pnl, energy, max_energy, level, last_active) 
                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, 
-                          [newUser.id, newUser.balance, newUser.click_lvl, newUser.pnl, newUser.energy, newUser.max_energy, newUser.level, newUser.last_active]);
-            
+                          [newUser.id, newUser.balance, newUser.click_lvl, newUser.pnl, 
+                           newUser.energy, newUser.max_energy, newUser.level, newUser.last_active]);
             res.json({ status: "ok", data: newUser });
         }
     } catch (e) { 
-        logger.error(`Ошибка запроса баланса для ${uid}`, e.message);
-        res.status(500).json({ error: "DB Error" }); 
+        logger.error(`Ошибка авторизации ${uid}`, e.message);
+        res.status(500).json({ error: "System Error" }); 
     }
 });
 
-// Сохранение
 app.post('/api/save', (req, res) => {
     const { user_id, score, energy, tap_power, pnl } = req.body;
     if (!user_id || user_id === "guest") return res.json({status: "ignored"});
@@ -119,7 +109,6 @@ app.post('/api/save', (req, res) => {
     res.json({ status: "queued" }); 
 });
 
-// Апгрейд клика
 app.post('/api/upgrade/click', async (req, res) => {
     const { user_id } = req.body;
     logger.api('POST', '/upgrade/click', user_id);
@@ -137,15 +126,14 @@ app.post('/api/upgrade/click', async (req, res) => {
             logger.success(`User ${user_id} купил CLICK LVL ${newLvl}`);
             res.json({ status: "ok", newBalance: newBal, newLvl });
         } else {
-            res.json({ status: "error", message: "Недостаточно средств для апгрейда" });
+            res.json({ status: "error", message: "Недостаточно средств" });
         }
     } catch (e) { 
-        logger.error("Upgrade click error", e); 
-        res.status(500).json({ status: "error", message: "Internal server error" }); 
+        logger.error("Upgrade error", e); 
+        res.status(500).json({ status: "error" }); 
     }
 });
 
-// --- [ОЧЕРЕДЬ СОХРАНЕНИЯ В БД] ---
 async function flushQueue() {
     if (saveQueue.size === 0) return;
     const count = saveQueue.size;
@@ -159,32 +147,26 @@ async function flushQueue() {
                         [d.balance, d.energy, d.click_lvl, d.pnl, d.last_active, id]);
         }
         await db.run('COMMIT');
-        logger.info(`💾 Пакетное сохранение: ${count} юзеров синхронизировано`);
+        logger.info(`💾 Синхронизация: ${count} пользователей`);
     } catch (e) {
         await db.run('ROLLBACK');
-        logger.error("Ошибка сброса очереди в БД", e);
+        logger.error("Ошибка очереди", e);
     }
 }
 setInterval(flushQueue, 15000);
 
-// --- [ТЕЛЕГРАМ БОТ] ---
 bot.start((ctx) => {
-    logger.info(`Бот запущен пользователем: ${ctx.from.id}`);
     const url = `${WEB_APP_URL}/?u=${ctx.from.id}&v=${Date.now()}`;
-    ctx.replyWithHTML(`🦾 <b>Neural Pulse Active</b>\n\nДобро пожаловать в нейронную сеть. Начни майнить токены прямо сейчас!`, Markup.inlineKeyboard([
+    ctx.replyWithHTML(`🦾 <b>Neural Pulse Active</b>\n\nСистема готова. Инициируйте вход.`, Markup.inlineKeyboard([
         [Markup.button.webApp("ВХОД 🧠", url)]
     ]));
 });
 
-// --- [ЗАПУСК] ---
 const PORT = process.env.PORT || 3000;
 async function start() {
     await initDB();
-    server.listen(PORT, '0.0.0.0', () => {
-        logger.success(`🚀 СЕРВЕР ЗАПУЩЕН НА ПОРТУ ${PORT}`);
-    });
+    server.listen(PORT, '0.0.0.0', () => logger.success(`СЕРВЕР: PORT ${PORT}`));
     bot.launch();
-    logger.success("Бот успешно подключен к Telegram API");
 }
 
 start();
