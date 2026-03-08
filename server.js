@@ -35,7 +35,8 @@ const bot = new Telegraf(API_TOKEN);
 
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 1000, // Увеличил лимит для активных игроков
+    max: 2000, // Лимит запросов
+    standardHeaders: true,
     message: { error: "Neural link unstable. Too many requests." }
 });
 
@@ -48,7 +49,7 @@ let db;
 const userCache = new Map();
 const saveQueue = new Set();
 
-// --- [2. БЕЗОПАСНОСТЬ] ---
+// --- [2. БЕЗОПАСНОСТЬ: TELEGRAM AUTH] ---
 function verifyTelegramWebAppData(telegramInitData) {
     if (!telegramInitData) return false;
     try {
@@ -141,7 +142,6 @@ app.post('/api/save', validateUser, async (req, res) => {
     const { user_id, score, energy, click_lvl, pnl } = req.body;
     const uid = String(user_id);
     
-    // Получаем текущие данные (из кэша или БД)
     let current = userCache.get(uid);
     if (!current) {
         current = await db.get('SELECT * FROM users WHERE id = ?', [uid]) || {};
@@ -150,10 +150,10 @@ app.post('/api/save', validateUser, async (req, res) => {
     const updateData = {
         ...current,
         id: uid,
-        balance: score !== undefined ? parseFloat(score) : current.balance,
-        energy: energy !== undefined ? parseFloat(energy) : current.energy,
-        click_lvl: click_lvl !== undefined ? parseInt(click_lvl) : current.click_lvl,
-        pnl: pnl !== undefined ? parseFloat(pnl) : current.pnl,
+        balance: score !== undefined ? Number(score) : current.balance,
+        energy: energy !== undefined ? Number(energy) : current.energy,
+        click_lvl: click_lvl !== undefined ? Number(click_lvl) : current.click_lvl,
+        pnl: pnl !== undefined ? Number(pnl) : current.pnl,
         last_active: Math.floor(Date.now() / 1000)
     };
 
@@ -168,6 +168,9 @@ app.post('/api/upgrade/:type', validateUser, async (req, res) => {
     const uid = String(user_id);
     let user = userCache.get(uid);
 
+    if (!user) {
+        user = await db.get('SELECT * FROM users WHERE id = ?', [uid]);
+    }
     if (!user) return res.status(404).json({ error: "Not found" });
 
     if (type === 'click') {
@@ -201,7 +204,7 @@ app.get('/api/leaderboard', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Leaderboard fail" }); }
 });
 
-// --- [6. СИНХРОНИЗАЦИЯ] ---
+// --- [6. СИНХРОНИЗАЦИЯ: BULK INSERT] ---
 async function flushToDisk() {
     if (saveQueue.size === 0) return;
     const ids = Array.from(saveQueue);
@@ -260,9 +263,15 @@ async function start() {
     server.listen(PORT, '0.0.0.0', () => logger.info(`CORE ONLINE: PORT ${PORT}`));
     bot.launch().then(() => logger.info("Bot: ACTIVE"));
 
-    process.on('SIGINT', async () => {
+    const shutdown = async () => {
+        logger.info("Shutdown initiated...");
+        bot.stop('SIGINT');
         await flushToDisk();
-        process.exit();
-    });
+        process.exit(0);
+    };
+
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
 }
+
 start().catch(e => logger.error("Main crash: " + e.message));
