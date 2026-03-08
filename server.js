@@ -16,7 +16,15 @@ const bot = new Telegraf(API_TOKEN);
 
 app.use(cors());
 app.use(express.json());
+
+// Раздача статики (картинки, манифест)
 app.use('/static', express.static(path.join(__dirname, 'static')));
+
+// --- [КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: ОТДАЧА INDEX.HTML] ---
+// Без этого блока ссылка в Telegram не откроется
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'static', 'index.html'));
+});
 
 let db;
 const saveQueue = new Map();
@@ -93,9 +101,8 @@ async function flushQueue() {
         const duration = Date.now() - startTime;
         logger.success(`Пакетное сохранение завершено успешно за ${duration}мс`);
     } catch (e) {
-        await db.run('ROLLBACK');
-        logger.error("ОШИБКА ПАКЕТНОГО СОХРАНЕНИЯ. Откат транзакции!", e.message);
-        // Возвращаем данные обратно в очередь, чтобы не потерять прогресс юзеров
+        if (db) await db.run('ROLLBACK');
+        logger.error("ОШИБКА ПАКЕТНОГО СОХРАНЕНИЯ!", e.message);
         users.forEach(([id, d]) => { if(!saveQueue.has(id)) saveQueue.set(id, d); });
     }
 }
@@ -111,7 +118,7 @@ app.get('/api/balance/:userId', async (req, res) => {
         const now = Math.floor(Date.now() / 1000);
 
         if (userData) {
-            const score = userData.balance || userData.score || 0;
+            const score = userData.balance || 0;
             const offTime = Math.min(now - (userData.last_active || now), 10800);
             const earned = (userData.pnl / 3600) * offTime;
             
@@ -158,21 +165,19 @@ app.post('/api/upgrade/mine', async (req, res) => {
     const { user_id } = req.body;
     try {
         const user = await db.get('SELECT balance, pnl FROM users WHERE id = ?', [String(user_id)]);
-        if (!user) {
-            logger.warn(`Попытка покупки MINE несуществующим юзером: ${user_id}`);
-            return res.status(404).send("User not found");
-        }
+        if (!user) return res.status(404).send("User not found");
 
         const currentLvl = Math.floor(user.pnl / 150);
         const cost = Math.floor(1000 * Math.pow(1.6, currentLvl));
 
         if (user.balance >= cost) {
-            await db.run('UPDATE users SET balance = balance - ?, pnl = pnl + 150 WHERE id = ?', [cost, String(user_id)]);
+            const newPnl = user.pnl + 150;
+            const newBalance = user.balance - cost;
+            await db.run('UPDATE users SET balance = ?, pnl = ? WHERE id = ?', [newBalance, newPnl, String(user_id)]);
             saveQueue.delete(String(user_id)); 
-            logger.success(`ПОКУПКА: Юзер ${user_id} купил MINE (Lvl ${currentLvl + 1}) за ${cost}`);
-            res.json({ status: "ok" });
+            logger.success(`ПОКУПКА: Юзер ${user_id} купил MINE. Баланс: ${newBalance}`);
+            res.json({ status: "ok", newBalance, newPnl });
         } else {
-            logger.warn(`ОТКАЗ: Юзеру ${user_id} не хватило ${cost - user.balance} для покупки MINE`);
             res.json({ status: "error", message: "Low balance" });
         }
     } catch (e) { 
@@ -189,28 +194,30 @@ bot.start((ctx) => {
     ]));
 });
 
-// --- [ЗАПУСК] ---
-const PORT = process.env.PORT || 3000;
+// --- [ЗАПУСК С АВТОПОРТОМ] ---
+// Bothost часто требует порт 80 или 8080 для внешнего доступа
+const PORT = process.env.PORT || 3000; 
+
 async function start() {
     await initDB();
-    await bot.telegram.deleteWebhook();
-    server.listen(PORT, '0.0.0.0', () => {
-        logger.success(`🚀 СЕРВЕР ЗАПУЩЕН НА ПОРТУ ${PORT}`);
-        logger.info("Режим работы: High-Load Cluster ready");
-    });
-    bot.launch().then(() => logger.success("🤖 Телеграм-бот успешно запущен"));
+    try {
+        await bot.telegram.deleteWebhook();
+        server.listen(PORT, '0.0.0.0', () => {
+            logger.success(`🚀 СЕРВЕР ЗАПУЩЕН НА ПОРТУ ${PORT}`);
+            logger.info(`URL ПРИЛОЖЕНИЯ: ${WEB_APP_URL}`);
+        });
+        bot.launch();
+        logger.success("🤖 Телеграм-бот успешно запущен");
+    } catch (e) {
+        logger.error("Ошибка при запуске бота:", e);
+    }
 }
 
 start();
 
 async function shutdown(signal) {
-    logger.warn(`Получен сигнал ${signal}. Начинаю корректное завершение...`);
-    const count = saveQueue.size;
-    if(count > 0) {
-        logger.info(`Сохраняю ${count} пользователей перед выходом...`);
-        await flushQueue();
-    }
-    logger.success("Все данные спасены. Сервер остановлен.");
+    logger.warn(`Получен сигнал ${signal}. Завершение...`);
+    await flushQueue();
     process.exit(0);
 }
 
