@@ -24,16 +24,17 @@
             height: 100vh;
             user-select: none;
             -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation; /* Защита от двойного тапа/зума */
         }
 
-        /* --- LOADER SCREEN --- */
+        /* --- LOADER --- */
         #loader-screen {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
             background: #050505;
             display: flex; align-items: center; justify-content: center;
             z-index: 10000;
-            transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: opacity 0.8s ease;
         }
         .loader-container { text-align: center; }
         .loader-logo-wrap { position: relative; width: 150px; height: 150px; margin: 0 auto 30px; }
@@ -43,28 +44,22 @@
             border-right: 2px solid var(--neon-purple); border-radius: 50%;
             animation: rotate-ring 1.5s linear infinite;
         }
-        .loader-logo-img {
-            width: 100%; height: 100%; border-radius: 50%; background: #111;
-            overflow: hidden; display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 0 30px rgba(188, 19, 254, 0.3);
-        }
         .loader-text {
             color: #fff; font-size: 11px; font-weight: 900; text-transform: uppercase;
-            letter-spacing: 2px; margin-bottom: 10px; min-height: 20px;
+            letter-spacing: 2px; margin-bottom: 10px;
         }
         .loader-percent { color: var(--neon-cyan); font-size: 24px; font-weight: 900; margin-bottom: 20px; font-family: monospace; }
         .loader-bar-bg { width: 220px; height: 4px; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 0 auto; overflow: hidden; }
-        .loader-bar-fill { width: 0%; height: 100%; background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); transition: width 0.3s ease; }
+        .loader-bar-fill { width: 0%; height: 100%; background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); transition: width 0.3s; }
         @keyframes rotate-ring { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
         /* --- UI LAYERS --- */
         #particles-js { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
-        
         .content-layer { 
             position: relative; z-index: 2; width: 100%; height: 100%; 
             display: flex; flex-direction: column; align-items: center; 
             padding-top: env(safe-area-inset-top);
-            transition: transform 1s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.8s ease;
+            transition: transform 0.6s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.5s ease;
             transform: scale(0.95); opacity: 0;
         }
         .content-layer.active { transform: scale(1); opacity: 1; }
@@ -89,20 +84,27 @@
         #balance { font-size: 42px; font-weight: 900; color: #fff; text-shadow: 0 0 20px rgba(255,255,255,0.2); }
 
         .main-wrapper { position: relative; width: 100%; display: flex; justify-content: center; align-items: center; margin-top: 20px; }
-        .click-area { position: relative; width: 280px; height: 280px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-        .main-logo { width: 240px; height: 240px; border-radius: 50%; box-shadow: 0 0 60px rgba(188, 19, 254, 0.3); transition: transform 0.05s; z-index: 5; object-fit: cover; }
-        .main-logo:active { transform: scale(0.95); }
+        .click-area { 
+            position: relative; width: 280px; height: 280px; 
+            display: flex; align-items: center; justify-content: center; 
+            cursor: pointer; touch-action: none; /* Важно для тапа */
+        }
+        .main-logo { 
+            width: 240px; height: 240px; border-radius: 50%; 
+            box-shadow: 0 0 60px rgba(188, 19, 254, 0.3); 
+            transition: transform 0.05s; z-index: 5; object-fit: cover;
+            pointer-events: none; /* Тапаем по зоне, а не по картинке */
+        }
+        .click-area:active .main-logo { transform: scale(0.95); }
         
         .side-nav { position: absolute; right: 15px; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
         .side-btn { background: #121212; border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 9px; font-weight: 800; padding: 10px 12px; border-radius: 10px; width: 70px; text-align: center; }
-        .side-btn.gold { color: #ffe600; border-color: rgba(255, 230, 0, 0.3); }
 
         .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: auto; margin-bottom: 30px; }
-        .nav-btn { background: var(--glass); border: 1.5px solid #444; padding: 12px 5px; border-radius: 12px; text-align: center; font-size: 11px; font-weight: 800; color: #fff; transition: 0.2s; }
-        .nav-btn:active { transform: scale(0.95); border-color: var(--neon-cyan); }
+        .nav-btn { background: var(--glass); border: 1.5px solid #444; padding: 12px 5px; border-radius: 12px; text-align: center; font-size: 11px; font-weight: 800; color: #fff; }
 
         .tap-text { position: absolute; color: #fff; font-size: 32px; font-weight: 900; pointer-events: none; animation: floatUp 0.6s ease-out forwards; z-index: 100; text-shadow: 0 0 10px var(--neon-purple); }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px); } }
 
         .energy-section { width: 85%; margin-top: 20px; margin-bottom: 20px; }
         .energy-bar-wrap { width: 100%; height: 10px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; }
@@ -121,9 +123,7 @@
             </div>
             <div class="loader-text">INITIALIZING...</div>
             <div id="loader-percent" class="loader-percent">0%</div>
-            <div class="loader-bar-bg">
-                <div id="loader-fill" class="loader-bar-fill"></div>
-            </div>
+            <div class="loader-bar-bg"><div id="loader-fill" class="loader-bar-fill"></div></div>
         </div>
     </div>
 
@@ -156,7 +156,7 @@
             <div class="side-nav">
                 <div class="side-btn" onclick="showInvite()">INVITE</div>
                 <div class="side-btn" onclick="tg.showAlert('Daily Tasks coming soon!')">TASKS</div>
-                <div class="side-btn gold" onclick="tg.showAlert('Daily Bonus available in next update!')">BONUS</div>
+                <div class="side-btn" style="color:#ffe600; border-color:rgba(255,230,0,0.3)" onclick="tg.showAlert('Daily Bonus in next update!')">BONUS</div>
             </div>
         </div>
 
@@ -165,9 +165,7 @@
                 <span>⚡ ENERGY</span>
                 <span id="energy-text">1000/1000</span>
             </div>
-            <div class="energy-bar-wrap">
-                <div id="energy-fill"></div>
-            </div>
+            <div class="energy-bar-wrap"><div id="energy-fill"></div></div>
         </div>
 
         <div class="bottom-nav">
@@ -185,7 +183,8 @@
         let state = { 
             balance: 0, energy: 1000, max_energy: 1000, 
             click_lvl: 1, pnl: 0, league: 'BRONZE LEAGUE', loaded: false,
-            uid: new URLSearchParams(window.location.search).get('u') || tg.initDataUnsafe?.user?.id
+            isDirty: false, // Флаг: были ли изменения для сохранения
+            uid: tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('u')
         };
 
         function startLoadingAnimation() {
@@ -193,7 +192,7 @@
             const percentEl = document.getElementById('loader-percent');
             const fillEl = document.getElementById('loader-fill');
             const statusEl = document.querySelector('.loader-text');
-            const statuses = ["SCANNING IDENTITY...", "DECRYPTING LINK...", "ESTABLISHING SYNC...", "ACCESS GRANTED"];
+            const statuses = ["SCANNING...", "DECRYPTING...", "SYNCING...", "GRANTED"];
 
             const interval = setInterval(() => {
                 if (progress < 25) statusEl.innerText = statuses[0];
@@ -204,11 +203,9 @@
                 if (state.loaded && progress >= 100) {
                     clearInterval(interval);
                     tg.HapticFeedback.notificationOccurred('success');
-                    setTimeout(() => {
-                        document.getElementById('loader-screen').style.opacity = '0';
-                        document.querySelector('.content-layer').classList.add('active');
-                        setTimeout(() => document.getElementById('loader-screen').style.display = 'none', 850);
-                    }, 200);
+                    document.getElementById('loader-screen').style.opacity = '0';
+                    document.querySelector('.content-layer').classList.add('active');
+                    setTimeout(() => document.getElementById('loader-screen').style.display = 'none', 850);
                     return;
                 }
                 
@@ -217,7 +214,7 @@
                 
                 percentEl.innerText = `${progress}%`;
                 fillEl.style.width = `${progress}%`;
-            }, 40);
+            }, 50);
         }
 
         function updateUI() {
@@ -230,48 +227,33 @@
         }
 
         async function loadData() {
-            if(!state.uid || state.uid === "undefined") { 
-                console.error("No UID found");
-                state.loaded = true; 
-                return; 
-            }
+            if(!state.uid) { state.loaded = true; return; }
             try {
-                // Здесь x-tg-data не нужен для GET, но мы можем его добавить для единообразия
                 const r = await fetch(`/api/balance/${state.uid}`);
                 const res = await r.json();
                 if(res.status === 'ok') {
-                    state.balance = res.data.balance;
-                    state.click_lvl = res.data.click_lvl;
-                    state.pnl = res.data.pnl;
-                    state.energy = res.data.energy;
-                    state.max_energy = res.data.max_energy;
-                    state.league = res.data.league;
+                    Object.assign(state, res.data);
                 }
-            } catch(e) { console.warn("Using offline mode"); }
+            } catch(e) { console.warn("Offline mode"); }
             state.loaded = true;
             updateUI();
         }
 
         async function syncData() {
-            if(!state.uid || !state.loaded || state.uid === "undefined") return;
+            if(!state.uid || !state.loaded || !state.isDirty) return;
             try {
                 const r = await fetch('/api/save', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-tg-data': tg.initData // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: передаем данные Telegram
-                    },
+                    headers: { 'Content-Type': 'application/json', 'x-tg-data': tg.initData },
                     body: JSON.stringify({
-                        user_id: state.uid,
-                        score: state.balance,
-                        energy: state.energy,
-                        click_lvl: state.click_lvl,
-                        pnl: state.pnl
+                        user_id: state.uid, score: state.balance,
+                        energy: state.energy, click_lvl: state.click_lvl, pnl: state.pnl
                     })
                 });
+                if(r.ok) state.isDirty = false;
                 const res = await r.json();
                 if(res.league) state.league = res.league;
-            } catch(e) { console.error("Cloud sync failed"); }
+            } catch(e) { console.error("Sync failed"); }
         }
 
         async function buyUpgrade(type) {
@@ -279,10 +261,7 @@
             try {
                 const r = await fetch(`/api/upgrade/${type}`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-tg-data': tg.initData // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ
-                    },
+                    headers: { 'Content-Type': 'application/json', 'x-tg-data': tg.initData },
                     body: JSON.stringify({ user_id: state.uid })
                 });
                 const res = await r.json();
@@ -293,7 +272,7 @@
                     updateUI();
                     tg.HapticFeedback.notificationOccurred('success');
                 } else {
-                    tg.showAlert(res.error || "Insufficient Credits");
+                    tg.showAlert(res.error || "Low Credits");
                 }
             } catch(e) { tg.showAlert("Connection lost"); }
         }
@@ -305,6 +284,7 @@
                 return;
             }
 
+            state.isDirty = true;
             for(let i=0; i < e.changedTouches.length; i++) {
                 const touch = e.changedTouches[i];
                 state.balance += state.click_lvl;
@@ -313,7 +293,8 @@
                 const num = document.createElement('div');
                 num.className = 'tap-text';
                 num.innerText = `+${state.click_lvl}`;
-                num.style.left = `${touch.pageX - 20}px`; num.style.top = `${touch.pageY - 50}px`;
+                num.style.left = `${touch.pageX - 15}px`; 
+                num.style.top = `${touch.pageY - 40}px`;
                 document.body.appendChild(num);
                 setTimeout(() => num.remove(), 600);
             }
@@ -326,33 +307,31 @@
                 const r = await fetch('/api/leaderboard');
                 const res = await r.json();
                 if(res.status === 'ok') {
-                    let list = res.leaderboard.map(p => 
-                        `${p.rank}. ID: ${String(p.id).slice(-4)} — ${p.balance.toLocaleString()} [${p.league}]`
-                    ).join('\n');
-                    tg.showAlert("🏆 TOP NEURAL AGENTS:\n\n" + (list || "Scanning network..."));
+                    let list = res.leaderboard.map(p => `${p.rank}. ID: ${String(p.id).slice(-4)} — ${p.balance.toLocaleString()}`).join('\n');
+                    tg.showAlert("🏆 TOP AGENTS:\n\n" + (list || "Empty..."));
                 }
             } catch(e) { tg.showAlert("Access denied"); }
         }
 
         function showInvite() {
             const link = `https://t.me/neural_pulse_bot?start=${state.uid}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join the Neural Pulse Network!`);
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join me!`);
         }
 
-        // --- BACKGROUND PARTICLES ---
+        // --- PARTICLES ---
         const canvas = document.getElementById('particles-js');
         const ctx = canvas.getContext('2d');
         let particles = [];
         function initParticles() {
             canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-            particles = Array.from({length: 20}, () => ({
+            particles = Array.from({length: 15}, () => ({
                 x: Math.random() * canvas.width, y: Math.random() * canvas.height,
-                vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3, size: Math.random() * 2
+                vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4, size: Math.random() * 2
             }));
         }
         function drawParticles() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = 'rgba(188, 19, 254, 0.2)';
+            ctx.fillStyle = 'rgba(188, 19, 254, 0.15)';
             particles.forEach(p => {
                 p.x += p.vx; p.y += p.vy;
                 if(p.x<0||p.x>canvas.width) p.vx*=-1; if(p.y<0||p.y>canvas.height) p.vy*=-1;
@@ -361,12 +340,13 @@
             requestAnimationFrame(drawParticles);
         }
 
-        // Игровой цикл
+        // Loop
         setInterval(() => {
             if (!state.loaded) return;
-            // Пассивный доход
-            if (state.pnl > 0) state.balance += (state.pnl / 3600);
-            // Регенерация энергии (1.5 в секунду)
+            if (state.pnl > 0) {
+                state.balance += (state.pnl / 3600);
+                state.isDirty = true;
+            }
             if (state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 1.5);
             }
