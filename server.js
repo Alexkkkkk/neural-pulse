@@ -25,7 +25,6 @@ app.use((req, res, next) => {
     next();
 });
 
-// Раздаем статику
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
 let db;
@@ -55,7 +54,6 @@ async function initDB() {
 // --- [ЛОГИКА ТЕЛЕГРАМ БОТА] ---
 bot.start(async (ctx) => {
     const uid = ctx.from.id;
-    // Добавляем параметр v=..., чтобы Telegram сбрасывал кэш WebApp при каждом старте
     const version = Math.random().toString(36).substring(7);
     const webAppUrlWithCacheReset = `${WEB_APP_URL}/?u=${uid}&v=${version}`;
     
@@ -75,6 +73,8 @@ bot.start(async (ctx) => {
 });
 
 // --- [API ЭНДПОИНТЫ] ---
+
+// 1. Получение баланса
 app.get('/api/balance/:userId', async (req, res) => {
     const userId = String(req.params.userId);
     try {
@@ -86,8 +86,6 @@ app.get('/api/balance/:userId', async (req, res) => {
         if (user) {
             const offTime = Math.min(now - (user.last_active || now), 10800);
             const earned = (user.pnl / 3600) * offTime;
-            
-            console.log(`[API] Загрузка для ${userId}: Баланс ${user.balance}, Доход ${earned.toFixed(2)}`);
             
             res.json({ status: "ok", data: {
                 score: user.balance + earned, 
@@ -110,6 +108,36 @@ app.get('/api/balance/:userId', async (req, res) => {
     }
 });
 
+// 2. Улучшение клика (BOOST)
+app.post('/api/upgrade/click', async (req, res) => {
+    const { user_id } = req.body;
+    try {
+        if (!db) return res.status(503).send("Database not ready");
+        
+        const user = await db.get('SELECT balance, click_lvl FROM users WHERE id = ?', [String(user_id)]);
+        if (!user) return res.json({ status: "error", message: "Пользователь не найден" });
+
+        // Стоимость: 500, 750, 1125... (рост в 1.5 раза за уровень)
+        const cost = Math.floor(500 * Math.pow(1.5, user.click_lvl - 1));
+
+        if (user.balance >= cost) {
+            const newBalance = user.balance - cost;
+            const newLvl = user.click_lvl + 1;
+            
+            await db.run('UPDATE users SET balance = ?, click_lvl = ? WHERE id = ?', [newBalance, newLvl, String(user_id)]);
+            
+            console.log(`[SHOP] ${user_id} купил апгрейд клика. Теперь уровень ${newLvl}`);
+            res.json({ status: "ok", newBalance, newLvl });
+        } else {
+            res.json({ status: "error", message: "Недостаточно нейро-кредитов" });
+        }
+    } catch (e) {
+        console.error(`![API] Ошибка апгрейда:`, e.message);
+        res.status(500).send(e.message);
+    }
+});
+
+// 3. Автосохранение
 app.post('/api/save', async (req, res) => {
     try {
         if (!db) return res.status(503).send("Database not ready");
