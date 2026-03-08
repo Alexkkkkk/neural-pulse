@@ -49,8 +49,8 @@
             box-shadow: 0 0 30px rgba(188, 19, 254, 0.3);
         }
         .loader-text {
-            color: #fff; font-size: 13px; font-weight: 900; text-transform: uppercase;
-            letter-spacing: 3px; margin-bottom: 10px; min-height: 20px;
+            color: #fff; font-size: 11px; font-weight: 900; text-transform: uppercase;
+            letter-spacing: 2px; margin-bottom: 10px; min-height: 20px;
         }
         .loader-percent { color: var(--neon-cyan); font-size: 24px; font-weight: 900; margin-bottom: 20px; font-family: monospace; }
         .loader-bar-bg { width: 220px; height: 4px; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 0 auto; overflow: hidden; }
@@ -64,8 +64,8 @@
             position: relative; z-index: 2; width: 100%; height: 100%; 
             display: flex; flex-direction: column; align-items: center; 
             padding-top: env(safe-area-inset-top);
-            transition: transform 1.2s cubic-bezier(0.19, 1, 0.22, 1), opacity 1s ease;
-            transform: scale(0.9); opacity: 0;
+            transition: transform 1s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.8s ease;
+            transform: scale(0.95); opacity: 0;
         }
         .content-layer.active { transform: scale(1); opacity: 1; }
         
@@ -86,25 +86,26 @@
             border: 1px solid rgba(188, 19, 254, 0.2); padding: 10px 40px; border-radius: 20px;
         }
         .jackpot-label { color: var(--neon-cyan); font-size: 10px; font-weight: 800; letter-spacing: 1px; margin-bottom: 2px; }
-        #balance { font-size: 42px; font-weight: 900; color: #fff; }
+        #balance { font-size: 42px; font-weight: 900; color: #fff; text-shadow: 0 0 20px rgba(255,255,255,0.2); }
 
         .main-wrapper { position: relative; width: 100%; display: flex; justify-content: center; align-items: center; margin-top: 20px; }
         .click-area { position: relative; width: 280px; height: 280px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-        .main-logo { width: 260px; height: 260px; border-radius: 50%; box-shadow: 0 0 60px rgba(188, 19, 254, 0.3); transition: transform 0.05s; z-index: 5; object-fit: cover; }
+        .main-logo { width: 260px; height: 260px; border-radius: 50%; box-shadow: 0 0 60px rgba(188, 19, 254, 0.3); transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 5; object-fit: cover; }
         
         .side-nav { position: absolute; right: 15px; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
         .side-btn { background: #121212; border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 9px; font-weight: 800; padding: 10px 12px; border-radius: 10px; width: 70px; text-align: center; }
         .side-btn.gold { color: #ffe600; border-color: rgba(255, 230, 0, 0.3); }
 
-        .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 30px; }
-        .nav-btn { background: none; border: 1.5px solid #444; padding: 12px 5px; border-radius: 12px; text-align: center; font-size: 11px; font-weight: 800; color: #fff; }
+        .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: auto; margin-bottom: 30px; }
+        .nav-btn { background: var(--glass); border: 1.5px solid #444; padding: 12px 5px; border-radius: 12px; text-align: center; font-size: 11px; font-weight: 800; color: #fff; transition: 0.2s; }
+        .nav-btn:active { transform: scale(0.95); border-color: var(--neon-cyan); }
 
-        .tap-text { position: absolute; color: #fff; font-size: 32px; font-weight: 900; pointer-events: none; animation: floatUp 0.7s forwards; z-index: 100; }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
+        .tap-text { position: absolute; color: #fff; font-size: 36px; font-weight: 900; pointer-events: none; animation: floatUp 0.8s ease-out forwards; z-index: 100; text-shadow: 0 0 10px var(--neon-purple); }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.2); } }
 
-        .energy-section { width: 85%; margin-top: auto; margin-bottom: 20px; }
+        .energy-section { width: 85%; margin-top: 20px; margin-bottom: 20px; }
         .energy-bar-wrap { width: 100%; height: 10px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; }
-        #energy-fill { height: 100%; background: #00ff66; width: 100%; transition: width 0.2s; }
+        #energy-fill { height: 100%; background: linear-gradient(90deg, #00ff66, #00f2ff); width: 100%; transition: width 0.3s; }
     </style>
 </head>
 <body>
@@ -132,7 +133,7 @@
             <div class="lvl-icon">AI</div>
             <div style="flex-grow: 1;">
                 <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; color: #aaa;">
-                    <span>BRONZE LEAGUE</span>
+                    <span id="league-name">BRONZE LEAGUE</span>
                     <span id="rank-id">ID: ----</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px; margin-top: 4px;">
@@ -143,7 +144,7 @@
         </div>
 
         <div class="score-container">
-            <div class="jackpot-label">GLOBAL JACKPOT</div>
+            <div class="jackpot-label">NEURAL TOKENS</div>
             <div id="balance">0</div>
         </div>
 
@@ -153,8 +154,8 @@
             </div>
             <div class="side-nav">
                 <div class="side-btn" onclick="showInvite()">INVITE</div>
-                <div class="side-btn">TASKS</div>
-                <div class="side-btn gold">BONUS</div>
+                <div class="side-btn" onclick="tg.showAlert('Coming Soon...')">TASKS</div>
+                <div class="side-btn gold" onclick="tg.showAlert('Daily Bonus available in next update!')">BONUS</div>
             </div>
         </div>
 
@@ -171,7 +172,7 @@
         <div class="bottom-nav">
             <div class="nav-btn" onclick="buyUpgrade('click')">🚀 BOOST</div>
             <div class="nav-btn" onclick="buyUpgrade('mine')">⛏️ MINE</div>
-            <div class="nav-btn">📊 STATS</div>
+            <div class="nav-btn" onclick="tg.showAlert('Leaderboard is empty yet!')">📊 STATS</div>
         </div>
     </div>
 
@@ -179,6 +180,7 @@
         const tg = window.Telegram.WebApp;
         tg.ready();
         tg.expand();
+        tg.enableClosingConfirmation();
 
         let state = { 
             balance: 0, energy: 1000, max_energy: 1000, 
@@ -186,12 +188,12 @@
             uid: new URLSearchParams(window.location.search).get('u') || tg.initDataUnsafe?.user?.id
         };
 
+        // --- LOADING LOGIC ---
         function startLoadingAnimation() {
             let progress = 0;
             const percentEl = document.getElementById('loader-percent');
             const fillEl = document.getElementById('loader-fill');
             const statusEl = document.querySelector('.loader-text');
-            
             const statuses = ["SCANNING IDENTITY...", "DECRYPTING LINK...", "ESTABLISHING SYNC...", "ACCESS GRANTED"];
 
             const interval = setInterval(() => {
@@ -200,38 +202,39 @@
                 else if (progress < 80) statusEl.innerText = statuses[2];
                 else statusEl.innerText = statuses[3];
 
-                if ([30, 65].includes(progress)) tg.HapticFeedback.impactOccurred('medium');
-
                 if (state.loaded && progress >= 100) {
                     clearInterval(interval);
                     tg.HapticFeedback.notificationOccurred('success');
                     setTimeout(() => {
                         document.getElementById('loader-screen').style.opacity = '0';
                         document.querySelector('.content-layer').classList.add('active');
-                        setTimeout(() => document.getElementById('loader-screen').style.display = 'none', 1000);
-                    }, 400);
+                        setTimeout(() => document.getElementById('loader-screen').style.display = 'none', 850);
+                    }, 300);
                     return;
                 }
-                if (progress < 99) progress += Math.floor(Math.random() * 4) + 1;
+                
+                if (progress < 100) progress += Math.floor(Math.random() * 5) + 2;
                 if (progress > 100) progress = 100;
+                
                 percentEl.innerText = `${progress}%`;
                 fillEl.style.width = `${progress}%`;
-            }, 75);
+            }, 80);
         }
 
+        // --- PARTICLES ---
         const canvas = document.getElementById('particles-js');
         const ctx = canvas.getContext('2d');
         let particles = [];
         function initParticles() {
             canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-            particles = Array.from({length: 15}, () => ({
+            particles = Array.from({length: 20}, () => ({
                 x: Math.random() * canvas.width, y: Math.random() * canvas.height,
-                vx: (Math.random() - 0.5) * 0.2, vy: (Math.random() - 0.5) * 0.2, size: Math.random() * 2
+                vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3, size: Math.random() * 2
             }));
         }
         function drawParticles() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = 'rgba(188, 19, 254, 0.15)';
+            ctx.fillStyle = 'rgba(188, 19, 254, 0.2)';
             particles.forEach(p => {
                 p.x += p.vx; p.y += p.vy;
                 if(p.x<0||p.x>canvas.width) p.vx*=-1; if(p.y<0||p.y>canvas.height) p.vy*=-1;
@@ -240,11 +243,18 @@
             requestAnimationFrame(drawParticles);
         }
 
+        // --- UI UPDATES ---
         function updateUI() {
             document.getElementById('balance').innerText = Math.floor(state.balance).toLocaleString();
             document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
             document.getElementById('energy-fill').style.width = `${(state.energy / state.max_energy) * 100}%`;
-            if(state.uid) document.getElementById('rank-id').innerText = `ID: ${String(state.uid).slice(-4)}`;
+            if(state.uid) document.getElementById('rank-id').innerText = `ID: ${String(state.uid).slice(-6)}`;
+            
+            // Динамическое название лиги
+            const league = document.getElementById('league-name');
+            if (state.balance > 1000000) league.innerText = "DIAMOND NODE";
+            else if (state.balance > 100000) league.innerText = "GOLD CORE";
+            else if (state.balance > 10000) league.innerText = "SILVER LINK";
         }
 
         async function loadData() {
@@ -253,39 +263,49 @@
                 const r = await fetch(`/api/balance/${state.uid}`);
                 const res = await r.json();
                 if(res.status === 'ok') {
-                    state.balance = res.data.balance;
-                    state.click_lvl = res.data.click_lvl;
-                    state.pnl = res.data.pnl;
-                    state.energy = res.data.energy;
-                    state.max_energy = res.data.max_energy;
+                    state.balance = parseFloat(res.data.balance || 0);
+                    state.click_lvl = parseInt(res.data.click_lvl || 1);
+                    state.pnl = parseFloat(res.data.pnl || 0);
+                    state.energy = parseFloat(res.data.energy || 1000);
+                    state.max_energy = parseInt(res.data.max_energy || 1000);
                     updateUI();
-                    state.loaded = true;
                 }
-            } catch(e) { state.loaded = true; }
+            } catch(e) { console.error("Load failed"); }
+            state.loaded = true;
         }
 
+        // --- CLICK HANDLER ---
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
             e.preventDefault();
-            if (state.energy < state.click_lvl) return;
-            for(let i=0; i < e.touches.length; i++) {
-                const touch = e.touches[i];
+            if (!state.loaded || state.energy < state.click_lvl) {
+                tg.HapticFeedback.notificationOccurred('error');
+                return;
+            }
+
+            for(let i=0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
                 state.balance += state.click_lvl;
                 state.energy -= state.click_lvl;
+
                 const num = document.createElement('div');
                 num.className = 'tap-text';
                 num.innerText = `+${state.click_lvl}`;
                 num.style.left = `${touch.pageX - 20}px`; num.style.top = `${touch.pageY - 50}px`;
                 document.body.appendChild(num);
-                setTimeout(() => num.remove(), 700);
+                setTimeout(() => num.remove(), 750);
             }
-            updateUI();
-            tg.HapticFeedback.impactOccurred('light');
-            document.getElementById('main-logo').style.transform = 'scale(0.96)';
-            setTimeout(() => document.getElementById('main-logo').style.transform = 'scale(1)', 50);
-        });
 
-        async function buyUpgrade(type) {
+            updateUI();
             tg.HapticFeedback.impactOccurred('medium');
+            
+            const logo = document.getElementById('main-logo');
+            logo.style.transform = 'scale(0.92)';
+            setTimeout(() => logo.style.transform = 'scale(1)', 100);
+        }, { passive: false });
+
+        // --- ACTIONS ---
+        async function buyUpgrade(type) {
+            tg.HapticFeedback.impactOccurred('light');
             const path = type === 'click' ? '/api/upgrade/click' : '/api/upgrade/mine';
             try {
                 const r = await fetch(path, {
@@ -294,19 +314,21 @@
                     body: JSON.stringify({ user_id: state.uid })
                 });
                 const data = await r.json();
-                if(data.status === 'ok') loadData();
+                if(data.status === 'ok') await loadData();
                 else tg.showAlert(data.message);
-            } catch(e) {}
+            } catch(e) { tg.showAlert("Server Link Error"); }
         }
 
         function showInvite() {
             const link = `https://t.me/neural_pulse_bot?start=${state.uid}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join Neural Pulse!`);
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join Neural Pulse AI and start mining!`);
         }
 
+        // Loops
         setInterval(() => {
+            if (!state.loaded) return;
             state.balance += (state.pnl / 3600);
-            state.energy = Math.min(state.max_energy, state.energy + 1.2);
+            state.energy = Math.min(state.max_energy, state.energy + 1.5); // Реген чуть быстрее
             updateUI();
         }, 1000);
 
@@ -322,8 +344,10 @@
             }).catch(() => {});
         }, 10000);
 
-        startLoadingAnimation();
-        initParticles(); drawParticles(); loadData();
+        window.onload = () => {
+            startLoadingAnimation();
+            initParticles(); drawParticles(); loadData();
+        };
     </script>
 </body>
 </html>
