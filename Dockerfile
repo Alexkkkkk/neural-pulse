@@ -1,13 +1,13 @@
 # --- ЭТАП 1: Сборка (Build-stage) ---
 FROM node:18-alpine AS builder
 
-# Инструменты для сборки нативных модулей (sqlite3)
+# Инструменты для сборки нативных модулей (обязательно для sqlite3 на alpine)
 RUN apk add --no-cache python3 make g++ gcc libc-dev sqlite-dev
 
 WORKDIR /app
 COPY package*.json ./
 
-# Устанавливаем всё и собираем бинарник sqlite3 специально под Alpine
+# Устанавливаем всё и собираем sqlite3 из исходников под текущую ОС
 RUN npm ci && \
     npm rebuild sqlite3 --build-from-source && \
     npm cache clean --force
@@ -15,36 +15,38 @@ RUN npm ci && \
 # --- ЭТАП 2: Финальный образ (Runtime-stage) ---
 FROM node:18-alpine
 
+# libstdc++ нужен для работы скомпилированного sqlite3
 RUN apk add --no-cache tini libstdc++
 
 WORKDIR /app
 
-# Копируем зависимости и код
+# Копируем зависимости из билдера и весь остальной код
 COPY --from=builder /app/node_modules ./node_modules
 COPY . .
 
-# Права доступа (обязательно для записи в sqlite)
-RUN mkdir -p /app/data && chown -R node:node /app/data
+# Создаем папки для данных и логов, выдаем права пользователю node
+RUN mkdir -p /app/data /app/logs && \
+    chown -R node:node /app/data /app/logs
 
 # Настройки окружения
 ENV NODE_ENV=production
-# Подстраиваем под реальные ресурсы (лучше оставить 1-2ГБ для начала)
+ENV PORT=3000
+# Оптимизация памяти
 ENV NODE_OPTIONS="--max-old-space-size=1024 --no-warnings"
-ENV NODE_MAX_HTTP_HEADER_SIZE=16384
 
 EXPOSE 3000
 
-# Устанавливаем PM2
+# Устанавливаем PM2 глобально
 RUN npm install -g pm2 && npm cache clean --force
 
-# Healthcheck: стучимся в корень (который точно отдает 200)
+# Healthcheck: проверка доступности API
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/', (r) => {if(r.statusCode!==200)process.exit(1)})" || exit 1
+  CMD node -e "require('http').get('http://localhost:3000/api/leaderboard', (r) => {if(r.statusCode!==200)process.exit(1)})" || exit 1
 
 ENTRYPOINT ["/sbin/tini", "--"]
 
+# Переключаемся на безопасного пользователя
 USER node
 
-# Запуск: 1 процесс для стабильности SQLite + PM2 для автоперезагрузки
-# Если в будущем перейдешь на PostgreSQL - тогда ставь "-i max"
-CMD ["pm2-runtime", "server.js", "-i", "1", "--exp-backoff-restart-delay", "100"]
+# Запуск через твой конфиг (он уже настроен на 1 инстанс и лимиты памяти)
+CMD ["pm2-runtime", "ecosystem.config.js", "--env", "production"]
