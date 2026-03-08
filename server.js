@@ -5,11 +5,11 @@ const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const { Telegraf, Markup } = require('telegraf'); // Добавили Telegraf
+const { Telegraf, Markup } = require('telegraf');
 
 // --- [КОНФИГУРАЦИЯ] ---
 const API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM";
-const WEB_APP_URL = "https://np.bothost.ru"; // Твой URL
+const WEB_APP_URL = "https://np.bothost.ru"; 
 
 const app = express();
 const server = http.createServer(app);
@@ -19,59 +19,76 @@ const bot = new Telegraf(API_TOKEN);
 app.use(cors());
 app.use(express.json());
 
-// Раздаем статику: index.html лежит в /static
+// --- [ЛОГИРОВАНИЕ ЗАПРОСОВ] ---
+app.use((req, res, next) => {
+    console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
+    next();
+});
+
+// Раздаем статику
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
 let db;
 
 // --- [ИНИЦИАЛИЗАЦИЯ БД] ---
 async function initDB() {
-    // Убедись, что папка 'data' существует в корне проекта
-    db = await open({
-        filename: path.join(__dirname, 'data', 'game.db'),
-        driver: sqlite3.Database
-    });
-    await db.exec(`CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY, 
-        balance REAL, 
-        click_lvl INTEGER, 
-        pnl REAL DEFAULT 0, 
-        energy REAL, 
-        max_energy INTEGER, 
-        level INTEGER DEFAULT 1, 
-        last_active INTEGER)`);
-    console.log("💾 Database & Tables Ready");
+    try {
+        db = await open({
+            filename: path.join(__dirname, 'data', 'game.db'),
+            driver: sqlite3.Database
+        });
+        await db.exec(`CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY, 
+            balance REAL, 
+            click_lvl INTEGER, 
+            pnl REAL DEFAULT 0, 
+            energy REAL, 
+            max_energy INTEGER, 
+            level INTEGER DEFAULT 1, 
+            last_active INTEGER)`);
+        console.log("💾 Database & Tables Ready");
+    } catch (err) {
+        console.error("![DB] Ошибка инициализации базы:", err);
+    }
 }
 
 // --- [ЛОГИКА ТЕЛЕГРАМ БОТА] ---
 bot.start(async (ctx) => {
     const uid = ctx.from.id;
+    // Добавляем параметр v=..., чтобы Telegram сбрасывал кэш WebApp при каждом старте
+    const version = Math.random().toString(36).substring(7);
+    const webAppUrlWithCacheReset = `${WEB_APP_URL}/?u=${uid}&v=${version}`;
+    
+    console.log(`[BOT] Команда /start от ${uid}. Ссылка: ${webAppUrlWithCacheReset}`);
+
     try {
-        // Приветственное сообщение с кнопкой WebApp
         await ctx.replyWithHTML(
             `🦾 <b>Neural Pulse: Протокол Запущен</b>\n\nДобро пожаловать в систему, нейро-майнер!`,
             Markup.inlineKeyboard([
-                [Markup.button.webApp("ВХОД В НЕЙРОСЕТЬ 🧠", `${WEB_APP_URL}/?u=${uid}`)],
+                [Markup.button.webApp("ВХОД В НЕЙРОСЕТЬ 🧠", webAppUrlWithCacheReset)],
                 [Markup.button.url("КАНАЛ ПРОЕКТА 📢", "https://t.me/neural_pulse")]
             ])
         );
     } catch (e) {
-        console.error("Ошибка бота при старте:", e);
+        console.error("[BOT] Ошибка отправки сообщения:", e);
     }
 });
 
 // --- [API ЭНДПОИНТЫ] ---
 app.get('/api/balance/:userId', async (req, res) => {
+    const userId = String(req.params.userId);
     try {
         if (!db) return res.status(503).send("Database not ready");
         
-        const userId = String(req.params.userId);
         const now = Math.floor(Date.now() / 1000);
         let user = await db.get('SELECT * FROM users WHERE id = ?', [userId]);
 
         if (user) {
             const offTime = Math.min(now - (user.last_active || now), 10800);
             const earned = (user.pnl / 3600) * offTime;
+            
+            console.log(`[API] Загрузка для ${userId}: Баланс ${user.balance}, Доход ${earned.toFixed(2)}`);
+            
             res.json({ status: "ok", data: {
                 score: user.balance + earned, 
                 tap_power: user.click_lvl,
@@ -82,12 +99,13 @@ app.get('/api/balance/:userId', async (req, res) => {
                 multiplier: 1
             }});
         } else {
-            // Регистрация нового игрока
+            console.log(`[API] Новый пользователь: ${userId}`);
             await db.run(`INSERT INTO users (id, balance, click_lvl, pnl, energy, max_energy, level, last_active) 
                           VALUES (?, 1000, 1, 0, 1000, 1000, 1, ?)`, [userId, now]);
             res.json({ status: "ok", data: { score: 1000, tap_power: 1, pnl: 0, energy: 1000, max_energy: 1000, level: 1, multiplier: 1 }});
         }
     } catch (e) { 
+        console.error(`![API] Ошибка в /balance/${userId}:`, e.message);
         res.status(500).send(e.message); 
     }
 });
@@ -99,6 +117,7 @@ app.post('/api/save', async (req, res) => {
         if (!d.user_id || d.user_id === "guest") return res.json({status: "ignored"});
 
         const now = Math.floor(Date.now() / 1000);
+        
         await db.run(`UPDATE users SET balance=?, click_lvl=?, pnl=?, energy=?, level=?, last_active=? WHERE id=?`,
             [
                 parseFloat(d.score), 
@@ -112,6 +131,7 @@ app.post('/api/save', async (req, res) => {
         );
         res.json({status: "ok"});
     } catch (e) { 
+        console.error(`![API] Ошибка сохранения для ${req.body.user_id}:`, e.message);
         res.status(500).send(e.message); 
     }
 });
@@ -133,8 +153,6 @@ const PORT = process.env.PORT || 3000;
 async function startServer() {
     try {
         await initDB();
-        
-        // Удаляем вебхуки, чтобы работал Long Polling (важно для Bothost)
         await bot.telegram.deleteWebhook();
         
         server.listen(PORT, '0.0.0.0', () => {
@@ -142,15 +160,14 @@ async function startServer() {
         });
 
         bot.launch();
-        console.log("🤖 Telegram Bot Started");
+        console.log("🤖 Telegram Bot Started and ready for commands");
 
     } catch (err) {
-        console.error("CRITICAL ERROR DURING START:", err);
+        console.error("![CRITICAL] Ошибка при запуске:", err);
     }
 }
 
 startServer();
 
-// Плавная остановка
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
