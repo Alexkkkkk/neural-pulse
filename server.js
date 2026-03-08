@@ -30,18 +30,19 @@ const logger = winston.createLogger({
 
 const app = express();
 
-// --- ВАЖНО: Настройка прокси ДО инициализации лимитера ---
+// --- ВАЖНО: ФИКС ДЛЯ BOTHOST PROXY ---
 app.set('trust proxy', 1); 
 
-// Настройка лимитера с полным отключением валидации заголовков
+const server = http.createServer(app);
+const bot = new Telegraf(API_TOKEN);
+
+// Лимитер (убирает ValidationError и правильно видит IP за прокси)
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 2000, 
     standardHeaders: true,
     legacyHeaders: false,
-    // Убирает ValidationError, сообщая библиотеке, что мы доверяем прокси
     validate: { xForwardedForHeader: false }, 
-    // Явно указываем использовать IP от Express
     keyGenerator: (req) => req.ip, 
     message: { error: "Neural link unstable. Too many requests." }
 });
@@ -77,7 +78,6 @@ function verifyTelegramWebAppData(telegramInitData) {
 const validateUser = (req, res, next) => {
     const initData = req.headers['x-tg-data'];
     if (!initData || !verifyTelegramWebAppData(initData)) {
-        // req.ip теперь будет корректным благодаря trust proxy
         logger.warn(`Unauthorized IP: ${req.ip}`);
         return res.status(403).json({ error: "Invalid Data Signature" });
     }
@@ -115,12 +115,15 @@ async function initDB() {
 app.get('/api/balance/:userId', async (req, res) => {
     const uid = String(req.params.userId);
     try {
+        if (!db) return res.status(503).json({ error: "DB starting..." });
+        
         let userData = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]);
         if (!userData) {
             const now = Math.floor(Date.now() / 1000);
             userData = { id: uid, balance: 100, click_lvl: 1, pnl: 0, energy: 1000, max_energy: 1000, last_active: now };
             await db.run(`INSERT INTO users (id, balance, last_active) VALUES (?, 100, ?)`, [uid, now]);
         }
+        
         const now = Math.floor(Date.now() / 1000);
         const offlineTime = Math.max(0, now - userData.last_active);
         if (offlineTime > 0) {
@@ -128,6 +131,7 @@ app.get('/api/balance/:userId', async (req, res) => {
             userData.energy = Math.min(userData.max_energy, userData.energy + (offlineTime * 1.5));
             userData.last_active = now;
         }
+        
         userCache.set(uid, userData);
         res.json({ status: "ok", data: { ...userData, league: getLeague(userData.balance) } });
     } catch (e) {
@@ -139,24 +143,32 @@ app.get('/api/balance/:userId', async (req, res) => {
 app.post('/api/save', validateUser, async (req, res) => {
     const { user_id, score, energy, click_lvl, pnl } = req.body;
     const uid = String(user_id);
-    let current = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]) || {};
-    const updateData = {
-        ...current,
-        id: uid,
-        balance: score !== undefined ? Number(score) : current.balance,
-        energy: energy !== undefined ? Number(energy) : current.energy,
-        click_lvl: click_lvl !== undefined ? Number(click_lvl) : current.click_lvl,
-        pnl: pnl !== undefined ? Number(pnl) : current.pnl,
-        last_active: Math.floor(Date.now() / 1000)
-    };
-    userCache.set(uid, updateData);
-    saveQueue.add(uid);
-    res.json({ status: "pulse_received", league: getLeague(updateData.balance) });
+    
+    try {
+        if (!db) return res.status(503).json({ error: "DB connection lost" });
+        
+        let current = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]) || {};
+        const updateData = {
+            ...current,
+            id: uid,
+            balance: score !== undefined ? Number(score) : (current.balance || 0),
+            energy: energy !== undefined ? Number(energy) : (current.energy || 1000),
+            click_lvl: click_lvl !== undefined ? Number(click_lvl) : (current.click_lvl || 1),
+            pnl: pnl !== undefined ? Number(pnl) : (current.pnl || 0),
+            last_active: Math.floor(Date.now() / 1000)
+        };
+        
+        userCache.set(uid, updateData);
+        saveQueue.add(uid);
+        res.json({ status: "pulse_received", league: getLeague(updateData.balance) });
+    } catch (e) {
+        res.status(500).json({ error: "Save process failed" });
+    }
 });
 
 // --- [6. СИНХРОНИЗАЦИЯ] ---
 async function flushToDisk() {
-    if (saveQueue.size === 0) return;
+    if (saveQueue.size === 0 || !db) return;
     const ids = Array.from(saveQueue);
     saveQueue.clear();
     try {
@@ -181,6 +193,7 @@ bot.start(async (ctx) => {
     const uid = String(ctx.from.id);
     const refId = ctx.startPayload;
     try {
+        if (!db) return ctx.reply("Система загружается, подождите секунду...");
         const existing = await db.get('SELECT id FROM users WHERE id = ?', [uid]);
         if (!existing) {
             const now = Math.floor(Date.now()/1000);
@@ -199,17 +212,24 @@ bot.start(async (ctx) => {
 // --- [8. ЗАПУСК] ---
 async function start() {
     await initDB();
-    const serverInst = http.createServer(app);
     const PORT = process.env.PORT || 3000;
-    serverInst.listen(PORT, '0.0.0.0', () => logger.info(`CORE ONLINE: PORT ${PORT}`));
-    bot.launch({ dropPendingUpdates: true });
+    
+    // Запуск сервера
+    server.listen(PORT, '0.0.0.0', () => logger.info(`CORE ONLINE: PORT ${PORT}`));
+    
+    // Запуск бота
+    bot.launch({ dropPendingUpdates: true })
+        .then(() => logger.info("Telegram Bot: OK"))
+        .catch(err => logger.error("Bot fail: " + err.message));
 
     const shutdown = async () => {
+        logger.info("Shutdown signal... Saving everything!");
         await flushToDisk();
         process.exit(0);
     };
+    
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
 }
 
-start().catch(e => logger.error("Crash: " + e.message));
+start().catch(e => logger.error("Fatal Crash: " + e.message));
