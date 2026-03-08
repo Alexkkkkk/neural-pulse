@@ -14,7 +14,7 @@ const { exec } = require('child_process');
 // --- [1. КОНФИГУРАЦИЯ] ---
 const API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM";
 const WEB_APP_URL = "https://np.bothost.ru"; 
-const ADMIN_ID = "636603814"; // <-- Вставь сюда свой числовой ID (узнать можно в @userinfobot)
+const ADMIN_ID = "636603814"; // Твой ID
 
 const logger = winston.createLogger({
     level: 'info',
@@ -24,7 +24,6 @@ const logger = winston.createLogger({
     ),
     transports: [
         new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
-        new winston.transports.File({ filename: 'logs/combined.log' }),
         new winston.transports.Console({
             format: winston.format.combine(winston.format.colorize(), winston.format.simple())
         })
@@ -33,19 +32,19 @@ const logger = winston.createLogger({
 
 const app = express();
 
-// --- ВАЖНОЕ ИСПРАВЛЕНИЕ ДЛЯ BOTHOST ---
+// --- ФИКС ДЛЯ BOTHOST PROXY ---
 app.set('trust proxy', 1); 
-// --------------------------------------
 
 const server = http.createServer(app);
 const bot = new Telegraf(API_TOKEN);
 
+// Настройка лимитера с отключенной проверкой заголовков (убирает ValidationError)
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 2000, 
     standardHeaders: true,
-    // Настройка для корректного определения IP за прокси
-    validate: { xForwardedForHeader: false }, 
+    legacyHeaders: false,
+    validate: { xForwardedForHeader: false }, // <--- Ключевая строка
     message: { error: "Neural link unstable. Too many requests." }
 });
 
@@ -58,7 +57,7 @@ let db;
 const userCache = new Map();
 const saveQueue = new Set();
 
-// --- [2. БЕЗОПАСНОСТЬ: TELEGRAM AUTH] ---
+// --- [2. БЕЗОПАСНОСТЬ] ---
 function verifyTelegramWebAppData(telegramInitData) {
     if (!telegramInitData) return false;
     try {
@@ -66,16 +65,13 @@ function verifyTelegramWebAppData(telegramInitData) {
         const hash = urlParams.get('hash');
         urlParams.delete('hash');
         urlParams.sort();
-
         let dataCheckString = "";
         for (const [key, value] of urlParams.entries()) {
             dataCheckString += `${key}=${value}\n`;
         }
         dataCheckString = dataCheckString.slice(0, -1);
-
         const secretKey = crypto.createHmac('sha256', 'WebAppData').update(API_TOKEN).digest();
         const hmac = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
-
         return hmac === hash;
     } catch (e) { return false; }
 }
@@ -83,8 +79,7 @@ function verifyTelegramWebAppData(telegramInitData) {
 const validateUser = (req, res, next) => {
     const initData = req.headers['x-tg-data'];
     if (!initData || !verifyTelegramWebAppData(initData)) {
-        // Теперь здесь будет реальный IP пользователя, а не прокси
-        logger.warn(`Unauthorized Access Attempt from IP: ${req.ip}`);
+        logger.warn(`Unauthorized IP: ${req.ip}`);
         return res.status(403).json({ error: "Invalid Data Signature" });
     }
     next();
@@ -131,7 +126,6 @@ app.get('/api/balance/:userId', async (req, res) => {
                 await db.run(`INSERT INTO users (id, balance, last_active) VALUES (?, 100, ?)`, [uid, now]);
             }
         }
-
         const now = Math.floor(Date.now() / 1000);
         const offlineTime = Math.max(0, now - userData.last_active);
         if (offlineTime > 0) {
@@ -139,11 +133,10 @@ app.get('/api/balance/:userId', async (req, res) => {
             userData.energy = Math.min(userData.max_energy, userData.energy + (offlineTime * 1.5));
             userData.last_active = now;
         }
-
         userCache.set(uid, userData);
         res.json({ status: "ok", data: { ...userData, league: getLeague(userData.balance) } });
     } catch (e) {
-        logger.error(`Balance API Error [${uid}]: ${e.message}`);
+        logger.error(`Balance Error: ${e.message}`);
         res.status(500).json({ error: "Sync Error" });
     }
 });
@@ -151,12 +144,7 @@ app.get('/api/balance/:userId', async (req, res) => {
 app.post('/api/save', validateUser, async (req, res) => {
     const { user_id, score, energy, click_lvl, pnl } = req.body;
     const uid = String(user_id);
-    
-    let current = userCache.get(uid);
-    if (!current) {
-        current = await db.get('SELECT * FROM users WHERE id = ?', [uid]) || {};
-    }
-
+    let current = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]) || {};
     const updateData = {
         ...current,
         id: uid,
@@ -166,55 +154,19 @@ app.post('/api/save', validateUser, async (req, res) => {
         pnl: pnl !== undefined ? Number(pnl) : current.pnl,
         last_active: Math.floor(Date.now() / 1000)
     };
-
     userCache.set(uid, updateData);
     saveQueue.add(uid);
     res.json({ status: "pulse_received", league: getLeague(updateData.balance) });
 });
 
-app.post('/api/upgrade/:type', validateUser, async (req, res) => {
-    const { user_id } = req.body;
-    const type = req.params.type;
-    const uid = String(user_id);
-    let user = userCache.get(uid);
-
-    if (!user) {
-        user = await db.get('SELECT * FROM users WHERE id = ?', [uid]);
-    }
-    if (!user) return res.status(404).json({ error: "Not found" });
-
-    if (type === 'click') {
-        const cost = Math.floor(500 * Math.pow(1.6, user.click_lvl - 1));
-        if (user.balance >= cost) {
-            user.balance -= cost;
-            user.click_lvl += 1;
-        } else return res.status(400).json({ error: "Low balance" });
-    } else if (type === 'mine') {
-        const cost = Math.floor(1000 * Math.pow(1.5, (user.pnl / 100)));
-        if (user.balance >= cost) {
-            user.balance -= cost;
-            user.pnl += 100;
-        } else return res.status(400).json({ error: "Low balance" });
-    }
-
-    userCache.set(uid, user);
-    saveQueue.add(uid);
-    res.json({ status: "ok", balance: user.balance, lvl: user.click_lvl, pnl: user.pnl });
-});
-
 app.get('/api/leaderboard', async (req, res) => {
     try {
         const top = await db.all(`SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10`);
-        res.json({ 
-            status: "ok", 
-            leaderboard: top.map((p, i) => ({ 
-                rank: i+1, id: p.id, balance: Math.floor(p.balance), league: getLeague(p.balance) 
-            })) 
-        });
+        res.json({ status: "ok", leaderboard: top.map((p, i) => ({ rank: i+1, id: p.id, balance: Math.floor(p.balance), league: getLeague(p.balance) })) });
     } catch (e) { res.status(500).json({ error: "Leaderboard fail" }); }
 });
 
-// --- [6. СИНХРОНИЗАЦИЯ: BULK INSERT] ---
+// --- [6. СИНХРОНИЗАЦИЯ] ---
 async function flushToDisk() {
     if (saveQueue.size === 0) return;
     const ids = Array.from(saveQueue);
@@ -236,87 +188,39 @@ async function flushToDisk() {
 }
 setInterval(flushToDisk, 20000);
 
-// --- [7. БОТ И РЕФЕРАЛЫ] ---
-
-bot.command('admin', (ctx) => {
-    if (String(ctx.from.id) !== ADMIN_ID) return;
-    ctx.reply("🛠 <b>NEURAL ADMIN CORE</b>\nСистема управления деплоем.", {
-        parse_mode: 'HTML',
-        ...Markup.inlineKeyboard([
-            [Markup.button.callback("🚀 ЗАПУСТИТЬ DEPLOY.SH", "run_deploy")]
-        ])
-    });
-});
-
-bot.action('run_deploy', async (ctx) => {
-    if (String(ctx.from.id) !== ADMIN_ID) return ctx.answerCbQuery("Доступ запрещен");
-
-    await ctx.answerCbQuery("Запуск протокола обновления...");
-    await ctx.editMessageText("⏳ <b>Процесс обновления запущен...</b>\n<i>Система запрашивает данные из GitHub.</i>", { parse_mode: 'HTML' });
-
-    const deployScriptPath = path.join(__dirname, 'deploy.sh');
-
-    exec(`bash ${deployScriptPath}`, (error, stdout, stderr) => {
-        if (error) {
-            logger.error(`Deploy Error: ${error.message}`);
-            return ctx.editMessageText(`❌ <b>Ошибка деплоя!</b>\n<code>${error.message}</code>`, { parse_mode: 'HTML' });
-        }
-        
-        logger.info("Deploy Success via Bot");
-        const logOutput = stdout.slice(-400);
-        ctx.editMessageText(`✅ <b>СИСТЕМА ОБНОВЛЕНА</b>\n\nЛог:\n<code>...${logOutput}</code>`, { parse_mode: 'HTML' });
-    });
-});
-
+// --- [7. БОТ] ---
 bot.start(async (ctx) => {
     const uid = String(ctx.from.id);
     const refId = ctx.startPayload;
-
     try {
         const existing = await db.get('SELECT id FROM users WHERE id = ?', [uid]);
         if (!existing) {
             const now = Math.floor(Date.now()/1000);
             let startBalance = 100;
-
             if (refId && refId !== uid) {
                 startBalance = 5000;
                 await db.run('UPDATE users SET balance = balance + 10000 WHERE id = ?', [refId]);
-                bot.telegram.sendMessage(refId, "🦾 Ваш реферал в сети! +10,000 токенов.").catch(() => {});
-                ctx.reply("🎁 Бонус 5,000 токенов за переход по ссылке!");
             }
-            await db.run('INSERT INTO users (id, balance, referrer_id, last_active) VALUES (?, ?, ?, ?)', 
-                [uid, startBalance, refId || null, now]);
+            await db.run('INSERT INTO users (id, balance, referrer_id, last_active) VALUES (?, ?, ?, ?)', [uid, startBalance, refId || null, now]);
         }
-    } catch (e) { logger.error("Bot start error: " + e.message); }
+    } catch (e) { logger.error("Bot Error: " + e.message); }
 
-    ctx.replyWithHTML(
-        `🦾 <b>NEURAL PULSE SYSTEM</b>\n\nСистема онлайн. Терминал готов.`,
-        Markup.inlineKeyboard([[Markup.button.webApp("ВХОД В НЕЙРОСЕТЬ 🧠", `${WEB_APP_URL}/?u=${uid}`)]])
-    );
+    ctx.replyWithHTML(`🦾 <b>NEURAL PULSE SYSTEM</b>`, Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", `${WEB_APP_URL}/?u=${uid}`)]]));
 });
-
-bot.catch((err) => logger.error(`Telegraf Error: ${err.message}`));
 
 // --- [8. ЗАПУСК] ---
 async function start() {
     await initDB();
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, '0.0.0.0', () => logger.info(`CORE ONLINE: PORT ${PORT}`));
-    
-    // Безопасный запуск бота для Docker
-    bot.launch({
-        dropPendingUpdates: true 
-    }).then(() => logger.info("Bot: ACTIVE"));
+    bot.launch({ dropPendingUpdates: true });
 
-    const shutdown = async (signal) => {
-        logger.info(`Received ${signal}. Shutdown initiated...`);
-        bot.stop(signal);
+    const shutdown = async () => {
         await flushToDisk();
         process.exit(0);
     };
-
-    process.on('SIGINT', () => shutdown('SIGINT'));
-    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
 }
 
-start().catch(e => logger.error("Main crash: " + e.message));
+start().catch(e => logger.error("Crash: " + e.message));
