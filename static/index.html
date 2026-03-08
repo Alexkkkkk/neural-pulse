@@ -26,7 +26,7 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* --- LOADER SCREEN STYLES --- */
+        /* --- LOADER SCREEN --- */
         #loader-screen {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -49,17 +49,25 @@
             box-shadow: 0 0 30px rgba(188, 19, 254, 0.3);
         }
         .loader-text {
-            color: #fff; font-size: 14px; font-weight: 900; text-transform: uppercase;
-            letter-spacing: 3px; margin-bottom: 10px;
+            color: #fff; font-size: 13px; font-weight: 900; text-transform: uppercase;
+            letter-spacing: 3px; margin-bottom: 10px; min-height: 20px;
         }
-        .loader-percent { color: var(--neon-cyan); font-size: 24px; font-weight: 900; margin-bottom: 20px; }
-        .loader-bar-bg { width: 240px; height: 4px; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 0 auto; overflow: hidden; }
+        .loader-percent { color: var(--neon-cyan); font-size: 24px; font-weight: 900; margin-bottom: 20px; font-family: monospace; }
+        .loader-bar-bg { width: 220px; height: 4px; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 0 auto; overflow: hidden; }
         .loader-bar-fill { width: 0%; height: 100%; background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); transition: width 0.3s ease; }
         @keyframes rotate-ring { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-        /* --- MAIN UI STYLES --- */
+        /* --- UI LAYERS --- */
         #particles-js { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
-        .content-layer { position: relative; z-index: 2; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; padding-top: env(safe-area-inset-top); }
+        
+        .content-layer { 
+            position: relative; z-index: 2; width: 100%; height: 100%; 
+            display: flex; flex-direction: column; align-items: center; 
+            padding-top: env(safe-area-inset-top);
+            transition: transform 1.2s cubic-bezier(0.19, 1, 0.22, 1), opacity 1s ease;
+            transform: scale(0.9); opacity: 0;
+        }
+        .content-layer.active { transform: scale(1); opacity: 1; }
         
         .header-card {
             width: 85%; margin-top: 15px; display: flex; align-items: center; gap: 12px; 
@@ -109,7 +117,7 @@
                     <img src="/static/images/logo.png" style="width: 100%; height: 100%; border-radius: 50%;" onerror="this.src='https://via.placeholder.com/150/bc13fe/fff?text=AI'">
                 </div>
             </div>
-            <div class="loader-text">Loading Neural Network</div>
+            <div class="loader-text">INITIALIZING...</div>
             <div id="loader-percent" class="loader-percent">0%</div>
             <div class="loader-bar-bg">
                 <div id="loader-fill" class="loader-bar-fill"></div>
@@ -125,11 +133,11 @@
             <div style="flex-grow: 1;">
                 <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; color: #aaa;">
                     <span>BRONZE LEAGUE</span>
-                    <span id="rank-id">ID: 0000</span>
+                    <span id="rank-id">ID: ----</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px; margin-top: 4px;">
                     <div style="width: 6px; height: 6px; background: #0f0; border-radius: 50%; box-shadow: 0 0 5px #0f0;"></div>
-                    <span style="font-size: 10px; color: #888;">1,240 ONLINE</span>
+                    <span style="font-size: 10px; color: #888;">NEURAL LINK ACTIVE</span>
                 </div>
             </div>
         </div>
@@ -141,7 +149,7 @@
 
         <div class="main-wrapper">
             <div class="click-area" id="tap-zone">
-                <img src="/static/images/logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/250/bc13fe/fff?text=AI'" alt="Pulse">
+                <img src="/static/images/logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/250/bc13fe/fff?text=AI'">
             </div>
             <div class="side-nav">
                 <div class="side-btn" onclick="showInvite()">INVITE</div>
@@ -178,30 +186,39 @@
             uid: new URLSearchParams(window.location.search).get('u') || tg.initDataUnsafe?.user?.id
         };
 
-        // --- Анимация загрузки ---
         function startLoadingAnimation() {
             let progress = 0;
             const percentEl = document.getElementById('loader-percent');
             const fillEl = document.getElementById('loader-fill');
+            const statusEl = document.querySelector('.loader-text');
+            
+            const statuses = ["SCANNING IDENTITY...", "DECRYPTING LINK...", "ESTABLISHING SYNC...", "ACCESS GRANTED"];
+
             const interval = setInterval(() => {
+                if (progress < 25) statusEl.innerText = statuses[0];
+                else if (progress < 50) statusEl.innerText = statuses[1];
+                else if (progress < 80) statusEl.innerText = statuses[2];
+                else statusEl.innerText = statuses[3];
+
+                if ([30, 65].includes(progress)) tg.HapticFeedback.impactOccurred('medium');
+
                 if (state.loaded && progress >= 100) {
                     clearInterval(interval);
+                    tg.HapticFeedback.notificationOccurred('success');
                     setTimeout(() => {
-                        const loader = document.getElementById('loader-screen');
-                        loader.style.opacity = '0';
-                        setTimeout(() => loader.style.display = 'none', 800);
-                    }, 500);
+                        document.getElementById('loader-screen').style.opacity = '0';
+                        document.querySelector('.content-layer').classList.add('active');
+                        setTimeout(() => document.getElementById('loader-screen').style.display = 'none', 1000);
+                    }, 400);
                     return;
                 }
-                if (progress < 99) progress += Math.floor(Math.random() * 5) + 1;
+                if (progress < 99) progress += Math.floor(Math.random() * 4) + 1;
                 if (progress > 100) progress = 100;
                 percentEl.innerText = `${progress}%`;
                 fillEl.style.width = `${progress}%`;
-            }, 100);
+            }, 75);
         }
-        startLoadingAnimation();
 
-        // --- Частицы ---
         const canvas = document.getElementById('particles-js');
         const ctx = canvas.getContext('2d');
         let particles = [];
@@ -242,12 +259,9 @@
                     state.energy = res.data.energy;
                     state.max_energy = res.data.max_energy;
                     updateUI();
-                    state.loaded = true; // Сигнал анимации загрузки, что данные получены
+                    state.loaded = true;
                 }
-            } catch(e) { 
-                console.error('Load error', e); 
-                state.loaded = true; 
-            }
+            } catch(e) { state.loaded = true; }
         }
 
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
@@ -266,9 +280,8 @@
             }
             updateUI();
             tg.HapticFeedback.impactOccurred('light');
-            const logo = document.getElementById('main-logo');
-            logo.style.transform = 'scale(0.96)';
-            setTimeout(() => logo.style.transform = 'scale(1)', 50);
+            document.getElementById('main-logo').style.transform = 'scale(0.96)';
+            setTimeout(() => document.getElementById('main-logo').style.transform = 'scale(1)', 50);
         });
 
         async function buyUpgrade(type) {
@@ -283,7 +296,7 @@
                 const data = await r.json();
                 if(data.status === 'ok') loadData();
                 else tg.showAlert(data.message);
-            } catch(e) { console.error('Upgrade error', e); }
+            } catch(e) {}
         }
 
         function showInvite() {
@@ -309,6 +322,7 @@
             }).catch(() => {});
         }, 10000);
 
+        startLoadingAnimation();
         initParticles(); drawParticles(); loadData();
     </script>
 </body>
