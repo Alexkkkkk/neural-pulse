@@ -52,11 +52,6 @@
             border: 2px solid rgba(0, 242, 255, 0.1);
         }
 
-        .storm-mode .main-logo {
-            box-shadow: 0 0 70px var(--neon-purple) !important;
-            border-color: var(--neon-purple);
-        }
-
         .score-container { margin-top: 25px; text-align: center; }
         #balance { 
             font-size: 56px; font-weight: 900; 
@@ -77,9 +72,8 @@
             padding: 15px 5px; border-radius: 16px; backdrop-filter: blur(15px);
             text-align: center; font-size: 10px; font-weight: 800; color: #fff;
             text-transform: uppercase; letter-spacing: 1px;
-            transition: 0.2;
+            transition: 0.2s;
         }
-        .nav-btn:active { transform: scale(0.95); background: rgba(255,255,255,0.1); }
 
         .tap-text {
             position: absolute; color: #fff; font-size: 34px; font-weight: 900;
@@ -145,26 +139,25 @@
     </div>
 
     <script>
+        // --- 1. ПЕРВООЧЕРЕДНАЯ ИНИЦИАЛИЗАЦИЯ ---
         const tg = window.Telegram.WebApp;
+        
+        // Перехват ошибок для отладки прямо в Telegram
+        window.onerror = function(msg, url, line) {
+            tg.showAlert(`Ошибка: ${msg}\nЛиния: ${line}`);
+            return false;
+        };
+
+        tg.ready(); // КРИТИЧЕСКИ ВАЖНО: сообщает ТГ, что приложение загружено
         tg.expand();
         tg.setHeaderColor('#050505');
 
         const urlParams = new URLSearchParams(window.location.search);
-        // Получаем UID из URL или из данных телеграма
         const uid = urlParams.get('u') || (tg.initDataUnsafe?.user?.id ? String(tg.initDataUnsafe.user.id) : "guest");
 
-        // Состояние игры (по умолчанию)
-        let state = { 
-            score: 0, 
-            energy: 1000, 
-            max_energy: 1000, 
-            tap_power: 1, 
-            pnl: 0, 
-            level: 1, 
-            multiplier: 1 
-        };
+        let state = { score: 0, energy: 1000, max_energy: 1000, tap_power: 1, pnl: 0, level: 1, multiplier: 1 };
 
-        // Частицы фона
+        // --- 2. ЧАСТИЦЫ ФОНА ---
         const canvas = document.getElementById('particles-js');
         const ctx = canvas.getContext('2d');
         let particles = [];
@@ -198,22 +191,26 @@
             requestAnimationFrame(drawParticles);
         }
 
+        // --- 3. ЗАГРУЗКА ДАННЫХ ---
         async function loadData() {
+            console.log("Загрузка данных для UID:", uid);
             initParticles();
             drawParticles();
+            
             try {
                 const response = await fetch(`/api/balance/${uid}`);
+                if (!response.ok) throw new Error(`Ошибка сервера: ${response.status}`);
+                
                 const res = await response.json();
                 if(res.status === 'ok') {
-                    // Синхронизируем данные сервера с состоянием клиента
-                    state.score = res.data.score;
-                    state.tap_power = res.data.tap_power;
-                    state.pnl = res.data.pnl;
-                    state.energy = res.data.energy;
-                    state.level = res.data.level;
-                    state.max_energy = res.data.max_energy;
+                    state = { ...state, ...res.data };
+                    console.log("Данные успешно загружены");
                 }
-            } catch(e) { console.warn("Working in offline/guest mode"); }
+            } catch(e) { 
+                console.error("Ошибка при загрузке данных:", e);
+                // Если не гость, пробуем еще раз через 2 секунды
+                if(uid !== "guest") setTimeout(loadData, 2000);
+            }
             updateUI();
         }
 
@@ -225,6 +222,7 @@
             document.getElementById('lvl-badge').innerText = state.level;
         }
 
+        // --- 4. ОБРАБОТКА ТАПОВ ---
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
             e.preventDefault();
             const power = state.tap_power * state.multiplier;
@@ -239,7 +237,6 @@
                 state.score += power;
                 state.energy -= power;
                 
-                // Анимация числа
                 const num = document.createElement('div');
                 num.className = 'tap-text';
                 num.innerText = `+${power}`;
@@ -262,7 +259,7 @@
             tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Присоединяйся к моей нейросети и получи 5000 XP!`);
         }
 
-        // Цикл пассивного дохода и регенерации энергии
+        // Доход и регенерация
         setInterval(() => {
             state.score += (state.pnl / 3600);
             if (state.energy < state.max_energy) {
@@ -271,7 +268,7 @@
             updateUI();
         }, 1000);
 
-        // Автосохранение каждые 4 секунды
+        // Сохранение
         setInterval(() => {
             if (uid === "guest") return;
             fetch('/api/save', {
@@ -285,7 +282,7 @@
                     energy: state.energy,
                     level: state.level
                 })
-            });
+            }).catch(err => console.error("Ошибка автосохранения:", err));
         }, 4000);
 
         window.addEventListener('resize', initParticles);
