@@ -9,12 +9,11 @@ const cors = require('cors');
 const { Telegraf, Markup } = require('telegraf');
 const rateLimit = require('express-rate-limit');
 const winston = require('winston');
-const { exec } = require('child_process');
 
 // --- [1. КОНФИГУРАЦИЯ] ---
 const API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM";
 const WEB_APP_URL = "https://np.bothost.ru"; 
-const ADMIN_ID = "636603814"; // Твой ID
+const ADMIN_ID = "636603814"; 
 
 const logger = winston.createLogger({
     level: 'info',
@@ -23,7 +22,6 @@ const logger = winston.createLogger({
         winston.format.printf(({ timestamp, level, message }) => `[${timestamp}] ${level.toUpperCase()}: ${message}`)
     ),
     transports: [
-        new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
         new winston.transports.Console({
             format: winston.format.combine(winston.format.colorize(), winston.format.simple())
         })
@@ -32,19 +30,19 @@ const logger = winston.createLogger({
 
 const app = express();
 
-// --- ФИКС ДЛЯ BOTHOST PROXY ---
+// --- ВАЖНО: Настройка прокси ДО инициализации лимитера ---
 app.set('trust proxy', 1); 
 
-const server = http.createServer(app);
-const bot = new Telegraf(API_TOKEN);
-
-// Настройка лимитера с отключенной проверкой заголовков (убирает ValidationError)
+// Настройка лимитера с полным отключением валидации заголовков
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 2000, 
     standardHeaders: true,
     legacyHeaders: false,
-    validate: { xForwardedForHeader: false }, // <--- Ключевая строка
+    // Убирает ValidationError, сообщая библиотеке, что мы доверяем прокси
+    validate: { xForwardedForHeader: false }, 
+    // Явно указываем использовать IP от Express
+    keyGenerator: (req) => req.ip, 
     message: { error: "Neural link unstable. Too many requests." }
 });
 
@@ -79,6 +77,7 @@ function verifyTelegramWebAppData(telegramInitData) {
 const validateUser = (req, res, next) => {
     const initData = req.headers['x-tg-data'];
     if (!initData || !verifyTelegramWebAppData(initData)) {
+        // req.ip теперь будет корректным благодаря trust proxy
         logger.warn(`Unauthorized IP: ${req.ip}`);
         return res.status(403).json({ error: "Invalid Data Signature" });
     }
@@ -98,8 +97,7 @@ function getLeague(balance) {
 async function initDB() {
     const dataDir = path.join(__dirname, 'data');
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-    if (!fs.existsSync('logs')) fs.mkdirSync('logs');
-
+    
     db = await open({ filename: path.join(dataDir, 'game.db'), driver: sqlite3.Database });
     await db.exec(`
         PRAGMA journal_mode = WAL;
@@ -117,14 +115,11 @@ async function initDB() {
 app.get('/api/balance/:userId', async (req, res) => {
     const uid = String(req.params.userId);
     try {
-        let userData = userCache.get(uid);
+        let userData = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]);
         if (!userData) {
-            userData = await db.get('SELECT * FROM users WHERE id = ?', [uid]);
-            if (!userData) {
-                const now = Math.floor(Date.now() / 1000);
-                userData = { id: uid, balance: 100, click_lvl: 1, pnl: 0, energy: 1000, max_energy: 1000, last_active: now };
-                await db.run(`INSERT INTO users (id, balance, last_active) VALUES (?, 100, ?)`, [uid, now]);
-            }
+            const now = Math.floor(Date.now() / 1000);
+            userData = { id: uid, balance: 100, click_lvl: 1, pnl: 0, energy: 1000, max_energy: 1000, last_active: now };
+            await db.run(`INSERT INTO users (id, balance, last_active) VALUES (?, 100, ?)`, [uid, now]);
         }
         const now = Math.floor(Date.now() / 1000);
         const offlineTime = Math.max(0, now - userData.last_active);
@@ -157,13 +152,6 @@ app.post('/api/save', validateUser, async (req, res) => {
     userCache.set(uid, updateData);
     saveQueue.add(uid);
     res.json({ status: "pulse_received", league: getLeague(updateData.balance) });
-});
-
-app.get('/api/leaderboard', async (req, res) => {
-    try {
-        const top = await db.all(`SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10`);
-        res.json({ status: "ok", leaderboard: top.map((p, i) => ({ rank: i+1, id: p.id, balance: Math.floor(p.balance), league: getLeague(p.balance) })) });
-    } catch (e) { res.status(500).json({ error: "Leaderboard fail" }); }
 });
 
 // --- [6. СИНХРОНИЗАЦИЯ] ---
@@ -211,8 +199,9 @@ bot.start(async (ctx) => {
 // --- [8. ЗАПУСК] ---
 async function start() {
     await initDB();
+    const serverInst = http.createServer(app);
     const PORT = process.env.PORT || 3000;
-    server.listen(PORT, '0.0.0.0', () => logger.info(`CORE ONLINE: PORT ${PORT}`));
+    serverInst.listen(PORT, '0.0.0.0', () => logger.info(`CORE ONLINE: PORT ${PORT}`));
     bot.launch({ dropPendingUpdates: true });
 
     const shutdown = async () => {
