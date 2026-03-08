@@ -10,7 +10,7 @@ const { Telegraf, Markup } = require('telegraf');
 const rateLimit = require('express-rate-limit');
 const winston = require('winston');
 
-// --- [1. КОНФИГУРАЦИЯ И ЛОГИРОВАНИЕ] ---
+// --- [1. КОНФИГУРАЦИЯ] ---
 const API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM";
 const WEB_APP_URL = "https://np.bothost.ru"; 
 
@@ -33,11 +33,10 @@ const app = express();
 const server = http.createServer(app);
 const bot = new Telegraf(API_TOKEN);
 
-// Лимит запросов (защита от DDOS)
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 500, // Увеличил, так как кликер шлет много запросов
-    message: { error: "Too many requests" }
+    max: 1000, // Увеличил лимит для активных игроков
+    message: { error: "Neural link unstable. Too many requests." }
 });
 
 app.use(cors());
@@ -49,7 +48,7 @@ let db;
 const userCache = new Map();
 const saveQueue = new Set();
 
-// --- [2. БЕЗОПАСНОСТЬ: ПРОВЕРКА ДАННЫХ TELEGRAM] ---
+// --- [2. БЕЗОПАСНОСТЬ] ---
 function verifyTelegramWebAppData(telegramInitData) {
     if (!telegramInitData) return false;
     try {
@@ -68,15 +67,13 @@ function verifyTelegramWebAppData(telegramInitData) {
         const hmac = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
 
         return hmac === hash;
-    } catch (e) {
-        return false;
-    }
+    } catch (e) { return false; }
 }
 
 const validateUser = (req, res, next) => {
     const initData = req.headers['x-tg-data'];
     if (!initData || !verifyTelegramWebAppData(initData)) {
-        logger.warn(`Unauthorized attempt from IP: ${req.ip}`);
+        logger.warn(`Unauthorized IP: ${req.ip}`);
         return res.status(403).json({ error: "Invalid Data Signature" });
     }
     next();
@@ -102,26 +99,19 @@ async function initDB() {
         PRAGMA journal_mode = WAL;
         PRAGMA synchronous = NORMAL;
         CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY, 
-            balance REAL DEFAULT 0, 
-            click_lvl INTEGER DEFAULT 1,
-            pnl REAL DEFAULT 0, 
-            energy REAL DEFAULT 1000, 
-            max_energy INTEGER DEFAULT 1000,
-            last_active INTEGER, 
-            referrer_id TEXT
+            id TEXT PRIMARY KEY, balance REAL DEFAULT 0, click_lvl INTEGER DEFAULT 1,
+            pnl REAL DEFAULT 0, energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000,
+            last_active INTEGER, referrer_id TEXT
         );
     `);
-    logger.info("Neural Core DB: ONLINE (WAL Mode)");
+    logger.info("Neural Core DB: ONLINE");
 }
 
 // --- [5. API] ---
-
 app.get('/api/balance/:userId', async (req, res) => {
     const uid = String(req.params.userId);
     try {
         let userData = userCache.get(uid);
-        
         if (!userData) {
             userData = await db.get('SELECT * FROM users WHERE id = ?', [uid]);
             if (!userData) {
@@ -133,8 +123,6 @@ app.get('/api/balance/:userId', async (req, res) => {
 
         const now = Math.floor(Date.now() / 1000);
         const offlineTime = Math.max(0, now - userData.last_active);
-        
-        // Начисление за время отсутствия
         if (offlineTime > 0) {
             userData.balance += (userData.pnl / 3600) * offlineTime;
             userData.energy = Math.min(userData.max_energy, userData.energy + (offlineTime * 1.5));
@@ -149,10 +137,15 @@ app.get('/api/balance/:userId', async (req, res) => {
     }
 });
 
-app.post('/api/save', validateUser, (req, res) => {
+app.post('/api/save', validateUser, async (req, res) => {
     const { user_id, score, energy, click_lvl, pnl } = req.body;
     const uid = String(user_id);
-    const current = userCache.get(uid) || {};
+    
+    // Получаем текущие данные (из кэша или БД)
+    let current = userCache.get(uid);
+    if (!current) {
+        current = await db.get('SELECT * FROM users WHERE id = ?', [uid]) || {};
+    }
 
     const updateData = {
         ...current,
@@ -177,21 +170,18 @@ app.post('/api/upgrade/:type', validateUser, async (req, res) => {
 
     if (!user) return res.status(404).json({ error: "Not found" });
 
-    let cost = 0;
     if (type === 'click') {
-        cost = Math.floor(500 * Math.pow(1.6, user.click_lvl - 1));
+        const cost = Math.floor(500 * Math.pow(1.6, user.click_lvl - 1));
         if (user.balance >= cost) {
             user.balance -= cost;
             user.click_lvl += 1;
         } else return res.status(400).json({ error: "Low balance" });
     } else if (type === 'mine') {
-        cost = Math.floor(1000 * Math.pow(1.5, (user.pnl / 100)));
+        const cost = Math.floor(1000 * Math.pow(1.5, (user.pnl / 100)));
         if (user.balance >= cost) {
             user.balance -= cost;
             user.pnl += 100;
         } else return res.status(400).json({ error: "Low balance" });
-    } else {
-        return res.status(400).json({ error: "Unknown upgrade type" });
     }
 
     userCache.set(uid, user);
@@ -205,33 +195,27 @@ app.get('/api/leaderboard', async (req, res) => {
         res.json({ 
             status: "ok", 
             leaderboard: top.map((p, i) => ({ 
-                rank: i+1, 
-                id: p.id, 
-                balance: Math.floor(p.balance), 
-                league: getLeague(p.balance) 
+                rank: i+1, id: p.id, balance: Math.floor(p.balance), league: getLeague(p.balance) 
             })) 
         });
     } catch (e) { res.status(500).json({ error: "Leaderboard fail" }); }
 });
 
-// --- [6. СИНХРОНИЗАЦИЯ С ДИСКОМ] ---
+// --- [6. СИНХРОНИЗАЦИЯ] ---
 async function flushToDisk() {
     if (saveQueue.size === 0) return;
     const ids = Array.from(saveQueue);
     saveQueue.clear();
-
     try {
         await db.run('BEGIN TRANSACTION');
-        const stmt = await db.prepare(`
-            UPDATE users SET balance=?, energy=?, click_lvl=?, pnl=?, last_active=? WHERE id=?
-        `);
+        const stmt = await db.prepare(`UPDATE users SET balance=?, energy=?, click_lvl=?, pnl=?, last_active=? WHERE id=?`);
         for (const id of ids) {
             const d = userCache.get(id);
             if (d) await stmt.run(d.balance, d.energy, d.click_lvl, d.pnl, d.last_active, id);
         }
         await stmt.finalize();
         await db.run('COMMIT');
-        logger.info(`💾 Synced ${ids.length} agents to disk.`);
+        logger.info(`💾 Synced ${ids.length} agents.`);
     } catch (e) {
         if (db) await db.run('ROLLBACK');
         logger.error("Sync Error: " + e.message);
@@ -256,28 +240,27 @@ bot.start(async (ctx) => {
                 bot.telegram.sendMessage(refId, "🦾 Ваш реферал в сети! +10,000 токенов.").catch(() => {});
                 ctx.reply("🎁 Бонус 5,000 токенов за переход по ссылке!");
             }
-
             await db.run('INSERT INTO users (id, balance, referrer_id, last_active) VALUES (?, ?, ?, ?)', 
                 [uid, startBalance, refId || null, now]);
         }
     } catch (e) { logger.error("Bot start error: " + e.message); }
 
     ctx.replyWithHTML(
-        `🦾 <b>NEURAL PULSE SYSTEM</b>\n\nСистема онлайн. Терминал готов к работе.`,
+        `🦾 <b>NEURAL PULSE SYSTEM</b>\n\nСистема онлайн. Терминал готов.`,
         Markup.inlineKeyboard([[Markup.button.webApp("ВХОД В НЕЙРОСЕТЬ 🧠", `${WEB_APP_URL}/?u=${uid}`)]])
     );
 });
+
+bot.catch((err) => logger.error(`Telegraf Error: ${err.message}`));
 
 // --- [8. ЗАПУСК] ---
 async function start() {
     await initDB();
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, '0.0.0.0', () => logger.info(`CORE ONLINE: PORT ${PORT}`));
-    
-    bot.launch().then(() => logger.info("Telegram Bot: ACTIVE"));
+    bot.launch().then(() => logger.info("Bot: ACTIVE"));
 
     process.on('SIGINT', async () => {
-        logger.info("Shutdown initiated...");
         await flushToDisk();
         process.exit();
     });
