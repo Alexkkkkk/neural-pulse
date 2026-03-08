@@ -1,76 +1,90 @@
-import asyncio, logging, os
-import aiosqlite, uvicorn
-from pathlib import Path
-from fastapi import FastAPI, Request
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, ORJSONResponse
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
-from contextlib import asynccontextmanager
+const express = require('express');
+const path = require('path');
+const { open } = require('sqlite');
+const sqlite3 = require('sqlite3');
+const { Telegraf, Markup } = require('telegraf');
 
-# Импорт твоей логики из папок
-from src.controllers.userController import db_syncer, USER_CACHE
-from src.routes.api import get_balance_logic, LAST_SAVE
+const app = express();
+app.use(express.json());
+app.use('/static', express.static(path.join(__dirname, 'static')));
 
-BASE_DIR = Path(__file__).parent.resolve()
-DB_PATH = BASE_DIR / "data" / "game.db" # Путь к папке data
-STATIC_DIR = BASE_DIR / "static"
-API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM"
-WEB_APP_URL = "https://np.bothost.ru"
+const API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM";
+const bot = new Telegraf(API_TOKEN);
+const WEB_APP_URL = "https://np.bothost.ru";
 
-bot = Bot(token=API_TOKEN)
-db_conn = None
+let db;
+let userCache = new Map();
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global db_conn
-    os.makedirs(BASE_DIR / "data", exist_ok=True)
-    db_conn = await aiosqlite.connect(DB_PATH)
-    await db_conn.execute("PRAGMA journal_mode=WAL")
-    await db_conn.execute("""CREATE TABLE IF NOT EXISTS users (
+// --- [ИНИЦИАЛИЗАЦИЯ БД] ---
+async function initDB() {
+    db = await open({
+        filename: path.join(__dirname, 'data', 'game.db'),
+        driver: sqlite3.Database
+    });
+    await db.exec(`CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY, balance REAL, click_lvl INTEGER, 
         pnl REAL DEFAULT 0, energy REAL, max_energy INTEGER, 
-        level INTEGER DEFAULT 1, last_active INTEGER)""")
-    await db_conn.commit()
+        level INTEGER DEFAULT 1, last_active INTEGER)`);
+    console.log("💾 SQLite Ready");
+}
 
-    asyncio.create_task(db_syncer(db_conn))
-    dp = Dispatcher()
-
-    @dp.message(Command("start"))
-    async def start(m: types.Message):
-        uid = str(m.from_user.id)
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="ВХОД В НЕЙРОСЕТЬ 🧠", web_app=WebAppInfo(url=f"{WEB_APP_URL}/?u={uid}"))]
+// --- [ЛОГИКА БОТА] ---
+bot.start((ctx) => {
+    const uid = ctx.from.id;
+    ctx.replyWithHTML("🦾 <b>Neural Pulse: Протокол Запущен</b>", 
+        Markup.inlineKeyboard([
+            [Markup.button.webApp("ВХОД В НЕЙРОСЕТЬ 🧠", `${WEB_APP_URL}/?u=${uid}`)],
+            [Markup.button.url("СООБЩЕСТВО 👥", "https://t.me/neural_pulse")]
         ])
-        await m.answer(f"🦾 <b>Neural Pulse: Протокол Запущен</b>", reply_markup=kb, parse_mode="HTML")
+    );
+});
 
-    polling_task = asyncio.create_task(dp.start_polling(bot))
-    yield
-    polling_task.cancel()
-    await db_conn.close()
+// --- [API ЭНДПОИНТЫ] ---
+app.get('/api/balance/:userId', async (req, res) => {
+    const userId = req.params.userId;
+    const now = Math.floor(Date.now() / 1000);
+    let user = await db.get('SELECT * FROM users WHERE id = ?', [userId]);
 
-app = FastAPI(lifespan=lifespan, default_response_class=ORJSONResponse)
+    if (!user) {
+        user = { id: userId, balance: 1000, click_lvl: 1, pnl: 0, energy: 1000, max_energy: 1000, level: 1, last_active: now };
+        await db.run('INSERT INTO users VALUES (?,?,?,?,?,?,?,?)', Object.values(user));
+    }
 
-@app.get("/api/balance/{user_id}")
-async def get_bal(user_id: str):
-    return await get_balance_logic(user_id, db_conn, aiosqlite)
+    const offTime = Math.min(now - (user.last_active || now), 10800);
+    const earned = (user.pnl / 3600) * offTime;
 
-@app.post("/api/save")
-async def save_state(request: Request):
-    data = await request.json()
-    uid = str(data.get("user_id"))
-    now = time.time()
-    if now - LAST_SAVE.get(uid, 0) < 0.4: return {"status": "fast"}
-    LAST_SAVE[uid] = now
-    USER_CACHE[uid] = {"data": data}
-    return {"status": "ok"}
+    res.json({ status: "ok", data: {
+        score: user.balance + earned, tap_power: user.click_lvl,
+        pnl: user.pnl, energy: user.energy, level: user.level,
+        max_energy: user.max_energy
+    }});
+});
 
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+app.post('/api/save', (req, res) => {
+    const data = req.body;
+    if (data.user_id && data.user_id !== "guest") {
+        userCache.set(data.user_id, data);
+    }
+    res.json({ status: "ok" });
+});
 
-@app.get("/")
-async def index():
-    return FileResponse(STATIC_DIR / "index.html")
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'static', 'index.html')));
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+// --- [СИНХРОНИЗАЦИЯ] ---
+setInterval(async () => {
+    if (userCache.size === 0) return;
+    const now = Math.floor(Date.now() / 1000);
+    for (let [uid, d] of userCache) {
+        await db.run(`UPDATE users SET balance=?, click_lvl=?, pnl=?, energy=?, level=?, last_active=? WHERE id=?`,
+            [d.score, d.tap_power, d.pnl, d.energy, d.level, now, uid]);
+    }
+    console.log(`💾 Synced ${userCache.size} users`);
+    userCache.clear();
+}, 15000);
+
+// --- [ЗАПУСК] ---
+const PORT = 3000;
+initDB().then(() => {
+    app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server on port ${PORT}`));
+    bot.launch();
+});
