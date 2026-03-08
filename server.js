@@ -19,21 +19,29 @@ app.use(express.json());
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
 let db;
-// Очередь для пакетного сохранения (InMemory Cache)
 const saveQueue = new Map();
+
+// --- [СИСТЕМА УМНОГО ЛОГИРОВАНИЯ] ---
+const logger = {
+    info: (msg, data = '') => console.log(`[${new Date().toISOString()}] 🟦 INFO: ${msg}`, data),
+    success: (msg, data = '') => console.log(`[${new Date().toISOString()}] 🟩 SUCCESS: ${msg}`, data),
+    warn: (msg, data = '') => console.warn(`[${new Date().toISOString()}] 🟧 WARN: ${msg}`, data),
+    error: (msg, err = '') => console.error(`[${new Date().toISOString()}] 🟥 ERROR: ${msg}`, err),
+    debug: (msg, data = '') => console.debug(`[${new Date().toISOString()}] 🟪 DEBUG: ${msg}`, data)
+};
 
 // --- [ИНИЦИАЛИЗАЦИЯ БД] ---
 async function initDB() {
     try {
+        logger.info("Попытка инициализации базы данных...");
         db = await open({
             filename: path.join(__dirname, 'data', 'game.db'),
             driver: sqlite3.Database
         });
         
-        // Оптимизация SQLite для параллельной работы
         await db.run('PRAGMA journal_mode = WAL');
         await db.run('PRAGMA synchronous = NORMAL');
-        await db.run('PRAGMA cache_size = -64000'); // 64MB кэша БД
+        await db.run('PRAGMA cache_size = -64000'); 
 
         await db.exec(`CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY, 
@@ -46,18 +54,25 @@ async function initDB() {
             last_active INTEGER)`);
 
         await db.exec(`CREATE INDEX IF NOT EXISTS idx_user_id ON users (id)`);
-        console.log("💾 Database Optimized for High-Load");
+        logger.success("База данных готова и оптимизирована (WAL Mode ON)");
     } catch (err) {
-        console.error("![DB] Init Error:", err);
+        logger.error("КРИТИЧЕСКАЯ ОШИБКА БД:", err);
     }
 }
 
 // --- [ЛОГИКА ПАКЕТНОГО СОХРАНЕНИЯ] ---
 async function flushQueue() {
-    if (saveQueue.size === 0) return;
+    const count = saveQueue.size;
+    if (count === 0) {
+        logger.debug("Очередь сохранения пуста. Пропуск.");
+        return;
+    }
 
+    const startTime = Date.now();
     const users = Array.from(saveQueue.entries());
     saveQueue.clear();
+
+    logger.info(`Начало пакетного сохранения для ${count} пользователей...`);
 
     try {
         await db.run('BEGIN TRANSACTION');
@@ -74,14 +89,17 @@ async function flushQueue() {
 
         await stmt.finalize();
         await db.run('COMMIT');
-        // Логируем только в режиме отладки, чтобы не забивать диск
+        
+        const duration = Date.now() - startTime;
+        logger.success(`Пакетное сохранение завершено успешно за ${duration}мс`);
     } catch (e) {
         await db.run('ROLLBACK');
-        console.error("![BATCH] Save Error:", e.message);
+        logger.error("ОШИБКА ПАКЕТНОГО СОХРАНЕНИЯ. Откат транзакции!", e.message);
+        // Возвращаем данные обратно в очередь, чтобы не потерять прогресс юзеров
+        users.forEach(([id, d]) => { if(!saveQueue.has(id)) saveQueue.set(id, d); });
     }
 }
 
-// Сброс данных в БД каждые 15 секунд
 setInterval(flushQueue, 15000);
 
 // --- [API ЭНДПОИНТЫ] ---
@@ -89,19 +107,15 @@ setInterval(flushQueue, 15000);
 app.get('/api/balance/:userId', async (req, res) => {
     const userId = String(req.params.userId);
     try {
-        // Сначала проверяем, нет ли данных в очереди (самые свежие)
-        let userData = saveQueue.get(userId);
-        
-        if (!userData) {
-            userData = await db.get('SELECT * FROM users WHERE id = ?', [userId]);
-        }
-
+        let userData = saveQueue.get(userId) || await db.get('SELECT * FROM users WHERE id = ?', [userId]);
         const now = Math.floor(Date.now() / 1000);
 
         if (userData) {
-            const score = userData.balance || userData.score; // Совместимость имен
+            const score = userData.balance || userData.score || 0;
             const offTime = Math.min(now - (userData.last_active || now), 10800);
             const earned = (userData.pnl / 3600) * offTime;
+            
+            logger.debug(`Запрос баланса: ID ${userId}. Начислено офлайн: ${earned.toFixed(2)}`);
             
             res.json({ status: "ok", data: {
                 score: score + earned, 
@@ -113,19 +127,21 @@ app.get('/api/balance/:userId', async (req, res) => {
                 multiplier: 1
             }});
         } else {
-            // Регистрация нового юзера
+            logger.info(`Регистрация нового пользователя: ${userId}`);
             await db.run(`INSERT INTO users (id, balance, click_lvl, pnl, energy, max_energy, level, last_active) 
                           VALUES (?, 1000, 1, 0, 1000, 1000, 1, ?)`, [userId, now]);
             res.json({ status: "ok", data: { score: 1000, tap_power: 1, pnl: 0, energy: 1000, max_energy: 1000, level: 1 }});
         }
-    } catch (e) { res.status(500).json({ error: "DB Error" }); }
+    } catch (e) { 
+        logger.error(`Ошибка API balance для юзера ${userId}:`, e);
+        res.status(500).json({ error: "DB Error" }); 
+    }
 });
 
 app.post('/api/save', (req, res) => {
     const d = req.body;
     if (!d.user_id || d.user_id === "guest") return res.json({status: "ignored"});
 
-    // Мгновенная запись в память (Cache-aside)
     saveQueue.set(String(d.user_id), {
         balance: parseFloat(d.score) || 0,
         click_lvl: parseInt(d.tap_power) || 1,
@@ -138,28 +154,35 @@ app.post('/api/save', (req, res) => {
     res.json({ status: "queued" }); 
 });
 
-// Магазин (оставляем прямой записью для безопасности транзакций покупок)
 app.post('/api/upgrade/mine', async (req, res) => {
     const { user_id } = req.body;
     try {
         const user = await db.get('SELECT balance, pnl FROM users WHERE id = ?', [String(user_id)]);
-        if (!user) return res.status(404).send("User not found");
+        if (!user) {
+            logger.warn(`Попытка покупки MINE несуществующим юзером: ${user_id}`);
+            return res.status(404).send("User not found");
+        }
 
         const currentLvl = Math.floor(user.pnl / 150);
         const cost = Math.floor(1000 * Math.pow(1.6, currentLvl));
 
         if (user.balance >= cost) {
             await db.run('UPDATE users SET balance = balance - ?, pnl = pnl + 150 WHERE id = ?', [cost, String(user_id)]);
-            // Очищаем из очереди, чтобы не затереть старым балансом при следующем батче
             saveQueue.delete(String(user_id)); 
+            logger.success(`ПОКУПКА: Юзер ${user_id} купил MINE (Lvl ${currentLvl + 1}) за ${cost}`);
             res.json({ status: "ok" });
         } else {
+            logger.warn(`ОТКАЗ: Юзеру ${user_id} не хватило ${cost - user.balance} для покупки MINE`);
             res.json({ status: "error", message: "Low balance" });
         }
-    } catch (e) { res.status(500).send(e.message); }
+    } catch (e) { 
+        logger.error(`Ошибка при покупке MINE для ${user_id}:`, e);
+        res.status(500).send(e.message); 
+    }
 });
 
 bot.start((ctx) => {
+    logger.info(`Команда /start от пользователя ${ctx.from.id}`);
     const url = `${WEB_APP_URL}/?u=${ctx.from.id}&v=${Math.random().toString(36).substring(7)}`;
     ctx.replyWithHTML(`🦾 <b>Neural Pulse Active</b>`, Markup.inlineKeyboard([
         [Markup.button.webApp("ВХОД 🧠", url)]
@@ -167,20 +190,27 @@ bot.start((ctx) => {
 });
 
 // --- [ЗАПУСК] ---
+const PORT = process.env.PORT || 3000;
 async function start() {
     await initDB();
     await bot.telegram.deleteWebhook();
-    server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Cluster Node Active on ${PORT}`));
-    bot.launch();
+    server.listen(PORT, '0.0.0.0', () => {
+        logger.success(`🚀 СЕРВЕР ЗАПУЩЕН НА ПОРТУ ${PORT}`);
+        logger.info("Режим работы: High-Load Cluster ready");
+    });
+    bot.launch().then(() => logger.success("🤖 Телеграм-бот успешно запущен"));
 }
 
-const PORT = process.env.PORT || 3000;
 start();
 
-// Обработка корректного завершения (сохраняем кэш перед выходом)
 async function shutdown(signal) {
-    console.log(`[${signal}] Сохранение данных перед выходом...`);
-    await flushQueue();
+    logger.warn(`Получен сигнал ${signal}. Начинаю корректное завершение...`);
+    const count = saveQueue.size;
+    if(count > 0) {
+        logger.info(`Сохраняю ${count} пользователей перед выходом...`);
+        await flushQueue();
+    }
+    logger.success("Все данные спасены. Сервер остановлен.");
     process.exit(0);
 }
 
