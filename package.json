@@ -5,11 +5,15 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "prod": "pm2 start server.js --name neural-pulse",
-    "stop": "pm2 stop neural-pulse",
-    "logs": "pm2 logs neural-pulse",
     "dev": "nodemon server.js",
-    "rebuild": "npm rebuild sqlite3 --build-from-source"
+    "prod": "pm2 start ecosystem.config.js --env production",
+    "stop": "pm2 stop neural-pulse-core",
+    "restart": "pm2 restart neural-pulse-core",
+    "reload": "pm2 reload neural-pulse-core",
+    "logs": "pm2 logs neural-pulse-core",
+    "monit": "pm2 monit",
+    "rebuild": "npm rebuild sqlite3 --build-from-source",
+    "db:vacuum": "sqlite3 data/game.db 'VACUUM;'"
   },
   "dependencies": {
     "express": "^4.18.2",
