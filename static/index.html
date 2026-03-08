@@ -115,7 +115,7 @@
             <div class="loader-logo-wrap">
                 <div class="loader-ring"></div>
                 <div class="loader-logo-img">
-                    <img src="/static/images/logo.png" style="width: 100%; height: 100%; border-radius: 50%;" onerror="this.src='https://via.placeholder.com/150/bc13fe/fff?text=AI'">
+                    <img src="images/logo.png" style="width: 100%; height: 100%; border-radius: 50%;" onerror="this.src='https://via.placeholder.com/150/bc13fe/fff?text=AI'">
                 </div>
             </div>
             <div class="loader-text">INITIALIZING...</div>
@@ -150,7 +150,7 @@
 
         <div class="main-wrapper">
             <div class="click-area" id="tap-zone">
-                <img src="/static/images/logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/250/bc13fe/fff?text=AI'">
+                <img src="images/logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/250/bc13fe/fff?text=AI'">
             </div>
             <div class="side-nav">
                 <div class="side-btn" onclick="showInvite()">INVITE</div>
@@ -187,7 +187,6 @@
             uid: new URLSearchParams(window.location.search).get('u') || tg.initDataUnsafe?.user?.id
         };
 
-        // --- LOADING LOGIC ---
         function startLoadingAnimation() {
             let progress = 0;
             const percentEl = document.getElementById('loader-percent');
@@ -220,7 +219,6 @@
             }, 50);
         }
 
-        // --- PARTICLES ---
         const canvas = document.getElementById('particles-js');
         const ctx = canvas.getContext('2d');
         let particles = [];
@@ -251,9 +249,8 @@
 
         async function loadData() {
             if(!state.uid) { state.loaded = true; return; }
-            
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000); // Тайм-аут 4 сек
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
 
             try {
                 const r = await fetch(`/api/balance/${state.uid}`, { signal: controller.signal });
@@ -264,14 +261,30 @@
                     state.pnl = parseFloat(res.data.pnl || 0);
                     state.energy = parseFloat(res.data.energy || 1000);
                     state.max_energy = parseInt(res.data.max_energy || 1000);
-                    updateUI();
                 }
             } catch(e) {
-                console.warn("Stand-alone mode active");
+                console.warn("API load failed, using local state");
             } finally {
                 clearTimeout(timeoutId);
-                state.loaded = true; // ГАРАНТИЯ: Убираем лоадер при любом исходе
+                state.loaded = true;
+                updateUI();
             }
+        }
+
+        // Автосинхронизация с сервером
+        async function syncData() {
+            if(!state.uid || !state.loaded) return;
+            try {
+                await fetch('/api/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        user_id: state.uid,
+                        score: state.balance,
+                        energy: state.energy
+                    })
+                });
+            } catch(e) { console.error("Sync error"); }
         }
 
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
@@ -296,13 +309,19 @@
 
         async function buyUpgrade(type) {
             if(!state.uid) return;
+            tg.HapticFeedback.impactOccurred('light');
             try {
                 const r = await fetch(type === 'click' ? '/api/upgrade/click' : '/api/upgrade/mine', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ user_id: state.uid })
                 });
-                await loadData();
+                const res = await r.json();
+                if(res.status === 'ok') {
+                    await loadData();
+                } else {
+                    tg.showAlert(res.message || "Not enough tokens!");
+                }
             } catch(e) { tg.showAlert("Server Error"); }
         }
 
@@ -314,9 +333,11 @@
         setInterval(() => {
             if (!state.loaded) return;
             state.balance += (state.pnl / 3600);
-            state.energy = Math.min(state.max_energy, state.energy + 1);
+            state.energy = Math.min(state.max_energy, state.energy + 1.2);
             updateUI();
         }, 1000);
+
+        setInterval(syncData, 10000); // Синхронизация каждые 10 секунд
 
         window.onload = () => {
             startLoadingAnimation();
