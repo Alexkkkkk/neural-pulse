@@ -5,23 +5,29 @@ const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const { Telegraf, Markup } = require('telegraf'); // Добавили Telegraf
+
+// --- [КОНФИГУРАЦИЯ] ---
+const API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM";
+const WEB_APP_URL = "https://np.bothost.ru"; // Твой URL
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
+const bot = new Telegraf(API_TOKEN);
 
 app.use(cors());
 app.use(express.json());
 
-// Раздаем статику: index.html лежит в /static, картинки в /static/images
+// Раздаем статику: index.html лежит в /static
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
 let db;
 
 // --- [ИНИЦИАЛИЗАЦИЯ БД] ---
 async function initDB() {
+    // Убедись, что папка 'data' существует в корне проекта
     db = await open({
-        // Сохраняем в /data, чтобы прогресс не удалялся при обновлении кода
         filename: path.join(__dirname, 'data', 'game.db'),
         driver: sqlite3.Database
     });
@@ -36,6 +42,23 @@ async function initDB() {
         last_active INTEGER)`);
     console.log("💾 Database & Tables Ready");
 }
+
+// --- [ЛОГИКА ТЕЛЕГРАМ БОТА] ---
+bot.start(async (ctx) => {
+    const uid = ctx.from.id;
+    try {
+        // Приветственное сообщение с кнопкой WebApp
+        await ctx.replyWithHTML(
+            `🦾 <b>Neural Pulse: Протокол Запущен</b>\n\nДобро пожаловать в систему, нейро-майнер!`,
+            Markup.inlineKeyboard([
+                [Markup.button.webApp("ВХОД В НЕЙРОСЕТЬ 🧠", `${WEB_APP_URL}/?u=${uid}`)],
+                [Markup.button.url("КАНАЛ ПРОЕКТА 📢", "https://t.me/neural_pulse")]
+            ])
+        );
+    } catch (e) {
+        console.error("Ошибка бота при старте:", e);
+    }
+});
 
 // --- [API ЭНДПОИНТЫ] ---
 app.get('/api/balance/:userId', async (req, res) => {
@@ -59,13 +82,12 @@ app.get('/api/balance/:userId', async (req, res) => {
                 multiplier: 1
             }});
         } else {
-            // Новый пользователь: начальный баланс 1000
+            // Регистрация нового игрока
             await db.run(`INSERT INTO users (id, balance, click_lvl, pnl, energy, max_energy, level, last_active) 
                           VALUES (?, 1000, 1, 0, 1000, 1000, 1, ?)`, [userId, now]);
             res.json({ status: "ok", data: { score: 1000, tap_power: 1, pnl: 0, energy: 1000, max_energy: 1000, level: 1, multiplier: 1 }});
         }
     } catch (e) { 
-        console.error(e);
         res.status(500).send(e.message); 
     }
 });
@@ -77,7 +99,6 @@ app.post('/api/save', async (req, res) => {
         if (!d.user_id || d.user_id === "guest") return res.json({status: "ignored"});
 
         const now = Math.floor(Date.now() / 1000);
-        // Используем parseFloat/parseInt для защиты от некорректных данных
         await db.run(`UPDATE users SET balance=?, click_lvl=?, pnl=?, energy=?, level=?, last_active=? WHERE id=?`,
             [
                 parseFloat(d.score), 
@@ -91,33 +112,45 @@ app.post('/api/save', async (req, res) => {
         );
         res.json({status: "ok"});
     } catch (e) { 
-        console.error("Save error:", e.message);
         res.status(500).send(e.message); 
     }
 });
 
-// Главная точка входа для WebApp
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'static', 'index.html'));
 });
 
 // --- [SOCKETS] ---
 io.on('connection', (socket) => {
-    // Можно добавить лог для отладки
     socket.on('tap', (data) => {
-        // Здесь можно добавить проверку лимитов (анти-чит)
         socket.emit('tap_ack', { ok: true });
     });
 });
 
-// --- [ЗАПУСК] ---
+// --- [ЗАПУСК СЕРВЕРА] ---
 const PORT = process.env.PORT || 3000;
 
-// Сначала инициализируем БД, потом открываем порт
-initDB().then(() => {
-    server.listen(PORT, '0.0.0.0', () => {
-        console.log(`🚀 Neural Pulse running on port ${PORT}`);
-    });
-}).catch(err => {
-    console.error("CRITICAL: Failed to init DB", err);
-});
+async function startServer() {
+    try {
+        await initDB();
+        
+        // Удаляем вебхуки, чтобы работал Long Polling (важно для Bothost)
+        await bot.telegram.deleteWebhook();
+        
+        server.listen(PORT, '0.0.0.0', () => {
+            console.log(`🚀 Neural Pulse running on port ${PORT}`);
+        });
+
+        bot.launch();
+        console.log("🤖 Telegram Bot Started");
+
+    } catch (err) {
+        console.error("CRITICAL ERROR DURING START:", err);
+    }
+}
+
+startServer();
+
+// Плавная остановка
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
