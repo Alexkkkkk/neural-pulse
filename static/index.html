@@ -154,7 +154,7 @@
             </div>
             <div class="side-nav">
                 <div class="side-btn" onclick="showInvite()">INVITE</div>
-                <div class="side-btn" onclick="tg.showAlert('Coming Soon...')">TASKS</div>
+                <div class="side-btn" onclick="tg.showAlert('Daily Tasks coming soon!')">TASKS</div>
                 <div class="side-btn gold" onclick="tg.showAlert('Daily Bonus available in next update!')">BONUS</div>
             </div>
         </div>
@@ -172,7 +172,7 @@
         <div class="bottom-nav">
             <div class="nav-btn" onclick="buyUpgrade('click')">🚀 BOOST</div>
             <div class="nav-btn" onclick="buyUpgrade('mine')">⛏️ MINE</div>
-            <div class="nav-btn" onclick="tg.showAlert('Leaderboard is empty yet!')">📊 STATS</div>
+            <div class="nav-btn" onclick="showLeaderboard()">📊 STATS</div>
         </div>
     </div>
 
@@ -183,7 +183,7 @@
 
         let state = { 
             balance: 0, energy: 1000, max_energy: 1000, 
-            click_lvl: 1, pnl: 0, loaded: false,
+            click_lvl: 1, pnl: 0, league: 'BRONZE LEAGUE', loaded: false,
             uid: new URLSearchParams(window.location.search).get('u') || tg.initDataUnsafe?.user?.id
         };
 
@@ -244,47 +244,58 @@
             document.getElementById('balance').innerText = Math.floor(state.balance).toLocaleString();
             document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
             document.getElementById('energy-fill').style.width = `${(state.energy / state.max_energy) * 100}%`;
+            document.getElementById('league-name').innerText = state.league;
             if(state.uid) document.getElementById('rank-id').innerText = `ID: ${String(state.uid).slice(-6)}`;
         }
 
         async function loadData() {
             if(!state.uid) { state.loaded = true; return; }
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
-
             try {
-                const r = await fetch(`/api/balance/${state.uid}`, { signal: controller.signal });
+                const r = await fetch(`/api/balance/${state.uid}`);
                 const res = await r.json();
                 if(res.status === 'ok') {
-                    state.balance = parseFloat(res.data.balance || 0);
-                    state.click_lvl = parseInt(res.data.click_lvl || 1);
-                    state.pnl = parseFloat(res.data.pnl || 0);
-                    state.energy = parseFloat(res.data.energy || 1000);
-                    state.max_energy = parseInt(res.data.max_energy || 1000);
+                    state.balance = parseFloat(res.data.balance);
+                    state.click_lvl = parseInt(res.data.click_lvl);
+                    state.pnl = parseFloat(res.data.pnl);
+                    state.energy = parseFloat(res.data.energy);
+                    state.max_energy = parseInt(res.data.max_energy);
+                    state.league = res.data.league;
                 }
-            } catch(e) {
-                console.warn("API load failed, using local state");
-            } finally {
-                clearTimeout(timeoutId);
-                state.loaded = true;
-                updateUI();
-            }
+            } catch(e) { console.warn("Sync failed, using offline mode"); }
+            state.loaded = true;
+            updateUI();
         }
 
-        // Автосинхронизация с сервером
         async function syncData() {
             if(!state.uid || !state.loaded) return;
             try {
-                await fetch('/api/save', {
+                const r = await fetch('/api/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         user_id: state.uid,
                         score: state.balance,
-                        energy: state.energy
+                        energy: state.energy,
+                        click_lvl: state.click_lvl,
+                        pnl: state.pnl
                     })
                 });
-            } catch(e) { console.error("Sync error"); }
+                const res = await r.json();
+                if(res.league) state.league = res.league;
+            } catch(e) { console.error("Cloud sync failed"); }
+        }
+
+        async function showLeaderboard() {
+            try {
+                const r = await fetch('/api/leaderboard');
+                const res = await r.json();
+                if(res.status === 'ok') {
+                    let list = res.leaderboard.map(p => 
+                        `${p.rank}. ID: ${String(p.id).slice(-4)} — ${p.balance.toLocaleString()} [${p.league}]`
+                    ).join('\n');
+                    tg.showAlert("🏆 TOP NEURAL AGENTS:\n\n" + (list || "Scanning network..."));
+                }
+            } catch(e) { tg.showAlert("Access denied"); }
         }
 
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
@@ -309,7 +320,6 @@
 
         async function buyUpgrade(type) {
             if(!state.uid) return;
-            tg.HapticFeedback.impactOccurred('light');
             try {
                 const r = await fetch(type === 'click' ? '/api/upgrade/click' : '/api/upgrade/mine', {
                     method: 'POST',
@@ -318,26 +328,30 @@
                 });
                 const res = await r.json();
                 if(res.status === 'ok') {
-                    await loadData();
+                    await loadData(); // Перезагружаем данные для обновления всех параметров
+                    tg.HapticFeedback.notificationOccurred('success');
                 } else {
-                    tg.showAlert(res.message || "Not enough tokens!");
+                    tg.showAlert(res.message || "Insufficient Credits");
                 }
-            } catch(e) { tg.showAlert("Server Error"); }
+            } catch(e) { tg.showAlert("Connection lost"); }
         }
 
         function showInvite() {
             const link = `https://t.me/neural_pulse_bot?start=${state.uid}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join Neural Pulse AI!`);
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join the Neural Pulse Network!`);
         }
 
+        // Игровой цикл (пассивный доход и энергия)
         setInterval(() => {
             if (!state.loaded) return;
             state.balance += (state.pnl / 3600);
-            state.energy = Math.min(state.max_energy, state.energy + 1.2);
+            if (state.energy < state.max_energy) {
+                state.energy = Math.min(state.max_energy, state.energy + 1.5);
+            }
             updateUI();
         }, 1000);
 
-        setInterval(syncData, 10000); // Синхронизация каждые 10 секунд
+        setInterval(syncData, 10000);
 
         window.onload = () => {
             startLoadingAnimation();
