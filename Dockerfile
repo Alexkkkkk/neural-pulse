@@ -1,60 +1,50 @@
 # --- ЭТАП 1: Сборка (Build-stage) ---
 FROM node:18-alpine AS builder
 
-# Установка необходимых инструментов для нативной компиляции
+# Инструменты для сборки нативных модулей (sqlite3)
 RUN apk add --no-cache python3 make g++ gcc libc-dev sqlite-dev
 
 WORKDIR /app
-
-# Копируем конфиги зависимостей
 COPY package*.json ./
 
-# Чистая установка (ci) быстрее и надежнее для продакшена
-# Компилируем sqlite3 и удаляем мусор после сборки
-RUN npm ci --include=dev && \
+# Устанавливаем всё и собираем бинарник sqlite3 специально под Alpine
+RUN npm ci && \
     npm rebuild sqlite3 --build-from-source && \
     npm cache clean --force
 
 # --- ЭТАП 2: Финальный образ (Runtime-stage) ---
 FROM node:18-alpine
 
-# Устанавливаем tini (правильный init для Docker) и библиотеки рантайма
 RUN apk add --no-cache tini libstdc++
 
 WORKDIR /app
 
-# Копируем только node_modules и файлы из сборщика
+# Копируем зависимости и код
 COPY --from=builder /app/node_modules ./node_modules
 COPY . .
 
-# Создаем папку данных и меняем владельца на системного пользователя 'node'
-# Это критично для безопасности при масштабировании
+# Права доступа (обязательно для записи в sqlite)
 RUN mkdir -p /app/data && chown -R node:node /app/data
 
-# Системные настройки для высокой нагрузки
+# Настройки окружения
 ENV NODE_ENV=production
-# Выделяем 4ГБ RAM, если сервер позволяет (на 20 млн юзеров меньше нельзя)
-ENV NODE_OPTIONS="--max-old-space-size=4096 --no-warnings"
-# Увеличиваем лимит http-заголовков (защита от больших кук/запросов)
+# Подстраиваем под реальные ресурсы (лучше оставить 1-2ГБ для начала)
+ENV NODE_OPTIONS="--max-old-space-size=1024 --no-warnings"
 ENV NODE_MAX_HTTP_HEADER_SIZE=16384
 
-# Открываем порт
 EXPOSE 3000
 
-# Устанавливаем PM2 глобально
+# Устанавливаем PM2
 RUN npm install -g pm2 && npm cache clean --force
 
-# Проверка "здоровья" контейнера (Healthcheck)
-# Если сервер не ответит за 5 секунд, Docker его перезапустит
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/api/balance/health', (r) => {if(r.statusCode!==200)process.exit(1)})" || exit 1
+# Healthcheck: стучимся в корень (который точно отдает 200)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/', (r) => {if(r.statusCode!==200)process.exit(1)})" || exit 1
 
-# Используем Tini для управления процессами
 ENTRYPOINT ["/sbin/tini", "--"]
 
-# Запуск под пользователем node (не root!)
 USER node
 
-# Запуск в режиме кластера PM2 (используем все ядра)
-# --exp-backoff-restart-delay - умный перезапуск при сбоях
-CMD ["pm2-runtime", "server.js", "-i", "max", "--exp-backoff-restart-delay", "100"]
+# Запуск: 1 процесс для стабильности SQLite + PM2 для автоперезагрузки
+# Если в будущем перейдешь на PostgreSQL - тогда ставь "-i max"
+CMD ["pm2-runtime", "server.js", "-i", "1", "--exp-backoff-restart-delay", "100"]
