@@ -5,16 +5,20 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "prod": "pm2-runtime start server.js -i 1",
+    "prod": "pm2 start server.js --name neural-pulse",
+    "stop": "pm2 stop neural-pulse",
+    "logs": "pm2 logs neural-pulse",
     "dev": "nodemon server.js",
-    "build:sqlite": "npm rebuild sqlite3 --build-from-source"
+    "rebuild": "npm rebuild sqlite3 --build-from-source"
   },
   "dependencies": {
     "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
     "sqlite3": "^5.1.7",
     "sqlite": "^5.1.1",
     "telegraf": "^4.16.3",
     "cors": "^2.8.5",
+    "winston": "^3.11.0",
     "pm2": "^5.3.1"
   },
   "devDependencies": {
