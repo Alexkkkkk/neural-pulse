@@ -150,12 +150,26 @@
     </div>
 
     <script>
+        // --- [ЛОГИРОВАНИЕ ИНИЦИАЛИЗАЦИИ] ---
         const tg = window.Telegram.WebApp;
+        console.log('--- [FRONTEND DEBUG START] ---');
+        console.log('SDK Version:', tg.version);
+        console.log('Platform:', tg.platform);
+        
         tg.ready();
         tg.expand();
+        
+        // Цвет шапки под дизайн
+        if (tg.setHeaderColor) tg.setHeaderColor('#050505');
 
         const urlParams = new URLSearchParams(window.location.search);
         const uid = urlParams.get('u') || (tg.initDataUnsafe?.user?.id ? String(tg.initDataUnsafe.user.id) : "guest");
+        
+        if (tg.initDataUnsafe?.user) {
+            console.log('✅ User Verified:', tg.initDataUnsafe.user.first_name, 'ID:', uid);
+        } else {
+            console.warn('⚠️ No InitData. Running in Guest Mode or Browser.');
+        }
 
         let state = { score: 0, energy: 1000, max_energy: 1000, tap_power: 1, pnl: 0, level: 1 };
         let lastSavedScore = 0;
@@ -191,6 +205,7 @@
         }
 
         async function loadData() {
+            console.log(`[DATA] Loading for UID: ${uid}...`);
             try {
                 const response = await fetch(`/api/balance/${uid}`);
                 const res = await response.json();
@@ -198,8 +213,12 @@
                     state = { ...state, ...res.data };
                     lastSavedScore = state.score;
                     updateUI();
+                    console.log('[DATA] Load Success:', state);
                 }
-            } catch(e) { setTimeout(loadData, 3000); }
+            } catch(e) { 
+                console.error('[DATA] Load Failed:', e);
+                setTimeout(loadData, 3000); 
+            }
         }
 
         function updateUI() {
@@ -208,7 +227,6 @@
             document.getElementById('energy-fill').style.width = `${(state.energy / state.max_energy) * 100}%`;
             document.getElementById('pnl-info').innerText = `PROFIT: +${Math.floor(state.pnl).toLocaleString()}/HR`;
             
-            // Логика рангов
             let currentRank = RANKS[0];
             let nextRank = RANKS[1];
             for(let i=0; i<RANKS.length; i++) {
@@ -230,23 +248,52 @@
 
         async function buyUpgrade() {
             tg.HapticFeedback.impactOccurred('medium');
-            const res = await fetch('/api/upgrade/click', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ user_id: uid }) });
-            const data = await res.json();
-            if(data.status==='ok') { state.score=data.newBalance; state.tap_power=data.newLvl; updateUI(); }
-            else tg.showAlert(data.message);
+            console.log('[UPGRADE] Click Upgrade Request...');
+            try {
+                const res = await fetch('/api/upgrade/click', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ user_id: uid }) 
+                });
+                const data = await res.json();
+                if(data.status==='ok') { 
+                    state.score=data.newBalance; 
+                    state.tap_power=data.newLvl; 
+                    updateUI();
+                    console.log('[UPGRADE] Click Success. New Lvl:', data.newLvl);
+                } else {
+                    tg.showAlert(data.message);
+                }
+            } catch(e) { console.error('[UPGRADE] Click Error:', e); }
         }
 
         async function buyMine() {
             tg.HapticFeedback.impactOccurred('heavy');
-            const res = await fetch('/api/upgrade/mine', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ user_id: uid }) });
-            const data = await res.json();
-            if(data.status==='ok') { state.score=data.newBalance; state.pnl=data.newPnl; updateUI(); }
-            else tg.showAlert(data.message);
+            console.log('[UPGRADE] Mine Upgrade Request...');
+            try {
+                const res = await fetch('/api/upgrade/mine', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ user_id: uid }) 
+                });
+                const data = await res.json();
+                if(data.status==='ok') { 
+                    state.score=data.newBalance; 
+                    state.pnl=data.newPnl; 
+                    updateUI();
+                    console.log('[UPGRADE] Mine Success. New PNL:', data.newPnl);
+                } else {
+                    tg.showAlert(data.message);
+                }
+            } catch(e) { console.error('[UPGRADE] Mine Error:', e); }
         }
 
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
             e.preventDefault();
-            if (state.energy < state.tap_power) { tg.HapticFeedback.notificationOccurred('error'); return; }
+            if (state.energy < state.tap_power) { 
+                tg.HapticFeedback.notificationOccurred('error'); 
+                return; 
+            }
 
             for(let i=0; i < e.touches.length; i++) {
                 const touch = e.touches[i];
@@ -268,6 +315,7 @@
         });
 
         function showInvite() {
+            console.log('[ACTION] Invite Friend Clicked');
             const link = `https://t.me/neural_pulse_bot?start=${uid}`;
             tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Стань частью Neural Pulse!`);
         }
@@ -279,9 +327,10 @@
             updateUI();
         }, 1000);
 
-        // --- КРИТИЧЕСКОЕ ОБНОВЛЕНИЕ: Сохранение раз в 15 секунд для 20 млн юзеров ---
+        // --- КРИТИЧЕСКОЕ ОБНОВЛЕНИЕ: Сохранение раз в 15 секунд ---
         setInterval(() => {
             if (uid === "guest" || state.score === lastSavedScore) return;
+            console.log(`[SYNC] Syncing progress to server for ID: ${uid}...`);
             lastSavedScore = state.score;
             fetch('/api/save', {
                 method: 'POST',
@@ -290,11 +339,13 @@
                     user_id: uid, score: state.score, tap_power: state.tap_power,
                     pnl: state.pnl, energy: state.energy, level: state.level
                 })
-            });
+            }).then(r => r.json()).then(data => console.log('[SYNC] Response:', data.status))
+              .catch(e => console.error('[SYNC] Error:', e));
         }, 15000);
 
         window.addEventListener('resize', initParticles);
         initParticles(); drawParticles(); loadData();
+        console.log('--- [FRONTEND READY] ---');
     </script>
 </body>
 </html>
