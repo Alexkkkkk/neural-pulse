@@ -3,118 +3,119 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NP Light</title>
+    <title>NP Ultra</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root { --cyan: #00f2ff; --bg: #050505; }
+        :root { --c: #00f2ff; --bg: #050505; }
         body {
-            margin: 0; padding: 0; background: var(--bg); color: white;
-            font-family: sans-serif; overflow: hidden; display: flex;
-            flex-direction: column; align-items: center; height: 100vh; user-select: none;
+            margin: 0; background: var(--bg); color: #fff;
+            font-family: sans-serif; overflow: hidden;
+            display: flex; flex-direction: column; align-items: center; height: 100vh;
         }
-        /* Упрощенный интерфейс без тяжелых градиентов */
-        .header { width: 90%; margin-top: 10px; display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 15px; }
-        .score-container { text-align: center; margin: 20px 0; }
-        #balance { font-size: 48px; font-weight: 900; color: var(--cyan); }
+        /* Упрощаем графику: убираем блюр и частицы */
+        .card { width: 90%; background: #111; border: 1px solid #333; border-radius: 12px; margin-top: 10px; padding: 10px; }
+        #balance { font-size: 50px; font-weight: 900; color: var(--c); margin: 20px 0; text-shadow: 0 0 10px var(--c); }
         
-        /* Главная кнопка - теперь просто круг, загружается мгновенно */
-        .click-area {
-            width: 220px; height: 220px; border-radius: 50%;
-            background: radial-gradient(circle, #00f2ff44 0%, #000 70%);
-            border: 4px solid var(--cyan); display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 0 20px var(--cyan); cursor: pointer;
+        /* Кнопка-тапалка на чистом CSS без картинок */
+        .btn-tap {
+            width: 200px; height: 200px; border-radius: 50%;
+            background: radial-gradient(circle, var(--c) 0%, #000 80%);
+            border: 4px solid var(--c); display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 0 30px rgba(0,242,255,0.3); cursor: pointer; transition: transform 0.05s;
         }
-        .main-logo { width: 150px; filter: drop-shadow(0 0 10px var(--cyan)); }
+        .btn-tap:active { transform: scale(0.92); }
 
-        .energy-section { width: 85%; margin-top: auto; margin-bottom: 20px; }
-        .bar-wrap { width: 100%; height: 10px; background: #222; border-radius: 10px; overflow: hidden; }
-        #energy-fill { height: 100%; background: var(--cyan); width: 100%; }
+        .energy-bar { width: 85%; height: 8px; background: #222; border-radius: 10px; margin-top: auto; margin-bottom: 20px; overflow: hidden; }
+        #fill { height: 100%; background: var(--c); width: 100%; transition: width 0.1s; }
         
-        .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 20px; }
-        .nav-btn { background: #111; border: 1px solid #333; padding: 12px 5px; border-radius: 12px; text-align: center; font-size: 10px; color: #fff; }
+        .nav { width: 95%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-bottom: 15px; }
+        .nav-item { background: #1a1a1a; padding: 12px 2px; border-radius: 10px; text-align: center; font-size: 10px; border: 1px solid #333; }
         
-        .tap-text { position: absolute; color: #fff; font-weight: 900; animation: up 0.5s ease-out forwards; pointer-events: none; }
-        @keyframes up { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-100px); } }
+        .pop { position: absolute; color: #fff; font-weight: 900; pointer-events: none; animation: p 0.4s ease-out forwards; }
+        @keyframes p { to { transform: translateY(-80px); opacity: 0; } }
     </style>
 </head>
 <body>
 
-    <div class="header">
-        <div id="lvl-badge" style="background:var(--cyan); color:#000; padding:5px 10px; border-radius:8px; font-weight:bold;">1</div>
-        <div style="flex:1; font-size:12px;">RANK: <span id="league-name">FAST_MODE</span></div>
+    <div class="card" style="display:flex; justify-content: space-between; align-items: center;">
+        <span id="lvl" style="background:var(--c); color:#000; padding:2px 8px; border-radius:5px; font-weight:bold;">1</span>
+        <span style="font-size:10px; opacity:0.6;">FAST MODE ENABLED</span>
     </div>
 
-    <div class="score-container">
-        <div id="balance">0</div>
-        <div id="pnl-info" style="font-size:12px; opacity:0.7;">PROFIT: +0/HR</div>
+    <div id="balance">0</div>
+    <div id="pnl" style="font-size:12px; color:var(--c); margin-bottom:20px;">PROFIT: +0/H</div>
+
+    <div class="btn-tap" id="tap">
+        <div style="font-size:24px; font-weight:bold; letter-spacing:2px;">PULSE</div>
     </div>
 
-    <div class="click-area" id="tap-zone">
-        <div style="font-size:40px; font-weight:bold;">PULSE</div>
+    <div class="energy-bar"><div id="fill"></div></div>
+
+    <div class="nav">
+        <div class="nav-item" onclick="act('click')">BOOST</div>
+        <div class="nav-item" onclick="act('mine')">MINE</div>
+        <div class="nav-item" onclick="tg.openTelegramLink('https://t.me/share/url?url=t.me/your_bot')">FRIENDS</div>
     </div>
 
-    <div class="energy-section">
-        <div style="display:flex; justify-content:space-between; font-size:10px; margin-bottom:4px;">
-            <span>ENERGY</span> <span id="energy-text">1000/1000</span>
-        </div>
-        <div class="bar-wrap"><div id="energy-fill"></div></div>
-    </div>
+<script>
+    const tg = window.Telegram.WebApp;
+    tg.ready(); tg.expand();
 
-    <div class="bottom-nav">
-        <div class="nav-btn" onclick="buy('click')">BOOST</div>
-        <div class="nav-btn" onclick="buy('mine')">MINE</div>
-        <div class="nav-btn" onclick="tg.openTelegramLink('https://t.me/share/url?url=...')">FRIENDS</div>
-    </div>
+    // Начальное состояние (загружается мгновенно, не ждет сервер)
+    let s = { b: 0, e: 1000, m: 1000, t: 1, p: 0, uid: tg.initDataUnsafe?.user?.id || "guest" };
 
-    <script>
-        const tg = window.Telegram.WebApp;
-        tg.ready(); tg.expand();
+    function ui() {
+        document.getElementById('balance').innerText = Math.floor(s.b).toLocaleString();
+        document.getElementById('fill').style.width = (s.e / s.m * 100) + '%';
+        document.getElementById('pnl').innerText = `PROFIT: +${Math.floor(s.p)}/H`;
+    }
 
-        let state = { score: 0, energy: 1000, max_energy: 1000, tap: 1, pnl: 0 };
-
-        // Мгновенное обновление UI
-        function update() {
-            document.getElementById('balance').innerText = Math.floor(state.score).toLocaleString();
-            document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
-            document.getElementById('energy-fill').style.width = (state.energy/state.max_energy*100) + '%';
+    // Обработка тапа (мгновенная реакция)
+    document.getElementById('tap').ontouchstart = (e) => {
+        e.preventDefault();
+        if (s.e < s.t) return;
+        
+        for(let i=0; i<e.touches.length; i++){
+            s.b += s.t; s.e -= s.t;
+            const p = document.createElement('div');
+            p.className='pop'; p.innerText='+'+s.t;
+            p.style.left=e.touches[i].pageX+'px'; p.style.top=e.touches[i].pageY+'px';
+            document.body.appendChild(p); setTimeout(()=>p.remove(),400);
         }
+        ui();
+        tg.HapticFeedback.impactOccurred('light');
+    };
 
-        // Клик без задержек
-        document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
-            if (state.energy < state.tap) return;
-            state.score += state.tap;
-            state.energy -= state.tap;
-            
-            const t = e.touches[0];
-            const n = document.createElement('div');
-            n.className = 'tap-text'; n.innerText = `+${state.tap}`;
-            n.style.left = t.pageX + 'px'; n.style.top = t.pageY + 'px';
-            document.body.appendChild(n);
-            setTimeout(() => n.remove(), 500);
-            
-            update();
-            tg.HapticFeedback.impactOccurred('light');
-        });
+    // Фоновая регенерация и доход
+    setInterval(() => {
+        s.b += (s.p / 3600);
+        s.e = Math.min(s.m, s.e + 1);
+        ui();
+    }, 1000);
 
-        // Фоновый доход (раз в секунду)
-        setInterval(() => {
-            state.score += (state.pnl / 3600);
-            state.energy = Math.min(state.max_energy, state.energy + 1);
-            update();
-        }, 1000);
+    // Тихая загрузка данных
+    async function load() {
+        try {
+            const res = await fetch('/api/balance/' + s.uid);
+            const d = await res.json();
+            if(d.status === 'ok') {
+                s.b = d.data.score; s.p = d.data.pnl; s.t = d.data.tap_power;
+                ui();
+            }
+        } catch(e) { console.log('Silent fail'); }
+    }
 
-        // Упрощенная загрузка данных (без лишних проверок)
-        async function load() {
-            try {
-                const r = await fetch(`/api/balance/${tg.initDataUnsafe?.user?.id || 'guest'}`);
-                const d = await r.json();
-                if(d.status === 'ok') {
-                    state = {...state, ...d.data};
-                    update();
-                }
-            } catch(e) { console.log("Offline mode"); }
-        }
-        load();
-    </script>
+    // Тихая отправка данных (раз в 15 секунд)
+    setInterval(async () => {
+        if(s.uid === "guest") return;
+        fetch('/api/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ user_id: s.uid, score: s.b, energy: s.e })
+        }).catch(() => {});
+    }, 15000);
+
+    load();
+</script>
 </body>
 </html>
