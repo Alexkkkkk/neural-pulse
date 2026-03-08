@@ -74,7 +74,7 @@ bot.start(async (ctx) => {
 
 // --- [API ЭНДПОИНТЫ] ---
 
-// 1. Получение баланса
+// 1. Получение баланса и расчет офлайн-дохода
 app.get('/api/balance/:userId', async (req, res) => {
     const userId = String(req.params.userId);
     try {
@@ -84,6 +84,7 @@ app.get('/api/balance/:userId', async (req, res) => {
         let user = await db.get('SELECT * FROM users WHERE id = ?', [userId]);
 
         if (user) {
+            // Лимит офлайн дохода — 3 часа (10800 сек)
             const offTime = Math.min(now - (user.last_active || now), 10800);
             const earned = (user.pnl / 3600) * offTime;
             
@@ -115,29 +116,50 @@ app.post('/api/upgrade/click', async (req, res) => {
         if (!db) return res.status(503).send("Database not ready");
         
         const user = await db.get('SELECT balance, click_lvl FROM users WHERE id = ?', [String(user_id)]);
-        if (!user) return res.json({ status: "error", message: "Пользователь не найден" });
+        if (!user) return res.json({ status: "error", message: "User not found" });
 
-        // Стоимость: 500, 750, 1125... (рост в 1.5 раза за уровень)
         const cost = Math.floor(500 * Math.pow(1.5, user.click_lvl - 1));
 
         if (user.balance >= cost) {
             const newBalance = user.balance - cost;
             const newLvl = user.click_lvl + 1;
-            
             await db.run('UPDATE users SET balance = ?, click_lvl = ? WHERE id = ?', [newBalance, newLvl, String(user_id)]);
-            
-            console.log(`[SHOP] ${user_id} купил апгрейд клика. Теперь уровень ${newLvl}`);
             res.json({ status: "ok", newBalance, newLvl });
         } else {
             res.json({ status: "error", message: "Недостаточно нейро-кредитов" });
         }
     } catch (e) {
-        console.error(`![API] Ошибка апгрейда:`, e.message);
         res.status(500).send(e.message);
     }
 });
 
-// 3. Автосохранение
+// 3. Улучшение майнинга (MINE)
+app.post('/api/upgrade/mine', async (req, res) => {
+    const { user_id } = req.body;
+    try {
+        if (!db) return res.status(503).send("Database not ready");
+        
+        const user = await db.get('SELECT balance, pnl FROM users WHERE id = ?', [String(user_id)]);
+        if (!user) return res.json({ status: "error", message: "User not found" });
+
+        const currentMineLvl = Math.floor(user.pnl / 150);
+        const cost = Math.floor(1000 * Math.pow(1.6, currentMineLvl));
+        const pnlBoost = 150; 
+
+        if (user.balance >= cost) {
+            const newBalance = user.balance - cost;
+            const newPnl = user.pnl + pnlBoost;
+            await db.run('UPDATE users SET balance = ?, pnl = ? WHERE id = ?', [newBalance, newPnl, String(user_id)]);
+            res.json({ status: "ok", newBalance, newPnl });
+        } else {
+            res.json({ status: "error", message: "Недостаточно нейро-кредитов" });
+        }
+    } catch (e) {
+        res.status(500).send(e.message);
+    }
+});
+
+// 4. Автосохранение
 app.post('/api/save', async (req, res) => {
     try {
         if (!db) return res.status(503).send("Database not ready");
@@ -159,7 +181,7 @@ app.post('/api/save', async (req, res) => {
         );
         res.json({status: "ok"});
     } catch (e) { 
-        console.error(`![API] Ошибка сохранения для ${req.body.user_id}:`, e.message);
+        console.error(`![API] Ошибка сохранения:`, e.message);
         res.status(500).send(e.message); 
     }
 });
