@@ -15,11 +15,8 @@ const app = express();
 const server = http.createServer(app);
 const bot = new Telegraf(API_TOKEN);
 
-// Настройки безопасности и статики
 app.use(cors());
-app.use(express.json({ limit: '50kb' })); // Увеличил лимит
-
-// Исправлено: если index.html лежит в /static, то корень должен смотреть туда
+app.use(express.json({ limit: '50kb' }));
 app.use(express.static(path.join(__dirname, 'static')));
 
 const logger = {
@@ -68,7 +65,6 @@ async function initDB() {
 
 // --- [API] ---
 
-// Главная точка входа (отдает index.html из статики)
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'static', 'index.html'));
 });
@@ -77,6 +73,7 @@ app.get('/api/balance/:userId', async (req, res) => {
     const uid = String(req.params.userId);
     if (!uid || uid === "undefined" || uid === "null") return res.status(400).send("ID_REQUIRED");
 
+    // Пытаемся взять из кэша
     if (userCache.has(uid)) {
         return res.json({ status: "ok", data: userCache.get(uid), cache: true });
     }
@@ -87,18 +84,13 @@ app.get('/api/balance/:userId', async (req, res) => {
 
         if (!userData) {
             userData = {
-                id: uid, balance: 1000.0, click_lvl: 1, pnl: 0.0,
+                id: uid, balance: 0.0, click_lvl: 1, pnl: 0.0,
                 energy: 1000.0, max_energy: 1000, level: 1, last_active: now
             };
             await db.run(`INSERT INTO users (id, balance, click_lvl, pnl, energy, max_energy, level, last_active) 
                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, 
-                          [uid, 1000, 1, 0, 1000, 1000, 1, now]);
+                          [uid, 0.0, 1, 0.0, 1000.0, 1000, 1, now]);
         }
-        
-        // Приведение типов
-        userData.balance = parseFloat(userData.balance);
-        userData.pnl = parseFloat(userData.pnl);
-        userData.energy = parseFloat(userData.energy);
         
         userCache.set(uid, userData);
         res.json({ status: "ok", data: userData });
@@ -109,18 +101,24 @@ app.get('/api/balance/:userId', async (req, res) => {
 });
 
 app.post('/api/save', (req, res) => {
-    const { user_id, score, energy, tap_power, pnl } = req.body;
+    const { user_id, score, energy, click_lvl, pnl } = req.body; // Имена полей теперь как во фронтенде
     const uid = String(user_id);
     if (!user_id || user_id === "guest" || user_id === "undefined") return res.json({status: "ignored"});
 
     const now = Math.floor(Date.now() / 1000);
+    
+    // Получаем текущие данные из кэша или создаем структуру
+    const current = userCache.get(uid) || {};
+    
     const updateData = {
         id: uid,
-        balance: parseFloat(score) || 0,
-        energy: parseFloat(energy) || 0,
-        click_lvl: parseInt(tap_power) || 1,
-        pnl: parseFloat(pnl) || 0,
-        last_active: now
+        balance: parseFloat(score) ?? (current.balance || 0),
+        energy: parseFloat(energy) ?? (current.energy || 0),
+        click_lvl: parseInt(click_lvl) ?? (current.click_lvl || 1),
+        pnl: parseFloat(pnl) ?? (current.pnl || 0),
+        last_active: now,
+        max_energy: current.max_energy || 1000,
+        level: current.level || 1
     };
 
     userCache.set(uid, updateData);
@@ -128,14 +126,13 @@ app.post('/api/save', (req, res) => {
     res.json({ status: "pulse_received" });
 });
 
-// Апгрейд клика
 app.post('/api/upgrade/click', async (req, res) => {
     const uid = String(req.body.user_id);
     let user = userCache.get(uid);
     
     if (!user) return res.status(404).json({ status: "error", message: "User not found" });
 
-    const cost = Math.floor(500 * Math.pow(1.5, user.click_lvl - 1));
+    const cost = Math.floor(500 * Math.pow(1.6, user.click_lvl - 1));
 
     if (user.balance >= cost) {
         user.balance -= cost;
@@ -148,13 +145,13 @@ app.post('/api/upgrade/click', async (req, res) => {
     }
 });
 
-// Добавлен эндпоинт для пассивного дохода (Mine)
 app.post('/api/upgrade/mine', async (req, res) => {
     const uid = String(req.body.user_id);
     let user = userCache.get(uid);
     if (!user) return res.status(404).json({ status: "error" });
 
-    const cost = Math.floor(1000 * Math.pow(1.7, (user.pnl / 100))); 
+    // Расчет цены на основе текущего PNL (пассивного дохода)
+    const cost = Math.floor(1000 * Math.pow(1.5, (user.pnl / 100))); 
     if (user.balance >= cost) {
         user.balance -= cost;
         user.pnl += 100; 
@@ -181,7 +178,7 @@ async function flushToDisk() {
         }
         await stmt.finalize();
         await db.run('COMMIT');
-        logger.info(`💾 Sync: ${toSaveIds.length} agents updated.`);
+        logger.info(`💾 Sync: ${toSaveIds.length} agents updated to disk.`);
     } catch (e) {
         if (db) await db.run('ROLLBACK');
         logger.error("Disk Write Failure", e);
@@ -191,12 +188,10 @@ setInterval(flushToDisk, 10000);
 
 // --- [BOT] ---
 bot.start((ctx) => {
-    // Убираем v=Date.now, если оно ломает кэширование на бэкенде, 
-    // но оставляем u=ID для инициализации
     const url = `${WEB_APP_URL}/?u=${ctx.from.id}`;
     ctx.replyWithHTML(
-        `🦾 <b>NEURAL PULSE SYSTEM</b>\n\nСистема онлайн. Терминал готов.`,
-        Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", url)]])
+        `🦾 <b>NEURAL PULSE SYSTEM</b>\n\nСистема онлайн. Терминал готов.\n\n<b>ID:</b> <code>${ctx.from.id}</code>`,
+        Markup.inlineKeyboard([[Markup.button.webApp("ВХОД В НЕЙРОСЕТЬ 🧠", url)]])
     );
 });
 
@@ -205,6 +200,13 @@ const PORT = process.env.PORT || 3000;
 async function start() {
     await initDB();
     server.listen(PORT, '0.0.0.0', () => logger.success(`CORE ONLINE: PORT ${PORT}`));
+    
+    // Обработка корректного завершения
+    process.on('SIGINT', async () => {
+        await flushToDisk();
+        process.exit();
+    });
+
     bot.launch();
 }
 
