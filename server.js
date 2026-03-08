@@ -23,15 +23,13 @@ const logger = {
     info: (msg) => console.log(`[${new Date().toLocaleTimeString()}] 🟦 INFO: ${msg}`),
     success: (msg) => console.log(`[${new Date().toLocaleTimeString()}] 🟩 SUCCESS: ${msg}`),
     warn: (msg) => console.log(`[${new Date().toLocaleTimeString()}] 🟧 WARN: ${msg}`),
-    error: (msg, err = '') => console.log(`[${new Date().toLocaleTimeString()}] 🟥 FATAL: ${msg}`, err),
-    api: (method, url, uid) => console.log(`[${new Date().toLocaleTimeString()}] 🌐 ${method} ${url} | ID: ${uid}`)
+    error: (msg, err = '') => console.log(`[${new Date().toLocaleTimeString()}] 🟥 FATAL: ${msg}`, err)
 };
 
 let db;
 const userCache = new Map(); 
 const saveQueue = new Set(); 
 
-// Вспомогательная функция для определения лиги по балансу
 function getLeague(balance) {
     if (balance >= 1000000) return "DIAMOND CORE";
     if (balance >= 500000) return "PLATINUM PULSE";
@@ -74,14 +72,11 @@ async function initDB() {
 
 // --- [API] ---
 
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'static', 'index.html'));
-});
-
-// Получение баланса и расчет оффлайн-дохода
 app.get('/api/balance/:userId', async (req, res) => {
     const uid = String(req.params.userId);
-    if (!uid || uid === "undefined" || uid === "null") return res.status(400).send("ID_REQUIRED");
+    if (!uid || uid === "undefined" || uid === "null" || uid === "guest") {
+        return res.status(400).json({ error: "ID_REQUIRED" });
+    }
 
     try {
         let userData = userCache.get(uid);
@@ -101,17 +96,17 @@ app.get('/api/balance/:userId', async (req, res) => {
         }
 
         const now = Math.floor(Date.now() / 1000);
-        const offlineTime = now - userData.last_active;
+        const offlineTime = Math.max(0, now - userData.last_active);
         
-        // Начисляем пассивный доход (PNL) за время отсутствия (если есть)
-        if (offlineTime > 0 && userData.pnl > 0) {
-            const earned = (userData.pnl / 3600) * offlineTime;
-            userData.balance += earned;
-        }
-
-        // Регенерация энергии (1.5 ед/сек)
-        if (offlineTime > 0 && userData.energy < userData.max_energy) {
-            userData.energy = Math.min(userData.max_energy, userData.energy + (offlineTime * 1.5));
+        if (offlineTime > 0) {
+            // Оффлайн доход
+            if (userData.pnl > 0) {
+                userData.balance += (userData.pnl / 3600) * offlineTime;
+            }
+            // Регенерация энергии
+            if (userData.energy < userData.max_energy) {
+                userData.energy = Math.min(userData.max_energy, userData.energy + (offlineTime * 1.5));
+            }
         }
 
         userData.last_active = now;
@@ -127,19 +122,23 @@ app.get('/api/balance/:userId', async (req, res) => {
     }
 });
 
-// Сохранение состояния
 app.post('/api/save', (req, res) => {
     const { user_id, score, energy, click_lvl, pnl } = req.body;
     const uid = String(user_id);
-    if (!user_id || user_id === "guest" || user_id === "undefined") return res.json({status: "ignored"});
+    
+    if (!user_id || uid === "guest" || uid === "undefined" || uid === "null") {
+        return res.json({ status: "ignored" });
+    }
 
     const current = userCache.get(uid) || {};
+    
+    // Используем проверку на undefined, чтобы 0 не заменялся старым значением
     const updateData = {
         id: uid,
-        balance: parseFloat(score) ?? current.balance,
-        energy: parseFloat(energy) ?? current.energy,
-        click_lvl: parseInt(click_lvl) ?? current.click_lvl,
-        pnl: parseFloat(pnl) ?? current.pnl,
+        balance: score !== undefined ? parseFloat(score) : (current.balance || 0),
+        energy: energy !== undefined ? parseFloat(energy) : (current.energy || 0),
+        click_lvl: click_lvl !== undefined ? parseInt(click_lvl) : (current.click_lvl || 1),
+        pnl: pnl !== undefined ? parseFloat(pnl) : (current.pnl || 0),
         last_active: Math.floor(Date.now() / 1000),
         max_energy: current.max_energy || 1000,
         level: current.level || 1
@@ -150,10 +149,9 @@ app.post('/api/save', (req, res) => {
     res.json({ status: "pulse_received", league: getLeague(updateData.balance) });
 });
 
-// Таблица лидеров
 app.get('/api/leaderboard', async (req, res) => {
     try {
-        await flushToDisk(); // Сбрасываем кэш, чтобы топ был честным
+        await flushToDisk(); 
         const top = await db.all(`SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10`);
         const result = top.map((p, i) => ({
             rank: i + 1,
@@ -167,11 +165,10 @@ app.get('/api/leaderboard', async (req, res) => {
     }
 });
 
-// Улучшение клика
 app.post('/api/upgrade/click', async (req, res) => {
     const uid = String(req.body.user_id);
     let user = userCache.get(uid);
-    if (!user) return res.status(404).json({ status: "error" });
+    if (!user) return res.status(404).json({ status: "error", message: "User not found" });
 
     const cost = Math.floor(500 * Math.pow(1.6, user.click_lvl - 1));
     if (user.balance >= cost) {
@@ -185,11 +182,10 @@ app.post('/api/upgrade/click', async (req, res) => {
     }
 });
 
-// Улучшение пассивного дохода
 app.post('/api/upgrade/mine', async (req, res) => {
     const uid = String(req.body.user_id);
     let user = userCache.get(uid);
-    if (!user) return res.status(404).json({ status: "error" });
+    if (!user) return res.status(404).json({ status: "error", message: "User not found" });
 
     const cost = Math.floor(1000 * Math.pow(1.5, (user.pnl / 100))); 
     if (user.balance >= cost) {
@@ -223,7 +219,7 @@ async function flushToDisk() {
         logger.error("Sync Error", e);
     }
 }
-setInterval(flushToDisk, 15000); // Сохраняем каждые 15 секунд
+setInterval(flushToDisk, 15000);
 
 // --- [BOT] ---
 bot.start((ctx) => {
@@ -241,11 +237,12 @@ async function start() {
     server.listen(PORT, '0.0.0.0', () => logger.success(`CORE ONLINE: PORT ${PORT}`));
     
     process.on('SIGINT', async () => {
+        logger.warn("Shutdown signal received. Saving data...");
         await flushToDisk();
         process.exit();
     });
 
-    bot.launch();
+    bot.launch().catch(err => logger.error("Bot launch failed", err));
 }
 
 start();
