@@ -1,4 +1,32 @@
+# Зависимости
 node_modules/
-data/*.db
-data/*.db-journal
+/dist
+/build
+
+# База данных и локальные данные
+/data/*.db
+/data/*.db-journal
+/data/*.db-wal
+/data/*.sqlite
+
+# Логи PM2 и приложения
+/logs/*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Секреты и настройки окружения
 .env
+.env.local
+.env.production
+/config/local.json
+
+# Docker и системные файлы
+.dockerignore
+.DS_Store
+Thumbs.db
+
+# Временные файлы редакторов
+.vscode/
+.idea/
+*.swp
