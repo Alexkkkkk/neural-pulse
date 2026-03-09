@@ -1,19 +1,18 @@
-# --- ЭТАП 1: Сборка ---
+# --- СТАДИЯ 1: СБОРКА ---
 FROM node:18-alpine AS builder
 
-# Устанавливаем инструменты сборки и Python3
-# Создаем симлинк, чтобы система видела 'python'
+# Устанавливаем инструменты сборки и Python (решает твою ошибку gyp ERR!)
 RUN apk add --no-cache python3 make g++ gcc libc-dev sqlite-dev && \
     ln -sf python3 /usr/bin/python
 
 WORKDIR /app
 COPY package*.json ./
 
-# Устанавливаем зависимости и заставляем sqlite3 компилироваться
+# Устанавливаем зависимости и заставляем sqlite3 скомпилироваться под Alpine
 RUN npm ci --only=production && \
     npm rebuild sqlite3 --build-from-source
 
-# --- ЭТАП 2: Рантайм ---
+# --- СТАДИЯ 2: ЗАПУСК ---
 FROM node:18-alpine
 
 # Для работы скомпилированного sqlite3 нужна библиотека libstdc++
@@ -21,14 +20,14 @@ RUN apk add --no-cache tini libstdc++
 
 WORKDIR /app
 
-# Копируем только готовые node_modules из первого этапа
+# Копируем только готовые модули и код
 COPY --from=builder /app/node_modules ./node_modules
 COPY . .
 
-# Создаем папки для БД и логов
+# Настройка прав для базы данных
 RUN mkdir -p /app/data /app/logs && chown -R node:node /app/data /app/logs
 
-# Глобально ставим PM2
+# Ставим PM2 глобально в финальный образ
 RUN npm install -g pm2
 
 ENV NODE_ENV=production
