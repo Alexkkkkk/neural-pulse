@@ -12,7 +12,7 @@ const winston = require('winston');
 
 // --- [1. КОНФИГУРАЦИЯ] ---
 // Рекомендуется задавать BOT_TOKEN через переменные окружения в панели Bothost
-const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM";
+const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAFnDpiHM7siB9h8XzARhlfzHurzCGQ9sAM";
 const WEB_APP_URL = "https://np.bothost.ru"; 
 
 const logger = winston.createLogger({
