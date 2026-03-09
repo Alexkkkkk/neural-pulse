@@ -6,14 +6,14 @@ module.exports = {
     autorestart: true,
     watch: false,
     
-    // Лимит памяти: PM2 перезапустит бота, если он "потечет" выше 450МБ
+    // Лимит памяти: PM2 перезапустит бота при превышении 450МБ
     max_memory_restart: '450M', 
     
     // Плавный перезапуск при критических ошибках
     exp_backoff_restart_delay: 1000, 
     min_uptime: "15s",
     
-    // Даем 10 секунд на корректное закрытие SQLite (flushToDisk)
+    // Даем 10 секунд на корректное сохранение SQLite перед выключением
     kill_timeout: 10000, 
     wait_ready: false, 
 
@@ -26,13 +26,13 @@ module.exports = {
       PORT: 3000
     },
     
-    // Настройка вывода логов в панель Bothost
+    // Настройка логов для панели Bothost
     error_file: "./logs/error.log",
     out_file: "./logs/combined.log",
     log_date_format: "YYYY-MM-DD HH:mm:ss",
     merge_logs: true,
     
-    // Лимит кучи V8 для Node.js
+    // Ограничение кучи Node.js (V8)
     node_args: "--max-old-space-size=400 --no-warnings"
   }]
 }
