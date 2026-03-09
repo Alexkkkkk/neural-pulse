@@ -174,8 +174,13 @@
         tg.ready();
         tg.expand();
 
-        // Добавляем haptic при запуске
-        if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+        // Позволяет видеть ошибки JS прямо в интерфейсе Telegram
+        window.onerror = function(msg, url, line) {
+            tg.showAlert(`DEBUG ERROR:\n${msg}\nLine: ${line}`);
+        };
+
+        // Автоматически определяем адрес API (на Bothost это обычно тот же домен)
+        const API_BASE = window.location.origin;
 
         let state = { 
             balance: 0, 
@@ -185,6 +190,7 @@
             pnl: 0, 
             loaded: false,
             isDirty: false,
+            // Проверка ID из Telegram или из URL
             uid: tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('u')
         };
 
@@ -194,23 +200,22 @@
             const fillEl = document.getElementById('loader-fill');
 
             const interval = setInterval(() => {
-                // Если данные загрузились, быстро доходим до 100%
                 if (state.loaded && progress < 100) {
-                    progress += 5;
+                    progress += 10; // Ускоряем в конце
                 } else if (!state.loaded && progress < 90) {
-                    progress += Math.random() * 2;
+                    progress += 0.5;
                 }
 
                 if (progress >= 100) {
                     progress = 100;
                     clearInterval(interval);
-                    setTimeout(hideLoader, 500);
+                    setTimeout(hideLoader, 300);
                 }
                 
                 const displayProgress = Math.min(100, Math.floor(progress));
                 percentEl.innerText = `${displayProgress}%`;
                 fillEl.style.width = `${displayProgress}%`;
-            }, 50);
+            }, 30);
         }
 
         function hideLoader() {
@@ -218,7 +223,7 @@
             document.querySelector('.content-layer').classList.add('active');
             setTimeout(() => {
                 document.getElementById('loader-screen').style.display = 'none';
-            }, 850);
+            }, 800);
         }
 
         function updateUI() {
@@ -232,25 +237,27 @@
 
         async function loadData() {
             if(!state.uid) { 
-                console.warn("User ID not found, using guest mode");
-                state.loaded = true; // Разрешаем играть локально для теста
+                console.warn("UID not found, starting as Guest");
+                state.loaded = true;
                 updateUI();
                 return; 
             }
             try {
-                // Добавляем таймаут для fetch, чтобы не висеть вечно
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-                const r = await fetch(`/api/balance/${state.uid}`, { signal: controller.signal });
+                // Прямой запрос к твоему API
+                const r = await fetch(`${API_BASE}/api/balance/${state.uid}`);
                 const res = await r.json();
-                clearTimeout(timeoutId);
 
                 if(res.status === 'ok') {
-                    Object.assign(state, res.data);
+                    // Синхронизируем состояние с сервером
+                    state.balance = res.data.balance;
+                    state.energy = res.data.energy;
+                    state.pnl = res.data.pnl;
+                    state.click_lvl = res.data.click_lvl;
+                    state.max_energy = res.data.max_energy;
                 }
             } catch(e) { 
-                console.error("Load failed, using local state", e);
+                console.error("Fetch error:", e);
+                // Если сервер упал, даем поиграть локально
             } finally {
                 state.loaded = true;
                 updateUI();
@@ -260,14 +267,13 @@
         async function syncData() {
             if(!state.uid || !state.loaded || !state.isDirty) return;
             try {
-                await fetch('/api/save', {
+                await fetch(`${API_BASE}/api/save`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         user_id: state.uid, 
                         score: state.balance,
-                        energy: state.energy,
-                        auth_date: tg.initDataUnsafe?.auth_date // для валидации на бэкенде
+                        energy: state.energy
                     })
                 });
                 state.isDirty = false;
@@ -277,7 +283,6 @@
         const tapZone = document.getElementById('tap-zone');
         const mainLogo = document.getElementById('main-logo');
 
-        // Исправленный обработчик кликов для мультитача
         tapZone.addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (!state.loaded) return;
@@ -293,7 +298,6 @@
                 state.energy -= state.click_lvl;
                 state.isDirty = true;
 
-                // Эффект цифр
                 const num = document.createElement('div');
                 num.className = 'tap-text';
                 num.innerText = `+${state.click_lvl}`;
@@ -305,7 +309,7 @@
                 if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
             }
 
-            mainLogo.style.transform = 'scale(0.92)';
+            mainLogo.style.transform = 'scale(0.95)';
             updateUI();
         }, { passive: false });
 
@@ -313,24 +317,18 @@
             mainLogo.style.transform = 'scale(1)';
         });
 
-        // Игровой цикл
+        // Игровой цикл (каждую секунду)
         setInterval(() => {
             if (!state.loaded) return;
             
-            // Начисляем PnL (делим на 3600 т.к. цикл раз в секунду)
-            if (state.pnl > 0) {
-                state.balance += (state.pnl / 3600);
-                state.isDirty = true;
-            }
-            
-            // Восстановление энергии (+3 в сек)
+            // Восстановление энергии (+3/сек)
             if (state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 3);
+                updateUI();
             }
-            updateUI();
         }, 1000);
 
-        // Синхронизация
+        // Синхронизация с сервером каждые 10 секунд
         setInterval(syncData, 10000);
 
         window.onload = () => {
@@ -345,9 +343,9 @@
 
         function showLeaderboard() {
             tg.showPopup({
-                title: 'Stats',
-                message: `Your Balance: ${Math.floor(state.balance)}\nLevel: ${state.click_lvl}`,
-                buttons: [{type: 'close'}]
+                title: 'Ваша статистика',
+                message: `Баланс: ${Math.floor(state.balance)} NT\nУровень клика: ${state.click_lvl}\nПассивный доход: ${state.pnl}/ч`,
+                buttons: [{type: 'close', text: 'Понятно'}]
             });
         }
     </script>
