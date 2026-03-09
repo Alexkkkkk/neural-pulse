@@ -61,8 +61,9 @@
             padding-top: env(safe-area-inset-top);
             transition: transform 0.6s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.5s ease;
             transform: scale(0.95); opacity: 0;
+            visibility: hidden;
         }
-        .content-layer.active { transform: scale(1); opacity: 1; }
+        .content-layer.active { transform: scale(1); opacity: 1; visibility: visible; }
         
         .header-card {
             width: 85%; margin-top: 15px; display: flex; align-items: center; gap: 12px; 
@@ -133,7 +134,7 @@
             <div class="lvl-icon" id="lvl-display">1</div>
             <div style="flex-grow: 1;">
                 <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; color: #aaa;">
-                    <span id="league-name">SEARCHING LEAGUE...</span>
+                    <span id="league-name">NEURAL LEAGUE</span>
                     <span id="rank-id">ID: ----</span>
                 </div>
                 <div id="pnl-display" class="pnl-badge">PASSIVE: +0/h</div>
@@ -188,12 +189,10 @@
             uid: tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('u')
         };
 
-        // --- ЛОГИКА ЗАГРУЗКИ ---
         function startLoadingAnimation() {
             let progress = 0;
             const percentEl = document.getElementById('loader-percent');
             const fillEl = document.getElementById('loader-fill');
-            const statusEl = document.querySelector('.loader-text');
 
             const interval = setInterval(() => {
                 if (state.loaded && progress >= 100) {
@@ -204,12 +203,12 @@
                     return;
                 }
                 
-                if (progress < 90) progress += Math.floor(Math.random() * 3) + 1;
+                if (progress < 95) progress += Math.floor(Math.random() * 5) + 2;
                 else if (state.loaded) progress = 100;
                 
                 percentEl.innerText = `${progress}%`;
                 fillEl.style.width = `${progress}%`;
-            }, 50);
+            }, 60);
         }
 
         function updateUI() {
@@ -223,29 +222,29 @@
 
         async function loadData() {
             if(!state.uid) { 
-                tg.showAlert("UID not found. Development mode.");
+                console.log("No UID - Demo Mode");
                 state.loaded = true; 
                 return; 
             }
             try {
                 const r = await fetch(`/api/balance/${state.uid}`);
+                if (!r.ok) throw new Error("Server error");
                 const res = await r.json();
                 if(res.status === 'ok') {
-                    // Синхронизируем состояние с сервером (включая начисленный PnL)
                     Object.assign(state, res.data);
-                    state.loaded = true;
                 }
             } catch(e) { 
-                console.error("Load failed", e);
-                document.querySelector('.loader-text').innerText = "CONNECTION ERROR";
+                console.error("Load failed, using local state", e);
+            } finally {
+                state.loaded = true;
+                updateUI();
             }
-            updateUI();
         }
 
         async function syncData() {
             if(!state.uid || !state.loaded || !state.isDirty) return;
             try {
-                await fetch('/api/save', {
+                const response = await fetch('/api/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -254,8 +253,8 @@
                         energy: state.energy
                     })
                 });
-                state.isDirty = false;
-            } catch(e) { console.error("Sync failed"); }
+                if (response.ok) state.isDirty = false;
+            } catch(e) { console.error("Sync silent fail"); }
         }
 
         async function buyUpgrade(type) {
@@ -280,7 +279,6 @@
             } catch(e) { tg.showAlert("API Error"); }
         }
 
-        // --- ТАПЫ ---
         const tapZone = document.getElementById('tap-zone');
         const mainLogo = document.getElementById('main-logo');
 
@@ -312,17 +310,12 @@
             mainLogo.style.transform = 'scale(1)';
         });
 
-        // --- ИГРОВОЙ ЦИКЛ (1 раз в сек) ---
         setInterval(() => {
             if (!state.loaded) return;
-            
-            // Начисляем пассивный доход в реальном времени
             if (state.pnl > 0) {
                 state.balance += (state.pnl / 3600);
                 state.isDirty = true;
             }
-            
-            // Регенерация энергии (+3 в сек)
             if (state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 3);
             }
