@@ -10,7 +10,7 @@ const { Telegraf, Markup } = require('telegraf');
 const winston = require('winston');
 
 // --- [1. КОНФИГУРАЦИЯ] ---
-const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAFnDpiHM7siB9h8XzARhlfzHurzCGQ9sAM";
+const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAGb0-TC4z3uFK2glOUJeU_wHnr27474zzQ";
 const WEB_APP_URL = "https://np.bothost.ru"; 
 
 const logger = winston.createLogger({
