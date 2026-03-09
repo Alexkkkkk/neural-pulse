@@ -9,8 +9,7 @@ const { Telegraf, Markup } = require('telegraf');
 const winston = require('winston');
 
 // --- [1. КОНФИГУРАЦИЯ] ---
-// Рекомендуется задавать токен через панель Bothost (Environment Variables)
-const API_TOKEN = process.env.BOT_TOKEN || "ТВОЙ_ТОКЕН_ТУТ";
+const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAGb0-TC4z3uFK2glOUJeU_wHnr27474zzQ";
 const WEB_APP_URL = "https://np.bothost.ru"; 
 
 const logger = winston.createLogger({
@@ -30,7 +29,7 @@ const bot = new Telegraf(API_TOKEN);
 app.use(cors());
 app.use(express.json());
 
-// Настройка статики
+// Настройка статики: папка static должна быть в корне проекта
 app.use(express.static(path.join(__dirname, 'static')));
 
 let db;
@@ -39,8 +38,7 @@ const saveQueue = new Set();
 
 // --- [2. ИНИЦИАЛИЗАЦИЯ БД] ---
 async function initDB() {
-    // В Docker контейнере используем абсолютный путь, созданный в Dockerfile
-    const dataDir = '/app/data'; 
+    const dataDir = '/app/data'; // Путь внутри Docker контейнера
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
     
     try {
@@ -69,23 +67,28 @@ async function initDB() {
     }
 }
 
-// --- [3. ЛОГИКА ПАССИВНОГО ДОХОДА] ---
-function calculateOfflineEarnings(user) {
+// --- [3. ЛОГИКА ДОХОДА И ЭНЕРГИИ] ---
+function processOffline(user) {
     const now = Math.floor(Date.now() / 1000);
     const lastActive = user.last_active || now;
     const secondsOffline = now - lastActive;
     
-    if (secondsOffline > 5 && user.pnl > 0) {
-        // Ограничение: фарм максимум за 3 часа
-        const effectiveSeconds = Math.min(secondsOffline, 10800); 
-        const earnings = (user.pnl / 3600) * effectiveSeconds;
-        
-        if (earnings > 0.01) {
-            logger.info(`💰 PnL: Юзер ${user.id} +${earnings.toFixed(2)} за ${effectiveSeconds}с`);
-            return Number(earnings);
+    if (secondsOffline > 5) {
+        // 1. Начисляем PnL (макс за 3 часа)
+        if (user.pnl > 0) {
+            const effectiveSeconds = Math.min(secondsOffline, 10800); 
+            const earnings = (user.pnl / 3600) * effectiveSeconds;
+            user.balance += Number(earnings);
         }
+
+        // 2. Восстанавливаем энергию (3 единицы в секунду)
+        const energyRegen = secondsOffline * 3;
+        user.energy = Math.min(user.max_energy, (user.energy || 0) + energyRegen);
+        
+        user.last_active = now;
+        return true;
     }
-    return 0;
+    return false;
 }
 
 // --- [4. API ЭНДПОИНТЫ] ---
@@ -94,16 +97,14 @@ app.get('/api/balance/:userId', async (req, res) => {
     const uid = String(req.params.userId);
     try {
         let user = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]);
-        const now = Math.floor(Date.now() / 1000);
-
+        
         if (!user) {
+            const now = Math.floor(Date.now() / 1000);
             user = { id: uid, balance: 100, click_lvl: 1, pnl: 10, energy: 1000, max_energy: 1000, last_active: now };
             await db.run(`INSERT INTO users (id, balance, pnl, last_active, energy, max_energy, click_lvl) VALUES (?, 100, 10, ?, 1000, 1000, 1)`, [uid, now]);
             logger.info(`🆕 ИГРОК: Создан профиль ${uid}`);
         } else {
-            const offlineIncome = calculateOfflineEarnings(user);
-            user.balance += offlineIncome;
-            user.last_active = now; 
+            processOffline(user);
         }
         
         userCache.set(uid, user);
@@ -119,12 +120,11 @@ app.post('/api/save', async (req, res) => {
     const { user_id, score, energy } = req.body;
     const uid = String(user_id);
     try {
-        let user = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]);
+        let user = userCache.get(uid);
         if (user) {
             user.balance = Number(score);
             user.energy = Number(energy);
             user.last_active = Math.floor(Date.now() / 1000);
-            userCache.set(uid, user);
             saveQueue.add(uid);
             res.json({ status: "ok" });
         } else {
@@ -133,7 +133,7 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).json({ status: "error" }); }
 });
 
-// --- [5. СИНХРОНИЗАЦИЯ С ДИСКОМ] ---
+// --- [5. СИНХРОНИЗАЦИЯ] ---
 async function flushToDisk() {
     if (saveQueue.size === 0) return;
     const ids = Array.from(saveQueue);
@@ -158,21 +158,21 @@ setInterval(flushToDisk, 20000);
 
 // --- [6. БОТ] ---
 bot.start((ctx) => {
-    ctx.replyWithHTML(`🦾 <b>NEURAL PULSE</b>\nПротокол PnL активирован.`, 
+    ctx.replyWithHTML(`🦾 <b>NEURAL PULSE</b>\nПротокол PnL активирован. Твои шахты работают, пока ты спишь.`, 
         Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", `${WEB_APP_URL}/?u=${ctx.from.id}`)]]));
 });
 
-// --- [7. ЗАПУСК И ЗАВЕРШЕНИЕ] ---
+// --- [7. ЗАПУСК] ---
 async function start() {
     await initDB();
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, '0.0.0.0', () => {
         logger.info(`🌐 СЕРВЕР: LIVE на порту ${PORT}`);
     });
-    bot.launch();
+    
+    bot.launch().catch(err => logger.error("🤖 БОТ: Ошибка запуска: " + err.message));
 }
 
-// Graceful Shutdown (важно для Docker/PM2)
 async function shutdown() {
     logger.info("🚀 ЗАВЕРШЕНИЕ: Сохранение данных...");
     await flushToDisk();
