@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
@@ -24,7 +24,7 @@
             height: 100vh;
             user-select: none;
             -webkit-tap-highlight-color: transparent;
-            touch-action: manipulation; /* Защита от двойного тапа/зума */
+            touch-action: none;
         }
 
         /* --- LOADER --- */
@@ -53,7 +53,7 @@
         .loader-bar-fill { width: 0%; height: 100%; background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); transition: width 0.3s; }
         @keyframes rotate-ring { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-        /* --- UI LAYERS --- */
+        /* --- UI --- */
         #particles-js { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
         .content-layer { 
             position: relative; z-index: 2; width: 100%; height: 100%; 
@@ -81,27 +81,26 @@
             border: 1px solid rgba(188, 19, 254, 0.2); padding: 10px 40px; border-radius: 20px;
         }
         .jackpot-label { color: var(--neon-cyan); font-size: 10px; font-weight: 800; letter-spacing: 1px; margin-bottom: 2px; }
-        #balance { font-size: 42px; font-weight: 900; color: #fff; text-shadow: 0 0 20px rgba(255,255,255,0.2); }
+        #balance { font-size: 42px; font-weight: 900; color: #fff; text-shadow: 0 0 20px rgba(255,255,255,0.2); font-variant-numeric: tabular-nums; }
 
         .main-wrapper { position: relative; width: 100%; display: flex; justify-content: center; align-items: center; margin-top: 20px; }
         .click-area { 
             position: relative; width: 280px; height: 280px; 
             display: flex; align-items: center; justify-content: center; 
-            cursor: pointer; touch-action: none; /* Важно для тапа */
+            cursor: pointer;
         }
         .main-logo { 
             width: 240px; height: 240px; border-radius: 50%; 
             box-shadow: 0 0 60px rgba(188, 19, 254, 0.3); 
             transition: transform 0.05s; z-index: 5; object-fit: cover;
-            pointer-events: none; /* Тапаем по зоне, а не по картинке */
+            pointer-events: none;
         }
-        .click-area:active .main-logo { transform: scale(0.95); }
         
         .side-nav { position: absolute; right: 15px; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
-        .side-btn { background: #121212; border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 9px; font-weight: 800; padding: 10px 12px; border-radius: 10px; width: 70px; text-align: center; }
+        .side-btn { background: #121212; border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 9px; font-weight: 800; padding: 10px 12px; border-radius: 10px; width: 70px; text-align: center; cursor: pointer; }
 
         .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: auto; margin-bottom: 30px; }
-        .nav-btn { background: var(--glass); border: 1.5px solid #444; padding: 12px 5px; border-radius: 12px; text-align: center; font-size: 11px; font-weight: 800; color: #fff; }
+        .nav-btn { background: var(--glass); border: 1.5px solid #444; padding: 12px 5px; border-radius: 12px; text-align: center; font-size: 11px; font-weight: 800; color: #fff; cursor: pointer; }
 
         .tap-text { position: absolute; color: #fff; font-size: 32px; font-weight: 900; pointer-events: none; animation: floatUp 0.6s ease-out forwards; z-index: 100; text-shadow: 0 0 10px var(--neon-purple); }
         @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px); } }
@@ -117,9 +116,7 @@
         <div class="loader-container">
             <div class="loader-logo-wrap">
                 <div class="loader-ring"></div>
-                <div class="loader-logo-img">
-                    <img src="images/logo.png" style="width: 100%; height: 100%; border-radius: 50%;" onerror="this.src='https://via.placeholder.com/150/bc13fe/fff?text=AI'">
-                </div>
+                <img src="images/logo.png" style="width: 150px; height: 150px; border-radius: 50%;" onerror="this.src='https://via.placeholder.com/150/bc13fe/fff?text=AI'">
             </div>
             <div class="loader-text">INITIALIZING...</div>
             <div id="loader-percent" class="loader-percent">0%</div>
@@ -181,9 +178,14 @@
         tg.expand();
 
         let state = { 
-            balance: 0, energy: 1000, max_energy: 1000, 
-            click_lvl: 1, pnl: 0, league: 'BRONZE LEAGUE', loaded: false,
-            isDirty: false, // Флаг: были ли изменения для сохранения
+            balance: 0, 
+            energy: 1000, 
+            max_energy: 1000, 
+            click_lvl: 1, 
+            pnl: 0, 
+            league: 'BRONZE LEAGUE', 
+            loaded: false,
+            isDirty: false,
             uid: tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('u')
         };
 
@@ -246,8 +248,11 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'x-tg-data': tg.initData },
                     body: JSON.stringify({
-                        user_id: state.uid, score: state.balance,
-                        energy: state.energy, click_lvl: state.click_lvl, pnl: state.pnl
+                        user_id: state.uid, 
+                        score: state.balance,
+                        energy: state.energy, 
+                        click_lvl: state.click_lvl, 
+                        pnl: state.pnl
                     })
                 });
                 if(r.ok) state.isDirty = false;
@@ -277,14 +282,20 @@
             } catch(e) { tg.showAlert("Connection lost"); }
         }
 
-        document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
-            e.preventDefault();
+        // --- УЛУЧШЕННЫЙ ТАП ---
+        const tapZone = document.getElementById('tap-zone');
+        const mainLogo = document.getElementById('main-logo');
+
+        tapZone.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // Защита от системных жестов
             if (!state.loaded || state.energy < state.click_lvl) {
                 if(state.energy < state.click_lvl) tg.HapticFeedback.notificationOccurred('warning');
                 return;
             }
 
             state.isDirty = true;
+            mainLogo.style.transform = 'scale(0.95)';
+
             for(let i=0; i < e.changedTouches.length; i++) {
                 const touch = e.changedTouches[i];
                 state.balance += state.click_lvl;
@@ -302,6 +313,10 @@
             tg.HapticFeedback.impactOccurred('medium');
         }, { passive: false });
 
+        tapZone.addEventListener('touchend', () => {
+            mainLogo.style.transform = 'scale(1)';
+        });
+
         async function showLeaderboard() {
             try {
                 const r = await fetch('/api/leaderboard');
@@ -315,7 +330,7 @@
 
         function showInvite() {
             const link = `https://t.me/neural_pulse_bot?start=${state.uid}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join me!`);
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join me in Neural Pulse!`);
         }
 
         // --- PARTICLES ---
@@ -340,7 +355,7 @@
             requestAnimationFrame(drawParticles);
         }
 
-        // Loop
+        // Основной цикл
         setInterval(() => {
             if (!state.loaded) return;
             if (state.pnl > 0) {
@@ -348,11 +363,13 @@
                 state.isDirty = true;
             }
             if (state.energy < state.max_energy) {
+                // Плавная регенерация: +1.5 энергии в секунду
                 state.energy = Math.min(state.max_energy, state.energy + 1.5);
             }
             updateUI();
         }, 1000);
 
+        // Синхронизация каждые 10 секунд
         setInterval(syncData, 10000);
 
         window.onload = () => {
@@ -361,6 +378,9 @@
             drawParticles(); 
             loadData();
         };
+
+        // Сохранение при сворачивании
+        window.addEventListener('blur', syncData);
     </script>
 </body>
 </html>
