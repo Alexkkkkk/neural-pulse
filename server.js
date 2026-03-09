@@ -10,7 +10,7 @@ const { Telegraf, Markup } = require('telegraf');
 const rateLimit = require('express-rate-limit');
 const winston = require('winston');
 
-// --- [1. КОНФИГУРАЦИЯ] ---
+// --- [1. КОНФИГУРАЦИЯ И ЛОГГЕР] ---
 const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAFnDpiHM7siB9h8XzARhlfzHurzCGQ9sAM";
 const WEB_APP_URL = "https://np.bothost.ru"; 
 
@@ -23,6 +23,8 @@ const logger = winston.createLogger({
     transports: [new winston.transports.Console()]
 });
 
+logger.info("🛠 СИСТЕМА: Запуск процесса инициализации (Fix Syntax)...");
+
 const app = express();
 app.set('trust proxy', 1);
 const server = http.createServer(app);
@@ -31,9 +33,9 @@ const bot = new Telegraf(API_TOKEN);
 app.use(cors());
 app.use(express.json({ limit: '15kb' }));
 
-// Логируем абсолютно каждый запрос для поиска "дыр"
+// Логируем каждый сетевой запрос
 app.use((req, res, next) => {
-    logger.debug(`📡 СЕТЬ: ${req.method} ${req.url} | Headers: ${JSON.stringify(req.headers['x-tg-data'] ? 'PRESENT' : 'MISSING')}`);
+    logger.debug(`📡 СЕТЬ: ${req.method} ${req.url} от ${req.ip}`);
     next();
 });
 
@@ -43,8 +45,9 @@ let db;
 const userCache = new Map();
 const saveQueue = new Set();
 
-// --- [2. ВЕРИФИКАЦИЯ] ---
+// --- [2. БЕЗОПАСНОСТЬ: ВЕРИФИКАЦИЯ] ---
 function verifyTelegramWebAppData(telegramInitData) {
+    logger.debug("🔐 БЕЗОПАСНОСТЬ: Проверка подписи...");
     if (!telegramInitData) return false;
     try {
         const urlParams = new URLSearchParams(telegramInitData);
@@ -55,13 +58,19 @@ function verifyTelegramWebAppData(telegramInitData) {
         const secretKey = crypto.createHmac('sha256', 'WebAppData').update(API_TOKEN).digest();
         const hmac = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
         return hmac === hash;
-    } catch (e) { return false; }
+    } catch (e) { 
+        logger.error(`❌ БЕЗОПАСНОСТЬ: Ошибка проверки: ${e.message}`);
+        return false; 
+    }
 }
 
 // --- [3. ИНИЦИАЛИЗАЦИЯ БД] ---
 async function initDB() {
     const dataDir = path.join(__dirname, 'data');
-    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+        logger.info("📁 ФАЙЛЫ: Создана директория /data");
+    }
     try {
         db = await open({ filename: path.join(dataDir, 'game.db'), driver: sqlite3.Database });
         await db.exec(`
@@ -77,39 +86,36 @@ async function initDB() {
             );
         `);
         logger.info("🚀 БД: СТАТУС - ONLINE");
-    } catch (err) { logger.error("❌ БД: ОШИБКА: " + err.message); }
+    } catch (err) { 
+        logger.error("❌ БД: КРИТИЧЕСКАЯ ОШИБКА: " + err.message); 
+    }
 }
 
 // --- [4. API ЭНДПОИНТЫ] ---
 
-// Получение баланса
 app.get('/api/balance/:userId', async (req, res) => {
     const uid = String(req.params.userId);
+    logger.debug(`👤 ИГРОК: Запрос данных для UID ${uid}`);
     try {
         let userData = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]);
         if (!userData) {
             const now = Math.floor(Date.now() / 1000);
             userData = { id: uid, balance: 100, click_lvl: 1, pnl: 0, energy: 1000, max_energy: 1000, last_active: now };
             await db.run(`INSERT INTO users (id, balance, last_active) VALUES (?, 100, ?)`, [uid, now]);
-            logger.info(`🆕 ИГРОК: Создан профиль ${uid}`);
+            logger.info(`🆕 ИГРОК: Зарегистрирован новый агент ${uid}`);
         }
         userCache.set(uid, userData);
         res.json({ status: "ok", data: userData });
     } catch (e) {
-        logger.error(`❌ API ERROR (Balance): ${e.message}`);
-        res.status(500).json({ status: "error", message: e.message });
+        logger.error(`❌ API: Ошибка баланса ${uid}: ${e.message}`);
+        res.status(500).json({ status: "error" });
     }
 });
 
-// Сохранение прогресса
 app.post('/api/save', async (req, res) => {
-    const { user_id, score, energy, initData } = req.body;
-    // Проверка подписи (если фронт ее присылает в теле или заголовке)
-    if (initData && !verifyTelegramWebAppData(initData)) {
-        logger.warn(`🛡 SECURITY: Неверная подпись для ${user_id}`);
-    }
-
+    const { user_id, score, energy } = req.body;
     const uid = String(user_id);
+    logger.debug(`📥 API: Сохранение прогресса UID ${uid}`);
     try {
         let current = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]);
         if (current) {
@@ -125,11 +131,10 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).json({ status: "error" }); }
 });
 
-// ДОБАВЛЯЕМ НЕДОСТАЮЩИЙ ЭНДПОИНТ (на который ругались логи)
 app.post('/api/upgrade/click', async (req, res) => {
     const { user_id } = req.body;
     const uid = String(user_id);
-    logger.debug(`🛠 UPGRADE: Запрос на улучшение клика для ${uid}`);
+    logger.debug(`🛠 API: Запрос UPGRADE CLICK для ${uid}`);
     try {
         let user = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]);
         const cost = (user.click_lvl || 1) * 500;
@@ -139,19 +144,24 @@ app.post('/api/upgrade/click', async (req, res) => {
             user.click_lvl = (user.click_lvl || 1) + 1;
             userCache.set(uid, user);
             saveQueue.add(uid);
-            logger.info(`✅ UPGRADE: ${uid} поднял уровень до ${user.click_lvl}`);
+            logger.info(`✅ UPGRADE: UID ${uid} -> LVL ${user.click_lvl}`);
             res.json({ status: "ok", new_lvl: user.click_lvl, new_balance: user.balance });
         } else {
-            res.status(400).json({ status: "error", message: "Insufficient funds" });
+            logger.warn(`⚠️ UPGRADE: У игрока ${uid} недостаточно средств`);
+            res.status(400).json({ status: "error", message: "Low balance" });
         }
     } catch (e) { res.status(500).json({ status: "error" }); }
 });
 
 // --- [5. СИНХРОНИЗАЦИЯ] ---
 async function flushToDisk() {
-    if (saveQueue.size === 0) return;
+    if (saveQueue.size === 0) {
+        logger.debug("⏲ ТАЙМЕР: Очередь пуста.");
+        return;
+    }
     const ids = Array.from(saveQueue);
     saveQueue.clear();
+    logger.info(`💾 ДИСК: Синхронизация ${ids.length} записей...`);
     try {
         await db.run('BEGIN TRANSACTION');
         const stmt = await db.prepare(`UPDATE users SET balance=?, click_lvl=?, energy=?, last_active=? WHERE id=?`);
@@ -161,23 +171,30 @@ async function flushToDisk() {
         }
         await stmt.finalize();
         await db.run('COMMIT');
-        logger.info(`💾 ДИСК: Синхронизировано ${ids.length} чел.`);
+        logger.info(`✅ ДИСК: Успешно записано.`);
     } catch (e) {
         if (db) await db.run('ROLLBACK');
-        logger.error("🛑 ДИСК ERROR: " + e.message);
+        logger.error("🛑 ДИСК: ОШИБКА: " + e.message);
     }
 }
-setInterval(flushToDisk, 20000);
+setInterval(flushToDisk, 30000);
 
-// --- [6. ЗАПУСК] ---
+// --- [6. БОТ] ---
 bot.start((ctx) => {
-    ctx.replyWithHTML(`🦾 <b>NEURAL PULSE</b>\nПротокол готов.`, 
-        Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", `${WEB_APP_URL}/?u=${ctx.from.id}`)]]));
+    const uid = ctx.from.id;
+    logger.info(`🤖 БОТ: /start от ${uid}`);
+    ctx.replyWithHTML(`🦾 <b>NEURAL PULSE</b>\nСистема готова к работе.`, 
+        Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", `${WEB_APP_URL}/?u=${uid}`)]]));
 });
 
+// --- [7. ЗАПУСК] ---
 async function start() {
     await initDB();
-    server.listen(3000, '0.0.0.0', () => logger.info(`🌐 ПОРТ 3000 LIVE` Panchenko Edition));
-    bot.launch();
+    const PORT = 3000;
+    server.listen(PORT, '0.0.0.0', () => {
+        logger.info(`🌐 СЕРВЕР: Запущен на порту ${PORT} | Panchenko Edition`);
+    });
+    bot.launch().then(() => logger.info("🤖 БОТ: Соединение установлено"));
 }
+
 start();
