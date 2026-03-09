@@ -1,20 +1,22 @@
 module.exports = {
   apps: [{
     name: "neural-pulse-core",
-    script: "./server.js",
+    script: "./server.js", 
     instances: 1, 
     autorestart: true,
     watch: false,
-    max_memory_restart: '350M',
+    max_memory_restart: '450M', // Увеличил запас памяти для работы с SQLite
     
-    // Плавный перезапуск при сбоях (чтобы не спамить рестартами)
-    exp_backoff_restart_delay: 100, 
+    // Плавный перезапуск при сбоях (экспоненциальная задержка)
+    exp_backoff_restart_delay: 500, 
     min_uptime: "10s",
     
-    // Даем 5 секунд на выполнение flushToDisk() при выключении
-    kill_timeout: 5000, 
-    wait_ready: true,
-    listen_timeout: 3000,
+    // ВАЖНО: Даем 8 секунд на выполнение flushToDisk() при выключении
+    // Это критично для сохранения баланса игроков в базу данных
+    kill_timeout: 8000, 
+    
+    // ОТКЛЮЧЕНО: так как в server.js нет сигнала готовности
+    wait_ready: false, 
 
     env: {
       NODE_ENV: "development",
@@ -25,9 +27,10 @@ module.exports = {
       PORT: 3000
     },
     
-    // Логирование (убедись, что папка logs существует)
-    error_file: "./logs/pm2-error.log",
-    out_file: "./logs/pm2-out.log",
+    // ЛОГИРОВАНИЕ: На Bothost (Docker) логи должны идти в стандартный поток,
+    // чтобы отображаться во вкладке «Логи работы» в панели управления.
+    error_file: "/dev/stderr",
+    out_file: "/dev/stdout",
     log_date_format: "YYYY-MM-DD HH:mm:ss",
     merge_logs: true
   }]
