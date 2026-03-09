@@ -12,8 +12,6 @@ const winston = require('winston');
 const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAGb0-TC4z3uFK2glOUJeU_wHnr27474zzQ";
 const WEB_APP_URL = "https://np.bothost.ru"; 
 const PORT = process.env.PORT || 3000;
-
-// Фиксируем секретный путь, чтобы он был постоянным
 const SECRET_PATH = `/telegraf/7659a15effe06d8b7c88477cbafce593ca20cefc052d061b5beafae78d9a1cde`;
 
 const logger = winston.createLogger({
@@ -26,24 +24,25 @@ const logger = winston.createLogger({
 });
 
 const app = express();
-app.set('trust proxy', 1);
+app.set('trust proxy', 1); // Обязательно для Bothost
 const server = http.createServer(app);
 const bot = new Telegraf(API_TOKEN);
 
-// --- [2. MIDDLEWARE ПОРЯДОК ВАЖЕН] ---
+// --- [2. ОБРАБОТКА ВЕБХУКА (БЕЗ ПАРСЕРОВ)] ---
 app.use(cors());
 
-// Логирование всех входящих POST запросов для отладки Webhook
+// Логирование входящих запросов
 app.post('*', (req, res, next) => {
-    if (req.url.startsWith('/telegraf')) {
-        logger.debug(`📥 Входящий запрос от Telegram на: ${req.url}`);
+    if (req.url === SECRET_PATH) {
+        logger.debug(`📥 Webhook: Получен POST от Telegram`);
     }
     next();
 });
 
-// ВАЖНО: Вебхук должен идти ДО express.json(), если Telegraf сам парсит тело запроса
+// ВАЖНО: Ставим вебхук ПЕРЕД express.json()
 app.use(bot.webhookCallback(SECRET_PATH));
 
+// Парсеры только для твоих API
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
@@ -66,13 +65,8 @@ async function initDB() {
             PRAGMA journal_mode = WAL;
             PRAGMA synchronous = NORMAL;
             CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY, 
-                balance REAL DEFAULT 0, 
-                click_lvl INTEGER DEFAULT 1,
-                pnl REAL DEFAULT 0, 
-                energy REAL DEFAULT 1000, 
-                max_energy INTEGER DEFAULT 1000,
-                last_active INTEGER
+                id TEXT PRIMARY KEY, balance REAL DEFAULT 0, click_lvl INTEGER DEFAULT 1,
+                pnl REAL DEFAULT 0, energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000, last_active INTEGER
             );
         `);
         logger.info("🚀 БД: СТАТУС - ONLINE");
@@ -91,13 +85,10 @@ function processOffline(user) {
     if (secondsOffline > 5) {
         const pnl = parseFloat(user.pnl) || 0;
         if (pnl > 0) {
-            const effectiveSeconds = Math.min(secondsOffline, 10800); 
-            const earnings = (pnl / 3600) * effectiveSeconds;
+            const earnings = (pnl / 3600) * Math.min(secondsOffline, 10800);
             user.balance = (parseFloat(user.balance) || 0) + earnings;
         }
-        const energyRegen = secondsOffline * 3;
-        const maxEnergy = parseInt(user.max_energy) || 1000;
-        user.energy = Math.min(maxEnergy, (parseFloat(user.energy) || 0) + energyRegen);
+        user.energy = Math.min(parseInt(user.max_energy) || 1000, (parseFloat(user.energy) || 0) + (secondsOffline * 3));
         user.last_active = now;
         return true;
     }
@@ -108,41 +99,29 @@ function processOffline(user) {
 app.get('/api/balance/:userId', async (req, res) => {
     const uid = String(req.params.userId);
     try {
-        let user = userCache.get(uid);
-        if (!user) user = await db.get('SELECT * FROM users WHERE id = ?', [uid]);
-
+        let user = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]);
         if (!user) {
-            const now = Math.floor(Date.now() / 1000);
-            user = { id: uid, balance: 100.0, click_lvl: 1, pnl: 10.0, energy: 1000.0, max_energy: 1000, last_active: now };
+            user = { id: uid, balance: 100.0, click_lvl: 1, pnl: 10.0, energy: 1000.0, max_energy: 1000, last_active: Math.floor(Date.now() / 1000) };
             await db.run(`INSERT INTO users (id, balance, pnl, last_active, energy, max_energy, click_lvl) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
                 [uid, user.balance, user.pnl, user.last_active, user.energy, user.max_energy, user.click_lvl]);
-            logger.info(`🆕 ИГРОК: Создан профиль ${uid}`);
         } else {
             processOffline(user);
         }
-        
         userCache.set(uid, user);
         res.json({ status: "ok", data: user });
-    } catch (e) {
-        res.status(500).json({ status: "error", message: e.message });
-    }
+    } catch (e) { res.status(500).json({ status: "error", message: e.message }); }
 });
 
-app.post('/api/save', async (req, res) => {
+app.post('/api/save', (req, res) => {
     const { user_id, score, energy } = req.body;
-    const uid = String(user_id);
-    try {
-        let user = userCache.get(uid);
-        if (user) {
-            user.balance = parseFloat(score);
-            user.energy = parseFloat(energy);
-            user.last_active = Math.floor(Date.now() / 1000);
-            saveQueue.add(uid);
-            res.json({ status: "ok" });
-        } else {
-            res.status(404).json({ status: "error" });
-        }
-    } catch (e) { res.status(500).json({ status: "error" }); }
+    const user = userCache.get(String(user_id));
+    if (user) {
+        user.balance = parseFloat(score);
+        user.energy = parseFloat(energy);
+        user.last_active = Math.floor(Date.now() / 1000);
+        saveQueue.add(String(user_id));
+        res.json({ status: "ok" });
+    } else { res.status(404).json({ status: "error" }); }
 });
 
 // --- [6. СИНХРОНИЗАЦИЯ] ---
@@ -154,56 +133,45 @@ async function flushToDisk() {
         await db.run('BEGIN TRANSACTION');
         for (const id of ids) {
             const d = userCache.get(id);
-            if (d) await db.run(`UPDATE users SET balance = ?, click_lvl = ?, pnl = ?, energy = ?, last_active = ? WHERE id = ?`,
+            if (d) await db.run(`UPDATE users SET balance=?, click_lvl=?, pnl=?, energy=?, last_active=? WHERE id=?`, 
                 [d.balance, d.click_lvl, d.pnl, d.energy, d.last_active, id]);
         }
         await db.run('COMMIT');
         logger.debug(`💾 ДИСК: Синхронизировано ${ids.length} игроков`);
-    } catch (e) {
-        if (db) await db.run('ROLLBACK');
-        logger.error("🛑 ДИСК: ОШИБКА: " + e.message);
-    }
+    } catch (e) { if (db) await db.run('ROLLBACK'); logger.error("🛑 ДИСК: " + e.message); }
 }
 setInterval(flushToDisk, 20000);
 
 // --- [7. ЛОГИКА БОТА] ---
-bot.start((ctx) => {
-    logger.info(`✅ БОТ: Получена команда /start от ${ctx.from.id}`);
+bot.start(async (ctx) => {
     const uid = ctx.from.id;
+    logger.info(`✅ БОТ: Получена команда /start от ${uid}`);
     const webAppUrlWithParams = `${WEB_APP_URL}/?u=${uid}&v=${Date.now()}`;
     
-    ctx.replyWithHTML(
+    await ctx.replyWithHTML(
         `🦾 <b>NEURAL PULSE</b>\n\nПротокол PnL активирован. Твои шахты работают, пока ты спишь.\n\n<i>Твой ID: ${uid}</i>`, 
         Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", webAppUrlWithParams)]])
-    ).catch(err => logger.error(`❌ Ошибка отправки ответа: ${err.message}`));
+    ).catch(err => logger.error(`❌ Ошибка ответа: ${err.message}`));
 });
 
-// --- [8. ЗАПУСК СЕРВЕРА] ---
+// --- [8. ЗАПУСК] ---
 async function start() {
     await initDB();
-    
     server.listen(PORT, '0.0.0.0', async () => {
         logger.info(`🌐 СЕРВЕР: LIVE на порту ${PORT}`);
-        
         try {
-            // Принудительно ставим вебхук при каждом запуске
-            const webhookFullUrl = `${WEB_APP_URL}${SECRET_PATH}`;
-            await bot.telegram.setWebhook(webhookFullUrl, {
-                drop_pending_updates: true // Очищаем старые «зависшие» нажатия
-            });
-            logger.info(`🤖 БОТ: Webhook установлен: ${webhookFullUrl}`);
-        } catch (err) {
-            logger.error(`🤖 БОТ: Ошибка Webhook: ${err.message}`);
-        }
+            await bot.telegram.setWebhook(`${WEB_APP_URL}${SECRET_PATH}`, { drop_pending_updates: true });
+            logger.info(`🤖 БОТ: Webhook установлен`);
+        } catch (err) { logger.error(`🤖 БОТ: Ошибка вебхука: ${err.message}`); }
     });
 }
 
-async function shutdown() {
+const shutdown = async () => {
     logger.info("🚀 ЗАВЕРШЕНИЕ...");
     await flushToDisk();
     if (db) await db.close();
     process.exit(0);
-}
+};
 
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
