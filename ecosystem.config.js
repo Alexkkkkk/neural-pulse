@@ -6,14 +6,14 @@ module.exports = {
     autorestart: true,
     watch: false,
     
-    // Лимит памяти: PM2 перезапустит процесс, если он превысит 450МБ
+    // Лимит памяти: PM2 перезапустит бота, если он "потечет" выше 450МБ
     max_memory_restart: '450M', 
     
-    // Плавный перезапуск при сбоях
+    // Плавный перезапуск при критических ошибках
     exp_backoff_restart_delay: 1000, 
     min_uptime: "15s",
     
-    // Время на сохранение данных SQLite (flushToDisk) перед выключением
+    // Даем 10 секунд на корректное закрытие SQLite (flushToDisk)
     kill_timeout: 10000, 
     wait_ready: false, 
 
@@ -26,13 +26,13 @@ module.exports = {
       PORT: 3000
     },
     
-    // Логи теперь будут в папке /logs, созданной в Dockerfile
+    // Настройка вывода логов в панель Bothost
     error_file: "./logs/error.log",
     out_file: "./logs/combined.log",
     log_date_format: "YYYY-MM-DD HH:mm:ss",
     merge_logs: true,
     
-    // Ограничение Node.js кучи (Heap)
+    // Лимит кучи V8 для Node.js
     node_args: "--max-old-space-size=400 --no-warnings"
   }]
 }
