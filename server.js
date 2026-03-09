@@ -12,7 +12,6 @@ const winston = require('winston');
 const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAGb0-TC4z3uFK2glOUJeU_wHnr27474zzQ";
 const WEB_APP_URL = "https://np.bothost.ru"; 
 const PORT = process.env.PORT || 3000;
-// Изменили на "/", чтобы прокси хостинга гарантированно доставлял пакеты
 const SECRET_PATH = "/"; 
 
 const logger = winston.createLogger({
@@ -34,17 +33,24 @@ const bot = new Telegraf(API_TOKEN);
 // --- [2. MIDDLEWARE & WEBHOOK] ---
 app.use(cors());
 
-// ВАЖНО: Вебхук на корневом пути "/" ПЕРЕД express.json()
-app.post('/', (req, res) => {
-    logger.debug(`📥 WEBHOOK: Входящий POST запрос от Telegram на "/"`);
-    bot.webhookCallback('/')(req, res);
+// ПОДСТРОЧНОЕ ЛОГИРОВАНИЕ ВЕБХУКА
+app.post('/', (req, res, next) => {
+    logger.debug(`📥 [STEP 1] WEBHOOK: Получен POST запрос`);
+    
+    // Передаем управление Telegraf
+    bot.webhookCallback('/')(req, res, (err) => {
+        if (err) {
+            logger.error(`❌ [STEP 1.1] WEBHOOK ERROR: ${err.message}`);
+            return next(err);
+        }
+        logger.debug(`📤 [STEP 4] WEBHOOK: Telegraf завершил обработку пакета`);
+    });
 });
 
-// Парсеры для API и статика
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Логгер для API запросов (теперь не конфликтует с ботом)
+// Логгер для API
 app.use((req, res, next) => {
     if (req.method !== 'POST' || req.url !== '/') {
         logger.debug(`🔍 ТРАФИК: ${req.method} на ${req.url}`);
@@ -164,18 +170,30 @@ async function flush() {
 }
 setInterval(flush, 20000);
 
-// --- [7. ЛОГИКА БОТА] ---
+// --- [7. ЛОГИКА БОТА С ПОДСТРОЧНЫМ КОНТРОЛЕМ] ---
 bot.start(async (ctx) => {
-    logger.info(`🤖 BOT: /start от ${ctx.from.id}`);
+    const uid = ctx.from.id;
+    logger.info(`🤖 [STEP 2] BOT: Получена команда /start от пользователя ${uid}`);
+    
     try {
-        const uid = ctx.from.id;
         const webAppUrl = `${WEB_APP_URL}/?u=${uid}&v=${Date.now()}`;
+        logger.debug(`🔗 [STEP 2.1] BOT: Сгенерирована ссылка: ${webAppUrl}`);
         
+        // Попытка отправки
         await ctx.replyWithHTML(
             `🦾 <b>NEURAL PULSE</b>\n\nПротокол активирован. Твой ID: <code>${uid}</code>`, 
             Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", webAppUrl)]])
         );
-    } catch (e) { logger.error(`❌ BOT START ERROR: ${e.message}`); }
+        
+        logger.info(`✅ [STEP 3] BOT: Ответ успешно отправлен пользователю ${uid}`);
+    } catch (e) { 
+        logger.error(`❌ [STEP 2.ERROR] BOT: Ошибка при отправке ответа: ${e.message}`); 
+    }
+});
+
+// Глобальный перехватчик ошибок Telegraf
+bot.catch((err, ctx) => {
+    logger.error(`🛑 [TELEGRAF CRITICAL]: Ошибка для типа ${ctx.updateType}: ${err.message}`);
 });
 
 // --- [8. ЗАПУСК] ---
@@ -184,7 +202,7 @@ async function start() {
     server.listen(PORT, '0.0.0.0', async () => {
         logger.info(`🌐 СЕРВЕР: LIVE на порту ${PORT}`);
         try {
-            // Устанавливаем вебхук прямо на основной домен
+            logger.debug("🌐 [CONFIG] Установка вебхука...");
             await bot.telegram.setWebhook(`${WEB_APP_URL}`, {
                 drop_pending_updates: true,
                 allowed_updates: ['message', 'callback_query']
