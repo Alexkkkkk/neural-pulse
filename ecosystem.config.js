@@ -9,11 +9,11 @@ module.exports = {
     // Лимит памяти: PM2 перезапустит бота, если он превысит 450МБ
     max_memory_restart: '450M', 
     
-    // Плавный перезапуск при критических ошибках
+    // Плавный перезапуск при критических ошибках (Backoff стратегия)
     exp_backoff_restart_delay: 1000, 
     min_uptime: "15s",
     
-    // Даем 10 секунд на корректное закрытие SQLite перед выключением
+    // Даем 10 секунд на корректное закрытие SQLite (завершение транзакций)
     kill_timeout: 10000, 
     wait_ready: false, 
 
@@ -26,13 +26,14 @@ module.exports = {
       PORT: 3000
     },
     
-    // Настройка логов для панели Bothost (папка /logs создана в Dockerfile)
-    error_file: "./logs/error.log",
-    out_file: "./logs/combined.log",
+    // Исправлено: Используем абсолютные пути для контейнера
+    error_file: "/app/logs/error.log",
+    out_file: "/app/logs/combined.log",
     log_date_format: "YYYY-MM-DD HH:mm:ss",
     merge_logs: true,
     
-    // Ограничение кучи Node.js (V8) для стабильности в контейнере
-    node_args: "--max-old-space-size=400 --no-warnings"
+    // Ограничение кучи Node.js (V8)
+    // Оставляем 50-100МБ запаса от общего лимита контейнера
+    node_args: "--max-old-space-size=380 --no-warnings"
   }]
 }
