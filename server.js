@@ -11,6 +11,7 @@ const rateLimit = require('express-rate-limit');
 const winston = require('winston');
 
 // --- [1. КОНФИГУРАЦИЯ] ---
+// Рекомендуется задавать BOT_TOKEN через переменные окружения в панели Bothost
 const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM";
 const WEB_APP_URL = "https://np.bothost.ru"; 
 
@@ -29,6 +30,7 @@ app.set('trust proxy', 1);
 const server = http.createServer(app);
 const bot = new Telegraf(API_TOKEN);
 
+// Лимитируем запросы, чтобы защититься от DDoS
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 2000,
@@ -114,11 +116,7 @@ app.get('/api/balance/:userId', async (req, res) => {
     try {
         if (!db) return res.status(503).json({ error: "DB starting..." });
         
-        let userData = userCache.get(uid);
-        if (!userData) {
-            userData = await db.get('SELECT * FROM users WHERE id = ?', [uid]);
-        }
-        
+        let userData = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]);
         const now = Math.floor(Date.now() / 1000);
 
         if (!userData) {
@@ -151,12 +149,16 @@ app.post('/api/save', validateUser, async (req, res) => {
         let current = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]);
         if (!current) return res.status(404).json({ error: "User not initialized" });
 
+        // Валидация входных данных
+        const newScore = Number(score);
+        if (isNaN(newScore)) return res.status(400).json({ error: "Invalid score value" });
+
         const updateData = {
             ...current,
-            balance: score !== undefined ? Math.max(current.balance, Number(score)) : current.balance,
-            energy: energy !== undefined ? Number(energy) : current.energy,
-            click_lvl: click_lvl !== undefined ? Math.floor(Number(click_lvl)) : current.click_lvl,
-            pnl: pnl !== undefined ? Number(pnl) : current.pnl,
+            balance: Math.max(current.balance, newScore),
+            energy: energy !== undefined ? Math.max(0, Number(energy)) : current.energy,
+            click_lvl: click_lvl !== undefined ? Math.max(1, Math.floor(Number(click_lvl))) : current.click_lvl,
+            pnl: pnl !== undefined ? Math.max(0, Number(pnl)) : current.pnl,
             last_active: Math.floor(Date.now() / 1000)
         };
         
@@ -210,6 +212,7 @@ app.get('/api/leaderboard', async (req, res) => {
 });
 
 // --- [6. СИНХРОНИЗАЦИЯ] ---
+
 async function flushToDisk() {
     if (saveQueue.size === 0 || !db) return;
     const ids = Array.from(saveQueue);
@@ -224,14 +227,14 @@ async function flushToDisk() {
         }
         await stmt.finalize();
         await db.run('COMMIT');
-        logger.info(`💾 Synced ${ids.length} agents.`);
+        logger.info(`💾 Synced ${ids.length} agents to disk.`);
     } catch (e) {
         if (db) await db.run('ROLLBACK');
         logger.error("Disk Write Error: " + e.message);
-        ids.forEach(id => saveQueue.add(id));
+        ids.forEach(id => saveQueue.add(id)); // Возвращаем в очередь при ошибке
     }
 }
-setInterval(flushToDisk, 30000);
+setInterval(flushToDisk, 30000); // Сохраняем каждые 30 секунд
 
 // --- [7. БОТ] ---
 bot.start(async (ctx) => {
@@ -249,7 +252,7 @@ bot.start(async (ctx) => {
             }
             await db.run('INSERT INTO users (id, balance, referrer_id, last_active) VALUES (?, ?, ?, ?)', [uid, startBalance, refId || null, now]);
         }
-        ctx.replyWithHTML(`🦾 <b>NEURAL PULSE SYSTEM</b>\nДобро пожаловать.`, 
+        ctx.replyWithHTML(`🦾 <b>NEURAL PULSE SYSTEM</b>\nДобро пожаловать, агент.`, 
             Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", `${WEB_APP_URL}/?u=${uid}`)]]));
     } catch (e) { logger.error("Bot Error: " + e.message); }
 });
@@ -259,16 +262,21 @@ async function start() {
     await initDB();
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, '0.0.0.0', () => logger.info(`🌐 CORE LIVE: PORT ${PORT}`));
-    bot.launch({ dropPendingUpdates: true });
+    
+    bot.launch({ dropPendingUpdates: true })
+        .then(() => logger.info("🤖 Bot Interface: OK"))
+        .catch(err => logger.error("Bot launch fail: " + err.message));
 
-    const shutdown = async () => {
-        logger.info("Graceful shutdown...");
+    const shutdown = async (signal) => {
+        logger.info(`Received ${signal}. Graceful shutdown...`);
+        clearInterval(flushToDisk);
         await flushToDisk();
         if (db) await db.close();
         process.exit(0);
     };
-    process.on('SIGINT', shutdown);
-    process.on('SIGTERM', shutdown);
+    
+    process.on('SIGINT', () => shutdown('SIGINT'));
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 start();
