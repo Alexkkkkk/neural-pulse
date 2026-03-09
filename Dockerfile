@@ -1,43 +1,46 @@
 # --- ЭТАП 1: Сборка (Builder) ---
 FROM node:18-alpine AS builder
 
-# Устанавливаем инструменты для компиляции sqlite3 (решает проблему gyp ERR!)
+# Инструменты для сборки sqlite3
 RUN apk add --no-cache python3 make g++ gcc libc-dev sqlite-dev && \
     ln -sf python3 /usr/bin/python
 
 WORKDIR /app
 COPY package*.json ./
 
-# Установка зависимостей и сборка нативных модулей
-RUN npm ci --only=production && \
+# Установка всех зависимостей и принудительная пересборка sqlite3 под архитектуру alpine
+RUN npm ci && \
     npm rebuild sqlite3 --build-from-source
 
 # --- ЭТАП 2: Запуск (Runtime) ---
 FROM node:18-alpine
 
-# Необходимые библиотеки для рантайма и tini для управления процессами
+# Добавляем tini для обработки сигналов завершения и libstdc++ для работы sqlite3
 RUN apk add --no-cache tini libstdc++
 
 WORKDIR /app
 
-# Копируем только то, что нужно для работы
+# Копируем только готовые модули и файлы проекта
 COPY --from=builder /app/node_modules ./node_modules
 COPY . .
 
-# Создаем структуру папок для БД и логов (обязательно для SQLite и PM2)
+# Настройка прав доступа для папок БД и логов
 RUN mkdir -p /app/data /app/logs && \
-    chown -R node:node /app/data /app/logs
+    chown -R node:node /app
 
-# Ставим PM2 глобально
+# Установка PM2
 RUN npm install -g pm2
 
 ENV NODE_ENV=production
 ENV PORT=3000
 EXPOSE 3000
 
-# tini предотвращает зависание контейнера при остановке
+# Используем tini как точку входа
 ENTRYPOINT ["/sbin/tini", "--"]
+
+# Переключаемся на пользователя node для безопасности
 USER node
 
-# Запуск через профессиональный менеджер процессов PM2
-CMD ["pm2-runtime", "ecosystem.config.js", "--env", "production"]
+# Запускаем через PM2 напрямую файл server.js (надежнее для Bothost)
+# Это заменяет необходимость в отдельном ecosystem.config.js
+CMD ["pm2-runtime", "server.js", "--name", "neural-pulse"]
