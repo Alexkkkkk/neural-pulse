@@ -1,52 +1,55 @@
 # --- ЭТАП 1: Сборка (Builder) ---
 FROM node:18-alpine AS builder
 
-# Системные зависимости для компиляции sqlite3
+# Устанавливаем зависимости для сборки нативных модулей (sqlite3)
 RUN apk add --no-cache python3 make g++ gcc libc-dev sqlite-dev
 
 WORKDIR /app
 
-# Копируем только файлы зависимостей для кэширования слоев
+# Копируем конфиги зависимостей
 COPY package*.json ./
 
-# Чистая установка и сборка sqlite3 из исходников
+# Устанавливаем зависимости и принудительно пересобираем sqlite3 из исходников под текущую архитектуру
 RUN npm ci && npm rebuild sqlite3 --build-from-source
 
 # --- ЭТАП 2: Запуск (Runtime) ---
 FROM node:18-alpine
 
-# Устанавливаем tini (для обработки сигналов) и библиотеки для sqlite
-RUN apk add --no-cache tini libstdc++
+# Устанавливаем tini для обработки сигналов и системные библиотеки для работы sqlite
+RUN apk add --no-cache tini libstdc++ sqlite-libs
 
 WORKDIR /app
 
-# Устанавливаем PM2 глобально
+# Устанавливаем PM2 глобально для управления процессом
 RUN npm install -g pm2 && npm cache clean --force
 
-# Сначала копируем зависимости из билдера
+# Копируем только собранные node_modules из билдера
 COPY --from=builder /app/node_modules ./node_modules
 
-# Копируем всё остальное
+# Копируем исходный код проекта
 COPY . .
 
-# Создаем нужные папки и ОДНИМ МАХОМ отдаем права пользователю node на всё
-# Это гарантирует, что база данных в /app/data создастся и будет работать
+# Исправление прав доступа:
+# 1. Создаем папки заранее
+# 2. Убеждаемся, что пользователь node имеет права на запись во всем каталоге /app
+# Это критично для SQLite, так как она создает временные -journal и -wal файлы в той же папке
 RUN mkdir -p /app/data /app/logs && \
-    chown -R node:node /app
+    chown -R node:node /app && \
+    chmod -R 755 /app/data
 
 # Настройки среды
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV WEB_APP_URL=https://np.bothost.ru
 
-# Открываем порт
+# Открываем порт для прокси хостинга
 EXPOSE 3000
 
-# Правильная обработка сигналов завершения (SIGTERM)
+# Используем tini как init-процесс для корректного проброса сигналов SIGTERM/SIGINT
 ENTRYPOINT ["/sbin/tini", "--"]
 
-# Работаем от имени непривилегированного пользователя
+# Переключаемся на безопасного пользователя
 USER node
 
-# Запуск через PM2-runtime (он лучше держит процесс в контейнере)
+# Запуск. Убедись, что файл ecosystem.config.js существует в корне проекта
 CMD ["pm2-runtime", "ecosystem.config.js"]
