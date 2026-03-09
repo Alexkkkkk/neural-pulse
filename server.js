@@ -10,18 +10,23 @@ const { Telegraf, Markup } = require('telegraf');
 const rateLimit = require('express-rate-limit');
 const winston = require('winston');
 
-// --- [1. КОНФИГУРАЦИЯ] ---
-// Рекомендуется задавать BOT_TOKEN через переменные окружения в панели Bothost
+// --- [1. КОНФИГУРАЦИЯ И УЛУЧШЕННОЕ ЛОГИРОВАНИЕ] ---
 const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAFnDpiHM7siB9h8XzARhlfzHurzCGQ9sAM";
 const WEB_APP_URL = "https://np.bothost.ru"; 
 
 const logger = winston.createLogger({
-    level: 'info',
+    level: 'debug', // Включаем режим отладки для Pro
     format: winston.format.combine(
-        winston.format.timestamp({ format: 'HH:mm:ss' }),
+        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
         winston.format.printf(({ timestamp, level, message }) => `[${timestamp}] ${level.toUpperCase()}: ${message}`)
     ),
-    transports: [new winston.transports.Console({ format: winston.format.combine(winston.format.colorize(), winston.format.simple()) })]
+    transports: [
+        new winston.transports.Console({ 
+            format: winston.format.combine(winston.format.colorize(), winston.format.simple()) 
+        }),
+        new winston.transports.File({ filename: './logs/error.log', level: 'error' }),
+        new winston.transports.File({ filename: './logs/combined.log' })
+    ]
 });
 
 const app = express();
@@ -30,18 +35,15 @@ app.set('trust proxy', 1);
 const server = http.createServer(app);
 const bot = new Telegraf(API_TOKEN);
 
-// Лимитируем запросы, чтобы защититься от DDoS
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 2000,
-    standardHeaders: true,
-    legacyHeaders: false,
+    max: 5000, // Увеличили лимит для Pro тарифа
     keyGenerator: (req) => req.ip,
     message: { error: "Neural link unstable. Too many requests." }
 });
 
 app.use(cors());
-app.use(express.json({ limit: '15kb' }));
+app.use(express.json({ limit: '20kb' }));
 app.use('/api/', limiter);
 app.use(express.static(path.join(__dirname, 'static')));
 
@@ -61,12 +63,16 @@ function verifyTelegramWebAppData(telegramInitData) {
         const secretKey = crypto.createHmac('sha256', 'WebAppData').update(API_TOKEN).digest();
         const hmac = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
         return hmac === hash;
-    } catch (e) { return false; }
+    } catch (e) { 
+        logger.error(`Security Check Failed: ${e.message}`);
+        return false; 
+    }
 }
 
 const validateUser = (req, res, next) => {
     const initData = req.headers['x-tg-data'];
     if (!initData || !verifyTelegramWebAppData(initData)) {
+        logger.warn(`Unauthorized API access attempt from IP: ${req.ip}`);
         return res.status(403).json({ error: "Invalid Data Signature" });
     }
     next();
@@ -91,6 +97,7 @@ async function initDB() {
         await db.exec(`
             PRAGMA journal_mode = WAL;
             PRAGMA synchronous = NORMAL;
+            PRAGMA temp_store = MEMORY;
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY, 
                 balance REAL DEFAULT 0, 
@@ -102,171 +109,114 @@ async function initDB() {
                 referrer_id TEXT
             );
         `);
-        logger.info("🚀 Neural Core DB: ONLINE (WAL Mode)");
+        logger.info("🚀 Neural Core DB: ONLINE (WAL Mode Active)");
     } catch (err) {
-        logger.error("DB Init Fail: " + err.message);
-        setTimeout(initDB, 5000);
+        logger.error("❌ DB Init Critical Fail: " + err.message);
+        process.exit(1);
     }
 }
 
-// --- [5. API] ---
+// --- [5. API С ПОЛНЫМ ЛОГИРОВАНИЕМ] ---
 
 app.get('/api/balance/:userId', async (req, res) => {
     const uid = String(req.params.userId);
     try {
-        if (!db) return res.status(503).json({ error: "DB starting..." });
+        if (!db) throw new Error("Database not ready");
         
         let userData = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]);
         const now = Math.floor(Date.now() / 1000);
 
         if (!userData) {
+            logger.info(`🆕 Registering new agent: ${uid}`);
             userData = { id: uid, balance: 100, click_lvl: 1, pnl: 0, energy: 1000, max_energy: 1000, last_active: now };
             await db.run(`INSERT INTO users (id, balance, last_active) VALUES (?, 100, ?)`, [uid, now]);
         } else {
             const offlineTime = Math.max(0, now - userData.last_active);
-            if (offlineTime > 0) {
-                userData.balance += (userData.pnl / 3600) * offlineTime;
+            if (offlineTime > 0 && userData.pnl > 0) {
+                const mined = (userData.pnl / 3600) * offlineTime;
+                userData.balance += mined;
                 userData.energy = Math.min(userData.max_energy, userData.energy + (offlineTime * 1.5));
                 userData.last_active = now;
+                logger.debug(`💰 Agent ${uid} mined ${mined.toFixed(2)} while offline`);
             }
         }
         
         userCache.set(uid, userData);
         res.json({ status: "ok", data: { ...userData, league: getLeague(userData.balance) } });
     } catch (e) {
-        logger.error(`Balance Error: ${e.message}`);
+        logger.error(`Balance Sync Error [ID: ${uid}]: ${e.message}`);
         res.status(500).json({ error: "Sync Error" });
     }
 });
 
 app.post('/api/save', validateUser, async (req, res) => {
-    const { user_id, score, energy, click_lvl, pnl } = req.body;
+    const { user_id, score, energy } = req.body;
     const uid = String(user_id);
     
     try {
-        if (!db) return res.status(503).json({ error: "DB offline" });
+        let current = userCache.get(uid);
+        if (!current) return res.status(404).json({ error: "Cache miss" });
+
+        current.balance = Math.max(current.balance, Number(score));
+        current.energy = Number(energy);
+        current.last_active = Math.floor(Date.now() / 1000);
         
-        let current = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]);
-        if (!current) return res.status(404).json({ error: "User not initialized" });
-
-        // Валидация входных данных
-        const newScore = Number(score);
-        if (isNaN(newScore)) return res.status(400).json({ error: "Invalid score value" });
-
-        const updateData = {
-            ...current,
-            balance: Math.max(current.balance, newScore),
-            energy: energy !== undefined ? Math.max(0, Number(energy)) : current.energy,
-            click_lvl: click_lvl !== undefined ? Math.max(1, Math.floor(Number(click_lvl))) : current.click_lvl,
-            pnl: pnl !== undefined ? Math.max(0, Number(pnl)) : current.pnl,
-            last_active: Math.floor(Date.now() / 1000)
-        };
+        userCache.set(uid, current);
+        saveQueue.add(uid);
         
-        userCache.set(uid, updateData);
-        saveQueue.add(uid);
-        res.json({ status: "pulse_received", league: getLeague(updateData.balance) });
+        logger.debug(`📥 Pulse saved for agent ${uid}. Balance: ${current.balance}`);
+        res.json({ status: "pulse_received" });
     } catch (e) {
-        res.status(500).json({ error: "Save failed" });
+        logger.error(`Save Fail [ID: ${uid}]: ${e.message}`);
+        res.status(500).json({ error: "Internal Error" });
     }
-});
-
-app.post('/api/upgrade/:type', validateUser, async (req, res) => {
-    const { user_id } = req.body;
-    const { type } = req.params;
-    const uid = String(user_id);
-
-    try {
-        let user = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]);
-        if (!user) return res.status(404).json({ error: "Agent not found" });
-
-        if (type === 'click') {
-            const cost = Math.floor(500 * Math.pow(1.6, user.click_lvl - 1));
-            if (user.balance < cost) return res.json({ status: "error", error: `Need ${cost} tokens` });
-            user.balance -= cost;
-            user.click_lvl += 1;
-        } 
-        else if (type === 'mine') {
-            const currentMineLvl = Math.floor(user.pnl / 100) + 1;
-            const cost = Math.floor(1000 * Math.pow(1.8, currentMineLvl - 1));
-            if (user.balance < cost) return res.json({ status: "error", error: `Need ${cost} tokens` });
-            user.balance -= cost;
-            user.pnl += 100;
-        }
-
-        userCache.set(uid, user);
-        saveQueue.add(uid);
-        res.json({ status: "ok", balance: user.balance, lvl: user.click_lvl, pnl: user.pnl });
-    } catch (e) {
-        res.status(500).json({ error: "Upgrade failed" });
-    }
-});
-
-app.get('/api/leaderboard', async (req, res) => {
-    try {
-        const top = await db.all('SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10');
-        res.json({ 
-            status: "ok", 
-            leaderboard: top.map((u, i) => ({ rank: i + 1, id: u.id, balance: Math.floor(u.balance) })) 
-        });
-    } catch (e) { res.status(500).json({ error: "Leaderboard error" }); }
 });
 
 // --- [6. СИНХРОНИЗАЦИЯ] ---
-
 async function flushToDisk() {
-    if (saveQueue.size === 0 || !db) return;
+    if (saveQueue.size === 0) return;
     const ids = Array.from(saveQueue);
     saveQueue.clear();
     
     try {
         await db.run('BEGIN TRANSACTION');
-        const stmt = await db.prepare(`UPDATE users SET balance=?, energy=?, click_lvl=?, pnl=?, last_active=? WHERE id=?`);
+        const stmt = await db.prepare(`UPDATE users SET balance=?, energy=?, last_active=? WHERE id=?`);
         for (const id of ids) {
             const d = userCache.get(id);
-            if (d) await stmt.run(d.balance, d.energy, d.click_lvl, d.pnl, d.last_active, id);
+            if (d) await stmt.run(d.balance, d.energy, d.last_active, id);
         }
         await stmt.finalize();
         await db.run('COMMIT');
-        logger.info(`💾 Synced ${ids.length} agents to disk.`);
+        logger.info(`💾 Database: Successfully synced ${ids.length} agents.`);
     } catch (e) {
         if (db) await db.run('ROLLBACK');
-        logger.error("Disk Write Error: " + e.message);
-        ids.forEach(id => saveQueue.add(id)); // Возвращаем в очередь при ошибке
+        logger.error("🛑 Critical Disk Write Error: " + e.message);
+        ids.forEach(id => saveQueue.add(id));
     }
 }
-setInterval(flushToDisk, 30000); // Сохраняем каждые 30 секунд
+setInterval(flushToDisk, 30000);
 
-// --- [7. БОТ] ---
+// --- [7. БОТ И ЗАПУСК] ---
 bot.start(async (ctx) => {
     const uid = String(ctx.from.id);
-    const refId = ctx.startPayload;
-    try {
-        if (!db) return ctx.reply("Система загружается...");
-        const existing = await db.get('SELECT id FROM users WHERE id = ?', [uid]);
-        if (!existing) {
-            const now = Math.floor(Date.now()/1000);
-            let startBalance = 100;
-            if (refId && refId !== uid) {
-                startBalance = 5000;
-                await db.run('UPDATE users SET balance = balance + 10000 WHERE id = ?', [refId]).catch(()=>{});
-            }
-            await db.run('INSERT INTO users (id, balance, referrer_id, last_active) VALUES (?, ?, ?, ?)', [uid, startBalance, refId || null, now]);
-        }
-        ctx.replyWithHTML(`🦾 <b>NEURAL PULSE SYSTEM</b>\nДобро пожаловать, агент.`, 
-            Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", `${WEB_APP_URL}/?u=${uid}`)]]));
-    } catch (e) { logger.error("Bot Error: " + e.message); }
+    logger.info(`🤖 Bot Start Command from: ${uid}`);
+    ctx.replyWithHTML(`🦾 <b>NEURAL PULSE SYSTEM</b>\n\nАгент <b>${ctx.from.first_name}</b>, система активна.`, 
+        Markup.inlineKeyboard([[Markup.button.webApp("ВХОД В НЕЙРОСЕТЬ 🧠", `${WEB_APP_URL}/?u=${uid}`)]]));
 });
 
-// --- [8. ЗАВЕРШЕНИЕ] ---
 async function start() {
     await initDB();
     const PORT = process.env.PORT || 3000;
-    server.listen(PORT, '0.0.0.0', () => logger.info(`🌐 CORE LIVE: PORT ${PORT}`));
+    server.listen(PORT, '0.0.0.0', () => {
+        logger.info(`🌐 CORE LIVE: Running on port ${PORT}`);
+        logger.info(`📊 Memory Limit: ${process.env.NODE_OPTIONS || 'Default'}`);
+    });
     
     bot.launch({ dropPendingUpdates: true })
-        .then(() => logger.info("🤖 Bot Interface: OK"))
+        .then(() => logger.info("🤖 Bot Interface: Connection Established"))
         .catch(err => logger.error("Bot launch fail: " + err.message));
 
+    // Правильное завершение для Docker
     const shutdown = async (signal) => {
         logger.info(`Received ${signal}. Graceful shutdown...`);
         clearInterval(flushToDisk);
