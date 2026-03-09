@@ -10,12 +10,12 @@ const { Telegraf, Markup } = require('telegraf');
 const rateLimit = require('express-rate-limit');
 const winston = require('winston');
 
-// --- [1. КОНФИГУРАЦИЯ И ЛОГГЕР] ---
+// --- [1. КОНФИГУРАЦИЯ И ГЛУБОКОЕ ЛОГИРОВАНИЕ] ---
 const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAFnDpiHM7siB9h8XzARhlfzHurzCGQ9sAM";
 const WEB_APP_URL = "https://np.bothost.ru"; 
 
 const logger = winston.createLogger({
-    level: 'debug', // Уровень debug для максимальной детализации
+    level: 'debug', 
     format: winston.format.combine(
         winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
         winston.format.printf(({ timestamp, level, message }) => `[${timestamp}] ${level.toUpperCase()}: ${message}`)
@@ -23,7 +23,7 @@ const logger = winston.createLogger({
     transports: [new winston.transports.Console()]
 });
 
-logger.info("🛠 Инициализация системы Neural Pulse...");
+logger.info("🛠 СИСТЕМА: Запуск процесса инициализации...");
 
 const app = express();
 app.set('trust proxy', 1);
@@ -32,18 +32,18 @@ const bot = new Telegraf(API_TOKEN);
 
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 2000,
+    max: 5000,
     keyGenerator: (req) => req.ip,
     handler: (req, res) => {
-        logger.warn(`⚠️ LIMIT: IP ${req.ip} превысил лимит запросов`);
-        res.status(429).json({ error: "Too many requests" });
+        logger.warn(`⚠️ SECURITY: Превышен лимит запросов для IP ${req.ip}`);
+        res.status(429).json({ error: "System overloaded" });
     }
 });
 
 app.use(cors());
 app.use(express.json({ limit: '15kb' }));
 app.use((req, res, next) => {
-    logger.debug(`📡 Входящий запрос: ${req.method} ${req.url} | IP: ${req.ip}`);
+    logger.debug(`📡 СЕТЬ: ${req.method} ${req.url} от ${req.ip}`);
     next();
 });
 app.use('/api/', limiter);
@@ -53,11 +53,11 @@ let db;
 const userCache = new Map();
 const saveQueue = new Set();
 
-// --- [2. БЕЗОПАСНОСТЬ: ДОСКОНАЛЬНАЯ ПРОВЕРКА] ---
+// --- [2. БЕЗОПАСНОСТЬ: ВЕРИФИКАЦИЯ] ---
 function verifyTelegramWebAppData(telegramInitData) {
-    logger.debug("🔐 Начинаю проверку подписи WebApp...");
+    logger.debug("🔐 БЕЗОПАСНОСТЬ: Проверка подписи WebApp...");
     if (!telegramInitData) {
-        logger.error("❌ Данные инициализации отсутствуют");
+        logger.error("❌ БЕЗОПАСНОСТЬ: Данные initData отсутствуют!");
         return false;
     }
     try {
@@ -71,40 +71,40 @@ function verifyTelegramWebAppData(telegramInitData) {
         const hmac = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
         
         const isValid = hmac === hash;
-        logger.debug(isValid ? "✅ Подпись верна" : "❌ Подпись не совпадает!");
+        logger.debug(isValid ? "✅ БЕЗОПАСНОСТЬ: Подпись подтверждена" : "❌ БЕЗОПАСНОСТЬ: Подпись ПОДДЕЛАНА!");
         return isValid;
     } catch (e) {
-        logger.error(`❌ Ошибка криптографии: ${e.message}`);
+        logger.error(`❌ БЕЗОПАСНОСТЬ: Ошибка криптографии: ${e.message}`);
         return false;
     }
 }
 
 const validateUser = (req, res, next) => {
     const initData = req.headers['x-tg-data'];
-    logger.debug("🛡 Валидация заголовка x-tg-data...");
+    logger.debug("🛡 API: Валидация заголовка x-tg-data...");
     if (!initData || !verifyTelegramWebAppData(initData)) {
-        return res.status(403).json({ error: "Invalid Neural Signature" });
+        return res.status(403).json({ error: "Neural link refused" });
     }
     next();
 };
 
-// --- [3. БАЗА ДАННЫХ С ЛОГАМИ ШАГОВ] ---
+// --- [3. БАЗА ДАННЫХ: ЖЕСТКИЙ КОНТРОЛЬ] ---
 async function initDB() {
     const dataDir = path.join(__dirname, 'data');
-    logger.debug(`📁 Проверка директории БД: ${dataDir}`);
+    logger.debug(`📁 ФАЙЛЫ: Проверка папки БД по пути: ${dataDir}`);
     if (!fs.existsSync(dataDir)) {
         fs.mkdirSync(dataDir, { recursive: true });
-        logger.info("📁 Директория данных создана");
+        logger.info("📁 ФАЙЛЫ: Создана новая директория для данных");
     }
     
     try {
-        logger.debug("🗄 Открытие файла game.db...");
+        logger.debug("🗄 БД: Подключение к game.db...");
         db = await open({ filename: path.join(dataDir, 'game.db'), driver: sqlite3.Database });
         
-        logger.debug("⚙️ Настройка PRAGMA (WAL Mode)...");
+        logger.debug("⚙️ БД: Установка режимов WAL и NORMAL...");
         await db.exec(`PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;`);
         
-        logger.debug("🔨 Проверка/Создание таблицы users...");
+        logger.debug("🔨 БД: Синхронизация структуры таблиц...");
         await db.exec(`
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY, 
@@ -117,29 +117,24 @@ async function initDB() {
                 referrer_id TEXT
             );
         `);
-        logger.info("🚀 Neural Core DB: ONLINE");
+        logger.info("🚀 БД: СТАТУС - ONLINE");
     } catch (err) {
-        logger.error("❌ КРИТИЧЕСКАЯ ОШИБКА БД: " + err.message);
+        logger.error("❌ БД: КРИТИЧЕСКИЙ СБОЙ: " + err.message);
+        process.exit(1);
     }
 }
 
-// --- [4. API ЭНДПОИНТЫ С ТРЕКИНГОМ] ---
+// --- [4. API С ПОЛНЫМ ТРЕКИНГОМ] ---
 
 app.get('/api/balance/:userId', async (req, res) => {
     const uid = String(req.params.userId);
-    logger.debug(`👤 Запрос баланса для пользователя: ${uid}`);
+    logger.debug(`👤 ИГРОК: Запрос данных профиля для UID ${uid}`);
     try {
-        let userData = userCache.get(uid);
-        if (userData) {
-            logger.debug(`💾 Данные взяты из кэша для ${uid}`);
-        } else {
-            logger.debug(`🔎 Поиск ${uid} в БД...`);
-            userData = await db.get('SELECT * FROM users WHERE id = ?', [uid]);
-        }
-
+        let userData = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]);
         const now = Math.floor(Date.now() / 1000);
+
         if (!userData) {
-            logger.info(`🆕 Регистрация нового агента: ${uid}`);
+            logger.info(`🆕 ИГРОК: Регистрация нового агента в системе: ${uid}`);
             userData = { id: uid, balance: 100, click_lvl: 1, pnl: 0, energy: 1000, max_energy: 1000, last_active: now };
             await db.run(`INSERT INTO users (id, balance, last_active) VALUES (?, 100, ?)`, [uid, now]);
         }
@@ -147,15 +142,15 @@ app.get('/api/balance/:userId', async (req, res) => {
         userCache.set(uid, userData);
         res.json({ status: "ok", data: userData });
     } catch (e) { 
-        logger.error(`❌ Ошибка /api/balance: ${e.message}`);
-        res.status(500).json({ error: "Sync Error" }); 
+        logger.error(`❌ API: Ошибка получения баланса ${uid}: ${e.message}`);
+        res.status(500).json({ error: "Data link failure" }); 
     }
 });
 
 app.post('/api/save', validateUser, async (req, res) => {
     const { user_id, score, energy } = req.body;
     const uid = String(user_id);
-    logger.debug(`📥 Попытка сохранения: UID ${uid} | Score ${score} | Energy ${energy}`);
+    logger.debug(`📥 API: Сохранение пульса: UID ${uid} | Bal: ${score} | Eng: ${energy}`);
     try {
         let current = userCache.get(uid);
         if (current) {
@@ -164,29 +159,28 @@ app.post('/api/save', validateUser, async (req, res) => {
             current.last_active = Math.floor(Date.now() / 1000);
             userCache.set(uid, current);
             saveQueue.add(uid);
-            logger.debug(`✅ UID ${uid} добавлен в очередь на сохранение (Очередь: ${saveQueue.size})`);
+            logger.debug(`✅ API: Данные UID ${uid} помещены в очередь записи`);
         } else {
-            logger.warn(`⚠️ UID ${uid} не найден в кэше при сохранении`);
+            logger.warn(`⚠️ API: Попытка сохранить данные для UID ${uid}, которого нет в кэше!`);
         }
         res.json({ status: "pulse_received" });
     } catch (e) { 
-        logger.error(`❌ Ошибка /api/save: ${e.message}`);
-        res.status(500).json({ error: "Save Fail" }); 
+        logger.error(`❌ API: Ошибка сохранения ${uid}: ${e.message}`);
+        res.status(500).json({ error: "Save transmission failed" }); 
     }
 });
 
-// --- [5. СИНХРОНИЗАЦИЯ С ЛОГИРОВАНИЕМ ШАГОВ ТРАНЗАКЦИИ] ---
+// --- [5. СИНХРОНИЗАЦИЯ: ВНУТРЕННЯЯ КУХНЯ БД] ---
 async function flushToDisk() {
     if (saveQueue.size === 0) {
-        logger.debug("⏲ Синхронизация: очередь пуста, пропускаю.");
+        logger.debug("⏲ ТАЙМЕР: Очередь записи пуста. Жду...");
         return;
     }
     const ids = Array.from(saveQueue);
     saveQueue.clear();
-    logger.info(`💾 Начинаю сброс данных на диск для ${ids.length} агентов...`);
+    logger.info(`💾 ДИСК: Начинаю физическую запись для ${ids.length} агентов...`);
     
     try {
-        logger.debug("📝 Начало транзакции BEGIN TRANSACTION");
         await db.run('BEGIN TRANSACTION');
         const stmt = await db.prepare(`UPDATE users SET balance=?, energy=?, last_active=? WHERE id=?`);
         
@@ -194,41 +188,41 @@ async function flushToDisk() {
             const d = userCache.get(id);
             if (d) {
                 await stmt.run(d.balance, d.energy, d.last_active, id);
-                logger.debug(`   -> Записан: ${id} (Bal: ${d.balance})`);
+                logger.debug(`   -> БД ЗАПИСЬ: ID ${id} | Финальный баланс: ${d.balance.toFixed(2)}`);
             }
         }
         await stmt.finalize();
         await db.run('COMMIT');
-        logger.info(`✅ Успешно синхронизировано: ${ids.length} записей.`);
+        logger.info(`✅ ДИСК: Успешная синхронизация ${ids.length} записей.`);
     } catch (e) {
         if (db) await db.run('ROLLBACK');
-        logger.error("🛑 ОШИБКА ЗАПИСИ: " + e.message);
+        logger.error("🛑 ДИСК: ОШИБКА ТРАНЗАКЦИИ: " + e.message);
         ids.forEach(id => saveQueue.add(id)); 
     }
 }
 setInterval(flushToDisk, 30000);
 
-// --- [6. БОТ И ЗАПУСК] ---
+// --- [6. БОТ: ИНТЕРФЕЙС УПРАВЛЕНИЯ] ---
 bot.start((ctx) => {
     const uid = String(ctx.from.id);
-    logger.info(`🤖 Команда /start от пользователя: ${uid} (@${ctx.from.username || 'N/A'})`);
-    ctx.replyWithHTML(`🦾 <b>NEURAL PULSE</b>\nДобро пожаловать в систему.`, 
-        Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", `${WEB_APP_URL}/?u=${uid}`)]]));
+    logger.info(`🤖 БОТ: Команда /start от ${uid} (${ctx.from.username || 'Без имени'})`);
+    ctx.replyWithHTML(`🦾 <b>NEURAL PULSE</b>\nПротокол активирован. Ожидаю подключения...`, 
+        Markup.inlineKeyboard([[Markup.button.webApp("ВХОД В ЯДРО 🧠", `${WEB_APP_URL}/?u=${uid}`)]]));
 });
 
+// --- [7. ЗАПУСК ЯДРА] ---
 async function start() {
-    logger.info("📡 Запуск Neural Core...");
+    logger.info("📡 СИСТЕМА: Запуск Neural Pulse Core...");
     await initDB();
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, '0.0.0.0', () => {
-        logger.info(`🌐 СЕРВЕР ЗАПУЩЕН | Порт: ${PORT}`);
-        logger.info(`🔗 WebApp URL: ${WEB_APP_URL}`);
+        logger.info(`🌐 СЕТЬ: СЕРВЕР LIVE | ПОРТ: ${PORT}`);
+        logger.info(`🔗 СЕТЬ: URL WEBAPP: ${WEB_APP_URL}`);
     });
     
-    logger.debug("🔌 Запуск Telegraf Bot...");
     bot.launch({ dropPendingUpdates: true })
-        .then(() => logger.info("🤖 Бот успешно подключен к Telegram API"))
-        .catch(e => logger.error(`❌ Ошибка запуска бота: ${e.message}`));
+        .then(() => logger.info("🤖 БОТ: Соединение с Telegram API установлено"))
+        .catch(e => logger.error(`❌ БОТ: Ошибка запуска: ${e.message}`));
 }
 
 start();
