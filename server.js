@@ -12,8 +12,8 @@ const winston = require('winston');
 const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAGb0-TC4z3uFK2glOUJeU_wHnr27474zzQ";
 const WEB_APP_URL = "https://np.bothost.ru"; 
 const PORT = process.env.PORT || 3000;
-// Рекомендую сменить на "/" если прокси хостинга капризничает, но пока оставляем как есть
-const SECRET_PATH = "/webhook-tg-pulse";
+// Изменили на "/", чтобы прокси хостинга гарантированно доставлял пакеты
+const SECRET_PATH = "/"; 
 
 const logger = winston.createLogger({
     level: 'debug',
@@ -34,26 +34,20 @@ const bot = new Telegraf(API_TOKEN);
 // --- [2. MIDDLEWARE & WEBHOOK] ---
 app.use(cors());
 
-// ВАЖНО: Вебхук ставим ПЕРЕД express.json(), чтобы он перехватывал "сырой" поток
-app.post(SECRET_PATH, (req, res, next) => {
-    logger.debug(`📥 WEBHOOK: Входящий POST запрос от Telegram`);
-    bot.webhookCallback(SECRET_PATH)(req, res, (err) => {
-        if (err) {
-            logger.error(`❌ WEBHOOK ERROR: Ошибка обработки: ${err.message}`);
-            return next(err);
-        }
-        logger.debug(`📤 WEBHOOK: Успешно обработан`);
-    });
+// ВАЖНО: Вебхук на корневом пути "/" ПЕРЕД express.json()
+app.post('/', (req, res) => {
+    logger.debug(`📥 WEBHOOK: Входящий POST запрос от Telegram на "/"`);
+    bot.webhookCallback('/')(req, res);
 });
 
-// Теперь можно подключать парсеры для остальных API
+// Парсеры для API и статика
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Глобальный логгер трафика (кроме вебхука, чтобы не спамить)
+// Логгер для API запросов (теперь не конфликтует с ботом)
 app.use((req, res, next) => {
-    if (req.url !== SECRET_PATH) {
-        logger.debug(`🔍 ТРАФИК: ${req.method} на ${req.url} (IP: ${req.ip})`);
+    if (req.method !== 'POST' || req.url !== '/') {
+        logger.debug(`🔍 ТРАФИК: ${req.method} на ${req.url}`);
     }
     next();
 });
@@ -97,7 +91,7 @@ function processOffline(user) {
     if (secondsOffline > 5) {
         const pnl = parseFloat(user.pnl) || 0;
         if (pnl > 0) {
-            const effectiveTime = Math.min(secondsOffline, 10800); // макс 3 часа
+            const effectiveTime = Math.min(secondsOffline, 10800);
             const earnings = (pnl / 3600) * effectiveTime;
             user.balance = (parseFloat(user.balance) || 0) + earnings;
             logger.debug(`💰 INCOME: Игрок ${user.id} +${earnings.toFixed(2)} за ${effectiveTime}с`);
@@ -190,13 +184,13 @@ async function start() {
     server.listen(PORT, '0.0.0.0', async () => {
         logger.info(`🌐 СЕРВЕР: LIVE на порту ${PORT}`);
         try {
-            // Удаляем старый вебхук и ставим новый
-            await bot.telegram.setWebhook(`${WEB_APP_URL}${SECRET_PATH}`, {
+            // Устанавливаем вебхук прямо на основной домен
+            await bot.telegram.setWebhook(`${WEB_APP_URL}`, {
                 drop_pending_updates: true,
                 allowed_updates: ['message', 'callback_query']
             });
             const info = await bot.telegram.getWebhookInfo();
-            logger.info(`🤖 БОТ: Вебхук установлен -> ${info.url}`);
+            logger.info(`🤖 БОТ: Вебхук установлен на корень -> ${info.url}`);
         } catch (err) { 
             logger.error(`🤖 БОТ WEBHOOK ERROR: ${err.message}`); 
         }
