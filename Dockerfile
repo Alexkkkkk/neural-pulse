@@ -1,48 +1,51 @@
 # --- ЭТАП 1: Сборка (Builder) ---
 FROM node:18-alpine AS builder
 
-# Инструменты для сборки sqlite3 (необходимы для компиляции нативных модулей)
+# Устанавливаем системные зависимости для сборки нативных модулей (sqlite3)
 RUN apk add --no-cache python3 make g++ gcc libc-dev sqlite-dev && \
     ln -sf python3 /usr/bin/python
 
 WORKDIR /app
+
+# Копируем файлы зависимостей отдельно, чтобы использовать кэш слоев Docker
 COPY package*.json ./
 
-# Устанавливаем все зависимости и компилируем sqlite3
+# Устанавливаем все зависимости и собираем sqlite3 из исходников под текущую архитектуру
 RUN npm ci && \
     npm rebuild sqlite3 --build-from-source
 
 # --- ЭТАП 2: Запуск (Runtime) ---
 FROM node:18-alpine
 
-# tini для корректного завершения процессов, libstdc++ для sqlite3
+# Устанавливаем библиотеки времени выполнения
 RUN apk add --no-cache tini libstdc++
 
 WORKDIR /app
 
-# Копируем зависимости из билдера
+# Копируем скомпилированные модули из сборщика
 COPY --from=builder /app/node_modules ./node_modules
-# Копируем остальные файлы проекта
+
+# Копируем исходный код приложения
 COPY . .
 
-# Создаем папки. Смена владельца (chown) идет ПОСЛЕ установки всех файлов
+# Устанавливаем PM2 глобально
+RUN npm install -g pm2 && npm cache clean --force
+
+# Создаем директории для данных и логов, затем передаем права пользователю node
+# Это критично, чтобы SQLite мог записывать файл базы данных
 RUN mkdir -p /app/data /app/logs && \
     chown -R node:node /app
 
-# Устанавливаем PM2 до переключения на пользователя node
-RUN npm install -g pm2
-
-# Настройки окружения
+# Настройки среды
 ENV NODE_ENV=production
 ENV PORT=3000
 EXPOSE 3000
 
-# Точка входа через tini (защита от зомби-процессов)
+# Используем tini для правильной обработки сигналов (SIGTERM, SIGINT)
 ENTRYPOINT ["/sbin/tini", "--"]
 
-# Переключаемся на пользователя node
+# Запускаем от имени непривилегированного пользователя
 USER node
 
-# Запускаем через PM2
-# --env production берет настройки из секции env_production твоего ecosystem.config.js
+# Запуск через PM2 с использованием твоего конфига
 CMD ["pm2-runtime", "ecosystem.config.js", "--env", "production"]
