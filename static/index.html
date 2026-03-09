@@ -54,7 +54,6 @@
         @keyframes rotate-ring { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
         /* --- UI --- */
-        #particles-js { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
         .content-layer { 
             position: relative; z-index: 2; width: 100%; height: 100%; 
             display: flex; flex-direction: column; align-items: center; 
@@ -121,13 +120,11 @@
                 <div class="loader-ring"></div>
                 <img src="images/logo.png" style="width: 150px; height: 150px; border-radius: 50%;" onerror="this.src='https://via.placeholder.com/150/bc13fe/fff?text=AI'">
             </div>
-            <div class="loader-text">CONNECTING TO CORE...</div>
+            <div class="loader-text" id="loader-status">CONNECTING TO CORE...</div>
             <div id="loader-percent" class="loader-percent">0%</div>
             <div class="loader-bar-bg"><div id="loader-fill" class="loader-bar-fill"></div></div>
         </div>
     </div>
-
-    <canvas id="particles-js"></canvas>
 
     <div class="content-layer">
         <div class="header-card">
@@ -166,8 +163,8 @@
         </div>
 
         <div class="bottom-nav">
-            <div class="nav-btn" onclick="buyUpgrade('click')">🚀 BOOST</div>
-            <div class="nav-btn" onclick="buyUpgrade('pnl')">⛏️ MINE</div>
+            <div class="nav-btn" onclick="tg.showAlert('Upgrades integrated with server soon!')">🚀 BOOST</div>
+            <div class="nav-btn" onclick="tg.showAlert('Mining system activation in progress...')">⛏️ MINE</div>
             <div class="nav-btn" onclick="showLeaderboard()">📊 STATS</div>
         </div>
     </div>
@@ -183,7 +180,6 @@
             max_energy: 1000, 
             click_lvl: 1, 
             pnl: 0, 
-            league: 'BRONZE', 
             loaded: false,
             isDirty: false,
             uid: tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('u')
@@ -203,12 +199,12 @@
                     return;
                 }
                 
-                if (progress < 95) progress += Math.floor(Math.random() * 5) + 2;
+                if (progress < 98) progress += Math.floor(Math.random() * 3) + 1;
                 else if (state.loaded) progress = 100;
                 
                 percentEl.innerText = `${progress}%`;
                 fillEl.style.width = `${progress}%`;
-            }, 60);
+            }, 50);
         }
 
         function updateUI() {
@@ -222,21 +218,20 @@
 
         async function loadData() {
             if(!state.uid) { 
-                console.log("No UID - Demo Mode");
-                state.loaded = true; 
+                document.getElementById('loader-status').innerText = "ERROR: NO USER ID FOUND";
                 return; 
             }
             try {
                 const r = await fetch(`/api/balance/${state.uid}`);
-                if (!r.ok) throw new Error("Server error");
                 const res = await r.json();
                 if(res.status === 'ok') {
                     Object.assign(state, res.data);
+                    state.loaded = true;
                 }
             } catch(e) { 
-                console.error("Load failed, using local state", e);
+                console.error("Load failed", e);
+                document.getElementById('loader-status').innerText = "SERVER CONNECTION FAILED";
             } finally {
-                state.loaded = true;
                 updateUI();
             }
         }
@@ -244,7 +239,7 @@
         async function syncData() {
             if(!state.uid || !state.loaded || !state.isDirty) return;
             try {
-                const response = await fetch('/api/save', {
+                await fetch('/api/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -253,30 +248,8 @@
                         energy: state.energy
                     })
                 });
-                if (response.ok) state.isDirty = false;
-            } catch(e) { console.error("Sync silent fail"); }
-        }
-
-        async function buyUpgrade(type) {
-            if(!state.uid) return;
-            tg.HapticFeedback.impactOccurred('light');
-            try {
-                const r = await fetch(`/api/upgrade/${type}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: state.uid })
-                });
-                const res = await r.json();
-                if(res.status === 'ok') {
-                    state.balance = res.new_balance;
-                    if(type === 'click') state.click_lvl = res.new_lvl;
-                    if(type === 'pnl') state.pnl = res.new_pnl;
-                    updateUI();
-                    tg.HapticFeedback.notificationOccurred('success');
-                } else {
-                    tg.showAlert(res.message || "Insufficient funds");
-                }
-            } catch(e) { tg.showAlert("API Error"); }
+                state.isDirty = false;
+            } catch(e) { console.error("Sync fail"); }
         }
 
         const tapZone = document.getElementById('tap-zone');
@@ -310,19 +283,25 @@
             mainLogo.style.transform = 'scale(1)';
         });
 
+        // Основной игровой цикл (1 раз в секунду)
         setInterval(() => {
             if (!state.loaded) return;
+            
+            // Начисляем PnL плавно
             if (state.pnl > 0) {
                 state.balance += (state.pnl / 3600);
                 state.isDirty = true;
             }
+            
+            // Восстанавливаем энергию
             if (state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 3);
             }
             updateUI();
         }, 1000);
 
-        setInterval(syncData, 15000);
+        // Синхронизация с базой каждые 10 секунд
+        setInterval(syncData, 10000);
 
         window.onload = () => {
             startLoadingAnimation();
@@ -334,8 +313,8 @@
             tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join me in Neural Pulse AI!`);
         }
 
-        async function showLeaderboard() {
-            tg.showAlert("Global stats analysis in progress...");
+        function showLeaderboard() {
+            tg.showAlert("Leaderboard will be available in the next neural update.");
         }
     </script>
 </body>
