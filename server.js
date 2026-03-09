@@ -21,34 +21,27 @@ const logger = winston.createLogger({
         winston.format.timestamp({ format: 'HH:mm:ss' }),
         winston.format.printf(({ timestamp, level, message }) => `[${timestamp}] ${level.toUpperCase()}: ${message}`)
     ),
-    transports: [
-        new winston.transports.Console({
-            format: winston.format.combine(winston.format.colorize(), winston.format.simple())
-        })
-    ]
+    transports: [new winston.transports.Console({ format: winston.format.combine(winston.format.colorize(), winston.format.simple()) })]
 });
 
 const app = express();
-
-// --- ВАЖНО: ФИКС ДЛЯ BOTHOST PROXY ---
-app.set('trust proxy', 1); 
+app.set('trust proxy', 1); // Фикс для Bothost
 
 const server = http.createServer(app);
 const bot = new Telegraf(API_TOKEN);
 
-// Лимитер (убирает ValidationError и правильно видит IP за прокси)
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 2000, 
+    max: 2000,
     standardHeaders: true,
     legacyHeaders: false,
-    validate: { xForwardedForHeader: false }, 
-    keyGenerator: (req) => req.ip, 
+    validate: { xForwardedForHeader: false },
+    keyGenerator: (req) => req.ip,
     message: { error: "Neural link unstable. Too many requests." }
 });
 
 app.use(cors());
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({ limit: '15kb' })); // Чуть больше лимит для запаса
 app.use('/api/', limiter);
 app.use(express.static(path.join(__dirname, 'static')));
 
@@ -64,11 +57,7 @@ function verifyTelegramWebAppData(telegramInitData) {
         const hash = urlParams.get('hash');
         urlParams.delete('hash');
         urlParams.sort();
-        let dataCheckString = "";
-        for (const [key, value] of urlParams.entries()) {
-            dataCheckString += `${key}=${value}\n`;
-        }
-        dataCheckString = dataCheckString.slice(0, -1);
+        let dataCheckString = Array.from(urlParams.entries()).map(([k, v]) => `${k}=${v}`).join('\n');
         const secretKey = crypto.createHmac('sha256', 'WebAppData').update(API_TOKEN).digest();
         const hmac = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
         return hmac === hash;
@@ -78,7 +67,6 @@ function verifyTelegramWebAppData(telegramInitData) {
 const validateUser = (req, res, next) => {
     const initData = req.headers['x-tg-data'];
     if (!initData || !verifyTelegramWebAppData(initData)) {
-        logger.warn(`Unauthorized IP: ${req.ip}`);
         return res.status(403).json({ error: "Invalid Data Signature" });
     }
     next();
@@ -98,17 +86,22 @@ async function initDB() {
     const dataDir = path.join(__dirname, 'data');
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
     
-    db = await open({ filename: path.join(dataDir, 'game.db'), driver: sqlite3.Database });
-    await db.exec(`
-        PRAGMA journal_mode = WAL;
-        PRAGMA synchronous = NORMAL;
-        CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY, balance REAL DEFAULT 0, click_lvl INTEGER DEFAULT 1,
-            pnl REAL DEFAULT 0, energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000,
-            last_active INTEGER, referrer_id TEXT
-        );
-    `);
-    logger.info("Neural Core DB: ONLINE");
+    try {
+        db = await open({ filename: path.join(dataDir, 'game.db'), driver: sqlite3.Database });
+        await db.exec(`
+            PRAGMA journal_mode = WAL;
+            PRAGMA synchronous = NORMAL;
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY, balance REAL DEFAULT 0, click_lvl INTEGER DEFAULT 1,
+                pnl REAL DEFAULT 0, energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000,
+                last_active INTEGER, referrer_id TEXT
+            );
+        `);
+        logger.info("🚀 Neural Core DB: ONLINE (WAL Mode)");
+    } catch (err) {
+        logger.error("DB Init Fail: " + err.message);
+        setTimeout(initDB, 5000); // Реконнект при сбое
+    }
 }
 
 // --- [5. API] ---
@@ -145,7 +138,7 @@ app.post('/api/save', validateUser, async (req, res) => {
     const uid = String(user_id);
     
     try {
-        if (!db) return res.status(503).json({ error: "DB connection lost" });
+        if (!db) return res.status(503).json({ error: "DB offline" });
         
         let current = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]) || {};
         const updateData = {
@@ -153,7 +146,7 @@ app.post('/api/save', validateUser, async (req, res) => {
             id: uid,
             balance: score !== undefined ? Number(score) : (current.balance || 0),
             energy: energy !== undefined ? Number(energy) : (current.energy || 1000),
-            click_lvl: click_lvl !== undefined ? Number(click_lvl) : (current.click_lvl || 1),
+            click_lvl: click_lvl !== undefined ? Math.floor(Number(click_lvl)) : (current.click_lvl || 1),
             pnl: pnl !== undefined ? Number(pnl) : (current.pnl || 0),
             last_active: Math.floor(Date.now() / 1000)
         };
@@ -180,48 +173,56 @@ async function flushToDisk() {
         }
         await stmt.finalize();
         await db.run('COMMIT');
-        logger.info(`💾 Synced ${ids.length} agents.`);
+        logger.info(`💾 Synced ${ids.length} agents to disk.`);
     } catch (e) {
         if (db) await db.run('ROLLBACK');
-        logger.error("Sync Error: " + e.message);
+        logger.error("Disk Write Error: " + e.message);
     }
 }
-setInterval(flushToDisk, 20000);
+setInterval(flushToDisk, 30000); // 30 секунд — оптимально для Bothost
 
 // --- [7. БОТ] ---
 bot.start(async (ctx) => {
     const uid = String(ctx.from.id);
     const refId = ctx.startPayload;
     try {
-        if (!db) return ctx.reply("Система загружается, подождите секунду...");
+        if (!db) return ctx.reply("Система загружается...");
         const existing = await db.get('SELECT id FROM users WHERE id = ?', [uid]);
         if (!existing) {
             const now = Math.floor(Date.now()/1000);
             let startBalance = 100;
             if (refId && refId !== uid) {
                 startBalance = 5000;
-                await db.run('UPDATE users SET balance = balance + 10000 WHERE id = ?', [refId]);
+                await db.run('UPDATE users SET balance = balance + 10000 WHERE id = ?', [refId]).catch(()=>{});
             }
             await db.run('INSERT INTO users (id, balance, referrer_id, last_active) VALUES (?, ?, ?, ?)', [uid, startBalance, refId || null, now]);
         }
     } catch (e) { logger.error("Bot Error: " + e.message); }
 
-    ctx.replyWithHTML(`🦾 <b>NEURAL PULSE SYSTEM</b>`, Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", `${WEB_APP_URL}/?u=${uid}`)]]));
+    ctx.replyWithHTML(`🦾 <b>NEURAL PULSE SYSTEM</b>\nДобро пожаловать в ядро.`, 
+        Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", `${WEB_APP_URL}/?u=${uid}`)]]));
 });
 
-// --- [8. ЗАПУСК] ---
+// --- [8. АНТИ-КРАШ СИСТЕМА] ---
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled Rejection: ' + reason);
+});
+process.on('uncaughtException', (err) => {
+    logger.error('Uncaught Exception: ' + err.message);
+});
+
 async function start() {
     await initDB();
     const PORT = process.env.PORT || 3000;
     
-    server.listen(PORT, '0.0.0.0', () => logger.info(`CORE ONLINE: PORT ${PORT}`));
+    server.listen(PORT, '0.0.0.0', () => logger.info(`🌐 CORE LIVE: PORT ${PORT}`));
     
     bot.launch({ dropPendingUpdates: true })
-        .then(() => logger.info("Telegram Bot: OK"))
+        .then(() => logger.info("🤖 Telegram Interface: OK"))
         .catch(err => logger.error("Bot fail: " + err.message));
 
     const shutdown = async () => {
-        logger.info("Shutdown signal... Saving everything!");
+        logger.info("Graceful shutdown initiated...");
         await flushToDisk();
         if (db) await db.close();
         process.exit(0);
@@ -231,4 +232,4 @@ async function start() {
     process.on('SIGTERM', shutdown);
 }
 
-start().catch(e => logger.error("Fatal Crash: " + e.message));
+start().catch(e => logger.error("Fatal System Crash: " + e.message));
