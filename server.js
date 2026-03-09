@@ -11,6 +11,7 @@ const rateLimit = require('express-rate-limit');
 const winston = require('winston');
 
 // --- [1. КОНФИГУРАЦИЯ] ---
+// РЕКОМЕНДАЦИЯ: Используй process.env.BOT_TOKEN
 const API_TOKEN = "8257287930:AAFdsn-kKHnq1yJK6Pbg38iQdGet7S9lOUM";
 const WEB_APP_URL = "https://np.bothost.ru"; 
 const ADMIN_ID = "636603814"; 
@@ -92,9 +93,14 @@ async function initDB() {
             PRAGMA journal_mode = WAL;
             PRAGMA synchronous = NORMAL;
             CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY, balance REAL DEFAULT 0, click_lvl INTEGER DEFAULT 1,
-                pnl REAL DEFAULT 0, energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000,
-                last_active INTEGER, referrer_id TEXT
+                id TEXT PRIMARY KEY, 
+                balance REAL DEFAULT 0, 
+                click_lvl INTEGER DEFAULT 1,
+                pnl REAL DEFAULT 0, 
+                energy REAL DEFAULT 1000, 
+                max_energy INTEGER DEFAULT 1000,
+                last_active INTEGER, 
+                referrer_id TEXT
             );
         `);
         logger.info("🚀 Neural Core DB: ONLINE (WAL Mode)");
@@ -106,25 +112,26 @@ async function initDB() {
 
 // --- [5. API] ---
 
-// Получение баланса и синхронизация времени
 app.get('/api/balance/:userId', async (req, res) => {
     const uid = String(req.params.userId);
     try {
         if (!db) return res.status(503).json({ error: "DB starting..." });
         
         let userData = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]);
-        if (!userData) {
-            const now = Math.floor(Date.now() / 1000);
-            userData = { id: uid, balance: 100, click_lvl: 1, pnl: 0, energy: 1000, max_energy: 1000, last_active: now };
-            await db.run(`INSERT INTO users (id, balance, last_active) VALUES (?, 100, ?)`, [uid, now]);
-        }
         
         const now = Math.floor(Date.now() / 1000);
-        const offlineTime = Math.max(0, now - userData.last_active);
-        if (offlineTime > 0) {
-            userData.balance += (userData.pnl / 3600) * offlineTime;
-            userData.energy = Math.min(userData.max_energy, userData.energy + (offlineTime * 1.5));
-            userData.last_active = now;
+
+        if (!userData) {
+            userData = { id: uid, balance: 100, click_lvl: 1, pnl: 0, energy: 1000, max_energy: 1000, last_active: now };
+            await db.run(`INSERT INTO users (id, balance, last_active) VALUES (?, 100, ?)`, [uid, now]);
+        } else {
+            // Расчет пассивного дохода и регенерации энергии при входе
+            const offlineTime = Math.max(0, now - userData.last_active);
+            if (offlineTime > 0) {
+                userData.balance += (userData.pnl / 3600) * offlineTime;
+                userData.energy = Math.min(userData.max_energy, userData.energy + (offlineTime * 1.5));
+                userData.last_active = now;
+            }
         }
         
         userCache.set(uid, userData);
@@ -135,7 +142,6 @@ app.get('/api/balance/:userId', async (req, res) => {
     }
 });
 
-// Сохранение прогресса
 app.post('/api/save', validateUser, async (req, res) => {
     const { user_id, score, energy, click_lvl, pnl } = req.body;
     const uid = String(user_id);
@@ -143,14 +149,20 @@ app.post('/api/save', validateUser, async (req, res) => {
     try {
         if (!db) return res.status(503).json({ error: "DB offline" });
         
-        let current = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]) || {};
+        let current = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]);
+        if (!current) return res.status(404).json({ error: "User not initialized" });
+
+        // Анти-чит и защита от Race Condition: не сохраняем баланс меньше текущего
+        const newBalance = Number(score);
+        if (isNaN(newBalance)) return res.status(400).json({ error: "Invalid score" });
+
         const updateData = {
             ...current,
             id: uid,
-            balance: score !== undefined ? Number(score) : (current.balance || 0),
-            energy: energy !== undefined ? Number(energy) : (current.energy || 1000),
-            click_lvl: click_lvl !== undefined ? Math.floor(Number(click_lvl)) : (current.click_lvl || 1),
-            pnl: pnl !== undefined ? Number(pnl) : (current.pnl || 0),
+            balance: Math.max(current.balance, newBalance), // Защита от отката
+            energy: energy !== undefined ? Math.max(0, Number(energy)) : current.energy,
+            click_lvl: click_lvl !== undefined ? Math.max(1, Math.floor(Number(click_lvl))) : current.click_lvl,
+            pnl: pnl !== undefined ? Math.max(0, Number(pnl)) : current.pnl,
             last_active: Math.floor(Date.now() / 1000)
         };
         
@@ -162,7 +174,6 @@ app.post('/api/save', validateUser, async (req, res) => {
     }
 });
 
-// Система улучшений (Boost & Mine)
 app.post('/api/upgrade/:type', validateUser, async (req, res) => {
     const { user_id } = req.body;
     const { type } = req.params;
@@ -184,6 +195,8 @@ app.post('/api/upgrade/:type', validateUser, async (req, res) => {
             if (user.balance < cost) return res.json({ status: "error", error: `Need ${cost} tokens` });
             user.balance -= cost;
             user.pnl += 100;
+        } else {
+            return res.status(400).json({ error: "Unknown upgrade type" });
         }
 
         userCache.set(uid, user);
@@ -194,7 +207,6 @@ app.post('/api/upgrade/:type', validateUser, async (req, res) => {
     }
 });
 
-// Таблица лидеров
 app.get('/api/leaderboard', async (req, res) => {
     try {
         const top = await db.all('SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10');
@@ -214,9 +226,14 @@ async function flushToDisk() {
     if (saveQueue.size === 0 || !db) return;
     const ids = Array.from(saveQueue);
     saveQueue.clear();
+    
     try {
         await db.run('BEGIN TRANSACTION');
-        const stmt = await db.prepare(`UPDATE users SET balance=?, energy=?, click_lvl=?, pnl=?, last_active=? WHERE id=?`);
+        const stmt = await db.prepare(`
+            UPDATE users SET 
+            balance=?, energy=?, click_lvl=?, pnl=?, last_active=? 
+            WHERE id=?
+        `);
         for (const id of ids) {
             const d = userCache.get(id);
             if (d) await stmt.run(d.balance, d.energy, d.click_lvl, d.pnl, d.last_active, id);
@@ -227,6 +244,8 @@ async function flushToDisk() {
     } catch (e) {
         if (db) await db.run('ROLLBACK');
         logger.error("Disk Write Error: " + e.message);
+        // Возвращаем ID в очередь, чтобы попробовать снова
+        ids.forEach(id => saveQueue.add(id));
     }
 }
 setInterval(flushToDisk, 30000);
@@ -234,47 +253,63 @@ setInterval(flushToDisk, 30000);
 // --- [7. БОТ] ---
 bot.start(async (ctx) => {
     const uid = String(ctx.from.id);
-    const refId = ctx.startPayload;
+    const refId = ctx.startPayload; // ID реферера из ссылки t.me/bot?start=123
     try {
         if (!db) return ctx.reply("Система загружается...");
+        
         const existing = await db.get('SELECT id FROM users WHERE id = ?', [uid]);
         if (!existing) {
             const now = Math.floor(Date.now()/1000);
             let startBalance = 100;
+
+            // Логика рефералов
             if (refId && refId !== uid) {
                 startBalance = 5000;
+                // Даем бонус пригласившему
                 await db.run('UPDATE users SET balance = balance + 10000 WHERE id = ?', [refId]).catch(()=>{});
             }
+            
             await db.run('INSERT INTO users (id, balance, referrer_id, last_active) VALUES (?, ?, ?, ?)', [uid, startBalance, refId || null, now]);
         }
-    } catch (e) { logger.error("Bot Error: " + e.message); }
-
-    ctx.replyWithHTML(`🦾 <b>NEURAL PULSE SYSTEM</b>\nДобро пожаловать в ядро.`, 
-        Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", `${WEB_APP_URL}/?u=${uid}`)]]));
+        
+        ctx.replyWithHTML(
+            `🦾 <b>NEURAL PULSE SYSTEM</b>\nДобро пожаловать в ядро, агент <code>${uid}</code>.`, 
+            Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", `${WEB_APP_URL}/?u=${uid}`)]])
+        );
+    } catch (e) { 
+        logger.error("Bot Error: " + e.message); 
+    }
 });
 
-// --- [8. АНТИ-КРАШ СИСТЕМА] ---
+// --- [8. АНТИ-КРАШ И ЗАВЕРШЕНИЕ] ---
 process.on('unhandledRejection', (reason) => logger.error('Unhandled Rejection: ' + reason));
 process.on('uncaughtException', (err) => logger.error('Uncaught Exception: ' + err.message));
 
 async function start() {
     await initDB();
     const PORT = process.env.PORT || 3000;
-    server.listen(PORT, '0.0.0.0', () => logger.info(`🌐 CORE LIVE: PORT ${PORT}`));
+    
+    server.listen(PORT, '0.0.0.0', () => {
+        logger.info(`🌐 CORE LIVE: PORT ${PORT}`);
+    });
     
     bot.launch({ dropPendingUpdates: true })
         .then(() => logger.info("🤖 Telegram Interface: OK"))
         .catch(err => logger.error("Bot fail: " + err.message));
 
-    const shutdown = async () => {
-        logger.info("Graceful shutdown initiated...");
+    const shutdown = async (signal) => {
+        logger.info(`Received ${signal}. Graceful shutdown...`);
+        clearInterval(flushToDisk);
         await flushToDisk();
         if (db) await db.close();
-        process.exit(0);
+        server.close(() => {
+            logger.info("Server closed.");
+            process.exit(0);
+        });
     };
     
-    process.on('SIGINT', shutdown);
-    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', () => shutdown('SIGINT'));
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 start().catch(e => logger.error("Fatal System Crash: " + e.message));
