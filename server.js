@@ -29,7 +29,7 @@ const bot = new Telegraf(API_TOKEN);
 app.use(cors());
 app.use(express.json());
 
-// Настройка статики: папка static должна быть в корне проекта
+// Настройка статики
 app.use(express.static(path.join(__dirname, 'static')));
 
 let db;
@@ -38,7 +38,7 @@ const saveQueue = new Set();
 
 // --- [2. ИНИЦИАЛИЗАЦИЯ БД] ---
 async function initDB() {
-    const dataDir = '/app/data'; // Путь внутри Docker контейнера
+    const dataDir = '/app/data'; 
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
     
     try {
@@ -81,7 +81,7 @@ function processOffline(user) {
             user.balance += Number(earnings);
         }
 
-        // 2. Восстанавливаем энергию (3 единицы в секунду)
+        // 2. Восстанавливаем энергию (3 ед/сек)
         const energyRegen = secondsOffline * 3;
         user.energy = Math.min(user.max_energy, (user.energy || 0) + energyRegen);
         
@@ -158,8 +158,11 @@ setInterval(flushToDisk, 20000);
 
 // --- [6. БОТ] ---
 bot.start((ctx) => {
+    // Исправлено: Добавляем v=${Date.now()}, чтобы Telegram не кэшировал старый index.html
+    const webAppUrlWithCacheBust = `${WEB_APP_URL}/?u=${ctx.from.id}&v=${Date.now()}`;
+    
     ctx.replyWithHTML(`🦾 <b>NEURAL PULSE</b>\nПротокол PnL активирован. Твои шахты работают, пока ты спишь.`, 
-        Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", `${WEB_APP_URL}/?u=${ctx.from.id}`)]]));
+        Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", webAppUrlWithCacheBust)]]));
 });
 
 // --- [7. ЗАПУСК] ---
@@ -170,7 +173,7 @@ async function start() {
         logger.info(`🌐 СЕРВЕР: LIVE на порту ${PORT}`);
     });
     
-    bot.launch().catch(err => logger.error("🤖 БОТ: Ошибка запуска: " + err.message));
+    bot.launch().then(() => logger.info("🤖 БОТ: Запущен успешно")).catch(err => logger.error("🤖 БОТ: Ошибка запуска: " + err.message));
 }
 
 async function shutdown() {
