@@ -25,7 +25,7 @@ const logger = winston.createLogger({
 });
 
 const app = express();
-app.set('trust proxy', 1); // Фикс для Bothost
+app.set('trust proxy', 1);
 
 const server = http.createServer(app);
 const bot = new Telegraf(API_TOKEN);
@@ -41,7 +41,7 @@ const limiter = rateLimit({
 });
 
 app.use(cors());
-app.use(express.json({ limit: '15kb' })); // Чуть больше лимит для запаса
+app.use(express.json({ limit: '15kb' }));
 app.use('/api/', limiter);
 app.use(express.static(path.join(__dirname, 'static')));
 
@@ -100,11 +100,13 @@ async function initDB() {
         logger.info("🚀 Neural Core DB: ONLINE (WAL Mode)");
     } catch (err) {
         logger.error("DB Init Fail: " + err.message);
-        setTimeout(initDB, 5000); // Реконнект при сбое
+        setTimeout(initDB, 5000);
     }
 }
 
 // --- [5. API] ---
+
+// Получение баланса и синхронизация времени
 app.get('/api/balance/:userId', async (req, res) => {
     const uid = String(req.params.userId);
     try {
@@ -133,6 +135,7 @@ app.get('/api/balance/:userId', async (req, res) => {
     }
 });
 
+// Сохранение прогресса
 app.post('/api/save', validateUser, async (req, res) => {
     const { user_id, score, energy, click_lvl, pnl } = req.body;
     const uid = String(user_id);
@@ -155,7 +158,54 @@ app.post('/api/save', validateUser, async (req, res) => {
         saveQueue.add(uid);
         res.json({ status: "pulse_received", league: getLeague(updateData.balance) });
     } catch (e) {
-        res.status(500).json({ error: "Save process failed" });
+        res.status(500).json({ error: "Save failed" });
+    }
+});
+
+// Система улучшений (Boost & Mine)
+app.post('/api/upgrade/:type', validateUser, async (req, res) => {
+    const { user_id } = req.body;
+    const { type } = req.params;
+    const uid = String(user_id);
+
+    try {
+        let user = userCache.get(uid) || await db.get('SELECT * FROM users WHERE id = ?', [uid]);
+        if (!user) return res.status(404).json({ error: "Agent not found" });
+
+        if (type === 'click') {
+            const cost = Math.floor(500 * Math.pow(1.6, user.click_lvl - 1));
+            if (user.balance < cost) return res.json({ status: "error", error: `Need ${cost} tokens` });
+            user.balance -= cost;
+            user.click_lvl += 1;
+        } 
+        else if (type === 'mine') {
+            const currentMineLvl = Math.floor(user.pnl / 100) + 1;
+            const cost = Math.floor(1000 * Math.pow(1.8, currentMineLvl - 1));
+            if (user.balance < cost) return res.json({ status: "error", error: `Need ${cost} tokens` });
+            user.balance -= cost;
+            user.pnl += 100;
+        }
+
+        userCache.set(uid, user);
+        saveQueue.add(uid);
+        res.json({ status: "ok", balance: user.balance, lvl: user.click_lvl, pnl: user.pnl });
+    } catch (e) {
+        res.status(500).json({ error: "Upgrade failed" });
+    }
+});
+
+// Таблица лидеров
+app.get('/api/leaderboard', async (req, res) => {
+    try {
+        const top = await db.all('SELECT id, balance FROM users ORDER BY balance DESC LIMIT 10');
+        const leaderboard = top.map((u, index) => ({
+            rank: index + 1,
+            id: u.id,
+            balance: Math.floor(u.balance)
+        }));
+        res.json({ status: "ok", leaderboard });
+    } catch (e) {
+        res.status(500).json({ error: "Leaderboard error" });
     }
 });
 
@@ -179,7 +229,7 @@ async function flushToDisk() {
         logger.error("Disk Write Error: " + e.message);
     }
 }
-setInterval(flushToDisk, 30000); // 30 секунд — оптимально для Bothost
+setInterval(flushToDisk, 30000);
 
 // --- [7. БОТ] ---
 bot.start(async (ctx) => {
@@ -204,17 +254,12 @@ bot.start(async (ctx) => {
 });
 
 // --- [8. АНТИ-КРАШ СИСТЕМА] ---
-process.on('unhandledRejection', (reason, promise) => {
-    logger.error('Unhandled Rejection: ' + reason);
-});
-process.on('uncaughtException', (err) => {
-    logger.error('Uncaught Exception: ' + err.message);
-});
+process.on('unhandledRejection', (reason) => logger.error('Unhandled Rejection: ' + reason));
+process.on('uncaughtException', (err) => logger.error('Uncaught Exception: ' + err.message));
 
 async function start() {
     await initDB();
     const PORT = process.env.PORT || 3000;
-    
     server.listen(PORT, '0.0.0.0', () => logger.info(`🌐 CORE LIVE: PORT ${PORT}`));
     
     bot.launch({ dropPendingUpdates: true })
