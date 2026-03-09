@@ -214,10 +214,8 @@ async function start() {
     await initDB();
     const PORT = process.env.PORT || 3000;
     
-    // Запуск сервера
     server.listen(PORT, '0.0.0.0', () => logger.info(`CORE ONLINE: PORT ${PORT}`));
     
-    // Запуск бота
     bot.launch({ dropPendingUpdates: true })
         .then(() => logger.info("Telegram Bot: OK"))
         .catch(err => logger.error("Bot fail: " + err.message));
@@ -225,6 +223,7 @@ async function start() {
     const shutdown = async () => {
         logger.info("Shutdown signal... Saving everything!");
         await flushToDisk();
+        if (db) await db.close();
         process.exit(0);
     };
     
