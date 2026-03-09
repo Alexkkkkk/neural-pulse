@@ -12,7 +12,6 @@ const winston = require('winston');
 const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAGb0-TC4z3uFK2glOUJeU_wHnr27474zzQ";
 const WEB_APP_URL = "https://np.bothost.ru"; 
 const PORT = process.env.PORT || 3000;
-// Упрощаем путь до минимума для стабильности прокси
 const SECRET_PATH = "/webhook-tg-pulse";
 
 const logger = winston.createLogger({
@@ -32,17 +31,20 @@ const bot = new Telegraf(API_TOKEN);
 // --- [2. MIDDLEWARE & WEBHOOK] ---
 app.use(cors());
 
-// Логгер для проверки — доходят ли запросы вообще
+// Логгер входящих запросов
 app.use((req, res, next) => {
-    if (req.url === SECRET_PATH) logger.debug(`📡 СЕТЬ: Получен запрос на Webhook`);
+    if (req.url === SECRET_PATH) {
+        logger.debug(`📡 СЕТЬ: Запрос на Webhook от ${req.ip}`);
+    }
     next();
 });
 
-// Настройка Webhook Callback
-// Используем стандартный middleware Telegraf
-app.use(bot.webhookCallback(SECRET_PATH));
+// ВАЖНО: Вебхук идет ПЕРЕД глобальным express.json()
+app.post(SECRET_PATH, (req, res, next) => {
+    bot.webhookCallback(SECRET_PATH)(req, res, next);
+});
 
-// Остальные парсеры ТОЛЬКО после вебхука
+// Парсеры для API (не влияют на вебхук, так как он выше)
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
@@ -58,6 +60,7 @@ async function initDB() {
         db = await open({ filename: path.join(dataDir, 'game.db'), driver: sqlite3.Database });
         await db.exec(`
             PRAGMA journal_mode = WAL;
+            PRAGMA synchronous = NORMAL;
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY, balance REAL DEFAULT 0, click_lvl INTEGER DEFAULT 1,
                 pnl REAL DEFAULT 0, energy REAL DEFAULT 1000, max_energy INTEGER DEFAULT 1000, last_active INTEGER
@@ -67,7 +70,26 @@ async function initDB() {
     } catch (err) { logger.error("❌ БД: " + err.message); process.exit(1); }
 }
 
-// --- [4. API] ---
+// --- [4. ЛОГИКА ДОХОДА] ---
+function processOffline(user) {
+    const now = Math.floor(Date.now() / 1000);
+    const lastActive = parseInt(user.last_active) || now;
+    const secondsOffline = now - lastActive;
+    
+    if (secondsOffline > 5) {
+        const pnl = parseFloat(user.pnl) || 0;
+        if (pnl > 0) {
+            const earnings = (pnl / 3600) * Math.min(secondsOffline, 10800);
+            user.balance = (parseFloat(user.balance) || 0) + earnings;
+        }
+        user.energy = Math.min(parseInt(user.max_energy) || 1000, (parseFloat(user.energy) || 0) + (secondsOffline * 3));
+        user.last_active = now;
+        return true;
+    }
+    return false;
+}
+
+// --- [5. API] ---
 app.get('/api/balance/:userId', async (req, res) => {
     const uid = String(req.params.userId);
     try {
@@ -77,6 +99,9 @@ app.get('/api/balance/:userId', async (req, res) => {
             user = { id: uid, balance: 100, click_lvl: 1, pnl: 10, energy: 1000, max_energy: 1000, last_active: now };
             await db.run(`INSERT INTO users (id, balance, pnl, last_active, energy, max_energy, click_lvl) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
                 [uid, user.balance, user.pnl, user.last_active, user.energy, user.max_energy, user.click_lvl]);
+            logger.info(`🆕 ИГРОК: Создан ${uid}`);
+        } else {
+            processOffline(user); // Применяем доход при проверке баланса
         }
         userCache.set(uid, user);
         res.json({ status: "ok", data: user });
@@ -85,17 +110,18 @@ app.get('/api/balance/:userId', async (req, res) => {
 
 app.post('/api/save', (req, res) => {
     const { user_id, score, energy } = req.body;
-    const user = userCache.get(String(user_id));
+    const uid = String(user_id);
+    const user = userCache.get(uid);
     if (user) {
         user.balance = parseFloat(score);
         user.energy = parseFloat(energy);
         user.last_active = Math.floor(Date.now() / 1000);
-        saveQueue.add(String(user_id));
+        saveQueue.add(uid);
         res.json({ status: "ok" });
     } else res.status(404).json({ status: "error" });
 });
 
-// --- [5. СИНХРОНИЗАЦИЯ] ---
+// --- [6. СИНХРОНИЗАЦИЯ] ---
 async function flush() {
     if (saveQueue.size === 0) return;
     const ids = Array.from(saveQueue); saveQueue.clear();
@@ -107,12 +133,12 @@ async function flush() {
                 [d.balance, d.click_lvl, d.pnl, d.energy, d.last_active, id]);
         }
         await db.run('COMMIT');
-        logger.debug(`💾 ДИСК: Сохранено ${ids.length} чел.`);
-    } catch (e) { if (db) await db.run('ROLLBACK'); }
+        logger.debug(`💾 ДИСК: Синхронизация (${ids.length})`);
+    } catch (e) { if (db) await db.run('ROLLBACK'); logger.error("🛑 ДИСК: " + e.message); }
 }
 setInterval(flush, 20000);
 
-// --- [6. БОТ] ---
+// --- [7. БОТ] ---
 bot.start(async (ctx) => {
     try {
         const uid = ctx.from.id;
@@ -125,21 +151,29 @@ bot.start(async (ctx) => {
     } catch (e) { logger.error(`❌ БОТ: Ошибка ответа: ${e.message}`); }
 });
 
-// --- [7. ЗАПУСК] ---
+// --- [8. ЗАПУСК] ---
 async function start() {
     await initDB();
     server.listen(PORT, '0.0.0.0', async () => {
         logger.info(`🌐 СЕРВЕР: Порт ${PORT}`);
         try {
-            // Принудительная установка вебхука с очисткой очереди
             await bot.telegram.setWebhook(`${WEB_APP_URL}${SECRET_PATH}`, {
                 drop_pending_updates: true,
                 allowed_updates: ['message', 'callback_query']
             });
-            logger.info(`🤖 БОТ: Webhook настроен на ${SECRET_PATH}`);
+            logger.info(`🤖 БОТ: Webhook установлен на ${SECRET_PATH}`);
         } catch (err) { logger.error(`🤖 БОТ: Ошибка: ${err.message}`); }
     });
 }
 
-process.on('SIGTERM', async () => { await flush(); if (db) await db.close(); process.exit(0); });
+const shutdown = async () => {
+    logger.info("🚀 ЗАВЕРШЕНИЕ...");
+    await flush();
+    if (db) await db.close();
+    process.exit(0);
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
 start();
