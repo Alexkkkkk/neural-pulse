@@ -13,6 +13,9 @@ const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAGb0-TC4z3uFK2glOUJeU_wH
 const WEB_APP_URL = "https://np.bothost.ru"; 
 const PORT = process.env.PORT || 3000;
 
+// Фиксируем секретный путь, чтобы он был постоянным
+const SECRET_PATH = `/telegraf/7659a15effe06d8b7c88477cbafce593ca20cefc052d061b5beafae78d9a1cde`;
+
 const logger = winston.createLogger({
     level: 'debug',
     format: winston.format.combine(
@@ -27,7 +30,20 @@ app.set('trust proxy', 1);
 const server = http.createServer(app);
 const bot = new Telegraf(API_TOKEN);
 
+// --- [2. MIDDLEWARE ПОРЯДОК ВАЖЕН] ---
 app.use(cors());
+
+// Логирование всех входящих POST запросов для отладки Webhook
+app.post('*', (req, res, next) => {
+    if (req.url.startsWith('/telegraf')) {
+        logger.debug(`📥 Входящий запрос от Telegram на: ${req.url}`);
+    }
+    next();
+});
+
+// ВАЖНО: Вебхук должен идти ДО express.json(), если Telegraf сам парсит тело запроса
+app.use(bot.webhookCallback(SECRET_PATH));
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
@@ -35,7 +51,7 @@ let db;
 const userCache = new Map();
 const saveQueue = new Set();
 
-// --- [2. ИНИЦИАЛИЗАЦИЯ БД] ---
+// --- [3. ИНИЦИАЛИЗАЦИЯ БД] ---
 async function initDB() {
     const dataDir = path.join(__dirname, 'data'); 
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -59,14 +75,14 @@ async function initDB() {
                 last_active INTEGER
             );
         `);
-        logger.info("🚀 БД: СТАТУС - ONLINE (PnL Protocol Enabled)");
+        logger.info("🚀 БД: СТАТУС - ONLINE");
     } catch (err) { 
         logger.error("❌ БД: ОШИБКА: " + err.message); 
         process.exit(1);
     }
 }
 
-// --- [3. ЛОГИКА ДОХОДА] ---
+// --- [4. ЛОГИКА ДОХОДА] ---
 function processOffline(user) {
     const now = Math.floor(Date.now() / 1000);
     const lastActive = parseInt(user.last_active) || now;
@@ -88,7 +104,7 @@ function processOffline(user) {
     return false;
 }
 
-// --- [4. API ЭНДПОИНТЫ] ---
+// --- [5. API] ---
 app.get('/api/balance/:userId', async (req, res) => {
     const uid = String(req.params.userId);
     try {
@@ -129,7 +145,7 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).json({ status: "error" }); }
 });
 
-// --- [5. СИНХРОНИЗАЦИЯ] ---
+// --- [6. СИНХРОНИЗАЦИЯ] ---
 async function flushToDisk() {
     if (saveQueue.size === 0) return;
     const ids = Array.from(saveQueue);
@@ -150,23 +166,19 @@ async function flushToDisk() {
 }
 setInterval(flushToDisk, 20000);
 
-// --- [6. WEBHOOK & BOT] ---
-
-
-// Путь для вебхука (скрытый)
-const secretPath = `/telegraf/${bot.secretPathComponent()}`;
-app.use(bot.webhookCallback(secretPath));
-
+// --- [7. ЛОГИКА БОТА] ---
 bot.start((ctx) => {
+    logger.info(`✅ БОТ: Получена команда /start от ${ctx.from.id}`);
     const uid = ctx.from.id;
     const webAppUrlWithParams = `${WEB_APP_URL}/?u=${uid}&v=${Date.now()}`;
+    
     ctx.replyWithHTML(
         `🦾 <b>NEURAL PULSE</b>\n\nПротокол PnL активирован. Твои шахты работают, пока ты спишь.\n\n<i>Твой ID: ${uid}</i>`, 
         Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", webAppUrlWithParams)]])
-    );
+    ).catch(err => logger.error(`❌ Ошибка отправки ответа: ${err.message}`));
 });
 
-// --- [7. ЗАПУСК] ---
+// --- [8. ЗАПУСК СЕРВЕРА] ---
 async function start() {
     await initDB();
     
@@ -174,9 +186,12 @@ async function start() {
         logger.info(`🌐 СЕРВЕР: LIVE на порту ${PORT}`);
         
         try {
-            // Устанавливаем Webhook
-            await bot.telegram.setWebhook(`${WEB_APP_URL}${secretPath}`);
-            logger.info(`🤖 БОТ: Webhook установлен: ${WEB_APP_URL}${secretPath}`);
+            // Принудительно ставим вебхук при каждом запуске
+            const webhookFullUrl = `${WEB_APP_URL}${SECRET_PATH}`;
+            await bot.telegram.setWebhook(webhookFullUrl, {
+                drop_pending_updates: true // Очищаем старые «зависшие» нажатия
+            });
+            logger.info(`🤖 БОТ: Webhook установлен: ${webhookFullUrl}`);
         } catch (err) {
             logger.error(`🤖 БОТ: Ошибка Webhook: ${err.message}`);
         }
@@ -184,7 +199,7 @@ async function start() {
 }
 
 async function shutdown() {
-    logger.info("🚀 ЗАВЕРШЕНИЕ: Сохранение данных...");
+    logger.info("🚀 ЗАВЕРШЕНИЕ...");
     await flushToDisk();
     if (db) await db.close();
     process.exit(0);
