@@ -1,34 +1,34 @@
-# --- ЭТАП 1: Сборка (Build-stage) ---
+# --- ЭТАП 1: Сборка ---
 FROM node:18-alpine AS builder
 
-# Устанавливаем инструменты сборки и Python
-# Создаем симлинк, чтобы node-gyp видел python3 как python
+# Устанавливаем инструменты сборки и Python3
+# Создаем симлинк, чтобы система видела 'python'
 RUN apk add --no-cache python3 make g++ gcc libc-dev sqlite-dev && \
     ln -sf python3 /usr/bin/python
 
 WORKDIR /app
 COPY package*.json ./
 
-# Устанавливаем зависимости и заставляем sqlite3 собраться из исходников
+# Устанавливаем зависимости и заставляем sqlite3 компилироваться
 RUN npm ci --only=production && \
     npm rebuild sqlite3 --build-from-source
 
-# --- ЭТАП 2: Финальный образ (Runtime-stage) ---
+# --- ЭТАП 2: Рантайм ---
 FROM node:18-alpine
 
-# Добавляем только минимально необходимые библиотеки для запуска
+# Для работы скомпилированного sqlite3 нужна библиотека libstdc++
 RUN apk add --no-cache tini libstdc++
 
 WORKDIR /app
 
-# Копируем только готовые модули и файлы проекта
+# Копируем только готовые node_modules из первого этапа
 COPY --from=builder /app/node_modules ./node_modules
 COPY . .
 
-# Создаем папки для БД и логов с правильными правами
+# Создаем папки для БД и логов
 RUN mkdir -p /app/data /app/logs && chown -R node:node /app/data /app/logs
 
-# Устанавливаем PM2 для управления процессом
+# Глобально ставим PM2
 RUN npm install -g pm2
 
 ENV NODE_ENV=production
@@ -38,5 +38,5 @@ EXPOSE 3000
 ENTRYPOINT ["/sbin/tini", "--"]
 USER node
 
-# Запуск через твой ecosystem файл
+# Запуск через PM2
 CMD ["pm2-runtime", "ecosystem.config.js", "--env", "production"]
