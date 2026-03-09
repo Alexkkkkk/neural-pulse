@@ -1,53 +1,52 @@
 # --- ЭТАП 1: Сборка (Builder) ---
 FROM node:18-alpine AS builder
 
-# Устанавливаем системные зависимости для сборки нативных модулей (sqlite3)
+# Системные зависимости для компиляции sqlite3
 RUN apk add --no-cache python3 make g++ gcc libc-dev sqlite-dev
 
 WORKDIR /app
 
-# Копируем файлы зависимостей
+# Копируем только файлы зависимостей для кэширования слоев
 COPY package*.json ./
 
-# Устанавливаем зависимости и пересобираем sqlite3 под архитектуру контейнера
-RUN npm ci && \
-    npm rebuild sqlite3 --build-from-source
+# Чистая установка и сборка sqlite3 из исходников
+RUN npm ci && npm rebuild sqlite3 --build-from-source
 
 # --- ЭТАП 2: Запуск (Runtime) ---
 FROM node:18-alpine
 
-# Устанавливаем tini и необходимые библиотеки для работы sqlite3
+# Устанавливаем tini (для обработки сигналов) и библиотеки для sqlite
 RUN apk add --no-cache tini libstdc++
 
 WORKDIR /app
 
-# Копируем скомпилированные модули из сборщика
-COPY --from=builder /app/node_modules ./node_modules
-
-# Копируем исходный код приложения
-COPY . .
-
-# Устанавливаем PM2 глобально (используем более легкий метод)
+# Устанавливаем PM2 глобально
 RUN npm install -g pm2 && npm cache clean --force
 
-# Создаем директории и ПЕРЕДАЕМ ПРАВА пользователю node
-# Это жизненно важно для Webhook-бота, чтобы логи и БД писались без ошибок
+# Сначала копируем зависимости из билдера
+COPY --from=builder /app/node_modules ./node_modules
+
+# Копируем всё остальное
+COPY . .
+
+# Создаем нужные папки и ОДНИМ МАХОМ отдаем права пользователю node на всё
+# Это гарантирует, что база данных в /app/data создастся и будет работать
 RUN mkdir -p /app/data /app/logs && \
-    chown -R node:node /app/data /app/logs /app
+    chown -R node:node /app
 
 # Настройки среды
 ENV NODE_ENV=production
 ENV PORT=3000
-# Переменная для нашего Webhook (подхватится сервером)
 ENV WEB_APP_URL=https://np.bothost.ru
 
+# Открываем порт
 EXPOSE 3000
 
-# Используем tini для правильной передачи сигналов остановки (SIGTERM) нашему серверу
+# Правильная обработка сигналов завершения (SIGTERM)
 ENTRYPOINT ["/sbin/tini", "--"]
 
-# Работаем от имени пользователя node для безопасности
+# Работаем от имени непривилегированного пользователя
 USER node
 
-# Запуск через PM2
-CMD ["pm2-runtime", "ecosystem.config.js", "--env", "production"]
+# Запуск через PM2-runtime (он лучше держит процесс в контейнере)
+CMD ["pm2-runtime", "ecosystem.config.js"]
