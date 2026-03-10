@@ -77,30 +77,67 @@ bot.command('admin_reset_db', async (ctx) => {
     await ctx.reply("💥 База данных успешно очищена.");
 });
 
-// --- [5. ЛОГИКА БОТА] ---
+// --- [5. ЛОГИКА БОТА: ТЕРМИНАЛЬНАЯ ИНИЦИАЛИЗАЦИЯ] ---
 bot.start(async (ctx) => {
     const uid = ctx.from.id;
-    const username = ctx.from.username || "User";
-    logger.info(`🎯 BOT: /start от ${username} (${uid})`);
+    const username = ctx.from.username || "Agent";
+    logger.info(`🎯 BOT: Протокол активации для ${username} (${uid})`);
     
-    // Кнопка ВХОД на первом месте
     try {
-        await ctx.replyWithHTML(
-            `🦾 <b>NEURAL PULSE AI</b>\n\nПривет, ${username}!\nТвой ID: <code>${uid}</code>`,
-            Markup.inlineKeyboard([
-                [Markup.button.webApp("ВХОД В СИСТЕМУ 🧠", `${WEB_APP_URL}/?u=${uid}`)],
-                [Markup.button.url("КАНАЛ НОВОСТЕЙ", "https://t.me/neural_pulse_news")]
-            ])
+        // ЭТАП 1: Подключение
+        const sentMsg = await ctx.replyWithHTML(
+            `📡 <b>NEURAL PULSE: CONNECTION...</b>\n` +
+            `<code>> Booting core system...</code>\n` +
+            `<code>[▒▒▒▒▒▒▒▒▒▒] 0%</code>`,
+            Markup.inlineKeyboard([[Markup.button.callback("ИНИЦИАЛИЗАЦИЯ... 🔄", "loading")]])
         );
-        logger.info(`✅ BOT: Ответ отправлен (ID: ${uid})`);
-    } catch (e) { logger.error(`❌ BOT ERROR: ${e.message}`); }
+
+        // ЭТАП 2: Проверка данных (через 700мс)
+        setTimeout(async () => {
+            await ctx.telegram.editMessageText(
+                ctx.chat.id, sentMsg.message_id, null,
+                `📡 <b>NEURAL PULSE: SYNCING...</b>\n` +
+                `<code>> Loading user data: OK</code>\n` +
+                `<code>[██████▒▒▒▒] 65%</code>`,
+                { 
+                    parse_mode: 'HTML', 
+                    ...Markup.inlineKeyboard([[Markup.button.callback("ЗАГРУЗКА ДАННЫХ... ⚙️", "loading")]]) 
+                }
+            ).catch(() => {});
+        }, 700);
+
+        // ЭТАП 3: Готовность (через 1400мс)
+        setTimeout(async () => {
+            const webAppUrl = `${WEB_APP_URL}/?u=${uid}`;
+            await ctx.telegram.editMessageText(
+                ctx.chat.id, sentMsg.message_id, null,
+                `🦾 <b>SYSTEM ONLINE: NEURAL PULSE AI</b>\n` +
+                `----------------------------------\n` +
+                `👤 АГЕНТ: <code>${username}</code>\n` +
+                `🆔 СЕКТОР: <code>${uid}</code>\n` +
+                `----------------------------------\n` +
+                `✅ Все системы активны. Доступ разрешен.`,
+                {
+                    parse_mode: 'HTML',
+                    ...Markup.inlineKeyboard([
+                        [Markup.button.webApp("ВХОД В СИСТЕМУ 🧠", webAppUrl)],
+                        [Markup.button.url("КАНАЛ СВЯЗИ", "https://t.me/neural_pulse_news")]
+                    ])
+                }
+            ).catch(() => {});
+            logger.info(`✅ BOT: Доступ открыт для ${uid}`);
+        }, 1400);
+
+    } catch (e) { logger.error(`❌ BOT START ERROR: ${e.message}`); }
 });
+
+bot.action('loading', (ctx) => ctx.answerCbQuery("Система загружается..."));
 
 bot.on('text', (ctx) => {
     ctx.reply("Система активна. Используйте /start для входа.");
 });
 
-// --- [6. API] ---
+// --- [6. API ДЛЯ WEBAPP] ---
 app.get('/api/balance/:userId', (req, res) => {
     const uid = String(req.params.userId);
     if (!usersData[uid]) {
