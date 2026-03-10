@@ -1,11 +1,9 @@
 module.exports = {
   apps: [{
-    name: "np-app",
-    script: "app.js",
+    name: "pulse-bot",
+    script: "http-wrapper.js",
     autorestart: true,
-    wait_ready: true,
-    max_memory_restart: '400M',
-    error_file: "logs/err.log",
-    out_file: "logs/out.log"
+    exp_backoff_restart_delay: 100,
+    env: { NODE_ENV: "production" }
   }]
 }
