@@ -174,12 +174,6 @@
         tg.ready();
         tg.expand();
 
-        // Позволяет видеть ошибки JS прямо в интерфейсе Telegram
-        window.onerror = function(msg, url, line) {
-            tg.showAlert(`DEBUG ERROR:\n${msg}\nLine: ${line}`);
-        };
-
-        // Автоматически определяем адрес API (на Bothost это обычно тот же домен)
         const API_BASE = window.location.origin;
 
         let state = { 
@@ -190,7 +184,7 @@
             pnl: 0, 
             loaded: false,
             isDirty: false,
-            // Проверка ID из Telegram или из URL
+            // Безопасное получение ID из initData или URL
             uid: tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('u')
         };
 
@@ -201,7 +195,7 @@
 
             const interval = setInterval(() => {
                 if (state.loaded && progress < 100) {
-                    progress += 10; // Ускоряем в конце
+                    progress += 10;
                 } else if (!state.loaded && progress < 90) {
                     progress += 0.5;
                 }
@@ -237,27 +231,24 @@
 
         async function loadData() {
             if(!state.uid) { 
-                console.warn("UID not found, starting as Guest");
+                console.warn("UID not found");
                 state.loaded = true;
                 updateUI();
                 return; 
             }
             try {
-                // Прямой запрос к твоему API
                 const r = await fetch(`${API_BASE}/api/balance/${state.uid}`);
                 const res = await r.json();
 
                 if(res.status === 'ok') {
-                    // Синхронизируем состояние с сервером
-                    state.balance = res.data.balance;
-                    state.energy = res.data.energy;
-                    state.pnl = res.data.pnl;
-                    state.click_lvl = res.data.click_lvl;
-                    state.max_energy = res.data.max_energy;
+                    state.balance = res.data.balance || 0;
+                    state.energy = res.data.energy || 1000;
+                    state.pnl = res.data.pnl || 0;
+                    state.click_lvl = res.data.click_lvl || 1;
+                    state.max_energy = res.data.max_energy || 1000;
                 }
             } catch(e) { 
-                console.error("Fetch error:", e);
-                // Если сервер упал, даем поиграть локально
+                console.error("Load failed");
             } finally {
                 state.loaded = true;
                 updateUI();
@@ -265,19 +256,31 @@
         }
 
         async function syncData() {
+            // Отправляем данные только если были клики и пользователь загружен
             if(!state.uid || !state.loaded || !state.isDirty) return;
+            
             try {
-                await fetch(`${API_BASE}/api/save`, {
+                const response = await fetch(`${API_BASE}/api/save`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        // ОБЯЗАТЕЛЬНО: Отправляем initData для проверки на сервере
+                        'Authorization': tg.initData 
+                    },
                     body: JSON.stringify({
                         user_id: state.uid, 
                         score: state.balance,
                         energy: state.energy
                     })
                 });
-                state.isDirty = false;
-            } catch(e) { console.error("Sync fail"); }
+                
+                const result = await response.json();
+                if(result.status === 'ok') {
+                    state.isDirty = false;
+                }
+            } catch(e) { 
+                console.error("Sync error"); 
+            }
         }
 
         const tapZone = document.getElementById('tap-zone');
@@ -317,18 +320,16 @@
             mainLogo.style.transform = 'scale(1)';
         });
 
-        // Игровой цикл (каждую секунду)
+        // Регенерация энергии раз в секунду
         setInterval(() => {
             if (!state.loaded) return;
-            
-            // Восстановление энергии (+3/сек)
             if (state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 3);
                 updateUI();
             }
         }, 1000);
 
-        // Синхронизация с сервером каждые 10 секунд
+        // Сохранение на сервер каждые 10 секунд
         setInterval(syncData, 10000);
 
         window.onload = () => {
