@@ -1,9 +1,14 @@
 module.exports = {
   apps: [{
-    name: "pulse-bot",
-    script: "http-wrapper.js",
+    name: "pulse-bot-main",
+    script: "server.js",
+    instances: 1,
     autorestart: true,
-    exp_backoff_restart_delay: 100,
-    env: { NODE_ENV: "production" }
+    watch: false,
+    max_memory_restart: '450M',
+    env: {
+      NODE_ENV: "production",
+      PORT: 3000
+    }
   }]
 }
