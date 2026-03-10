@@ -1,55 +1,59 @@
 # --- ЭТАП 1: Сборка (Builder) ---
 FROM node:18-alpine AS builder
 
-# Устанавливаем зависимости для сборки нативных модулей (sqlite3)
-RUN apk add --no-cache python3 make g++ gcc libc-dev sqlite-dev
+# Устанавливаем ВСЕ необходимые инструменты для сборки нативных модулей
+# python3, make, g++ нужны для node-gyp (компиляция sqlite3)
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    gcc \
+    libc-dev \
+    sqlite-dev \
+    linux-headers
 
 WORKDIR /app
 
-# Копируем конфиги зависимостей
+# Копируем файлы зависимостей
 COPY package*.json ./
 
-# Устанавливаем зависимости и принудительно пересобираем sqlite3 из исходников под текущую архитектуру
+# Устанавливаем зависимости. 
+# Мы используем --build-from-source, чтобы sqlite3 точно скомпилировался под архитектуру Alpine
 RUN npm ci && npm rebuild sqlite3 --build-from-source
 
 # --- ЭТАП 2: Запуск (Runtime) ---
 FROM node:18-alpine
 
-# Устанавливаем tini для обработки сигналов и системные библиотеки для работы sqlite
+# Устанавливаем tini для обработки сигналов и библиотеки рантайма sqlite
+# libstdc++ и sqlite-libs обязательны для работы скомпилированного модуля
 RUN apk add --no-cache tini libstdc++ sqlite-libs
 
 WORKDIR /app
 
-# Устанавливаем PM2 глобально для управления процессом
+# Устанавливаем PM2 глобально
 RUN npm install -g pm2 && npm cache clean --force
 
-# Копируем только собранные node_modules из билдера
+# Копируем собранные node_modules и бинарники из билдера
 COPY --from=builder /app/node_modules ./node_modules
-
-# Копируем исходный код проекта
 COPY . .
 
-# Исправление прав доступа:
-# 1. Создаем папки заранее
-# 2. Убеждаемся, что пользователь node имеет права на запись во всем каталоге /app
-# Это критично для SQLite, так как она создает временные -journal и -wal файлы в той же папке
+# Настройка прав доступа (КРИТИЧЕСКИ ВАЖНО для Bothost)
+# SQLite создает временные файлы (WAL/Journal), поэтому node должен владеть папкой данных
 RUN mkdir -p /app/data /app/logs && \
     chown -R node:node /app && \
-    chmod -R 755 /app/data
+    chmod -R 775 /app/data /app/logs
 
-# Настройки среды
+# Переменные окружения по умолчанию
 ENV NODE_ENV=production
 ENV PORT=3000
-ENV WEB_APP_URL=https://np.bothost.ru
 
-# Открываем порт для прокси хостинга
 EXPOSE 3000
 
-# Используем tini как init-процесс для корректного проброса сигналов SIGTERM/SIGINT
+# Используем tini для правильной обработки SIGTERM (важно для сохранения БД при перезагрузке)
 ENTRYPOINT ["/sbin/tini", "--"]
 
-# Переключаемся на безопасного пользователя
+# Работаем от имени непривилегированного пользователя
 USER node
 
-# Запуск. Убедись, что файл ecosystem.config.js существует в корне проекта
+# Если у тебя НЕТ файла ecosystem.config.js, замени на: CMD ["pm2-runtime", "server.js"]
 CMD ["pm2-runtime", "ecosystem.config.js"]
