@@ -39,23 +39,21 @@ function loadData() {
         }
     } catch (e) { 
         logger.error(`📂 БД ERROR: ${e.message}`); 
-        usersData = {};
     }
 }
 
 function saveData() {
     try {
-        const data = JSON.stringify(usersData, null, 2);
-        fs.writeFileSync(DATA_FILE, data);
-        logger.debug("💾 БД: Данные сохранены");
+        fs.writeFileSync(DATA_FILE, JSON.stringify(usersData, null, 2));
+        logger.debug("💾 БД: Сохранено");
     } catch (e) { 
         logger.error(`💾 БД ERROR: ${e.message}`); 
     }
 }
 
-// --- [3. MIDDLEWARE И ВЕБХУК] ---
+// --- [3. РОУТЫ И ВЕБХУК] ---
 app.post(WEBHOOK_PATH, (req, res, next) => {
-    logger.debug(`📡 WEBHOOK: POST запрос от Telegram`);
+    logger.debug(`📡 WEBHOOK: Входящий запрос`);
     next();
 }, bot.webhookCallback(WEBHOOK_PATH));
 
@@ -63,37 +61,34 @@ app.use(express.json());
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// --- [4. API ДЛЯ WEBAPP] ---
+// API для баланса
 app.get('/api/balance/:userId', (req, res) => {
     const uid = String(req.params.userId);
-    if (!usersData[uid]) {
-        usersData[uid] = { id: uid, balance: 0, energy: 1000, max_energy: 1000 };
-    }
+    if (!usersData[uid]) usersData[uid] = { id: uid, balance: 0, energy: 1000, max_energy: 1000 };
     res.json({ status: "ok", data: usersData[uid] });
 });
 
+// API для сохранения
 app.post('/api/save', (req, res) => {
     const { user_id, score, energy } = req.body;
     const uid = String(user_id);
-    if (uid && uid !== 'undefined') {
-        if (!usersData[uid]) usersData[uid] = { id: uid, balance: 0, energy: 1000 };
+    if (uid && usersData[uid]) {
         if (score !== undefined) usersData[uid].balance = Number(score);
         if (energy !== undefined) usersData[uid].energy = Number(energy);
-        saveData(); // Сохраняем сразу при важном обновлении
         return res.json({ status: "ok" });
     }
-    res.status(400).json({ status: "error", message: "Invalid ID" });
+    res.status(400).json({ status: "error" });
 });
 
-// --- [5. ЛОГИКА БОТА] ---
+// --- [4. ЛОГИКА БОТА] ---
 bot.start(async (ctx) => {
     const uid = ctx.from.id;
     const username = ctx.from.username || "User";
-    logger.info(`🎯 BOT: Команда /start от ${uid}`);
+    logger.info(`🎯 BOT: /start от ${uid}`);
     
     try {
         await ctx.replyWithHTML(
-            `🦾 <b>NEURAL PULSE AI</b>\n\nПривет, ${username}!\nТвой ID: <code>${uid}</code>\n\nБот работает через PM2 + http-wrapper.`,
+            `🦾 <b>NEURAL PULSE AI</b>\n\nПривет, ${username}!\nТвой ID: <code>${uid}</code>\n\nСистема работает стабильно.`,
             Markup.inlineKeyboard([
                 [Markup.button.webApp("ВХОД В СИСТЕМУ 🧠", `${WEB_APP_URL}/?u=${uid}`)],
                 [Markup.button.url("КАНАЛ", "https://t.me/neural_pulse_news")]
@@ -102,11 +97,11 @@ bot.start(async (ctx) => {
     } catch (e) { logger.error(`❌ BOT ERROR: ${e.message}`); }
 });
 
-bot.on('text', (ctx) => ctx.reply("Система активна. Напишите /start для входа."));
+bot.on('text', (ctx) => ctx.reply("Система активна. Используй /start."));
 
-// --- [6. ЗАПУСК] ---
+// --- [5. ЗАПУСК] ---
 loadData();
-setInterval(saveData, 60000); // Автосохранение каждую минуту
+setInterval(saveData, 60000);
 
 async function init() {
     try {
@@ -114,7 +109,7 @@ async function init() {
         logger.info(`🤖 BOT: Авторизован как @${me.username}`);
 
         app.listen(PORT, '0.0.0.0', async () => {
-            logger.info(`🌐 SERVER: Запущен на порту ${PORT}`);
+            logger.info(`🌐 SERVER: Слушает порт ${PORT}`);
             const hookUrl = `${WEB_APP_URL}${WEBHOOK_PATH}`;
             
             await bot.telegram.deleteWebhook({ drop_pending_updates: true });
@@ -122,26 +117,15 @@ async function init() {
             
             logger.info(`🤖 BOT: Вебхук установлен: ${hookUrl}`);
 
-            // СИГНАЛ ДЛЯ PM2 (если используется wait_ready: true)
-            if (process.send) {
-                process.send('ready');
-                logger.info("🚀 PM2: Сигнал 'ready' отправлен");
-            }
+            // Сигнал готовности для PM2
+            if (process.send) process.send('ready');
         });
     } catch (e) {
-        logger.error(`❌ FATAL: Ошибка инициализации: ${e.message}`);
-        process.exit(1);
+        logger.error(`❌ FATAL: ${e.message}`);
     }
 }
 
 init();
 
-// --- [7. ЗАВЕРШЕНИЕ РАБОТЫ] ---
-const gracefulShutdown = () => {
-    logger.info("⚠️ Завершение работы: сохранение данных...");
-    saveData();
-    process.exit(0);
-};
-
-process.on('SIGTERM', gracefulShutdown);
-process.on('SIGINT', gracefulShutdown);
+// Graceful shutdown
+process.on('SIGTERM', () => { saveData(); process.exit(0); });
