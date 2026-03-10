@@ -6,7 +6,7 @@ const { Telegraf, Markup } = require('telegraf');
 const winston = require('winston');
 
 // --- [1. КОНФИГУРАЦИЯ] ---
-const API_TOKEN = "8257287930:AAG4hbfu1mF55SghPkrzt3_CZgh3tuds3x0"; // Твой новый токен
+const API_TOKEN = "8257287930:AAG4hbfu1mF55SghPkrzt3_CZgh3tuds3x0"; 
 const WEB_APP_URL = "https://np.bothost.ru";
 const PORT = process.env.PORT || 3000;
 const WEBHOOK_PATH = "/webhook-tg-pulse";
@@ -72,7 +72,6 @@ bot.start(async (ctx) => {
     } catch (e) { logger.error(`❌ BOT ERROR: ${e.message}`); }
 });
 
-// Ответ на любой текст
 bot.on('text', (ctx) => ctx.reply("Система активна. Используй /start."));
 
 // --- [5. ЗАПУСК] ---
@@ -85,17 +84,14 @@ async function init() {
         logger.info(`🤖 BOT: Авторизован как @${me.username}`);
 
         app.listen(PORT, '0.0.0.0', async () => {
-            logger.info(`🌐 SERVER: Запущен на порту ${PORT}`);
+            logger.info(`🌐 SERVER (HTTP-WRAPPER): Запущен на порту ${PORT}`);
             const hookUrl = `${WEB_APP_URL}${WEBHOOK_PATH}`;
-            
-            // drop_pending_updates: true удаляет все старые сообщения, чтобы бот не тормозил
             await bot.telegram.deleteWebhook({ drop_pending_updates: true });
             await bot.telegram.setWebhook(hookUrl);
-            
             logger.info(`🤖 BOT: Вебхук установлен на ${hookUrl}`);
         });
     } catch (e) {
-        logger.error(`❌ FATAL: Ошибка авторизации бота. Проверь токен! ${e.message}`);
+        logger.error(`❌ FATAL: Ошибка авторизации бота: ${e.message}`);
     }
 }
 
