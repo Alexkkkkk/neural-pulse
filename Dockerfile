@@ -1,48 +1,26 @@
-# --- ЭТАП 1: Сборка ---
+# Сборка
 FROM node:18-alpine AS builder
-
 WORKDIR /app
-
-# Копируем конфиги зависимостей
 COPY package*.json ./
-
-# Устанавливаем зависимости (clean install)
 RUN npm ci --omit=dev
 
-# --- ЭТАП 2: Рантайм ---
+# Рантайм
 FROM node:18-alpine
-
-# Устанавливаем системные утилиты и PM2
-RUN apk add --no-cache tini && \
-    npm install -g pm2 && \
-    npm cache clean --force
-
+RUN apk add --no-cache tini
 WORKDIR /app
-
-# Переносим модули из билдера
 COPY --from=builder /app/node_modules ./node_modules
-
-# Копируем исходный код
 COPY . .
 
-# Настройка прав доступа (ВЫПОЛНЯЕТСЯ ПОСЛЕ COPY)
-USER root
+# Права доступа
 RUN mkdir -p /app/data /app/logs && \
-    # Создаем пустой файл БД, если он отсутствует, чтобы избежать ошибок прав
-    touch /app/data/users.json && \
+    if [ ! -f /app/data/users.json ]; then echo "{}" > /app/data/users.json; fi && \
     chown -R node:node /app && \
     chmod -R 775 /app/data /app/logs
 
-# Переменные окружения
 ENV NODE_ENV=production
 ENV PORT=3000
 EXPOSE 3000
 
-# Использование tini предотвращает проблему "PID 1" в контейнере
 ENTRYPOINT ["/sbin/tini", "--"]
-
-# Переключаемся на непривилегированного пользователя
 USER node
-
-# Запуск через PM2 Runtime (специальная версия для Docker)
-CMD ["pm2-runtime", "ecosystem.config.js"]
+CMD ["node", "server.js"]
