@@ -1,31 +1,33 @@
 module.exports = {
   apps: [{
     name: "neural-pulse-core",
-    script: "./server.js", 
+    script: "server.js", // Упростил путь, так как мы запускаем из корня /app
+    cwd: "/app",         // Явно задаем рабочую директорию для Docker
     
-    // Оставляем fork для экономии ресурсов на тарифе Pro
+    // Режим fork оптимален для 1 инстанса на лимитированных ресурсах
     instances: 1,
     exec_mode: "fork",
     
     autorestart: true,
     watch: false,
     
-    // Мониторинг памяти
+    // Перезапуск при превышении порога памяти (350MB V8 + запас)
     max_memory_restart: '400M', 
     
-    // Защита от цикличных перезагрузок (Crash Loop)
+    // Стратегия предотвращения бесконечных рестартов при фатальных ошибках
     exp_backoff_restart_delay: 2000, 
     min_uptime: "15s",
     max_restarts: 10,
     
-    // Механизм корректного завершения (Graceful Shutdown)
-    // Эти настройки критичны, чтобы успеть сохранить users.json
+    // Грейсфул шатдаун: даем 5 секунд на сохранение users.json
     kill_timeout: 5000, 
     shutdown_with_message: true,
+    
+    // Ждем process.send('ready') от сервера перед тем, как считать запуск успешным
     wait_ready: true, 
-    listen_timeout: 3000,
+    listen_timeout: 5000, // Увеличил до 5с, чтобы база точно успела прочитаться
 
-    // Коды выхода, при которых НЕ нужно перезапускаться (чистое завершение)
+    // Не перезапускать, если процесс завершился без ошибок
     stop_exit_codes: [0],
 
     env: {
@@ -33,13 +35,13 @@ module.exports = {
       PORT: 3000
     },
 
-    // Пути к логам внутри Docker-контейнера
+    // Настройка логов
     log_date_format: "YYYY-MM-DD HH:mm:ss",
     merge_logs: true,
     error_file: "logs/err.log",
     out_file: "logs/out.log",
 
-    // Тюнинг движка V8 под лимиты хостинга
+    // Оптимизация Node.js под тариф Pro
     node_args: [
       "--no-warnings",
       "--enable-source-maps",
