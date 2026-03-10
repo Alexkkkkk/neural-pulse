@@ -36,7 +36,6 @@ function loadData() {
         if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
         if (fs.existsSync(DATA_FILE)) {
             const raw = fs.readFileSync(DATA_FILE, 'utf8');
-            // Проверка на пустой файл или некорректный JSON
             if (raw.trim()) {
                 usersData = JSON.parse(raw);
                 logger.info(`📦 БД: Загружено профилей: ${Object.keys(usersData).length}`);
@@ -56,10 +55,8 @@ function loadData() {
 
 function saveData() {
     try {
-        // Атомарная запись через временный файл
         const tmpFile = DATA_FILE + '.tmp';
-        const content = JSON.stringify(usersData, null, 2);
-        fs.writeFileSync(tmpFile, content, 'utf8');
+        fs.writeFileSync(tmpFile, JSON.stringify(usersData, null, 2), 'utf8');
         fs.renameSync(tmpFile, DATA_FILE);
         logger.debug("💾 БД: Данные синхронизированы успешно");
     } catch (e) {
@@ -69,95 +66,70 @@ function saveData() {
 
 // --- [3. MIDDLEWARE & WEBHOOK] ---
 app.use(cors());
-app.use(express.json()); // Переместил вверх для всех роутов
+app.use(express.json()); // Обязательно перед роутами
 app.use(express.static(path.join(__dirname, 'static')));
 
 app.get('/', (req, res) => {
     res.status(200).send('Neural Pulse Core is Live');
 });
 
-// Обработка вебхука Telegram
+// ОБРАБОТКА ВЕБХУКА (Критический узел)
 app.post(WEBHOOK_PATH, async (req, res) => {
+    // Сразу отвечаем Telegram, чтобы он не слал повторы
+    res.sendStatus(200);
+
     try {
         if (req.body && req.body.update_id) {
-            await bot.handleUpdate(req.body, res);
-        } else {
-            res.sendStatus(200);
+            logger.debug(`📥 ВЕБХУК: Получен апдейт ID ${req.body.update_id}`);
+            await bot.handleUpdate(req.body);
         }
     } catch (e) {
         logger.error(`❌ ВЕБХУК ERROR: ${e.message}`);
-        if (!res.headersSent) res.sendStatus(500);
     }
 });
 
 // --- [4. API] ---
-const getInitialProfile = (uid) => ({
-    id: uid,
-    balance: 100,
-    click_lvl: 1,
-    pnl: 10,
-    energy: 1000,
-    max_energy: 1000,
-    last_active: Math.floor(Date.now() / 1000)
-});
-
 app.get('/api/balance/:userId', (req, res) => {
     const uid = String(req.params.userId);
     if (!usersData[uid]) {
-        usersData[uid] = getInitialProfile(uid);
+        usersData[uid] = { 
+            id: uid, balance: 100, click_lvl: 1, pnl: 10, 
+            energy: 1000, max_energy: 1000, last_active: Math.floor(Date.now() / 1000) 
+        };
     }
     res.json({ status: "ok", data: usersData[uid] });
 });
 
 app.post('/api/save', (req, res) => {
-    try {
-        const { user_id, score, energy } = req.body;
-        const uid = String(user_id);
-        
-        if (!uid || uid === 'undefined') {
-            return res.status(400).json({ status: "error", message: "Invalid user_id" });
-        }
-
-        // Если пользователя нет в памяти, создаем его
-        if (!usersData[uid]) {
-            usersData[uid] = getInitialProfile(uid);
-        }
-
+    const { user_id, score, energy } = req.body;
+    const uid = String(user_id);
+    if (uid && uid !== 'undefined') {
+        if (!usersData[uid]) usersData[uid] = { id: uid, balance: 0, energy: 1000 };
         if (score !== undefined) usersData[uid].balance = Number(score);
         if (energy !== undefined) usersData[uid].energy = Number(energy);
         usersData[uid].last_active = Math.floor(Date.now() / 1000);
-        
         res.json({ status: "ok" });
-    } catch (e) {
-        logger.error(`❌ API SAVE ERROR: ${e.message}`);
-        res.status(500).json({ status: "error" });
+    } else {
+        res.status(400).json({ status: "error", message: "Invalid user_id" });
     }
 });
 
-// Интервал сохранения — раз в минуту
 setInterval(saveData, 60000);
 
 // --- [5. БОТ] ---
 bot.start(async (ctx) => {
     const uid = ctx.from.id;
-    // v=timestamp помогает сбросить кэш WebApp в приложении Telegram
     const webAppUrl = `${WEB_APP_URL}/?u=${uid}&v=${Date.now()}`;
+    logger.info(`🎯 БОТ: Получена команда /start от ${uid}`);
     
     try {
         await ctx.replyWithHTML(
-            `🦾 <b>NEURAL PULSE</b>\n\nПротокол активирован. Добро пожаловать, агент.`, 
-            Markup.inlineKeyboard([
-                [Markup.button.webApp("ВХОД 🧠", webAppUrl)]
-            ])
+            `🦾 <b>NEURAL PULSE</b>\n\nСистема инициализирована. Добро пожаловать, агент.`, 
+            Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", webAppUrl)]])
         );
-        logger.info(`✅ БОТ: /start нажат пользователем ${uid}`);
     } catch (e) {
-        logger.error(`❌ БОТ START ERROR: ${e.message}`);
+        logger.error(`❌ БОТ REPLY ERROR: ${e.message}`);
     }
-});
-
-bot.catch((err, ctx) => {
-    logger.error(`🛑 TELEGRAF ERROR [Update:${ctx.update.update_id}]: ${err.message}`);
 });
 
 // --- [6. ЗАПУСК] ---
@@ -167,28 +139,24 @@ async function start() {
         logger.info(`🌐 СЕРВЕР: Запущен на порту ${PORT}`);
         try {
             const hookUrl = `${WEB_APP_URL}${WEBHOOK_PATH}`;
-            // Очищаем хвосты и ставим новый вебхук
+            // Очищаем старые сообщения и ставим вебхук заново
             await bot.telegram.deleteWebhook({ drop_pending_updates: true });
             await bot.telegram.setWebhook(hookUrl);
             
             const info = await bot.telegram.getWebhookInfo();
-            logger.info(`🤖 БОТ: Вебхук успешно установлен: ${info.url}`);
+            logger.info(`🤖 БОТ: Вебхук установлен: ${info.url}`);
             
             if (process.send) process.send('ready'); 
         } catch (err) {
-            logger.error(`🤖 WEBHOOK SET ERROR: ${err.message}`);
+            logger.error(`🤖 WEBHOOK ERROR: ${err.message}`);
         }
     });
 }
 
-// Корректное завершение (Graceful Shutdown)
 const shutdown = () => {
-    logger.warn("⚠️ Получен сигнал завершения. Сохранение данных...");
+    logger.warn("⚠️ Завершение работы...");
     saveData();
-    // Даем 500мс на завершение операций записи перед выходом
-    setTimeout(() => {
-        process.exit(0);
-    }, 500);
+    setTimeout(() => process.exit(0), 500);
 };
 
 process.on('SIGTERM', shutdown);
