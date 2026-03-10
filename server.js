@@ -3,7 +3,7 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const cors = require('cors');
-const crypto = require('crypto'); // Добавлено для проверки токена
+const crypto = require('crypto');
 const { Telegraf, Markup } = require('telegraf');
 const winston = require('winston');
 
@@ -29,65 +29,77 @@ app.set('trust proxy', 1);
 const server = http.createServer(app);
 const bot = new Telegraf(API_TOKEN);
 
-// --- [НОВОЕ: ПРОВЕРКА ПОДЛИННОСТИ TELEGRAM] ---
+// --- [ПРОВЕРКА ПОДЛИННОСТИ] ---
 function validateInitData(initData) {
-    if (!initData) return false;
+    if (!initData) {
+        logger.debug("🔍 AUTH: initData отсутствует");
+        return false;
+    }
+    try {
+        const urlParams = new URLSearchParams(initData);
+        const hash = urlParams.get('hash');
+        urlParams.delete('hash');
 
-    const urlParams = new URLSearchParams(initData);
-    const hash = urlParams.get('hash');
-    urlParams.delete('hash');
+        const dataCheckString = Array.from(urlParams.entries())
+            .map(([key, value]) => `${key}=${value}`)
+            .sort()
+            .join('\n');
 
-    // Сортируем параметры алфавитно
-    const dataCheckString = Array.from(urlParams.entries())
-        .map(([key, value]) => `${key}=${value}`)
-        .sort()
-        .join('\n');
+        const secretKey = crypto.createHmac('sha256', 'WebAppData')
+            .update(API_TOKEN)
+            .digest();
 
-    // Создаем секретный ключ на основе токена бота
-    const secretKey = crypto.createHmac('sha256', 'WebAppData')
-        .update(API_TOKEN)
-        .digest();
+        const hmac = crypto.createHmac('sha256', secretKey)
+            .update(dataCheckString)
+            .digest('hex');
 
-    // Вычисляем хеш
-    const hmac = crypto.createHmac('sha256', secretKey)
-        .update(dataCheckString)
-        .digest('hex');
-
-    return hmac === hash;
+        const isValid = hmac === hash;
+        logger.debug(`🔍 AUTH: Результат проверки: ${isValid}`);
+        return isValid;
+    } catch (e) {
+        logger.error(`🔍 AUTH: Ошибка валидации: ${e.message}`);
+        return false;
+    }
 }
 
-// --- [2. БАЗА ДАННЫХ (JSON)] ---
+// --- [2. БАЗА ДАННЫХ] ---
 let usersData = {};
 
 function loadData() {
+    logger.info("📂 БД: Начало загрузки...");
     try {
-        if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+        if (!fs.existsSync(DATA_DIR)) {
+            fs.mkdirSync(DATA_DIR, { recursive: true });
+            logger.info("📂 БД: Директория создана");
+        }
         if (fs.existsSync(DATA_FILE)) {
             const raw = fs.readFileSync(DATA_FILE, 'utf8');
             if (raw.trim()) {
                 usersData = JSON.parse(raw);
-                logger.info(`📦 БД: Загружено профилей: ${Object.keys(usersData).length}`);
+                logger.info(`📂 БД: Успешно загружено профилей: ${Object.keys(usersData).length}`);
             } else {
+                logger.warn("📂 БД: Файл пуст");
                 usersData = {};
             }
         } else {
+            logger.info("📂 БД: Файл не найден, инициализация пустой базы");
             usersData = {};
-            logger.info("📦 БД: Создана новая база");
         }
     } catch (e) {
-        logger.error("❌ БД LOAD ERROR: " + e.message);
+        logger.error(`📂 БД: Фатальная ошибка загрузки: ${e.message}`);
         usersData = {}; 
     }
 }
 
 function saveData() {
+    logger.debug("💾 БД: Попытка сохранения...");
     try {
         const tmpFile = DATA_FILE + '.tmp';
         fs.writeFileSync(tmpFile, JSON.stringify(usersData, null, 2), 'utf8');
         fs.renameSync(tmpFile, DATA_FILE);
-        logger.debug("💾 БД: Данные сохранены");
+        logger.debug("💾 БД: Сохранение завершено успешно");
     } catch (e) {
-        logger.error("❌ БД SAVE ERROR: " + e.message);
+        logger.error(`💾 БД: Ошибка сохранения: ${e.message}`);
     }
 }
 
@@ -96,16 +108,16 @@ app.use(cors());
 app.use(express.json()); 
 app.use(express.static(path.join(__dirname, 'static')));
 
-app.get('/health', (req, res) => res.status(200).json({ status: "alive" }));
-
 app.post(WEBHOOK_PATH, async (req, res) => {
+    logger.debug(`📥 WEBHOOK: Получен запрос от TG (ID: ${req.body?.update_id})`);
     res.sendStatus(200);
     try {
         if (req.body && req.body.update_id) {
             await bot.handleUpdate(req.body);
+            logger.debug(`📥 WEBHOOK: Обработан успешно`);
         }
     } catch (e) {
-        logger.error(`❌ ВЕБХУК ERROR: ${e.message}`);
+        logger.error(`📥 WEBHOOK: Ошибка обработки: ${e.message}`);
     }
 });
 
@@ -117,33 +129,40 @@ const getBaseProfile = (uid) => ({
 
 app.get('/api/balance/:userId', (req, res) => {
     const uid = String(req.params.userId);
-    if (!usersData[uid]) usersData[uid] = getBaseProfile(uid);
+    logger.debug(`📡 API GET: Запрос баланса для ${uid}`);
+    if (!usersData[uid]) {
+        logger.info(`📡 API GET: Создание нового профиля для ${uid}`);
+        usersData[uid] = getBaseProfile(uid);
+    }
     res.json({ status: "ok", data: usersData[uid] });
 });
 
-// ЗАЩИЩЕННЫЙ РОУТ СОХРАНЕНИЯ
 app.post('/api/save', (req, res) => {
-    const initData = req.headers['authorization']; // Ожидаем initData в заголовке
-    
-    // Проверка токена/подписи Telegram
-    if (!validateInitData(initData)) {
-        logger.warn(`⚠️ Попытка взлома или неверные данные API от ID: ${req.body.user_id}`);
-        // Временно закомментируй возврат 403, если пока не настроил фронтенд
-        // return res.status(403).json({ status: "error", message: "Invalid Auth" });
-    }
-
     const { user_id, score, energy } = req.body;
     const uid = String(user_id);
+    const authHeader = req.headers['authorization'];
+
+    logger.debug(`📡 API POST: Попытка сохранения для ${uid}`);
     
-    if (uid && uid !== 'undefined') {
-        if (!usersData[uid]) usersData[uid] = getBaseProfile(uid);
+    if (!validateInitData(authHeader)) {
+        logger.warn(`⚠️ API POST: Невалидная авторизация для ${uid}`);
+        // Оставляем без return для тестов, как и договорились ранее
+    }
+
+    if (uid && uid !== 'undefined' && uid !== 'null') {
+        if (!usersData[uid]) {
+            logger.info(`📡 API POST: Инициализация профиля ${uid} при сохранении`);
+            usersData[uid] = getBaseProfile(uid);
+        }
         
         if (score !== undefined) usersData[uid].balance = Number(score);
         if (energy !== undefined) usersData[uid].energy = Number(energy);
         usersData[uid].last_active = Math.floor(Date.now() / 1000);
         
+        logger.debug(`📡 API POST: Данные для ${uid} обновлены в памяти`);
         res.json({ status: "ok" });
     } else {
+        logger.error(`📡 API POST: Некорректный user_id: ${uid}`);
         res.status(400).json({ status: "error", message: "Invalid user_id" });
     }
 });
@@ -151,41 +170,50 @@ app.post('/api/save', (req, res) => {
 const saveInterval = setInterval(saveData, 60000);
 
 // --- [5. БОТ ЛОГИКА] ---
-bot.catch((err) => logger.error(`🛑 TELEGRAF ERROR: ${err.message}`));
+bot.catch((err) => logger.error(`🛑 BOT ERROR: ${err.message}`));
 
 bot.start(async (ctx) => {
     const uid = ctx.from.id;
+    logger.info(`🎯 BOT: Команда /start от ${uid}`);
     const webAppUrl = `${WEB_APP_URL}/?u=${uid}&v=${Date.now()}`;
     try {
         await ctx.replyWithHTML(
             `🦾 <b>NEURAL PULSE</b>\n\nСистема инициализирована. Добро пожаловать, агент.`, 
             Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", webAppUrl)]])
         );
+        logger.debug(`🎯 BOT: Ответ на /start отправлен для ${uid}`);
     } catch (e) {
-        logger.error(`❌ БОТ REPLY ERROR: ${e.message}`);
+        logger.error(`🎯 BOT: Ошибка ответа пользователю ${uid}: ${e.message}`);
     }
 });
 
 // --- [6. ЗАПУСК] ---
 async function start() {
+    logger.info("🚀 SYSTEM: Запуск процесса...");
     loadData();
     server.listen(PORT, '0.0.0.0', async () => {
-        logger.info(`🌐 СЕРВЕР: Запущен на порту ${PORT}`);
+        logger.info(`🌐 SERVER: Слушает порт ${PORT}`);
         try {
             const hookUrl = `${WEB_APP_URL}${WEBHOOK_PATH}`;
+            logger.info(`🤖 BOT: Установка вебхука на ${hookUrl}...`);
             await bot.telegram.deleteWebhook({ drop_pending_updates: true });
             await bot.telegram.setWebhook(hookUrl);
+            logger.info("🤖 BOT: Вебхук успешно подтвержден");
             if (process.send) process.send('ready'); 
         } catch (err) {
-            logger.error(`🤖 WEBHOOK ERROR: ${err.message}`);
+            logger.error(`🤖 BOT: Ошибка при установке вебхука: ${err.message}`);
         }
     });
 }
 
 const shutdown = () => {
+    logger.warn("🛑 SYSTEM: Получен сигнал выключения");
     clearInterval(saveInterval);
     saveData();
-    setTimeout(() => process.exit(0), 500);
+    setTimeout(() => {
+        logger.info("🛑 SYSTEM: Процесс завершен");
+        process.exit(0);
+    }, 500);
 };
 
 process.on('SIGTERM', shutdown);
