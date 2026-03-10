@@ -8,7 +8,7 @@ const winston = require('winston');
 
 // --- [1. КОНФИГУРАЦИЯ] ---
 // Проверь этот токен еще раз в BotFather!
-const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAGb0-TC4z3uFK2glOUJeU_wHnr27474zzQ";
+const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAG4hbfu1mF55SghPkrzt3_CZgh3tuds3x0";
 const WEB_APP_URL = process.env.WEB_APP_URL || "https://np.bothost.ru";
 const PORT = process.env.PORT || 3000;
 const WEBHOOK_PATH = "/webhook-tg-pulse";
