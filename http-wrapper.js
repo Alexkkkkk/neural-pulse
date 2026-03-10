@@ -4,115 +4,70 @@ const fs = require('fs');
 const cors = require('cors');
 const { exec } = require('child_process');
 const { Telegraf, Markup } = require('telegraf');
-const winston = require('winston');
 
-// --- [1. КОНФИГУРАЦИЯ] ---
+// --- [КОНФИГУРАЦИЯ] ---
 const API_TOKEN = "8257287930:AAFUmUinCAALPf6Bivpo04__Zp_V4Y49MFs"; 
 const WEB_APP_URL = "https://np.bothost.ru";
-const PORT = process.env.PORT || 3000;
-const WEBHOOK_PATH = "/webhook-tg-pulse";
-const DATA_DIR = path.join(__dirname, 'data');
-const DATA_FILE = path.join(DATA_DIR, 'users.json');
+const PORT = 3000;
 const ADMIN_ID = 476014374; 
 
-const logger = winston.createLogger({
-    level: 'debug',
-    format: winston.format.combine(
-        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-        winston.format.printf(({ timestamp, level, message }) => `[${timestamp}] ${level.toUpperCase()}: ${message}`)
-    ),
-    transports: [
-        new winston.transports.Console(),
-        new winston.transports.File({ filename: 'logs/err.log', level: 'error' })
-    ]
-});
-
 const app = express();
-app.set('trust proxy', 1);
 const bot = new Telegraf(API_TOKEN);
 
-// --- [2. БАЗА ДАННЫХ] ---
+// --- [БАЗА ДАННЫХ] ---
+const DATA_FILE = path.join(__dirname, 'data', 'users.json');
 let usersData = {};
-function loadData() {
-    try {
-        if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-        if (fs.existsSync(DATA_FILE)) {
-            const raw = fs.readFileSync(DATA_FILE, 'utf8');
-            usersData = raw.trim() ? JSON.parse(raw) : {};
-        }
-    } catch (e) { logger.error(`📂 БД ERROR: ${e.stack}`); }
-}
-function saveData() {
-    try {
-        fs.writeFileSync(DATA_FILE, JSON.stringify(usersData, null, 2));
-    } catch (e) { logger.error(`💾 БД ERROR: ${e.stack}`); }
-}
+if (!fs.existsSync(path.join(__dirname, 'data'))) fs.mkdirSync(path.join(__dirname, 'data'));
+if (fs.existsSync(DATA_FILE)) usersData = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8') || '{}');
 
-// --- [3. РОУТЫ И API] ---
-app.post(WEBHOOK_PATH, bot.webhookCallback(WEBHOOK_PATH));
+const save = () => fs.writeFileSync(DATA_FILE, JSON.stringify(usersData, null, 2));
+
+// --- [API & MIDDLEWARE] ---
 app.use(express.json());
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// API
 app.get('/api/balance/:userId', (req, res) => {
     const uid = String(req.params.userId);
-    if (!usersData[uid]) usersData[uid] = { id: uid, balance: 0, energy: 1000 };
-    res.json({ status: "ok", data: usersData[uid] });
+    res.json({ status: "ok", data: usersData[uid] || { balance: 0, energy: 1000 } });
 });
 
 app.post('/api/save', (req, res) => {
     const { user_id, score, energy } = req.body;
-    const uid = String(user_id);
-    if (uid && uid !== 'undefined') {
-        if (!usersData[uid]) usersData[uid] = { id: uid, balance: 0 };
-        if (score !== undefined) usersData[uid].balance = Number(score);
-        if (energy !== undefined) usersData[uid].energy = Number(energy);
-        saveData();
-        return res.json({ status: "ok" });
+    if (user_id) {
+        usersData[user_id] = { balance: score, energy };
+        save();
     }
-    res.status(400).send("ID Error");
+    res.json({ status: "ok" });
 });
 
-// --- [4. АДМИН-КОМАНДЫ] ---
-bot.command('admin_reload', async (ctx) => {
-    if (ctx.from.id !== ADMIN_ID) return;
-    await ctx.reply("🚀 Очистка кэша и перезапуск...");
-    setTimeout(() => process.exit(1), 500);
+// --- [КОМАНДЫ БОТА] ---
+bot.start((ctx) => ctx.replyWithHTML(`🦾 <b>NEURAL PULSE</b>`, 
+    Markup.inlineKeyboard([[Markup.button.webApp("ИГРАТЬ", `${WEB_APP_URL}/?u=${ctx.from.id}`)]])));
+
+bot.command('admin_reset', (ctx) => {
+    if (ctx.from.id === ADMIN_ID) { usersData = {}; save(); ctx.reply("БД очищена"); }
 });
 
-bot.command('admin_update', async (ctx) => {
-    if (ctx.from.id !== ADMIN_ID) return;
-    await ctx.reply("🔄 GitHub Pull...");
-    exec('git pull && npm install', (err, stdout) => {
-        if (err) return ctx.reply(`❌ Git Error: ${err.message}`);
-        ctx.reply(`✅ Обновлено. Рестарт...`);
-        setTimeout(() => process.exit(1), 1500);
+bot.command('admin_pull', (ctx) => {
+    if (ctx.from.id === ADMIN_ID) {
+        exec('git pull', (err) => ctx.reply(err ? "Ошибка" : "Обновлено, перезапустите бот"));
+    }
+});
+
+// --- [ЗАПУСК С ПРОВЕРКОЙ ПОРТА] ---
+const startServer = () => {
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`✅ Бот успешно занял порт ${PORT}`);
+        bot.telegram.setWebhook(`${WEB_APP_URL}/webhook-tg`).catch(console.error);
+    }).on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            console.log("⚠️ Порт занят заглушкой. Перезапуск через 2 сек...");
+            setTimeout(() => process.exit(1), 2000); // PM2 перезапустит нас
+        }
     });
-});
+};
 
-bot.command('admin_errors', async (ctx) => {
-    if (ctx.from.id !== ADMIN_ID) return;
-    try {
-        const logData = fs.readFileSync('logs/err.log', 'utf8').slice(-1000);
-        await ctx.reply(`📋 Ошибки:\n<pre>${logData || "Чисто"}</pre>`, { parse_mode: 'HTML' });
-    } catch (e) { ctx.reply("Логи недоступны."); }
-});
+app.post('/webhook-tg', (req, res) => bot.handleUpdate(req.body, res));
 
-bot.start(async (ctx) => {
-    await ctx.replyWithHTML(
-        `🦾 <b>NEURAL PULSE AI</b>\n\nБот запущен.`,
-        Markup.inlineKeyboard([[Markup.button.webApp("ВХОД", `${WEB_APP_URL}/?u=${ctx.from.id}`)]])
-    );
-});
-
-// --- [5. ЗАПУСК] ---
-loadData();
-app.listen(PORT, '0.0.0.0', async () => {
-    logger.info(`🌐 SERVER: Запущен на порту ${PORT}`);
-    try {
-        await bot.telegram.deleteWebhook({ drop_pending_updates: true });
-        await bot.telegram.setWebhook(`${WEB_APP_URL}${WEBHOOK_PATH}`);
-        if (process.send) process.send('ready');
-    } catch (e) { logger.error(`❌ Hook Error: ${e.message}`); }
-});
+startServer();
