@@ -31,35 +31,35 @@ const bot = new Telegraf(API_TOKEN);
 // --- [2. БАЗА ДАННЫХ] ---
 let usersData = {};
 function loadData() {
-    logger.info("📂 БД [START]: Загрузка данных из файла...");
+    logger.info("📂 БД: Старт загрузки...");
     try {
         if (!fs.existsSync(DATA_DIR)) {
             fs.mkdirSync(DATA_DIR, { recursive: true });
-            logger.info("📂 БД: Создана директория /data");
+            logger.info("📂 БД: Создана папка /data");
         }
         if (fs.existsSync(DATA_FILE)) {
             const raw = fs.readFileSync(DATA_FILE, 'utf8');
             usersData = raw.trim() ? JSON.parse(raw) : {};
-            logger.info(`📂 БД [OK]: Загружено профилей: ${Object.keys(usersData).length}`);
+            logger.info(`📂 БД: Успех. Профилей: ${Object.keys(usersData).length}`);
         } else {
-            logger.info("📂 БД: Файл users.json не найден, создаем пустой объект");
+            logger.info("📂 БД: Файл не найден, инициализирован пустой реестр");
         }
     } catch (e) { logger.error(`📂 БД ERROR: ${e.message}`); }
 }
 
 function saveData() {
     try {
-        logger.debug("💾 БД: Начинаю сохранение...");
+        logger.debug("💾 БД: Сохранение данных...");
         const tmp = DATA_FILE + '.tmp';
         fs.writeFileSync(tmp, JSON.stringify(usersData, null, 2));
         fs.renameSync(tmp, DATA_FILE);
-        logger.debug("💾 БД [OK]: Данные синхронизированы");
+        logger.debug("💾 БД: Синхронизация завершена");
     } catch (e) { logger.error(`💾 БД ERROR: ${e.message}`); }
 }
 
 // --- [3. ОБРАБОТКА ВЕБХУКА] ---
 app.post(WEBHOOK_PATH, (req, res, next) => {
-    logger.debug(`📡 WEBHOOK: Пришел входящий POST-запрос`);
+    logger.debug(`📡 WEBHOOK: Получен POST от TG`);
     next();
 }, bot.webhookCallback(WEBHOOK_PATH));
 
@@ -68,68 +68,47 @@ app.use(cors());
 app.use(express.static(path.join(__dirname, 'static')));
 
 // --- [4. АДМИН-КОМАНДЫ] ---
-bot.command('admin_reset_db', async (ctx) => {
-    if (ctx.from.id !== ADMIN_ID) return logger.warn(`🛑 SECURITY: Попытка сброса БД от ID ${ctx.from.id}`);
-    usersData = {};
-    saveData();
-    logger.info(`💥 ADMIN: База данных очищена админом`);
-    await ctx.reply("💥 База данных успешно очищена.");
-});
-
-bot.command('admin_update', async (ctx) => {
-    if (ctx.from.id !== ADMIN_ID) return;
-    logger.info(`🔄 ADMIN: Запрос обновления кода с GitHub`);
-    await ctx.reply("🔄 Обновление кода...");
-    exec('git pull && npm install', (err) => {
-        if (err) {
-            logger.error(`❌ GIT ERROR: ${err.message}`);
-            return ctx.reply(`❌ Ошибка: ${err.message}`);
-        }
-        logger.info(`✅ GIT [OK]: Код обновлен. Инициирую перезагрузку.`);
-        ctx.reply(`✅ Обновлено. Перезагрузка...`);
-        setTimeout(() => process.exit(1), 1000);
-    });
-});
-
 bot.command('admin_reload', async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return;
-    logger.info(`🚀 ADMIN: Ручной перезапуск процесса`);
-    await ctx.reply("🚀 Перезапуск процесса...");
+    logger.info("🚀 ADMIN: Рестарт процесса");
+    await ctx.reply("🚀 Перезапуск...");
     setTimeout(() => process.exit(1), 500);
+});
+
+bot.command('admin_reset_db', async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return;
+    usersData = {};
+    saveData();
+    logger.info("💥 ADMIN: БД очищена");
+    await ctx.reply("💥 База данных успешно очищена.");
 });
 
 // --- [5. ЛОГИКА БОТА] ---
 bot.start(async (ctx) => {
     const uid = ctx.from.id;
-    const username = ctx.from.username || "Агент";
-    logger.info(`🎯 BOT: Нажата /start. Пользователь: ${username} (${uid})`);
+    const username = ctx.from.username || "User";
+    logger.info(`🎯 BOT: /start от ${username} (${uid})`);
     
-    const webAppUrl = `${WEB_APP_URL}/?u=${uid}`;
-    
+    // Кнопка ВХОД теперь на первом месте (первая строка массива)
     try {
         await ctx.replyWithHTML(
-            `🦾 <b>NEURAL PULSE AI</b>\n\nПривет, ${username}!\nТвой ID: <code>${uid}</code>\n\nНажми кнопку ниже.`,
+            `🦾 <b>NEURAL PULSE AI</b>\n\nПривет, ${username}!\nТвой ID: <code>${uid}</code>`,
             Markup.inlineKeyboard([
-                [Markup.button.webApp("ВХОД В СИСТЕМУ 🧠", webAppUrl)],
-                [Markup.button.url("КАНАЛ", "https://t.me/neural_pulse_news")]
+                [Markup.button.webApp("ВХОД В СИСТЕМУ 🧠", `${WEB_APP_URL}/?u=${uid}`)],
+                [Markup.button.url("КАНАЛ НОВОСТЕЙ", "https://t.me/neural_pulse_news")]
             ])
         );
-        logger.info(`✅ BOT: Приветствие отправлено пользователю ${uid}`);
-    } catch (e) { logger.error(`❌ BOT SEND ERROR: ${e.message}`); }
+        logger.info(`✅ BOT: Ответ отправлен (ID: ${uid})`);
+    } catch (e) { logger.error(`❌ BOT ERROR: ${e.message}`); }
 });
 
-bot.on('text', (ctx) => {
-    logger.debug(`📩 BOT: Получен текст от ${ctx.from.id}: ${ctx.text}`);
-    ctx.reply("Система активна. Используйте /start для входа.");
-});
-
-// --- [6. API ДЛЯ WEBAPP] ---
+// --- [6. API] ---
 app.get('/api/balance/:userId', (req, res) => {
     const uid = String(req.params.userId);
-    logger.debug(`📡 API: Запрос данных для ID ${uid}`);
+    logger.debug(`📡 API: Запрос баланса ID ${uid}`);
     if (!usersData[uid]) {
         usersData[uid] = { id: uid, balance: 0, energy: 1000, max_energy: 1000, last_active: Date.now() };
-        logger.info(`🆕 API: Создан новый профиль для ${uid}`);
+        logger.info(`🆕 API: Новый юзер: ${uid}`);
     }
     res.json({ status: "ok", data: usersData[uid] });
 });
@@ -142,45 +121,31 @@ app.post('/api/save', (req, res) => {
         if (score !== undefined) usersData[uid].balance = Number(score);
         if (energy !== undefined) usersData[uid].energy = Number(energy);
         saveData();
-        logger.debug(`📡 API SAVE [OK]: ID ${uid} сохранен`);
+        logger.debug(`📡 API SAVE: Успех для ${uid}`);
         return res.json({ status: "ok" });
     }
-    logger.warn(`⚠️ API SAVE ERROR: Некорректный ID ${uid}`);
-    res.status(400).json({ status: "error", message: "Invalid user_id" });
+    logger.warn(`⚠️ API SAVE: Ошибка ID ${uid}`);
+    res.status(400).json({ status: "error" });
 });
 
-// --- [7. ЗАПУСК] ---
+// --- [7. ИНИЦИАЛИЗАЦИЯ] ---
 loadData();
-setInterval(() => {
-    logger.debug("🕒 CRON: Плановое автосохранение...");
-    saveData();
-}, 60000);
+setInterval(saveData, 60000);
 
 async function init() {
     try {
-        logger.info("🤖 BOT [INIT]: Авторизация в Telegram...");
+        logger.info("🤖 BOT: Авторизация...");
         const me = await bot.telegram.getMe();
-        logger.info(`🤖 BOT [READY]: Запущен как @${me.username}`);
+        logger.info(`🤖 BOT: Активен под именем @${me.username}`);
 
         app.listen(PORT, '0.0.0.0', async () => {
-            logger.info(`🌐 SERVER [READY]: Порт ${PORT} открыт`);
+            logger.info(`🌐 SERVER: Порт ${PORT} открыт`);
             const hookUrl = `${WEB_APP_URL}${WEBHOOK_PATH}`;
-            
-            logger.info(`📡 WEBHOOK [SETTING]: Попытка установки: ${hookUrl}`);
             await bot.telegram.deleteWebhook({ drop_pending_updates: true });
             await bot.telegram.setWebhook(hookUrl);
-            logger.info(`🤖 BOT [WEBHOOK OK]: Вебхук успешно привязан.`);
+            logger.info(`🤖 BOT: Вебхук установлен: ${hookUrl}`);
         });
-    } catch (e) {
-        logger.error(`❌ FATAL ERROR ПРИ ЗАПУСКЕ: ${e.message}`);
-    }
+    } catch (e) { logger.error(`❌ FATAL: ${e.message}`); }
 }
 
 init();
-
-// Безопасное завершение
-process.on('SIGTERM', () => { 
-    logger.info("⚠️ SIGTERM: Сохранение перед выключением...");
-    saveData(); 
-    process.exit(0); 
-});
