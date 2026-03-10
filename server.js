@@ -1,4 +1,3 @@
-
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -8,7 +7,6 @@ const { Telegraf, Markup } = require('telegraf');
 const winston = require('winston');
 
 // --- [1. КОНФИГУРАЦИЯ] ---
-// Токен берется из переменных окружения Bothost или используется твой текущий
 const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAGb0-TC4z3uFK2glOUJeU_wHnr27474zzQ";
 const WEB_APP_URL = process.env.WEB_APP_URL || "https://np.bothost.ru"; 
 const PORT = process.env.PORT || 3000;
@@ -16,7 +14,7 @@ const WEBHOOK_PATH = "/webhook-tg-pulse";
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'users.json');
 
-// Настройка логов для удобного дебага в панели Bothost
+// Настройка красивых логов для панели Bothost
 const logger = winston.createLogger({
     level: 'debug',
     format: winston.format.combine(
@@ -42,7 +40,7 @@ function loadData() {
         if (fs.existsSync(DATA_FILE)) {
             const raw = fs.readFileSync(DATA_FILE, 'utf8');
             usersData = raw.trim() ? JSON.parse(raw) : {};
-            logger.info(`📂 БД: Загружено профилей: ${Object.keys(usersData).length}`);
+            logger.info(`📂 БД: Успешно загружено профилей: ${Object.keys(usersData).length}`);
         } else {
             logger.info("📂 БД: Файл не найден, создаем новую базу");
             usersData = {};
@@ -55,8 +53,11 @@ function loadData() {
 
 function saveData() {
     try {
-        fs.writeFileSync(DATA_FILE, JSON.stringify(usersData, null, 2), 'utf8');
-        logger.debug("💾 БД: Данные синхронизированы с файлом");
+        // Атомарное сохранение (через временный файл), чтобы не повредить JSON при сбое
+        const tempFile = DATA_FILE + '.tmp';
+        fs.writeFileSync(tempFile, JSON.stringify(usersData, null, 2), 'utf8');
+        fs.renameSync(tempFile, DATA_FILE);
+        logger.debug("💾 БД: Данные синхронизированы");
     } catch (e) {
         logger.error(`💾 БД ERROR: ${e.message}`);
     }
@@ -91,10 +92,10 @@ function validateInitData(initData) {
 
 // --- [4. MIDDLEWARE & API] ---
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Обработчик вебхука Telegraf (самый надежный способ)
+// ВАЖНО: Подключаем обработку вебхука Telegraf как middleware
 app.use(bot.webhookCallback(WEBHOOK_PATH));
 
 const getBaseProfile = (uid) => ({
@@ -109,33 +110,41 @@ const getBaseProfile = (uid) => ({
 
 // API: Получение данных пользователя
 app.get('/api/balance/:userId', (req, res) => {
-    const uid = String(req.params.userId);
-    if (!usersData[uid]) {
-        usersData[uid] = getBaseProfile(uid);
+    try {
+        const uid = String(req.params.userId);
+        if (!usersData[uid]) {
+            usersData[uid] = getBaseProfile(uid);
+        }
+        res.json({ status: "ok", data: usersData[uid] });
+    } catch (e) {
+        res.status(500).json({ status: "error", message: e.message });
     }
-    res.json({ status: "ok", data: usersData[uid] });
 });
 
 // API: Сохранение прогресса
 app.post('/api/save', (req, res) => {
-    const { user_id, score, energy } = req.body;
-    const uid = String(user_id);
-    const authHeader = req.headers['authorization'];
+    try {
+        const { user_id, score, energy } = req.body;
+        const uid = String(user_id);
+        const authHeader = req.headers['authorization'];
 
-    if (!validateInitData(authHeader)) {
-        logger.warn(`⚠️ AUTH: Невалидный запрос от ${uid}`);
-    }
+        if (!validateInitData(authHeader)) {
+            logger.warn(`⚠️ AUTH: Подозрительный запрос от ${uid}`);
+        }
 
-    if (uid && uid !== 'undefined' && uid !== 'null') {
-        if (!usersData[uid]) usersData[uid] = getBaseProfile(uid);
-        
-        if (score !== undefined) usersData[uid].balance = Number(score);
-        if (energy !== undefined) usersData[uid].energy = Number(energy);
-        usersData[uid].last_active = Math.floor(Date.now() / 1000);
-        
-        res.json({ status: "ok" });
-    } else {
-        res.status(400).json({ status: "error", message: "Invalid ID" });
+        if (uid && uid !== 'undefined' && uid !== 'null') {
+            if (!usersData[uid]) usersData[uid] = getBaseProfile(uid);
+            
+            if (score !== undefined) usersData[uid].balance = Number(score);
+            if (energy !== undefined) usersData[uid].energy = Number(energy);
+            usersData[uid].last_active = Math.floor(Date.now() / 1000);
+            
+            res.json({ status: "ok" });
+        } else {
+            res.status(400).json({ status: "error", message: "Invalid ID" });
+        }
+    } catch (e) {
+        res.status(500).json({ status: "error", message: e.message });
     }
 });
 
@@ -144,14 +153,14 @@ bot.start(async (ctx) => {
     const uid = ctx.from.id;
     const webAppUrl = `${WEB_APP_URL}/?u=${uid}`;
     
-    logger.info(`🎯 BOT: Команда /start от пользователя ${uid}`);
+    logger.info(`🎯 BOT: Команда /start от ${uid}`);
     
     try {
         await ctx.replyWithHTML(
-            `🦾 <b>NEURAL PULSE AI</b>\n\nСистема приветствует тебя, агент <code>${uid}</code>.\n\nТвоя задача: добывать нейро-токены и развивать свою сеть. Энергия ограничена, используй её с умом.`,
+            `🦾 <b>NEURAL PULSE AI</b>\n\nСистема инициализирована. Добро пожаловать, агент <code>${uid}</code>.\n\nТвоя задача: добывать нейро-токены. Энергия ограничена!`,
             Markup.inlineKeyboard([
                 [Markup.button.webApp("ВХОД В СИСТЕМУ 🧠", webAppUrl)],
-                [Markup.button.url("НОВОСТИ ПРОЕКТА", "https://t.me/neural_pulse_news")]
+                [Markup.button.url("КАНАЛ ПРОЕКТА", "https://t.me/neural_pulse_news")]
             ])
         );
     } catch (e) {
@@ -160,14 +169,14 @@ bot.start(async (ctx) => {
 });
 
 // --- [6. ЗАПУСК И ЗАВЕРШЕНИЕ] ---
-async function main() {
+async function startServer() {
     loadData();
 
     app.listen(PORT, '0.0.0.0', async () => {
         logger.info(`🌐 SERVER: Запущен на порту ${PORT}`);
         try {
             const hookUrl = `${WEB_APP_URL}${WEBHOOK_PATH}`;
-            // Очищаем старые обновления и ставим вебхук заново
+            // Очищаем старые "зависшие" сообщения и ставим вебхук
             await bot.telegram.setWebhook(hookUrl, { drop_pending_updates: true });
             logger.info(`🤖 BOT: Вебхук успешно установлен на ${hookUrl}`);
         } catch (err) {
@@ -177,16 +186,20 @@ async function main() {
 }
 
 // Автосохранение базы каждые 60 секунд
-setInterval(saveData, 60000);
+const saveInterval = setInterval(saveData, 60000);
 
-// Корректное завершение при перезагрузке сервера
-const handleShutdown = () => {
-    logger.warn("🛑 SYSTEM: Выключение...");
+// Корректное завершение при перезагрузке сервера Bothost
+const handleShutdown = async (signal) => {
+    logger.warn(`🛑 SYSTEM: Получен сигнал ${signal}. Выключение...`);
+    clearInterval(saveInterval);
     saveData();
+    try {
+        await bot.stop(signal);
+    } catch (e) {}
     process.exit(0);
 };
 
-process.on('SIGTERM', handleShutdown);
-process.on('SIGINT', handleShutdown);
+process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+process.on('SIGINT', () => handleShutdown('SIGINT'));
 
-main();
+startServer();
