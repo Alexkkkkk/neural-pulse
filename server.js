@@ -2,7 +2,6 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const cors = require('cors');
-const { exec } = require('child_process');
 const { Telegraf, Markup } = require('telegraf');
 const winston = require('winston');
 
@@ -52,10 +51,7 @@ function saveData() {
 }
 
 // --- [3. ОБРАБОТКА ВЕБХУКА] ---
-app.post(WEBHOOK_PATH, (req, res, next) => {
-    logger.debug(`📡 WEBHOOK: Получен POST от TG`);
-    next();
-}, bot.webhookCallback(WEBHOOK_PATH));
+app.post(WEBHOOK_PATH, bot.webhookCallback(WEBHOOK_PATH));
 
 app.use(express.json());
 app.use(cors());
@@ -64,49 +60,41 @@ app.use(express.static(path.join(__dirname, 'static')));
 // --- [4. АДМИН-КОМАНДЫ] ---
 bot.command('admin_reload', async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return;
-    logger.info("🚀 ADMIN: Рестарт процесса");
     await ctx.reply("🚀 Перезапуск...");
     setTimeout(() => process.exit(1), 500);
-});
-
-bot.command('admin_reset_db', async (ctx) => {
-    if (ctx.from.id !== ADMIN_ID) return;
-    usersData = {};
-    saveData();
-    logger.info("💥 ADMIN: БД очищена");
-    await ctx.reply("💥 База данных успешно очищена.");
 });
 
 // --- [5. ЛОГИКА БОТА: ТЕРМИНАЛЬНАЯ ИНИЦИАЛИЗАЦИЯ] ---
 bot.start(async (ctx) => {
     const uid = ctx.from.id;
     const username = ctx.from.username || "Agent";
-    logger.info(`🎯 BOT: Протокол активации для ${username} (${uid})`);
     
     try {
-        // ЭТАП 1: Подключение
+        // ЭТАП 1: Создаем сообщение с "мертвой" кнопкой (просто текст)
         const sentMsg = await ctx.replyWithHTML(
             `📡 <b>NEURAL PULSE: CONNECTION...</b>\n` +
             `<code>> Booting core system...</code>\n` +
-            `<code>[▒▒▒▒▒▒▒▒▒▒] 0%</code>`,
-            Markup.inlineKeyboard([[Markup.button.callback("ИНИЦИАЛИЗАЦИЯ... 🔄", "loading")]])
+            `<code>[▒▒▒▒▒▒▒▒▒▒] 10%</code>`,
+            Markup.inlineKeyboard([
+                [Markup.button.callback("ПОДКЛЮЧЕНИЕ ⏳", "loading_status")]
+            ])
         );
 
-        // ЭТАП 2: Проверка данных (через 700мс)
+        // ЭТАП 2: Имитация загрузки данных (через 800мс)
         setTimeout(async () => {
             await ctx.telegram.editMessageText(
                 ctx.chat.id, sentMsg.message_id, null,
                 `📡 <b>NEURAL PULSE: SYNCING...</b>\n` +
                 `<code>> Loading user data: OK</code>\n` +
                 `<code>[██████▒▒▒▒] 65%</code>`,
-                { 
-                    parse_mode: 'HTML', 
-                    ...Markup.inlineKeyboard([[Markup.button.callback("ЗАГРУЗКА ДАННЫХ... ⚙️", "loading")]]) 
+                {
+                    parse_mode: 'HTML',
+                    ...Markup.inlineKeyboard([[Markup.button.callback("ЗАГРУЗКА ⚙️", "loading_status")]])
                 }
             ).catch(() => {});
-        }, 700);
+        }, 800);
 
-        // ЭТАП 3: Готовность (через 1400мс)
+        // ЭТАП 3: ФИНАЛ - Кнопка превращается в ВХОД (через 1600мс)
         setTimeout(async () => {
             const webAppUrl = `${WEB_APP_URL}/?u=${uid}`;
             await ctx.telegram.editMessageText(
@@ -116,7 +104,7 @@ bot.start(async (ctx) => {
                 `👤 АГЕНТ: <code>${username}</code>\n` +
                 `🆔 СЕКТОР: <code>${uid}</code>\n` +
                 `----------------------------------\n` +
-                `✅ Все системы активны. Доступ разрешен.`,
+                `✅ Доступ разрешен. Модули активны.`,
                 {
                     parse_mode: 'HTML',
                     ...Markup.inlineKeyboard([
@@ -125,13 +113,15 @@ bot.start(async (ctx) => {
                     ])
                 }
             ).catch(() => {});
-            logger.info(`✅ BOT: Доступ открыт для ${uid}`);
-        }, 1400);
+        }, 1600);
 
     } catch (e) { logger.error(`❌ BOT START ERROR: ${e.message}`); }
 });
 
-bot.action('loading', (ctx) => ctx.answerCbQuery("Система загружается..."));
+// Обработчик для клика по кнопке во время загрузки
+bot.action('loading_status', (ctx) => {
+    ctx.answerCbQuery("Система еще загружается, подождите ✅", { show_alert: false });
+});
 
 bot.on('text', (ctx) => {
     ctx.reply("Система активна. Используйте /start для входа.");
@@ -169,7 +159,6 @@ async function init() {
         app.listen(PORT, '0.0.0.0', async () => {
             logger.info(`🌐 SERVER: Порт ${PORT} открыт`);
             const hookUrl = `${WEB_APP_URL}${WEBHOOK_PATH}`;
-            await bot.telegram.deleteWebhook({ drop_pending_updates: true });
             await bot.telegram.setWebhook(hookUrl);
             logger.info(`🤖 BOT: Вебхук установлен: ${hookUrl}`);
         });
