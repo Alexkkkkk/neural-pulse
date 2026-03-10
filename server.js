@@ -7,7 +7,6 @@ const { Telegraf, Markup } = require('telegraf');
 const winston = require('winston');
 
 // --- [1. КОНФИГУРАЦИЯ] ---
-// Проверь этот токен еще раз в BotFather!
 const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAG4hbfu1mF55SghPkrzt3_CZgh3tuds3x0";
 const WEB_APP_URL = process.env.WEB_APP_URL || "https://np.bothost.ru";
 const PORT = process.env.PORT || 3000;
@@ -51,9 +50,9 @@ function saveData() {
 }
 
 // --- [3. ОБРАБОТКА ВЕБХУКА] ---
-// Важно: ставим обработчик ДО bodyParser
+// Ставим до body-parser, чтобы Telegraf сам читал поток
 app.post(WEBHOOK_PATH, (req, res, next) => {
-    logger.debug(`📡 WEBHOOK: Получен POST от Telegram IP: ${req.ip}`);
+    logger.debug(`📡 WEBHOOK: Получен POST от Telegram`);
     next();
 }, bot.webhookCallback(WEBHOOK_PATH));
 
@@ -70,7 +69,6 @@ bot.start(async (ctx) => {
     const webAppUrl = `${WEB_APP_URL}/?u=${uid}`;
     
     try {
-        // Пробуем отправить сообщение
         await ctx.replyWithHTML(
             `🦾 <b>NEURAL PULSE AI</b>\n\nПривет, ${username}!\nТвой ID: <code>${uid}</code>\n\nНажми кнопку, чтобы запустить модуль.`,
             Markup.inlineKeyboard([
@@ -84,7 +82,6 @@ bot.start(async (ctx) => {
     }
 });
 
-// Дополнительная проверка: отвечает ли бот на обычный текст?
 bot.on('text', (ctx) => {
     logger.debug(`📩 BOT: Текст от ${ctx.from.id}: ${ctx.text}`);
     ctx.reply("Система активна. Используйте /start для входа.");
@@ -93,19 +90,23 @@ bot.on('text', (ctx) => {
 // --- [5. API] ---
 app.get('/api/balance/:userId', (req, res) => {
     const uid = String(req.params.userId);
-    if (!usersData[uid]) usersData[uid] = { id: uid, balance: 0, energy: 1000, max_energy: 1000 };
+    if (!usersData[uid]) {
+        usersData[uid] = { id: uid, balance: 0, energy: 1000, max_energy: 1000, last_active: Date.now() };
+    }
     res.json({ status: "ok", data: usersData[uid] });
 });
 
 app.post('/api/save', (req, res) => {
     const { user_id, score, energy } = req.body;
     const uid = String(user_id);
-    if (uid && usersData[uid]) {
-        if (score !== undefined) usersData[uid].balance = score;
-        if (energy !== undefined) usersData[uid].energy = energy;
+    if (uid && uid !== 'undefined') {
+        if (!usersData[uid]) usersData[uid] = { id: uid, balance: 0, energy: 1000 };
+        if (score !== undefined) usersData[uid].balance = Number(score);
+        if (energy !== undefined) usersData[uid].energy = Number(energy);
+        logger.debug(`📡 API SAVE: Профиль ${uid} обновлен.`);
         return res.json({ status: "ok" });
     }
-    res.status(400).json({ status: "error" });
+    res.status(400).json({ status: "error", message: "Invalid user_id" });
 });
 
 // --- [6. ЗАПУСК] ---
@@ -114,7 +115,6 @@ setInterval(saveData, 60000);
 
 async function init() {
     try {
-        // ПРОВЕРКА ТОКЕНА
         const me = await bot.telegram.getMe();
         logger.info(`🤖 BOT: Авторизован как @${me.username} (ID: ${me.id})`);
 
@@ -126,10 +126,11 @@ async function init() {
             logger.info(`🤖 BOT: Вебхук установлен: ${hookUrl}`);
         });
     } catch (e) {
-        logger.error(`❌ FATAL ERROR: Ошибка при запуске бота. Возможно, неверный TOKEN? Сообщение: ${e.message}`);
+        logger.error(`❌ FATAL ERROR: ${e.message}`);
     }
 }
 
 init();
 
 process.on('SIGTERM', () => { saveData(); process.exit(0); });
+process.on('SIGINT', () => { saveData(); process.exit(0); });
