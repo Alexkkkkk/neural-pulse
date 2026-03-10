@@ -3,46 +3,46 @@ module.exports = {
     name: "neural-pulse-core",
     script: "./server.js", 
     
-    // Для SQLite строго 1 инстанс и режим fork, чтобы избежать Lock-ошибок
+    // SQLite требует строго 1 инстанс в режиме fork (кластер сломает БД)
     instances: 1,
     exec_mode: "fork",
     
+    // Перезапуск
     autorestart: true,
     watch: false,
-    
-    // Лимит памяти. На тарифе Pro у тебя есть запас, но 400M — безопасная отсечка
     max_memory_restart: '400M', 
     
-    // Стратегия перезапуска: при падении ждем 2с, увеличивая интервал при повторных сбоях
+    // Задержки при сбоях (экспоненциальный рост ожидания)
     exp_backoff_restart_delay: 2000, 
     min_uptime: "15s",
     
-    // Даем 5 секунд на корректное закрытие БД (вызов shutdown в твоем коде)
+    // Завершение работы: даем приложению время закрыть соединения с БД
     kill_timeout: 5000, 
-    
+    shutdown_with_message: true,
+    wait_ready: true, // Ждать сигнала готовности (если используешь process.send('ready'))
+
     // Переменные окружения
     env: {
       NODE_ENV: "production",
       PORT: 3000
     },
-    
-    // Логирование: перенаправляем всё в системные потоки Docker
-    // Это позволяет Bothost корректно отображать логи в своей панели
-    error_file: "/dev/stderr",
-    out_file: "/dev/stdout",
+
+    // Логирование:
+    // Мы убираем жесткую привязку к /dev/stdout, чтобы PM2 не дублировал логи
+    // Bothost сам считывает консольный вывод процесса
     log_date_format: "YYYY-MM-DD HH:mm:ss",
     merge_logs: true,
-    
+    error_file: "logs/err.log",
+    out_file: "logs/out.log",
+
     // Аргументы Node.js
-    // --no-warnings убирает лишний шум в консоли
-    // --enable-source-maps поможет, если будешь использовать минификацию
     node_args: [
       "--no-warnings",
-      "--enable-source-maps"
+      "--enable-source-maps",
+      "--max-old-space-size=384" // Ограничиваем V8 внутри лимита 400M
     ],
 
-    // Слушать сигналы остановки от Docker/Tini
-    listen_timeout: 3000,
-    shutdown_with_message: true
+    // Слушать сигналы от Docker (Tini)
+    listen_timeout: 3000
   }]
 }
