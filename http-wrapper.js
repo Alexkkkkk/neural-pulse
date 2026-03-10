@@ -7,13 +7,13 @@ const { Telegraf, Markup } = require('telegraf');
 const winston = require('winston');
 
 // --- [1. КОНФИГУРАЦИЯ] ---
-const API_TOKEN = "8257287930:AAG4hbfu1mF55SghPkrzt3_CZgh3tuds3x0";
+const API_TOKEN = "8257287930:AAFUmUinCAALPf6Bivpo04__Zp_V4Y49MFs"; 
 const WEB_APP_URL = "https://np.bothost.ru";
 const PORT = process.env.PORT || 3000;
 const WEBHOOK_PATH = "/webhook-tg-pulse";
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'users.json');
-const ADMIN_ID = 476014374; // Твой ID установлен
+const ADMIN_ID = 476014374; 
 
 const logger = winston.createLogger({
     level: 'debug',
@@ -48,7 +48,7 @@ function saveData() {
     } catch (e) { logger.error(`💾 БД ERROR: ${e.stack}`); }
 }
 
-// --- [3. РОУТЫ И API ДЛЯ ИГРЫ] ---
+// --- [3. РОУТЫ И API] ---
 app.post(WEBHOOK_PATH, bot.webhookCallback(WEBHOOK_PATH));
 app.use(express.json());
 app.use(cors());
@@ -70,10 +70,10 @@ app.post('/api/save', (req, res) => {
         saveData();
         return res.json({ status: "ok" });
     }
-    res.status(400).send("Error: No ID");
+    res.status(400).send("Error: Invalid User ID");
 });
 
-// --- [4. АДМИН-ПАНЕЛЬ (ТОЛЬКО ДЛЯ ТЕБЯ)] ---
+// --- [4. АДМИН-ФУНКЦИИ] ---
 bot.command('admin_reset_db', async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return;
     usersData = {};
@@ -86,24 +86,24 @@ bot.command('admin_update', async (ctx) => {
     await ctx.reply("🔄 Обновление кода с GitHub...");
     exec('git pull && npm install', (err, stdout) => {
         if (err) return ctx.reply(`❌ Ошибка git: ${err.message}`);
-        ctx.reply(`✅ GitHub Update:\n${stdout.slice(0, 500)}`);
-        setTimeout(() => process.exit(1), 2000); // Перезапуск через PM2
+        ctx.reply(`✅ Обновлено. Перезагрузка...`);
+        setTimeout(() => process.exit(1), 1000);
     });
 });
 
 bot.command('admin_reload', async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return;
-    await ctx.reply("🚀 Сброс кэша и перезапуск процесса...");
-    setTimeout(() => process.exit(1), 1000);
+    await ctx.reply("🚀 Перезапуск (очистка кэша)...");
+    setTimeout(() => process.exit(1), 500);
 });
 
 bot.command('admin_errors', async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return;
     try {
-        if (!fs.existsSync('logs/err.log')) return ctx.reply("Лг пуст.");
-        const logData = fs.readFileSync('logs/err.log', 'utf8').slice(-1000);
-        await ctx.reply(`📋 Лог ошибок:\n<pre>${logData}</pre>`, { parse_mode: 'HTML' });
-    } catch (e) { ctx.reply("Не удалось прочитать логи."); }
+        if (!fs.existsSync('logs/err.log')) return ctx.reply("Лог пуст.");
+        const logData = fs.readFileSync('logs/err.log', 'utf8').slice(-1500);
+        await ctx.reply(`📋 Последние ошибки:\n<pre>${logData}</pre>`, { parse_mode: 'HTML' });
+    } catch (e) { ctx.reply("Ошибка логов."); }
 });
 
 // --- [5. ОБЫЧНЫЕ КОМАНДЫ] ---
@@ -120,11 +120,14 @@ loadData();
 app.listen(PORT, '0.0.0.0', async () => {
     logger.info(`🌐 SERVER: Слушает порт ${PORT}`);
     try {
+        const hookUrl = `${WEB_APP_URL}${WEBHOOK_PATH}`;
         await bot.telegram.deleteWebhook({ drop_pending_updates: true });
-        await bot.telegram.setWebhook(`${WEB_APP_URL}${WEBHOOK_PATH}`);
-        logger.info(`🤖 BOT: Вебхук установлен: ${WEB_APP_URL}${WEBHOOK_PATH}`);
+        await bot.telegram.setWebhook(hookUrl);
+        logger.info(`🤖 BOT: Вебхук установлен: ${hookUrl}`);
         if (process.send) process.send('ready');
-    } catch (e) { logger.error(`❌ WEBHOOK ERROR: ${e.message}`); }
+    } catch (e) { 
+        logger.error(`❌ WEBHOOK ERROR: ${e.message}`); 
+    }
 });
 
 process.on('SIGTERM', () => { saveData(); process.exit(0); });
