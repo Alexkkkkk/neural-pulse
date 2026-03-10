@@ -1,29 +1,22 @@
-# Этап сборки
-FROM node:18-alpine AS builder
+FROM node:18-alpine
+
+# Устанавливаем PM2 глобально
+RUN npm install pm2 -g
+
 WORKDIR /app
+
 COPY package*.json ./
 RUN npm install --omit=dev
 
-# Этап рантайма
-FROM node:18-alpine
-RUN apk add --no-cache tini
-WORKDIR /app
-
-COPY --from=builder /app/node_modules ./node_modules
 COPY . .
 
-# Настройка папок и прав
-RUN mkdir -p /app/data /app/logs && \
-    if [ ! -f /app/data/users.json ]; then echo "{}" > /app/data/users.json; fi && \
-    chown -R node:node /app && \
-    chmod -R 775 /app/data /app/logs
+# Удаляем системную заглушку, если она есть, и создаем папки
+RUN rm -f /app/http-wrapper.js && \
+    mkdir -p /app/data /app/logs && \
+    chown -R node:node /app
 
 ENV NODE_ENV=production
-ENV PORT=3000
 EXPOSE 3000
 
-ENTRYPOINT ["/sbin/tini", "--"]
-USER node
-
-# Запускаем наш переименованный файл
-CMD ["node", "http-wrapper.js"]
+# Запускаем через PM2 в режиме non-daemon (чтобы контейнер не закрылся)
+CMD ["pm2-runtime", "ecosystem.config.js"]
