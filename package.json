@@ -1,23 +1,18 @@
 {
   "name": "neural-pulse",
   "version": "1.1.0",
-  "description": "Neural Pulse Telegram WebApp Game - High Performance Core",
+  "description": "Neural Pulse Telegram WebApp Game - High Performance JSON Core",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
     "prod": "pm2-runtime start ecosystem.config.js --env production",
-    "rebuild": "npm rebuild sqlite3 --build-from-source",
-    "clean": "rm -rf logs/*.log data/*.db-journal data/*.db-wal data/*.db-shm",
-    "vacuum": "sqlite3 data/game.db 'VACUUM;'",
-    "test": "node --check server.js",
-    "postinstall": "npm rebuild sqlite3 --build-from-source"
+    "clean": "rm -rf logs/*.log data/*.json",
+    "test": "node --check server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
-    "sqlite3": "^5.1.7",
-    "sqlite": "^5.1.1",
     "telegraf": "^4.16.3",
     "cors": "^2.8.5",
     "winston": "^3.11.0",
