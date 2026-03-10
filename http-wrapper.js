@@ -54,6 +54,7 @@ app.use(express.json());
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'static')));
 
+// API
 app.get('/api/balance/:userId', (req, res) => {
     const uid = String(req.params.userId);
     if (!usersData[uid]) usersData[uid] = { id: uid, balance: 0, energy: 1000 };
@@ -70,64 +71,48 @@ app.post('/api/save', (req, res) => {
         saveData();
         return res.json({ status: "ok" });
     }
-    res.status(400).send("Error: Invalid User ID");
+    res.status(400).send("ID Error");
 });
 
-// --- [4. АДМИН-ФУНКЦИИ] ---
-bot.command('admin_reset_db', async (ctx) => {
+// --- [4. АДМИН-КОМАНДЫ] ---
+bot.command('admin_reload', async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return;
-    usersData = {};
-    saveData();
-    await ctx.reply("💥 База данных успешно очищена.");
+    await ctx.reply("🚀 Очистка кэша и перезапуск...");
+    setTimeout(() => process.exit(1), 500);
 });
 
 bot.command('admin_update', async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return;
-    await ctx.reply("🔄 Обновление кода с GitHub...");
+    await ctx.reply("🔄 GitHub Pull...");
     exec('git pull && npm install', (err, stdout) => {
-        if (err) return ctx.reply(`❌ Ошибка git: ${err.message}`);
-        ctx.reply(`✅ Обновлено. Перезагрузка...`);
-        setTimeout(() => process.exit(1), 1000);
+        if (err) return ctx.reply(`❌ Git Error: ${err.message}`);
+        ctx.reply(`✅ Обновлено. Рестарт...`);
+        setTimeout(() => process.exit(1), 1500);
     });
-});
-
-bot.command('admin_reload', async (ctx) => {
-    if (ctx.from.id !== ADMIN_ID) return;
-    await ctx.reply("🚀 Перезапуск (очистка кэша)...");
-    setTimeout(() => process.exit(1), 500);
 });
 
 bot.command('admin_errors', async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return;
     try {
-        if (!fs.existsSync('logs/err.log')) return ctx.reply("Лог пуст.");
-        const logData = fs.readFileSync('logs/err.log', 'utf8').slice(-1500);
-        await ctx.reply(`📋 Последние ошибки:\n<pre>${logData}</pre>`, { parse_mode: 'HTML' });
-    } catch (e) { ctx.reply("Ошибка логов."); }
+        const logData = fs.readFileSync('logs/err.log', 'utf8').slice(-1000);
+        await ctx.reply(`📋 Ошибки:\n<pre>${logData || "Чисто"}</pre>`, { parse_mode: 'HTML' });
+    } catch (e) { ctx.reply("Логи недоступны."); }
 });
 
-// --- [5. ОБЫЧНЫЕ КОМАНДЫ] ---
 bot.start(async (ctx) => {
-    const uid = ctx.from.id;
     await ctx.replyWithHTML(
-        `🦾 <b>NEURAL PULSE AI</b>\n\nСистема онлайн.\nТвой ID: <code>${uid}</code>`,
-        Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", `${WEB_APP_URL}/?u=${uid}`)]])
+        `🦾 <b>NEURAL PULSE AI</b>\n\nБот запущен.`,
+        Markup.inlineKeyboard([[Markup.button.webApp("ВХОД", `${WEB_APP_URL}/?u=${ctx.from.id}`)]])
     );
 });
 
-// --- [6. ЗАПУСК] ---
+// --- [5. ЗАПУСК] ---
 loadData();
 app.listen(PORT, '0.0.0.0', async () => {
-    logger.info(`🌐 SERVER: Слушает порт ${PORT}`);
+    logger.info(`🌐 SERVER: Запущен на порту ${PORT}`);
     try {
-        const hookUrl = `${WEB_APP_URL}${WEBHOOK_PATH}`;
         await bot.telegram.deleteWebhook({ drop_pending_updates: true });
-        await bot.telegram.setWebhook(hookUrl);
-        logger.info(`🤖 BOT: Вебхук установлен: ${hookUrl}`);
+        await bot.telegram.setWebhook(`${WEB_APP_URL}${WEBHOOK_PATH}`);
         if (process.send) process.send('ready');
-    } catch (e) { 
-        logger.error(`❌ WEBHOOK ERROR: ${e.message}`); 
-    }
+    } catch (e) { logger.error(`❌ Hook Error: ${e.message}`); }
 });
-
-process.on('SIGTERM', () => { saveData(); process.exit(0); });
