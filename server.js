@@ -33,23 +33,17 @@ let usersData = {};
 function loadData() {
     logger.info("📂 БД: Старт загрузки...");
     try {
-        if (!fs.existsSync(DATA_DIR)) {
-            fs.mkdirSync(DATA_DIR, { recursive: true });
-            logger.info("📂 БД: Создана папка /data");
-        }
+        if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
         if (fs.existsSync(DATA_FILE)) {
             const raw = fs.readFileSync(DATA_FILE, 'utf8');
             usersData = raw.trim() ? JSON.parse(raw) : {};
             logger.info(`📂 БД: Успех. Профилей: ${Object.keys(usersData).length}`);
-        } else {
-            logger.info("📂 БД: Файл не найден, инициализирован пустой реестр");
         }
     } catch (e) { logger.error(`📂 БД ERROR: ${e.message}`); }
 }
 
 function saveData() {
     try {
-        logger.debug("💾 БД: Сохранение данных...");
         const tmp = DATA_FILE + '.tmp';
         fs.writeFileSync(tmp, JSON.stringify(usersData, null, 2));
         fs.renameSync(tmp, DATA_FILE);
@@ -89,7 +83,7 @@ bot.start(async (ctx) => {
     const username = ctx.from.username || "User";
     logger.info(`🎯 BOT: /start от ${username} (${uid})`);
     
-    // Кнопка ВХОД теперь на первом месте (первая строка массива)
+    // Кнопка ВХОД на первом месте
     try {
         await ctx.replyWithHTML(
             `🦾 <b>NEURAL PULSE AI</b>\n\nПривет, ${username}!\nТвой ID: <code>${uid}</code>`,
@@ -102,13 +96,15 @@ bot.start(async (ctx) => {
     } catch (e) { logger.error(`❌ BOT ERROR: ${e.message}`); }
 });
 
+bot.on('text', (ctx) => {
+    ctx.reply("Система активна. Используйте /start для входа.");
+});
+
 // --- [6. API] ---
 app.get('/api/balance/:userId', (req, res) => {
     const uid = String(req.params.userId);
-    logger.debug(`📡 API: Запрос баланса ID ${uid}`);
     if (!usersData[uid]) {
         usersData[uid] = { id: uid, balance: 0, energy: 1000, max_energy: 1000, last_active: Date.now() };
-        logger.info(`🆕 API: Новый юзер: ${uid}`);
     }
     res.json({ status: "ok", data: usersData[uid] });
 });
@@ -121,23 +117,18 @@ app.post('/api/save', (req, res) => {
         if (score !== undefined) usersData[uid].balance = Number(score);
         if (energy !== undefined) usersData[uid].energy = Number(energy);
         saveData();
-        logger.debug(`📡 API SAVE: Успех для ${uid}`);
         return res.json({ status: "ok" });
     }
-    logger.warn(`⚠️ API SAVE: Ошибка ID ${uid}`);
     res.status(400).json({ status: "error" });
 });
 
-// --- [7. ИНИЦИАЛИЗАЦИЯ] ---
+// --- [7. ЗАПУСК] ---
 loadData();
 setInterval(saveData, 60000);
 
 async function init() {
     try {
-        logger.info("🤖 BOT: Авторизация...");
-        const me = await bot.telegram.getMe();
-        logger.info(`🤖 BOT: Активен под именем @${me.username}`);
-
+        await bot.telegram.getMe();
         app.listen(PORT, '0.0.0.0', async () => {
             logger.info(`🌐 SERVER: Порт ${PORT} открыт`);
             const hookUrl = `${WEB_APP_URL}${WEBHOOK_PATH}`;
@@ -147,5 +138,4 @@ async function init() {
         });
     } catch (e) { logger.error(`❌ FATAL: ${e.message}`); }
 }
-
 init();
