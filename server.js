@@ -36,17 +36,22 @@ function loadData() {
         if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
         if (fs.existsSync(DATA_FILE)) {
             const raw = fs.readFileSync(DATA_FILE, 'utf8');
-            usersData = JSON.parse(raw || '{}');
+            // Если файл пустой, JSON.parse выдаст ошибку, поэтому проверяем контент
+            usersData = raw.trim() ? JSON.parse(raw) : {};
             logger.info(`📦 БД: Загружено профилей: ${Object.keys(usersData).length}`);
+        } else {
+            usersData = {};
+            logger.info("📦 БД: Файл не найден, создана новая база");
         }
     } catch (e) {
-        logger.error("❌ БД LOAD ERROR: " + e.message);
-        usersData = {};
+        logger.error("❌ БД LOAD ERROR (проверьте формат JSON): " + e.message);
+        usersData = {}; // Сбрасываем в пустой объект, чтобы не падать
     }
 }
 
 function saveData() {
     try {
+        // Сохраняем сначала во временный файл, чтобы не повредить основной при сбое
         const tmpFile = DATA_FILE + '.tmp';
         fs.writeFileSync(tmpFile, JSON.stringify(usersData, null, 2));
         fs.renameSync(tmpFile, DATA_FILE);
@@ -59,28 +64,21 @@ function saveData() {
 // --- [3. MIDDLEWARE & WEBHOOK] ---
 app.use(cors());
 
-// Health check
 app.get('/', (req, res) => {
-    logger.debug("🔍 HEALTH: Запрос на корень /");
     res.status(200).send('Neural Pulse Core is Live');
 });
 
-// Вебхук Telegram с детальным логированием
+// Обработка вебхука
 app.post(WEBHOOK_PATH, express.json(), async (req, res) => {
     const updateId = req.body ? req.body.update_id : 'unknown';
-    logger.debug(`📥 ВЕБХУК [ID:${updateId}]: Получен входящий POST запрос`);
+    logger.debug(`📥 ВЕБХУК [ID:${updateId}]: Получен запрос`);
 
     try {
         if (req.body && req.body.update_id) {
-            // Логируем тип обновления (message, callback_query и т.д.)
-            const updateType = Object.keys(req.body).find(key => key !== 'update_id');
-            logger.debug(`📥 ВЕБХУК [ID:${updateId}]: Тип события - ${updateType}`);
-            
             await bot.handleUpdate(req.body, res);
-            logger.debug(`✅ ВЕБХУК [ID:${updateId}]: Успешно обработан Telegraf`);
+            logger.debug(`✅ ВЕБХУК [ID:${updateId}]: Обработан`);
         } else {
-            logger.warn(`⚠️ ВЕБХУК: Получен пустой или некорректный JSON`);
-            res.sendStatus(200); // Telegram требует 200, даже если тело пустое
+            res.sendStatus(200); 
         }
     } catch (e) {
         logger.error(`❌ ВЕБХУК [ID:${updateId}] ERROR: ${e.message}`);
@@ -88,13 +86,13 @@ app.post(WEBHOOK_PATH, express.json(), async (req, res) => {
     }
 });
 
+// Статические файлы и JSON парсинг для API
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
 // --- [4. API] ---
 app.get('/api/balance/:userId', (req, res) => {
     const uid = String(req.params.userId);
-    logger.debug(`📡 API GET: Запрос баланса пользователя ${uid}`);
     if (!usersData[uid]) {
         usersData[uid] = { 
             id: uid, balance: 100, click_lvl: 1, pnl: 10, 
@@ -107,7 +105,6 @@ app.get('/api/balance/:userId', (req, res) => {
 app.post('/api/save', (req, res) => {
     const { user_id, score, energy } = req.body;
     const uid = String(user_id);
-    logger.debug(`📡 API POST: Сохранение данных пользователя ${uid}`);
     
     if (uid && usersData[uid]) {
         if (score !== undefined) usersData[uid].balance = parseFloat(score);
@@ -115,8 +112,7 @@ app.post('/api/save', (req, res) => {
         usersData[uid].last_active = Math.floor(Date.now() / 1000);
         res.json({ status: "ok" });
     } else {
-        logger.warn(`📡 API POST: Ошибка сохранения, пользователь ${uid} не найден`);
-        res.status(404).json({ status: "error", message: "User not found or invalid ID" });
+        res.status(404).json({ status: "error", message: "User not found" });
     }
 });
 
@@ -125,20 +121,18 @@ setInterval(saveData, 60000);
 // --- [5. БОТ] ---
 bot.start(async (ctx) => {
     const uid = ctx.from.id;
-    logger.info(`🤖 БОТ: Выполнение команды /start для пользователя ${uid}`);
     const webAppUrl = `${WEB_APP_URL}/?u=${uid}&v=${Date.now()}`;
     try {
         await ctx.replyWithHTML(
             `🦾 <b>NEURAL PULSE</b>\n\nПротокол активирован. Добро пожаловать!`, 
             Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", webAppUrl)]])
         );
-        logger.info(`✅ БОТ: Ответ на /start отправлен пользователю ${uid}`);
+        logger.info(`✅ БОТ: /start выполнен для ${uid}`);
     } catch (e) {
-        logger.error(`❌ БОТ START ERROR [User:${uid}]: ${e.message}`);
+        logger.error(`❌ БОТ START ERROR: ${e.message}`);
     }
 });
 
-// Глобальный перехват ошибок Telegraf
 bot.catch((err, ctx) => {
     logger.error(`🛑 TELEGRAF ERROR [Update:${ctx.update.update_id}]: ${err.message}`);
 });
@@ -147,16 +141,15 @@ bot.catch((err, ctx) => {
 async function start() {
     loadData();
     server.listen(PORT, '0.0.0.0', async () => {
-        logger.info(`🌐 СЕРВЕР: Слушает порт ${PORT}`);
+        logger.info(`🌐 СЕРВЕР: Порт ${PORT}`);
         try {
             const hookUrl = `${WEB_APP_URL}${WEBHOOK_PATH}`;
-            // Сначала удаляем старый вебхук на всякий случай
+            // Очищаем старые обновления и ставим вебхук
             await bot.telegram.deleteWebhook({ drop_pending_updates: true });
-            // Ставим новый
             await bot.telegram.setWebhook(hookUrl);
             
             const info = await bot.telegram.getWebhookInfo();
-            logger.info(`🤖 БОТ: Вебхук успешно установлен на -> ${info.url}`);
+            logger.info(`🤖 БОТ: Вебхук установлен на -> ${info.url}`);
             
             if (process.send) process.send('ready'); 
         } catch (err) {
@@ -166,7 +159,7 @@ async function start() {
 }
 
 const shutdown = () => {
-    logger.warn("⚠️  Остановка сервера...");
+    logger.warn("⚠️  Завершение работы...");
     saveData();
     process.exit(0);
 };
