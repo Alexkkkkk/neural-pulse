@@ -22,8 +22,6 @@ const logger = winston.createLogger({
     transports: [new winston.transports.Console()]
 });
 
-logger.info("🛠 СИСТЕМА: Запуск процесса...");
-
 const app = express();
 app.set('trust proxy', 1); 
 const server = http.createServer(app);
@@ -32,25 +30,25 @@ const bot = new Telegraf(API_TOKEN);
 // --- [2. MIDDLEWARE & WEBHOOK] ---
 app.use(cors());
 
-// Важно: Вебхук должен обрабатываться ДО express.json(), 
-// так как Telegraf сам парсит тело запроса (Buffer)
-app.post('/', (req, res) => {
-    logger.debug(`📥 [STEP 1] WEBHOOK: Получен POST запрос на корень`);
-    // Используем встроенный метод без жесткой привязки к пути внутри callback
-    return bot.handleUpdate(req.body, res);
+// ВАЖНО: Обработчик вебхука ДО общего express.json()
+// Мы вручную парсим JSON только для этого маршрута, чтобы Telegraf получил чистый объект
+app.post('/', express.json(), async (req, res) => {
+    try {
+        if (!req.body || !req.body.update_id) {
+            logger.debug("🔍 ТРАФИК: Пустой POST запрос на корень (игнорируем)");
+            return res.sendStatus(200);
+        }
+        logger.debug(`📥 [STEP 1] WEBHOOK: Update ID ${req.body.update_id} получен`);
+        await bot.handleUpdate(req.body, res);
+    } catch (e) {
+        logger.error(`❌ WEBHOOK ERROR: ${e.message}`);
+        res.sendStatus(500);
+    }
 });
 
-// Теперь можно подключать парсеры для API
+// Парсер для остальных API запросов
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
-
-// Логгер трафика (исключая корень, чтобы не дублировать)
-app.use((req, res, next) => {
-    if (req.url !== '/') {
-        logger.debug(`🔍 ТРАФИК: ${req.method} на ${req.url}`);
-    }
-    next();
-});
 
 let db;
 const userCache = new Map();
@@ -60,15 +58,10 @@ const saveQueue = new Set();
 async function initDB() {
     logger.info("📦 БД: Подключение...");
     const dataDir = path.join(__dirname, 'data'); 
-    if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true });
-        logger.warn("📁 БД: Создана папка /data");
-    }
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
     
     try {
         db = await open({ filename: path.join(dataDir, 'game.db'), driver: sqlite3.Database });
-        
-        // Оптимизация SQLite для высокой нагрузки
         await db.exec(`
             PRAGMA journal_mode = WAL;
             PRAGMA synchronous = NORMAL;
@@ -98,7 +91,7 @@ function processOffline(user) {
     if (secondsOffline > 5) {
         const pnl = parseFloat(user.pnl) || 0;
         if (pnl > 0) {
-            const effectiveTime = Math.min(secondsOffline, 10800); // макс 3 часа
+            const effectiveTime = Math.min(secondsOffline, 10800);
             const earnings = (pnl / 3600) * effectiveTime;
             user.balance = (parseFloat(user.balance) || 0) + earnings;
             logger.debug(`💰 INCOME: Игрок ${user.id} +${earnings.toFixed(2)} за ${effectiveTime}с`);
@@ -175,24 +168,19 @@ setInterval(flush, 20000);
 bot.start(async (ctx) => {
     const uid = ctx.from.id;
     logger.info(`🤖 [STEP 2] BOT: Команда /start от ${uid}`);
-    
     try {
         const webAppUrl = `${WEB_APP_URL}/?u=${uid}&v=${Date.now()}`;
-        
         await ctx.replyWithHTML(
             `🦾 <b>NEURAL PULSE</b>\n\nПротокол активирован. Твой ID: <code>${uid}</code>`, 
             Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", webAppUrl)]])
         );
-        
         logger.info(`✅ [STEP 3] BOT: Ответ отправлен пользователю ${uid}`);
     } catch (e) { 
         logger.error(`❌ [STEP 2.ERROR] BOT: ${e.message}`); 
     }
 });
 
-bot.catch((err, ctx) => {
-    logger.error(`🛑 [TELEGRAF CRITICAL]: ${err.message}`);
-});
+bot.catch((err) => logger.error(`🛑 TELEGRAF ERROR: ${err.message}`));
 
 // --- [8. ЗАПУСК] ---
 async function start() {
@@ -200,10 +188,9 @@ async function start() {
     server.listen(PORT, '0.0.0.0', async () => {
         logger.info(`🌐 СЕРВЕР: LIVE на порту ${PORT}`);
         try {
-            // Удаляем старые вебхуки и ставим новый на корень
+            // Сброс и установка вебхука
             await bot.telegram.deleteWebhook({ drop_pending_updates: true });
             await bot.telegram.setWebhook(`${WEB_APP_URL}`);
-            
             const info = await bot.telegram.getWebhookInfo();
             logger.info(`🤖 БОТ: Вебхук установлен -> ${info.url}`);
         } catch (err) { 
@@ -221,5 +208,4 @@ const shutdown = async () => {
 
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
-
 start();
