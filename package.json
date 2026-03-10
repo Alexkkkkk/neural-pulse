@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "prestart": "mkdir -p data logs",
     "test": "node --check server.js"
   },
   "dependencies": {
