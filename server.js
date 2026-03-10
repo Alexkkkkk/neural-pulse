@@ -2,8 +2,6 @@ const express = require('express');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
-const sqlite3 = require('sqlite3');
-const { open } = require('sqlite');
 const cors = require('cors');
 const { Telegraf, Markup } = require('telegraf');
 const winston = require('winston');
@@ -12,6 +10,9 @@ const winston = require('winston');
 const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAGb0-TC4z3uFK2glOUJeU_wHnr27474zzQ";
 const WEB_APP_URL = "https://np.bothost.ru"; 
 const PORT = process.env.PORT || 3000;
+// Путь вебхука должен СТРОГО совпадать с тем, что видит прокси хостинга
+const WEBHOOK_PATH = "/webhook-tg-pulse"; 
+const DATA_FILE = path.join(__dirname, 'data', 'users.json');
 
 const logger = winston.createLogger({
     level: 'debug',
@@ -27,185 +28,118 @@ app.set('trust proxy', 1);
 const server = http.createServer(app);
 const bot = new Telegraf(API_TOKEN);
 
-// --- [2. MIDDLEWARE & WEBHOOK] ---
+// --- [2. БАЗА ДАННЫХ (JSON-хранилище для стабильности)] ---
+// Это заменяет sqlite3, который вызывает ошибку "Build Failed"
+let usersData = {};
+
+function loadData() {
+    try {
+        const dataDir = path.join(__dirname, 'data');
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+        if (fs.existsSync(DATA_FILE)) {
+            usersData = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+            logger.info("📦 БД: Данные загружены из JSON");
+        }
+    } catch (e) {
+        logger.error("❌ БД LOAD ERROR: " + e.message);
+        usersData = {};
+    }
+}
+
+function saveData() {
+    try {
+        fs.writeFileSync(DATA_FILE, JSON.stringify(usersData, null, 2));
+        logger.info("💾 БД: Сохранение выполнено");
+    } catch (e) {
+        logger.error("❌ БД SAVE ERROR: " + e.message);
+    }
+}
+
+// --- [3. MIDDLEWARE & WEBHOOK] ---
 app.use(cors());
 
-// ВАЖНО: Обработчик вебхука ДО общего express.json()
-// Мы вручную парсим JSON только для этого маршрута, чтобы Telegraf получил чистый объект
-app.post('/', express.json(), async (req, res) => {
+// Вебхук обрабатываем ПЕРЕД общим express.json()
+app.post(WEBHOOK_PATH, express.json(), async (req, res) => {
     try {
-        if (!req.body || !req.body.update_id) {
-            logger.debug("🔍 ТРАФИК: Пустой POST запрос на корень (игнорируем)");
-            return res.sendStatus(200);
+        if (req.body && req.body.update_id) {
+            await bot.handleUpdate(req.body, res);
+        } else {
+            res.sendStatus(200);
         }
-        logger.debug(`📥 [STEP 1] WEBHOOK: Update ID ${req.body.update_id} получен`);
-        await bot.handleUpdate(req.body, res);
     } catch (e) {
         logger.error(`❌ WEBHOOK ERROR: ${e.message}`);
         res.sendStatus(500);
     }
 });
 
-// Парсер для остальных API запросов
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-let db;
-const userCache = new Map();
-const saveQueue = new Set();
-
-// --- [3. БАЗА ДАННЫХ] ---
-async function initDB() {
-    logger.info("📦 БД: Подключение...");
-    const dataDir = path.join(__dirname, 'data'); 
-    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-    
-    try {
-        db = await open({ filename: path.join(dataDir, 'game.db'), driver: sqlite3.Database });
-        await db.exec(`
-            PRAGMA journal_mode = WAL;
-            PRAGMA synchronous = NORMAL;
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY, 
-                balance REAL DEFAULT 100, 
-                click_lvl INTEGER DEFAULT 1,
-                pnl REAL DEFAULT 10, 
-                energy REAL DEFAULT 1000, 
-                max_energy INTEGER DEFAULT 1000, 
-                last_active INTEGER
-            );
-        `);
-        logger.info("🚀 БД: СТАТУС - ONLINE");
-    } catch (err) { 
-        logger.error("❌ БД CRITICAL: " + err.message); 
-        process.exit(1); 
-    }
-}
-
-// --- [4. ЛОГИКА ДОХОДА] ---
-function processOffline(user) {
-    const now = Math.floor(Date.now() / 1000);
-    const lastActive = parseInt(user.last_active) || now;
-    const secondsOffline = now - lastActive;
-    
-    if (secondsOffline > 5) {
-        const pnl = parseFloat(user.pnl) || 0;
-        if (pnl > 0) {
-            const effectiveTime = Math.min(secondsOffline, 10800);
-            const earnings = (pnl / 3600) * effectiveTime;
-            user.balance = (parseFloat(user.balance) || 0) + earnings;
-            logger.debug(`💰 INCOME: Игрок ${user.id} +${earnings.toFixed(2)} за ${effectiveTime}с`);
-        }
-        const regen = secondsOffline * 3;
-        user.energy = Math.min(parseInt(user.max_energy) || 1000, (parseFloat(user.energy) || 0) + regen);
-        user.last_active = now;
-        return true;
-    }
-    return false;
-}
-
-// --- [5. API] ---
-app.get('/api/balance/:userId', async (req, res) => {
+// --- [4. API ДЛЯ ИГРЫ] ---
+app.get('/api/balance/:userId', (req, res) => {
     const uid = String(req.params.userId);
-    try {
-        let user = userCache.get(uid);
-        if (!user) {
-            user = await db.get('SELECT * FROM users WHERE id = ?', [uid]);
-            if (!user) {
-                const now = Math.floor(Date.now() / 1000);
-                user = { id: uid, balance: 100, click_lvl: 1, pnl: 10, energy: 1000, max_energy: 1000, last_active: now };
-                await db.run(`INSERT INTO users (id, balance, pnl, last_active, energy, max_energy, click_lvl) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
-                    [uid, user.balance, user.pnl, user.last_active, user.energy, user.max_energy, user.click_lvl]);
-                logger.info(`🆕 API: Создан игрок ${uid}`);
-            }
-        }
-        processOffline(user);
-        userCache.set(uid, user);
-        res.json({ status: "ok", data: user });
-    } catch (e) { 
-        logger.error(`❌ API GET ERROR: ${e.message}`);
-        res.status(500).json({ status: "error" }); 
+    if (!usersData[uid]) {
+        usersData[uid] = { 
+            id: uid, balance: 100, click_lvl: 1, pnl: 10, 
+            energy: 1000, max_energy: 1000, last_active: Math.floor(Date.now() / 1000) 
+        };
     }
+    res.json({ status: "ok", data: usersData[uid] });
 });
 
 app.post('/api/save', (req, res) => {
     const { user_id, score, energy } = req.body;
     const uid = String(user_id);
-    const user = userCache.get(uid);
-    if (user) {
-        user.balance = parseFloat(score);
-        user.energy = parseFloat(energy);
-        user.last_active = Math.floor(Date.now() / 1000);
-        saveQueue.add(uid);
+    if (usersData[uid]) {
+        usersData[uid].balance = parseFloat(score);
+        usersData[uid].energy = parseFloat(energy);
+        usersData[uid].last_active = Math.floor(Date.now() / 1000);
         res.json({ status: "ok" });
     } else {
-        res.status(404).json({ status: "error", message: "User not in cache" });
+        res.status(404).json({ status: "error", message: "User not found" });
     }
 });
 
-// --- [6. СИНХРОНИЗАЦИЯ] ---
-async function flush() {
-    if (saveQueue.size === 0) return;
-    const ids = Array.from(saveQueue); 
-    saveQueue.clear();
-    try {
-        await db.run('BEGIN TRANSACTION');
-        for (const id of ids) {
-            const d = userCache.get(id);
-            if (d) await db.run(`UPDATE users SET balance=?, click_lvl=?, pnl=?, energy=?, last_active=? WHERE id=?`, 
-                [d.balance, d.click_lvl, d.pnl, d.energy, d.last_active, id]);
-        }
-        await db.run('COMMIT');
-        logger.info(`💾 SYNC: Сохранено ${ids.length} профилей`);
-    } catch (e) { 
-        if (db) await db.run('ROLLBACK'); 
-        logger.error(`🛑 SYNC ERROR: ${e.message}`);
-    }
-}
-setInterval(flush, 20000);
+// Авто-сохранение каждые 30 секунд
+setInterval(saveData, 30000);
 
-// --- [7. ЛОГИКА БОТА] ---
+// --- [5. ЛОГИКА БОТА] ---
 bot.start(async (ctx) => {
     const uid = ctx.from.id;
-    logger.info(`🤖 [STEP 2] BOT: Команда /start от ${uid}`);
+    logger.info(`🤖 BOT: Обработка /start от ${uid}`);
     try {
         const webAppUrl = `${WEB_APP_URL}/?u=${uid}&v=${Date.now()}`;
         await ctx.replyWithHTML(
-            `🦾 <b>NEURAL PULSE</b>\n\nПротокол активирован. Твой ID: <code>${uid}</code>`, 
+            `🦾 <b>NEURAL PULSE</b>\n\nПротокол активирован.`, 
             Markup.inlineKeyboard([[Markup.button.webApp("ВХОД 🧠", webAppUrl)]])
         );
-        logger.info(`✅ [STEP 3] BOT: Ответ отправлен пользователю ${uid}`);
-    } catch (e) { 
-        logger.error(`❌ [STEP 2.ERROR] BOT: ${e.message}`); 
+    } catch (e) {
+        logger.error(`❌ BOT ERROR: ${e.message}`);
     }
 });
 
-bot.catch((err) => logger.error(`🛑 TELEGRAF ERROR: ${err.message}`));
-
-// --- [8. ЗАПУСК] ---
+// --- [6. ЗАПУСК] ---
 async function start() {
-    await initDB();
+    loadData();
     server.listen(PORT, '0.0.0.0', async () => {
         logger.info(`🌐 СЕРВЕР: LIVE на порту ${PORT}`);
         try {
-            // Сброс и установка вебхука
-            await bot.telegram.deleteWebhook({ drop_pending_updates: true });
-            await bot.telegram.setWebhook(`${WEB_APP_URL}`);
-            const info = await bot.telegram.getWebhookInfo();
-            logger.info(`🤖 БОТ: Вебхук установлен -> ${info.url}`);
-        } catch (err) { 
-            logger.error(`🤖 БОТ WEBHOOK ERROR: ${err.message}`); 
+            // Установка вебхука на правильный путь
+            const hookUrl = `${WEB_APP_URL}${WEBHOOK_PATH}`;
+            await bot.telegram.setWebhook(hookUrl, { drop_pending_updates: true });
+            logger.info(`🤖 БОТ: Вебхук установлен на -> ${hookUrl}`);
+        } catch (err) {
+            logger.error(`🤖 WEBHOOK SET ERROR: ${err.message}`);
         }
     });
 }
 
-const shutdown = async () => {
-    logger.warn("🚀 ЗАВЕРШЕНИЕ РАБОТЫ...");
-    await flush();
-    if (db) await db.close();
+// Завершение работы
+const shutdown = () => {
+    saveData();
     process.exit(0);
 };
-
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
+
 start();
