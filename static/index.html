@@ -34,82 +34,84 @@
             background: #050505;
             display: flex; align-items: center; justify-content: center;
             z-index: 10000;
-            transition: opacity 0.8s ease;
+            transition: opacity 0.8s ease, visibility 0.8s;
         }
         .loader-container { text-align: center; }
-        .loader-logo-wrap { position: relative; width: 150px; height: 150px; margin: 0 auto 30px; }
+        .loader-logo-wrap { position: relative; width: 120px; height: 120px; margin: 0 auto 30px; }
         .loader-ring {
-            position: absolute; top: -5px; left: -5px; right: -5px; bottom: -5px;
-            border: 2px solid transparent; border-top: 2px solid var(--neon-cyan);
-            border-right: 2px solid var(--neon-purple); border-radius: 50%;
-            animation: rotate-ring 1.5s linear infinite;
+            position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px;
+            border: 3px solid transparent; border-top: 3px solid var(--neon-cyan);
+            border-right: 3px solid var(--neon-purple); border-radius: 50%;
+            animation: rotate-ring 1s linear infinite;
         }
         .loader-text {
-            color: #fff; font-size: 11px; font-weight: 900; text-transform: uppercase;
-            letter-spacing: 2px; margin-bottom: 10px;
+            color: #fff; font-size: 10px; font-weight: 900; text-transform: uppercase;
+            letter-spacing: 3px; margin-bottom: 10px; opacity: 0.7;
         }
-        .loader-percent { color: var(--neon-cyan); font-size: 24px; font-weight: 900; margin-bottom: 20px; font-family: monospace; }
-        .loader-bar-bg { width: 220px; height: 4px; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 0 auto; overflow: hidden; }
-        .loader-bar-fill { width: 0%; height: 100%; background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); transition: width 0.3s; }
+        .loader-percent { color: var(--neon-cyan); font-size: 28px; font-weight: 900; margin-bottom: 20px; font-family: monospace; }
+        .loader-bar-bg { width: 200px; height: 4px; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 0 auto; overflow: hidden; }
+        .loader-bar-fill { width: 0%; height: 100%; background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); transition: width 0.2s; }
+        
         @keyframes rotate-ring { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-        /* --- UI --- */
+        /* --- UI LAYER --- */
         .content-layer { 
             position: relative; z-index: 2; width: 100%; height: 100%; 
             display: flex; flex-direction: column; align-items: center; 
             padding-top: env(safe-area-inset-top);
-            transition: transform 0.6s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.5s ease;
-            transform: scale(0.95); opacity: 0;
+            transition: transform 0.8s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.6s ease;
+            transform: scale(0.92); opacity: 0;
             visibility: hidden;
         }
         .content-layer.active { transform: scale(1); opacity: 1; visibility: visible; }
         
         .header-card {
             width: 85%; margin-top: 15px; display: flex; align-items: center; gap: 12px; 
-            background: var(--glass); padding: 12px; border-radius: 20px; backdrop-filter: blur(10px);
-            border: 1px solid rgba(0, 242, 255, 0.1);
+            background: var(--glass); padding: 12px; border-radius: 20px; backdrop-filter: blur(15px);
+            border: 1px solid rgba(0, 242, 255, 0.15);
         }
         .lvl-icon {
-            width: 42px; height: 42px; background: rgba(0, 242, 255, 0.1); 
+            width: 44px; height: 44px; background: rgba(0, 242, 255, 0.1); 
             border: 1px solid var(--neon-cyan); border-radius: 12px; 
             display: flex; align-items: center; justify-content: center; 
             font-weight: 900; color: var(--neon-cyan); font-size: 18px;
+            box-shadow: 0 0 15px rgba(0, 242, 255, 0.2);
         }
 
         .score-container {
-            margin-top: 20px; text-align: center; background: rgba(188, 19, 254, 0.05);
-            border: 1px solid rgba(188, 19, 254, 0.2); padding: 10px 40px; border-radius: 20px;
+            margin-top: 25px; text-align: center;
         }
-        .jackpot-label { color: var(--neon-cyan); font-size: 10px; font-weight: 800; letter-spacing: 1px; margin-bottom: 2px; }
-        #balance { font-size: 42px; font-weight: 900; color: #fff; text-shadow: 0 0 20px rgba(255,255,255,0.2); font-variant-numeric: tabular-nums; }
+        .jackpot-label { color: var(--neon-cyan); font-size: 11px; font-weight: 800; letter-spacing: 2px; margin-bottom: 5px; opacity: 0.8; }
+        #balance { font-size: 48px; font-weight: 900; color: #fff; text-shadow: 0 0 30px rgba(0, 242, 255, 0.3); font-variant-numeric: tabular-nums; }
 
-        .main-wrapper { position: relative; width: 100%; display: flex; justify-content: center; align-items: center; margin-top: 20px; }
+        .main-wrapper { position: relative; width: 100%; display: flex; justify-content: center; align-items: center; margin-top: 30px; }
         .click-area { 
             position: relative; width: 280px; height: 280px; 
             display: flex; align-items: center; justify-content: center; 
             cursor: pointer;
         }
         .main-logo { 
-            width: 240px; height: 240px; border-radius: 50%; 
-            box-shadow: 0 0 60px rgba(188, 19, 254, 0.3); 
-            transition: transform 0.05s; z-index: 5; object-fit: cover;
+            width: 230px; height: 230px; border-radius: 50%; 
+            box-shadow: 0 0 80px rgba(188, 19, 254, 0.2); 
+            transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 5; object-fit: cover;
             pointer-events: none;
+            border: 4px solid rgba(255,255,255,0.05);
         }
         
-        .side-nav { position: absolute; right: 15px; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
-        .side-btn { background: #121212; border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 9px; font-weight: 800; padding: 10px 12px; border-radius: 10px; width: 70px; text-align: center; cursor: pointer; }
+        .side-nav { position: absolute; right: 10px; display: flex; flex-direction: column; gap: 12px; z-index: 10; }
+        .side-btn { background: rgba(20,20,20,0.8); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 10px; font-weight: 800; padding: 12px; border-radius: 14px; width: 65px; text-align: center; backdrop-filter: blur(5px); }
 
-        .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: auto; margin-bottom: 30px; }
-        .nav-btn { background: var(--glass); border: 1.5px solid #444; padding: 12px 5px; border-radius: 12px; text-align: center; font-size: 11px; font-weight: 800; color: #fff; cursor: pointer; }
+        .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: auto; margin-bottom: 35px; }
+        .nav-btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 14px 5px; border-radius: 16px; text-align: center; font-size: 11px; font-weight: 800; color: #fff; }
 
-        .tap-text { position: absolute; color: #fff; font-size: 32px; font-weight: 900; pointer-events: none; animation: floatUp 0.6s ease-out forwards; z-index: 100; text-shadow: 0 0 10px var(--neon-purple); }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px); } }
+        .tap-text { position: absolute; color: #fff; font-size: 36px; font-weight: 900; pointer-events: none; animation: floatUp 0.7s ease-out forwards; z-index: 100; text-shadow: 0 0 15px var(--neon-purple); }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-140px) scale(1.2); } }
 
-        .energy-section { width: 85%; margin-top: 20px; margin-bottom: 20px; }
-        .energy-bar-wrap { width: 100%; height: 10px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; }
-        #energy-fill { height: 100%; background: linear-gradient(90deg, #00ff66, #00f2ff); width: 100%; transition: width 0.3s; }
+        .energy-section { width: 85%; margin-top: 25px; }
+        .energy-bar-wrap { width: 100%; height: 12px; background: rgba(255,255,255,0.05); border-radius: 20px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05); }
+        #energy-fill { height: 100%; background: linear-gradient(90deg, #00ff66, var(--neon-cyan)); width: 100%; transition: width 0.3s; }
         
-        .pnl-badge { font-size: 10px; color: var(--neon-cyan); margin-top: 5px; font-weight: bold; }
+        .pnl-badge { font-size: 11px; color: var(--neon-cyan); margin-top: 6px; font-weight: bold; letter-spacing: 0.5px; }
     </style>
 </head>
 <body>
@@ -118,9 +120,9 @@
         <div class="loader-container">
             <div class="loader-logo-wrap">
                 <div class="loader-ring"></div>
-                <img src="images/logo.png" style="width: 150px; height: 150px; border-radius: 50%;" onerror="this.src='https://via.placeholder.com/150/bc13fe/fff?text=AI'">
+                <img src="images/logo.png" style="width: 120px; height: 120px; border-radius: 50%; position: relative; z-index: 2;" onerror="this.src='https://via.placeholder.com/120/bc13fe/fff?text=AI'">
             </div>
-            <div class="loader-text" id="loader-status">CONNECTING TO CORE...</div>
+            <div class="loader-text" id="loader-status">Initializing Neural Link...</div>
             <div id="loader-percent" class="loader-percent">0%</div>
             <div class="loader-bar-bg"><div id="loader-fill" class="loader-bar-fill"></div></div>
         </div>
@@ -130,9 +132,9 @@
         <div class="header-card">
             <div class="lvl-icon" id="lvl-display">1</div>
             <div style="flex-grow: 1;">
-                <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; color: #aaa;">
+                <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; color: #888; letter-spacing: 1px;">
                     <span id="league-name">NEURAL LEAGUE</span>
-                    <span id="rank-id">ID: ----</span>
+                    <span id="rank-id">ID: ------</span>
                 </div>
                 <div id="pnl-display" class="pnl-badge">PASSIVE: +0/h</div>
             </div>
@@ -145,17 +147,17 @@
 
         <div class="main-wrapper">
             <div class="click-area" id="tap-zone">
-                <img src="images/logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/250/bc13fe/fff?text=AI'">
+                <img src="images/logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/230/bc13fe/fff?text=AI'">
             </div>
             <div class="side-nav">
                 <div class="side-btn" onclick="showInvite()">INVITE</div>
-                <div class="side-btn" onclick="tg.showAlert('Daily Tasks coming soon!')">TASKS</div>
-                <div class="side-btn" style="color:#ffe600; border-color:rgba(255,230,0,0.3)" onclick="tg.showAlert('Daily Bonus in next update!')">BONUS</div>
+                <div class="side-btn" onclick="tg.showAlert('Tasks update in 24h')">TASKS</div>
+                <div class="side-btn" style="color:#ffe600; border-color:rgba(255,230,0,0.4)" onclick="tg.showAlert('Daily Bonus available tomorrow!')">BONUS</div>
             </div>
         </div>
 
         <div class="energy-section">
-            <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; margin-bottom: 6px; color: #aaa;">
+            <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 800; margin-bottom: 8px; color: #888;">
                 <span>⚡ ENERGY</span>
                 <span id="energy-text">1000/1000</span>
             </div>
@@ -163,8 +165,8 @@
         </div>
 
         <div class="bottom-nav">
-            <div class="nav-btn" onclick="tg.showAlert('Upgrades integrated with server soon!')">🚀 BOOST</div>
-            <div class="nav-btn" onclick="tg.showAlert('Mining system activation in progress...')">⛏️ MINE</div>
+            <div class="nav-btn" onclick="tg.showAlert('Upgrades loading...')">🚀 BOOST</div>
+            <div class="nav-btn" onclick="tg.showAlert('Mining starts at Level 5')">⛏️ MINE</div>
             <div class="nav-btn" onclick="showLeaderboard()">📊 STATS</div>
         </div>
     </div>
@@ -184,7 +186,6 @@
             pnl: 0, 
             loaded: false,
             isDirty: false,
-            // Безопасное получение ID из initData или URL
             uid: tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('u')
         };
 
@@ -194,30 +195,30 @@
             const fillEl = document.getElementById('loader-fill');
 
             const interval = setInterval(() => {
-                if (state.loaded && progress < 100) {
-                    progress += 10;
-                } else if (!state.loaded && progress < 90) {
-                    progress += 0.5;
+                // Если данные пришли, ускоряем загрузку
+                if (state.loaded) {
+                    progress += 4;
+                } else if (progress < 92) {
+                    progress += 0.3;
                 }
 
                 if (progress >= 100) {
                     progress = 100;
                     clearInterval(interval);
-                    setTimeout(hideLoader, 300);
+                    hideLoader();
                 }
                 
-                const displayProgress = Math.min(100, Math.floor(progress));
+                const displayProgress = Math.floor(progress);
                 percentEl.innerText = `${displayProgress}%`;
                 fillEl.style.width = `${displayProgress}%`;
             }, 30);
         }
 
         function hideLoader() {
-            document.getElementById('loader-screen').style.opacity = '0';
+            const loader = document.getElementById('loader-screen');
+            loader.style.opacity = '0';
+            loader.style.visibility = 'hidden';
             document.querySelector('.content-layer').classList.add('active');
-            setTimeout(() => {
-                document.getElementById('loader-screen').style.display = 'none';
-            }, 800);
         }
 
         function updateUI() {
@@ -231,7 +232,6 @@
 
         async function loadData() {
             if(!state.uid) { 
-                console.warn("UID not found");
                 state.loaded = true;
                 updateUI();
                 return; 
@@ -239,7 +239,6 @@
             try {
                 const r = await fetch(`${API_BASE}/api/balance/${state.uid}`);
                 const res = await r.json();
-
                 if(res.status === 'ok') {
                     state.balance = res.data.balance || 0;
                     state.energy = res.data.energy || 1000;
@@ -247,40 +246,25 @@
                     state.click_lvl = res.data.click_lvl || 1;
                     state.max_energy = res.data.max_energy || 1000;
                 }
-            } catch(e) { 
-                console.error("Load failed");
-            } finally {
-                state.loaded = true;
-                updateUI();
-            }
+            } catch(e) { console.error("API Error"); }
+            state.loaded = true;
+            updateUI();
         }
 
         async function syncData() {
-            // Отправляем данные только если были клики и пользователь загружен
             if(!state.uid || !state.loaded || !state.isDirty) return;
-            
             try {
-                const response = await fetch(`${API_BASE}/api/save`, {
+                await fetch(`${API_BASE}/api/save`, {
                     method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        // ОБЯЗАТЕЛЬНО: Отправляем initData для проверки на сервере
-                        'Authorization': tg.initData 
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         user_id: state.uid, 
                         score: state.balance,
                         energy: state.energy
                     })
                 });
-                
-                const result = await response.json();
-                if(result.status === 'ok') {
-                    state.isDirty = false;
-                }
-            } catch(e) { 
-                console.error("Sync error"); 
-            }
+                state.isDirty = false;
+            } catch(e) {}
         }
 
         const tapZone = document.getElementById('tap-zone');
@@ -292,7 +276,7 @@
 
             for(let i=0; i < e.changedTouches.length; i++) {
                 if (state.energy < state.click_lvl) {
-                    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
+                    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('warning');
                     break;
                 }
 
@@ -304,15 +288,15 @@
                 const num = document.createElement('div');
                 num.className = 'tap-text';
                 num.innerText = `+${state.click_lvl}`;
-                num.style.left = `${touch.pageX - 15}px`; 
-                num.style.top = `${touch.pageY - 40}px`;
+                num.style.left = `${touch.pageX - 20}px`; 
+                num.style.top = `${touch.pageY - 50}px`;
                 document.body.appendChild(num);
-                setTimeout(() => num.remove(), 600);
+                setTimeout(() => num.remove(), 700);
 
                 if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
             }
 
-            mainLogo.style.transform = 'scale(0.95)';
+            mainLogo.style.transform = 'scale(0.92)';
             updateUI();
         }, { passive: false });
 
@@ -320,17 +304,15 @@
             mainLogo.style.transform = 'scale(1)';
         });
 
-        // Регенерация энергии раз в секунду
+        // Энергия +3 в сек
         setInterval(() => {
-            if (!state.loaded) return;
-            if (state.energy < state.max_energy) {
+            if (state.loaded && state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 3);
                 updateUI();
             }
         }, 1000);
 
-        // Сохранение на сервер каждые 10 секунд
-        setInterval(syncData, 10000);
+        setInterval(syncData, 5000); // Синхронизация каждые 5 сек
 
         window.onload = () => {
             startLoadingAnimation();
@@ -338,15 +320,15 @@
         };
         
         function showInvite() {
-            const link = `https://t.me/neural_pulse_bot?start=${state.uid}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join me in Neural Pulse AI!`);
+            const link = `https://t.me/UltraMind_AI_bot?start=${state.uid}`;
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join me in Neural Pulse AI! 🧠`);
         }
 
         function showLeaderboard() {
             tg.showPopup({
-                title: 'Ваша статистика',
-                message: `Баланс: ${Math.floor(state.balance)} NT\nУровень клика: ${state.click_lvl}\nПассивный доход: ${state.pnl}/ч`,
-                buttons: [{type: 'close', text: 'Понятно'}]
+                title: '📈 СТАТИСТИКА',
+                message: `Токенов: ${Math.floor(state.balance)}\nЭнергия: ${state.energy}\nУровень: ${state.click_lvl}`,
+                buttons: [{type: 'close', text: 'ЗАКРЫТЬ'}]
             });
         }
     </script>
