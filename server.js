@@ -4,7 +4,7 @@ const fs = require('fs');
 const cors = require('cors');
 const { Telegraf, Markup } = require('telegraf');
 
-console.log("🚀 [SYSTEM] Запуск глубокого мониторинга...");
+console.log("🚀 [SYSTEM] Активация Гибридного ядра (Long Polling + Express)...");
 
 // [1] КОНФИГУРАЦИЯ
 const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAFUmUinCAALPf6Bivpo04__Zp_V4Y49MFs"; 
@@ -13,7 +13,6 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'users.json');
 const WEB_APP_URL = `https://${DOMAIN}`;
-const WEBHOOK_PATH = '/bot-webhook-debug'; 
 
 const app = express();
 const bot = new Telegraf(API_TOKEN);
@@ -22,76 +21,103 @@ const bot = new Telegraf(API_TOKEN);
 let usersData = {};
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (fs.existsSync(DATA_FILE)) {
-    try {
-        usersData = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8') || '{}');
-    } catch (e) { usersData = {}; }
+    try { usersData = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8') || '{}'); } 
+    catch (e) { usersData = {}; }
 }
 const saveDB = () => fs.writeFile(DATA_FILE, JSON.stringify(usersData, null, 2), () => {});
 
-// [3] MIDDLEWARE
+// ==========================================
+// [3] EXPRESS - ТОЛЬКО ДЛЯ WEB APP И API
+// ==========================================
 app.use(cors());
-app.use(express.json()); // Оставляем только один парсер
+app.use(express.json());
 
-// МИКРО-ЛОГИРОВАНИЕ КАЖДОГО ЗАПРОСА
+// Логируем запросы к серверу (от приложения)
 app.use((req, res, next) => {
-    if (req.url === WEBHOOK_PATH) {
-        console.log(`\n📥 [HOOK] Входящий запрос: ${req.method} ${req.url}`);
-        console.log(`📡 Headers: ${JSON.stringify(req.headers['x-forwarded-for'] || req.ip)}`);
-        
-        // Логируем тело, если оно уже распаршено express.json()
-        if (req.body && Object.keys(req.body).length > 0) {
-            console.log(`📦 Body: ${JSON.stringify(req.body)}`);
-        } else {
-            console.log(`⚠️ Внимание: Тело запроса пустое!`);
-        }
-    }
+    console.log(`🌐 [WEB] Запрос к API/Статике: ${req.method} ${req.url}`);
     next();
 });
 
-// [4] ОБРАБОТКА ВЕБХУКА
-app.post(WEBHOOK_PATH, (req, res) => {
-    bot.handleUpdate(req.body, res)
-        .then(() => {
-            if (!res.writableEnded) res.sendStatus(200);
-            console.log("✅ [OK] Update обработан Telegraf");
-        })
-        .catch((err) => {
-            console.error("🚨 [ERROR] Ошибка внутри Telegraf:", err);
-            res.sendStatus(500);
-        });
+// API Эндпоинты
+app.get('/api/balance/:userId', (req, res) => {
+    const uid = String(req.params.userId);
+    if (!usersData[uid]) {
+        usersData[uid] = { id: uid, balance: 0, energy: 1000 };
+        saveDB();
+    }
+    res.json({ status: "ok", data: usersData[uid] });
 });
 
+app.post('/api/save', (req, res) => {
+    const { user_id, score, energy } = req.body;
+    if (user_id && usersData[user_id]) {
+        usersData[user_id].balance = Number(score);
+        usersData[user_id].energy = Number(energy);
+        saveDB();
+        return res.json({ status: "ok" });
+    }
+    res.status(400).send("error");
+});
+
+// Раздача статики (твоя папка public)
 app.use(express.static(path.join(__dirname, 'public')));
 
-// [5] ЛОГИКА БОТА
+// ==========================================
+// [4] TELEGRAF - ПРЯМОЕ ПОДКЛЮЧЕНИЕ (LONG POLLING)
+// ==========================================
 bot.start((ctx) => {
-    console.log(`🎯 [BOT] Команда /start от ${ctx.from.id}`);
+    console.log(`🎯 [BOT] Команда /start от ${ctx.from.first_name} (ID: ${ctx.from.id})`);
+    
+    // Синхронизация БД при старте
+    const uid = String(ctx.from.id);
+    if (!usersData[uid]) {
+        usersData[uid] = { id: uid, balance: 0, energy: 1000 };
+        saveDB();
+    }
+
     ctx.replyWithHTML(
-        `<b>🚀 Система Neural Pulse активна!</b>\n\nТвой ID: <code>${ctx.from.id}</code>`,
+        `<b>🚀 Система Neural Pulse активна!</b>\n\nКанал связи установлен напрямую.`,
         Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', WEB_APP_URL)]])
     );
 });
 
-// [6] ЗАПУСК С ОЧИСТКОЙ ОЧЕРЕДИ
+bot.on('text', (ctx) => {
+    console.log(`💬 [BOT] Сообщение от ${ctx.from.id}: ${ctx.message.text}`);
+    if (ctx.message.text.toLowerCase().includes('баланс')) {
+        const bal = usersData[ctx.from.id]?.balance || 0;
+        return ctx.reply(`💰 Твой баланс: ${bal} NP`);
+    }
+    ctx.reply("🧬 Для начала майнинга нажми кнопку 'ИГРАТЬ' в меню!");
+});
+
+// ==========================================
+// [5] ЗАПУСК СИСТЕМЫ
+// ==========================================
 async function boot() {
-    app.listen(PORT, '0.0.0.0', async () => {
-        console.log(`🖥️ [SERVER] Работает на порту: ${PORT}`);
-        try {
-            const hookUrl = `https://${DOMAIN}${WEBHOOK_PATH}`;
-            
-            // КРИТИЧНО: Очищаем очередь застрявших 12 сообщений
-            await bot.telegram.deleteWebhook({ drop_pending_updates: true });
-            console.log(`🗑️ [WEBHOOK] Очередь очищена`);
-            
-            await bot.telegram.setWebhook(hookUrl);
-            console.log(`✅ [WEBHOOK] Установлен: ${hookUrl}`);
-            
-            const info = await bot.telegram.getWebhookInfo();
-            console.log(`📊 [STATUS]:`, JSON.stringify(info, null, 2));
-        } catch (e) {
-            console.error("❌ [BOOT ERROR]:", e.message);
-        }
+    // 1. Запускаем сервер для Web App
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`🖥️ [EXPRESS] Сервер для Web App работает на порту: ${PORT}`);
     });
+
+    // 2. Отключаем сломанный вебхук
+    try {
+        await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+        console.log(`🗑️ [WEBHOOK] Заблокированный вебхук удален`);
+    } catch (e) {
+        console.error("⚠️ [WEBHOOK] Ошибка при удалении:", e.message);
+    }
+
+    // 3. Запускаем бота напрямую
+    try {
+        bot.launch();
+        console.log(`✅ [TELEGRAM] Бот запущен в режиме ПРЯМОГО подключения (Long Polling)!`);
+    } catch (e) {
+        console.error("❌ [BOT ERROR] Ошибка запуска бота:", e.message);
+    }
 }
 
 boot();
+
+// Защита от крашей
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
