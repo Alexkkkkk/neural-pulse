@@ -3,78 +3,92 @@ const mongoose = require('mongoose');
 const { Telegraf, Markup } = require('telegraf');
 const cors = require('cors');
 const path = require('path');
-const User = require('./models/User'); // Путь к модели
+const User = require('./models/User'); 
 
 // [1] КОНФИГУРАЦИЯ
 const BOT_TOKEN = "8257287930:AAFUmUinCAALPf6Bivpo04__Zp_V4Y49MFs";
-const MONGO_URI = "mongodb+srv://admin:твои_пароль@cluster.mongodb.net/neuralpulse"; // ТУТ НУЖНА ТВОЯ ССЫЛКА
+
+// !!! ЗАМЕНИ ЭТУ СТРОКУ НА СВОЮ ИЗ MONGODB ATLAS !!!
+// Обязательно проверь, чтобы пароль был вписан вместо <password>
+const MONGO_URI = "mongodb+srv://admin:ТВОЙ_ПАРОЛЬ@cluster0.abcde.mongodb.net/neuralpulse?retryWrites=true&w=majority";
+
 const DOMAIN = "np.bothost.ru";
 const PORT = process.env.PORT || 3000;
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// [2] ПОДКЛЮЧЕНИЕ К БАЗЕ
-mongoose.connect(MONGO_URI)
-    .then(() => console.log("💎 [DB] Connected to MongoDB (Scalable)"))
-    .catch(err => console.error("🚨 [DB] Connection Error:", err));
+// [2] ПРАВИЛЬНОЕ ПОДКЛЮЧЕНИЕ К БАЗЕ
+mongoose.set('strictQuery', false);
+const connectDB = async () => {
+    try {
+        await mongoose.connect(MONGO_URI, {
+            serverSelectionTimeoutMS: 5000 // Не ждем дольше 5 секунд
+        });
+        console.log("💎 [DB] Успешно подключено к MongoDB Atlas!");
+    } catch (err) {
+        console.error("🚨 [DB] Ошибка подключения! Скорее всего, неверная ссылка или пароль.");
+        console.error("Детали:", err.message);
+    }
+};
+
+connectDB();
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// [3] API ДЛЯ ИГРЫ (Оптимизировано под миллионы юзеров)
+// [3] API ЭНДПОИНТЫ
 app.get('/api/user/:id', async (req, res) => {
-    let user = await User.findOne({ userId: req.params.id });
-    if (!user) {
-        user = await User.create({ userId: req.params.id });
+    try {
+        let user = await User.findOne({ userId: req.params.id });
+        if (!user) {
+            user = await User.create({ userId: req.params.id });
+        }
+        res.json(user);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
-    res.json(user);
 });
 
 app.post('/api/save', async (req, res) => {
-    const { userId, balance, energy } = req.body;
-    await User.findOneAndUpdate({ userId }, { balance, energy, lastSync: Date.now() });
-    res.json({ status: 'success' });
+    try {
+        const { userId, balance, energy } = req.body;
+        await User.findOneAndUpdate({ userId }, { balance, energy, lastSync: Date.now() });
+        res.json({ status: 'success' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
-// [4] ЛОГИКА БОТА С РЕФЕРАЛКОЙ (Путь к 20 млн)
+// [4] ЛОГИКА БОТА
 bot.start(async (ctx) => {
     const uid = String(ctx.from.id);
-    const refId = ctx.startPayload; // ID того, кто пригласил
+    const refId = ctx.startPayload;
 
-    let user = await User.findOne({ userId: uid });
-
-    if (!user) {
-        user = await User.create({ 
-            userId: uid, 
-            username: ctx.from.username,
-            referredBy: refId || null 
-        });
-
-        // Бонус пригласившему
-        if (refId) {
-            await User.findOneAndUpdate({ userId: refId }, { $inc: { balance: 5000, friendsCount: 1 } });
+    try {
+        let user = await User.findOne({ userId: uid });
+        if (!user) {
+            user = await User.create({ userId: uid, referredBy: refId || null });
+            if (refId) {
+                await User.findOneAndUpdate({ userId: refId }, { $inc: { balance: 5000, friendsCount: 1 } });
+            }
         }
-    }
 
-    const shareLink = `https://t.me/neural_pulse_bot?start=${uid}`;
-    
-    ctx.replyWithHTML(
-        `<b>🚀 NEURAL PULSE: ВХОД ВЫПОЛНЕН</b>\n\n` +
-        `Твой баланс: 💰 <b>${user.balance} NP</b>\n` +
-        `Приглашено друзей: 👥 <b>${user.friendsCount}</b>\n\n` +
-        `За каждого друга даем 5,000 NP!`,
-        Markup.inlineKeyboard([
-            [Markup.button.webApp('⚡ ИГРАТЬ', `https://${DOMAIN}`)],
-            [Markup.button.switchToChat('📢 Пригласить друга', `Играй со мной в Neural Pulse! 💎`)]
-        ])
-    );
+        ctx.replyWithHTML(
+            `<b>🚀 NEURAL PULSE: СИСТЕМА ГОТОВА</b>\n\nБаланс: 💰 <b>${user.balance} NP</b>`,
+            Markup.inlineKeyboard([
+                [Markup.button.webApp('⚡ ИГРАТЬ', `https://${DOMAIN}`)]
+            ])
+        );
+    } catch (e) {
+        console.error("Ошибка в /start:", e);
+        ctx.reply("⚠️ Ошибка подключения к базе данных. Попробуйте позже.");
+    }
 });
 
 // [5] ЗАПУСК
 app.listen(PORT, () => {
-    console.log(`🖥️ [SERVER] Web App on port ${PORT}`);
-    bot.launch();
-    console.log(`✅ [BOT] Long Polling started`);
+    console.log(`🖥️ [SERVER] Работает на порту ${PORT}`);
+    bot.launch().then(() => console.log(`✅ [BOT] Бот запущен (Long Polling)`));
 });
