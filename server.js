@@ -11,51 +11,65 @@ const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// --- БАЗА ДАННЫХ ЗАКОММЕНТИРОВАНА ---
-// const mongoose = require('mongoose');
-// const User = require('./models/User');
-// const MONGO_URI = "mongodb+srv://..."; 
-
-// Временное хранилище в памяти (сбросится при перезагрузке)
+// Временное хранилище в оперативной памяти (сбросится при перезагрузке сервера)
 let tempUsers = {}; 
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// [2] API ЭНДПОИНТЫ (РАБОТАЮТ ЧЕРЕЗ ПАМЯТЬ)
+// [2] API ЭНДПОИНТЫ
+
+// Получение данных (вызывается при загрузке игры)
 app.get('/api/user/:id', (req, res) => {
     const uid = String(req.params.id);
+    
     if (!tempUsers[uid]) {
-        tempUsers[uid] = { userId: uid, balance: 0, energy: 1000 };
+        // Начальное состояние нового игрока
+        tempUsers[uid] = { 
+            userId: uid, 
+            balance: 0, 
+            energy: 1000,
+            click_lvl: 1,
+            pnl: 0 
+        };
     }
+    
+    console.log(`📡 [GET] Данные игрока ${uid} отправлены`);
     res.json(tempUsers[uid]);
 });
 
+// Сохранение данных (вызывается из игры каждые 4 сек или при клике)
 app.post('/api/save', (req, res) => {
     const { userId, balance, energy } = req.body;
     const uid = String(userId);
-    if (uid) {
-        tempUsers[uid] = { userId: uid, balance: Number(balance), energy: Number(energy) };
+
+    if (uid && tempUsers[uid]) {
+        // Сохраняем значения, форсируя тип Number, чтобы не было ошибок в математике
+        tempUsers[uid].balance = Number(balance);
+        tempUsers[uid].energy = Number(energy);
+        
+        console.log(`☁️  [POST] Сохранено ${uid}: 💰 ${balance} | ⚡ ${energy}`);
         return res.json({ status: 'success' });
     }
-    res.status(400).json({ error: 'No user ID' });
+    
+    res.status(400).json({ error: 'User not found' });
 });
 
-// [3] ЛОГИКА БОТА
+// [3] ЛОГИКА ТЕЛЕГРАМ-БОТА
 bot.start((ctx) => {
     const uid = String(ctx.from.id);
-    console.log(`🎯 [BOT] Старт от ${ctx.from.first_name} (${uid})`);
+    const firstName = ctx.from.first_name || "User";
 
-    // Создаем профиль в памяти, если его нет
     if (!tempUsers[uid]) {
-        tempUsers[uid] = { userId: uid, balance: 0, energy: 1000 };
+        tempUsers[uid] = { userId: uid, balance: 0, energy: 1000, click_lvl: 1, pnl: 0 };
     }
 
     ctx.replyWithHTML(
-        `<b>🚀 NEURAL PULSE: ТЕСТОВЫЙ РЕЖИМ</b>\n\n` +
-        `База данных временно отключена. Прогресс сохраняется только до перезагрузки бота.\n\n` +
-        `Баланс: 💰 <b>${tempUsers[uid].balance} NP</b>`,
+        `<b>🚀 Привет, ${firstName}! Добро пожаловать в Neural Pulse</b>\n\n` +
+        `Твой текущий баланс: 💰 <b>${Math.floor(tempUsers[uid].balance)} NP</b>\n` +
+        `Энергия: ⚡ <b>${Math.floor(tempUsers[uid].energy)}</b>\n\n` +
+        `<i>Нажми кнопку ниже, чтобы начать майнинг:</i>`,
         Markup.inlineKeyboard([
             [Markup.button.webApp('⚡ ИГРАТЬ', `https://${DOMAIN}`)]
         ])
@@ -65,13 +79,14 @@ bot.start((ctx) => {
 // [4] ЗАПУСК
 app.listen(PORT, () => {
     console.log(`\n————————————————————————————————————————————————`);
-    console.log(`🖥️  [SERVER] Работает на порту ${PORT}`);
-    console.log(`⚠️  [STATUS] MongoDB отключена (используется RAM)`);
+    console.log(`🖥️  СЕРВЕР: https://${DOMAIN}`);
+    console.log(`📡  API: http://localhost:${PORT}/api/user/`);
+    console.log(`⚠️  БАЗА: MongoDB ОТКЛЮЧЕНА (данные в RAM)`);
     console.log(`————————————————————————————————————————————————\n`);
     
-    bot.launch().catch(err => console.error("❌ Ошибка запуска бота:", err));
+    bot.launch().catch(err => console.error("❌ Ошибка бота:", err));
 });
 
-// Защита от корректного завершения
+// Безопасное завершение
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
