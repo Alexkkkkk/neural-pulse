@@ -6,109 +6,43 @@
     <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root {
-            --neon-cyan: #00f2ff;
-            --neon-purple: #bc13fe;
-            --bg-dark: #050505;
-            --glass: rgba(255, 255, 255, 0.07);
-        }
-
-        body {
-            margin: 0; padding: 0;
-            background-color: var(--bg-dark);
-            background-image: radial-gradient(circle at 50% 50%, #150a28 0%, #050505 100%);
-            color: white;
-            font-family: 'Segoe UI', Roboto, sans-serif;
-            overflow: hidden;
-            display: flex; flex-direction: column; align-items: center;
-            height: 100vh;
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
-            touch-action: none; 
-        }
-
-        /* --- LOADER --- */
-        #loader-screen {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: #050505;
-            display: flex; align-items: center; justify-content: center;
-            z-index: 10000;
-            transition: opacity 0.5s ease;
-        }
+        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #050505; --glass: rgba(255, 255, 255, 0.07); }
+        body { margin: 0; padding: 0; background-color: var(--bg-dark); background-image: radial-gradient(circle at 50% 50%, #150a28 0%, #050505 100%); color: white; font-family: 'Segoe UI', Roboto, sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
+        
+        /* Лоадер */
+        #loader-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #050505; display: flex; align-items: center; justify-content: center; z-index: 10000; transition: opacity 0.5s ease; }
         .loader-container { text-align: center; }
         .loader-logo-wrap { position: relative; width: 120px; height: 120px; margin: 0 auto 30px; }
-        .loader-ring {
-            position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px;
-            border: 3px solid transparent; border-top: 3px solid var(--neon-cyan);
-            border-right: 3px solid var(--neon-purple); border-radius: 50%;
-            animation: rotate-ring 1s linear infinite;
-        }
-        .loader-text {
-            color: #fff; font-size: 10px; font-weight: 900; text-transform: uppercase;
-            letter-spacing: 3px; margin-bottom: 10px; opacity: 0.7;
-        }
+        .loader-ring { position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; border: 3px solid transparent; border-top: 3px solid var(--neon-cyan); border-right: 3px solid var(--neon-purple); border-radius: 50%; animation: rotate-ring 1s linear infinite; }
+        .loader-text { color: #fff; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 10px; opacity: 0.7; }
         .loader-percent { color: var(--neon-cyan); font-size: 28px; font-weight: 900; margin-bottom: 20px; font-family: monospace; }
         .loader-bar-bg { width: 200px; height: 4px; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 0 auto; overflow: hidden; }
         .loader-bar-fill { width: 0%; height: 100%; background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); transition: width 0.2s; }
-        
         @keyframes rotate-ring { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-        /* --- UI LAYER --- */
-        .content-layer { 
-            position: relative; z-index: 2; width: 100%; height: 100%; 
-            display: flex; flex-direction: column; align-items: center; 
-            padding-top: env(safe-area-inset-top);
-            transition: transform 0.6s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.5s ease;
-            transform: scale(0.95); opacity: 0;
-            visibility: hidden;
-        }
+        /* Интерфейс */
+        .content-layer { position: relative; z-index: 2; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; padding-top: env(safe-area-inset-top); transition: transform 0.6s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.5s ease; transform: scale(0.95); opacity: 0; visibility: hidden; }
         .content-layer.active { transform: scale(1); opacity: 1; visibility: visible; }
-        
-        .header-card {
-            width: 85%; margin-top: 15px; display: flex; align-items: center; gap: 12px; 
-            background: var(--glass); padding: 12px; border-radius: 20px; backdrop-filter: blur(15px);
-            border: 1px solid rgba(0, 242, 255, 0.15);
-        }
-        .lvl-icon {
-            width: 44px; height: 44px; background: rgba(0, 242, 255, 0.1); 
-            border: 1px solid var(--neon-cyan); border-radius: 12px; 
-            display: flex; align-items: center; justify-content: center; 
-            font-weight: 900; color: var(--neon-cyan); font-size: 18px;
-            box-shadow: 0 0 15px rgba(0, 242, 255, 0.2);
-        }
-
+        .header-card { width: 85%; margin-top: 15px; display: flex; align-items: center; gap: 12px; background: var(--glass); padding: 12px; border-radius: 20px; backdrop-filter: blur(15px); border: 1px solid rgba(0, 242, 255, 0.15); }
+        .lvl-icon { width: 44px; height: 44px; background: rgba(0, 242, 255, 0.1); border: 1px solid var(--neon-cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--neon-cyan); font-size: 18px; box-shadow: 0 0 15px rgba(0, 242, 255, 0.2); }
         .score-container { margin-top: 25px; text-align: center; }
         .jackpot-label { color: var(--neon-cyan); font-size: 11px; font-weight: 800; letter-spacing: 2px; margin-bottom: 5px; opacity: 0.8; }
         #balance { font-size: 48px; font-weight: 900; color: #fff; text-shadow: 0 0 30px rgba(0, 242, 255, 0.3); font-variant-numeric: tabular-nums; }
 
         .main-wrapper { position: relative; width: 100%; display: flex; justify-content: center; align-items: center; margin-top: 30px; }
-        .click-area { 
-            position: relative; width: 280px; height: 280px; 
-            display: flex; align-items: center; justify-content: center; 
-            cursor: pointer;
-        }
-        .main-logo { 
-            width: 230px; height: 230px; border-radius: 50%; 
-            box-shadow: 0 0 80px rgba(188, 19, 254, 0.2); 
-            transition: transform 0.05s ease; z-index: 5; object-fit: cover;
-            pointer-events: none;
-            border: 4px solid rgba(255,255,255,0.05);
-        }
+        .click-area { position: relative; width: 280px; height: 280px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .main-logo { width: 230px; height: 230px; border-radius: 50%; box-shadow: 0 0 80px rgba(188, 19, 254, 0.2); transition: transform 0.05s ease; z-index: 5; object-fit: cover; pointer-events: none; border: 4px solid rgba(255,255,255,0.05); }
         
         .side-nav { position: absolute; right: 10px; display: flex; flex-direction: column; gap: 12px; z-index: 10; }
         .side-btn { background: rgba(20,20,20,0.8); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 10px; font-weight: 800; padding: 12px; border-radius: 14px; width: 65px; text-align: center; backdrop-filter: blur(5px); }
-
         .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: auto; margin-bottom: 35px; }
         .nav-btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 14px 5px; border-radius: 16px; text-align: center; font-size: 11px; font-weight: 800; color: #fff; }
-
         .tap-text { position: absolute; color: #fff; font-size: 36px; font-weight: 900; pointer-events: none; animation: floatUp 0.7s ease-out forwards; z-index: 100; text-shadow: 0 0 15px var(--neon-purple); }
         @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-140px) scale(1.2); } }
 
         .energy-section { width: 85%; margin-top: 25px; }
         .energy-bar-wrap { width: 100%; height: 12px; background: rgba(255,255,255,0.05); border-radius: 20px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05); }
         #energy-fill { height: 100%; background: linear-gradient(90deg, #00ff66, var(--neon-cyan)); width: 100%; transition: width 0.3s; }
-        
         .pnl-badge { font-size: 11px; color: var(--neon-cyan); margin-top: 6px; font-weight: bold; letter-spacing: 0.5px; }
     </style>
 </head>
@@ -176,16 +110,14 @@
 
         console.log("1️⃣ [FRONT] Инициализация WebApp...");
 
-        const API_BASE = window.location.origin;
+        // Надежное определение пути API
+        const API_BASE = window.location.origin.includes('localhost') || window.location.origin.includes('file') 
+            ? 'https://np.bothost.ru' // Замени на свой домен, если открываешь локально
+            : window.location.origin;
 
         let state = { 
-            balance: 0, 
-            energy: 1000, 
-            max_energy: 1000, 
-            click_lvl: 1, 
-            pnl: 0, 
-            loaded: false,
-            isDirty: false,
+            balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, pnl: 0, 
+            loaded: false, isDirty: false,
             uid: tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('u')
         };
 
@@ -195,11 +127,8 @@
             const fillEl = document.getElementById('loader-fill');
 
             const interval = setInterval(() => {
-                if (state.loaded) {
-                    progress += 10;
-                } else if (progress < 92) {
-                    progress += 0.4;
-                }
+                if (state.loaded) progress += 10;
+                else if (progress < 92) progress += 0.4;
 
                 if (progress >= 100) {
                     progress = 100;
@@ -214,7 +143,6 @@
         }
 
         function hideLoader() {
-            console.log("4️⃣ [FRONT] Скрытие экрана загрузки.");
             document.getElementById('loader-screen').style.opacity = '0';
             setTimeout(() => {
                 document.getElementById('loader-screen').style.display = 'none';
@@ -233,27 +161,24 @@
 
         async function loadData() {
             if(!state.uid) { 
-                console.warn("⚠️ [FRONT] UID не найден, работаем в демо-режиме.");
+                console.warn("⚠️ [FRONT] Работаем в демо-режиме (нет UID).");
                 state.loaded = true;
                 return; 
             }
 
-            console.log(`2️⃣ [FRONT] Запрос данных с сервера для ID: ${state.uid}`);
             try {
                 const r = await fetch(`${API_BASE}/api/balance/${state.uid}`);
                 if (!r.ok) throw new Error("Server response not OK");
                 const res = await r.json();
                 
                 if(res.status === 'ok') {
-                    console.log("3️⃣ [FRONT] Данные успешно загружены.");
                     state.balance = res.data.balance || 0;
                     state.energy = res.data.energy || 1000;
                     state.pnl = res.data.pnl || 0;
                     state.click_lvl = res.data.click_lvl || 1;
                 }
             } catch(e) { 
-                console.error("🚨 [FRONT] Критическая ошибка API:", e.message); 
-                tg.showAlert("Сервер не отвечает. Данные не будут сохранены.");
+                console.error("🚨 [FRONT] Ошибка API:", e.message); 
             }
             state.loaded = true;
             updateUI();
@@ -266,16 +191,9 @@
                 const response = await fetch(`${API_BASE}/api/save`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        user_id: state.uid, 
-                        score: state.balance,
-                        energy: state.energy
-                    })
+                    body: JSON.stringify({ user_id: state.uid, score: state.balance, energy: state.energy })
                 });
-                if(response.ok) {
-                    state.isDirty = false;
-                    console.log("💾 [FRONT] Прогресс синхронизирован.");
-                }
+                if(response.ok) state.isDirty = false;
             } catch(e) { console.warn("☁️ [SYNC] Ошибка связи."); }
         }
 
@@ -312,11 +230,8 @@
             updateUI();
         }, { passive: false });
 
-        tapZone.addEventListener('touchend', () => {
-            mainLogo.style.transform = 'scale(1)';
-        });
+        tapZone.addEventListener('touchend', () => mainLogo.style.transform = 'scale(1)');
 
-        // Плавное восстановление энергии
         setInterval(() => {
             if (state.loaded && state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 1.2);
@@ -324,7 +239,6 @@
             }
         }, 1000);
 
-        // Синхронизация каждые 4 секунды при наличии изменений
         setInterval(syncData, 4000); 
 
         window.onload = () => {
@@ -333,7 +247,7 @@
         };
         
         function showInvite() {
-            const link = `https://t.me/UltraMind_AI_bot?start=${state.uid}`;
+            const link = `https://t.me/ТВОЙ_БОТ?start=${state.uid}`; // ВСТАВЬ ЮЗЕРНЕЙМ СВОЕГО БОТА ТУТ
             tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join me in Neural Pulse AI! 🧠`);
         }
 
