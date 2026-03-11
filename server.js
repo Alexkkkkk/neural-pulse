@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const os = require('os'); // Встроенный модуль Node.js для телеметрии
+const os = require('os'); 
 const cors = require('cors');
 const { Telegraf, Markup } = require('telegraf');
 const winston = require('winston');
@@ -12,7 +12,7 @@ const winston = require('winston');
 const logger = winston.createLogger({
     level: 'debug',
     format: winston.format.combine(
-        winston.format.timestamp({ format: 'HH:mm:ss.SSS' }), // Миллисекунды для профилирования
+        winston.format.timestamp({ format: 'HH:mm:ss.SSS' }), 
         winston.format.printf(({ timestamp, level, message }) => `[${timestamp}] ${level.toUpperCase()} > ${message}`)
     ),
     transports: [new winston.transports.Console()]
@@ -44,7 +44,6 @@ function initDatabase() {
     try {
         if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
         
-        // Создаем бэкап при каждом старте (защита от потери данных)
         if (fs.existsSync(DATA_FILE)) {
             fs.copyFileSync(DATA_FILE, BACKUP_FILE);
             logger.info("🛡️ [DB SECURITY] Создана резервная копия базы данных (users.bak)");
@@ -63,7 +62,7 @@ function saveData() {
     try {
         const tmp = DATA_FILE + '.tmp';
         fs.writeFileSync(tmp, JSON.stringify(usersData, null, 2));
-        fs.renameSync(tmp, DATA_FILE); // Атомарная перезапись (Atomic Write)
+        fs.renameSync(tmp, DATA_FILE); 
         logger.debug(`💾 [SYNC] Данные сохранены. Размер RAM: ${(process.memoryUsage().rss / 1024 / 1024).toFixed(2)} MB`);
     } catch (e) { 
         logger.error(`💾 [SYNC ERROR] Не удалось сохранить БД: ${e.message}`); 
@@ -71,22 +70,34 @@ function saveData() {
 }
 
 // ==========================================
-// [4] СЕТЕВОЙ СЛОЙ (EXPRESS & MIDDLEWARE)
+// [4] СЕТЕВОЙ СЛОЙ И БРОНЕБОЙНЫЙ ВЕБХУК
 // ==========================================
 app.use(express.json()); // Строго ПЕРЕД маршрутами!
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'static')));
+
+// 📡 ГЛОБАЛЬНЫЙ РАДАР (Логирует вообще всё, что прилетает на сервер)
+app.use((req, res, next) => {
+    logger.debug(`[СЕТЬ] Стук в дверь: ${req.method} ${req.originalUrl}`);
+    next();
+});
 
 // Эндпоинт для мониторинга (Health Check)
 app.get('/health', (req, res) => {
     res.json({ status: 'ONLINE', uptime: process.uptime(), users: Object.keys(usersData).length });
 });
 
-// Перехватчик Telegram Webhook
-app.post(WEBHOOK_PATH, (req, res, next) => {
-    logger.debug(`📥 [TG STREAM] Входящий пакет: ID ${req.body.update_id}`);
-    next();
-}, bot.webhookCallback(WEBHOOK_PATH));
+// 🛡️ БРОНЕБОЙНЫЙ ВЕБХУК (Ручной проброс данных в бота)
+app.post(WEBHOOK_PATH, async (req, res) => {
+    logger.info(`📥 [TG STREAM] Получен апдейт от Telegram! ID: ${req.body.update_id || 'unknown'}`);
+    try {
+        // Насильно кормим бота данными, игнорируя встроенные роутеры Telegraf
+        await bot.handleUpdate(req.body, res);
+    } catch (e) {
+        logger.error(`❌ [TG STREAM ERROR] ${e.message}`);
+        if (!res.headersSent) res.sendStatus(500);
+    }
+});
 
 // ==========================================
 // [5] ИНТЕРФЕЙС БОТА (КИНЕМАТОГРАФИЧНЫЙ ЗАПУСК)
@@ -99,27 +110,23 @@ bot.start(async (ctx) => {
     logger.info(`🎯 [LOGIN] Запрос авторизации от ${uid} (${username})`);
 
     try {
-        // Кадр 1
         const msg = await ctx.replyWithHTML(
             `🖥 <b>NEURAL TERMINAL v3.0</b>\n<code>> Establishing secure link...</code>\n<code>[▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒] 10%</code>`,
             Markup.inlineKeyboard([[Markup.button.callback("ПИНГ СЕРВЕРА... 📡", "ignore")]])
         );
 
-        // Кадр 2 (через 600мс)
         await delay(600);
         await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null,
             `🖥 <b>NEURAL TERMINAL v3.0</b>\n<code>> Bypassing firewall protocols...</code>\n<code>[████▒▒▒▒▒▒▒▒▒▒▒] 35%</code>`,
             { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback("ОБХОД ЗАЩИТЫ... 🛡", "ignore")]]) }
         ).catch(() => {});
 
-        // Кадр 3 (через 600мс)
         await delay(600);
         await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null,
             `🖥 <b>NEURAL TERMINAL v3.0</b>\n<code>> Decrypting user sector... OK</code>\n<code>[██████████▒▒▒▒▒] 75%</code>`,
             { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback("РАСШИФРОВКА... 🧬", "ignore")]]) }
         ).catch(() => {});
 
-        // Кадр 4 - ФИНАЛ (через 600мс)
         await delay(600);
         await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null,
             `🦾 <b>ACCESS GRANTED: NEURAL PULSE</b>\n` +
@@ -149,7 +156,7 @@ app.get('/api/balance/:userId', (req, res) => {
     if (!usersData[uid]) {
         usersData[uid] = { id: uid, balance: 0, energy: 1000, last_seen: Date.now() };
         logger.info(`🌟 [NEW USER] Зарегистрирован ID: ${uid}`);
-        saveData(); // Сохраняем сразу при новой регистрации
+        saveData(); 
     }
     usersData[uid].last_seen = Date.now();
     res.json({ status: "ok", data: usersData[uid] });
@@ -222,7 +229,7 @@ const syncInterval = setInterval(saveData, 60000);
 function shutdown(signal) {
     logger.warn(`\n⚠️ [SHUTDOWN] Получен сигнал ${signal}. Запуск протокола консервации...`);
     clearInterval(syncInterval);
-    saveData(); // Принудительное сохранение перед смертью процесса
+    saveData(); 
     
     if (server) {
         server.close(() => {
@@ -235,8 +242,8 @@ function shutdown(signal) {
     }
 }
 
-process.once('SIGINT', () => shutdown('SIGINT'));   // Ctrl+C в консоли
-process.once('SIGTERM', () => shutdown('SIGTERM')); // Остановка сервером Bothost
+process.once('SIGINT', () => shutdown('SIGINT'));   
+process.once('SIGTERM', () => shutdown('SIGTERM')); 
 
 // Старт!
 bootSystem();
