@@ -28,7 +28,6 @@ const app = express();
 app.set('trust proxy', 1);
 const bot = new Telegraf(API_TOKEN);
 
-// Глобальный перехват ошибок бота
 bot.catch((err, ctx) => {
     logger.error(`❌ [TELEGRAF ERROR] ${ctx.updateType}: ${err.message}`);
 });
@@ -38,17 +37,14 @@ let usersData = {};
 // [3] БАЗА ДАННЫХ
 function initDatabase() {
     try {
-        if (!fs.existsSync(DATA_DIR)) {
-            fs.mkdirSync(DATA_DIR, { recursive: true });
-            logger.info("📁 Папка данных создана");
-        }
+        if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
         if (fs.existsSync(DATA_FILE)) {
             const raw = fs.readFileSync(DATA_FILE, 'utf8');
             try {
                 usersData = raw.trim() ? JSON.parse(raw) : {};
                 logger.info(`📂 БД загружена: ${Object.keys(usersData).length} пользователей`);
             } catch (jsonErr) {
-                logger.error("🚨 Файл БД поврежден, создаю новый");
+                logger.error("🚨 БД повреждена, сброс");
                 usersData = {};
             }
         } else {
@@ -62,7 +58,6 @@ function saveData() {
         const tmp = DATA_FILE + '.tmp';
         fs.writeFileSync(tmp, JSON.stringify(usersData, null, 2));
         fs.renameSync(tmp, DATA_FILE); 
-        logger.debug("💾 Данные синхронизированы");
     } catch (e) { logger.error(`💾 [SAVE ERROR] ${e.message}`); }
 }
 
@@ -71,39 +66,31 @@ app.use(express.json());
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Обработчик вебхука с логом
 app.post(WEBHOOK_PATH, async (req, res) => {
-    logger.debug(`📥 Входящий вебхук: ${req.body?.update_id || 'no-id'}`);
+    logger.debug(`📥 Webhook Update ID: ${req.body?.update_id}`);
     try {
         await bot.handleUpdate(req.body, res);
     } catch (e) {
-        logger.error(`❌ [TG HANDLE ERROR] ${e.message}`);
+        logger.error(`❌ [HANDLE ERROR] ${e.message}`);
         if (!res.headersSent) res.sendStatus(500);
     }
 });
 
 app.get('/health', (req, res) => {
-    res.json({ 
-        status: 'ONLINE', 
-        users: Object.keys(usersData).length,
-        uptime: Math.floor(process.uptime())
-    });
+    res.json({ status: 'ONLINE', users: Object.keys(usersData).length, uptime: Math.floor(process.uptime()) });
 });
 
 // [5] ЛОГИКА БОТА
 bot.start(async (ctx) => {
     const uid = ctx.from.id;
-    const username = ctx.from.username ? `@${ctx.from.username}` : "Agent";
     try {
-        await ctx.replyWithHTML(`🦾 <b>NEURAL PULSE ONLINE</b>\n👤 АГЕНТ: <code>${username}</code>`, 
-            Markup.inlineKeyboard([
-                [Markup.button.webApp("ВХОД В СИСТЕМУ 🧠", `${WEB_APP_URL}/?u=${uid}`)]
-            ])
+        await ctx.replyWithHTML(`🦾 <b>NEURAL PULSE ONLINE</b>`, 
+            Markup.inlineKeyboard([[Markup.button.webApp("ВХОД В СИСТЕМУ 🧠", `${WEB_APP_URL}/?u=${uid}`)]])
         );
-    } catch (e) { logger.error(`❌ [START CMD ERROR]: ${e.message}`); }
+    } catch (e) { logger.error(`❌ [START ERROR]: ${e.message}`); }
 });
 
-// API для баланса
+// API
 app.get('/api/balance/:userId', (req, res) => {
     const uid = String(req.params.userId);
     if (!usersData[uid]) {
@@ -126,42 +113,42 @@ app.post('/api/save', (req, res) => {
     res.status(400).json({ status: "error" });
 });
 
-// [6] ЗАПУСК СИСТЕМЫ
+// [6] ЗАПУСК СИСТЕМЫ (ПРИОРИТЕТ ВЕБХУКА)
 async function boot() {
     initDatabase();
     
-    const server = app.listen(PORT, '0.0.0.0', async () => {
-        try {
-            const hookUrl = `${WEB_APP_URL}${WEBHOOK_PATH}`;
-            const info = await bot.telegram.getWebhookInfo();
-            if (info.url !== hookUrl) {
-                await bot.telegram.deleteWebhook({ drop_pending_updates: true });
-                await bot.telegram.setWebhook(hookUrl);
-                logger.info(`🔗 Вебхук установлен: ${hookUrl}`);
-            }
-            logger.info(`✅ [SYSTEM ONLINE] Port: ${PORT}`);
-        } catch (e) {
-            logger.error(`🛑 Webhook failed: ${e.message}`);
-        }
-    });
+    logger.info("📡 Шаг 1: Принудительная установка вебхука...");
+    try {
+        const hookUrl = `${WEB_APP_URL}${WEBHOOK_PATH}`;
+        
+        // Удаляем старый и ставим новый вебхук ДО запуска сервера
+        await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+        await bot.telegram.setWebhook(hookUrl);
+        
+        const info = await bot.telegram.getWebhookInfo();
+        logger.info(`🔗 Вебхук активен: ${info.url}`);
 
-    server.on('error', (err) => {
-        if (err.code === 'EADDRINUSE') {
-            logger.warn(`⚠️ Порт ${PORT} занят. Перезапуск через 3 сек...`);
-            setTimeout(() => process.exit(1), 3000);
-        }
-    });
+        // Шаг 2: Только теперь открываем порт
+        logger.info("🌐 Шаг 2: Открытие порта для Bothost...");
+        const server = app.listen(PORT, '0.0.0.0', () => {
+            logger.info(`✅ [SYSTEM ONLINE] Слушаю порт: ${PORT}`);
+        });
+
+        server.on('error', (err) => {
+            if (err.code === 'EADDRINUSE') {
+                logger.warn(`⚠️ Порт ${PORT} занят. Перезапуск через 3 сек для вытеснения...`);
+                setTimeout(() => process.exit(1), 3000);
+            }
+        });
+
+    } catch (e) {
+        logger.error(`🛑 КРИТИЧЕСКИЙ СБОЙ: ${e.message}`);
+        setTimeout(() => process.exit(1), 5000);
+    }
 }
 
 const syncInterval = setInterval(saveData, 60000);
-
-const shutdown = () => {
-    clearInterval(syncInterval);
-    saveData();
-    process.exit(0);
-};
-
-process.once('SIGINT', shutdown);
-process.once('SIGTERM', shutdown);
+process.once('SIGINT', () => { clearInterval(syncInterval); saveData(); process.exit(0); });
+process.once('SIGTERM', () => { clearInterval(syncInterval); saveData(); process.exit(0); });
 
 boot();
