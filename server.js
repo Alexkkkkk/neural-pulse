@@ -26,6 +26,7 @@ const WEB_APP_URL = "https://np.bothost.ru";
 const PORT = process.env.PORT || 3000;
 const WEBHOOK_PATH = "/webhook-tg-pulse";
 
+// Пути к данным (абсолютные для Docker)
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'users.json');
 const BACKUP_FILE = path.join(DATA_DIR, 'users.bak');
@@ -41,7 +42,10 @@ let usersData = {};
 
 function initDatabase() {
     try {
-        if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+        if (!fs.existsSync(DATA_DIR)) {
+            fs.mkdirSync(DATA_DIR, { recursive: true });
+            logger.info("📁 Создана директория для данных");
+        }
         if (fs.existsSync(DATA_FILE)) {
             fs.copyFileSync(DATA_FILE, BACKUP_FILE);
             const raw = fs.readFileSync(DATA_FILE, 'utf8');
@@ -56,23 +60,23 @@ function initDatabase() {
 
 function saveData() {
     try {
+        if (Object.keys(usersData).length === 0 && fs.existsSync(DATA_FILE)) return;
         const tmp = DATA_FILE + '.tmp';
         fs.writeFileSync(tmp, JSON.stringify(usersData, null, 2));
         fs.renameSync(tmp, DATA_FILE); 
+        logger.debug("💾 База данных синхронизирована");
     } catch (e) { logger.error(`💾 [SYNC ERROR] ${e.message}`); }
 }
 
 // ==========================================
-// [4] СЕТЕВОЙ СЛОЙ (OPTIMIZED)
+// [4] СЕТЕВОЙ СЛОЙ
 // ==========================================
 app.use(express.json());
 app.use(cors());
 
-// 🛡️ ОБРАБОТЧИК ВЕБХУКА (СТРОГО ДО СТАТИКИ)
+// Обработчик вебхука
 const handleTgUpdate = async (req, res) => {
-    if (!req.body || !req.body.update_id) {
-        return res.status(400).send('Invalid Update');
-    }
+    if (!req.body || !req.body.update_id) return res.status(400).send('Invalid Update');
     try {
         await bot.handleUpdate(req.body, res);
     } catch (e) {
@@ -84,54 +88,35 @@ const handleTgUpdate = async (req, res) => {
 app.post(WEBHOOK_PATH, handleTgUpdate);
 app.post(`${WEBHOOK_PATH}/`, handleTgUpdate);
 
-// Радар запросов
-app.use((req, res, next) => {
-    if (req.url !== '/health') {
-        logger.debug(`[СЕТЬ] Запрос: ${req.method} ${req.originalUrl}`);
-    }
-    next();
-});
-
 app.use(express.static(path.join(__dirname, 'static')));
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ONLINE', uptime: Math.floor(process.uptime()), users: Object.keys(usersData).length });
 });
 
-// Ловушка 404 (Диагностика)
-app.use((req, res) => {
-    logger.warn(`⚠️ 404: ${req.method} ${req.originalUrl} | IP: ${req.ip}`);
-    res.status(404).send('System Core: 404');
+app.use((req, res, next) => {
+    if (req.url !== '/health') logger.debug(`[СЕТЬ] ${req.method} ${req.originalUrl}`);
+    next();
 });
 
 // ==========================================
 // [5] ИНТЕРФЕЙС БОТА
 // ==========================================
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
 bot.start(async (ctx) => {
     const uid = ctx.from.id;
     const username = ctx.from.username ? `@${ctx.from.username}` : "Agent";
     
     try {
-        const msg = await ctx.replyWithHTML(`🖥 <b>NEURAL TERMINAL v3.0</b>\n<code>> Establishing link...</code>`);
-        
-        await delay(600);
-        await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null,
-            `🖥 <b>NEURAL TERMINAL v3.0</b>\n<code>> Decrypting sector... OK</code>\n<code>[██████████▒▒▒▒▒] 75%</code>`,
-            { parse_mode: 'HTML' }
-        ).catch(() => {});
-
-        await delay(600);
-        await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null,
-            `🦾 <b>ACCESS GRANTED</b>\n👤 АГЕНТ: <code>${username}</code>\n🆔 ID: <code>${uid}</code>`,
-            {
-                parse_mode: 'HTML',
-                ...Markup.inlineKeyboard([
-                    [Markup.button.webApp("ВХОД В СИСТЕМУ 🧠", `${WEB_APP_URL}/?u=${uid}`)]
-                ])
-            }
-        ).catch(() => {});
+        const msg = await ctx.replyWithHTML(`🖥 <b>NEURAL TERMINAL</b>\n<code>> Establishing link...</code>`);
+        setTimeout(() => {
+            ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null,
+                `🦾 <b>ACCESS GRANTED</b>\n👤 АГЕНТ: <code>${username}</code>`,
+                {
+                    parse_mode: 'HTML',
+                    ...Markup.inlineKeyboard([[Markup.button.webApp("ВХОД В СИСТЕМУ 🧠", `${WEB_APP_URL}/?u=${uid}`)]])
+                }
+            ).catch(() => {});
+        }, 1000);
     } catch (e) { logger.error(`❌ [UI ERROR]: ${e.message}`); }
 });
 
@@ -160,7 +145,7 @@ app.post('/api/save', (req, res) => {
 });
 
 // ==========================================
-// [7] ЗАПУСК
+// [7] ЗАПУСК СИСТЕМЫ
 // ==========================================
 let server;
 
@@ -168,11 +153,12 @@ async function bootSystem() {
     initDatabase();
     try {
         await bot.telegram.getMe();
+        // Привязка к 0.0.0.0 критична для Docker
         server = app.listen(PORT, '0.0.0.0', async () => {
             const hookUrl = `${WEB_APP_URL}${WEBHOOK_PATH}`;
             await bot.telegram.deleteWebhook({ drop_pending_updates: true });
             await bot.telegram.setWebhook(hookUrl);
-            logger.info(`✅ [SYSTEM ONLINE] Порт: ${PORT} | Вебхук: ${hookUrl}`);
+            logger.info(`✅ [SYSTEM ONLINE] Port: ${PORT} | Hook: ${hookUrl}`);
         });
     } catch (e) {
         logger.error(`🛑 [FATAL] ${e.message}`);
@@ -182,10 +168,16 @@ async function bootSystem() {
 
 const syncInterval = setInterval(saveData, 60000);
 
-process.once('SIGINT', () => {
+// Корректное завершение
+const gracefulShutdown = (signal) => {
+    logger.warn(`⚠️ Получен сигнал ${signal}. Сохранение...`);
     clearInterval(syncInterval);
     saveData();
     if (server) server.close(() => process.exit(0));
-});
+    else process.exit(0);
+};
+
+process.once('SIGINT', () => gracefulShutdown('SIGINT'));
+process.once('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 bootSystem();
