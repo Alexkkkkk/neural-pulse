@@ -24,7 +24,6 @@
             height: 100vh;
             user-select: none;
             -webkit-tap-highlight-color: transparent;
-            /* Улучшенная отзывчивость тапов */
             touch-action: none; 
         }
 
@@ -35,7 +34,7 @@
             background: #050505;
             display: flex; align-items: center; justify-content: center;
             z-index: 10000;
-            transition: opacity 0.8s ease, visibility 0.8s;
+            transition: opacity 0.5s ease;
         }
         .loader-container { text-align: center; }
         .loader-logo-wrap { position: relative; width: 120px; height: 120px; margin: 0 auto 30px; }
@@ -60,8 +59,8 @@
             position: relative; z-index: 2; width: 100%; height: 100%; 
             display: flex; flex-direction: column; align-items: center; 
             padding-top: env(safe-area-inset-top);
-            transition: transform 0.8s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.6s ease;
-            transform: scale(0.92); opacity: 0;
+            transition: transform 0.6s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.5s ease;
+            transform: scale(0.95); opacity: 0;
             visibility: hidden;
         }
         .content-layer.active { transform: scale(1); opacity: 1; visibility: visible; }
@@ -121,7 +120,7 @@
                 <div class="loader-ring"></div>
                 <img src="logo.png" style="width: 120px; height: 120px; border-radius: 50%; position: relative; z-index: 2;" onerror="this.src='https://via.placeholder.com/120/bc13fe/fff?text=AI'">
             </div>
-            <div class="loader-text" id="loader-status">Initializing Neural Link...</div>
+            <div class="loader-text" id="loader-status">Link Established...</div>
             <div id="loader-percent" class="loader-percent">0%</div>
             <div class="loader-bar-bg"><div id="loader-fill" class="loader-bar-fill"></div></div>
         </div>
@@ -133,7 +132,7 @@
             <div style="flex-grow: 1;">
                 <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; color: #888; letter-spacing: 1px;">
                     <span id="league-name">NEURAL LEAGUE</span>
-                    <span id="rank-id">ID: ------</span>
+                    <span id="rank-id">ID: LOADING</span>
                 </div>
                 <div id="pnl-display" class="pnl-badge">PASSIVE: +0/h</div>
             </div>
@@ -175,8 +174,7 @@
         tg.ready();
         tg.expand();
 
-        // Авто-настройка темы под Telegram
-        if (tg.setHeaderColor) tg.setHeaderColor('#050505');
+        console.log("1️⃣ [FRONT] Инициализация WebApp...");
 
         const API_BASE = window.location.origin;
 
@@ -188,7 +186,6 @@
             pnl: 0, 
             loaded: false,
             isDirty: false,
-            // Берем UID либо из WebApp, либо из параметров URL
             uid: tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('u')
         };
 
@@ -199,9 +196,9 @@
 
             const interval = setInterval(() => {
                 if (state.loaded) {
-                    progress += 5;
-                } else if (progress < 90) {
-                    progress += 0.5;
+                    progress += 10;
+                } else if (progress < 92) {
+                    progress += 0.4;
                 }
 
                 if (progress >= 100) {
@@ -217,8 +214,12 @@
         }
 
         function hideLoader() {
-            document.getElementById('loader-screen').style.display = 'none';
-            document.querySelector('.content-layer').classList.add('active');
+            console.log("4️⃣ [FRONT] Скрытие экрана загрузки.");
+            document.getElementById('loader-screen').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('loader-screen').style.display = 'none';
+                document.querySelector('.content-layer').classList.add('active');
+            }, 500);
         }
 
         function updateUI() {
@@ -232,28 +233,37 @@
 
         async function loadData() {
             if(!state.uid) { 
+                console.warn("⚠️ [FRONT] UID не найден, работаем в демо-режиме.");
                 state.loaded = true;
-                updateUI();
                 return; 
             }
+
+            console.log(`2️⃣ [FRONT] Запрос данных с сервера для ID: ${state.uid}`);
             try {
                 const r = await fetch(`${API_BASE}/api/balance/${state.uid}`);
+                if (!r.ok) throw new Error("Server response not OK");
                 const res = await r.json();
+                
                 if(res.status === 'ok') {
+                    console.log("3️⃣ [FRONT] Данные успешно загружены.");
                     state.balance = res.data.balance || 0;
                     state.energy = res.data.energy || 1000;
                     state.pnl = res.data.pnl || 0;
                     state.click_lvl = res.data.click_lvl || 1;
                 }
-            } catch(e) { console.warn("API Offline, using local state"); }
+            } catch(e) { 
+                console.error("🚨 [FRONT] Критическая ошибка API:", e.message); 
+                tg.showAlert("Сервер не отвечает. Данные не будут сохранены.");
+            }
             state.loaded = true;
             updateUI();
         }
 
         async function syncData() {
             if(!state.uid || !state.loaded || !state.isDirty) return;
+            
             try {
-                await fetch(`${API_BASE}/api/save`, {
+                const response = await fetch(`${API_BASE}/api/save`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -262,8 +272,11 @@
                         energy: state.energy
                     })
                 });
-                state.isDirty = false;
-            } catch(e) {}
+                if(response.ok) {
+                    state.isDirty = false;
+                    console.log("💾 [FRONT] Прогресс синхронизирован.");
+                }
+            } catch(e) { console.warn("☁️ [SYNC] Ошибка связи."); }
         }
 
         const tapZone = document.getElementById('tap-zone');
@@ -273,7 +286,6 @@
             e.preventDefault();
             if (!state.loaded) return;
 
-            // Поддержка мультитача (несколько пальцев)
             for(let i=0; i < e.changedTouches.length; i++) {
                 if (state.energy < state.click_lvl) {
                     if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('warning');
@@ -285,19 +297,18 @@
                 state.energy -= state.click_lvl;
                 state.isDirty = true;
 
-                // Создаем вылетающий текст
                 const num = document.createElement('div');
                 num.className = 'tap-text';
                 num.innerText = `+${state.click_lvl}`;
                 num.style.left = `${touch.pageX - 20}px`; 
                 num.style.top = `${touch.pageY - 50}px`;
                 document.body.appendChild(num);
-                setTimeout(() => num.remove(), 700);
+                setTimeout(() => num.remove(), 600);
 
                 if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
             }
 
-            mainLogo.style.transform = 'scale(0.95)';
+            mainLogo.style.transform = 'scale(0.92)';
             updateUI();
         }, { passive: false });
 
@@ -305,15 +316,16 @@
             mainLogo.style.transform = 'scale(1)';
         });
 
-        // Энергия восстанавливается (+1 в сек для баланса)
+        // Плавное восстановление энергии
         setInterval(() => {
             if (state.loaded && state.energy < state.max_energy) {
-                state.energy = Math.min(state.max_energy, state.energy + 2);
+                state.energy = Math.min(state.max_energy, state.energy + 1.2);
                 updateUI();
             }
         }, 1000);
 
-        setInterval(syncData, 3000); // Синхронизация каждые 3 сек
+        // Синхронизация каждые 4 секунды при наличии изменений
+        setInterval(syncData, 4000); 
 
         window.onload = () => {
             startLoadingAnimation();
@@ -328,8 +340,8 @@
         function showLeaderboard() {
             tg.showPopup({
                 title: '📈 СТАТИСТИКА',
-                message: `Баланс: ${Math.floor(state.balance)}\nУровень клика: ${state.click_lvl}`,
-                buttons: [{type: 'close', text: 'ОК'}]
+                message: `Ваш баланс: ${Math.floor(state.balance)}\nЭнергия: ${Math.floor(state.energy)}`,
+                buttons: [{type: 'close', text: 'ЗАКРЫТЬ'}]
             });
         }
     </script>
