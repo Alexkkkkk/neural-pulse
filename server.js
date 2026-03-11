@@ -4,7 +4,7 @@ const fs = require('fs');
 const cors = require('cors');
 const { Telegraf, Markup } = require('telegraf');
 
-console.log("🚀 [SYSTEM] Инициализация ядра...");
+console.log("🚀 [SYSTEM] Запуск глубокого мониторинга...");
 
 // [1] КОНФИГУРАЦИЯ
 const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAFUmUinCAALPf6Bivpo04__Zp_V4Y49MFs"; 
@@ -13,118 +13,83 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'users.json');
 const WEB_APP_URL = `https://${DOMAIN}`;
-const WEBHOOK_PATH = '/bot-webhook-debug'; // Изменили путь для чистого теста
+const WEBHOOK_PATH = '/bot-webhook-debug'; 
 
 const app = express();
 const bot = new Telegraf(API_TOKEN);
-let usersData = {};
 
 // [2] БАЗА ДАННЫХ
-function initDatabase() {
+let usersData = {};
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (fs.existsSync(DATA_FILE)) {
     try {
-        if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-        if (fs.existsSync(DATA_FILE)) {
-            const raw = fs.readFileSync(DATA_FILE, 'utf8');
-            usersData = raw.trim() ? JSON.parse(raw) : {};
-            console.log(`📦 [DB] Загружено пользователей: ${Object.keys(usersData).length}`);
-        }
-    } catch (e) { console.error("🚨 [DB ERROR]", e.message); }
+        usersData = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8') || '{}');
+    } catch (e) { usersData = {}; }
 }
 const saveDB = () => fs.writeFile(DATA_FILE, JSON.stringify(usersData, null, 2), () => {});
 
-// [3] МИКРО-ДОСКОНАЛЬНОЕ ЛОГИРОВАНИЕ (Middleware уровня Express)
+// [3] MIDDLEWARE
+app.use(cors());
+app.use(express.json()); // Оставляем только один парсер
+
+// МИКРО-ЛОГИРОВАНИЕ КАЖДОГО ЗАПРОСА
 app.use((req, res, next) => {
     if (req.url === WEBHOOK_PATH) {
-        console.log(`\n📥 [WEBHOOK INCOMING] --- ${new Date().toISOString()} ---`);
-        console.log(`📡 IP отправителя: ${req.headers['x-forwarded-for'] || req.socket.remoteAddress}`);
-        console.log(`🛠 Метод: ${req.method} | Content-Type: ${req.headers['content-type']}`);
+        console.log(`\n📥 [HOOK] Входящий запрос: ${req.method} ${req.url}`);
+        console.log(`📡 Headers: ${JSON.stringify(req.headers['x-forwarded-for'] || req.ip)}`);
         
-        // Перехватываем тело запроса для логов
-        let data = '';
-        req.on('data', chunk => { data += chunk; });
-        req.on('end', () => {
-            if (data) {
-                const body = JSON.parse(data);
-                const updateId = body.update_id;
-                const user = body.message?.from?.username || body.message?.from?.id || "Unknown";
-                console.log(`🆔 Update ID: ${updateId} | От: ${user}`);
-                if (body.message?.text) console.log(`📝 Текст: "${body.message.text}"`);
-            }
-        });
+        // Логируем тело, если оно уже распаршено express.json()
+        if (req.body && Object.keys(req.body).length > 0) {
+            console.log(`📦 Body: ${JSON.stringify(req.body)}`);
+        } else {
+            console.log(`⚠️ Внимание: Тело запроса пустое!`);
+        }
     }
     next();
 });
 
-app.use(express.json());
-app.use(cors());
-
-// [4] ОБРАБОТКА ВЕБХУКА (Telegraf)
-app.use((req, res, next) => {
-    if (req.url === WEBHOOK_PATH) {
-        // Мы вызываем колбэк и ловим результат
-        return bot.webhookCallback(WEBHOOK_PATH)(req, res, (err) => {
-            if (err) console.error("🚨 [TELEGRAF ERROR]", err);
-            next();
+// [4] ОБРАБОТКА ВЕБХУКА
+app.post(WEBHOOK_PATH, (req, res) => {
+    bot.handleUpdate(req.body, res)
+        .then(() => {
+            if (!res.writableEnded) res.sendStatus(200);
+            console.log("✅ [OK] Update обработан Telegraf");
+        })
+        .catch((err) => {
+            console.error("🚨 [ERROR] Ошибка внутри Telegraf:", err);
+            res.sendStatus(500);
         });
-    }
-    next();
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// [5] ЛОГИКА БОТА С ЛОГАМИ
-bot.start(async (ctx) => {
+// [5] ЛОГИКА БОТА
+bot.start((ctx) => {
     console.log(`🎯 [BOT] Команда /start от ${ctx.from.id}`);
-    try {
-        await ctx.replyWithHTML(
-            `<b>🚀 Neural Pulse AI Активен</b>\n\nСистема логирования подтвердила твой вход.`,
-            Markup.inlineKeyboard([
-                [Markup.button.webApp('⚡ ИГРАТЬ', WEB_APP_URL)]
-            ])
-        );
-        console.log(`✅ [BOT] Ответ на /start успешно отправлен`);
-    } catch (e) {
-        console.error(`❌ [BOT ERROR] Не удалось отправить ответ:`, e.message);
-    }
+    ctx.replyWithHTML(
+        `<b>🚀 Система Neural Pulse активна!</b>\n\nТвой ID: <code>${ctx.from.id}</code>`,
+        Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', WEB_APP_URL)]])
+    );
 });
 
-// [6] API ЭНДПОИНТЫ
-app.get('/api/balance/:userId', (req, res) => {
-    const uid = String(req.params.userId);
-    console.log(`🔍 [API] Запрос баланса для: ${uid}`);
-    if (!usersData[uid]) {
-        usersData[uid] = { id: uid, balance: 0, energy: 1000 };
-        saveDB();
-    }
-    res.json({ status: "ok", data: usersData[uid] });
-});
-
-// [7] ЗАПУСК С МОНИТОРИНГОМ СОСТОЯНИЯ
+// [6] ЗАПУСК С ОЧИСТКОЙ ОЧЕРЕДИ
 async function boot() {
-    initDatabase();
     app.listen(PORT, '0.0.0.0', async () => {
-        console.log(`🖥️ [SERVER] Запущен на порту: ${PORT}`);
+        console.log(`🖥️ [SERVER] Работает на порту: ${PORT}`);
         try {
             const hookUrl = `https://${DOMAIN}${WEBHOOK_PATH}`;
-            console.log(`🌐 [CONFIG] Целевой URL: ${hookUrl}`);
             
-            // Удаляем старый вебхук перед установкой нового
-            await bot.telegram.deleteWebhook();
-            console.log(`🗑️ [WEBHOOK] Старый вебхук удален`);
+            // КРИТИЧНО: Очищаем очередь застрявших 12 сообщений
+            await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+            console.log(`🗑️ [WEBHOOK] Очередь очищена`);
             
-            const success = await bot.telegram.setWebhook(hookUrl);
-            if (success) {
-                console.log(`✅ [WEBHOOK] УСТАНОВЛЕН УСПЕШНО: ${hookUrl}`);
-            } else {
-                console.log(`⚠️ [WEBHOOK] Telegram вернул false при установке`);
-            }
+            await bot.telegram.setWebhook(hookUrl);
+            console.log(`✅ [WEBHOOK] Установлен: ${hookUrl}`);
             
-            // Проверка статуса через API Telegram
             const info = await bot.telegram.getWebhookInfo();
-            console.log(`📊 [WEBHOOK INFO] Текущий статус в Telegram:`, JSON.stringify(info, null, 2));
-
+            console.log(`📊 [STATUS]:`, JSON.stringify(info, null, 2));
         } catch (e) {
-            console.error("❌ [FATAL ERROR] Ошибка при запуске вебхука:", e.message);
+            console.error("❌ [BOOT ERROR]:", e.message);
         }
     });
 }
