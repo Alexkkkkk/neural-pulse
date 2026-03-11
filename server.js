@@ -16,7 +16,7 @@ const WEB_APP_URL = `https://${DOMAIN}`;
 const WEBHOOK_PATH = `/webhook-${API_TOKEN}`; 
 
 if (!API_TOKEN) {
-    console.error("🛑 [FATAL ERROR] BOT_TOKEN не найден в переменных окружения!");
+    console.error("🛑 [FATAL ERROR] BOT_TOKEN не найден! Добавь его в переменные окружения в панели Bothost.");
     process.exit(1);
 }
 
@@ -36,9 +36,9 @@ function initDatabase() {
             const raw = fs.readFileSync(DATA_FILE, 'utf8');
             try {
                 usersData = raw.trim() ? JSON.parse(raw) : {};
-                console.log(`✅ [DB] База загружена. Пользователей: ${Object.keys(usersData).length}`);
-            } catch (parseErr) {
-                console.error("⚠️ [DB] Ошибка парсинга JSON, создаю новую базу.");
+                console.log(`✅ [DB] База загружена. Юзеров: ${Object.keys(usersData).length}`);
+            } catch (pErr) {
+                console.error("⚠️ [DB] Ошибка чтения JSON, создаю пустую базу.");
                 usersData = {};
             }
         } else {
@@ -46,7 +46,7 @@ function initDatabase() {
             console.log("✅ [DB] Создан новый файл базы.");
         }
     } catch (e) { 
-        console.error(`🚨 [DB ERROR] Ошибка инициализации: ${e.message}`); 
+        console.error(`🚨 [DB ERROR] Ошибка: ${e.message}`); 
     }
 }
 
@@ -69,14 +69,7 @@ bot.start((ctx) => {
 app.get('/api/balance/:userId', (req, res) => {
     const uid = String(req.params.userId);
     if (!usersData[uid]) {
-        usersData[uid] = { 
-            id: uid, 
-            balance: 0, 
-            energy: 1000, 
-            max_energy: 1000, 
-            click_lvl: 1, 
-            last_seen: Date.now() 
-        };
+        usersData[uid] = { id: uid, balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, last_seen: Date.now() };
     }
     res.json({ status: "ok", data: usersData[uid] });
 });
@@ -88,17 +81,16 @@ app.post('/api/save', (req, res) => {
         usersData[user_id].energy = Number(energy);
         usersData[user_id].last_seen = Date.now();
         
-        // Асинхронная запись с проверкой ошибок
         fs.writeFile(DATA_FILE, JSON.stringify(usersData, null, 2), (err) => {
-            if (err) console.error(`❌ [DB] Ошибка сохранения для ${user_id}:`, err);
+            if (err) console.error(`❌ [DB SAVE ERROR]:`, err);
         });
         
         return res.json({ status: "ok" });
     }
-    res.status(400).json({ status: "error", message: "Invalid data" });
+    res.status(400).json({ status: "error" });
 });
 
-// [6] ВЕБХУК
+// [6] ОБРАБОТКА ВЕБХУКА
 app.use(bot.webhookCallback(WEBHOOK_PATH));
 
 // [7] ЗАПУСК
@@ -108,9 +100,9 @@ async function boot() {
         console.log(`🚀 [SERVER] Запущен на порту ${PORT}`);
         try {
             await bot.telegram.setWebhook(`${WEB_APP_URL}${WEBHOOK_PATH}`);
-            console.log(`✅ [TELEGRAM] Webhook установлен: ${WEB_APP_URL}`);
+            console.log(`✅ [TELEGRAM] Webhook установлен на ${WEB_APP_URL}`);
         } catch (whError) {
-            console.error(`❌ [TELEGRAM ERROR] Ошибка Webhook: ${whError.message}`);
+            console.error(`❌ [TELEGRAM ERROR] Ошибка вебхука: ${whError.message}`);
         }
     });
 }
