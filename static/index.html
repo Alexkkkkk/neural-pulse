@@ -24,7 +24,8 @@
             height: 100vh;
             user-select: none;
             -webkit-tap-highlight-color: transparent;
-            touch-action: none;
+            /* Улучшенная отзывчивость тапов */
+            touch-action: none; 
         }
 
         /* --- LOADER --- */
@@ -78,9 +79,7 @@
             box-shadow: 0 0 15px rgba(0, 242, 255, 0.2);
         }
 
-        .score-container {
-            margin-top: 25px; text-align: center;
-        }
+        .score-container { margin-top: 25px; text-align: center; }
         .jackpot-label { color: var(--neon-cyan); font-size: 11px; font-weight: 800; letter-spacing: 2px; margin-bottom: 5px; opacity: 0.8; }
         #balance { font-size: 48px; font-weight: 900; color: #fff; text-shadow: 0 0 30px rgba(0, 242, 255, 0.3); font-variant-numeric: tabular-nums; }
 
@@ -93,7 +92,7 @@
         .main-logo { 
             width: 230px; height: 230px; border-radius: 50%; 
             box-shadow: 0 0 80px rgba(188, 19, 254, 0.2); 
-            transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 5; object-fit: cover;
+            transition: transform 0.05s ease; z-index: 5; object-fit: cover;
             pointer-events: none;
             border: 4px solid rgba(255,255,255,0.05);
         }
@@ -120,7 +119,7 @@
         <div class="loader-container">
             <div class="loader-logo-wrap">
                 <div class="loader-ring"></div>
-                <img src="images/logo.png" style="width: 120px; height: 120px; border-radius: 50%; position: relative; z-index: 2;" onerror="this.src='https://via.placeholder.com/120/bc13fe/fff?text=AI'">
+                <img src="logo.png" style="width: 120px; height: 120px; border-radius: 50%; position: relative; z-index: 2;" onerror="this.src='https://via.placeholder.com/120/bc13fe/fff?text=AI'">
             </div>
             <div class="loader-text" id="loader-status">Initializing Neural Link...</div>
             <div id="loader-percent" class="loader-percent">0%</div>
@@ -147,7 +146,7 @@
 
         <div class="main-wrapper">
             <div class="click-area" id="tap-zone">
-                <img src="images/logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/230/bc13fe/fff?text=AI'">
+                <img src="logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/230/bc13fe/fff?text=AI'">
             </div>
             <div class="side-nav">
                 <div class="side-btn" onclick="showInvite()">INVITE</div>
@@ -176,6 +175,9 @@
         tg.ready();
         tg.expand();
 
+        // Авто-настройка темы под Telegram
+        if (tg.setHeaderColor) tg.setHeaderColor('#050505');
+
         const API_BASE = window.location.origin;
 
         let state = { 
@@ -186,6 +188,7 @@
             pnl: 0, 
             loaded: false,
             isDirty: false,
+            // Берем UID либо из WebApp, либо из параметров URL
             uid: tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('u')
         };
 
@@ -195,11 +198,10 @@
             const fillEl = document.getElementById('loader-fill');
 
             const interval = setInterval(() => {
-                // Если данные пришли, ускоряем загрузку
                 if (state.loaded) {
-                    progress += 4;
-                } else if (progress < 92) {
-                    progress += 0.3;
+                    progress += 5;
+                } else if (progress < 90) {
+                    progress += 0.5;
                 }
 
                 if (progress >= 100) {
@@ -211,13 +213,11 @@
                 const displayProgress = Math.floor(progress);
                 percentEl.innerText = `${displayProgress}%`;
                 fillEl.style.width = `${displayProgress}%`;
-            }, 30);
+            }, 50);
         }
 
         function hideLoader() {
-            const loader = document.getElementById('loader-screen');
-            loader.style.opacity = '0';
-            loader.style.visibility = 'hidden';
+            document.getElementById('loader-screen').style.display = 'none';
             document.querySelector('.content-layer').classList.add('active');
         }
 
@@ -244,9 +244,8 @@
                     state.energy = res.data.energy || 1000;
                     state.pnl = res.data.pnl || 0;
                     state.click_lvl = res.data.click_lvl || 1;
-                    state.max_energy = res.data.max_energy || 1000;
                 }
-            } catch(e) { console.error("API Error"); }
+            } catch(e) { console.warn("API Offline, using local state"); }
             state.loaded = true;
             updateUI();
         }
@@ -274,6 +273,7 @@
             e.preventDefault();
             if (!state.loaded) return;
 
+            // Поддержка мультитача (несколько пальцев)
             for(let i=0; i < e.changedTouches.length; i++) {
                 if (state.energy < state.click_lvl) {
                     if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('warning');
@@ -285,6 +285,7 @@
                 state.energy -= state.click_lvl;
                 state.isDirty = true;
 
+                // Создаем вылетающий текст
                 const num = document.createElement('div');
                 num.className = 'tap-text';
                 num.innerText = `+${state.click_lvl}`;
@@ -296,7 +297,7 @@
                 if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
             }
 
-            mainLogo.style.transform = 'scale(0.92)';
+            mainLogo.style.transform = 'scale(0.95)';
             updateUI();
         }, { passive: false });
 
@@ -304,15 +305,15 @@
             mainLogo.style.transform = 'scale(1)';
         });
 
-        // Энергия +3 в сек
+        // Энергия восстанавливается (+1 в сек для баланса)
         setInterval(() => {
             if (state.loaded && state.energy < state.max_energy) {
-                state.energy = Math.min(state.max_energy, state.energy + 3);
+                state.energy = Math.min(state.max_energy, state.energy + 2);
                 updateUI();
             }
         }, 1000);
 
-        setInterval(syncData, 5000); // Синхронизация каждые 5 сек
+        setInterval(syncData, 3000); // Синхронизация каждые 3 сек
 
         window.onload = () => {
             startLoadingAnimation();
@@ -327,8 +328,8 @@
         function showLeaderboard() {
             tg.showPopup({
                 title: '📈 СТАТИСТИКА',
-                message: `Токенов: ${Math.floor(state.balance)}\nЭнергия: ${state.energy}\nУровень: ${state.click_lvl}`,
-                buttons: [{type: 'close', text: 'ЗАКРЫТЬ'}]
+                message: `Баланс: ${Math.floor(state.balance)}\nУровень клика: ${state.click_lvl}`,
+                buttons: [{type: 'close', text: 'ОК'}]
             });
         }
     </script>
