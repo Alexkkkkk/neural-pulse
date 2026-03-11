@@ -108,12 +108,9 @@
         tg.ready();
         tg.expand();
 
-        console.log("1️⃣ [FRONT] Инициализация WebApp...");
-
-        // Надежное определение пути API
-        const API_BASE = window.location.origin.includes('localhost') || window.location.origin.includes('file') 
-            ? 'https://np.bothost.ru' // Замени на свой домен, если открываешь локально
-            : window.location.origin;
+        // 1. КОНФИГУРАЦИЯ
+        const BOT_USERNAME = "neural_pulse_bot"; // ЗАМЕНИ НА ЮЗЕРНЕЙМ СВОЕГО БОТА БЕЗ @
+        const API_BASE = window.location.origin;
 
         let state = { 
             balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, pnl: 0, 
@@ -121,6 +118,109 @@
             uid: tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('u')
         };
 
+        // 2. ЗАГРУЗКА ДАННЫХ
+        async function loadData() {
+            if(!state.uid) { 
+                console.warn("⚠️ [FRONT] Нет UID, демо-режим.");
+                state.loaded = true;
+                return; 
+            }
+
+            try {
+                // ПУТЬ СИНХРОНИЗИРОВАН С SERVER.JS (/api/user/:id)
+                const r = await fetch(`${API_BASE}/api/user/${state.uid}`);
+                if (!r.ok) throw new Error("Server Error");
+                const res = await r.json();
+                
+                state.balance = res.balance || 0;
+                state.energy = res.energy || 1000;
+                state.pnl = res.pnl || 0;
+                state.click_lvl = res.click_lvl || 1;
+            } catch(e) { 
+                console.error("🚨 [FRONT] Ошибка API:", e.message); 
+            }
+            state.loaded = true;
+            updateUI();
+        }
+
+        // 3. СОХРАНЕНИЕ ДАННЫХ
+        async function syncData() {
+            if(!state.uid || !state.loaded || !state.isDirty) return;
+            
+            try {
+                await fetch(`${API_BASE}/api/save`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        userId: String(state.uid), // ПЕРЕМЕННАЯ СИНХРОНИЗИРОВАНА С SERVER.JS
+                        balance: state.balance, 
+                        energy: state.energy 
+                    })
+                });
+                state.isDirty = false;
+                console.log("☁️ [SYNC] Данные сохранены");
+            } catch(e) { console.warn("☁️ [SYNC] Ошибка связи."); }
+        }
+
+        // 4. ИНТЕРФЕЙС
+        function updateUI() {
+            document.getElementById('balance').innerText = Math.floor(state.balance).toLocaleString();
+            document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
+            document.getElementById('energy-fill').style.width = `${(state.energy / state.max_energy) * 100}%`;
+            document.getElementById('lvl-display').innerText = state.click_lvl;
+            document.getElementById('pnl-display').innerText = `PASSIVE: +${Math.floor(state.pnl)}/h`;
+            if(state.uid) document.getElementById('rank-id').innerText = `ID: ${String(state.uid).slice(-6)}`;
+        }
+
+        // 5. КЛИКИ
+        const tapZone = document.getElementById('tap-zone');
+        const mainLogo = document.getElementById('main-logo');
+
+        tapZone.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (!state.loaded) return;
+
+            for(let i=0; i < e.changedTouches.length; i++) {
+                if (state.energy < state.click_lvl) {
+                    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('warning');
+                    break;
+                }
+
+                const touch = e.changedTouches[i];
+                state.balance += state.click_lvl;
+                state.energy -= state.click_lvl;
+                state.isDirty = true;
+
+                // Анимация текста +1
+                const num = document.createElement('div');
+                num.className = 'tap-text';
+                num.innerText = `+${state.click_lvl}`;
+                num.style.left = `${touch.pageX - 20}px`; 
+                num.style.top = `${touch.pageY - 50}px`;
+                document.body.appendChild(num);
+                setTimeout(() => num.remove(), 600);
+
+                if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+            }
+
+            mainLogo.style.transform = 'scale(0.92)';
+            updateUI();
+        }, { passive: false });
+
+        tapZone.addEventListener('touchend', () => mainLogo.style.transform = 'scale(1)');
+
+        // Энергия восстанавливается сама
+        setInterval(() => {
+            if (state.loaded && state.energy < state.max_energy) {
+                state.energy = Math.min(state.max_energy, state.energy + 1.2);
+                updateUI();
+            }
+        }, 1000);
+
+        // Авто-сохранение раз в 4 секунды
+        setInterval(syncData, 4000); 
+
+        // Лоадер
         function startLoadingAnimation() {
             let progress = 0;
             const percentEl = document.getElementById('loader-percent');
@@ -150,104 +250,13 @@
             }, 500);
         }
 
-        function updateUI() {
-            document.getElementById('balance').innerText = Math.floor(state.balance).toLocaleString();
-            document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
-            document.getElementById('energy-fill').style.width = `${(state.energy / state.max_energy) * 100}%`;
-            document.getElementById('lvl-display').innerText = state.click_lvl;
-            document.getElementById('pnl-display').innerText = `PASSIVE: +${Math.floor(state.pnl)}/h`;
-            if(state.uid) document.getElementById('rank-id').innerText = `ID: ${String(state.uid).slice(-6)}`;
-        }
-
-        async function loadData() {
-            if(!state.uid) { 
-                console.warn("⚠️ [FRONT] Работаем в демо-режиме (нет UID).");
-                state.loaded = true;
-                return; 
-            }
-
-            try {
-                const r = await fetch(`${API_BASE}/api/balance/${state.uid}`);
-                if (!r.ok) throw new Error("Server response not OK");
-                const res = await r.json();
-                
-                if(res.status === 'ok') {
-                    state.balance = res.data.balance || 0;
-                    state.energy = res.data.energy || 1000;
-                    state.pnl = res.data.pnl || 0;
-                    state.click_lvl = res.data.click_lvl || 1;
-                }
-            } catch(e) { 
-                console.error("🚨 [FRONT] Ошибка API:", e.message); 
-            }
-            state.loaded = true;
-            updateUI();
-        }
-
-        async function syncData() {
-            if(!state.uid || !state.loaded || !state.isDirty) return;
-            
-            try {
-                const response = await fetch(`${API_BASE}/api/save`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: state.uid, score: state.balance, energy: state.energy })
-                });
-                if(response.ok) state.isDirty = false;
-            } catch(e) { console.warn("☁️ [SYNC] Ошибка связи."); }
-        }
-
-        const tapZone = document.getElementById('tap-zone');
-        const mainLogo = document.getElementById('main-logo');
-
-        tapZone.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            if (!state.loaded) return;
-
-            for(let i=0; i < e.changedTouches.length; i++) {
-                if (state.energy < state.click_lvl) {
-                    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('warning');
-                    break;
-                }
-
-                const touch = e.changedTouches[i];
-                state.balance += state.click_lvl;
-                state.energy -= state.click_lvl;
-                state.isDirty = true;
-
-                const num = document.createElement('div');
-                num.className = 'tap-text';
-                num.innerText = `+${state.click_lvl}`;
-                num.style.left = `${touch.pageX - 20}px`; 
-                num.style.top = `${touch.pageY - 50}px`;
-                document.body.appendChild(num);
-                setTimeout(() => num.remove(), 600);
-
-                if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-            }
-
-            mainLogo.style.transform = 'scale(0.92)';
-            updateUI();
-        }, { passive: false });
-
-        tapZone.addEventListener('touchend', () => mainLogo.style.transform = 'scale(1)');
-
-        setInterval(() => {
-            if (state.loaded && state.energy < state.max_energy) {
-                state.energy = Math.min(state.max_energy, state.energy + 1.2);
-                updateUI();
-            }
-        }, 1000);
-
-        setInterval(syncData, 4000); 
-
         window.onload = () => {
             startLoadingAnimation();
             loadData();
         };
         
         function showInvite() {
-            const link = `https://t.me/ТВОЙ_БОТ?start=${state.uid}`; // ВСТАВЬ ЮЗЕРНЕЙМ СВОЕГО БОТА ТУТ
+            const link = `https://t.me/${BOT_USERNAME}?start=${state.uid}`;
             tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join me in Neural Pulse AI! 🧠`);
         }
 
