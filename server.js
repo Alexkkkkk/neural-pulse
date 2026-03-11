@@ -4,110 +4,104 @@ const fs = require('fs');
 const cors = require('cors');
 const { Telegraf, Markup } = require('telegraf');
 
-// [1] КОНФИГУРАЦИЯ ИЗ ОКРУЖЕНИЯ
+console.log("1️⃣ [START] Скрипт запущен, импорт модулей завершен.");
+
+// [1] КОНФИГУРАЦИЯ
 const API_TOKEN = process.env.BOT_TOKEN;
 const DOMAIN = process.env.DOMAIN || "np.bothost.ru";
 const PORT = process.env.PORT || 3000;
-
-// ВАЖНО: Путь /app/data согласно мануалу Bothost для персистентности
 const DATA_DIR = "/app/data"; 
 const DATA_FILE = path.join(DATA_DIR, 'users.json');
-
 const WEB_APP_URL = `https://${DOMAIN}`;
 const WEBHOOK_PATH = "/webhook-tg-pulse";
 
+console.log(`2️⃣ [CONFIG] URL: ${WEB_APP_URL}, Port: ${PORT}`);
+
 const app = express();
 const bot = new Telegraf(API_TOKEN);
-
 let usersData = {};
 
-// [2] БАЗА ДАННЫХ (Программное создание по мануалу)
+// [2] БАЗА ДАННЫХ
 function initDatabase() {
+    const startDB = Date.now();
+    console.log("3️⃣ [DB] Начало инициализации базы...");
     try {
-        // Создаем папку /app/data если её нет
         if (!fs.existsSync(DATA_DIR)) {
+            console.log("   -> Создаю папку /app/data...");
             fs.mkdirSync(DATA_DIR, { recursive: true });
-            console.log("📁 Папка /app/data создана");
         }
         
         if (fs.existsSync(DATA_FILE)) {
+            console.log("   -> Читаю файл users.json...");
             const raw = fs.readFileSync(DATA_FILE, 'utf8');
             usersData = raw.trim() ? JSON.parse(raw) : {};
-            console.log(`📂 БД загружена: ${Object.keys(usersData).length} юзеров`);
         } else {
+            console.log("   -> Файл базы не найден, создаю новый...");
             usersData = {};
             fs.writeFileSync(DATA_FILE, JSON.stringify({}, null, 2));
-            console.log("📄 Файл users.json инициализирован");
         }
-    } catch (e) { console.error(`🚨 [DB ERROR] ${e.message}`); }
+        console.log(`✅ [DB] Загружено за ${Date.now() - startDB}мс. Юзеров: ${Object.keys(usersData).length}`);
+    } catch (e) { 
+        console.error(`🚨 [DB ERROR] Критическая ошибка БД: ${e.message}`); 
+    }
 }
 
-function saveData() {
-    try {
-        // Используем временный файл для безопасной записи (атомарно)
-        const tmp = DATA_FILE + '.tmp';
-        fs.writeFileSync(tmp, JSON.stringify(usersData, null, 2));
-        fs.renameSync(tmp, DATA_FILE); 
-    } catch (e) { console.error(`💾 [SAVE ERROR] ${e.message}`); }
-}
-
-// [3] MIDDLEWARE & СТАТИКА
+// [3] MIDDLEWARE
+console.log("4️⃣ [APP] Настройка Express...");
 app.use(express.json());
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// [4] ЛОГИКА БОТА
-bot.start((ctx) => {
-    const uid = String(ctx.from.id);
-    if (!usersData[uid]) {
-        usersData[uid] = { 
-            id: uid, balance: 0, energy: 1000, max_energy: 1000, 
-            click_lvl: 1, pnl: 0, last_seen: Date.now() 
-        };
-        saveData();
-    }
-    ctx.replyWithHTML(`🦾 <b>NEURAL PULSE ONLINE</b>`, 
-        Markup.inlineKeyboard([[
-            Markup.button.webApp("ВХОД В СИСТЕМУ 🧠", `${WEB_APP_URL}/?u=${uid}`)
-        ]])
-    );
-});
-
-// [5] API ДЛЯ MINI APP
+// [4] API ЭНДПОИНТЫ
 app.get('/api/balance/:userId', (req, res) => {
     const uid = String(req.params.userId);
+    console.log(`📥 [API GET] Запрос баланса для: ${uid}`);
     if (!usersData[uid]) {
         usersData[uid] = { id: uid, balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, pnl: 0 };
-        saveData();
     }
     res.json({ status: "ok", data: usersData[uid] });
 });
 
 app.post('/api/save', (req, res) => {
     const { user_id, score, energy } = req.body;
-    const uid = String(user_id);
-    if (uid && usersData[uid]) {
-        usersData[uid].balance = Number(score);
-        usersData[uid].energy = Number(energy);
-        usersData[uid].last_seen = Date.now();
-        saveData();
+    if (user_id && usersData[user_id]) {
+        usersData[user_id].balance = Number(score);
+        usersData[user_id].energy = Number(energy);
+        fs.writeFile(DATA_FILE, JSON.stringify(usersData, null, 2), () => {}); 
         return res.json({ status: "ok" });
     }
-    res.status(400).json({ status: "error" });
+    res.status(400).send("error");
 });
 
-// Вебхук
-app.post(WEBHOOK_PATH, (req, res) => bot.handleUpdate(req.body, res));
+// [5] ОБРАБОТКА ВЕБХУКА
+app.post(WEBHOOK_PATH, (req, res) => {
+    bot.handleUpdate(req.body, res).catch(e => console.error("❌ [TG ERROR]", e));
+});
 
-// [6] ЗАПУСК
+// [6] ЗАПУСК (ГДЕ ЧАЩЕ ВСЕГО ЗАВИСАЕТ)
 async function boot() {
+    console.log("5️⃣ [BOOT] Вхожу в функцию boot()...");
     initDatabase();
+    
     try {
-        await bot.telegram.setWebhook(`${WEB_APP_URL}${WEBHOOK_PATH}`);
+        console.log("6️⃣ [TELEGRAM] Попытка установить Webhook...");
+        const startHook = Date.now();
+        
+        // Установка вебхука может висеть, если сервер Telegram не отвечает
+        await bot.telegram.setWebhook(`${WEB_APP_URL}${WEBHOOK_PATH}`)
+            .then(() => console.log(`✅ [TELEGRAM] Webhook установлен за ${Date.now() - startHook}мс`))
+            .catch(e => { throw new Error(`Ошибка Webhook: ${e.message}`) });
+
+        console.log("7️⃣ [SERVER] Попытка запустить Express...");
         app.listen(PORT, '0.0.0.0', () => {
-            console.log(`✅ [SYSTEM ONLINE] Port: ${PORT}`);
+            console.log(`🚀 [SUCCESS] Система полностью онлайн на порту ${PORT}`);
         });
-    } catch (e) { console.error(`🛑 BOOT ERROR: ${e.message}`); }
+
+    } catch (e) { 
+        console.error(`🛑 [FATAL] Остановка на этапе boot: ${e.message}`);
+        console.log("💡 СОВЕТ: Проверь, правильно ли указан DOMAIN и BOT_TOKEN!");
+    }
 }
 
+console.log("8️⃣ [EXECUTE] Вызов функции boot()...");
 boot();
