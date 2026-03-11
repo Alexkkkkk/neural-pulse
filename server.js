@@ -7,7 +7,7 @@ const { Telegraf, Markup } = require('telegraf');
 const winston = require('winston');
 
 // ==========================================
-// [1] ЯДРО ЛОГИРОВАНИЯ (С ЦВЕТОМ И МЕТРИКАМИ)
+// [1] ЯДРО ЛОГИРОВАНИЯ
 // ==========================================
 const logger = winston.createLogger({
     level: 'debug',
@@ -19,7 +19,7 @@ const logger = winston.createLogger({
 });
 
 // ==========================================
-// [2] ГЛОБАЛЬНАЯ КОНФИГУРАЦИЯ СИСТЕМЫ
+// [2] ГЛОБАЛЬНАЯ КОНФИГУРАЦИЯ
 // ==========================================
 const API_TOKEN = "8257287930:AAFUmUinCAALPf6Bivpo04__Zp_V4Y49MFs"; 
 const ADMIN_ID = 476014374; 
@@ -36,24 +36,21 @@ app.set('trust proxy', 1);
 const bot = new Telegraf(API_TOKEN);
 
 // ==========================================
-// [3] ДВИЖОК БАЗЫ ДАННЫХ (С АВТО-БЭКАПАМИ)
+// [3] ДВИЖОК БАЗЫ ДАННЫХ
 // ==========================================
 let usersData = {};
 
 function initDatabase() {
     try {
         if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-        
         if (fs.existsSync(DATA_FILE)) {
             fs.copyFileSync(DATA_FILE, BACKUP_FILE);
-            logger.info("🛡️ [DB SECURITY] Создана резервная копия базы данных (users.bak)");
-            
             const raw = fs.readFileSync(DATA_FILE, 'utf8');
             usersData = raw.trim() ? JSON.parse(raw) : {};
         }
         return Object.keys(usersData).length;
     } catch (e) {
-        logger.error(`🚨 [DB CRASH] Критическая ошибка чтения: ${e.message}`);
+        logger.error(`🚨 [DB CRASH] ${e.message}`);
         return 0;
     }
 }
@@ -63,187 +60,137 @@ function saveData() {
         const tmp = DATA_FILE + '.tmp';
         fs.writeFileSync(tmp, JSON.stringify(usersData, null, 2));
         fs.renameSync(tmp, DATA_FILE); 
-        logger.debug(`💾 [SYNC] Данные сохранены. Размер RAM: ${(process.memoryUsage().rss / 1024 / 1024).toFixed(2)} MB`);
-    } catch (e) { 
-        logger.error(`💾 [SYNC ERROR] Не удалось сохранить БД: ${e.message}`); 
-    }
+    } catch (e) { logger.error(`💾 [SYNC ERROR] ${e.message}`); }
 }
 
 // ==========================================
-// [4] СЕТЕВОЙ СЛОЙ И БРОНЕБОЙНЫЙ ВЕБХУК
+// [4] СЕТЕВОЙ СЛОЙ (ИСПРАВЛЕННЫЙ)
 // ==========================================
-app.use(express.json()); // Строго ПЕРЕД маршрутами!
+app.use(express.json());
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// 📡 ГЛОБАЛЬНЫЙ РАДАР (Логирует вообще всё, что прилетает на сервер)
+// ГЛОБАЛЬНЫЙ РАДАР
 app.use((req, res, next) => {
-    logger.debug(`[СЕТЬ] Стук в дверь: ${req.method} ${req.originalUrl}`);
+    if (req.url !== '/health') {
+        logger.debug(`[СЕТЬ] Запрос: ${req.method} ${req.originalUrl}`);
+    }
     next();
 });
 
-// Эндпоинт для мониторинга (Health Check)
+// МОНИТОРИНГ
 app.get('/health', (req, res) => {
-    res.json({ status: 'ONLINE', uptime: process.uptime(), users: Object.keys(usersData).length });
+    res.json({ status: 'ONLINE', users: Object.keys(usersData).length });
 });
 
-// 🛡️ БРОНЕБОЙНЫЙ ВЕБХУК (Ручной проброс данных в бота)
-app.post(WEBHOOK_PATH, async (req, res) => {
-    logger.info(`📥 [TG STREAM] Получен апдейт от Telegram! ID: ${req.body.update_id || 'unknown'}`);
+// 🛡️ БРОНЕБОЙНЫЙ ВЕБХУК (С защитой от слэшей)
+const handleTgUpdate = async (req, res) => {
+    if (!req.body || !req.body.update_id) {
+        return res.status(400).send('No payload');
+    }
     try {
-        // Насильно кормим бота данными, игнорируя встроенные роутеры Telegraf
         await bot.handleUpdate(req.body, res);
     } catch (e) {
-        logger.error(`❌ [TG STREAM ERROR] ${e.message}`);
+        logger.error(`❌ [TG ERROR] ${e.message}`);
         if (!res.headersSent) res.sendStatus(500);
     }
+};
+
+app.post(WEBHOOK_PATH, handleTgUpdate);
+app.post(`${WEBHOOK_PATH}/`, handleTgUpdate); // Защита от лишнего слэша
+
+// Ловушка для 404 (Диагностика)
+app.use((req, res) => {
+    logger.warn(`⚠️  404 NOT FOUND: ${req.method} ${req.originalUrl} - Проверь настройки вебхука!`);
+    res.status(404).send('Not Found');
 });
 
 // ==========================================
-// [5] ИНТЕРФЕЙС БОТА (КИНЕМАТОГРАФИЧНЫЙ ЗАПУСК)
+// [5] ИНТЕРФЕЙС БОТА
 // ==========================================
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 bot.start(async (ctx) => {
     const uid = ctx.from.id;
-    const username = ctx.from.username ? `@${ctx.from.username}` : "Неизвестный агент";
-    logger.info(`🎯 [LOGIN] Запрос авторизации от ${uid} (${username})`);
-
+    const username = ctx.from.username ? `@${ctx.from.username}` : "Агент";
+    
     try {
         const msg = await ctx.replyWithHTML(
-            `🖥 <b>NEURAL TERMINAL v3.0</b>\n<code>> Establishing secure link...</code>\n<code>[▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒] 10%</code>`,
-            Markup.inlineKeyboard([[Markup.button.callback("ПИНГ СЕРВЕРА... 📡", "ignore")]])
+            `🖥 <b>NEURAL TERMINAL v3.0</b>\n<code>> Establishing link...</code>\n<code>[▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒] 10%</code>`
         );
-
-        await delay(600);
+        await delay(500);
         await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null,
-            `🖥 <b>NEURAL TERMINAL v3.0</b>\n<code>> Bypassing firewall protocols...</code>\n<code>[████▒▒▒▒▒▒▒▒▒▒▒] 35%</code>`,
-            { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback("ОБХОД ЗАЩИТЫ... 🛡", "ignore")]]) }
+            `🖥 <b>NEURAL TERMINAL v3.0</b>\n<code>> Decrypting sector... OK</code>\n<code>[██████████▒▒▒▒▒] 75%</code>`,
+            { parse_mode: 'HTML' }
         ).catch(() => {});
-
-        await delay(600);
+        await delay(500);
         await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null,
-            `🖥 <b>NEURAL TERMINAL v3.0</b>\n<code>> Decrypting user sector... OK</code>\n<code>[██████████▒▒▒▒▒] 75%</code>`,
-            { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback("РАСШИФРОВКА... 🧬", "ignore")]]) }
-        ).catch(() => {});
-
-        await delay(600);
-        await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null,
-            `🦾 <b>ACCESS GRANTED: NEURAL PULSE</b>\n` +
-            `===========================\n` +
-            `👤 АГЕНТ: <code>${username}</code>\n` +
-            `🆔 СЕКТОР: <code>${uid}</code>\n` +
-            `===========================\n` +
-            `⚡️ Нейронная сеть готова к работе.`,
+            `🦾 <b>ACCESS GRANTED</b>\n👤 АГЕНТ: <code>${username}</code>`,
             {
                 parse_mode: 'HTML',
                 ...Markup.inlineKeyboard([
-                    [Markup.button.webApp("ВХОД В СИСТЕМУ 🧠", `${WEB_APP_URL}/?u=${uid}`)],
-                    [Markup.button.url("КАНАЛ СВЯЗИ 📡", "https://t.me/neural_pulse_news")]
+                    [Markup.button.webApp("ВХОД В СИСТЕМУ 🧠", `${WEB_APP_URL}/?u=${uid}`)]
                 ])
             }
         ).catch(() => {});
-    } catch (e) { logger.error(`❌ [BOT UI ERROR]: ${e.message}`); }
+    } catch (e) { logger.error(`❌ [UI ERROR]: ${e.message}`); }
 });
 
-bot.action('ignore', (ctx) => ctx.answerCbQuery("Идет процесс подключения... ⏳"));
-
 // ==========================================
-// [6] БОЕВОЙ API ДЛЯ WEBAPP
+// [6] API ДЛЯ WEBAPP
 // ==========================================
 app.get('/api/balance/:userId', (req, res) => {
     const uid = String(req.params.userId);
     if (!usersData[uid]) {
         usersData[uid] = { id: uid, balance: 0, energy: 1000, last_seen: Date.now() };
-        logger.info(`🌟 [NEW USER] Зарегистрирован ID: ${uid}`);
         saveData(); 
     }
-    usersData[uid].last_seen = Date.now();
     res.json({ status: "ok", data: usersData[uid] });
 });
 
 app.post('/api/save', (req, res) => {
     const { user_id, score, energy } = req.body;
     const uid = String(user_id);
-    
     if (uid && usersData[uid]) {
         usersData[uid].balance = Number(score);
         usersData[uid].energy = Number(energy);
         usersData[uid].last_seen = Date.now();
         return res.json({ status: "ok" });
     }
-    res.status(400).json({ status: "error", message: "User session not found" });
+    res.status(400).json({ status: "error" });
 });
 
 // ==========================================
-// [7] АБСОЛЮТНЫЙ BOOT SEQUENCE & SHUTDOWN
+// [7] ЗАПУСК СИСТЕМЫ
 // ==========================================
 let server;
 
 async function bootSystem() {
-    console.clear();
-    console.log("\n███╗   ██╗███████╗██╗   ██╗██████╗  █████╗ ██╗     ");
-    console.log("████╗  ██║██╔════╝██║   ██║██╔══██╗██╔══██╗██║     ");
-    console.log("██╔██╗ ██║█████╗  ██║   ██║██████╔╝███████║██║     ");
-    console.log("██║╚██╗██║██╔══╝  ██║   ██║██╔══██╗██╔══██║██║     ");
-    console.log("██║ ╚████║███████╗╚██████╔╝██║  ██║██║  ██║███████╗");
-    console.log("╚═╝  ╚═══╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝\n");
-    
-    logger.info(`🚀 [BOOT] OS: ${os.type()} ${os.release()} | CPU Core: ${os.cpus().length}`);
-    logger.info(`🚀 [BOOT] Инициализация ядра системы...`);
-    
-    await delay(500);
-    const userCount = initDatabase();
-    logger.info(`📂 [BOOT] База загружена. Активных агентов: ${userCount}`);
-    
-    await delay(500);
-    logger.info("🌐 [BOOT] Сетевые фильтры и CORS активированы.");
-    
+    initDatabase();
     try {
-        const me = await bot.telegram.getMe();
-        logger.info(`🤖 [BOOT] Telegram API Token VALID: @${me.username}`);
-
+        await bot.telegram.getMe();
         server = app.listen(PORT, '0.0.0.0', async () => {
             const hookUrl = `${WEB_APP_URL}${WEBHOOK_PATH}`;
-            
-            // Очистка мертвых очередей (Лечение ошибки 404)
             await bot.telegram.deleteWebhook({ drop_pending_updates: true });
             await bot.telegram.setWebhook(hookUrl);
-            
-            console.log("==================================================");
-            logger.info(`✅ [SYSTEM ONLINE] СЕРВЕР СЛУШАЕТ ПОРТ: ${PORT}`);
-            logger.info(`🌍 [WEBHOOK] КАНАЛ СВЯЗИ: ${hookUrl}`);
-            logger.info(`💻 [TELEMETRY] RAM Свободно: ${(os.freemem() / 1024 / 1024 / 1024).toFixed(2)} GB`);
-            console.log("==================================================");
+            logger.info(`✅ [SYSTEM ONLINE] Порт: ${PORT} | Вебхук: ${hookUrl}`);
         });
     } catch (e) {
-        logger.error(`🛑 [FATAL CRASH] ${e.message}`);
+        logger.error(`🛑 [FATAL] ${e.message}`);
         process.exit(1);
     }
 }
 
-// Фоновое автосохранение
 const syncInterval = setInterval(saveData, 60000);
 
-// --- ЗАЩИТА ОТ ПОТЕРИ ДАННЫХ ПРИ ПЕРЕЗАГРУЗКЕ (GRACEFUL SHUTDOWN) ---
 function shutdown(signal) {
-    logger.warn(`\n⚠️ [SHUTDOWN] Получен сигнал ${signal}. Запуск протокола консервации...`);
     clearInterval(syncInterval);
-    saveData(); 
-    
-    if (server) {
-        server.close(() => {
-            logger.info("🔒 [SHUTDOWN] Сетевые порты закрыты.");
-            logger.info("💤 [SHUTDOWN] Система остановлена безопасно.");
-            process.exit(0);
-        });
-    } else {
-        process.exit(0);
-    }
+    saveData();
+    if (server) server.close(() => process.exit(0));
+    else process.exit(0);
 }
 
-process.once('SIGINT', () => shutdown('SIGINT'));   
-process.once('SIGTERM', () => shutdown('SIGTERM')); 
+process.once('SIGINT', () => shutdown('SIGINT'));
+process.once('SIGTERM', () => shutdown('SIGTERM'));
 
-// Старт!
 bootSystem();
