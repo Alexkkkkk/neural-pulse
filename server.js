@@ -3,121 +3,127 @@ const path = require('path');
 const fs = require('fs');
 const cors = require('cors');
 const { Telegraf, Markup } = require('telegraf');
+const rateLimit = require('express-rate-limit');
 
-console.log("🚀 [SYSTEM] Активация Гибридного ядра (Long Polling + Express)...");
-
-// [1] КОНФИГУРАЦИЯ
-const API_TOKEN = process.env.BOT_TOKEN || "8257287930:AAFUmUinCAALPf6Bivpo04__Zp_V4Y49MFs"; 
-const DOMAIN = "np.bothost.ru"; 
-const PORT = process.env.PORT || 3000;
-const DATA_DIR = path.join(__dirname, 'data');
-const DATA_FILE = path.join(DATA_DIR, 'users.json');
-const WEB_APP_URL = `https://${DOMAIN}`;
+// [1] КОНФИГУРАЦИЯ И СТИЛЬ
+const CONFIG = {
+    TOKEN: process.env.BOT_TOKEN || "8257287930:AAFUmUinCAALPf6Bivpo04__Zp_V4Y49MFs",
+    DOMAIN: "np.bothost.ru",
+    PORT: process.env.PORT || 3000,
+    WEBHOOK_PATH: '/gate/v1/neural-sync', // Скрытый путь для безопасности
+    DATA_PATH: path.join(__dirname, 'data', 'users.json')
+};
 
 const app = express();
-const bot = new Telegraf(API_TOKEN);
+const bot = new Telegraf(CONFIG.TOKEN);
 
-// [2] БАЗА ДАННЫХ
-let usersData = {};
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-if (fs.existsSync(DATA_FILE)) {
-    try { usersData = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8') || '{}'); } 
-    catch (e) { usersData = {}; }
-}
-const saveDB = () => fs.writeFile(DATA_FILE, JSON.stringify(usersData, null, 2), () => {});
+// [2] БАЗА ДАННЫХ С АВТО-БЭКАПОМ
+let users = {};
+const loadDB = () => {
+    try {
+        if (!fs.existsSync(path.dirname(CONFIG.DATA_PATH))) fs.mkdirSync(path.dirname(CONFIG.DATA_PATH));
+        users = fs.existsSync(CONFIG.DATA_PATH) ? JSON.parse(fs.readFileSync(CONFIG.DATA_PATH)) : {};
+        console.log(`💎 [SYSTEM] Neural Core загружен. Активных узлов: ${Object.keys(users).length}`);
+    } catch (e) { console.error("🚨 [DB_LOAD_ERR]", e); users = {}; }
+};
+const saveDB = () => fs.writeFileSync(CONFIG.DATA_PATH, JSON.stringify(users, null, 2));
 
-// ==========================================
-// [3] EXPRESS - ТОЛЬКО ДЛЯ WEB APP И API
-// ==========================================
+// [3] ЗАЩИТА И СЕТЬ (Middleware)
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }); // Защита API от перегрузки
+
 app.use(cors());
 app.use(express.json());
+app.use('/api/', limiter);
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Логируем запросы к серверу (от приложения)
+// Ультра-логирование (визуально чистое)
 app.use((req, res, next) => {
-    console.log(`🌐 [WEB] Запрос к API/Статике: ${req.method} ${req.url}`);
+    if (req.url === CONFIG.WEBHOOK_PATH) {
+        const upid = req.body?.update_id;
+        console.log(`📡 [PULSE] Входящий сигнал: ${upid} | IP: ${req.ip.replace('::ffff:', '')}`);
+    }
     next();
 });
 
-// API Эндпоинты
-app.get('/api/balance/:userId', (req, res) => {
-    const uid = String(req.params.userId);
-    if (!usersData[uid]) {
-        usersData[uid] = { id: uid, balance: 0, energy: 1000 };
-        saveDB();
-    }
-    res.json({ status: "ok", data: usersData[uid] });
+// [4] СИСТЕМА УПРАВЛЕНИЯ ПОЛЬЗОВАТЕЛЯМИ (API)
+app.get('/api/v1/sync/:id', (req, res) => {
+    const id = req.params.id;
+    if (!users[id]) users[id] = { id, balance: 0, energy: 1000, level: 1, lastSync: Date.now() };
+    res.json({ success: true, user: users[id] });
 });
 
-app.post('/api/save', (req, res) => {
-    const { user_id, score, energy } = req.body;
-    if (user_id && usersData[user_id]) {
-        usersData[user_id].balance = Number(score);
-        usersData[user_id].energy = Number(energy);
+app.post('/api/v1/save', (req, res) => {
+    const { id, balance, energy } = req.body;
+    if (id && users[id]) {
+        users[id] = { ...users[id], balance: Number(balance), energy: Number(energy), lastSync: Date.now() };
         saveDB();
-        return res.json({ status: "ok" });
+        return res.json({ success: true });
     }
-    res.status(400).send("error");
+    res.status(403).json({ success: false, error: 'Unauthorized Node' });
 });
 
-// Раздача статики (твоя папка public)
-app.use(express.static(path.join(__dirname, 'public')));
-
-// ==========================================
-// [4] TELEGRAF - ПРЯМОЕ ПОДКЛЮЧЕНИЕ (LONG POLLING)
-// ==========================================
-bot.start((ctx) => {
-    console.log(`🎯 [BOT] Команда /start от ${ctx.from.first_name} (ID: ${ctx.from.id})`);
-    
-    // Синхронизация БД при старте
+// [5] ИНТЕРФЕЙС БОТА (Next-Gen UI)
+bot.start(async (ctx) => {
     const uid = String(ctx.from.id);
-    if (!usersData[uid]) {
-        usersData[uid] = { id: uid, balance: 0, energy: 1000 };
+    const firstName = ctx.from.first_name || 'Agent';
+    
+    if (!users[uid]) {
+        users[uid] = { id: uid, balance: 0, energy: 1000, level: 1, lastSync: Date.now() };
         saveDB();
     }
 
-    ctx.replyWithHTML(
-        `<b>🚀 Система Neural Pulse активна!</b>\n\nКанал связи установлен напрямую.`,
-        Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', WEB_APP_URL)]])
+    const welcomeMsg = 
+        `<b>🛰 NEURAL PULSE: CONNECTION ESTABLISHED</b>\n\n` +
+        `Приветствуем, <b>${firstName}</b>. Твой биометрический профиль синхронизирован.\n\n` +
+        `🧬 <b>Твои данные:</b>\n` +
+        `├ ID: <code>${uid}</code>\n` +
+        `├ Статус: <pre>Online</pre>\n` +
+        `└ Баланс: 💰 <b>${users[uid].balance} NP</b>\n\n` +
+        `<i>Используй высокочастотный доступ для добычи токенов.</i>`;
+
+    await ctx.replyWithPhoto(
+        { url: 'https://img.freepik.com/free-vector/abstract-technology-particle-background_23-2148425219.jpg' }, // Можно заменить на свое лого
+        {
+            caption: welcomeMsg,
+            parse_mode: 'HTML',
+            ...Markup.inlineKeyboard([
+                [Markup.button.webApp('⚡ ВХОД В СИСТЕМУ', `https://${CONFIG.DOMAIN}`)],
+                [Markup.button.url('📡 КАНАЛ СВЯЗИ', 'https://t.me/your_channel'), Markup.button.url('🤝 ПОДДЕРЖКА', 'https://t.me/your_support')]
+            ])
+        }
     );
 });
 
-bot.on('text', (ctx) => {
-    console.log(`💬 [BOT] Сообщение от ${ctx.from.id}: ${ctx.message.text}`);
-    if (ctx.message.text.toLowerCase().includes('баланс')) {
-        const bal = usersData[ctx.from.id]?.balance || 0;
-        return ctx.reply(`💰 Твой баланс: ${bal} NP`);
-    }
-    ctx.reply("🧬 Для начала майнинга нажми кнопку 'ИГРАТЬ' в меню!");
+// [6] ГЛОБАЛЬНЫЙ ОБРАБОТЧИК ОШИБОК
+bot.catch((err, ctx) => {
+    console.error(`🚨 [CRITICAL_BOT_ERR] User: ${ctx.from.id}`, err);
 });
 
-// ==========================================
-// [5] ЗАПУСК СИСТЕМЫ
-// ==========================================
-async function boot() {
-    // 1. Запускаем сервер для Web App
-    app.listen(PORT, '0.0.0.0', () => {
-        console.log(`🖥️ [EXPRESS] Сервер для Web App работает на порту: ${PORT}`);
+// [7] ЗАПУСК ЯДРА
+async function startup() {
+    loadDB();
+    
+    app.post(CONFIG.WEBHOOK_PATH, (req, res) => bot.handleUpdate(req.body, res));
+
+    app.listen(CONFIG.PORT, '0.0.0.0', async () => {
+        console.log(`\n————————————————————————————————————————————————`);
+        console.log(`🟢 NEURAL PULSE ENGINE STARTED ON PORT: ${CONFIG.PORT}`);
+        console.log(`🌐 DOMAIN: https://${CONFIG.DOMAIN}`);
+        
+        try {
+            const hookUrl = `https://${CONFIG.DOMAIN}${CONFIG.WEBHOOK_PATH}`;
+            await bot.telegram.setWebhook(hookUrl, {
+                allowed_updates: ['message', 'callback_query'],
+                drop_pending_updates: true // Очистка при каждом перезапуске для чистоты
+            });
+            console.log(`✅ WEBHOOK: Синхронизирован`);
+        } catch (e) { console.log(`❌ WEBHOOK: Ошибка связи`); }
+        console.log(`————————————————————————————————————————————————\n`);
     });
-
-    // 2. Отключаем сломанный вебхук
-    try {
-        await bot.telegram.deleteWebhook({ drop_pending_updates: true });
-        console.log(`🗑️ [WEBHOOK] Заблокированный вебхук удален`);
-    } catch (e) {
-        console.error("⚠️ [WEBHOOK] Ошибка при удалении:", e.message);
-    }
-
-    // 3. Запускаем бота напрямую
-    try {
-        bot.launch();
-        console.log(`✅ [TELEGRAM] Бот запущен в режиме ПРЯМОГО подключения (Long Polling)!`);
-    } catch (e) {
-        console.error("❌ [BOT ERROR] Ошибка запуска бота:", e.message);
-    }
 }
 
-boot();
+startup();
 
-// Защита от крашей
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+// Безопасное завершение
+process.once('SIGINT', () => saveDB());
+process.once('SIGTERM', () => saveDB());
