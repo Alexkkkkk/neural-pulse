@@ -1,18 +1,16 @@
 {
-  "name": "neural-pulse",
-  "version": "1.0.0",
-  "description": "Neural Pulse Telegram Mini App on BotHost",
+  "name": "neural-pulse-back",
+  "version": "2.0.0",
+  "description": "Neural Pulse Scalable Core",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "start": "node server.js"
   },
   "dependencies": {
+    "express": "^4.18.2",
+    "telegraf": "^4.12.2",
+    "mongoose": "^7.0.0",
     "cors": "^2.8.5",
-    "express": "^4.19.2",
-    "telegraf": "^4.16.3"
+    "dotenv": "^16.0.3"
   }
 }
