@@ -13,7 +13,8 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'users.json');
 const WEB_APP_URL = `https://${DOMAIN}`;
-const WEBHOOK_PATH = `/webhook-${API_TOKEN}`; 
+// Используем короткую часть токена для пути вебхука в целях безопасности
+const WEBHOOK_PATH = `/webhook-${API_TOKEN ? API_TOKEN.split(':')[0] : 'secret'}`; 
 
 if (!API_TOKEN) {
     console.error("🛑 [FATAL ERROR] BOT_TOKEN не найден! Добавь его в переменные окружения в панели Bothost.");
@@ -37,8 +38,8 @@ function initDatabase() {
             try {
                 usersData = raw.trim() ? JSON.parse(raw) : {};
                 console.log(`✅ [DB] База загружена. Юзеров: ${Object.keys(usersData).length}`);
-            } catch (pErr) {
-                console.error("⚠️ [DB] Ошибка чтения JSON, создаю пустую базу.");
+            } catch (parseErr) {
+                console.error("⚠️ [DB] Ошибка парсинга JSON, создаю пустую базу.");
                 usersData = {};
             }
         } else {
@@ -93,14 +94,15 @@ app.post('/api/save', (req, res) => {
 // [6] ОБРАБОТКА ВЕБХУКА
 app.use(bot.webhookCallback(WEBHOOK_PATH));
 
-// [7] ЗАПУСК
+// [7] ЗАПУСК СЕРВЕРА
 async function boot() {
     initDatabase();
     app.listen(PORT, '0.0.0.0', async () => {
         console.log(`🚀 [SERVER] Запущен на порту ${PORT}`);
         try {
+            // Устанавливаем вебхук в Telegram
             await bot.telegram.setWebhook(`${WEB_APP_URL}${WEBHOOK_PATH}`);
-            console.log(`✅ [TELEGRAM] Webhook установлен на ${WEB_APP_URL}`);
+            console.log(`✅ [TELEGRAM] Webhook успешно установлен на ${WEB_APP_URL}`);
         } catch (whError) {
             console.error(`❌ [TELEGRAM ERROR] Ошибка вебхука: ${whError.message}`);
         }
