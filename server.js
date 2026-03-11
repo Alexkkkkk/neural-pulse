@@ -22,7 +22,6 @@ const logger = winston.createLogger({
 // [2] ГЛОБАЛЬНАЯ КОНФИГУРАЦИЯ
 // ==========================================
 const API_TOKEN = "8257287930:AAFUmUinCAALPf6Bivpo04__Zp_V4Y49MFs"; 
-const ADMIN_ID = 476014374; 
 const WEB_APP_URL = "https://np.bothost.ru";
 const PORT = process.env.PORT || 3000;
 const WEBHOOK_PATH = "/webhook-tg-pulse";
@@ -64,29 +63,15 @@ function saveData() {
 }
 
 // ==========================================
-// [4] СЕТЕВОЙ СЛОЙ (ИСПРАВЛЕННЫЙ)
+// [4] СЕТЕВОЙ СЛОЙ (OPTIMIZED)
 // ==========================================
 app.use(express.json());
 app.use(cors());
-app.use(express.static(path.join(__dirname, 'static')));
 
-// ГЛОБАЛЬНЫЙ РАДАР
-app.use((req, res, next) => {
-    if (req.url !== '/health') {
-        logger.debug(`[СЕТЬ] Запрос: ${req.method} ${req.originalUrl}`);
-    }
-    next();
-});
-
-// МОНИТОРИНГ
-app.get('/health', (req, res) => {
-    res.json({ status: 'ONLINE', users: Object.keys(usersData).length });
-});
-
-// 🛡️ БРОНЕБОЙНЫЙ ВЕБХУК (С защитой от слэшей)
+// 🛡️ ОБРАБОТЧИК ВЕБХУКА (СТРОГО ДО СТАТИКИ)
 const handleTgUpdate = async (req, res) => {
     if (!req.body || !req.body.update_id) {
-        return res.status(400).send('No payload');
+        return res.status(400).send('Invalid Update');
     }
     try {
         await bot.handleUpdate(req.body, res);
@@ -97,12 +82,26 @@ const handleTgUpdate = async (req, res) => {
 };
 
 app.post(WEBHOOK_PATH, handleTgUpdate);
-app.post(`${WEBHOOK_PATH}/`, handleTgUpdate); // Защита от лишнего слэша
+app.post(`${WEBHOOK_PATH}/`, handleTgUpdate);
 
-// Ловушка для 404 (Диагностика)
+// Радар запросов
+app.use((req, res, next) => {
+    if (req.url !== '/health') {
+        logger.debug(`[СЕТЬ] Запрос: ${req.method} ${req.originalUrl}`);
+    }
+    next();
+});
+
+app.use(express.static(path.join(__dirname, 'static')));
+
+app.get('/health', (req, res) => {
+    res.json({ status: 'ONLINE', uptime: Math.floor(process.uptime()), users: Object.keys(usersData).length });
+});
+
+// Ловушка 404 (Диагностика)
 app.use((req, res) => {
-    logger.warn(`⚠️  404 NOT FOUND: ${req.method} ${req.originalUrl} - Проверь настройки вебхука!`);
-    res.status(404).send('Not Found');
+    logger.warn(`⚠️ 404: ${req.method} ${req.originalUrl} | IP: ${req.ip}`);
+    res.status(404).send('System Core: 404');
 });
 
 // ==========================================
@@ -112,20 +111,20 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 bot.start(async (ctx) => {
     const uid = ctx.from.id;
-    const username = ctx.from.username ? `@${ctx.from.username}` : "Агент";
+    const username = ctx.from.username ? `@${ctx.from.username}` : "Agent";
     
     try {
-        const msg = await ctx.replyWithHTML(
-            `🖥 <b>NEURAL TERMINAL v3.0</b>\n<code>> Establishing link...</code>\n<code>[▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒] 10%</code>`
-        );
-        await delay(500);
+        const msg = await ctx.replyWithHTML(`🖥 <b>NEURAL TERMINAL v3.0</b>\n<code>> Establishing link...</code>`);
+        
+        await delay(600);
         await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null,
             `🖥 <b>NEURAL TERMINAL v3.0</b>\n<code>> Decrypting sector... OK</code>\n<code>[██████████▒▒▒▒▒] 75%</code>`,
             { parse_mode: 'HTML' }
         ).catch(() => {});
-        await delay(500);
+
+        await delay(600);
         await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null,
-            `🦾 <b>ACCESS GRANTED</b>\n👤 АГЕНТ: <code>${username}</code>`,
+            `🦾 <b>ACCESS GRANTED</b>\n👤 АГЕНТ: <code>${username}</code>\n🆔 ID: <code>${uid}</code>`,
             {
                 parse_mode: 'HTML',
                 ...Markup.inlineKeyboard([
@@ -161,7 +160,7 @@ app.post('/api/save', (req, res) => {
 });
 
 // ==========================================
-// [7] ЗАПУСК СИСТЕМЫ
+// [7] ЗАПУСК
 // ==========================================
 let server;
 
@@ -183,14 +182,10 @@ async function bootSystem() {
 
 const syncInterval = setInterval(saveData, 60000);
 
-function shutdown(signal) {
+process.once('SIGINT', () => {
     clearInterval(syncInterval);
     saveData();
     if (server) server.close(() => process.exit(0));
-    else process.exit(0);
-}
-
-process.once('SIGINT', () => shutdown('SIGINT'));
-process.once('SIGTERM', () => shutdown('SIGTERM'));
+});
 
 bootSystem();
