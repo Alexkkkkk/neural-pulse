@@ -7,13 +7,18 @@ const { Telegraf, Markup } = require('telegraf');
 console.log("1️⃣ [START] Скрипт запущен, импорт модулей завершен.");
 
 // [1] КОНФИГУРАЦИЯ
-const API_TOKEN = process.env.BOT_TOKEN;
-const DOMAIN = process.env.DOMAIN || "np.bothost.ru";
+const API_TOKEN = process.env.BOT_TOKEN; // Убедись, что добавил в панели Bothost!
+const DOMAIN = process.env.DOMAIN || "np.bothost.ru"; // Твой домен
 const PORT = process.env.PORT || 3000;
-const DATA_DIR = "/app/data"; 
+const DATA_DIR = path.join(__dirname, 'data'); // ИСПРАВЛЕНО: Правильный локальный путь
 const DATA_FILE = path.join(DATA_DIR, 'users.json');
 const WEB_APP_URL = `https://${DOMAIN}`;
-const WEBHOOK_PATH = "/webhook-tg-pulse";
+const WEBHOOK_PATH = `/webhook-${API_TOKEN}`; // Безопасный путь для вебхука
+
+if (!API_TOKEN) {
+    console.error("🛑 [FATAL ERROR] Токен бота не найден! Добавь BOT_TOKEN в переменные окружения.");
+    process.exit(1);
+}
 
 console.log(`2️⃣ [CONFIG] URL: ${WEB_APP_URL}, Port: ${PORT}`);
 
@@ -27,7 +32,7 @@ function initDatabase() {
     console.log("3️⃣ [DB] Начало инициализации базы...");
     try {
         if (!fs.existsSync(DATA_DIR)) {
-            console.log("   -> Создаю папку /app/data...");
+            console.log("   -> Создаю папку data...");
             fs.mkdirSync(DATA_DIR, { recursive: true });
         }
         
@@ -50,14 +55,24 @@ function initDatabase() {
 console.log("4️⃣ [APP] Настройка Express...");
 app.use(express.json());
 app.use(cors());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'))); // Указываем папку со статикой
 
-// [4] API ЭНДПОИНТЫ
+// [4] TELEGRAM БОТ (ДОБАВЛЕНО: Команда /start)
+bot.start((ctx) => {
+    ctx.reply(
+        '🧠 Добро пожаловать в Neural Pulse AI!\n\nЖми кнопку ниже, чтобы начать фармить токены.', 
+        Markup.inlineKeyboard([
+            Markup.button.webApp('🚀 Запустить Neural Pulse', WEB_APP_URL)
+        ])
+    );
+});
+
+// [5] API ЭНДПОИНТЫ
 app.get('/api/balance/:userId', (req, res) => {
     const uid = String(req.params.userId);
     console.log(`📥 [API GET] Запрос баланса для: ${uid}`);
     if (!usersData[uid]) {
-        usersData[uid] = { id: uid, balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, pnl: 0 };
+        usersData[uid] = { id: uid, balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, pnl: 0, last_seen: Date.now() };
     }
     res.json({ status: "ok", data: usersData[uid] });
 });
@@ -67,41 +82,37 @@ app.post('/api/save', (req, res) => {
     if (user_id && usersData[user_id]) {
         usersData[user_id].balance = Number(score);
         usersData[user_id].energy = Number(energy);
+        usersData[user_id].last_seen = Date.now();
         fs.writeFile(DATA_FILE, JSON.stringify(usersData, null, 2), () => {}); 
         return res.json({ status: "ok" });
     }
     res.status(400).send("error");
 });
 
-// [5] ОБРАБОТКА ВЕБХУКА
-app.post(WEBHOOK_PATH, (req, res) => {
-    bot.handleUpdate(req.body, res).catch(e => console.error("❌ [TG ERROR]", e));
-});
+// [6] ОБРАБОТКА ВЕБХУКА
+app.use(bot.webhookCallback(WEBHOOK_PATH));
 
-// [6] ЗАПУСК (ГДЕ ЧАЩЕ ВСЕГО ЗАВИСАЕТ)
+// [7] ЗАПУСК
 async function boot() {
     console.log("5️⃣ [BOOT] Вхожу в функцию boot()...");
     initDatabase();
     
     try {
-        console.log("6️⃣ [TELEGRAM] Попытка установить Webhook...");
-        const startHook = Date.now();
-        
-        // Установка вебхука может висеть, если сервер Telegram не отвечает
-        await bot.telegram.setWebhook(`${WEB_APP_URL}${WEBHOOK_PATH}`)
-            .then(() => console.log(`✅ [TELEGRAM] Webhook установлен за ${Date.now() - startHook}мс`))
-            .catch(e => { throw new Error(`Ошибка Webhook: ${e.message}`) });
-
-        console.log("7️⃣ [SERVER] Попытка запустить Express...");
-        app.listen(PORT, '0.0.0.0', () => {
-            console.log(`🚀 [SUCCESS] Система полностью онлайн на порту ${PORT}`);
+        console.log("6️⃣ [SERVER] Запуск Express сервера...");
+        app.listen(PORT, '0.0.0.0', async () => {
+            console.log(`🚀 [SUCCESS] Сервер запущен на порту ${PORT}`);
+            
+            console.log("7️⃣ [TELEGRAM] Попытка установить Webhook...");
+            try {
+                await bot.telegram.setWebhook(`${WEB_APP_URL}${WEBHOOK_PATH}`);
+                console.log(`✅ [TELEGRAM] Webhook успешно установлен на ${WEB_APP_URL}`);
+            } catch (whError) {
+                console.error(`❌ [TELEGRAM ERROR] Ошибка Webhook. Проверь DOMAIN! ${whError.message}`);
+            }
         });
-
     } catch (e) { 
         console.error(`🛑 [FATAL] Остановка на этапе boot: ${e.message}`);
-        console.log("💡 СОВЕТ: Проверь, правильно ли указан DOMAIN и BOT_TOKEN!");
     }
 }
 
-console.log("8️⃣ [EXECUTE] Вызов функции boot()...");
 boot();
