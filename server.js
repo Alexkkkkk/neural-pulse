@@ -25,7 +25,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 // [2] УМНАЯ ИНИЦИАЛИЗАЦИЯ БАЗЫ
 const initDB = async () => {
     try {
-        // Создаем таблицу, если её вообще нет
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
@@ -38,7 +37,7 @@ const initDB = async () => {
             );
         `);
 
-        // Дополнительная проверка на колонки (на случай, если таблица уже была)
+        // Проверка наличия колонок
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen BIGINT DEFAULT extract(epoch from now());`);
 
@@ -51,6 +50,7 @@ initDB();
 
 // [3] API ЭНДПОИНТЫ
 
+// Загрузка данных пользователя
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
     if (!uid || uid === "null" || uid === "undefined") return res.status(400).json({ error: "Invalid ID" });
@@ -67,18 +67,36 @@ app.get('/api/user/:id', async (req, res) => {
         }
         
         let user = result.rows[0];
-
-        // Расчет пассивного дохода
         const now = Math.floor(Date.now() / 1000);
         const lastSeen = parseInt(user.last_seen) || now;
-        const secondsOffline = now - lastSeen;
+        const secondsOffline = Math.max(0, now - lastSeen); // Защита от отрицательных чисел
         
         user.balance = parseFloat(user.balance) || 0;
+        user.energy = parseInt(user.energy) || 1000;
         user.pnl = parseFloat(user.pnl) || 0;
 
+        let needsDbUpdate = false;
+
+        // 1. Начисляем оффлайн доход
         if (secondsOffline > 0 && user.pnl > 0) {
             const bonus = (secondsOffline * user.pnl) / 3600;
             user.balance += bonus;
+            needsDbUpdate = true;
+        }
+
+        // 2. Восстанавливаем энергию оффлайн (1.5 в секунду)
+        if (secondsOffline > 0 && user.energy < 1000) {
+            const energyRestored = Math.floor(secondsOffline * 1.5);
+            user.energy = Math.min(1000, user.energy + energyRestored);
+            needsDbUpdate = true;
+        }
+
+        // 3. Мгновенно сохраняем оффлайн прогресс, чтобы он не потерялся!
+        if (needsDbUpdate) {
+            await pool.query(
+                'UPDATE users SET balance = $1, energy = $2, last_seen = $3 WHERE user_id = $4',
+                [user.balance, user.energy, now, uid]
+            );
         }
         
         res.json(user);
@@ -88,6 +106,7 @@ app.get('/api/user/:id', async (req, res) => {
     }
 });
 
+// Сохранение данных
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, click_lvl, pnl, username } = req.body;
     const uid = String(userId);
@@ -98,8 +117,13 @@ app.post('/api/save', async (req, res) => {
                 INSERT INTO users (user_id, balance, energy, click_lvl, pnl, username, last_seen)
                 VALUES ($1, $2, $3, $4, $5, $6, extract(epoch from now()))
                 ON CONFLICT (user_id) DO UPDATE SET
-                balance = $2, energy = $3, click_lvl = $4, pnl = $5, username = $6, last_seen = extract(epoch from now())
-            `, [uid, balance || 0, energy || 0, click_lvl || 1, pnl || 0, username || 'Игрок']);
+                balance = EXCLUDED.balance, 
+                energy = EXCLUDED.energy, 
+                click_lvl = EXCLUDED.click_lvl, 
+                pnl = EXCLUDED.pnl, 
+                username = EXCLUDED.username, 
+                last_seen = extract(epoch from now())
+            `, [uid, balance, energy, click_lvl, pnl, username]);
             
             res.json({ status: 'ok' });
         } catch (e) {
@@ -115,7 +139,6 @@ app.post('/api/save', async (req, res) => {
 
 bot.command('top', async (ctx) => {
     try {
-        // Берем топ-10 по балансу
         const result = await pool.query('SELECT username, balance, user_id FROM users ORDER BY balance DESC LIMIT 10');
         let message = "<b>🏆 ТОП-10 МАЙНЕРОВ NEURAL PULSE</b>\n\n";
         
@@ -138,10 +161,9 @@ bot.command('top', async (ctx) => {
 
 bot.start(async (ctx) => {
     const uid = String(ctx.from.id);
-    const name = ctx.from.first_name || "Игрок";
+    const name = ctx.from.username || ctx.from.first_name || "Игрок";
 
     try {
-        // Сохраняем имя сразу при старте
         await pool.query(`
             INSERT INTO users (user_id, username) 
             VALUES ($1, $2) 
