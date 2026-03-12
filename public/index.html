@@ -33,10 +33,9 @@
         
         /* КНОПКИ БОКОВЫЕ */
         .side-nav { position: absolute; right: 10px; display: flex; flex-direction: column; gap: 12px; }
-        .side-btn { position: relative; background: rgba(20,20,20,0.8); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 10px; font-weight: 800; padding: 12px; border-radius: 14px; width: 65px; text-align: center; overflow: hidden; }
+        .side-btn { position: relative; background: rgba(20,20,20,0.8); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 10px 5px; border-radius: 14px; width: 65px; min-height: 40px; text-align: center; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         
-        /* Скрываем стандартную кнопку TON Connect, оставляя ее кликабельной */
-        #ton-connect-btn { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+        #ton-connect-btn { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 10; }
 
         .energy-section { width: 85%; margin-top: 25px; }
         .energy-bar-wrap { width: 100%; height: 12px; background: rgba(255,255,255,0.05); border-radius: 20px; overflow: hidden; }
@@ -78,12 +77,13 @@
             </div>
             <div class="side-nav">
                 <div class="side-btn" style="border-color: var(--ton-blue); color: var(--ton-blue);">
-                    <span id="wallet-text">WALLET</span>
+                    <div style="font-size: 10px; font-weight: 800; pointer-events: none;">WALLET</div>
+                    <div id="addr-small" style="font-size: 7px; margin-top: 2px; opacity: 0.8; pointer-events: none;"></div>
                     <div id="ton-connect-btn"></div>
                 </div>
-                <div class="side-btn" onclick="showInvite()">INVITE</div>
-                <div class="side-btn" onclick="tg.showAlert('Daily Tasks coming soon')">TASKS</div>
-                <div class="side-btn" style="color:#ffe600; border-color: rgba(255,230,0,0.3);" onclick="tg.showAlert('Bonus available tomorrow')">BONUS</div>
+                <div class="side-btn" onclick="showInvite()" style="font-size: 10px; font-weight: 800;">INVITE</div>
+                <div class="side-btn" onclick="tg.showAlert('Daily Tasks coming soon')" style="font-size: 10px; font-weight: 800;">TASKS</div>
+                <div class="side-btn" style="color:#ffe600; border-color: rgba(255,230,0,0.3); font-size: 10px; font-weight: 800;" onclick="tg.showAlert('Bonus available tomorrow')">BONUS</div>
             </div>
         </div>
 
@@ -140,9 +140,12 @@
             document.getElementById('pnl-display').innerText = `PASSIVE: +${Math.floor(state.pnl || 0)}/h`;
             document.getElementById('rank-id').innerText = `ID: ${String(state.uid).slice(-6)}`;
             
+            // Если кошелек есть — выводим адрес МАЛЕНЬКИМ шрифтом ПОД надписью WALLET
+            const addrDiv = document.getElementById('addr-small');
             if(state.wallet) {
-                document.getElementById('wallet-text').innerText = state.wallet.slice(0,3) + '..' + state.wallet.slice(-3);
-                document.getElementById('wallet-text').style.fontSize = '8px';
+                addrDiv.innerText = state.wallet.slice(0,4) + '..' + state.wallet.slice(-4);
+            } else {
+                addrDiv.innerText = '';
             }
         }
 
@@ -151,6 +154,9 @@
                 state.wallet = wallet.account.address;
                 state.isDirty = true;
                 if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+                updateUI();
+            } else {
+                state.wallet = null;
                 updateUI();
             }
         });
