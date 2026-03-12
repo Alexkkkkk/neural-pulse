@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// Временное хранилище в оперативной памяти (сбросится при перезагрузке)
+// Временное хранилище в оперативной памяти
 let tempUsers = {}; 
 
 app.use(cors());
@@ -40,21 +40,23 @@ app.get('/api/user/:id', (req, res) => {
 
 // Сохранение прогресса (при тапах)
 app.post('/api/save', (req, res) => {
-    // Принимаем данные. Добавлена проверка разных стилей написания ID
-    const { userId, user_id, balance, energy } = req.body;
+    const { userId, user_id, balance, energy, click_lvl, pnl } = req.body;
     const uid = String(userId || user_id);
 
     if (uid && uid !== "undefined" && uid !== "null") {
+        // Если пользователя нет, создаем структуру
         if (!tempUsers[uid]) {
-            tempUsers[uid] = { userId: uid, click_lvl: 1, pnl: 0 };
+            tempUsers[uid] = { userId: uid, balance: 0, energy: 1000, click_lvl: 1, pnl: 0 };
         }
 
-        // Обновляем баланс и энергию, принудительно преобразуя в числа
-        tempUsers[uid].balance = Number(balance) || tempUsers[uid].balance;
-        tempUsers[uid].energy = Number(energy) || 0;
+        // Обновляем данные (используем проверку на undefined, чтобы не потерять 0)
+        if (balance !== undefined) tempUsers[uid].balance = Number(balance);
+        if (energy !== undefined) tempUsers[uid].energy = Number(energy);
+        if (click_lvl !== undefined) tempUsers[uid].click_lvl = Number(click_lvl);
+        if (pnl !== undefined) tempUsers[uid].pnl = Number(pnl);
         
-        console.log(`☁️  [POST] Сохранено ${uid}: 💰 ${tempUsers[uid].balance} | ⚡ ${energy}`);
-        return res.json({ status: 'ok' });
+        console.log(`☁️  [POST] Сохранено ${uid}: 💰 ${tempUsers[uid].balance} | ⚡ ${tempUsers[uid].energy}`);
+        return res.json({ status: 'ok', data: tempUsers[uid] });
     }
     
     console.error("❌ [POST] Ошибка: ID пользователя не получен", req.body);
@@ -73,7 +75,8 @@ bot.start((ctx) => {
     ctx.replyWithHTML(
         `<b>🚀 NEURAL PULSE AI: ОНЛАЙН</b>\n\n` +
         `Привет, ${name}!\n` +
-        `Твой баланс: 💰 <b>${Math.floor(tempUsers[uid].balance)} NP</b>`,
+        `Твой баланс: 💰 <b>${Math.floor(tempUsers[uid].balance).toLocaleString()} NP</b>\n` +
+        `Твой уровень клика: ⚡ <b>${tempUsers[uid].click_lvl}</b>`,
         Markup.inlineKeyboard([
             [Markup.button.webApp('⚡ ИГРАТЬ', `https://${DOMAIN}`)]
         ])
@@ -85,7 +88,7 @@ app.listen(PORT, () => {
     console.log(`\n————————————————————————————————————————————————`);
     console.log(`🖥️  СЕРВЕР ЗАПУЩЕН: https://${DOMAIN}`);
     console.log(`📡  API ПОРТ: ${PORT}`);
-    console.log(`⚠️  РЕЖИМ: Хранение в RAM (без БД)`);
+    console.log(`⚠️  РЕЖИМ: Хранение в RAM (Данные сбросятся при рестарте)`);
     console.log(`————————————————————————————————————————————————\n`);
     
     bot.launch().catch(err => console.error("❌ Ошибка бота:", err));
