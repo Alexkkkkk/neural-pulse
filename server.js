@@ -15,14 +15,16 @@ const app = express();
 
 const pool = new Pool({
     connectionString: PG_URI,
-    ssl: false // Обязательно false для внутренней сети Bothost
+    ssl: false // Внутренняя сеть Bothost не требует SSL
 });
 
 app.use(cors());
 app.use(express.json());
+
+// Раздача статических файлов (HTML, JS, CSS) из папки public
 app.use(express.static(path.join(__dirname, 'public')));
 
-// [2] УМНАЯ ИНИЦИАЛИЗАЦИЯ БАЗЫ
+// [2] ИНИЦИАЛИЗАЦИЯ БАЗЫ
 const initDB = async () => {
     try {
         await pool.query(`
@@ -36,11 +38,6 @@ const initDB = async () => {
                 last_seen BIGINT DEFAULT extract(epoch from now())
             );
         `);
-
-        // Проверка наличия колонок
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen BIGINT DEFAULT extract(epoch from now());`);
-
         console.log("📦 [DB] PostgreSQL подключена. Структура проверена.");
     } catch (err) {
         console.error("❌ [DB] Ошибка инициализации:", err.message);
@@ -69,29 +66,29 @@ app.get('/api/user/:id', async (req, res) => {
         let user = result.rows[0];
         const now = Math.floor(Date.now() / 1000);
         const lastSeen = parseInt(user.last_seen) || now;
-        const secondsOffline = Math.max(0, now - lastSeen); // Защита от отрицательных чисел
+        const secondsOffline = Math.max(0, now - lastSeen);
         
-        user.balance = parseFloat(user.balance) || 0;
+        // Превращаем строки из PG в числа
+        user.balance = Number(user.balance) || 0;
         user.energy = parseInt(user.energy) || 1000;
-        user.pnl = parseFloat(user.pnl) || 0;
+        user.pnl = Number(user.pnl) || 0;
 
         let needsDbUpdate = false;
 
-        // 1. Начисляем оффлайн доход
+        // Начисляем оффлайн доход
         if (secondsOffline > 0 && user.pnl > 0) {
             const bonus = (secondsOffline * user.pnl) / 3600;
             user.balance += bonus;
             needsDbUpdate = true;
         }
 
-        // 2. Восстанавливаем энергию оффлайн (1.5 в секунду)
+        // Восстанавливаем энергию (1.5 в сек)
         if (secondsOffline > 0 && user.energy < 1000) {
             const energyRestored = Math.floor(secondsOffline * 1.5);
             user.energy = Math.min(1000, user.energy + energyRestored);
             needsDbUpdate = true;
         }
 
-        // 3. Мгновенно сохраняем оффлайн прогресс, чтобы он не потерялся!
         if (needsDbUpdate) {
             await pool.query(
                 'UPDATE users SET balance = $1, energy = $2, last_seen = $3 WHERE user_id = $4',
@@ -137,28 +134,6 @@ app.post('/api/save', async (req, res) => {
 
 // [4] ЛОГИКА ТЕЛЕГРАМ-БОТА
 
-bot.command('top', async (ctx) => {
-    try {
-        const result = await pool.query('SELECT username, balance, user_id FROM users ORDER BY balance DESC LIMIT 10');
-        let message = "<b>🏆 ТОП-10 МАЙНЕРОВ NEURAL PULSE</b>\n\n";
-        
-        if (result.rows.length === 0) {
-            message += "<i>Пока никого нет... Стань первым!</i>";
-        } else {
-            result.rows.forEach((user, index) => {
-                const name = user.username || `ID: ${String(user.user_id).slice(0,4)}...`;
-                const bal = Math.floor(parseFloat(user.balance)).toLocaleString();
-                message += `${index + 1}. <b>${name}</b> — ${bal} NP\n`;
-            });
-        }
-        
-        ctx.replyWithHTML(message);
-    } catch (e) {
-        console.error("❌ [TOP] Ошибка:", e.message);
-        ctx.reply("❌ Не удалось загрузить таблицу лидеров.");
-    }
-});
-
 bot.start(async (ctx) => {
     const uid = String(ctx.from.id);
     const name = ctx.from.username || ctx.from.first_name || "Игрок";
@@ -171,7 +146,10 @@ bot.start(async (ctx) => {
         `, [uid, name]);
         
         const result = await pool.query('SELECT balance FROM users WHERE user_id = $1', [uid]);
-        const bal = parseFloat(result.rows[0]?.balance) || 0;
+        const bal = Number(result.rows[0]?.balance) || 0;
+
+        // Создаем ссылку с "анти-кэшем"
+        const gameUrl = `https://${DOMAIN}?v=${Date.now()}`;
 
         ctx.replyWithHTML(
             `<b>🚀 NEURAL PULSE AI</b>\n\n` +
@@ -179,7 +157,7 @@ bot.start(async (ctx) => {
             `Твой баланс: 💰 <b>${Math.floor(bal).toLocaleString()} NP</b>\n\n` +
             `Используй /top чтобы увидеть лидеров!`,
             Markup.inlineKeyboard([
-                [Markup.button.webApp('⚡ ИГРАТЬ', `https://${DOMAIN}`)]
+                [Markup.button.webApp('⚡ ИГРАТЬ', gameUrl)]
             ])
         );
     } catch (e) {
@@ -188,7 +166,28 @@ bot.start(async (ctx) => {
     }
 });
 
-// [5] ЗАПУСК СЕРВЕРА
+bot.command('top', async (ctx) => {
+    try {
+        const result = await pool.query('SELECT username, balance, user_id FROM users ORDER BY balance DESC LIMIT 10');
+        let message = "<b>🏆 ТОП-10 МАЙНЕРОВ NEURAL PULSE</b>\n\n";
+        
+        if (result.rows.length === 0) {
+            message += "<i>Пока никого нет... Стань первым!</i>";
+        } else {
+            result.rows.forEach((user, index) => {
+                const name = user.username || `ID: ${String(user.user_id).slice(0,4)}...`;
+                const bal = Math.floor(Number(user.balance)).toLocaleString();
+                message += `${index + 1}. <b>${name}</b> — ${bal} NP\n`;
+            });
+        }
+        ctx.replyWithHTML(message);
+    } catch (e) {
+        console.error("❌ [TOP] Ошибка:", e.message);
+        ctx.reply("❌ Не удалось загрузить таблицу лидеров.");
+    }
+});
+
+// [5] ЗАПУСК
 app.listen(PORT, () => {
     console.log(`\n————————————————————————————————————————————————`);
     console.log(`🖥️  СЕРВЕР: https://${DOMAIN}`);
