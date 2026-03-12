@@ -14,22 +14,14 @@ const app = express();
 
 const pool = new Pool({
     connectionString: PG_URI,
-    ssl: false // Отключено для внутренней сети Bothost
+    ssl: false
 });
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Манифест для кошелька
-app.get('/tonconnect-manifest.json', (req, res) => {
-    res.json({
-        "url": `https://${DOMAIN}`,
-        "name": "Neural Pulse AI",
-        "iconUrl": `https://${DOMAIN}/logo.png`
-    });
-});
-
+// Инициализация базы данных
 const initDB = async () => {
     try {
         await pool.query(`
@@ -49,20 +41,45 @@ const initDB = async () => {
 };
 initDB();
 
+// API получения данных пользователя (с расчетом оффлайна)
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
     try {
         const result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
+        
         if (result.rows.length === 0) {
-            const newUser = await pool.query('INSERT INTO users (user_id, last_seen) VALUES ($1, extract(epoch from now())) RETURNING *', [uid]);
+            const newUser = await pool.query(
+                'INSERT INTO users (user_id, last_seen) VALUES ($1, extract(epoch from now())) RETURNING *', 
+                [uid]
+            );
             return res.json(newUser.rows[0]);
         }
+
         let user = result.rows[0];
-        // Логика начисления оффлайн дохода... (как в твоем коде)
+        const now = Math.floor(Date.now() / 1000);
+        const diff = now - parseInt(user.last_seen); // Секунды отсутствия
+
+        // 1. Расчет регенерации энергии (например, 1.5 ед. в секунду)
+        const energyRegen = diff * 1.5;
+        const newEnergy = Math.min(1000, parseFloat(user.energy) + energyRegen);
+
+        // 2. Расчет пассивного дохода (pnl — это доход в ЧАС)
+        const passiveIncome = (parseFloat(user.pnl) / 3600) * diff;
+        const newBalance = parseFloat(user.balance) + passiveIncome;
+
+        // Обновляем объект перед отправкой (но в базу запишем при следующем save)
+        user.energy = Math.floor(newEnergy);
+        user.balance = newBalance;
+        user.last_seen = now;
+
         res.json(user);
-    } catch (e) { res.status(500).json({ error: "DB Error" }); }
+    } catch (e) { 
+        console.error(e);
+        res.status(500).json({ error: "DB Error" }); 
+    }
 });
 
+// Сохранение данных
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, click_lvl, pnl, username, wallet_address } = req.body;
     try {
@@ -73,15 +90,30 @@ app.post('/api/save', async (req, res) => {
             balance=$2, energy=$3, click_lvl=$4, pnl=$5, username=$6, wallet_address=$7, last_seen=extract(epoch from now())
         `, [String(userId), balance, Math.floor(energy), click_lvl, pnl, username, wallet_address]);
         res.json({ status: 'ok' });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+        res.status(500).json({ error: e.message }); 
+    }
+});
+
+// Манифест
+app.get('/tonconnect-manifest.json', (req, res) => {
+    res.json({
+        "url": `https://${DOMAIN}`,
+        "name": "Neural Pulse AI",
+        "iconUrl": `https://${DOMAIN}/logo.png`
+    });
 });
 
 bot.start((ctx) => {
     const gameUrl = `https://${DOMAIN}?v=${Date.now()}`;
-    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI</b>`, Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', gameUrl)]]));
+    ctx.replyWithHTML(
+        `<b>🚀 ДОБРО ПОЖАЛОВАТЬ В NEURAL PULSE AI</b>\n\n` +
+        `Майни токены NP, улучшай нейросеть и подключай свой кошелек TON.`,
+        Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', gameUrl)]])
+    );
 });
 
 app.listen(PORT, () => {
     bot.launch();
-    console.log(`🚀 Server on ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });
