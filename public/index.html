@@ -123,6 +123,10 @@
             uid: tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('u')
         };
 
+        // Имя юзера для сохранения
+        const tgUser = tg.initDataUnsafe?.user;
+        const currentUsername = tgUser ? (tgUser.username || tgUser.first_name) : "Игрок";
+
         // 2. ЗАГРУЗКА ДАННЫХ
         async function loadData() {
             if(!state.uid) { 
@@ -148,7 +152,7 @@
             updateUI();
         }
 
-        // 3. СОХРАНЕНИЕ ДАННЫХ
+        // 3. СОХРАНЕНИЕ ДАННЫХ (ИСПРАВЛЕНА СИНХРОНИЗАЦИЯ)
         async function syncData() {
             if(!state.uid || !state.loaded || !state.isDirty) return;
             
@@ -157,9 +161,12 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        userId: String(state.uid), 
+                        userId: String(state.uid),
+                        username: currentUsername, // Передаем имя, чтобы не затиралось!
                         balance: state.balance, 
-                        energy: state.energy 
+                        energy: state.energy,
+                        click_lvl: state.click_lvl, // Передаем уровень!
+                        pnl: state.pnl             // Передаем пассивный доход!
                     })
                 });
                 state.isDirty = false;
@@ -222,6 +229,7 @@
         setInterval(() => {
             if (state.loaded && state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 1.5);
+                state.isDirty = true; // Триггерим сохранение при регенерации
                 updateUI();
             }
         }, 1000);
