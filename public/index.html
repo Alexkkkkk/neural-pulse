@@ -1,117 +1,300 @@
-require('dotenv').config();
-const express = require('express');
-const { Telegraf, Markup } = require('telegraf');
-const cors = require('cors');
-const path = require('path');
-const { Pool } = require('pg');
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Neural Pulse AI</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+    
+    <style>
+        :root {
+            --cyan: #00f2ff;
+            --bg: #000;
+            --panel: rgba(255, 255, 255, 0.07);
+        }
 
-// ДАННЫЕ ИЗ ТВОИХ СКРИНШОТОВ
-const BOT_TOKEN = "8257287930:AAFUmUinCAALPf6Bivpo04__Zp_V4Y49MFs";
-const DOMAIN = "neural-pulse.bothost.ru";
-const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg);
+            color: white;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
 
-const bot = new Telegraf(BOT_TOKEN);
-const app = express();
+        /* Загрузочный экран */
+        #loader {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
 
-const pool = new Pool({
-    connectionString: PG_URI,
-    ssl: false 
-});
+        .loader-pct {
+            font-size: 64px;
+            font-weight: 900;
+            color: var(--cyan);
+            text-shadow: 0 0 20px rgba(0, 242, 255, 0.5);
+        }
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+        /* Основной контейнер игры */
+        #game-ui {
+            width: 100%;
+            max-width: 500px;
+            display: none; /* Скрыт до загрузки */
+            flex-direction: column;
+            align-items: center;
+            height: 100%;
+            padding-top: 30px;
+        }
 
-// ФУНКЦИЯ СБРОСА БАЗЫ ДАННЫХ
-const resetDatabase = async () => {
-    try {
-        console.log("⚠️ [DB] Начинаю процесс сброса...");
-        
-        // УДАЛЯЕМ СТАРУЮ ТАБЛИЦУ (Внимание: все данные будут стерты!)
-        await pool.query(`DROP TABLE IF EXISTS users CASCADE;`);
-        
-        // СОЗДАЕМ ТАБЛИЦУ ЗАНОВО С ПРАВИЛЬНОЙ СТРУКТУРОЙ
-        await pool.query(`
-            CREATE TABLE users (
-                user_id TEXT PRIMARY KEY,
-                username TEXT,
-                balance NUMERIC DEFAULT 0,
-                energy INTEGER DEFAULT 1000,
-                click_lvl INTEGER DEFAULT 1,
-                pnl NUMERIC DEFAULT 0,
-                wallet TEXT,
-                last_seen BIGINT DEFAULT extract(epoch from now())
-            );
-        `);
-        console.log("✅ [DB] База данных успешно сброшена и создана заново.");
-    } catch (err) {
-        console.error("❌ [DB] Ошибка при сбросе:", err.message);
-    }
-};
+        .header-label {
+            font-size: 12px;
+            letter-spacing: 3px;
+            color: var(--cyan);
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
 
-// Вызываем сброс (Удали эту строку после первого успешного запуска!)
-resetDatabase();
+        .balance-value {
+            font-size: 56px;
+            font-weight: 900;
+            margin-bottom: 20px;
+        }
 
-app.get('/tonconnect-manifest.json', (req, res) => {
-    res.json({
-        "url": `https://${DOMAIN}`,
-        "name": "Neural Pulse AI",
-        "iconUrl": `https://${DOMAIN}/logo.png`
+        /* Кнопка-кликер */
+        .click-area {
+            position: relative;
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .main-coin {
+            width: 280px;
+            height: 280px;
+            border-radius: 50%;
+            border: 6px solid #111;
+            background: radial-gradient(circle, #0a0a0a 0%, #000 100%);
+            box-shadow: 0 0 40px rgba(0, 242, 255, 0.1);
+            transition: transform 0.05s ease;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .main-coin:active {
+            transform: scale(0.96);
+        }
+
+        /* Статистика снизу */
+        .bottom-stats {
+            width: 90%;
+            background: var(--panel);
+            padding: 20px;
+            border-radius: 24px;
+            margin-top: auto;
+            margin-bottom: 40px;
+            backdrop-filter: blur(10px);
+        }
+
+        .energy-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .progress-bg {
+            width: 100%;
+            height: 14px;
+            background: #111;
+            border-radius: 7px;
+            overflow: hidden;
+        }
+
+        #progress-fill {
+            height: 100%;
+            width: 100%;
+            background: linear-gradient(90deg, #0088ff, var(--cyan));
+            transition: width 0.3s ease;
+        }
+
+        /* Анимация всплывающих цифр */
+        .tap-anim {
+            position: absolute;
+            color: white;
+            font-size: 38px;
+            font-weight: 900;
+            pointer-events: none;
+            user-select: none;
+            animation: moveUp 0.7s ease-out forwards;
+        }
+
+        @keyframes moveUp {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-120px); opacity: 0; }
+        }
+
+        #ton-btn {
+            background: #0088cc;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 16px;
+            font-weight: bold;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loader">
+        <div class="loader-pct" id="load-pct">0%</div>
+        <div style="font-size: 10px; letter-spacing: 2px; color: #444; margin-top: 15px;">INITIALIZING NEURAL NETWORK</div>
+    </div>
+
+    <div id="game-ui">
+        <div class="header-label">NEURAL PULSE AI</div>
+        <div class="balance-value" id="balance">0</div>
+
+        <div class="click-area">
+            <img src="logo.png" id="clicker" class="main-coin" onerror="this.src='https://via.placeholder.com/300/000000/00f2ff?text=AI'">
+        </div>
+
+        <button id="ton-btn">CONNECT WALLET</button>
+
+        <div class="bottom-stats">
+            <div class="energy-row">
+                <span>⚡ ENERGY</span>
+                <span id="energy-text">1000 / 1000</span>
+            </div>
+            <div class="progress-bg">
+                <div id="progress-fill"></div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+
+    // Настройка TON Connect
+    const tonConnectUI = new TONConnectUI.TonConnectUI({
+        manifestUrl: window.location.origin + '/tonconnect-manifest.json',
+        buttonRootId: 'ton-btn'
     });
-});
 
-app.get('/api/user/:id', async (req, res) => {
-    const uid = String(req.params.id);
-    if (!uid || uid === "null") return res.status(400).json({ error: "Invalid ID" });
-    try {
-        const result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
-        if (result.rows.length === 0) {
-            const newUser = await pool.query(
-                'INSERT INTO users (user_id) VALUES ($1) RETURNING *', [uid]
-            );
-            return res.json(newUser.rows[0]);
-        }
-        let user = result.rows[0];
-        const now = Math.floor(Date.now() / 1000);
-        const lastSeen = parseInt(user.last_seen) || now;
-        const secondsOffline = Math.max(0, now - lastSeen);
+    // Состояние игры
+    let state = {
+        userId: new URLSearchParams(window.location.search).get('u') || tg.initDataUnsafe?.user?.id || "guest",
+        balance: 0,
+        energy: 1000,
+        clickLvl: 1,
+        isReady: false
+    };
+
+    // Плавная анимация загрузки
+    let loadProgress = 0;
+    const loadInterval = setInterval(() => {
+        if (loadProgress < 90) loadProgress += Math.random() * 5;
+        if (state.isReady) loadProgress = 100;
         
-        if (secondsOffline > 0 && user.pnl > 0) {
-            user.balance = Number(user.balance) + (secondsOffline * (Number(user.pnl) / 3600));
-            user.energy = Math.min(1000, (user.energy || 1000) + Math.floor(secondsOffline * 1.5));
+        document.getElementById('load-pct').innerText = Math.floor(loadProgress) + '%';
+        
+        if (loadProgress >= 100) {
+            clearInterval(loadInterval);
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('game-ui').style.display = 'flex';
         }
-        res.json(user);
-    } catch (e) {
-        res.status(500).json({ error: "Server Error" });
+    }, 80);
+
+    // Загрузка данных с сервера
+    async function fetchUserData() {
+        try {
+            const response = await fetch(`/api/user/${state.userId}`);
+            const data = await response.json();
+            
+            state.balance = Number(data.balance) || 0;
+            state.energy = Number(data.energy) || 1000;
+            state.clickLvl = Number(data.click_lvl) || 1;
+        } catch (err) {
+            console.error("Ошибка загрузки данных:", err);
+        } finally {
+            state.isReady = true;
+            updateDisplay();
+        }
     }
-});
 
-app.post('/api/save', async (req, res) => {
-    const { userId, balance, energy, click_lvl, pnl, username, wallet } = req.body;
-    try {
-        await pool.query(`
-            INSERT INTO users (user_id, balance, energy, click_lvl, pnl, username, wallet, last_seen)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, extract(epoch from now()))
-            ON CONFLICT (user_id) DO UPDATE SET
-            balance = EXCLUDED.balance, energy = EXCLUDED.energy, click_lvl = EXCLUDED.click_lvl, 
-            pnl = EXCLUDED.pnl, username = EXCLUDED.username, wallet = EXCLUDED.wallet,
-            last_seen = extract(epoch from now())
-        `, [String(userId), balance, energy, click_lvl, pnl, username, wallet]);
-        res.json({ ok: true });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
+    // Обновление цифр на экране
+    function updateDisplay() {
+        document.getElementById('balance').innerText = Math.floor(state.balance).toLocaleString();
+        document.getElementById('energy-text').innerText = `${Math.floor(state.energy)} / 1000`;
+        document.getElementById('progress-fill').style.width = (state.energy / 10) + '%';
     }
-});
 
-bot.start((ctx) => {
-    const gameUrl = `https://${DOMAIN}?u=${ctx.from.id}`;
-    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI: ПЕРЕЗАГРУЗКА</b>\n\nБаза данных была очищена. Начни свой путь заново!`, 
-        Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', gameUrl)]])
-    );
-});
+    // Обработка клика
+    const clicker = document.getElementById('clicker');
+    clicker.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (state.energy < state.clickLvl) return;
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`🚀 Сервер на https://${DOMAIN}`);
-    bot.launch();
-});
+        // Обновляем состояние
+        state.balance += state.clickLvl;
+        state.energy -= state.clickLvl;
+
+        // Анимация цифр
+        const touch = e.touches[0];
+        const anim = document.createElement('div');
+        anim.className = 'tap-anim';
+        anim.style.left = touch.clientX + 'px';
+        anim.style.top = touch.clientY + 'px';
+        anim.innerText = `+${state.clickLvl}`;
+        document.body.appendChild(anim);
+        
+        setTimeout(() => anim.remove(), 700);
+
+        updateDisplay();
+        tg.HapticFeedback.impactOccurred('medium');
+    });
+
+    // Сохранение данных на сервер каждые 5 секунд
+    setInterval(() => {
+        if (state.isReady && state.userId !== "guest") {
+            fetch('/api/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: state.userId,
+                    balance: state.balance,
+                    energy: state.energy,
+                    click_lvl: state.clickLvl
+                })
+            });
+        }
+    }, 5000);
+
+    // Регенерация энергии (1.5 ед. в секунду)
+    setInterval(() => {
+        if (state.energy < 1000) {
+            state.energy = Math.min(1000, state.energy + 1.5);
+            updateDisplay();
+        }
+    }, 1000);
+
+    // Запуск приложения
+    window.onload = fetchUserData;
+</script>
+</body>
+</html>
