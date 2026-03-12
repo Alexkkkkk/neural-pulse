@@ -5,11 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/sdk@latest/dist/tonconnect-sdk.min.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
     <style>
-        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #050505; --glass: rgba(255, 255, 255, 0.07); --ton-blue: #0088cc; }
-        body { margin: 0; padding: 0; background-color: var(--bg-dark); background-image: radial-gradient(circle at 50% 50%, #150a28 0%, #050505 100%); color: white; font-family: 'Segoe UI', Roboto, sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
-        
+        :root { 
+            --neon-cyan: #00f2ff; 
+            --neon-purple: #bc13fe; 
+            --bg-dark: #050505; 
+            --glass: rgba(255, 255, 255, 0.07); 
+            --ton-blue: #0088cc; 
+        }
+
+        body { 
+            margin: 0; padding: 0; background-color: var(--bg-dark); 
+            background-image: radial-gradient(circle at 50% 50%, #150a28 0%, #050505 100%); 
+            color: white; font-family: 'Segoe UI', Roboto, sans-serif; 
+            overflow: hidden; display: flex; flex-direction: column; 
+            align-items: center; height: 100vh; user-select: none; 
+            -webkit-tap-highlight-color: transparent; touch-action: none; 
+        }
+
+        /* Loader */
         #loader-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #050505; display: flex; align-items: center; justify-content: center; z-index: 10000; transition: opacity 0.5s ease; }
         .loader-container { text-align: center; }
         .loader-logo-wrap { position: relative; width: 120px; height: 120px; margin: 0 auto 30px; }
@@ -19,27 +36,43 @@
         .loader-bar-fill { width: 0%; height: 100%; background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); transition: width 0.2s; }
         @keyframes rotate-ring { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
+        /* Main UI */
         .content-layer { position: relative; z-index: 2; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; padding-top: env(safe-area-inset-top); transition: all 0.5s ease; transform: scale(0.95); opacity: 0; visibility: hidden; }
         .content-layer.active { transform: scale(1); opacity: 1; visibility: visible; }
+        
         .header-card { width: 85%; margin-top: 15px; display: flex; align-items: center; gap: 12px; background: var(--glass); padding: 12px; border-radius: 20px; backdrop-filter: blur(15px); border: 1px solid rgba(0, 242, 255, 0.15); }
         .lvl-icon { width: 44px; height: 44px; background: rgba(0, 242, 255, 0.1); border: 1px solid var(--neon-cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--neon-cyan); font-size: 18px; }
+        
         #balance { font-size: 48px; font-weight: 900; color: #fff; text-shadow: 0 0 30px rgba(0, 242, 255, 0.3); margin-top: 20px; }
 
         .main-wrapper { position: relative; width: 100%; display: flex; justify-content: center; align-items: center; margin-top: 30px; }
         .click-area { width: 280px; height: 280px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-        .main-logo { width: 230px; height: 230px; border-radius: 50%; border: 4px solid rgba(255,255,255,0.1); transition: transform 0.05s ease; }
+        .main-logo { width: 230px; height: 230px; border-radius: 50%; border: 4px solid rgba(255,255,255,0.1); transition: transform 0.05s ease; box-shadow: 0 0 40px rgba(188, 19, 254, 0.2); }
         
+        /* Side Navigation & Wallet Button */
         .side-nav { position: absolute; right: 10px; display: flex; flex-direction: column; gap: 12px; }
-        .side-btn { background: rgba(20,20,20,0.8); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 10px; font-weight: 800; padding: 12px; border-radius: 14px; width: 65px; text-align: center; }
-        .wallet-btn { border-color: var(--ton-blue); color: var(--ton-blue); }
+        .side-btn { 
+            background: rgba(20,20,20,0.8); border: 1px solid rgba(255,255,255,0.1); 
+            color: #fff; font-size: 10px; font-weight: 800; padding: 12px; 
+            border-radius: 14px; width: 65px; text-align: center; 
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+        }
+        
+        .wallet-active { 
+            background: linear-gradient(135deg, #0088cc 0%, #00aaff 100%); 
+            border: none; box-shadow: 0 0 15px rgba(0, 136, 204, 0.4); 
+        }
+        .wallet-active i { font-size: 16px; margin-bottom: 2px; }
 
+        /* Energy & Bottom Nav */
         .energy-section { width: 85%; margin-top: auto; margin-bottom: 20px; }
         .energy-bar-wrap { width: 100%; height: 12px; background: rgba(255,255,255,0.05); border-radius: 20px; overflow: hidden; }
         #energy-fill { height: 100%; background: linear-gradient(90deg, #00ff66, var(--neon-cyan)); width: 100%; transition: width 0.3s; }
         
         .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 35px; }
         .nav-btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 14px; border-radius: 16px; text-align: center; font-size: 11px; color: #fff; }
-        .tap-text { position: absolute; color: #fff; font-size: 32px; font-weight: 900; pointer-events: none; animation: floatUp 0.6s ease-out forwards; }
+        
+        .tap-text { position: absolute; color: #fff; font-size: 32px; font-weight: 900; pointer-events: none; animation: floatUp 0.6s ease-out forwards; z-index: 1000; }
         @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px); } }
     </style>
 </head>
@@ -70,10 +103,20 @@
             <div class="click-area" id="tap-zone">
                 <img src="logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/230/bc13fe/fff?text=AI'">
             </div>
+            
             <div class="side-nav">
-                <div class="side-btn wallet-btn" id="ton-connect-btn">WALLET</div>
-                <div class="side-btn" onclick="showInvite()">INVITE</div>
-                <div class="side-btn" onclick="tg.showAlert('Coming soon')">TASKS</div>
+                <div class="side-btn wallet-active" id="ton-connect-btn">
+                    <i class="fa-solid fa-wallet"></i>
+                    <span id="wallet-text">WALLET</span>
+                </div>
+                <div class="side-btn" onclick="showInvite()">
+                    <i class="fa-solid fa-user-plus"></i>
+                    <span>INVITE</span>
+                </div>
+                <div class="side-btn" onclick="tg.showAlert('Coming soon')">
+                    <i class="fa-solid fa-list-check"></i>
+                    <span>TASKS</span>
+                </div>
             </div>
         </div>
 
@@ -88,7 +131,7 @@
         <div class="bottom-nav">
             <div class="nav-btn" onclick="tg.showAlert('Boosts updated daily')">🚀 BOOST</div>
             <div class="nav-btn" onclick="tg.showAlert('Mining at Lvl 5')">⛏️ MINE</div>
-            <div class="nav-btn" onclick="showLeaderboard()">📊 STATS</div>
+            <div class="nav-btn" onclick="tg.showAlert('Stats loading...')">📊 STATS</div>
         </div>
     </div>
 
@@ -97,9 +140,10 @@
         tg.ready();
         tg.expand();
 
-        // TON Connect Настройка
-        const tonConnect = new TonConnectSDK.TonConnect({
-            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json'
+        // Инициализация TON Connect UI
+        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
+            buttonRootId: 'ton-connect-btn' // Привязываем к нашей кнопке
         });
 
         let state = { 
@@ -109,6 +153,7 @@
             uid: tg.initDataUnsafe?.user?.id || "demo_user"
         };
 
+        // Загрузка данных с сервера
         async function loadData() {
             try {
                 const r = await fetch(`/api/user/${state.uid}`);
@@ -119,27 +164,53 @@
                 state.pnl = Number(res.pnl) || 0;
                 state.click_lvl = Number(res.click_lvl) || 1;
                 state.wallet = res.wallet_address || null;
-            } catch(e) { console.error("Load error"); }
+            } catch(e) { console.error("Ошибка загрузки"); }
             state.loaded = true;
             updateUI();
         }
 
         function updateUI() {
             document.getElementById('balance').innerText = Math.floor(state.balance).toLocaleString();
-            document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
-            document.getElementById('energy-fill').style.width = `${(state.energy / state.max_energy) * 100}%`;
+            
+            // Защита от NaN в энергии
+            const curEnergy = Math.max(0, Math.floor(state.energy || 0));
+            const maxEnergy = state.max_energy || 1000;
+            document.getElementById('energy-text').innerText = `${curEnergy}/${maxEnergy}`;
+            document.getElementById('energy-fill').style.width = `${(curEnergy / maxEnergy) * 100}%`;
+            
             document.getElementById('lvl-display').innerText = state.click_lvl;
             document.getElementById('pnl-display').innerText = `PASSIVE: +${Math.floor(state.pnl)}/h`;
             document.getElementById('rank-id').innerText = `ID: ${String(state.uid).slice(-6)}`;
             
-            const wBtn = document.getElementById('ton-connect-btn');
-            wBtn.innerText = state.wallet ? 'CONNECTED' : 'WALLET';
+            // Текст кошелька
+            const wText = document.getElementById('wallet-text');
+            if(state.wallet) {
+                wText.innerText = state.wallet.slice(0, 4) + '..' + state.wallet.slice(-3);
+            } else {
+                wText.innerText = 'WALLET';
+            }
         }
+
+        // Следим за состоянием кошелька через UI
+        tonConnectUI.onStatusChange(wallet => {
+            if (wallet) {
+                state.wallet = wallet.account.address;
+                state.isDirty = true;
+                updateUI();
+            } else {
+                state.wallet = null;
+                updateUI();
+            }
+        });
 
         // Логика тапов
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (!state.loaded || state.energy < state.click_lvl) return;
+
+            const logo = document.getElementById('main-logo');
+            logo.style.transform = 'scale(0.95)';
+            setTimeout(() => logo.style.transform = 'scale(1)', 50);
 
             for(let i=0; i<e.changedTouches.length; i++) {
                 state.balance += state.click_lvl;
@@ -159,21 +230,7 @@
             updateUI();
         });
 
-        // TON Connect Клик
-        document.getElementById('ton-connect-btn').onclick = async () => {
-            if(state.wallet) return tg.showAlert("Wallet: " + state.wallet);
-            
-            const walletsList = await tonConnect.getWallets();
-            // Для примера открываем первую доступную ссылку (обычно Tonkeeper)
-            const tonkeeper = walletsList.find(w => w.name.toLowerCase().includes('tonkeeper'));
-            if(tonkeeper) {
-                window.location.href = tonkeeper.universalLink;
-            } else {
-                tg.showAlert("Please install Tonkeeper");
-            }
-        };
-
-        // Авто-сохранение и реген
+        // Регенерация энергии
         setInterval(() => {
             if (state.loaded && state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 1.5);
@@ -181,33 +238,37 @@
             }
         }, 1000);
 
+        // Синхронизация с сервером
         setInterval(async () => {
-            if(state.isDirty) {
-                await fetch('/api/save', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        userId: state.uid,
-                        balance: state.balance,
-                        energy: state.energy,
-                        click_lvl: state.click_lvl,
-                        pnl: state.pnl,
-                        username: tg.initDataUnsafe?.user?.username || "Player",
-                        wallet_address: state.wallet
-                    })
-                });
-                state.isDirty = false;
+            if(state.isDirty && state.loaded) {
+                try {
+                    await fetch('/api/save', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            userId: state.uid,
+                            balance: state.balance,
+                            energy: state.energy,
+                            click_lvl: state.click_lvl,
+                            pnl: state.pnl,
+                            username: tg.initDataUnsafe?.user?.username || "Player",
+                            wallet_address: state.wallet
+                        })
+                    });
+                    state.isDirty = false;
+                } catch(e) { console.log("Save fail"); }
             }
         }, 3000);
 
-        // Лоадер
+        // Обработка загрузки
         window.onload = () => {
             let p = 0;
             const iv = setInterval(() => {
-                p += state.loaded ? 10 : 1;
+                p += state.loaded ? 10 : 2;
+                if (p > 100) p = 100;
                 document.getElementById('loader-fill').style.width = p+'%';
                 document.getElementById('loader-percent').innerText = p+'%';
-                if(p >= 100) {
+                if(p >= 100 && state.loaded) {
                     clearInterval(iv);
                     document.getElementById('loader-screen').style.opacity = 0;
                     setTimeout(() => {
@@ -221,7 +282,7 @@
 
         function showInvite() {
             const link = `https://t.me/neural_pulse_bot?start=${state.uid}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join me!`);
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my AI team!`);
         }
     </script>
 </body>
