@@ -5,10 +5,9 @@ const cors = require('cors');
 const path = require('path');
 const { Pool } = require('pg');
 
-// КОНФИГУРАЦИЯ
-const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
+// ДАННЫЕ ИЗ ТВОИХ СКРИНШОТОВ
+const BOT_TOKEN = "8257287930:AAFUmUinCAALPf6Bivpo04__Zp_V4Y49MFs";
 const DOMAIN = "neural-pulse.bothost.ru";
-const PORT = process.env.PORT || 3000;
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
 const bot = new Telegraf(BOT_TOKEN);
@@ -38,16 +37,15 @@ const initDB = async () => {
                 last_seen BIGINT DEFAULT extract(epoch from now())
             );
         `);
-        console.log("✅ [DB] Таблица пользователей готова.");
+        console.log("✅ [DATABASE] Таблица создана или уже существует");
     } catch (err) {
-        console.error("❌ [DB] Ошибка:", err.message);
+        console.error("❌ [DATABASE] Ошибка инициализации:", err.message);
     }
 };
 initDB();
 
 // Манифест для TON Connect
 app.get('/tonconnect-manifest.json', (req, res) => {
-    res.setHeader('Content-Type', 'application/json');
     res.json({
         "url": `https://${DOMAIN}`,
         "name": "Neural Pulse AI",
@@ -55,16 +53,16 @@ app.get('/tonconnect-manifest.json', (req, res) => {
     });
 });
 
-// API: Получение данных игрока
+// API: Получение данных пользователя
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
-    if (!uid || uid === "null" || uid === "undefined") return res.status(400).json({ error: "Invalid ID" });
+    if (!uid || uid === "null") return res.status(400).json({ error: "Invalid ID" });
     
     try {
         const result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
         if (result.rows.length === 0) {
             const newUser = await pool.query(
-                'INSERT INTO users (user_id, last_seen) VALUES ($1, extract(epoch from now())) RETURNING *', [uid]
+                'INSERT INTO users (user_id) VALUES ($1) RETURNING *', [uid]
             );
             return res.json(newUser.rows[0]);
         }
@@ -74,17 +72,19 @@ app.get('/api/user/:id', async (req, res) => {
         const lastSeen = parseInt(user.last_seen) || now;
         const secondsOffline = Math.max(0, now - lastSeen);
         
-        // Начисления за время отсутствия
-        user.balance = Number(user.balance) + (secondsOffline * (Number(user.pnl || 0) / 3600));
-        user.energy = Math.min(1000, (user.energy || 1000) + Math.floor(secondsOffline * 1.5));
+        // Расчет пассивного дохода за время отсутствия
+        if (secondsOffline > 0 && user.pnl > 0) {
+            user.balance = Number(user.balance) + (secondsOffline * (Number(user.pnl) / 3600));
+            user.energy = Math.min(1000, (user.energy || 1000) + Math.floor(secondsOffline * 1.5));
+        }
         
         res.json(user);
     } catch (e) {
-        res.status(500).json({ error: "DB Error" });
+        res.status(500).json({ error: "Internal Server Error" });
     }
 });
 
-// API: Сохранение прогресса
+// API: Сохранение данных
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, click_lvl, pnl, username, wallet } = req.body;
     try {
@@ -102,14 +102,16 @@ app.post('/api/save', async (req, res) => {
     }
 });
 
+// Команда /start в Telegram
 bot.start((ctx) => {
     const gameUrl = `https://${DOMAIN}?u=${ctx.from.id}`;
-    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI</b>\n\nДобро пожаловать в систему.`, 
+    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI</b>\n\nДобро пожаловать в систему майнинга. Нажми кнопку ниже, чтобы начать!`, 
         Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', gameUrl)]])
     );
 });
 
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`📡 [SERVER] Работает на https://${DOMAIN}`);
+    console.log(`📡 [SERVER] Опубликован на https://${DOMAIN}`);
     bot.launch();
 });
