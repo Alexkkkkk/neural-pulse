@@ -2,101 +2,121 @@ const express = require('express');
 const { Telegraf, Markup } = require('telegraf');
 const cors = require('cors');
 const path = require('path');
+const mongoose = require('mongoose');
 
 // [1] КОНФИГУРАЦИЯ
 const BOT_TOKEN = "8257287930:AAFUmUinCAALPf6Bivpo04__Zp_V4Y49MFs";
 const DOMAIN = "np.bothost.ru";
 const PORT = process.env.PORT || 3000;
 
+// ВСТАВЬ СЮДА ССЫЛКУ ИЗ ПАНЕЛИ BOTHOST (раздел Базы Данных)
+const MONGO_URI = "mongodb://ТВОЯ_ССЫЛКА_ИЗ_ПАНЕЛИ_БАЗ_ДАННЫХ";
+
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
-
-// Временное хранилище в RAM
-let tempUsers = {}; 
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// [2] API ЭНДПОИНТЫ
+// [2] МОДЕЛЬ ДАННЫХ (MongoDB)
+const userSchema = new mongoose.Schema({
+    userId: { type: String, unique: true, required: true },
+    balance: { type: Number, default: 0 },
+    energy: { type: Number, default: 1000 },
+    click_lvl: { type: Number, default: 1 },
+    pnl: { type: Number, default: 0 }
+});
+
+const User = mongoose.model('User', userSchema);
+
+// Подключение к БД
+mongoose.connect(MONGO_URI)
+    .then(() => console.log("📦 [DB] Успешное подключение к MongoDB"))
+    .catch(err => console.error("❌ [DB] Ошибка подключения к MongoDB:", err));
+
+// [3] API ЭНДПОИНТЫ
 
 // Получение данных пользователя
-app.get('/api/user/:id', (req, res) => {
+app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
-    
-    // Если пользователя нет, создаем дефолтный профиль
-    if (!tempUsers[uid]) {
-        tempUsers[uid] = { 
-            userId: uid, 
-            balance: 0, 
-            energy: 1000,
-            click_lvl: 1,
-            pnl: 0 
-        };
+    try {
+        let user = await User.findOne({ userId: uid });
+        if (!user) {
+            user = await User.create({ userId: uid });
+        }
+        console.log(`📡 [GET] Данные отправлены для ID: ${uid}`);
+        res.json(user);
+    } catch (e) {
+        res.status(500).json({ error: "DB Error" });
     }
-    
-    console.log(`📡 [GET] Данные отправлены для ID: ${uid}`);
-    res.json(tempUsers[uid]);
 });
 
 // Сохранение прогресса
-app.post('/api/save', (req, res) => {
-    const { userId, user_id, balance, energy, click_lvl, pnl } = req.body;
-    const uid = String(userId || user_id);
+app.post('/api/save', async (req, res) => {
+    const { userId, balance, energy, click_lvl, pnl } = req.body;
+    const uid = String(userId);
 
-    // Проверка на валидность ID
     if (uid && uid !== "undefined" && uid !== "null") {
-        if (!tempUsers[uid]) {
-            tempUsers[uid] = { userId: uid, balance: 0, energy: 1000, click_lvl: 1, pnl: 0 };
+        try {
+            const updatedUser = await User.findOneAndUpdate(
+                { userId: uid },
+                { 
+                    $set: { 
+                        balance: parseFloat(balance) || 0,
+                        energy: parseInt(energy) || 0,
+                        click_lvl: parseInt(click_lvl) || 1,
+                        pnl: parseFloat(pnl) || 0
+                    } 
+                },
+                { new: true, upsert: true } // Создать, если нет
+            );
+            
+            console.log(`☁️ [POST] Сохранено в БД ${uid}: 💰 ${updatedUser.balance.toFixed(2)}`);
+            return res.json({ status: 'ok', data: updatedUser });
+        } catch (e) {
+            console.error("❌ [DB] Ошибка сохранения:", e);
+            return res.status(500).json({ error: "Save Error" });
         }
-
-        // Обновляем данные с защитой от пустых строк и NaN
-        if (balance !== undefined) tempUsers[uid].balance = parseFloat(balance) || 0;
-        if (energy !== undefined) tempUsers[uid].energy = parseInt(energy) || 0;
-        if (click_lvl !== undefined) tempUsers[uid].click_lvl = parseInt(click_lvl) || 1;
-        if (pnl !== undefined) tempUsers[uid].pnl = parseFloat(pnl) || 0;
-        
-        console.log(`☁️  [POST] Обновлено ${uid}: 💰 ${tempUsers[uid].balance.toFixed(2)} | ⚡ ${tempUsers[uid].energy}`);
-        return res.json({ status: 'ok', data: tempUsers[uid] });
     }
-    
-    console.error("❌ [POST] Ошибка: Тело запроса пустое или ID не валиден", req.body);
     res.status(400).json({ error: 'Invalid User ID' });
 });
 
-// [3] ЛОГИКА ТЕЛЕГРАМ-БОТА
-bot.start((ctx) => {
+// [4] ЛОГИКА ТЕЛЕГРАМ-БОТА
+bot.start(async (ctx) => {
     const uid = String(ctx.from.id);
     const name = ctx.from.first_name || "Игрок";
 
-    if (!tempUsers[uid]) {
-        tempUsers[uid] = { userId: uid, balance: 0, energy: 1000, click_lvl: 1, pnl: 0 };
-    }
+    try {
+        let user = await User.findOne({ userId: uid });
+        if (!user) user = await User.create({ userId: uid });
 
-    ctx.replyWithHTML(
-        `<b>🚀 NEURAL PULSE AI: ОНЛАЙН</b>\n\n` +
-        `Привет, ${name}!\n` +
-        `Твой баланс: 💰 <b>${Math.floor(tempUsers[uid].balance).toLocaleString()} NP</b>\n` +
-        `Энергия: ⚡ <b>${tempUsers[uid].energy}</b>`,
-        Markup.inlineKeyboard([
-            [Markup.button.webApp('⚡ ИГРАТЬ', `https://${DOMAIN}`)]
-        ])
-    );
+        ctx.replyWithHTML(
+            `<b>🚀 NEURAL PULSE AI: ОНЛАЙН</b>\n\n` +
+            `Привет, ${name}!\n` +
+            `Твой баланс: 💰 <b>${Math.floor(user.balance).toLocaleString()} NP</b>\n` +
+            `Энергия: ⚡ <b>${user.energy}</b>`,
+            Markup.inlineKeyboard([
+                [Markup.button.webApp('⚡ ИГРАТЬ', `https://${DOMAIN}`)]
+            ])
+        );
+    } catch (e) {
+        ctx.reply("Ошибка загрузки профиля. Попробуй позже.");
+    }
 });
 
-// [4] ЗАПУСК
+// [5] ЗАПУСК
 app.listen(PORT, () => {
     console.log(`\n————————————————————————————————————————————————`);
-    console.log(`🖥️  СЕРВЕР: https://${DOMAIN}`);
-    console.log(`📡  API: http://localhost:${PORT}/api/user/`);
-    console.log(`⚠️  РЕЖИМ: RAM (Данные обнулятся при перезагрузке)`);
+    console.log(`🖥️ СЕРВЕР: https://${DOMAIN}`);
+    console.log(`📦 БАЗА ДАННЫХ: MongoDB Connected`);
+    console.log(`⚠️ РЕЖИМ: PERSISTENT (Данные сохраняются навсегда)`);
     console.log(`————————————————————————————————————————————————\n`);
     
     bot.launch().then(() => {
-        console.log(`✅ [BOT] Телегрaм бот запущен`);
+        console.log(`✅ [BOT] Телеграм бот запущен`);
     }).catch(err => console.error("❌ Ошибка бота:", err));
 });
 
-// Безопасное завершение
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
