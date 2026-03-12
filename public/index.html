@@ -8,7 +8,6 @@
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
         :root { 
-            /* ТЕ САМЫЕ ЦВЕТА ИЗ ТВОЕЙ ЗАГРУЗКИ */
             --neon-cyan: #00f2ff; 
             --neon-purple: #bc13fe; 
             --bg-dark: #050505; 
@@ -22,23 +21,18 @@
             touch-action: none; user-select: none; 
         }
 
-        /* Эффекты Canvas (Искры) */
         #particle-canvas { position: absolute; inset: 0; pointer-events: none; z-index: 100; }
 
-        /* Loader (Твой стиль) */
         #loader-screen { position: fixed; inset: 0; background: #050505; display: flex; align-items: center; justify-content: center; z-index: 10000; transition: opacity 0.5s; }
         .loader-bar { width: 200px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin-top: 10px; }
         #loader-fill { width: 0%; height: 100%; background: var(--neon-cyan); transition: width 0.2s; }
 
-        /* UI Элементы */
         .header-card { width: 85%; margin-top: 15px; display: flex; align-items: center; gap: 12px; background: var(--glass); padding: 12px; border-radius: 20px; border: 1px solid rgba(0, 242, 255, 0.15); backdrop-filter: blur(10px); z-index: 10; }
         #balance { font-size: 48px; font-weight: 900; margin-top: 25px; text-shadow: 0 0 30px rgba(0, 242, 255, 0.4); z-index: 10; font-variant-numeric: tabular-nums; }
         
-        /* Зона тапа */
         .click-area { width: 280px; height: 280px; display: flex; align-items: center; justify-content: center; margin-top: 30px; position: relative; z-index: 5; }
-        .main-logo { width: 230px; height: 230px; border-radius: 50%; transition: transform 0.05s cubic-bezier(0.17, 0.67, 0.83, 0.67); border: 4px solid rgba(255,255,255,0.05); }
+        .main-logo { width: 230px; height: 230px; border-radius: 50%; transition: transform 0.05s; border: 4px solid rgba(255,255,255,0.05); object-fit: cover; }
         
-        /* Свечение логотипа при PNL */
         .main-logo.active { animation: pulse-glow 2s infinite; }
         @keyframes pulse-glow {
             0% { filter: drop-shadow(0 0 5px var(--neon-cyan)); }
@@ -46,23 +40,20 @@
             100% { filter: drop-shadow(0 0 5px var(--neon-cyan)); }
         }
 
-        /* Магазин */
         #shop-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(15px); }
         .shop-card { background: var(--glass); width: 85%; padding: 20px; border-radius: 24px; border: 1px solid rgba(0, 242, 255, 0.3); margin-bottom: 15px; text-align: center; }
-        .buy-btn { background: var(--neon-cyan); color: #000; border: none; width: 100%; padding: 14px; border-radius: 12px; font-weight: 900; margin-top: 10px; cursor: pointer; }
+        .buy-btn { background: var(--neon-cyan); color: #000; border: none; width: 100%; padding: 14px; border-radius: 12px; font-weight: 900; margin-top: 10px; }
 
-        /* Навигация */
         .side-nav { position: absolute; right: -10px; display: flex; flex-direction: column; gap: 10px; }
-        .side-btn { background: rgba(20,20,20,0.8); border: 1px solid rgba(255,255,255,0.1); padding: 12px 5px; border-radius: 16px; width: 70px; text-align: center; font-size: 10px; font-weight: 800; cursor: pointer; }
+        .side-btn { background: rgba(20,20,20,0.8); border: 1px solid rgba(255,255,255,0.1); padding: 12px 5px; border-radius: 16px; width: 70px; text-align: center; font-size: 10px; font-weight: 800; }
         
         .energy-section { width: 85%; margin-top: 25px; z-index: 10; }
         .energy-bar-wrap { width: 100%; height: 12px; background: rgba(255,255,255,0.05); border-radius: 20px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); }
         #energy-fill { height: 100%; background: linear-gradient(90deg, #00ff66, var(--neon-cyan)); width: 100%; transition: width 0.3s; }
 
         .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: auto; margin-bottom: 35px; z-index: 10; }
-        .nav-btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 16px 5px; border-radius: 18px; text-align: center; font-size: 11px; font-weight: 800; cursor: pointer; }
+        .nav-btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 16px 5px; border-radius: 18px; text-align: center; font-size: 11px; font-weight: 800; }
         
-        /* Вылетающий текст +1 */
         .tap-text { position: absolute; color: #fff; font-size: 36px; font-weight: 900; pointer-events: none; animation: floatUp 0.6s ease-out forwards; text-shadow: 0 0 15px var(--neon-purple); z-index: 1000; }
         @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.3); } }
     </style>
@@ -91,12 +82,12 @@
     <div class="click-area" id="tap-zone">
         <img src="logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/230/bc13fe/fff?text=AI'">
         <div class="side-nav">
-            <div class="side-btn" id="ton-btn-root" style="border-color: #0088cc; position: relative;">
+            <div class="side-btn" id="ton-btn-root" style="border-color: #0088cc; overflow: hidden;">
                 <span id="addr-text">WALLET</span>
-                <div id="ton-connect-mount" style="position: absolute; inset: 0; opacity: 0; z-index: 10;"></div>
+                <div id="ton-connect-mount" style="position: absolute; inset: 0; opacity: 0.01;"></div>
             </div>
             <div class="side-btn" onclick="showInvite()">INVITE</div>
-            <div class="side-btn" onclick="tg.showAlert('Bonus system online!')">BONUS</div>
+            <div class="side-btn" onclick="tg.showAlert('Daily bonus: 1,000 NP collected!')">BONUS</div>
         </div>
     </div>
 
@@ -133,7 +124,6 @@
         const tg = window.Telegram.WebApp;
         tg.ready(); tg.expand();
 
-        // Canvas для частиц
         const canvas = document.getElementById('particle-canvas');
         const ctx = canvas.getContext('2d');
         canvas.width = window.innerWidth;
@@ -151,9 +141,8 @@
             balance: 0, energy: 1000, click_lvl: 1, pnl: 0, loaded: false, unsavedClicks: 0
         };
 
-        // --- МАТЕМАТИКА ЦЕН ---
         const getClickCost = (lvl) => Math.floor(500 * Math.pow(1.45, lvl - 1));
-        const getPnlCost = (pnl) => Math.floor(1200 * Math.pow(1.28, Math.floor(pnl/250)));
+        const getPnlCost = (pnl) => Math.floor(1200 * Math.pow(1.28, Math.floor(pnl/250) || 0));
 
         async function init() {
             try {
@@ -163,7 +152,7 @@
                 state.loaded = true;
                 if(state.pnl > 0) document.getElementById('main-logo').classList.add('active');
                 updateUI();
-            } catch(e) { setTimeout(init, 2000); }
+            } catch(e) { console.error("Retry loading..."); setTimeout(init, 2000); }
         }
 
         function updateUI() {
@@ -176,24 +165,23 @@
             document.getElementById('click-cost').innerText = `Cost: ${getClickCost(state.click_lvl).toLocaleString()} NP`;
             document.getElementById('pnl-cost').innerText = `Cost: ${getPnlCost(state.pnl).toLocaleString()} NP`;
 
-            const addrText = document.getElementById('addr-text');
+            // Обновление Лиги
+            const league = state.balance > 1000000 ? "NEURAL DIAMOND" : state.balance > 100000 ? "NEURAL GOLD" : "NEURAL BRONZE";
+            document.getElementById('league-name').innerText = league;
+
             if(tonConnectUI.account) {
                 const a = tonConnectUI.account.address;
-                addrText.innerText = a.slice(0,4) + '..' + a.slice(-4);
-                addrText.style.color = '#00ff66';
+                document.getElementById('addr-text').innerText = a.slice(0,4) + '..' + a.slice(-4);
+                document.getElementById('addr-text').style.color = '#00ff66';
             }
         }
 
-        // Система частиц (Искры)
         function spawnParticles(x, y) {
             for(let i=0; i<6; i++) {
                 particles.push({
                     x, y,
-                    vx: (Math.random()-0.5)*8,
-                    vy: (Math.random()-0.5)*8,
-                    life: 1.0,
-                    size: Math.random()*3 + 1,
-                    // ЦВЕТА ИЗ ТВОЕЙ ЗАГРУЗКИ
+                    vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
+                    life: 1.0, size: Math.random()*3 + 1,
                     color: Math.random() > 0.5 ? '#00f2ff' : '#bc13fe'
                 });
             }
@@ -202,7 +190,7 @@
         function animate() {
             ctx.clearRect(0,0,canvas.width, canvas.height);
             particles.forEach((p, i) => {
-                p.x += p.vx; p.y += p.vy; p.life -= 0.02;
+                p.x += p.vx; p.y += p.vy; p.life -= 0.025;
                 ctx.globalAlpha = p.life;
                 ctx.fillStyle = p.color;
                 ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
@@ -212,20 +200,18 @@
         }
         animate();
 
-        // Обработка тапа
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if(!state.loaded || state.energy < state.click_lvl) {
-                tg.HapticFeedback.notificationOccurred('warning');
+                tg.HapticFeedback.notificationOccurred('error');
                 return;
             }
 
             const t = e.touches[0];
             state.balance += state.click_lvl;
             state.energy -= state.click_lvl;
-            state.unsavedClicks++;
+            state.unsavedClicks += 1;
 
-            // Визуал
             spawnParticles(t.clientX, t.clientY);
             const n = document.createElement('div');
             n.className = 'tap-text'; n.innerText = `+${state.click_lvl}`;
@@ -233,10 +219,9 @@
             document.body.appendChild(n);
             setTimeout(() => n.remove(), 600);
 
-            // Эффект нажатия
-            document.getElementById('main-logo').style.transform = 'scale(0.92) rotate(2deg)';
+            document.getElementById('main-logo').style.transform = 'scale(0.94) rotate(1deg)';
             updateUI();
-            tg.HapticFeedback.impactOccurred('medium');
+            tg.HapticFeedback.impactOccurred('light');
         });
 
         document.getElementById('tap-zone').addEventListener('touchend', () => {
@@ -252,20 +237,24 @@
             const res = await r.json();
             if(res.success) {
                 tg.HapticFeedback.notificationOccurred('success');
-                init();
-            } else tg.showAlert("Low balance!");
+                init(); // Перезагружаем данные с сервера
+            } else tg.showAlert("Insufficient NP Balance!");
         }
 
         async function sync() {
             if(!state.loaded || state.unsavedClicks === 0) return;
-            const clicks = state.unsavedClicks;
-            const r = await fetch('/api/save', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ userId: state.uid, clicks: clicks, energy: state.energy })
-            });
-            const res = await r.json();
-            if(res.status === 'ok') state.unsavedClicks -= clicks;
+            const clicksToSend = state.unsavedClicks;
+            state.unsavedClicks = 0; // Сбрасываем сразу, чтобы не дублировать
+            
+            try {
+                const r = await fetch('/api/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ userId: state.uid, clicks: clicksToSend, energy: state.energy, username: tg.initDataUnsafe?.user?.username })
+                });
+            } catch(e) { 
+                state.unsavedClicks += clicksToSend; // В случае ошибки возвращаем клики
+            }
         }
 
         function toggleShop() {
@@ -279,29 +268,38 @@
         }
 
         function showStats() {
-            tg.showPopup({ 
-                title: '📊 NEURAL STATS', 
-                message: `Balance: ${Math.floor(state.balance)} NP\nClick: ${state.click_lvl}\nPassive: ${state.pnl}/h`,
-                buttons: [{type: 'close'}] 
+            fetch('/api/top').then(r => r.json()).then(top => {
+                let list = top.map((u, i) => `${i+1}. ${u.username || 'User'}: ${Math.floor(u.balance)}`).join('\n');
+                tg.showPopup({ 
+                    title: '📊 GLOBAL LEADERS', 
+                    message: list || 'No data yet',
+                    buttons: [{type: 'close'}] 
+                });
             });
         }
 
-        setInterval(sync, 4000);
-        setInterval(() => { if(state.loaded && state.energy < 1000) { state.energy += 1.8; updateUI(); } }, 1000);
+        setInterval(sync, 3500);
+        setInterval(() => { 
+            if(state.loaded) {
+                if(state.energy < 1000) state.energy = Math.min(1000, state.energy + 1.5);
+                updateUI();
+            }
+        }, 1000);
 
         window.onload = () => {
-            let p = 0;
-            const iv = setInterval(() => {
-                p += state.loaded ? 10 : 2;
-                if(p >= 100) { 
-                    clearInterval(iv); 
+            init();
+            let progress = 0;
+            const loader = setInterval(() => {
+                progress += state.loaded ? 15 : 2;
+                if(progress >= 100) { 
+                    progress = 100;
+                    clearInterval(loader); 
                     document.getElementById('loader-screen').style.opacity = '0';
                     setTimeout(() => document.getElementById('loader-screen').style.display='none', 500);
                 }
-                document.getElementById('loader-fill').style.width = p+'%';
-                document.getElementById('loader-percent').innerText = p+'%';
-            }, 50);
-            init();
+                document.getElementById('loader-fill').style.width = progress + '%';
+                document.getElementById('loader-percent').innerText = progress + '%';
+            }, 60);
         };
     </script>
 </body>
