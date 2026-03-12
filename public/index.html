@@ -7,137 +7,163 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
-        :root { --neon: #00f2ff; --bg: #050505; }
-        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; align-items: center; }
+        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #050505; }
+        body { margin: 0; background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; align-items: center; }
         
-        /* Лоадер */
-        #loader { position: fixed; inset: 0; background: #000; z-index: 999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .pct { font-size: 40px; font-weight: 900; color: var(--neon); font-family: monospace; }
+        #loader { position: fixed; inset: 0; background: #000; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: 0.5s; }
+        .pct { font-size: 48px; font-weight: 900; color: var(--cyan); text-shadow: 0 0 20px var(--cyan); }
+
+        .container { width: 100%; height: 100%; display: none; flex-direction: column; align-items: center; opacity: 0; transition: 1s; }
+        .container.active { display: flex; opacity: 1; }
+
+        .score { font-size: 50px; font-weight: 900; margin: 30px 0; font-variant-numeric: tabular-nums; }
+        .main-btn { width: 260px; height: 260px; border-radius: 50%; border: 6px solid rgba(255,255,255,0.05); box-shadow: 0 0 50px rgba(188, 19, 254, 0.2); transition: 0.05s; }
+        .main-btn:active { transform: scale(0.95); }
+
+        .stats-box { width: 85%; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 20px; border: 1px solid rgba(0,242,255,0.1); margin-top: auto; margin-bottom: 40px; }
+        .energy-bar { width: 100%; height: 12px; background: #111; border-radius: 10px; overflow: hidden; margin-top: 8px; }
+        #fill { height: 100%; width: 100%; background: linear-gradient(90deg, #00ff66, var(--cyan)); transition: 0.3s; }
         
-        /* Интерфейс */
-        .app { width: 100%; display: none; flex-direction: column; align-items: center; padding-top: 20px; }
-        .balance { font-size: 48px; font-weight: 900; margin: 20px 0; }
-        .logo-btn { width: 250px; height: 250px; border-radius: 50%; border: 5px solid #111; transition: transform 0.1s; }
-        .logo-btn:active { transform: scale(0.95); }
-        .stats { width: 80%; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; margin-top: 20px; }
-        .bar { width: 100%; height: 10px; background: #222; border-radius: 5px; overflow: hidden; margin-top: 5px; }
-        #fill { width: 100%; height: 100%; background: var(--neon); transition: 0.3s; }
-        .tap-anim { position: absolute; color: white; font-size: 30px; font-weight: 900; pointer-events: none; animation: up 0.6s forwards; }
-        @keyframes up { to { transform: translateY(-100px); opacity: 0; } }
+        .floating-text { position: absolute; color: white; font-size: 34px; font-weight: 900; pointer-events: none; animation: moveUp 0.7s forwards; }
+        @keyframes moveUp { to { transform: translateY(-120px); opacity: 0; } }
     </style>
 </head>
 <body>
 
-<div id="loader">
-    <div class="pct" id="loading-text">0%</div>
-    <div style="color: #444; font-size: 10px; margin-top: 10px;">CONNECTING TO NEURAL NETWORK...</div>
-</div>
+    <div id="loader"><div class="pct" id="l-pct">0%</div></div>
 
-<div class="app" id="main-app">
-    <div style="font-size: 12px; color: var(--neon);">NEURAL TOKENS</div>
-    <div class="balance" id="bal">0</div>
-    
-    <img src="logo.png" class="logo-btn" id="coin" onerror="this.src='https://via.placeholder.com/250/00f2ff/000?text=AI'">
-    
-    <div class="stats">
-        <div style="display: flex; justify-content: space-between; font-size: 12px;">
-            <span>ENERGY</span>
-            <span id="nrg-txt">1000/1000</span>
+    <div class="container" id="app">
+        <div style="margin-top: 20px; font-size: 10px; letter-spacing: 2px; color: var(--cyan);">NEURAL TOKENS</div>
+        <div class="score" id="score">0</div>
+
+        <div style="position: relative;" id="tap-area">
+            <img src="logo.png" class="main-btn" id="logo" onerror="this.src='https://via.placeholder.com/260/bc13fe/fff?text=AI'">
         </div>
-        <div class="bar"><div id="fill"></div></div>
+
+        <div style="margin-top: 20px;">
+            <button id="wallet-btn" style="background: rgba(0,136,204,0.2); border: 1px solid #0088cc; color: white; padding: 10px 25px; border-radius: 12px; font-size: 12px; font-weight: bold;">CONNECT WALLET</button>
+        </div>
+
+        <div class="stats-box">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: bold;">
+                <span>⚡ ENERGY</span>
+                <span id="nrg-val">1000/1000</span>
+            </div>
+            <div class="energy-bar"><div id="fill"></div></div>
+            <div id="pnl" style="font-size: 11px; color: var(--cyan); margin-top: 8px; text-align: center;">+0/h PASSIVE INCOME</div>
+        </div>
     </div>
-    
-    <button id="w-btn" style="margin-top: 20px; background: none; border: 1px solid #333; color: white; padding: 10px 20px; border-radius: 10px;">WALLET</button>
-</div>
 
 <script>
     const tg = window.Telegram.WebApp;
+    tg.ready();
     tg.expand();
-    
-    const tonConnectUI = new TONConnectUI.TonConnectUI({
+
+    const tonUI = new TONConnectUI.TonConnectUI({
         manifestUrl: window.location.origin + '/tonconnect-manifest.json'
     });
 
     let state = {
-        bal: 0, nrg: 1000, lvl: 1, pnl: 0,
+        bal: 0, nrg: 1000, lvl: 1, pnl: 0, 
         uid: new URLSearchParams(window.location.search).get('u') || tg.initDataUnsafe?.user?.id,
-        wallet: null, ready: false
+        wallet: null, loaded: false, dirty: false
     };
 
-    // Анимация лоадера
-    let loadProgress = 0;
-    const loadInt = setInterval(() => {
-        if (loadProgress < 90) loadProgress += Math.random() * 5;
-        if (state.ready) loadProgress = 100;
-        
-        document.getElementById('loading-text').innerText = Math.floor(loadProgress) + '%';
-        
-        if (loadProgress >= 100) {
-            clearInterval(loadInt);
-            document.getElementById('loader').style.display = 'none';
-            document.getElementById('main-app').style.display = 'flex';
+    // Плавный лоадер
+    let p = 0;
+    const lIdx = setInterval(() => {
+        if (p < 90) p += Math.random() * 8;
+        if (state.loaded) p = 100;
+        document.getElementById('l-pct').innerText = Math.floor(p) + '%';
+        if (p >= 100) {
+            clearInterval(lIdx);
+            document.getElementById('loader').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('app').classList.add('active');
+            }, 500);
         }
-    }, 100);
+    }, 80);
 
-    async function init() {
+    async function load() {
         if (state.uid) {
             try {
-                const r = await fetch('/api/user/' + state.uid);
+                const r = await fetch(`/api/user/${state.uid}`);
                 const d = await r.json();
                 state.bal = Number(d.balance) || 0;
                 state.nrg = Number(d.energy) || 1000;
                 state.lvl = Number(d.click_lvl) || 1;
                 state.pnl = Number(d.pnl) || 0;
-            } catch (e) { console.error("API error, using defaults"); }
+                state.wallet = d.wallet || null;
+                if(state.wallet) updateWalletUI(true);
+            } catch (e) { console.warn("Offline mode"); }
         }
-        state.ready = true;
+        state.loaded = true;
         render();
     }
 
     function render() {
-        document.getElementById('bal').innerText = Math.floor(state.bal).toLocaleString();
-        document.getElementById('nrg-txt').innerText = Math.floor(state.nrg) + '/1000';
+        document.getElementById('score').innerText = Math.floor(state.bal).toLocaleString();
+        document.getElementById('nrg-val').innerText = `${Math.floor(state.nrg)}/1000`;
         document.getElementById('fill').style.width = (state.nrg / 10) + '%';
+        document.getElementById('pnl').innerText = `+${Math.floor(state.pnl)}/h PASSIVE INCOME`;
     }
 
-    document.getElementById('coin').addEventListener('touchstart', (e) => {
+    document.getElementById('tap-area').addEventListener('touchstart', (e) => {
         e.preventDefault();
-        if (state.nrg < state.lvl) return;
+        if (state.nrg < state.lvl) {
+            tg.HapticFeedback.notificationOccurred('error');
+            return;
+        }
         
         state.bal += state.lvl;
         state.nrg -= state.lvl;
-        
+        state.dirty = true;
+
         const t = e.touches[0];
         const n = document.createElement('div');
-        n.className = 'tap-anim';
+        n.className = 'floating-text';
         n.style.left = t.clientX + 'px';
         n.style.top = t.clientY + 'px';
-        n.innerText = '+' + state.lvl;
+        n.innerText = `+${state.lvl}`;
         document.body.appendChild(n);
-        setTimeout(() => n.remove(), 600);
+        setTimeout(() => n.remove(), 700);
         
         render();
-        tg.HapticFeedback.impactOccurred('light');
+        tg.HapticFeedback.impactOccurred('medium');
     });
 
-    document.getElementById('w-btn').onclick = async () => {
-        if (state.wallet) {
-            tg.showAlert("Connected: " + state.wallet.slice(0,8) + "...");
-        } else {
-            await tonConnectUI.openModal();
-        }
+    document.getElementById('wallet-btn').onclick = () => {
+        if (state.wallet) tg.showAlert("Connected: " + state.wallet.slice(0,10) + "...");
+        else tonUI.openModal();
     };
 
-    tonConnectUI.onStatusChange(w => {
+    tonUI.onStatusChange(w => {
         if (w) {
             state.wallet = w.account.address;
-            document.getElementById('w-btn').style.borderColor = '#00f2ff';
+            state.dirty = true;
+            updateWalletUI(true);
+        } else {
+            state.wallet = null;
+            updateWalletUI(false);
         }
     });
 
-    setInterval(async () => {
-        if (state.ready && state.uid) {
-            await fetch('/api/save', {
+    function updateWalletUI(connected) {
+        const btn = document.getElementById('wallet-btn');
+        if (connected) {
+            btn.innerText = "CONNECTED";
+            btn.style.borderColor = "#00ff66";
+            btn.style.background = "rgba(0,255,102,0.1)";
+        } else {
+            btn.innerText = "CONNECT WALLET";
+            btn.style.borderColor = "#0088cc";
+        }
+    }
+
+    setInterval(() => {
+        if (state.dirty && state.uid) {
+            fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
@@ -146,8 +172,9 @@
                     username: tg.initDataUnsafe?.user?.username || 'Player'
                 })
             });
+            state.dirty = false;
         }
-    }, 5000);
+    }, 4000);
 
     setInterval(() => {
         if (state.nrg < 1000) {
@@ -156,7 +183,7 @@
         }
     }, 1000);
 
-    window.onload = init;
+    window.onload = load;
 </script>
 </body>
 </html>
