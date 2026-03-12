@@ -6,43 +6,60 @@
     <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root { --cyan: #00f2ff; }
-        body { margin: 0; background: #000; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; height: 100vh; overflow: hidden; }
-        
-        #loader { position: fixed; inset: 0; background: #000; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .pct { font-size: 60px; font-weight: 900; color: var(--cyan); text-shadow: 0 0 15px var(--cyan); }
+        :root { --cyan: #00f2ff; --bg: #000; }
+        body { 
+            margin: 0; padding: 0; background-color: var(--bg); color: white; 
+            font-family: 'Segoe UI', Roboto, sans-serif; overflow: hidden; 
+            height: 100vh; display: flex; flex-direction: column; align-items: center; 
+        }
 
-        #game { display: none; flex-direction: column; align-items: center; width: 100%; height: 100%; padding-top: 40px; }
-        .bal { font-size: 50px; font-weight: 900; color: var(--cyan); margin-bottom: 30px; }
-        
-        .coin-wrap { position: relative; }
-        .coin { width: 260px; height: 260px; border-radius: 50%; border: 4px solid #111; transition: 0.1s; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-        .coin:active { transform: scale(0.92); }
+        /* Загрузочный экран */
+        #loader { 
+            position: fixed; inset: 0; background: #000; z-index: 9999; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+        }
+        .loader-pct { font-size: 64px; font-weight: 900; color: var(--cyan); text-shadow: 0 0 20px rgba(0, 242, 255, 0.5); }
 
-        .stats { width: 85%; background: rgba(255,255,255,0.05); padding: 20px; border-radius: 20px; margin-top: auto; margin-bottom: 50px; backdrop-filter: blur(5px); }
-        .nrg-row { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 10px; font-size: 14px; }
-        .bar-bg { width: 100%; height: 12px; background: #111; border-radius: 6px; overflow: hidden; }
-        #bar { height: 100%; background: linear-gradient(90deg, #0088ff, var(--cyan)); width: 100%; transition: 0.3s; }
-        
-        .tap-msg { position: absolute; color: #fff; font-size: 32px; font-weight: 900; pointer-events: none; user-select: none; animation: up 0.6s ease-out forwards; }
-        @keyframes up { 0% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: translateY(-120px) scale(1.2); opacity: 0; } }
+        /* Интерфейс */
+        #game-ui { width: 100%; max-width: 500px; display: none; flex-direction: column; align-items: center; height: 100%; padding-top: 30px; }
+        .header-label { font-size: 12px; letter-spacing: 3px; color: var(--cyan); margin-bottom: 5px; font-weight: bold; }
+        .balance-value { font-size: 56px; font-weight: 900; margin-bottom: 20px; }
+
+        .click-area { position: relative; margin: 20px 0; display: flex; justify-content: center; align-items: center; }
+        .main-coin { 
+            width: 280px; height: 280px; border-radius: 50%; border: 6px solid #111; 
+            background: radial-gradient(circle, #0a0a0a 0%, #000 100%); 
+            transition: transform 0.05s ease; cursor: pointer; -webkit-tap-highlight-color: transparent; 
+        }
+        .main-coin:active { transform: scale(0.95); }
+
+        .bottom-stats { width: 90%; background: rgba(255,255,255,0.07); padding: 20px; border-radius: 24px; margin-top: auto; margin-bottom: 40px; }
+        .energy-row { display: flex; justify-content: space-between; font-size: 14px; font-weight: bold; margin-bottom: 10px; }
+        .progress-bg { width: 100%; height: 14px; background: #111; border-radius: 7px; overflow: hidden; }
+        #progress-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #0088ff, var(--cyan)); transition: width 0.3s ease; }
+
+        .tap-anim { position: absolute; color: white; font-size: 38px; font-weight: 900; pointer-events: none; animation: moveUp 0.7s ease-out forwards; }
+        @keyframes moveUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-120px); opacity: 0; } }
     </style>
 </head>
 <body>
 
-    <div id="loader"><div class="pct" id="l-pct">0%</div></div>
+    <div id="loader">
+        <div class="loader-pct" id="load-pct">0%</div>
+    </div>
 
-    <div id="game">
-        <div class="bal" id="bal">0</div>
-        <div class="coin-wrap">
-            <img src="logo.png" id="coin" class="coin" onerror="this.src='https://via.placeholder.com/260/000/00f2ff?text=AI'">
+    <div id="game-ui">
+        <div class="header-label">NEURAL PULSE AI</div>
+        <div class="balance-value" id="balance">0</div>
+        <div class="click-area">
+            <img src="logo.png" id="clicker" class="main-coin" onerror="this.src='https://via.placeholder.com/300/000/00f2ff?text=AI'">
         </div>
-        <div class="stats">
-            <div class="nrg-row">
+        <div class="bottom-stats">
+            <div class="energy-row">
                 <span>⚡ ENERGY</span>
-                <span id="nrg-txt">1000/1000</span>
+                <span id="energy-text">1000 / 1000</span>
             </div>
-            <div class="bar-bg"><div id="bar"></div></div>
+            <div class="progress-bg"><div id="progress-fill"></div></div>
         </div>
     </div>
 
@@ -51,74 +68,94 @@
     tg.expand();
 
     let state = {
-        bal: 0, nrg: 1000, lvl: 1, 
-        uid: new URLSearchParams(window.location.search).get('u') || tg.initDataUnsafe?.user?.id || "guest",
-        ready: false
+        userId: new URLSearchParams(window.location.search).get('u') || tg.initDataUnsafe?.user?.id || "guest",
+        balance: 0,
+        energy: 1000,
+        clickLvl: 1,
+        isReady: false
     };
 
-    function update() {
-        document.getElementById('bal').innerText = Math.floor(state.bal).toLocaleString();
-        document.getElementById('nrg-txt').innerText = `${Math.floor(state.nrg)}/1000`;
-        document.getElementById('bar').style.width = (state.nrg / 10) + '%';
+    function updateDisplay() {
+        // Защита от NaN: если значение пустое, ставим 0
+        const b = Math.floor(state.balance) || 0;
+        const e = Math.floor(state.energy) || 0;
+        document.getElementById('balance').innerText = b.toLocaleString();
+        document.getElementById('energy-text').innerText = e + " / 1000";
+        document.getElementById('progress-fill').style.width = (e / 10) + "%";
     }
 
-    async function load() {
+    async function fetchUserData() {
         try {
-            const res = await fetch('/api/user/' + state.uid);
-            const d = await res.json();
-            // Защита от пустых данных (NaN)
-            state.bal = Number(d.balance) || 0;
-            state.nrg = Number(d.energy) || 1000;
-            state.lvl = Number(d.click_lvl) || 1;
-        } catch (e) { console.error("Load error:", e); }
-        state.ready = true;
-        update();
+            const response = await fetch('/api/user/' + state.userId);
+            const data = await response.json();
+            // Превращаем всё в числа принудительно
+            state.balance = Number(data.balance) || 0;
+            state.energy = Number(data.energy) || 1000;
+            state.clickLvl = Number(data.click_lvl) || 1;
+        } catch (err) {
+            console.error("Ошибка загрузки:", err);
+        } finally {
+            state.isReady = true;
+            updateDisplay();
+        }
     }
 
-    document.getElementById('coin').addEventListener('touchstart', (e) => {
+    // Обработка клика
+    document.getElementById('clicker').addEventListener('touchstart', (e) => {
         e.preventDefault();
-        if (state.nrg < state.lvl) return;
+        if (state.energy < state.clickLvl) return;
 
-        state.bal += state.lvl;
-        state.nrg -= state.lvl;
-        
+        state.balance += state.clickLvl;
+        state.energy -= state.clickLvl;
+
+        // Всплывающее число
         const t = e.touches[0];
-        const m = document.createElement('div');
-        m.className = 'tap-msg';
-        m.style.left = t.clientX + 'px'; m.style.top = t.clientY + 'px';
-        m.innerText = `+${state.lvl}`;
-        document.body.appendChild(m);
-        setTimeout(() => m.remove(), 600);
+        const a = document.createElement('div');
+        a.className = 'tap-anim';
+        a.style.left = t.clientX + 'px'; a.style.top = t.clientY + 'px';
+        a.innerText = "+" + state.clickLvl;
+        document.body.appendChild(a);
+        setTimeout(() => a.remove(), 700);
 
-        update();
+        updateDisplay();
         tg.HapticFeedback.impactOccurred('medium');
     });
 
+    // Автосохранение
     setInterval(() => {
-        if (state.ready && state.uid !== "guest") {
+        if (state.isReady && state.userId !== "guest") {
             fetch('/api/save', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ userId: state.uid, balance: state.bal, energy: state.nrg, click_lvl: state.lvl })
-            }).catch(e => console.error("Save error"));
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: state.userId, balance: state.balance,
+                    energy: state.energy, click_lvl: state.clickLvl
+                })
+            });
         }
     }, 5000);
 
+    // Регенерация
     setInterval(() => {
-        if (state.nrg < 1000) { state.nrg = Math.min(1000, state.nrg + 1.2); update(); }
+        if (state.energy < 1000) {
+            state.energy = Math.min(1000, state.energy + 1.5);
+            updateDisplay();
+        }
     }, 1000);
 
+    // Лоадер
     let p = 0;
     const lInt = setInterval(() => {
-        p += 5; document.getElementById('l-pct').innerText = p + '%';
+        p += 5;
+        document.getElementById('load-pct').innerText = p + "%";
         if (p >= 100) {
             clearInterval(lInt);
             document.getElementById('loader').style.display = 'none';
-            document.getElementById('game').style.display = 'flex';
+            document.getElementById('game-ui').style.display = 'flex';
         }
     }, 40);
 
-    window.onload = load;
+    window.onload = fetchUserData;
 </script>
 </body>
 </html>
