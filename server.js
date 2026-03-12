@@ -21,7 +21,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- ГЛОБАЛЬНАЯ МАТЕМАТИКА ЦЕН ---
+// --- МАТЕМАТИКА ---
 const MATH = {
     CLICK_BASE: 500,
     CLICK_GROWTH: 1.45,
@@ -36,7 +36,7 @@ const getPnlCost = (pnl) => {
     return Math.floor(MATH.PNL_BASE * Math.pow(MATH.PNL_GROWTH, pnlLvl));
 };
 
-// Инициализация БД
+// Инициализация БД (добавлена колонка для защиты)
 const initDB = async () => {
     try {
         await pool.query(`
@@ -49,15 +49,16 @@ const initDB = async () => {
                 pnl NUMERIC DEFAULT 0,
                 wallet_address TEXT,
                 referrer_id TEXT,
-                last_seen BIGINT DEFAULT extract(epoch from now())
+                last_seen BIGINT DEFAULT extract(epoch from now()),
+                last_save BIGINT DEFAULT extract(epoch from now())
             );
         `);
-        console.log("✅ [DB] Таблицы готовы.");
+        console.log("✅ [DB] Система готова.");
     } catch (err) { console.error("❌ [DB] Ошибка:", err.message); }
 };
 initDB();
 
-// [1] API: Данные пользователя + Рефералка + Оффлайн доход
+// [1] Получение данных + Рефералы
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
     const refBy = req.query.ref;
@@ -66,13 +67,12 @@ app.get('/api/user/:id', async (req, res) => {
         let result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
         
         if (result.rows.length === 0) {
-            // Новый пользователь
             await pool.query(
                 'INSERT INTO users (user_id, referrer_id, last_seen) VALUES ($1, $2, extract(epoch from now()))', 
                 [uid, refBy]
             );
-            // Если пришел по ссылке — обоим по 5000 бонуса
             if (refBy && refBy !== uid) {
+                // Бонус за приглашение
                 await pool.query('UPDATE users SET balance = balance + 5000 WHERE user_id IN ($1, $2)', [uid, refBy]);
             }
             result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
@@ -82,10 +82,11 @@ app.get('/api/user/:id', async (req, res) => {
         const now = Math.floor(Date.now() / 1000);
         const diff = now - parseInt(user.last_seen);
 
-        // Начисление за время отсутствия (макс 4 часа)
-        if (diff > 10) {
-            const passiveIncome = user.pnl > 0 ? (parseFloat(user.pnl) / 3600) * Math.min(diff, 14400) : 0;
-            const energyRegen = diff * 1.5; 
+        // Оффлайн доход (PNL)
+        if (diff > 30) {
+            const hours = Math.min(diff, 14400) / 3600; // Макс 4 часа
+            const passiveIncome = parseFloat(user.pnl) * hours;
+            const energyRegen = diff * 1.5;
             
             user.balance = parseFloat(user.balance) + passiveIncome;
             user.energy = Math.min(1000, parseFloat(user.energy) + energyRegen);
@@ -100,84 +101,86 @@ app.get('/api/user/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "DB Error" }); }
 });
 
-// [2] API: Сохранение прогресса
+// [2] Сохранение прогресса (защищенное)
 app.post('/api/save', async (req, res) => {
-    const { userId, clicks, energy, wallet_address, username } = req.body;
-    try {
-        const userRes = await pool.query('SELECT click_lvl, balance FROM users WHERE user_id = $1', [String(userId)]);
-        if (userRes.rows.length === 0) return res.status(404).json({error: "Not found"});
+    const { userId, clicks, energy, username } = req.body;
+    const now = Math.floor(Date.now() / 1000);
 
+    try {
+        const userRes = await pool.query('SELECT * FROM users WHERE user_id = $1', [String(userId)]);
+        if (userRes.rows.length === 0) return res.status(404).json({error: "Not found"});
         const user = userRes.rows[0];
-        const income = (Number(clicks) || 0) * parseInt(user.click_lvl);
+
+        // Простая проверка на читы (не более 15 кликов в секунду)
+        const timeDiff = now - parseInt(user.last_save || 0);
+        const maxClicks = Math.max(timeDiff, 1) * 15;
+        const validClicks = Math.min(clicks || 0, maxClicks);
+
+        const income = validClicks * parseInt(user.click_lvl);
         const newBalance = parseFloat(user.balance) + income;
 
         await pool.query(`
             UPDATE users SET 
                 balance=$1, energy=$2, username=COALESCE($3, username), 
-                wallet_address=COALESCE($4, wallet_address), last_seen=extract(epoch from now())
+                last_save=$4, last_seen=$4
             WHERE user_id=$5
-        `, [newBalance, Math.floor(energy), username, wallet_address, String(userId)]);
+        `, [newBalance, Math.floor(energy), username, now, String(userId)]);
         
         res.json({ status: 'ok', balance: newBalance });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// [3] API: Улучшения (Магазин)
+// [3] Магазин (Апгрейды)
 app.post('/api/upgrade', async (req, res) => {
     const { userId, type } = req.body;
     try {
         const userRes = await pool.query('SELECT * FROM users WHERE user_id = $1', [String(userId)]);
         const user = userRes.rows[0];
+        if (!user) return res.status(404).json({error: "User not found"});
 
         let cost, updateQuery;
         if (type === 'click') {
             cost = getClickCost(user.click_lvl);
             updateQuery = 'UPDATE users SET balance=balance-$1, click_lvl=click_lvl+1 WHERE user_id=$2';
-        } else {
+        } else if (type === 'pnl') {
             cost = getPnlCost(user.pnl);
             updateQuery = `UPDATE users SET balance=balance-$1, pnl=pnl+${MATH.PNL_STEP} WHERE user_id=$2`;
         }
         
         if (parseFloat(user.balance) >= cost) {
             await pool.query(updateQuery, [cost, userId]);
-            res.json({ success: true });
+            res.json({ success: true, newCost: type === 'click' ? getClickCost(user.click_lvl + 1) : getPnlCost(user.pnl + MATH.PNL_STEP) });
         } else {
-            res.json({ success: false, error: "No money" });
+            res.json({ success: false, error: "Недостаточно средств" });
         }
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// [4] API: ТОП Игроков (для кнопки STATS)
+// [4] ТОП Игроков
 app.get('/api/top', async (req, res) => {
     try {
-        const result = await pool.query('SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10');
+        const result = await pool.query('SELECT username, balance FROM users WHERE username IS NOT NULL ORDER BY balance DESC LIMIT 10');
         res.json(result.rows);
     } catch (e) { res.status(500).json({ error: "Top error" }); }
 });
 
-// TON Manifest
-app.get('/tonconnect-manifest.json', (req, res) => {
-    res.json({
-        "url": `https://${DOMAIN}`,
-        "name": "Neural Pulse AI",
-        "iconUrl": `https://${DOMAIN}/logo.png`
-    });
-});
-
-// Логика Бота
+// Бот
 bot.start((ctx) => {
     const refId = ctx.payload || ''; 
-    const gameUrl = `https://${DOMAIN}?u=${ctx.from.id}${refId ? '&ref=' + refId : ''}`;
+    const gameUrl = `https://${DOMAIN}?u=${ctx.from.id}${refId ? '&ref=' + refId : ''}&v=${Date.now()}`;
     
     ctx.replyWithHTML(
-        `<b>🚀 ДОБРО ПОЖАЛОВАТЬ В NEURAL PULSE AI</b>\n\n` +
-        `Майни токены NP, прокачивай нейросеть и приглашай друзей!\n` +
-        `Бонус за друга: 💰 <b>5,000 NP</b>`,
-        Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', gameUrl)]])
+        `<b>🧠 NEURAL PULSE AI</b>\n\n` +
+        `Добро пожаловать, ${ctx.from.first_name}!\n` +
+        `Твоя нейросеть готова к майнингу.`,
+        Markup.inlineKeyboard([
+            [Markup.button.webApp('⚡ ИГРАТЬ', gameUrl)],
+            [Markup.button.url('📢 КАНАЛ ПРОЕКТА', 'https://t.me/your_channel')]
+        ])
     );
 });
 
 app.listen(PORT, () => {
     bot.launch();
-    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🚀 Server on port ${PORT}`);
 });
