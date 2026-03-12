@@ -6,7 +6,7 @@ const path = require('path');
 const { Pool } = require('pg');
 
 // ДАННЫЕ ИЗ ТВОИХ СКРИНШОТОВ
-const BOT_TOKEN = "8257287930:AAFUmUinCAALPf6Bivpo04__Zp_V4Y49MFs";
+const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const DOMAIN = "neural-pulse.bothost.ru";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
