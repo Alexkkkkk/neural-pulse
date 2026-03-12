@@ -5,26 +5,26 @@ const cors = require('cors');
 const path = require('path');
 const { Pool } = require('pg');
 
-// 1. ПРОВЕРЕННЫЕ ДАННЫЕ
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const DOMAIN = "neural-pulse.bothost.ru";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
-
-const pool = new Pool({
-    connectionString: PG_URI,
-    ssl: false 
-});
+const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
 app.use(cors());
 app.use(express.json());
 
-// 2. ВАЖНО: Указываем серверу, где лежат файлы игры (папка public)
+// ВАЖНО: Указываем путь к папке public
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Инициализация базы данных без удаления данных
+// Принудительно отдаем index.html при заходе на корень
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Инициализация БД (без DROP TABLE, чтобы не терять данные)
 const initDB = async () => {
     try {
         await pool.query(`
@@ -39,23 +39,20 @@ const initDB = async () => {
                 last_seen BIGINT DEFAULT extract(epoch from now())
             );
         `);
-        console.log("✅ [DB] Таблица готова к работе");
+        console.log("✅ [DB] Подключено");
     } catch (err) {
         console.error("❌ [DB] Ошибка:", err.message);
     }
 };
 initDB();
 
-// API для получения данных игрока
+// API: Получение юзера
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
-    if (!uid || uid === "null") return res.status(400).json({ error: "Invalid ID" });
     try {
         const result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
         if (result.rows.length === 0) {
-            const newUser = await pool.query(
-                'INSERT INTO users (user_id) VALUES ($1) RETURNING *', [uid]
-            );
+            const newUser = await pool.query('INSERT INTO users (user_id) VALUES ($1) RETURNING *', [uid]);
             return res.json(newUser.rows[0]);
         }
         res.json(result.rows[0]);
@@ -64,39 +61,29 @@ app.get('/api/user/:id', async (req, res) => {
     }
 });
 
-// API для сохранения прогресса
+// API: Сохранение
 app.post('/api/save', async (req, res) => {
-    const { userId, balance, energy, click_lvl, pnl, username, wallet } = req.body;
+    const { userId, balance, energy, click_lvl } = req.body;
     try {
         await pool.query(`
-            INSERT INTO users (user_id, balance, energy, click_lvl, pnl, username, wallet, last_seen)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, extract(epoch from now()))
-            ON CONFLICT (user_id) DO UPDATE SET
-            balance = EXCLUDED.balance, energy = EXCLUDED.energy, click_lvl = EXCLUDED.click_lvl, 
-            pnl = EXCLUDED.pnl, username = EXCLUDED.username, wallet = EXCLUDED.wallet,
-            last_seen = extract(epoch from now())
-        `, [String(userId), balance, energy, click_lvl, pnl, username, wallet]);
+            INSERT INTO users (user_id, balance, energy, click_lvl)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (user_id) DO UPDATE SET balance = $2, energy = $3, click_lvl = $4
+        `, [String(userId), balance, energy, click_lvl]);
         res.json({ ok: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
-// Роут для главной страницы (чтобы не показывал код текстом)
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// Запуск Telegram бота
 bot.start((ctx) => {
-    const gameUrl = `https://${DOMAIN}?u=${ctx.from.id}`;
-    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI</b>\n\nБот активирован! Жми кнопку и начни майнинг.`, 
-        Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', gameUrl)]])
+    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI</b>\n\nНачни майнить прямо сейчас!`, 
+        Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', `https://${DOMAIN}?u=${ctx.from.id}`)]])
     );
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 Сервер работает на порту ${PORT}`);
-    bot.launch().catch(err => console.error("TG Error:", err.message));
+    console.log(`🚀 Сервер запущен`);
+    bot.launch();
 });
