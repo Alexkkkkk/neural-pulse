@@ -3,197 +3,160 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse AI</title>
+    <title>Neural Pulse</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
-        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #050505; --glass: rgba(255, 255, 255, 0.07); --ton-blue: #0088cc; }
-        body { margin: 0; padding: 0; background-color: var(--bg-dark); background-image: radial-gradient(circle at 50% 50%, #150a28 0%, #050505 100%); color: white; font-family: 'Segoe UI', Roboto, sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
+        :root { --neon: #00f2ff; --bg: #050505; }
+        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; align-items: center; }
         
-        #loader-screen { position: fixed; inset: 0; background: #050505; display: flex; align-items: center; justify-content: center; z-index: 10000; transition: 0.5s; }
-        .loader-percent { color: var(--neon-cyan); font-size: 28px; font-weight: 900; font-family: monospace; }
-
-        .content-layer { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; visibility: hidden; transition: 0.5s; }
-        .content-layer.active { opacity: 1; visibility: visible; }
-
-        .header-card { width: 85%; margin-top: 15px; display: flex; align-items: center; gap: 12px; background: var(--glass); padding: 12px; border-radius: 20px; backdrop-filter: blur(15px); border: 1px solid rgba(0, 242, 255, 0.15); }
-        .lvl-icon { width: 44px; height: 44px; border: 1px solid var(--neon-cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--neon-cyan); }
-
-        #balance { font-size: 48px; font-weight: 900; margin-top: 25px; text-shadow: 0 0 30px rgba(0, 242, 255, 0.3); }
-
-        .main-wrapper { position: relative; width: 100%; display: flex; justify-content: center; align-items: center; margin-top: 30px; flex-grow: 1; }
-        .main-logo { width: 230px; height: 230px; border-radius: 50%; transition: 0.05s; border: 4px solid rgba(255,255,255,0.05); }
+        /* Лоадер */
+        #loader { position: fixed; inset: 0; background: #000; z-index: 999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .pct { font-size: 40px; font-weight: 900; color: var(--neon); font-family: monospace; }
         
-        .side-nav { position: absolute; right: 10px; display: flex; flex-direction: column; gap: 12px; }
-        .side-btn { background: rgba(20,20,20,0.8); border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 14px; width: 65px; font-size: 10px; font-weight: 800; text-align: center; }
-        .wallet-connected { border-color: var(--ton-blue); color: var(--ton-blue); }
-
-        .energy-section { width: 85%; margin-bottom: 30px; }
-        .energy-bar-wrap { width: 100%; height: 12px; background: rgba(255,255,255,0.05); border-radius: 20px; overflow: hidden; }
-        #energy-fill { height: 100%; background: linear-gradient(90deg, #00ff66, var(--neon-cyan)); width: 100%; transition: 0.3s; }
-
-        .tap-text { position: absolute; color: #fff; font-size: 36px; font-weight: 900; pointer-events: none; animation: floatUp 0.7s forwards; }
-        @keyframes floatUp { to { opacity: 0; transform: translateY(-120px); } }
+        /* Интерфейс */
+        .app { width: 100%; display: none; flex-direction: column; align-items: center; padding-top: 20px; }
+        .balance { font-size: 48px; font-weight: 900; margin: 20px 0; }
+        .logo-btn { width: 250px; height: 250px; border-radius: 50%; border: 5px solid #111; transition: transform 0.1s; }
+        .logo-btn:active { transform: scale(0.95); }
+        .stats { width: 80%; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; margin-top: 20px; }
+        .bar { width: 100%; height: 10px; background: #222; border-radius: 5px; overflow: hidden; margin-top: 5px; }
+        #fill { width: 100%; height: 100%; background: var(--neon); transition: 0.3s; }
+        .tap-anim { position: absolute; color: white; font-size: 30px; font-weight: 900; pointer-events: none; animation: up 0.6s forwards; }
+        @keyframes up { to { transform: translateY(-100px); opacity: 0; } }
     </style>
 </head>
 <body>
 
-    <div id="loader-screen"><div class="loader-percent" id="loader-percent">0%</div></div>
+<div id="loader">
+    <div class="pct" id="loading-text">0%</div>
+    <div style="color: #444; font-size: 10px; margin-top: 10px;">CONNECTING TO NEURAL NETWORK...</div>
+</div>
 
-    <div class="content-layer">
-        <div class="header-card">
-            <div class="lvl-icon" id="lvl-display">1</div>
-            <div id="pnl-display" style="color: var(--neon-cyan); font-weight: bold; font-size: 12px;">+0/h</div>
+<div class="app" id="main-app">
+    <div style="font-size: 12px; color: var(--neon);">NEURAL TOKENS</div>
+    <div class="balance" id="bal">0</div>
+    
+    <img src="logo.png" class="logo-btn" id="coin" onerror="this.src='https://via.placeholder.com/250/00f2ff/000?text=AI'">
+    
+    <div class="stats">
+        <div style="display: flex; justify-content: space-between; font-size: 12px;">
+            <span>ENERGY</span>
+            <span id="nrg-txt">1000/1000</span>
         </div>
-
-        <div id="balance">0</div>
-
-        <div class="main-wrapper">
-            <div id="tap-zone" style="cursor:pointer">
-                <img src="logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/230/bc13fe/fff?text=AI'">
-            </div>
-            <div class="side-nav">
-                <div class="side-btn" id="wallet-btn" onclick="connectWallet()">WALLET</div>
-                <div class="side-btn" onclick="showInvite()">INVITE</div>
-                <div class="side-btn" onclick="tg.showAlert('Soon')">TASKS</div>
-            </div>
-        </div>
-
-        <div class="energy-section">
-            <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:5px;">
-                <span>⚡ ENERGY</span> <span id="energy-text">1000/1000</span>
-            </div>
-            <div class="energy-bar-wrap"><div id="energy-fill"></div></div>
-        </div>
+        <div class="bar"><div id="fill"></div></div>
     </div>
+    
+    <button id="w-btn" style="margin-top: 20px; background: none; border: 1px solid #333; color: white; padding: 10px 20px; border-radius: 10px;">WALLET</button>
+</div>
 
 <script>
     const tg = window.Telegram.WebApp;
     tg.expand();
-
-    // Инициализация TON Connect
+    
     const tonConnectUI = new TONConnectUI.TonConnectUI({
-        manifestUrl: 'https://np.bothost.ru/tonconnect-manifest.json'
+        manifestUrl: window.location.origin + '/tonconnect-manifest.json'
     });
 
-    let state = { 
-        balance: 0, energy: 1000, max_energy: 1000, 
-        click_lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id,
-        wallet: null, loaded: false, isDirty: false 
+    let state = {
+        bal: 0, nrg: 1000, lvl: 1, pnl: 0,
+        uid: new URLSearchParams(window.location.search).get('u') || tg.initDataUnsafe?.user?.id,
+        wallet: null, ready: false
     };
 
-    // Слушаем кошелек
-    tonConnectUI.onStatusChange(wallet => {
-        const btn = document.getElementById('wallet-btn');
-        if (wallet) {
-            state.wallet = wallet.account.address;
-            state.isDirty = true;
-            btn.innerText = 'OK';
-            btn.classList.add('wallet-connected');
-        } else {
-            state.wallet = null;
-            btn.innerText = 'WALLET';
-            btn.classList.remove('wallet-connected');
+    // Анимация лоадера
+    let loadProgress = 0;
+    const loadInt = setInterval(() => {
+        if (loadProgress < 90) loadProgress += Math.random() * 5;
+        if (state.ready) loadProgress = 100;
+        
+        document.getElementById('loading-text').innerText = Math.floor(loadProgress) + '%';
+        
+        if (loadProgress >= 100) {
+            clearInterval(loadInt);
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('main-app').style.display = 'flex';
         }
-    });
+    }, 100);
 
-    async function loadData() {
-        if(!state.uid) { state.loaded = true; hideLoader(); return; }
-        try {
-            const r = await fetch(`/api/user/${state.uid}`);
-            const res = await r.json();
-            state.balance = Number(res.balance) || 0;
-            state.energy = Number(res.energy) || 1000;
-            state.pnl = Number(res.pnl) || 0;
-            state.click_lvl = Number(res.click_lvl) || 1;
-            state.wallet = res.wallet || null;
-        } catch(e) {}
-        state.loaded = true;
-        updateUI();
-        hideLoader();
+    async function init() {
+        if (state.uid) {
+            try {
+                const r = await fetch('/api/user/' + state.uid);
+                const d = await r.json();
+                state.bal = Number(d.balance) || 0;
+                state.nrg = Number(d.energy) || 1000;
+                state.lvl = Number(d.click_lvl) || 1;
+                state.pnl = Number(d.pnl) || 0;
+            } catch (e) { console.error("API error, using defaults"); }
+        }
+        state.ready = true;
+        render();
     }
 
-    function updateUI() {
-        document.getElementById('balance').innerText = Math.floor(state.balance).toLocaleString();
-        document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
-        document.getElementById('energy-fill').style.width = `${(state.energy/state.max_energy)*100}%`;
-        document.getElementById('lvl-display').innerText = state.click_lvl;
-        document.getElementById('pnl-display').innerText = `+${Math.floor(state.pnl)}/h`;
+    function render() {
+        document.getElementById('bal').innerText = Math.floor(state.bal).toLocaleString();
+        document.getElementById('nrg-txt').innerText = Math.floor(state.nrg) + '/1000';
+        document.getElementById('fill').style.width = (state.nrg / 10) + '%';
     }
 
-    document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
+    document.getElementById('coin').addEventListener('touchstart', (e) => {
         e.preventDefault();
-        if (state.energy < state.click_lvl) return;
+        if (state.nrg < state.lvl) return;
         
-        state.balance += state.click_lvl;
-        state.energy -= state.click_lvl;
-        state.isDirty = true;
-
-        const touch = e.touches[0];
-        const num = document.createElement('div');
-        num.className = 'tap-text';
-        num.innerText = `+${state.click_lvl}`;
-        num.style.left = touch.clientX + 'px';
-        num.style.top = touch.clientY + 'px';
-        document.body.appendChild(num);
-        setTimeout(() => num.remove(), 700);
+        state.bal += state.lvl;
+        state.nrg -= state.lvl;
         
-        updateUI();
-        tg.HapticFeedback.impactOccurred('medium');
+        const t = e.touches[0];
+        const n = document.createElement('div');
+        n.className = 'tap-anim';
+        n.style.left = t.clientX + 'px';
+        n.style.top = t.clientY + 'px';
+        n.innerText = '+' + state.lvl;
+        document.body.appendChild(n);
+        setTimeout(() => n.remove(), 600);
+        
+        render();
+        tg.HapticFeedback.impactOccurred('light');
     });
 
-    async function connectWallet() {
+    document.getElementById('w-btn').onclick = async () => {
         if (state.wallet) {
-            tg.showPopup({ 
-                title: 'WALLET', 
-                message: 'Wallet is connected. Do you want to disconnect?', 
-                buttons: [{id: 'd', type: 'destructive', text: 'DISCONNECT'}, {type:'cancel'}]
-            }, (id) => { if(id==='d') tonConnectUI.disconnect(); });
+            tg.showAlert("Connected: " + state.wallet.slice(0,8) + "...");
         } else {
             await tonConnectUI.openModal();
         }
-    }
+    };
 
-    async function syncData() {
-        if(!state.uid || !state.isDirty) return;
-        await fetch('/api/save', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                userId: String(state.uid),
-                username: tg.initDataUnsafe?.user?.username || 'Player',
-                balance: state.balance,
-                energy: state.energy,
-                click_lvl: state.click_lvl,
-                pnl: state.pnl,
-                wallet: state.wallet
-            })
-        });
-        state.isDirty = false;
-    }
+    tonConnectUI.onStatusChange(w => {
+        if (w) {
+            state.wallet = w.account.address;
+            document.getElementById('w-btn').style.borderColor = '#00f2ff';
+        }
+    });
 
-    function hideLoader() {
-        document.getElementById('loader-screen').style.opacity = '0';
-        setTimeout(() => {
-            document.getElementById('loader-screen').style.display = 'none';
-            document.querySelector('.content-layer').classList.add('active');
-        }, 500);
-    }
+    setInterval(async () => {
+        if (state.ready && state.uid) {
+            await fetch('/api/save', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    userId: state.uid, balance: state.bal, energy: state.nrg,
+                    click_lvl: state.lvl, pnl: state.pnl, wallet: state.wallet,
+                    username: tg.initDataUnsafe?.user?.username || 'Player'
+                })
+            });
+        }
+    }, 5000);
 
     setInterval(() => {
-        if (state.energy < state.max_energy) {
-            state.energy = Math.min(state.max_energy, state.energy + 1.5);
-            updateUI();
+        if (state.nrg < 1000) {
+            state.nrg = Math.min(1000, state.nrg + 1.5);
+            render();
         }
     }, 1000);
 
-    setInterval(syncData, 4000);
-    window.onload = loadData;
-
-    function showInvite() {
-        const link = `https://t.me/neural_pulse_bot?start=${state.uid}`;
-        tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join me!`);
-    }
+    window.onload = init;
 </script>
 </body>
 </html>
