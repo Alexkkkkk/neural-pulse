@@ -15,14 +15,23 @@ const app = express();
 
 const pool = new Pool({
     connectionString: PG_URI,
-    ssl: false
+    ssl: { rejectUnauthorized: false } // Включаем SSL для работы с удаленными базами
 });
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// [2] ИНИЦИАЛИЗАЦИЯ БАЗЫ (Без сброса данных)
+// [2] МАНИФЕСТ ДЛЯ TON CONNECT (Критично для работы кошелька)
+app.get('/tonconnect-manifest.json', (req, res) => {
+    res.json({
+        "url": `https://${DOMAIN}`,
+        "name": "Neural Pulse AI",
+        "iconUrl": `https://${DOMAIN}/logo.png`
+    });
+});
+
+// [3] ИНИЦИАЛИЗАЦИЯ БАЗЫ
 const initDB = async () => {
     try {
         await pool.query(`
@@ -40,31 +49,34 @@ const initDB = async () => {
         `);
         console.log("📦 [DB] PostgreSQL готова.");
     } catch (err) {
-        console.error("❌ [DB] Ошибка:", err.message);
+        console.error("❌ [DB] Ошибка инициализации:", err.message);
     }
 };
 initDB();
 
-// [3] API
+// [4] API
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
     if (!uid || uid === "null" || uid === "undefined") return res.status(400).json({ error: "Invalid ID" });
     
     try {
         const result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
+        let user;
+
         if (result.rows.length === 0) {
             const newUser = await pool.query(
                 'INSERT INTO users (user_id, last_seen) VALUES ($1, extract(epoch from now())) RETURNING *', [uid]
             );
-            return res.json(newUser.rows[0]);
+            user = newUser.rows[0];
+        } else {
+            user = result.rows[0];
         }
         
-        let user = result.rows[0];
         const now = Math.floor(Date.now() / 1000);
         const lastSeen = parseInt(user.last_seen) || now;
         const secondsOffline = Math.max(0, now - lastSeen);
         
-        // Преобразование для фронтенда (защита от NaN)
+        // Преобразование типов и расчеты
         user.balance = Number(user.balance) || 0;
         user.energy = Number(user.energy) || 1000;
         user.max_energy = Number(user.max_energy) || 1000;
@@ -72,9 +84,9 @@ app.get('/api/user/:id', async (req, res) => {
         user.click_lvl = parseInt(user.click_lvl) || 1;
 
         if (secondsOffline > 0) {
-            // Оффлайн доход
+            // Пассивный доход
             if (user.pnl > 0) user.balance += (secondsOffline * user.pnl) / 3600;
-            // Реген энергии (1.5/сек)
+            // Реген энергии
             if (user.energy < user.max_energy) {
                 user.energy = Math.min(user.max_energy, user.energy + (secondsOffline * 1.5));
             }
@@ -83,6 +95,7 @@ app.get('/api/user/:id', async (req, res) => {
         }
         res.json(user);
     } catch (e) {
+        console.error("API GET Error:", e);
         res.status(500).json({ error: "DB Error" });
     }
 });
@@ -98,17 +111,35 @@ app.post('/api/save', async (req, res) => {
         `, [String(userId), Number(balance), Number(energy), parseInt(click_lvl), Number(pnl), username, wallet_address]);
         res.json({ status: 'ok' });
     } catch (e) {
+        console.error("API SAVE Error:", e);
         res.status(500).json({ error: e.message });
     }
 });
 
-// [4] БОТ
+// [5] БОТ
 bot.start(async (ctx) => {
     const uid = String(ctx.from.id);
     const gameUrl = `https://${DOMAIN}?v=${Date.now()}`;
-    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI</b>\n\nГотов к майнингу?`, 
-        Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', gameUrl)]]));
+    
+    // Приветственное сообщение с кнопкой
+    ctx.replyWithHTML(
+        `<b>🚀 Welcome to NEURAL PULSE AI!</b>\n\n` +
+        `Здесь ты можешь майнить токены, прокачивать нейросети и подключать свой TON кошелек.\n\n` +
+        `<i>Нажимай кнопку ниже, чтобы начать!</i>`, 
+        Markup.inlineKeyboard([
+            [Markup.button.webApp('⚡ ИГРАТЬ', gameUrl)]
+        ])
+    );
+});
+
+// Обработка ошибок бота
+bot.catch((err) => {
+    console.error("Telegram Bot Error:", err);
 });
 
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 bot.launch();
+
+// Graceful stop
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
