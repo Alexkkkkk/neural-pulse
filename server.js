@@ -15,10 +15,10 @@ const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// Настройка пула соединений
+// Настройка пула соединений (ИСПРАВЛЕНО: SSL ОТКЛЮЧЕН)
 const pool = new Pool({
     connectionString: PG_URI,
-    ssl: { rejectUnauthorized: false } // Важно для стабильного соединения с внешними нодами pghost
+    ssl: false // Отключаем SSL, так как сервер Bothost его не поддерживает
 });
 
 app.use(cors());
@@ -37,7 +37,7 @@ const initDB = async () => {
                 pnl NUMERIC DEFAULT 0
             );
         `);
-        console.log("📦 [DB] PostgreSQL подключена, таблица 'users' активна");
+        console.log("📦 [DB] PostgreSQL подключена, таблица 'users' готова");
     } catch (err) {
         console.error("❌ [DB] Ошибка инициализации:", err.message);
     }
@@ -62,10 +62,11 @@ app.get('/api/user/:id', async (req, res) => {
             return res.json(newUser.rows[0]);
         }
         
-        // PostgreSQL возвращает NUMERIC как строки, конвертируем их для фронтенда
         const user = result.rows[0];
-        user.balance = parseFloat(user.balance);
-        user.pnl = parseFloat(user.pnl);
+        // Превращаем строки из базы в числа для JavaScript
+        user.balance = parseFloat(user.balance) || 0;
+        user.pnl = parseFloat(user.pnl) || 0;
+        user.energy = parseInt(user.energy) || 0;
         
         res.json(user);
     } catch (e) {
@@ -89,7 +90,7 @@ app.post('/api/save', async (req, res) => {
             `, [uid, balance || 0, energy || 0, click_lvl || 1, pnl || 0]);
             
             if (Math.random() > 0.9) {
-                console.log(`☁️ [DB SAVE] Успешное сохранение в Postgres для: ${uid}`);
+                console.log(`☁️ [DB SAVE] Сохранено в Postgres для: ${uid}`);
             }
             res.json({ status: 'ok' });
         } catch (e) {
@@ -117,19 +118,21 @@ bot.start(async (ctx) => {
             userData = result.rows[0];
         }
 
+        const bal = parseFloat(userData.balance) || 0;
+
         ctx.replyWithHTML(
             `<b>🚀 NEURAL PULSE AI: ОНЛАЙН</b>\n\n` +
             `Привет, ${name}!\n` +
-            `Твой баланс: 💰 <b>${Math.floor(Number(userData.balance)).toLocaleString()} NP</b>\n` +
+            `Твой баланс: 💰 <b>${Math.floor(bal).toLocaleString()} NP</b>\n` +
             `Энергия: ⚡ <b>${userData.energy}</b>\n\n` +
-            `<i>Данные синхронизированы с PostgreSQL 🐘</i>`,
+            `<i>База данных подключена успешно! ✅</i>`,
             Markup.inlineKeyboard([
                 [Markup.button.webApp('⚡ ИГРАТЬ', `https://${DOMAIN}`)]
             ])
         );
     } catch (e) {
         console.error("❌ [BOT START] Ошибка:", e.message);
-        ctx.reply("⚠️ Ошибка доступа к базе данных. Попробуйте позже.");
+        ctx.reply("⚠️ Ошибка связи с базой данных.");
     }
 });
 
@@ -137,11 +140,11 @@ bot.start(async (ctx) => {
 app.listen(PORT, () => {
     console.log(`\n————————————————————————————————————————————————`);
     console.log(`🖥️  СЕРВЕР: https://${DOMAIN}`);
-    console.log(`📦 БАЗА: PostgreSQL (Bothost)`);
+    console.log(`📦 БАЗА: PostgreSQL (Bothost) - SSL OFF`);
     console.log(`————————————————————————————————————————————————\n`);
     
     bot.launch().then(() => {
-        console.log(`✅ [BOT] Телеграм бот запущен и готов к работе`);
+        console.log(`✅ [BOT] Телеграм бот запущен`);
     }).catch(err => console.error("❌ Ошибка запуска бота:", err));
 });
 
