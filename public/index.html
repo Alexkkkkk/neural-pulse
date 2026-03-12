@@ -6,7 +6,7 @@
     <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #050505; --glass: rgba(255, 255, 255, 0.07); }
+        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #050505; --glass: rgba(255, 255, 255, 0.07); --ton-blue: #0088cc; }
         body { margin: 0; padding: 0; background-color: var(--bg-dark); background-image: radial-gradient(circle at 50% 50%, #150a28 0%, #050505 100%); color: white; font-family: 'Segoe UI', Roboto, sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
         
         /* Лоадер */
@@ -33,8 +33,15 @@
         .click-area { position: relative; width: 280px; height: 280px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
         .main-logo { width: 230px; height: 230px; border-radius: 50%; box-shadow: 0 0 80px rgba(188, 19, 254, 0.2); transition: transform 0.05s ease; z-index: 5; object-fit: cover; pointer-events: none; border: 4px solid rgba(255,255,255,0.05); }
         
+        /* Боковая навигация с кнопкой TON */
         .side-nav { position: absolute; right: 10px; display: flex; flex-direction: column; gap: 12px; z-index: 10; }
-        .side-btn { background: rgba(20,20,20,0.8); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 10px; font-weight: 800; padding: 12px; border-radius: 14px; width: 65px; text-align: center; backdrop-filter: blur(5px); }
+        .side-btn { background: rgba(20,20,20,0.8); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 10px; font-weight: 800; padding: 12px; border-radius: 14px; width: 65px; text-align: center; backdrop-filter: blur(5px); transition: all 0.2s; }
+        .side-btn:active { transform: scale(0.9); }
+        
+        /* Специфический стиль для кнопки кошелька */
+        .wallet-btn { border-color: var(--ton-blue); background: rgba(0, 136, 204, 0.2); box-shadow: 0 0 10px rgba(0, 136, 204, 0.3); }
+        .ton-icon { width: 14px; margin-bottom: 4px; display: block; margin-left: auto; margin-right: auto; }
+
         .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: auto; margin-bottom: 35px; }
         .nav-btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 14px 5px; border-radius: 16px; text-align: center; font-size: 11px; font-weight: 800; color: #fff; }
         .tap-text { position: absolute; color: #fff; font-size: 36px; font-weight: 900; pointer-events: none; animation: floatUp 0.7s ease-out forwards; z-index: 100; text-shadow: 0 0 15px var(--neon-purple); }
@@ -82,6 +89,10 @@
                 <img src="logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/230/bc13fe/fff?text=AI'">
             </div>
             <div class="side-nav">
+                <div class="side-btn wallet-btn" onclick="connectWallet()">
+                    <img src="https://ton.org/download/ton_symbol.svg" class="ton-icon">
+                    WALLET
+                </div>
                 <div class="side-btn" onclick="showInvite()">INVITE</div>
                 <div class="side-btn" onclick="tg.showAlert('Tasks update in 24h')">TASKS</div>
                 <div class="side-btn" style="color:#ffe600; border-color:rgba(255,230,0,0.4)" onclick="tg.showAlert('Daily Bonus available tomorrow!')">BONUS</div>
@@ -123,7 +134,6 @@
             uid: tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('u')
         };
 
-        // Имя юзера для сохранения
         const tgUser = tg.initDataUnsafe?.user;
         const currentUsername = tgUser ? (tgUser.username || tgUser.first_name) : "Игрок";
 
@@ -134,13 +144,10 @@
                 state.loaded = true;
                 return; 
             }
-
             try {
                 const r = await fetch(`${API_BASE}/api/user/${state.uid}`);
                 if (!r.ok) throw new Error("Server Error");
                 const res = await r.json();
-                
-                // Важно: переводим в числа
                 state.balance = Number(res.balance) || 0;
                 state.energy = Number(res.energy) || 1000;
                 state.pnl = Number(res.pnl) || 0;
@@ -152,29 +159,26 @@
             updateUI();
         }
 
-        // 3. СОХРАНЕНИЕ ДАННЫХ (ИСПРАВЛЕНА СИНХРОНИЗАЦИЯ)
+        // 3. СОХРАНЕНИЕ
         async function syncData() {
             if(!state.uid || !state.loaded || !state.isDirty) return;
-            
             try {
                 await fetch(`${API_BASE}/api/save`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         userId: String(state.uid),
-                        username: currentUsername, // Передаем имя, чтобы не затиралось!
+                        username: currentUsername,
                         balance: state.balance, 
                         energy: state.energy,
-                        click_lvl: state.click_lvl, // Передаем уровень!
-                        pnl: state.pnl             // Передаем пассивный доход!
+                        click_lvl: state.click_lvl,
+                        pnl: state.pnl
                     })
                 });
                 state.isDirty = false;
-                console.log("☁️ [SYNC] Успешно");
             } catch(e) { console.warn("☁️ [SYNC] Ошибка связи."); }
         }
 
-        // 4. ИНТЕРФЕЙС
         function updateUI() {
             document.getElementById('balance').innerText = Math.floor(state.balance).toLocaleString();
             document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
@@ -184,7 +188,7 @@
             if(state.uid) document.getElementById('rank-id').innerText = `ID: ${String(state.uid).slice(-6)}`;
         }
 
-        // 5. ЛОГИКА ТАПОВ
+        // 4. ЛОГИКА ТАПОВ
         const tapZone = document.getElementById('tap-zone');
         const mainLogo = document.getElementById('main-logo');
 
@@ -192,20 +196,16 @@
             e.preventDefault();
             if (!state.loaded) return;
 
-            // Обработка мультитача
             for(let i=0; i < e.changedTouches.length; i++) {
                 const touch = e.changedTouches[i];
-
                 if (state.energy < state.click_lvl) {
                     if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('warning');
                     break;
                 }
-
                 state.balance += state.click_lvl;
                 state.energy -= state.click_lvl;
                 state.isDirty = true;
 
-                // Анимация +1
                 const num = document.createElement('div');
                 num.className = 'tap-text';
                 num.innerText = `+${state.click_lvl}`;
@@ -213,10 +213,8 @@
                 num.style.top = `${touch.clientY - 40}px`;
                 document.body.appendChild(num);
                 setTimeout(() => num.remove(), 600);
-
                 if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
             }
-
             mainLogo.style.transform = 'scale(0.94) rotate(-2deg)';
             updateUI();
         }, { passive: false });
@@ -225,34 +223,45 @@
             mainLogo.style.transform = 'scale(1) rotate(0deg)';
         });
 
-        // Регенерация энергии
+        // 5. НОВАЯ ФУНКЦИЯ КОШЕЛЬКА
+        function connectWallet() {
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('heavy');
+            tg.showPopup({
+                title: '💎 TON WALLET',
+                message: 'Connect your TON wallet to withdraw NP tokens in the future.',
+                buttons: [
+                    {id: 'connect', type: 'default', text: 'CONNECT WALLET'},
+                    {type: 'cancel', text: 'LATER'}
+                ]
+            }, (btn) => {
+                if (btn === 'connect') {
+                    tg.showAlert('TON Connect integration is coming soon!');
+                }
+            });
+        }
+
         setInterval(() => {
             if (state.loaded && state.energy < state.max_energy) {
                 state.energy = Math.min(state.max_energy, state.energy + 1.5);
-                state.isDirty = true; // Триггерим сохранение при регенерации
+                state.isDirty = true;
                 updateUI();
             }
         }, 1000);
 
-        // Авто-сохранение раз в 4 сек
         setInterval(syncData, 4000); 
 
-        // Лоадер
         function startLoadingAnimation() {
             let progress = 0;
             const percentEl = document.getElementById('loader-percent');
             const fillEl = document.getElementById('loader-fill');
-
             const interval = setInterval(() => {
-                if (state.loaded) progress += 15; // Ускоряем, если данные уже пришли
+                if (state.loaded) progress += 15;
                 else if (progress < 90) progress += 0.5;
-
                 if (progress >= 100) {
                     progress = 100;
                     clearInterval(interval);
                     hideLoader();
                 }
-                
                 const displayProgress = Math.floor(progress);
                 percentEl.innerText = `${displayProgress}%`;
                 fillEl.style.width = `${displayProgress}%`;
