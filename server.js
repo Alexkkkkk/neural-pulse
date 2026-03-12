@@ -15,16 +15,9 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
 app.use(cors());
 app.use(express.json());
-
-// ВАЖНО: Указываем путь к папке public
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Принудительно отдаем index.html при заходе на корень
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// Инициализация БД (без DROP TABLE, чтобы не терять данные)
+// Инициализация таблицы
 const initDB = async () => {
     try {
         await pool.query(`
@@ -39,29 +32,41 @@ const initDB = async () => {
                 last_seen BIGINT DEFAULT extract(epoch from now())
             );
         `);
-        console.log("✅ [DB] Подключено");
+        console.log("✅ [DB] Подключено и готово");
     } catch (err) {
         console.error("❌ [DB] Ошибка:", err.message);
     }
 };
 initDB();
 
-// API: Получение юзера
+// API: Получение данных игрока
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
+    if (!uid || uid === "null") return res.status(400).json({ error: "Invalid ID" });
     try {
         const result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
+        let user;
         if (result.rows.length === 0) {
-            const newUser = await pool.query('INSERT INTO users (user_id) VALUES ($1) RETURNING *', [uid]);
-            return res.json(newUser.rows[0]);
+            const newUser = await pool.query(
+                'INSERT INTO users (user_id, balance, energy, click_lvl) VALUES ($1, 0, 1000, 1) RETURNING *', 
+                [uid]
+            );
+            user = newUser.rows[0];
+        } else {
+            user = result.rows[0];
         }
-        res.json(result.rows[0]);
+        res.json({
+            user_id: user.user_id,
+            balance: Number(user.balance) || 0,
+            energy: Number(user.energy) || 1000,
+            click_lvl: Number(user.click_lvl) || 1
+        });
     } catch (e) {
         res.status(500).json({ error: "DB Error" });
     }
 });
 
-// API: Сохранение
+// API: Сохранение прогресса
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, click_lvl } = req.body;
     try {
@@ -76,14 +81,18 @@ app.post('/api/save', async (req, res) => {
     }
 });
 
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI</b>\n\nНачни майнить прямо сейчас!`, 
+    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI</b>`, 
         Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', `https://${DOMAIN}?u=${ctx.from.id}`)]])
     );
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 Сервер запущен`);
-    bot.launch();
+    console.log(`🚀 Сервер на порту ${PORT}`);
+    bot.launch().catch(err => console.error("TG Error:", err.message));
 });
