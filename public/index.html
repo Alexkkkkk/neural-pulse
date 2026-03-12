@@ -5,296 +5,73 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
-    
     <style>
-        :root {
-            --cyan: #00f2ff;
-            --bg: #000;
-            --panel: rgba(255, 255, 255, 0.07);
-        }
-
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: var(--bg);
-            color: white;
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            overflow: hidden;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        /* Загрузочный экран */
-        #loader {
-            position: fixed;
-            inset: 0;
-            background: #000;
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .loader-pct {
-            font-size: 64px;
-            font-weight: 900;
-            color: var(--cyan);
-            text-shadow: 0 0 20px rgba(0, 242, 255, 0.5);
-        }
-
-        /* Основной контейнер игры */
-        #game-ui {
-            width: 100%;
-            max-width: 500px;
-            display: none; /* Скрыт до загрузки */
-            flex-direction: column;
-            align-items: center;
-            height: 100%;
-            padding-top: 30px;
-        }
-
-        .header-label {
-            font-size: 12px;
-            letter-spacing: 3px;
-            color: var(--cyan);
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-
-        .balance-value {
-            font-size: 56px;
-            font-weight: 900;
-            margin-bottom: 20px;
-        }
-
-        /* Кнопка-кликер */
-        .click-area {
-            position: relative;
-            margin: 20px 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .main-coin {
-            width: 280px;
-            height: 280px;
-            border-radius: 50%;
-            border: 6px solid #111;
-            background: radial-gradient(circle, #0a0a0a 0%, #000 100%);
-            box-shadow: 0 0 40px rgba(0, 242, 255, 0.1);
-            transition: transform 0.05s ease;
-            cursor: pointer;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        .main-coin:active {
-            transform: scale(0.96);
-        }
-
-        /* Статистика снизу */
-        .bottom-stats {
-            width: 90%;
-            background: var(--panel);
-            padding: 20px;
-            border-radius: 24px;
-            margin-top: auto;
-            margin-bottom: 40px;
-            backdrop-filter: blur(10px);
-        }
-
-        .energy-row {
-            display: flex;
-            justify-content: space-between;
-            font-size: 14px;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-
-        .progress-bg {
-            width: 100%;
-            height: 14px;
-            background: #111;
-            border-radius: 7px;
-            overflow: hidden;
-        }
-
-        #progress-fill {
-            height: 100%;
-            width: 100%;
-            background: linear-gradient(90deg, #0088ff, var(--cyan));
-            transition: width 0.3s ease;
-        }
-
-        /* Анимация всплывающих цифр */
-        .tap-anim {
-            position: absolute;
-            color: white;
-            font-size: 38px;
-            font-weight: 900;
-            pointer-events: none;
-            user-select: none;
-            animation: moveUp 0.7s ease-out forwards;
-        }
-
-        @keyframes moveUp {
-            0% { transform: translateY(0); opacity: 1; }
-            100% { transform: translateY(-120px); opacity: 0; }
-        }
-
-        #ton-btn {
-            background: #0088cc;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 16px;
-            font-weight: bold;
-            font-size: 14px;
-            margin-top: 10px;
-        }
+        body { margin: 0; background: #000; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        #loader { font-size: 40px; color: #00f2ff; font-weight: 900; }
+        #game { display: none; flex-direction: column; align-items: center; width: 100%; }
+        .bal { font-size: 48px; font-weight: 900; margin-bottom: 20px; color: #00f2ff; }
+        .coin { width: 250px; height: 250px; border-radius: 50%; border: 4px solid #111; box-shadow: 0 0 20px rgba(0,242,255,0.2); transition: 0.1s; cursor: pointer; }
+        .coin:active { transform: scale(0.95); }
+        .energy-box { width: 80%; background: #111; height: 10px; border-radius: 5px; margin-top: 40px; overflow: hidden; }
+        #bar { height: 100%; background: #00f2ff; width: 100%; transition: 0.3s; }
     </style>
 </head>
 <body>
-
-    <div id="loader">
-        <div class="loader-pct" id="load-pct">0%</div>
-        <div style="font-size: 10px; letter-spacing: 2px; color: #444; margin-top: 15px;">INITIALIZING NEURAL NETWORK</div>
-    </div>
-
-    <div id="game-ui">
-        <div class="header-label">NEURAL PULSE AI</div>
-        <div class="balance-value" id="balance">0</div>
-
-        <div class="click-area">
-            <img src="logo.png" id="clicker" class="main-coin" onerror="this.src='https://via.placeholder.com/300/000000/00f2ff?text=AI'">
-        </div>
-
-        <button id="ton-btn">CONNECT WALLET</button>
-
-        <div class="bottom-stats">
-            <div class="energy-row">
-                <span>⚡ ENERGY</span>
-                <span id="energy-text">1000 / 1000</span>
-            </div>
-            <div class="progress-bg">
-                <div id="progress-fill"></div>
-            </div>
-        </div>
+    <div id="loader">0%</div>
+    <div id="game">
+        <div class="bal" id="bal">0</div>
+        <img src="logo.png" class="coin" id="coin" onerror="this.src='https://via.placeholder.com/250/000/00f2ff?text=AI'">
+        <div class="energy-box"><div id="bar"></div></div>
+        <p id="nrg-txt">1000/1000</p>
     </div>
 
 <script>
     const tg = window.Telegram.WebApp;
-    tg.expand();
+    let state = { bal: 0, nrg: 1000, lvl: 1, uid: new URLSearchParams(window.location.search).get('u') || tg.initDataUnsafe?.user?.id };
 
-    // Настройка TON Connect
-    const tonConnectUI = new TONConnectUI.TonConnectUI({
-        manifestUrl: window.location.origin + '/tonconnect-manifest.json',
-        buttonRootId: 'ton-btn'
-    });
+    // Имитация загрузки
+    let p = 0;
+    const lIdx = setInterval(() => {
+        p += 5;
+        document.getElementById('loader').innerText = p + '%';
+        if (p >= 100) {
+            clearInterval(lIdx);
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('game').style.display = 'flex';
+        }
+    }, 50);
 
-    // Состояние игры
-    let state = {
-        userId: new URLSearchParams(window.location.search).get('u') || tg.initDataUnsafe?.user?.id || "guest",
-        balance: 0,
-        energy: 1000,
-        clickLvl: 1,
-        isReady: false
+    async function load() {
+        if (!state.uid) return;
+        const res = await fetch('/api/user/' + state.uid);
+        const d = await res.json();
+        state.bal = Number(d.balance) || 0;
+        state.nrg = Number(d.energy) || 1000;
+        update();
+    }
+
+    function update() {
+        document.getElementById('bal').innerText = Math.floor(state.bal);
+        document.getElementById('bar').style.width = (state.nrg / 10) + '%';
+        document.getElementById('nrg-txt').innerText = Math.floor(state.energy) + '/1000';
+    }
+
+    document.getElementById('coin').onclick = () => {
+        if (state.nrg < state.lvl) return;
+        state.bal += state.lvl; state.nrg -= state.lvl;
+        update();
+        tg.HapticFeedback.impactOccurred('light');
     };
 
-    // Плавная анимация загрузки
-    let loadProgress = 0;
-    const loadInterval = setInterval(() => {
-        if (loadProgress < 90) loadProgress += Math.random() * 5;
-        if (state.isReady) loadProgress = 100;
-        
-        document.getElementById('load-pct').innerText = Math.floor(loadProgress) + '%';
-        
-        if (loadProgress >= 100) {
-            clearInterval(loadInterval);
-            document.getElementById('loader').style.display = 'none';
-            document.getElementById('game-ui').style.display = 'flex';
-        }
-    }, 80);
-
-    // Загрузка данных с сервера
-    async function fetchUserData() {
-        try {
-            const response = await fetch(`/api/user/${state.userId}`);
-            const data = await response.json();
-            
-            state.balance = Number(data.balance) || 0;
-            state.energy = Number(data.energy) || 1000;
-            state.clickLvl = Number(data.click_lvl) || 1;
-        } catch (err) {
-            console.error("Ошибка загрузки данных:", err);
-        } finally {
-            state.isReady = true;
-            updateDisplay();
-        }
-    }
-
-    // Обновление цифр на экране
-    function updateDisplay() {
-        document.getElementById('balance').innerText = Math.floor(state.balance).toLocaleString();
-        document.getElementById('energy-text').innerText = `${Math.floor(state.energy)} / 1000`;
-        document.getElementById('progress-fill').style.width = (state.energy / 10) + '%';
-    }
-
-    // Обработка клика
-    const clicker = document.getElementById('clicker');
-    clicker.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        if (state.energy < state.clickLvl) return;
-
-        // Обновляем состояние
-        state.balance += state.clickLvl;
-        state.energy -= state.clickLvl;
-
-        // Анимация цифр
-        const touch = e.touches[0];
-        const anim = document.createElement('div');
-        anim.className = 'tap-anim';
-        anim.style.left = touch.clientX + 'px';
-        anim.style.top = touch.clientY + 'px';
-        anim.innerText = `+${state.clickLvl}`;
-        document.body.appendChild(anim);
-        
-        setTimeout(() => anim.remove(), 700);
-
-        updateDisplay();
-        tg.HapticFeedback.impactOccurred('medium');
-    });
-
-    // Сохранение данных на сервер каждые 5 секунд
     setInterval(() => {
-        if (state.isReady && state.userId !== "guest") {
-            fetch('/api/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userId: state.userId,
-                    balance: state.balance,
-                    energy: state.energy,
-                    click_lvl: state.clickLvl
-                })
-            });
-        }
+        fetch('/api/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ userId: state.uid, balance: state.bal, energy: state.nrg, click_lvl: state.lvl })
+        });
     }, 5000);
 
-    // Регенерация энергии (1.5 ед. в секунду)
-    setInterval(() => {
-        if (state.energy < 1000) {
-            state.energy = Math.min(1000, state.energy + 1.5);
-            updateDisplay();
-        }
-    }, 1000);
-
-    // Запуск приложения
-    window.onload = fetchUserData;
+    window.onload = load;
 </script>
 </body>
 </html>
