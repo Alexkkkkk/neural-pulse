@@ -10,48 +10,47 @@
         :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #050505; --glass: rgba(255, 255, 255, 0.07); --ton-blue: #0088cc; }
         body { margin: 0; padding: 0; background-color: var(--bg-dark); background-image: radial-gradient(circle at 50% 50%, #150a28 0%, #050505 100%); color: white; font-family: 'Segoe UI', Roboto, sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
         
+        /* ТВОЙ ЛОАДЕР */
         #loader-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #050505; display: flex; align-items: center; justify-content: center; z-index: 10000; transition: opacity 0.5s ease; }
         .loader-container { text-align: center; }
         .loader-logo-wrap { position: relative; width: 120px; height: 120px; margin: 0 auto 30px; }
         .loader-ring { position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; border: 3px solid transparent; border-top: 3px solid var(--neon-cyan); border-right: 3px solid var(--neon-purple); border-radius: 50%; animation: rotate-ring 1s linear infinite; }
-        .loader-percent { color: var(--neon-cyan); font-size: 28px; font-weight: 900; font-family: monospace; }
-        .loader-bar-bg { width: 200px; height: 4px; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 20px auto; overflow: hidden; }
+        .loader-percent { color: var(--neon-cyan); font-size: 28px; font-weight: 900; margin-bottom: 20px; font-family: monospace; }
+        .loader-bar-bg { width: 200px; height: 4px; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 0 auto; overflow: hidden; }
         .loader-bar-fill { width: 0%; height: 100%; background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); transition: width 0.2s; }
         @keyframes rotate-ring { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-        .content-layer { position: relative; z-index: 2; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; padding-top: env(safe-area-inset-top); transition: all 0.5s ease; transform: scale(0.95); opacity: 0; visibility: hidden; }
+        /* ТВОЙ ИНТЕРФЕЙС */
+        .content-layer { position: relative; z-index: 2; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; padding-top: env(safe-area-inset-top); transition: transform 0.6s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.5s ease; transform: scale(0.95); opacity: 0; visibility: hidden; }
         .content-layer.active { transform: scale(1); opacity: 1; visibility: visible; }
         .header-card { width: 85%; margin-top: 15px; display: flex; align-items: center; gap: 12px; background: var(--glass); padding: 12px; border-radius: 20px; backdrop-filter: blur(15px); border: 1px solid rgba(0, 242, 255, 0.15); }
         .lvl-icon { width: 44px; height: 44px; background: rgba(0, 242, 255, 0.1); border: 1px solid var(--neon-cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--neon-cyan); font-size: 18px; }
-        #balance { font-size: 48px; font-weight: 900; color: #fff; text-shadow: 0 0 30px rgba(0, 242, 255, 0.3); margin-top: 20px; }
+        #balance { font-size: 48px; font-weight: 900; color: #fff; text-shadow: 0 0 30px rgba(0, 242, 255, 0.3); margin-top: 25px; }
 
         .main-wrapper { position: relative; width: 100%; display: flex; justify-content: center; align-items: center; margin-top: 30px; }
         .click-area { width: 280px; height: 280px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-        .main-logo { width: 230px; height: 230px; border-radius: 50%; border: 4px solid rgba(255,255,255,0.1); transition: transform 0.05s ease; }
+        .main-logo { width: 230px; height: 230px; border-radius: 50%; transition: transform 0.05s ease; border: 4px solid rgba(255,255,255,0.05); }
         
-        /* Боковое меню из твоего дизайна */
+        /* ТВОИ КНОПКИ БОКОВЫЕ */
         .side-nav { position: absolute; right: 10px; display: flex; flex-direction: column; gap: 12px; }
-        .side-btn { background: rgba(20,20,20,0.8); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 10px; font-weight: 800; padding: 12px; border-radius: 14px; width: 65px; text-align: center; cursor: pointer; }
+        .side-btn { background: rgba(20,20,20,0.8); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 10px; font-weight: 800; padding: 12px; border-radius: 14px; width: 65px; text-align: center; }
         
-        /* Кнопка кошелька - активная и яркая */
-        .wallet-btn { border-color: var(--ton-blue); color: #fff; background: rgba(0, 136, 204, 0.3); }
-        .wallet-btn span { display: block; font-size: 8px; margin-top: 4px; opacity: 0.8; }
-
-        .energy-section { width: 85%; margin-top: auto; margin-bottom: 20px; }
+        .energy-section { width: 85%; margin-top: 25px; }
         .energy-bar-wrap { width: 100%; height: 12px; background: rgba(255,255,255,0.05); border-radius: 20px; overflow: hidden; }
         #energy-fill { height: 100%; background: linear-gradient(90deg, #00ff66, var(--neon-cyan)); width: 100%; transition: width 0.3s; }
         
-        .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 35px; }
-        .nav-btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 14px; border-radius: 16px; text-align: center; font-size: 11px; color: #fff; }
-        .tap-text { position: absolute; color: #fff; font-size: 32px; font-weight: 900; pointer-events: none; animation: floatUp 0.6s ease-out forwards; }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px); } }
+        .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: auto; margin-bottom: 35px; }
+        .nav-btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 14px 5px; border-radius: 16px; text-align: center; font-size: 11px; color: #fff; }
+        .tap-text { position: absolute; color: #fff; font-size: 36px; font-weight: 900; pointer-events: none; animation: floatUp 0.7s ease-out forwards; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-140px); } }
     </style>
 </head>
 <body>
 
     <div id="loader-screen">
         <div class="loader-container">
-            <div class="loader-logo-wrap"><div class="loader-ring"></div><div class="loader-percent" id="loader-percent">0%</div></div>
+            <div class="loader-logo-wrap"><div class="loader-ring"></div></div>
+            <div id="loader-percent" class="loader-percent">0%</div>
             <div class="loader-bar-bg"><div id="loader-fill" class="loader-bar-fill"></div></div>
         </div>
     </div>
@@ -75,18 +74,15 @@
                 <img src="logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/230/bc13fe/fff?text=AI'">
             </div>
             <div class="side-nav">
-                <div class="side-btn wallet-btn" id="ton-connect-btn">
-                    <div>💎</div>
-                    <div id="wallet-label">WALLET</div>
-                </div>
+                <div class="side-btn" id="ton-connect-btn" style="border-color: var(--ton-blue); color: var(--ton-blue);">WALLET</div>
                 <div class="side-btn" onclick="showInvite()">INVITE</div>
-                <div class="side-btn" onclick="tg.showAlert('Coming soon')">TASKS</div>
-                <div class="side-btn" style="border-color: gold; color: gold;" onclick="tg.showAlert('Bonus available daily')">BONUS</div>
+                <div class="side-btn" onclick="tg.showAlert('Soon')">TASKS</div>
+                <div class="side-btn" style="color:#ffe600;" onclick="tg.showAlert('Soon')">BONUS</div>
             </div>
         </div>
 
         <div class="energy-section">
-            <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px;">
+            <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 8px; color: #888;">
                 <span>⚡ ENERGY</span>
                 <span id="energy-text">1000/1000</span>
             </div>
@@ -94,18 +90,17 @@
         </div>
 
         <div class="bottom-nav">
-            <div class="nav-btn" onclick="tg.showAlert('Boosts updated daily')">🚀 BOOST</div>
-            <div class="nav-btn" onclick="tg.showAlert('Mining at Lvl 5')">⛏️ MINE</div>
-            <div class="nav-btn" onclick="tg.showAlert('Global stats coming soon')">📊 STATS</div>
+            <div class="nav-btn">🚀 BOOST</div>
+            <div class="nav-btn">⛏️ MINE</div>
+            <div class="nav-btn">📊 STATS</div>
         </div>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
-        tg.ready();
-        tg.expand();
+        tg.ready(); tg.expand();
 
-        // Инициализация TON Connect
+        // TON Connect UI привязываем к твоей кнопке
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
             manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
             buttonRootId: 'ton-connect-btn' 
@@ -115,7 +110,7 @@
             balance: 0, energy: 1000, max_energy: 1000, 
             click_lvl: 1, pnl: 0, loaded: false, isDirty: false,
             wallet: null,
-            uid: tg.initDataUnsafe?.user?.id || "demo_user"
+            uid: tg.initDataUnsafe?.user?.id || "demo"
         };
 
         async function loadData() {
@@ -124,36 +119,29 @@
                 const res = await r.json();
                 state.balance = Number(res.balance) || 0;
                 state.energy = Number(res.energy) || 1000;
-                state.max_energy = Number(res.max_energy) || 1000;
                 state.pnl = Number(res.pnl) || 0;
                 state.click_lvl = Number(res.click_lvl) || 1;
                 state.wallet = res.wallet_address || null;
-            } catch(e) { console.error("Load error"); }
+            } catch(e) {}
             state.loaded = true;
             updateUI();
         }
 
         function updateUI() {
             document.getElementById('balance').innerText = Math.floor(state.balance).toLocaleString();
-            
-            // Фикс NaN
-            const curEnergy = Math.max(0, Math.floor(state.energy || 0));
-            const maxEnergy = state.max_energy || 1000;
-            document.getElementById('energy-text').innerText = `${curEnergy}/${maxEnergy}`;
-            document.getElementById('energy-fill').style.width = `${(curEnergy / maxEnergy) * 100}%`;
-            
+            document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/1000`;
+            document.getElementById('energy-fill').style.width = `${(state.energy / 1000) * 100}%`;
             document.getElementById('lvl-display').innerText = state.click_lvl;
             document.getElementById('pnl-display').innerText = `PASSIVE: +${Math.floor(state.pnl)}/h`;
             document.getElementById('rank-id').innerText = `ID: ${String(state.uid).slice(-6)}`;
             
-            // Обновляем текст кнопки кошелька
-            const label = document.getElementById('wallet-label');
+            // Если кошелек подключен, меняем текст кнопки
             if(state.wallet) {
-                label.innerText = state.wallet.slice(0, 3) + '..' + state.wallet.slice(-3);
+                document.getElementById('ton-connect-btn').innerText = state.wallet.slice(0,3) + '..' + state.wallet.slice(-3);
             }
         }
 
-        // Слушаем подключение кошелька
+        // Следим за подключением кошелька
         tonConnectUI.onStatusChange(wallet => {
             if (wallet) {
                 state.wallet = wallet.account.address;
@@ -162,42 +150,25 @@
             }
         });
 
-        // Тапы
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (!state.loaded || state.energy < state.click_lvl) return;
-
-            const logo = document.getElementById('main-logo');
-            logo.style.transform = 'scale(0.95)';
-            setTimeout(() => logo.style.transform = 'scale(1)', 50);
-
-            for(let i=0; i<e.changedTouches.length; i++) {
-                state.balance += state.click_lvl;
-                state.energy -= state.click_lvl;
-                state.isDirty = true;
-
-                const touch = e.changedTouches[i];
-                const num = document.createElement('div');
-                num.className = 'tap-text';
-                num.innerText = `+${state.click_lvl}`;
-                num.style.left = touch.clientX + 'px';
-                num.style.top = touch.clientY + 'px';
-                document.body.appendChild(num);
-                setTimeout(() => num.remove(), 600);
-            }
-            tg.HapticFeedback.impactOccurred('medium');
+            state.balance += state.click_lvl;
+            state.energy -= state.click_lvl;
+            state.isDirty = true;
+            
+            const touch = e.changedTouches[0];
+            const num = document.createElement('div');
+            num.className = 'tap-text';
+            num.innerText = `+${state.click_lvl}`;
+            num.style.left = touch.clientX + 'px';
+            num.style.top = touch.clientY + 'px';
+            document.body.appendChild(num);
+            setTimeout(() => num.remove(), 600);
+            
             updateUI();
         });
 
-        // Авто-реген
-        setInterval(() => {
-            if (state.loaded && state.energy < state.max_energy) {
-                state.energy = Math.min(state.max_energy, state.energy + 1.5);
-                updateUI();
-            }
-        }, 1000);
-
-        // Сохранение
         setInterval(async () => {
             if(state.isDirty && state.loaded) {
                 await fetch('/api/save', {
@@ -214,23 +185,22 @@
             }
         }, 3000);
 
-        // Лоадер
         window.onload = () => {
             let p = 0;
             const iv = setInterval(() => {
-                p += state.loaded ? 10 : 2;
+                p += state.loaded ? 10 : 1;
                 if(p > 100) p = 100;
                 document.getElementById('loader-fill').style.width = p+'%';
                 document.getElementById('loader-percent').innerText = p+'%';
                 if(p >= 100 && state.loaded) {
                     clearInterval(iv);
-                    document.getElementById('loader-screen').style.opacity = 0;
+                    document.getElementById('loader-screen').style.opacity = '0';
                     setTimeout(() => {
                         document.getElementById('loader-screen').style.display = 'none';
                         document.querySelector('.content-layer').classList.add('active');
                     }, 500);
                 }
-            }, 50);
+            }, 30);
             loadData();
         };
 
