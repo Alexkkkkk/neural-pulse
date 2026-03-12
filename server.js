@@ -12,17 +12,16 @@ const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// --- НАСТРОЙКА БАЗЫ ДАННЫХ (БЕЗ SSL для Bothost) ---
 const pool = new Pool({ 
     connectionString: PG_URI,
-    ssl: false // Обязательно false для твоего текущего сервера
+    ssl: false 
 });
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- ГЛОБАЛЬНАЯ МАТЕМАТИКА ---
+// --- ГЛОБАЛЬНАЯ МАТЕМАТИКА ЦЕН ---
 const MATH = {
     CLICK_BASE: 500,
     CLICK_GROWTH: 1.45,
@@ -40,11 +39,7 @@ const getPnlCost = (pnl) => {
 // Инициализация БД
 const initDB = async () => {
     try {
-        // Проверка соединения
-        const client = await pool.connect();
-        console.log("✅ [DB] Соединение с PostgreSQL установлено.");
-        
-        await client.query(`
+        await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
                 username TEXT,
@@ -57,15 +52,12 @@ const initDB = async () => {
                 last_seen BIGINT DEFAULT extract(epoch from now())
             );
         `);
-        client.release();
-        console.log("📦 [DB] Таблицы проверены и готовы.");
-    } catch (err) { 
-        console.error("❌ [DB] Ошибка подключения/инициализации:", err.message); 
-    }
+        console.log("✅ [DB] Таблицы готовы.");
+    } catch (err) { console.error("❌ [DB] Ошибка:", err.message); }
 };
 initDB();
 
-// API: Данные пользователя
+// [1] API: Данные пользователя + Рефералка + Оффлайн доход
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
     const refBy = req.query.ref;
@@ -74,10 +66,12 @@ app.get('/api/user/:id', async (req, res) => {
         let result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
         
         if (result.rows.length === 0) {
+            // Новый пользователь
             await pool.query(
                 'INSERT INTO users (user_id, referrer_id, last_seen) VALUES ($1, $2, extract(epoch from now()))', 
                 [uid, refBy]
             );
+            // Если пришел по ссылке — обоим по 5000 бонуса
             if (refBy && refBy !== uid) {
                 await pool.query('UPDATE users SET balance = balance + 5000 WHERE user_id IN ($1, $2)', [uid, refBy]);
             }
@@ -88,9 +82,10 @@ app.get('/api/user/:id', async (req, res) => {
         const now = Math.floor(Date.now() / 1000);
         const diff = now - parseInt(user.last_seen);
 
-        if (diff > 5) {
+        // Начисление за время отсутствия (макс 4 часа)
+        if (diff > 10) {
             const passiveIncome = user.pnl > 0 ? (parseFloat(user.pnl) / 3600) * Math.min(diff, 14400) : 0;
-            const energyRegen = diff * 1.8;
+            const energyRegen = diff * 1.5; 
             
             user.balance = parseFloat(user.balance) + passiveIncome;
             user.energy = Math.min(1000, parseFloat(user.energy) + energyRegen);
@@ -102,18 +97,15 @@ app.get('/api/user/:id', async (req, res) => {
             );
         }
         res.json(user);
-    } catch (e) { 
-        console.error("API Error (User):", e);
-        res.status(500).json({ error: "DB Error" }); 
-    }
+    } catch (e) { res.status(500).json({ error: "DB Error" }); }
 });
 
-// API: Сохранение кликов
+// [2] API: Сохранение прогресса
 app.post('/api/save', async (req, res) => {
-    const { userId, clicks, energy, wallet_address } = req.body;
+    const { userId, clicks, energy, wallet_address, username } = req.body;
     try {
         const userRes = await pool.query('SELECT click_lvl, balance FROM users WHERE user_id = $1', [String(userId)]);
-        if (userRes.rows.length === 0) return res.status(404).json({error: "User not found"});
+        if (userRes.rows.length === 0) return res.status(404).json({error: "Not found"});
 
         const user = userRes.rows[0];
         const income = (Number(clicks) || 0) * parseInt(user.click_lvl);
@@ -121,15 +113,16 @@ app.post('/api/save', async (req, res) => {
 
         await pool.query(`
             UPDATE users SET 
-                balance=$1, energy=$2, wallet_address=COALESCE($3, wallet_address), last_seen=extract(epoch from now())
-            WHERE user_id=$4
-        `, [newBalance, Math.floor(energy), wallet_address, String(userId)]);
+                balance=$1, energy=$2, username=COALESCE($3, username), 
+                wallet_address=COALESCE($4, wallet_address), last_seen=extract(epoch from now())
+            WHERE user_id=$5
+        `, [newBalance, Math.floor(energy), username, wallet_address, String(userId)]);
         
         res.json({ status: 'ok', balance: newBalance });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// API: Улучшения
+// [3] API: Улучшения (Магазин)
 app.post('/api/upgrade', async (req, res) => {
     const { userId, type } = req.body;
     try {
@@ -149,9 +142,17 @@ app.post('/api/upgrade', async (req, res) => {
             await pool.query(updateQuery, [cost, userId]);
             res.json({ success: true });
         } else {
-            res.json({ success: false, error: "Insufficient funds" });
+            res.json({ success: false, error: "No money" });
         }
     } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// [4] API: ТОП Игроков (для кнопки STATS)
+app.get('/api/top', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10');
+        res.json(result.rows);
+    } catch (e) { res.status(500).json({ error: "Top error" }); }
 });
 
 // TON Manifest
@@ -163,19 +164,19 @@ app.get('/tonconnect-manifest.json', (req, res) => {
     });
 });
 
-// Bot Logic
+// Логика Бота
 bot.start((ctx) => {
     const refId = ctx.payload || ''; 
     const gameUrl = `https://${DOMAIN}?u=${ctx.from.id}${refId ? '&ref=' + refId : ''}`;
     
     ctx.replyWithHTML(
         `<b>🚀 ДОБРО ПОЖАЛОВАТЬ В NEURAL PULSE AI</b>\n\n` +
-        `Майни токены NP, прокачивай нейросеть и готовься к листингу!`,
+        `Майни токены NP, прокачивай нейросеть и приглашай друзей!\n` +
+        `Бонус за друга: 💰 <b>5,000 NP</b>`,
         Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', gameUrl)]])
     );
 });
 
-// Start Server
 app.listen(PORT, () => {
     bot.launch();
     console.log(`🚀 Server running on port ${PORT}`);
