@@ -2,15 +2,15 @@ const express = require('express');
 const { Telegraf, Markup } = require('telegraf');
 const cors = require('cors');
 const path = require('path');
-const { Pool } = require('pg'); // Используем pg вместо mongoose
+const { Pool } = require('pg');
 
 // [1] КОНФИГУРАЦИЯ
 const BOT_TOKEN = "8257287930:AAFUmUinCAALPf6Bivpo04__Zp_V4Y49MFs";
 const DOMAIN = "np.bothost.ru";
 const PORT = process.env.PORT || 3000;
 
-// СЮДА ВСТАВЬ ССЫЛКУ ИЗ ПАНЕЛИ BOTHOST (раздел Базы Данных PostgreSQL)
-const PG_URI = "postgres://user:password@host:port/dbname";
+// Твоя ссылка на PostgreSQL (Bothost)
+const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
@@ -18,7 +18,7 @@ const app = express();
 // Настройка пула соединений
 const pool = new Pool({
     connectionString: PG_URI,
-    ssl: false // На Bothost обычно SSL не требуется для внутренних соединений
+    ssl: { rejectUnauthorized: false } // Важно для стабильного соединения с внешними нодами pghost
 });
 
 app.use(cors());
@@ -37,7 +37,7 @@ const initDB = async () => {
                 pnl NUMERIC DEFAULT 0
             );
         `);
-        console.log("📦 [DB] Таблица пользователей PostgreSQL готова");
+        console.log("📦 [DB] PostgreSQL подключена, таблица 'users' активна");
     } catch (err) {
         console.error("❌ [DB] Ошибка инициализации:", err.message);
     }
@@ -49,22 +49,25 @@ initDB();
 // Получение данных пользователя
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
-    if (!uid || uid === "null") return res.status(400).json({ error: "Invalid ID" });
+    if (!uid || uid === "null" || uid === "undefined") return res.status(400).json({ error: "Invalid ID" });
     
     try {
         const result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
         
         if (result.rows.length === 0) {
-            // Если игрока нет, создаем его
             const newUser = await pool.query(
                 'INSERT INTO users (user_id) VALUES ($1) RETURNING *', 
                 [uid]
             );
-            console.log(`🆕 [DB] Новый игрок в Postgres: ${uid}`);
             return res.json(newUser.rows[0]);
         }
         
-        res.json(result.rows[0]);
+        // PostgreSQL возвращает NUMERIC как строки, конвертируем их для фронтенда
+        const user = result.rows[0];
+        user.balance = parseFloat(user.balance);
+        user.pnl = parseFloat(user.pnl);
+        
+        res.json(user);
     } catch (e) {
         console.error("❌ [API GET] Ошибка:", e.message);
         res.status(500).json({ error: "DB Read Error" });
@@ -76,7 +79,7 @@ app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, click_lvl, pnl } = req.body;
     const uid = String(userId);
 
-    if (uid && uid !== "undefined") {
+    if (uid && uid !== "undefined" && uid !== "null") {
         try {
             await pool.query(`
                 INSERT INTO users (user_id, balance, energy, click_lvl, pnl)
@@ -86,11 +89,11 @@ app.post('/api/save', async (req, res) => {
             `, [uid, balance || 0, energy || 0, click_lvl || 1, pnl || 0]);
             
             if (Math.random() > 0.9) {
-                console.log(`☁️ [DB SAVE] Сохранено в Postgres для ${uid}`);
+                console.log(`☁️ [DB SAVE] Успешное сохранение в Postgres для: ${uid}`);
             }
             res.json({ status: 'ok' });
         } catch (e) {
-            console.error("❌ [DB SAVE] Ошибка:", e.message);
+            console.error("❌ [DB SAVE] Ошибка сохранения:", e.message);
             res.status(500).json({ error: "Save Error" });
         }
     } else {
@@ -106,26 +109,27 @@ bot.start(async (ctx) => {
     try {
         const result = await pool.query('SELECT balance, energy FROM users WHERE user_id = $1', [uid]);
         
-        let user;
+        let userData;
         if (result.rows.length === 0) {
             const newUser = await pool.query('INSERT INTO users (user_id) VALUES ($1) RETURNING *', [uid]);
-            user = newUser.rows[0];
+            userData = newUser.rows[0];
         } else {
-            user = result.rows[0];
+            userData = result.rows[0];
         }
 
         ctx.replyWithHTML(
             `<b>🚀 NEURAL PULSE AI: ОНЛАЙН</b>\n\n` +
             `Привет, ${name}!\n` +
-            `Твой баланс: 💰 <b>${Math.floor(Number(user.balance)).toLocaleString()} NP</b>\n` +
-            `Энергия: ⚡ <b>${user.energy}</b>`,
+            `Твой баланс: 💰 <b>${Math.floor(Number(userData.balance)).toLocaleString()} NP</b>\n` +
+            `Энергия: ⚡ <b>${userData.energy}</b>\n\n` +
+            `<i>Данные синхронизированы с PostgreSQL 🐘</i>`,
             Markup.inlineKeyboard([
                 [Markup.button.webApp('⚡ ИГРАТЬ', `https://${DOMAIN}`)]
             ])
         );
     } catch (e) {
         console.error("❌ [BOT START] Ошибка:", e.message);
-        ctx.reply("⚠️ Ошибка базы данных. Мы уже чиним!");
+        ctx.reply("⚠️ Ошибка доступа к базе данных. Попробуйте позже.");
     }
 });
 
@@ -137,7 +141,7 @@ app.listen(PORT, () => {
     console.log(`————————————————————————————————————————————————\n`);
     
     bot.launch().then(() => {
-        console.log(`✅ [BOT] Телеграм бот запущен`);
+        console.log(`✅ [BOT] Телеграм бот запущен и готов к работе`);
     }).catch(err => console.error("❌ Ошибка запуска бота:", err));
 });
 
