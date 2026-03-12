@@ -22,11 +22,17 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Инициализация БД и проверка колонок (чтобы ничего не потерялось)
-const initDB = async () => {
+// ФУНКЦИЯ СБРОСА БАЗЫ ДАННЫХ
+const resetDatabase = async () => {
     try {
+        console.log("⚠️ [DB] Начинаю процесс сброса...");
+        
+        // УДАЛЯЕМ СТАРУЮ ТАБЛИЦУ (Внимание: все данные будут стерты!)
+        await pool.query(`DROP TABLE IF EXISTS users CASCADE;`);
+        
+        // СОЗДАЕМ ТАБЛИЦУ ЗАНОВО С ПРАВИЛЬНОЙ СТРУКТУРОЙ
         await pool.query(`
-            CREATE TABLE IF NOT EXISTS users (
+            CREATE TABLE users (
                 user_id TEXT PRIMARY KEY,
                 username TEXT,
                 balance NUMERIC DEFAULT 0,
@@ -37,14 +43,15 @@ const initDB = async () => {
                 last_seen BIGINT DEFAULT extract(epoch from now())
             );
         `);
-        console.log("✅ [DATABASE] База данных готова");
+        console.log("✅ [DB] База данных успешно сброшена и создана заново.");
     } catch (err) {
-        console.error("❌ [DATABASE] Ошибка:", err.message);
+        console.error("❌ [DB] Ошибка при сбросе:", err.message);
     }
 };
-initDB();
 
-// Манифест для TON Connect
+// Вызываем сброс (Удали эту строку после первого успешного запуска!)
+resetDatabase();
+
 app.get('/tonconnect-manifest.json', (req, res) => {
     res.json({
         "url": `https://${DOMAIN}`,
@@ -53,11 +60,9 @@ app.get('/tonconnect-manifest.json', (req, res) => {
     });
 });
 
-// API: Получение данных пользователя
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
-    if (!uid || uid === "null" || uid === "undefined") return res.status(400).json({ error: "Invalid ID" });
-    
+    if (!uid || uid === "null") return res.status(400).json({ error: "Invalid ID" });
     try {
         const result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
         if (result.rows.length === 0) {
@@ -66,26 +71,21 @@ app.get('/api/user/:id', async (req, res) => {
             );
             return res.json(newUser.rows[0]);
         }
-        
         let user = result.rows[0];
         const now = Math.floor(Date.now() / 1000);
         const lastSeen = parseInt(user.last_seen) || now;
         const secondsOffline = Math.max(0, now - lastSeen);
         
-        // Начисление пассивного дохода
         if (secondsOffline > 0 && user.pnl > 0) {
             user.balance = Number(user.balance) + (secondsOffline * (Number(user.pnl) / 3600));
             user.energy = Math.min(1000, (user.energy || 1000) + Math.floor(secondsOffline * 1.5));
         }
-        
         res.json(user);
     } catch (e) {
-        console.error("API Get Error:", e);
-        res.status(500).json({ error: "DB Error" });
+        res.status(500).json({ error: "Server Error" });
     }
 });
 
-// API: Сохранение данных
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, click_lvl, pnl, username, wallet } = req.body;
     try {
@@ -99,20 +99,19 @@ app.post('/api/save', async (req, res) => {
         `, [String(userId), balance, energy, click_lvl, pnl, username, wallet]);
         res.json({ ok: true });
     } catch (e) {
-        console.error("API Save Error:", e);
         res.status(500).json({ error: e.message });
     }
 });
 
 bot.start((ctx) => {
     const gameUrl = `https://${DOMAIN}?u=${ctx.from.id}`;
-    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI</b>\n\nСистема готова к запуску. Начни майнинг прямо сейчас!`, 
+    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI: ПЕРЕЗАГРУЗКА</b>\n\nБаза данных была очищена. Начни свой путь заново!`, 
         Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', gameUrl)]])
     );
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`📡 [SERVER] Запущен на порту ${PORT}`);
+    console.log(`🚀 Сервер на https://${DOMAIN}`);
     bot.launch();
 });
