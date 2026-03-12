@@ -15,16 +15,17 @@ const app = express();
 
 const pool = new Pool({
     connectionString: PG_URI,
-    ssl: false // Для внутренней сети Bothost
+    ssl: false // Обязательно false для внутренней сети Bothost
 });
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// [2] ИНИЦИАЛИЗАЦИЯ ТАБЛИЦЫ
+// [2] УМНАЯ ИНИЦИАЛИЗАЦИЯ БАЗЫ
 const initDB = async () => {
     try {
+        // Создаем таблицу, если её вообще нет
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
@@ -36,7 +37,12 @@ const initDB = async () => {
                 last_seen BIGINT DEFAULT extract(epoch from now())
             );
         `);
-        console.log("📦 [DB] PostgreSQL подключена. Таблицы готовы.");
+
+        // Дополнительная проверка на колонки (на случай, если таблица уже была)
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen BIGINT DEFAULT extract(epoch from now());`);
+
+        console.log("📦 [DB] PostgreSQL подключена. Структура проверена.");
     } catch (err) {
         console.error("❌ [DB] Ошибка инициализации:", err.message);
     }
@@ -62,7 +68,7 @@ app.get('/api/user/:id', async (req, res) => {
         
         let user = result.rows[0];
 
-        // Расчет пассивного дохода за время отсутствия
+        // Расчет пассивного дохода
         const now = Math.floor(Date.now() / 1000);
         const lastSeen = parseInt(user.last_seen) || now;
         const secondsOffline = now - lastSeen;
@@ -71,7 +77,6 @@ app.get('/api/user/:id', async (req, res) => {
         user.pnl = parseFloat(user.pnl) || 0;
 
         if (secondsOffline > 0 && user.pnl > 0) {
-            // Доход: (секунды * доход_в_час) / 3600
             const bonus = (secondsOffline * user.pnl) / 3600;
             user.balance += bonus;
         }
@@ -110,7 +115,8 @@ app.post('/api/save', async (req, res) => {
 
 bot.command('top', async (ctx) => {
     try {
-        const result = await pool.query('SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10');
+        // Берем топ-10 по балансу
+        const result = await pool.query('SELECT username, balance, user_id FROM users ORDER BY balance DESC LIMIT 10');
         let message = "<b>🏆 ТОП-10 МАЙНЕРОВ NEURAL PULSE</b>\n\n";
         
         if (result.rows.length === 0) {
@@ -135,6 +141,7 @@ bot.start(async (ctx) => {
     const name = ctx.from.first_name || "Игрок";
 
     try {
+        // Сохраняем имя сразу при старте
         await pool.query(`
             INSERT INTO users (user_id, username) 
             VALUES ($1, $2) 
@@ -159,13 +166,15 @@ bot.start(async (ctx) => {
     }
 });
 
-// [5] ЗАПУСК
+// [5] ЗАПУСК СЕРВЕРА
 app.listen(PORT, () => {
     console.log(`\n————————————————————————————————————————————————`);
     console.log(`🖥️  СЕРВЕР: https://${DOMAIN}`);
     console.log(`📦 БАЗА: PostgreSQL ПОДКЛЮЧЕНА`);
     console.log(`————————————————————————————————————————————————\n`);
-    bot.launch().catch(err => console.error("❌ Ошибка бота:", err));
+    bot.launch().then(() => {
+        console.log(`✅ [BOT] Бот успешно запущен`);
+    }).catch(err => console.error("❌ Ошибка бота:", err));
 });
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
