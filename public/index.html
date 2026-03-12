@@ -1,165 +1,117 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse AI</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
-    <style>
-        :root { --main: #00f2ff; --bg: #000; }
-        body { margin: 0; background: var(--bg); color: white; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; align-items: center; }
+require('dotenv').config();
+const express = require('express');
+const { Telegraf, Markup } = require('telegraf');
+const cors = require('cors');
+const path = require('path');
+const { Pool } = require('pg');
+
+// ДАННЫЕ ИЗ ТВОИХ СКРИНШОТОВ
+const BOT_TOKEN = "8257287930:AAFUmUinCAALPf6Bivpo04__Zp_V4Y49MFs";
+const DOMAIN = "neural-pulse.bothost.ru";
+const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
+
+const bot = new Telegraf(BOT_TOKEN);
+const app = express();
+
+const pool = new Pool({
+    connectionString: PG_URI,
+    ssl: false 
+});
+
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+// ФУНКЦИЯ СБРОСА БАЗЫ ДАННЫХ
+const resetDatabase = async () => {
+    try {
+        console.log("⚠️ [DB] Начинаю процесс сброса...");
         
-        /* Loader */
-        #loader { position: fixed; inset: 0; background: #000; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .pct-text { font-size: 50px; font-weight: 900; color: var(--main); font-family: monospace; }
+        // УДАЛЯЕМ СТАРУЮ ТАБЛИЦУ (Внимание: все данные будут стерты!)
+        await pool.query(`DROP TABLE IF EXISTS users CASCADE;`);
         
-        /* Game UI */
-        #app { width: 100%; display: none; flex-direction: column; align-items: center; height: 100%; padding: 20px 0; }
-        .balance { font-size: 50px; font-weight: 900; margin: 20px 0; text-shadow: 0 0 15px rgba(0,242,255,0.4); }
-        .coin-wrap { position: relative; width: 260px; height: 260px; margin: 30px 0; }
-        .coin-img { width: 100%; height: 100%; border-radius: 50%; border: 4px solid #111; filter: drop-shadow(0 0 20px rgba(0,242,255,0.1)); }
-        .coin-img:active { transform: scale(0.96); }
-
-        .stat-card { width: 85%; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 15px; border-radius: 20px; margin-top: auto; margin-bottom: 30px; }
-        .progress-bg { width: 100%; height: 10px; background: #111; border-radius: 5px; margin-top: 10px; overflow: hidden; }
-        #progress-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #00f2ff, #bc13fe); transition: 0.3s; }
-        
-        .floating-val { position: absolute; color: white; font-size: 32px; font-weight: 900; pointer-events: none; animation: fly 0.6s forwards; }
-        @keyframes fly { to { transform: translateY(-120px); opacity: 0; } }
-    </style>
-</head>
-<body>
-
-    <div id="loader">
-        <div class="pct-text" id="load-val">0%</div>
-        <div style="font-size: 10px; color: #444; margin-top: 15px; letter-spacing: 2px;">SYNCING WITH NEURAL GRID...</div>
-    </div>
-
-    <div id="app">
-        <div style="font-size: 12px; color: var(--main); font-weight: bold;">AVAILABLE ASSETS</div>
-        <div class="balance" id="balance">0</div>
-
-        <div class="coin-wrap">
-            <img src="logo.png" class="coin-img" id="coin" onerror="this.src='https://via.placeholder.com/260/000/00f2ff?text=AI'">
-        </div>
-
-        <button id="ton-btn" style="background: #0088cc; color: white; border: none; padding: 10px 20px; border-radius: 12px; font-weight: bold;">CONNECT WALLET</button>
-
-        <div class="stat-card">
-            <div style="display: flex; justify-content: space-between; font-size: 12px;">
-                <span>⚡ ENERGY</span>
-                <span id="energy-text">1000/1000</span>
-            </div>
-            <div class="progress-bg"><div id="progress-fill"></div></div>
-        </div>
-    </div>
-
-<script>
-    const tg = window.Telegram.WebApp;
-    tg.expand();
-
-    const tonUI = new TONConnectUI.TonConnectUI({
-        manifestUrl: window.location.origin + '/tonconnect-manifest.json'
-    });
-
-    let state = {
-        bal: 0, nrg: 1000, lvl: 1, pnl: 0,
-        uid: new URLSearchParams(window.location.search).get('u') || tg.initDataUnsafe?.user?.id,
-        wallet: null, ready: false
-    };
-
-    // Загрузка
-    let p = 0;
-    const lTimer = setInterval(() => {
-        if (p < 95) p += Math.random() * 5;
-        if (state.ready) p = 100;
-        document.getElementById('load-val').innerText = Math.floor(p) + '%';
-        if (p >= 100) {
-            clearInterval(lTimer);
-            document.getElementById('loader').style.display = 'none';
-            document.getElementById('app').style.display = 'flex';
-        }
-    }, 100);
-
-    async function init() {
-        if (state.uid) {
-            try {
-                const res = await fetch('/api/user/' + state.uid);
-                const data = await res.json();
-                state.bal = Number(data.balance) || 0;
-                state.nrg = Number(data.energy) || 1000;
-                state.pnl = Number(data.pnl) || 0;
-                state.wallet = data.wallet || null;
-            } catch (e) { console.warn("Dev Mode / API Offline"); }
-        }
-        state.ready = true;
-        render();
+        // СОЗДАЕМ ТАБЛИЦУ ЗАНОВО С ПРАВИЛЬНОЙ СТРУКТУРОЙ
+        await pool.query(`
+            CREATE TABLE users (
+                user_id TEXT PRIMARY KEY,
+                username TEXT,
+                balance NUMERIC DEFAULT 0,
+                energy INTEGER DEFAULT 1000,
+                click_lvl INTEGER DEFAULT 1,
+                pnl NUMERIC DEFAULT 0,
+                wallet TEXT,
+                last_seen BIGINT DEFAULT extract(epoch from now())
+            );
+        `);
+        console.log("✅ [DB] База данных успешно сброшена и создана заново.");
+    } catch (err) {
+        console.error("❌ [DB] Ошибка при сбросе:", err.message);
     }
+};
 
-    function render() {
-        document.getElementById('balance').innerText = Math.floor(state.bal).toLocaleString();
-        document.getElementById('energy-text').innerText = Math.floor(state.nrg) + '/1000';
-        document.getElementById('progress-fill').style.width = (state.nrg / 10) + '%';
-        if (state.wallet) document.getElementById('ton-btn').innerText = "CONNECTED";
+// Вызываем сброс (Удали эту строку после первого успешного запуска!)
+resetDatabase();
+
+app.get('/tonconnect-manifest.json', (req, res) => {
+    res.json({
+        "url": `https://${DOMAIN}`,
+        "name": "Neural Pulse AI",
+        "iconUrl": `https://${DOMAIN}/logo.png`
+    });
+});
+
+app.get('/api/user/:id', async (req, res) => {
+    const uid = String(req.params.id);
+    if (!uid || uid === "null") return res.status(400).json({ error: "Invalid ID" });
+    try {
+        const result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
+        if (result.rows.length === 0) {
+            const newUser = await pool.query(
+                'INSERT INTO users (user_id) VALUES ($1) RETURNING *', [uid]
+            );
+            return res.json(newUser.rows[0]);
+        }
+        let user = result.rows[0];
+        const now = Math.floor(Date.now() / 1000);
+        const lastSeen = parseInt(user.last_seen) || now;
+        const secondsOffline = Math.max(0, now - lastSeen);
+        
+        if (secondsOffline > 0 && user.pnl > 0) {
+            user.balance = Number(user.balance) + (secondsOffline * (Number(user.pnl) / 3600));
+            user.energy = Math.min(1000, (user.energy || 1000) + Math.floor(secondsOffline * 1.5));
+        }
+        res.json(user);
+    } catch (e) {
+        res.status(500).json({ error: "Server Error" });
     }
+});
 
-    document.getElementById('coin').addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        if (state.nrg < state.lvl) return;
+app.post('/api/save', async (req, res) => {
+    const { userId, balance, energy, click_lvl, pnl, username, wallet } = req.body;
+    try {
+        await pool.query(`
+            INSERT INTO users (user_id, balance, energy, click_lvl, pnl, username, wallet, last_seen)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, extract(epoch from now()))
+            ON CONFLICT (user_id) DO UPDATE SET
+            balance = EXCLUDED.balance, energy = EXCLUDED.energy, click_lvl = EXCLUDED.click_lvl, 
+            pnl = EXCLUDED.pnl, username = EXCLUDED.username, wallet = EXCLUDED.wallet,
+            last_seen = extract(epoch from now())
+        `, [String(userId), balance, energy, click_lvl, pnl, username, wallet]);
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 
-        state.bal += state.lvl;
-        state.nrg -= state.lvl;
+bot.start((ctx) => {
+    const gameUrl = `https://${DOMAIN}?u=${ctx.from.id}`;
+    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI: ПЕРЕЗАГРУЗКА</b>\n\nБаза данных была очищена. Начни свой путь заново!`, 
+        Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', gameUrl)]])
+    );
+});
 
-        const touch = e.touches[0];
-        const val = document.createElement('div');
-        val.className = 'floating-val';
-        val.style.left = touch.clientX + 'px';
-        val.style.top = touch.clientY + 'px';
-        val.innerText = '+' + state.lvl;
-        document.body.appendChild(val);
-        setTimeout(() => val.remove(), 600);
-
-        render();
-        tg.HapticFeedback.impactOccurred('medium');
-    });
-
-    document.getElementById('ton-btn').onclick = () => {
-        if (state.wallet) tg.showAlert("Wallet: " + state.wallet);
-        else tonUI.openModal();
-    };
-
-    tonUI.onStatusChange(w => {
-        if (w) {
-            state.wallet = w.account.address;
-            render();
-        }
-    });
-
-    // Автосохранение каждые 5 сек
-    setInterval(() => {
-        if (state.ready && state.uid) {
-            fetch('/api/save', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    userId: state.uid, balance: state.bal, energy: state.nrg,
-                    click_lvl: state.lvl, pnl: state.pnl, wallet: state.wallet,
-                    username: tg.initDataUnsafe?.user?.username || 'Guest'
-                })
-            });
-        }
-    }, 5000);
-
-    // Реген энергии
-    setInterval(() => {
-        if (state.nrg < 1000) {
-            state.nrg = Math.min(1000, state.nrg + 1.2);
-            render();
-        }
-    }, 1000);
-
-    window.onload = init;
-</script>
-</body>
-</html>
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`🚀 Сервер на https://${DOMAIN}`);
+    bot.launch();
+});
