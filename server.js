@@ -13,16 +13,17 @@ const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
+// Настройка пула БД БЕЗ SSL (исправляет ошибку в логах)
 const pool = new Pool({
     connectionString: PG_URI,
-    ssl: { rejectUnauthorized: false } // Включаем SSL для работы с удаленными базами
+    ssl: false // Полностью отключаем SSL, так как сервер его не поддерживает
 });
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// [2] МАНИФЕСТ ДЛЯ TON CONNECT (Критично для работы кошелька)
+// [2] МАНИФЕСТ ДЛЯ TON CONNECT
 app.get('/tonconnect-manifest.json', (req, res) => {
     res.json({
         "url": `https://${DOMAIN}`,
@@ -47,9 +48,9 @@ const initDB = async () => {
                 last_seen BIGINT DEFAULT extract(epoch from now())
             );
         `);
-        console.log("📦 [DB] PostgreSQL готова.");
+        console.log("📦 [DB] PostgreSQL подключена успешно.");
     } catch (err) {
-        console.error("❌ [DB] Ошибка инициализации:", err.message);
+        console.error("❌ [DB] Критическая ошибка:", err.message);
     }
 };
 initDB();
@@ -76,7 +77,6 @@ app.get('/api/user/:id', async (req, res) => {
         const lastSeen = parseInt(user.last_seen) || now;
         const secondsOffline = Math.max(0, now - lastSeen);
         
-        // Преобразование типов и расчеты
         user.balance = Number(user.balance) || 0;
         user.energy = Number(user.energy) || 1000;
         user.max_energy = Number(user.max_energy) || 1000;
@@ -84,9 +84,7 @@ app.get('/api/user/:id', async (req, res) => {
         user.click_lvl = parseInt(user.click_lvl) || 1;
 
         if (secondsOffline > 0) {
-            // Пассивный доход
             if (user.pnl > 0) user.balance += (secondsOffline * user.pnl) / 3600;
-            // Реген энергии
             if (user.energy < user.max_energy) {
                 user.energy = Math.min(user.max_energy, user.energy + (secondsOffline * 1.5));
             }
@@ -95,7 +93,7 @@ app.get('/api/user/:id', async (req, res) => {
         }
         res.json(user);
     } catch (e) {
-        console.error("API GET Error:", e);
+        console.error("API GET Error:", e.message);
         res.status(500).json({ error: "DB Error" });
     }
 });
@@ -111,35 +109,22 @@ app.post('/api/save', async (req, res) => {
         `, [String(userId), Number(balance), Number(energy), parseInt(click_lvl), Number(pnl), username, wallet_address]);
         res.json({ status: 'ok' });
     } catch (e) {
-        console.error("API SAVE Error:", e);
+        console.error("API SAVE Error:", e.message);
         res.status(500).json({ error: e.message });
     }
 });
 
 // [5] БОТ
-bot.start(async (ctx) => {
-    const uid = String(ctx.from.id);
+bot.start((ctx) => {
     const gameUrl = `https://${DOMAIN}?v=${Date.now()}`;
-    
-    // Приветственное сообщение с кнопкой
     ctx.replyWithHTML(
-        `<b>🚀 Welcome to NEURAL PULSE AI!</b>\n\n` +
-        `Здесь ты можешь майнить токены, прокачивать нейросети и подключать свой TON кошелек.\n\n` +
-        `<i>Нажимай кнопку ниже, чтобы начать!</i>`, 
-        Markup.inlineKeyboard([
-            [Markup.button.webApp('⚡ ИГРАТЬ', gameUrl)]
-        ])
+        `<b>🚀 NEURAL PULSE AI</b>\n\nЗапускай майнер и подключай кошелек!`, 
+        Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', gameUrl)]])
     );
 });
 
-// Обработка ошибок бота
-bot.catch((err) => {
-    console.error("Telegram Bot Error:", err);
-});
-
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-bot.launch();
+bot.launch().catch(err => console.error("Bot launch error:", err));
 
-// Graceful stop
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
