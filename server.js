@@ -5,7 +5,6 @@ const cors = require('cors');
 const path = require('path');
 const { Pool } = require('pg');
 
-// ДАННЫЕ ИЗ ТВОИХ СКРИНШОТОВ
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const DOMAIN = "neural-pulse.bothost.ru";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
@@ -22,17 +21,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ФУНКЦИЯ СБРОСА БАЗЫ ДАННЫХ
-const resetDatabase = async () => {
+// Инициализация (без удаления таблицы)
+const initDB = async () => {
     try {
-        console.log("⚠️ [DB] Начинаю процесс сброса...");
-        
-        // УДАЛЯЕМ СТАРУЮ ТАБЛИЦУ (Внимание: все данные будут стерты!)
-        await pool.query(`DROP TABLE IF EXISTS users CASCADE;`);
-        
-        // СОЗДАЕМ ТАБЛИЦУ ЗАНОВО С ПРАВИЛЬНОЙ СТРУКТУРОЙ
         await pool.query(`
-            CREATE TABLE users (
+            CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
                 username TEXT,
                 balance NUMERIC DEFAULT 0,
@@ -43,14 +36,12 @@ const resetDatabase = async () => {
                 last_seen BIGINT DEFAULT extract(epoch from now())
             );
         `);
-        console.log("✅ [DB] База данных успешно сброшена и создана заново.");
+        console.log("✅ [DB] Подключение стабильно, таблица готова.");
     } catch (err) {
-        console.error("❌ [DB] Ошибка при сбросе:", err.message);
+        console.error("❌ [DB] Ошибка:", err.message);
     }
 };
-
-// Вызываем сброс (Удали эту строку после первого успешного запуска!)
-resetDatabase();
+initDB();
 
 app.get('/tonconnect-manifest.json', (req, res) => {
     res.json({
@@ -71,18 +62,9 @@ app.get('/api/user/:id', async (req, res) => {
             );
             return res.json(newUser.rows[0]);
         }
-        let user = result.rows[0];
-        const now = Math.floor(Date.now() / 1000);
-        const lastSeen = parseInt(user.last_seen) || now;
-        const secondsOffline = Math.max(0, now - lastSeen);
-        
-        if (secondsOffline > 0 && user.pnl > 0) {
-            user.balance = Number(user.balance) + (secondsOffline * (Number(user.pnl) / 3600));
-            user.energy = Math.min(1000, (user.energy || 1000) + Math.floor(secondsOffline * 1.5));
-        }
-        res.json(user);
+        res.json(result.rows[0]);
     } catch (e) {
-        res.status(500).json({ error: "Server Error" });
+        res.status(500).json({ error: "DB Error" });
     }
 });
 
@@ -105,13 +87,12 @@ app.post('/api/save', async (req, res) => {
 
 bot.start((ctx) => {
     const gameUrl = `https://${DOMAIN}?u=${ctx.from.id}`;
-    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI: ПЕРЕЗАГРУЗКА</b>\n\nБаза данных была очищена. Начни свой путь заново!`, 
+    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI</b>\n\nСистема запущена. Нажми кнопку ниже, чтобы начать майнинг!`, 
         Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', gameUrl)]])
     );
 });
 
+bot.launch().catch(e => console.error("TG Error:", e.message));
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`🚀 Сервер на https://${DOMAIN}`);
-    bot.launch();
-});
+app.listen(PORT, () => console.log(`🚀 Сервер запущен`));
