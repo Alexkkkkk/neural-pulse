@@ -22,7 +22,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Инициализация базы данных
+// Инициализация БД и проверка колонок (чтобы ничего не потерялось)
 const initDB = async () => {
     try {
         await pool.query(`
@@ -37,9 +37,9 @@ const initDB = async () => {
                 last_seen BIGINT DEFAULT extract(epoch from now())
             );
         `);
-        console.log("✅ [DATABASE] Таблица создана или уже существует");
+        console.log("✅ [DATABASE] База данных готова");
     } catch (err) {
-        console.error("❌ [DATABASE] Ошибка инициализации:", err.message);
+        console.error("❌ [DATABASE] Ошибка:", err.message);
     }
 };
 initDB();
@@ -56,7 +56,7 @@ app.get('/tonconnect-manifest.json', (req, res) => {
 // API: Получение данных пользователя
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
-    if (!uid || uid === "null") return res.status(400).json({ error: "Invalid ID" });
+    if (!uid || uid === "null" || uid === "undefined") return res.status(400).json({ error: "Invalid ID" });
     
     try {
         const result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
@@ -72,7 +72,7 @@ app.get('/api/user/:id', async (req, res) => {
         const lastSeen = parseInt(user.last_seen) || now;
         const secondsOffline = Math.max(0, now - lastSeen);
         
-        // Расчет пассивного дохода за время отсутствия
+        // Начисление пассивного дохода
         if (secondsOffline > 0 && user.pnl > 0) {
             user.balance = Number(user.balance) + (secondsOffline * (Number(user.pnl) / 3600));
             user.energy = Math.min(1000, (user.energy || 1000) + Math.floor(secondsOffline * 1.5));
@@ -80,7 +80,8 @@ app.get('/api/user/:id', async (req, res) => {
         
         res.json(user);
     } catch (e) {
-        res.status(500).json({ error: "Internal Server Error" });
+        console.error("API Get Error:", e);
+        res.status(500).json({ error: "DB Error" });
     }
 });
 
@@ -96,22 +97,22 @@ app.post('/api/save', async (req, res) => {
             pnl = EXCLUDED.pnl, username = EXCLUDED.username, wallet = EXCLUDED.wallet,
             last_seen = extract(epoch from now())
         `, [String(userId), balance, energy, click_lvl, pnl, username, wallet]);
-        res.json({ success: true });
+        res.json({ ok: true });
     } catch (e) {
+        console.error("API Save Error:", e);
         res.status(500).json({ error: e.message });
     }
 });
 
-// Команда /start в Telegram
 bot.start((ctx) => {
     const gameUrl = `https://${DOMAIN}?u=${ctx.from.id}`;
-    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI</b>\n\nДобро пожаловать в систему майнинга. Нажми кнопку ниже, чтобы начать!`, 
+    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI</b>\n\nСистема готова к запуску. Начни майнинг прямо сейчас!`, 
         Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', gameUrl)]])
     );
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`📡 [SERVER] Опубликован на https://${DOMAIN}`);
+    console.log(`📡 [SERVER] Запущен на порту ${PORT}`);
     bot.launch();
 });
