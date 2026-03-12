@@ -3,42 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse AI</title>
+    <title>Neural Pulse AI | Pro Edition</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
-        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #050505; --glass: rgba(255, 255, 255, 0.07); }
-        body { margin: 0; padding: 0; background-color: var(--bg-dark); color: white; font-family: 'Segoe UI', Roboto, sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; user-select: none; }
+        :root { 
+            --neon-cyan: #00f2ff; 
+            --neon-purple: #bc13fe; 
+            --bg-dark: #050505; 
+            --glass: rgba(255, 255, 255, 0.07); 
+        }
+        
+        body { 
+            margin: 0; padding: 0; background-color: var(--bg-dark); color: white; 
+            font-family: 'Segoe UI', Roboto, sans-serif; overflow: hidden; 
+            display: flex; flex-direction: column; align-items: center; height: 100vh; 
+            touch-action: none; user-select: none; 
+        }
 
+        /* Эффекты Canvas */
+        #particle-canvas { position: absolute; inset: 0; pointer-events: none; z-index: 100; }
+
+        /* Loader */
         #loader-screen { position: fixed; inset: 0; background: #050505; display: flex; align-items: center; justify-content: center; z-index: 10000; transition: opacity 0.5s; }
         .loader-bar { width: 200px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin-top: 10px; }
         #loader-fill { width: 0%; height: 100%; background: var(--neon-cyan); transition: width 0.2s; }
 
+        /* UI Elements */
+        .header-card { width: 85%; margin-top: 15px; display: flex; align-items: center; gap: 12px; background: var(--glass); padding: 12px; border-radius: 20px; border: 1px solid rgba(0, 242, 255, 0.15); backdrop-filter: blur(10px); z-index: 10; }
+        #balance { font-size: 48px; font-weight: 900; margin-top: 25px; text-shadow: 0 0 30px rgba(0, 242, 255, 0.4); z-index: 10; font-variant-numeric: tabular-nums; }
+        
+        .click-area { width: 280px; height: 280px; display: flex; align-items: center; justify-content: center; margin-top: 30px; position: relative; z-index: 5; }
+        .main-logo { width: 230px; height: 230px; border-radius: 50%; transition: transform 0.05s cubic-bezier(0.17, 0.67, 0.83, 0.67); border: 4px solid rgba(255,255,255,0.05); }
+        .main-logo.active { animation: pulse-glow 2s infinite; }
+        @keyframes pulse-glow {
+            0% { filter: drop-shadow(0 0 5px var(--neon-cyan)); }
+            50% { filter: drop-shadow(0 0 25px var(--neon-cyan)); }
+            100% { filter: drop-shadow(0 0 5px var(--neon-cyan)); }
+        }
+
+        /* Shop Modal */
         #shop-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(15px); }
         .shop-card { background: var(--glass); width: 85%; padding: 20px; border-radius: 24px; border: 1px solid rgba(0, 242, 255, 0.3); margin-bottom: 15px; text-align: center; }
         .buy-btn { background: var(--neon-cyan); color: #000; border: none; width: 100%; padding: 14px; border-radius: 12px; font-weight: 900; margin-top: 10px; cursor: pointer; }
 
-        .header-card { width: 85%; margin-top: 15px; display: flex; align-items: center; gap: 12px; background: var(--glass); padding: 12px; border-radius: 20px; border: 1px solid rgba(0, 242, 255, 0.15); backdrop-filter: blur(10px); }
-        #balance { font-size: 48px; font-weight: 900; margin-top: 25px; text-shadow: 0 0 30px rgba(0, 242, 255, 0.4); }
-        
-        .click-area { width: 280px; height: 280px; display: flex; align-items: center; justify-content: center; margin-top: 30px; position: relative; }
-        .main-logo { width: 230px; height: 230px; border-radius: 50%; transition: transform 0.05s cubic-bezier(0.17, 0.67, 0.83, 0.67); border: 4px solid rgba(255,255,255,0.05); }
-        
-        .side-nav { position: absolute; right: 0px; display: flex; flex-direction: column; gap: 10px; }
+        /* Navigation */
+        .side-nav { position: absolute; right: -10px; display: flex; flex-direction: column; gap: 10px; }
         .side-btn { background: rgba(20,20,20,0.8); border: 1px solid rgba(255,255,255,0.1); padding: 12px 5px; border-radius: 16px; width: 70px; text-align: center; font-size: 10px; font-weight: 800; cursor: pointer; }
         
-        .energy-section { width: 85%; margin-top: 25px; }
+        .energy-section { width: 85%; margin-top: 25px; z-index: 10; }
         .energy-bar-wrap { width: 100%; height: 12px; background: rgba(255,255,255,0.05); border-radius: 20px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); }
         #energy-fill { height: 100%; background: linear-gradient(90deg, #00ff66, var(--neon-cyan)); width: 100%; transition: width 0.3s; }
 
-        .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: auto; margin-bottom: 35px; }
+        .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: auto; margin-bottom: 35px; z-index: 10; }
         .nav-btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 16px 5px; border-radius: 18px; text-align: center; font-size: 11px; font-weight: 800; cursor: pointer; }
         
-        .tap-text { position: absolute; color: #fff; font-size: 38px; font-weight: 900; pointer-events: none; animation: floatUp 0.7s ease-out forwards; text-shadow: 0 0 15px var(--neon-purple); }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-140px) scale(1.2); } }
+        .tap-text { position: absolute; color: #fff; font-size: 36px; font-weight: 900; pointer-events: none; animation: floatUp 0.6s ease-out forwards; text-shadow: 0 0 15px var(--neon-purple); z-index: 1000; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.3); } }
     </style>
 </head>
 <body>
+
+    <canvas id="particle-canvas"></canvas>
 
     <div id="loader-screen">
         <div style="text-align: center;">
@@ -65,7 +91,7 @@
                 <div id="ton-connect-mount" style="position: absolute; inset: 0; opacity: 0; z-index: 10;"></div>
             </div>
             <div class="side-btn" onclick="showInvite()">INVITE</div>
-            <div class="side-btn" onclick="tg.showAlert('Daily Bonus: 5000 NP available tomorrow!')">BONUS</div>
+            <div class="side-btn" onclick="tg.showAlert('Bonus system online!')">BONUS</div>
         </div>
     </div>
 
@@ -87,12 +113,12 @@
         <h2 style="margin-bottom: 25px; color: #fff; letter-spacing: 2px;">NEURAL SHOP</h2>
         <div class="shop-card">
             <h3 style="margin: 0; color: var(--neon-cyan);">⚡ MULTI-TAP</h3>
-            <p id="click-cost" style="color: #888; margin: 10px 0;">Cost: 750 NP</p>
+            <p id="click-cost" style="color: #888; margin: 10px 0;">Cost: 500 NP</p>
             <button class="buy-btn" onclick="buy('click')">UPGRADE</button>
         </div>
         <div class="shop-card">
             <h3 style="margin: 0; color: var(--neon-cyan);">⛏️ AUTO-MINING</h3>
-            <p id="pnl-cost" style="color: #888; margin: 10px 0;">Cost: 1500 NP</p>
+            <p id="pnl-cost" style="color: #888; margin: 10px 0;">Cost: 1200 NP</p>
             <button class="buy-btn" onclick="buy('pnl')">UPGRADE</button>
         </div>
         <button onclick="toggleShop()" style="background: none; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 12px 40px; border-radius: 12px; margin-top: 10px;">BACK</button>
@@ -100,67 +126,87 @@
 
     <script>
         const tg = window.Telegram.WebApp;
-        tg.ready();
-        tg.expand();
+        tg.ready(); tg.expand();
+
+        // Canvas для частиц
+        const canvas = document.getElementById('particle-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        let particles = [];
 
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
             manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
             buttonRootId: 'ton-connect-mount'
         });
 
-        // Слушаем изменения кошелька в реальном времени
-        tonConnectUI.onStatusChange(wallet => {
-            updateUI();
-            if(wallet) sync(); 
-        });
-
         const params = new URLSearchParams(window.location.search);
         let state = { 
             uid: params.get('u') || tg.initDataUnsafe?.user?.id || 'demo',
-            ref: params.get('ref') || '',
-            balance: 0, energy: 1000, click_lvl: 1, pnl: 0,
-            unsavedClicks: 0, loaded: false 
+            balance: 0, energy: 1000, click_lvl: 1, pnl: 0, loaded: false, unsavedClicks: 0
         };
+
+        // МАТЕМАТИКА ЦЕН (Крутая экспонента)
+        const getClickCost = (lvl) => Math.floor(500 * Math.pow(1.45, lvl - 1));
+        const getPnlCost = (pnl) => Math.floor(1200 * Math.pow(1.28, Math.floor(pnl/250)));
 
         async function init() {
             try {
-                const r = await fetch(`/api/user/${state.uid}?ref=${state.ref}`);
+                const r = await fetch(`/api/user/${state.uid}`);
                 const data = await r.json();
                 Object.assign(state, data);
                 state.loaded = true;
+                if(state.pnl > 0) document.getElementById('main-logo').classList.add('active');
                 updateUI();
-            } catch(e) { 
-                console.error("Init error", e);
-                setTimeout(init, 2000); // Повтор при ошибке
-            }
+            } catch(e) { setTimeout(init, 2000); }
         }
 
         function updateUI() {
             document.getElementById('balance').innerText = Math.floor(state.balance).toLocaleString();
             document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/1000`;
-            document.getElementById('energy-fill').style.width = `${(state.energy/1000)*100}%`;
+            document.getElementById('energy-fill').style.width = (state.energy/10)+'%';
             document.getElementById('lvl-badge').innerText = state.click_lvl;
             document.getElementById('pnl-display').innerText = `PASSIVE: +${Math.floor(state.pnl)}/h`;
             
-            // Расчет стоимости апгрейдов по формулам бэкенда
-            document.getElementById('click-cost').innerText = `Cost: ${state.click_lvl * 750} NP`;
-            document.getElementById('pnl-cost').innerText = `Cost: ${Math.floor((state.pnl + 100) * 15)} NP`;
-            
-            if(state.balance > 100000) document.getElementById('league-name').innerText = "NEURAL PLATINUM";
-            else if(state.balance > 10000) document.getElementById('league-name').innerText = "NEURAL SILVER";
+            document.getElementById('click-cost').innerText = `Cost: ${getClickCost(state.click_lvl).toLocaleString()} NP`;
+            document.getElementById('pnl-cost').innerText = `Cost: ${getPnlCost(state.pnl).toLocaleString()} NP`;
 
-            // Отображение кошелька
             const addrText = document.getElementById('addr-text');
             if(tonConnectUI.account) {
                 const a = tonConnectUI.account.address;
                 addrText.innerText = a.slice(0,4) + '..' + a.slice(-4);
                 addrText.style.color = '#00ff66';
-            } else {
-                addrText.innerText = 'WALLET';
-                addrText.style.color = '#fff';
             }
         }
 
+        // Система частиц
+        function spawnParticles(x, y) {
+            for(let i=0; i<6; i++) {
+                particles.push({
+                    x, y,
+                    vx: (Math.random()-0.5)*8,
+                    vy: (Math.random()-0.5)*8,
+                    life: 1.0,
+                    size: Math.random()*3 + 1,
+                    color: Math.random() > 0.5 ? '#00f2ff' : '#bc13fe'
+                });
+            }
+        }
+
+        function animate() {
+            ctx.clearRect(0,0,canvas.width, canvas.height);
+            particles.forEach((p, i) => {
+                p.x += p.vx; p.y += p.vy; p.life -= 0.02;
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+                if(p.life <= 0) particles.splice(i, 1);
+            });
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        // Обработка тапа
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if(!state.loaded || state.energy < state.click_lvl) {
@@ -168,112 +214,82 @@
                 return;
             }
 
+            const t = e.touches[0];
             state.balance += state.click_lvl;
             state.energy -= state.click_lvl;
             state.unsavedClicks++;
 
-            // Анимация текста
-            const t = e.changedTouches[0];
+            // Визуал
+            spawnParticles(t.clientX, t.clientY);
             const n = document.createElement('div');
             n.className = 'tap-text'; n.innerText = `+${state.click_lvl}`;
             n.style.left = (t.clientX - 20) + 'px'; n.style.top = (t.clientY - 40) + 'px';
             document.body.appendChild(n);
             setTimeout(() => n.remove(), 600);
 
-            document.getElementById('main-logo').style.transform = 'scale(0.92)';
+            document.getElementById('main-logo').style.transform = 'scale(0.92) rotate(2deg)';
             updateUI();
             tg.HapticFeedback.impactOccurred('medium');
         });
 
         document.getElementById('tap-zone').addEventListener('touchend', () => {
-            document.getElementById('main-logo').style.transform = 'scale(1)';
+            document.getElementById('main-logo').style.transform = 'scale(1) rotate(0deg)';
         });
 
-        async function sync() {
-            if(!state.uid || !state.loaded) return;
-            if(state.unsavedClicks === 0 && !tonConnectUI.account) return;
-
-            const tempClicks = state.unsavedClicks; // Запоминаем, сколько отправляем
-            try {
-                const r = await fetch('/api/save', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        userId: state.uid, 
-                        clicks: tempClicks,
-                        energy: state.energy, 
-                        wallet_address: tonConnectUI.account?.address || null
-                    })
-                });
-                const res = await r.json();
-                if(res.status === 'ok') {
-                    state.balance = res.balance;
-                    state.unsavedClicks -= tempClicks; // Вычитаем только те, что успешно ушли
-                    updateUI();
-                }
-            } catch(e) { console.error("Sync error"); }
+        async function buy(type) {
+            const r = await fetch('/api/upgrade', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ userId: state.uid, type })
+            });
+            const res = await r.json();
+            if(res.success) {
+                tg.HapticFeedback.notificationOccurred('success');
+                init();
+            } else tg.showAlert("Low balance!");
         }
 
-        async function buy(type) {
-            try {
-                const r = await fetch('/api/upgrade', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: state.uid, type })
-                });
-                const res = await r.json();
-                if(res.success) {
-                    tg.HapticFeedback.notificationOccurred('success');
-                    // Обновляем данные без полной перезагрузки init
-                    const updateReq = await fetch(`/api/user/${state.uid}`);
-                    const newData = await updateReq.json();
-                    Object.assign(state, newData);
-                    updateUI();
-                } else {
-                    tg.showAlert("Not enough NP Tokens!");
-                    tg.HapticFeedback.notificationOccurred('error');
-                }
-            } catch(e) { tg.showAlert("Purchase error"); }
+        async function sync() {
+            if(!state.loaded || state.unsavedClicks === 0) return;
+            const clicks = state.unsavedClicks;
+            const r = await fetch('/api/save', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ userId: state.uid, clicks: clicks, energy: state.energy })
+            });
+            const res = await r.json();
+            if(res.status === 'ok') state.unsavedClicks -= clicks;
         }
 
         function toggleShop() {
             const m = document.getElementById('shop-modal');
             m.style.display = (m.style.display === 'flex') ? 'none' : 'flex';
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
         }
 
         function showInvite() {
             const link = `https://t.me/neural_pulse_bot?start=${state.uid}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Start mining Neural Pulse tokens with me! 🧠 +5000 NP bonus inside!`);
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my Neural Network! 🧠`);
         }
 
         function showStats() {
             tg.showPopup({ 
-                title: '📊 YOUR NEURAL STATS', 
-                message: `Balance: ${Math.floor(state.balance)} NP\nClick Power: ${state.click_lvl}\nPassive: ${state.pnl}/h\nWallet: ${tonConnectUI.account ? 'Connected' : 'Disconnected'}`, 
+                title: '📊 NEURAL STATS', 
+                message: `Balance: ${Math.floor(state.balance)} NP\nClick: ${state.click_lvl}\nPassive: ${state.pnl}/h`,
                 buttons: [{type: 'close'}] 
             });
         }
 
-        // Интервалы
         setInterval(sync, 4000);
-        setInterval(() => { 
-            if(state.loaded && state.energy < 1000) { 
-                state.energy = Math.min(1000, state.energy + 1.5); 
-                updateUI(); 
-            } 
-        }, 1000);
+        setInterval(() => { if(state.loaded && state.energy < 1000) { state.energy += 1.8; updateUI(); } }, 1000);
 
-        // Плавный лоадер
         window.onload = () => {
             let p = 0;
             const iv = setInterval(() => {
-                p += state.loaded ? 15 : 2;
+                p += state.loaded ? 10 : 2;
                 if(p >= 100) { 
-                    p = 100;
                     clearInterval(iv); 
-                    document.getElementById('loader-screen').style.opacity = '0'; 
-                    setTimeout(() => document.getElementById('loader-screen').style.display='none', 500); 
+                    document.getElementById('loader-screen').style.opacity = '0';
+                    setTimeout(() => document.getElementById('loader-screen').style.display='none', 500);
                 }
                 document.getElementById('loader-fill').style.width = p+'%';
                 document.getElementById('loader-percent').innerText = p+'%';
