@@ -54,7 +54,7 @@
                 <div class="loader-ring"></div>
                 <img src="logo.png" style="width: 120px; height: 120px; border-radius: 50%; position: relative; z-index: 2;" onerror="this.src='https://via.placeholder.com/120/bc13fe/fff?text=AI'">
             </div>
-            <div class="loader-text" id="loader-status">Link Established...</div>
+            <div class="loader-text" id="loader-status">Establishing Neural Link...</div>
             <div id="loader-percent" class="loader-percent">0%</div>
             <div class="loader-bar-bg"><div id="loader-fill" class="loader-bar-fill"></div></div>
         </div>
@@ -109,12 +109,17 @@
         tg.expand();
 
         // 1. КОНФИГУРАЦИЯ
-        const BOT_USERNAME = "neural_pulse_bot"; // ЗАМЕНИ НА ЮЗЕРНЕЙМ СВОЕГО БОТА БЕЗ @
+        const BOT_USERNAME = "neural_pulse_bot"; 
         const API_BASE = window.location.origin;
 
         let state = { 
-            balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, pnl: 0, 
-            loaded: false, isDirty: false,
+            balance: 0, 
+            energy: 1000, 
+            max_energy: 1000, 
+            click_lvl: 1, 
+            pnl: 0, 
+            loaded: false, 
+            isDirty: false,
             uid: tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('u')
         };
 
@@ -127,15 +132,15 @@
             }
 
             try {
-                // ПУТЬ СИНХРОНИЗИРОВАН С SERVER.JS (/api/user/:id)
                 const r = await fetch(`${API_BASE}/api/user/${state.uid}`);
                 if (!r.ok) throw new Error("Server Error");
                 const res = await r.json();
                 
-                state.balance = res.balance || 0;
-                state.energy = res.energy || 1000;
-                state.pnl = res.pnl || 0;
-                state.click_lvl = res.click_lvl || 1;
+                // Важно: переводим в числа
+                state.balance = Number(res.balance) || 0;
+                state.energy = Number(res.energy) || 1000;
+                state.pnl = Number(res.pnl) || 0;
+                state.click_lvl = Number(res.click_lvl) || 1;
             } catch(e) { 
                 console.error("🚨 [FRONT] Ошибка API:", e.message); 
             }
@@ -152,13 +157,13 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        userId: String(state.uid), // ПЕРЕМЕННАЯ СИНХРОНИЗИРОВАНА С SERVER.JS
+                        userId: String(state.uid), 
                         balance: state.balance, 
                         energy: state.energy 
                     })
                 });
                 state.isDirty = false;
-                console.log("☁️ [SYNC] Данные сохранены");
+                console.log("☁️ [SYNC] Успешно");
             } catch(e) { console.warn("☁️ [SYNC] Ошибка связи."); }
         }
 
@@ -172,7 +177,7 @@
             if(state.uid) document.getElementById('rank-id').innerText = `ID: ${String(state.uid).slice(-6)}`;
         }
 
-        // 5. КЛИКИ
+        // 5. ЛОГИКА ТАПОВ
         const tapZone = document.getElementById('tap-zone');
         const mainLogo = document.getElementById('main-logo');
 
@@ -180,44 +185,48 @@
             e.preventDefault();
             if (!state.loaded) return;
 
+            // Обработка мультитача
             for(let i=0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+
                 if (state.energy < state.click_lvl) {
                     if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('warning');
                     break;
                 }
 
-                const touch = e.changedTouches[i];
                 state.balance += state.click_lvl;
                 state.energy -= state.click_lvl;
                 state.isDirty = true;
 
-                // Анимация текста +1
+                // Анимация +1
                 const num = document.createElement('div');
                 num.className = 'tap-text';
                 num.innerText = `+${state.click_lvl}`;
-                num.style.left = `${touch.pageX - 20}px`; 
-                num.style.top = `${touch.pageY - 50}px`;
+                num.style.left = `${touch.clientX - 20}px`; 
+                num.style.top = `${touch.clientY - 40}px`;
                 document.body.appendChild(num);
                 setTimeout(() => num.remove(), 600);
 
                 if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
             }
 
-            mainLogo.style.transform = 'scale(0.92)';
+            mainLogo.style.transform = 'scale(0.94) rotate(-2deg)';
             updateUI();
         }, { passive: false });
 
-        tapZone.addEventListener('touchend', () => mainLogo.style.transform = 'scale(1)');
+        tapZone.addEventListener('touchend', () => {
+            mainLogo.style.transform = 'scale(1) rotate(0deg)';
+        });
 
-        // Энергия восстанавливается сама
+        // Регенерация энергии
         setInterval(() => {
             if (state.loaded && state.energy < state.max_energy) {
-                state.energy = Math.min(state.max_energy, state.energy + 1.2);
+                state.energy = Math.min(state.max_energy, state.energy + 1.5);
                 updateUI();
             }
         }, 1000);
 
-        // Авто-сохранение раз в 4 секунды
+        // Авто-сохранение раз в 4 сек
         setInterval(syncData, 4000); 
 
         // Лоадер
@@ -227,8 +236,8 @@
             const fillEl = document.getElementById('loader-fill');
 
             const interval = setInterval(() => {
-                if (state.loaded) progress += 10;
-                else if (progress < 92) progress += 0.4;
+                if (state.loaded) progress += 15; // Ускоряем, если данные уже пришли
+                else if (progress < 90) progress += 0.5;
 
                 if (progress >= 100) {
                     progress = 100;
@@ -243,9 +252,10 @@
         }
 
         function hideLoader() {
-            document.getElementById('loader-screen').style.opacity = '0';
+            const loader = document.getElementById('loader-screen');
+            loader.style.opacity = '0';
             setTimeout(() => {
-                document.getElementById('loader-screen').style.display = 'none';
+                loader.style.display = 'none';
                 document.querySelector('.content-layer').classList.add('active');
             }, 500);
         }
@@ -262,9 +272,9 @@
 
         function showLeaderboard() {
             tg.showPopup({
-                title: '📈 СТАТИСТИКА',
-                message: `Ваш баланс: ${Math.floor(state.balance)}\nЭнергия: ${Math.floor(state.energy)}`,
-                buttons: [{type: 'close', text: 'ЗАКРЫТЬ'}]
+                title: '📈 STATS',
+                message: `Balance: ${Math.floor(state.balance)} NP\nEnergy: ${Math.floor(state.energy)}`,
+                buttons: [{type: 'close', text: 'CLOSE'}]
             });
         }
     </script>
