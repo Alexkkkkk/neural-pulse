@@ -5,295 +5,195 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
         :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #050505; --glass: rgba(255, 255, 255, 0.07); --ton-blue: #0088cc; }
         body { margin: 0; padding: 0; background-color: var(--bg-dark); background-image: radial-gradient(circle at 50% 50%, #150a28 0%, #050505 100%); color: white; font-family: 'Segoe UI', Roboto, sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
         
-        /* Лоадер */
-        #loader-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #050505; display: flex; align-items: center; justify-content: center; z-index: 10000; transition: opacity 0.5s ease; }
-        .loader-container { text-align: center; }
-        .loader-logo-wrap { position: relative; width: 120px; height: 120px; margin: 0 auto 30px; }
-        .loader-ring { position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; border: 3px solid transparent; border-top: 3px solid var(--neon-cyan); border-right: 3px solid var(--neon-purple); border-radius: 50%; animation: rotate-ring 1s linear infinite; }
-        .loader-text { color: #fff; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 10px; opacity: 0.7; }
-        .loader-percent { color: var(--neon-cyan); font-size: 28px; font-weight: 900; margin-bottom: 20px; font-family: monospace; }
-        .loader-bar-bg { width: 200px; height: 4px; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 0 auto; overflow: hidden; }
-        .loader-bar-fill { width: 0%; height: 100%; background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); transition: width 0.2s; }
-        @keyframes rotate-ring { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        #loader-screen { position: fixed; inset: 0; background: #050505; display: flex; align-items: center; justify-content: center; z-index: 10000; transition: 0.5s; }
+        .loader-percent { color: var(--neon-cyan); font-size: 28px; font-weight: 900; font-family: monospace; }
 
-        /* Интерфейс */
-        .content-layer { position: relative; z-index: 2; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; padding-top: env(safe-area-inset-top); transition: transform 0.6s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.5s ease; transform: scale(0.95); opacity: 0; visibility: hidden; }
-        .content-layer.active { transform: scale(1); opacity: 1; visibility: visible; }
+        .content-layer { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; visibility: hidden; transition: 0.5s; }
+        .content-layer.active { opacity: 1; visibility: visible; }
+
         .header-card { width: 85%; margin-top: 15px; display: flex; align-items: center; gap: 12px; background: var(--glass); padding: 12px; border-radius: 20px; backdrop-filter: blur(15px); border: 1px solid rgba(0, 242, 255, 0.15); }
-        .lvl-icon { width: 44px; height: 44px; background: rgba(0, 242, 255, 0.1); border: 1px solid var(--neon-cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--neon-cyan); font-size: 18px; box-shadow: 0 0 15px rgba(0, 242, 255, 0.2); }
-        .score-container { margin-top: 25px; text-align: center; }
-        .jackpot-label { color: var(--neon-cyan); font-size: 11px; font-weight: 800; letter-spacing: 2px; margin-bottom: 5px; opacity: 0.8; }
-        #balance { font-size: 48px; font-weight: 900; color: #fff; text-shadow: 0 0 30px rgba(0, 242, 255, 0.3); font-variant-numeric: tabular-nums; }
+        .lvl-icon { width: 44px; height: 44px; border: 1px solid var(--neon-cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--neon-cyan); }
 
-        .main-wrapper { position: relative; width: 100%; display: flex; justify-content: center; align-items: center; margin-top: 30px; }
-        .click-area { position: relative; width: 280px; height: 280px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-        .main-logo { width: 230px; height: 230px; border-radius: 50%; box-shadow: 0 0 80px rgba(188, 19, 254, 0.2); transition: transform 0.05s ease; z-index: 5; object-fit: cover; pointer-events: none; border: 4px solid rgba(255,255,255,0.05); }
+        #balance { font-size: 48px; font-weight: 900; margin-top: 25px; text-shadow: 0 0 30px rgba(0, 242, 255, 0.3); }
+
+        .main-wrapper { position: relative; width: 100%; display: flex; justify-content: center; align-items: center; margin-top: 30px; flex-grow: 1; }
+        .main-logo { width: 230px; height: 230px; border-radius: 50%; transition: 0.05s; border: 4px solid rgba(255,255,255,0.05); }
         
-        /* Боковая навигация с кнопкой TON */
-        .side-nav { position: absolute; right: 10px; display: flex; flex-direction: column; gap: 12px; z-index: 10; }
-        .side-btn { background: rgba(20,20,20,0.8); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 10px; font-weight: 800; padding: 12px; border-radius: 14px; width: 65px; text-align: center; backdrop-filter: blur(5px); transition: all 0.2s; }
-        .side-btn:active { transform: scale(0.9); }
-        
-        /* Специфический стиль для кнопки кошелька */
-        .wallet-btn { border-color: var(--ton-blue); background: rgba(0, 136, 204, 0.2); box-shadow: 0 0 10px rgba(0, 136, 204, 0.3); }
-        .ton-icon { width: 14px; margin-bottom: 4px; display: block; margin-left: auto; margin-right: auto; }
+        .side-nav { position: absolute; right: 10px; display: flex; flex-direction: column; gap: 12px; }
+        .side-btn { background: rgba(20,20,20,0.8); border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 14px; width: 65px; font-size: 10px; font-weight: 800; text-align: center; }
+        .wallet-connected { border-color: var(--ton-blue); color: var(--ton-blue); }
 
-        .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: auto; margin-bottom: 35px; }
-        .nav-btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 14px 5px; border-radius: 16px; text-align: center; font-size: 11px; font-weight: 800; color: #fff; }
-        .tap-text { position: absolute; color: #fff; font-size: 36px; font-weight: 900; pointer-events: none; animation: floatUp 0.7s ease-out forwards; z-index: 100; text-shadow: 0 0 15px var(--neon-purple); }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-140px) scale(1.2); } }
+        .energy-section { width: 85%; margin-bottom: 30px; }
+        .energy-bar-wrap { width: 100%; height: 12px; background: rgba(255,255,255,0.05); border-radius: 20px; overflow: hidden; }
+        #energy-fill { height: 100%; background: linear-gradient(90deg, #00ff66, var(--neon-cyan)); width: 100%; transition: 0.3s; }
 
-        .energy-section { width: 85%; margin-top: 25px; }
-        .energy-bar-wrap { width: 100%; height: 12px; background: rgba(255,255,255,0.05); border-radius: 20px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05); }
-        #energy-fill { height: 100%; background: linear-gradient(90deg, #00ff66, var(--neon-cyan)); width: 100%; transition: width 0.3s; }
-        .pnl-badge { font-size: 11px; color: var(--neon-cyan); margin-top: 6px; font-weight: bold; letter-spacing: 0.5px; }
+        .tap-text { position: absolute; color: #fff; font-size: 36px; font-weight: 900; pointer-events: none; animation: floatUp 0.7s forwards; }
+        @keyframes floatUp { to { opacity: 0; transform: translateY(-120px); } }
     </style>
 </head>
 <body>
 
-    <div id="loader-screen">
-        <div class="loader-container">
-            <div class="loader-logo-wrap">
-                <div class="loader-ring"></div>
-                <img src="logo.png" style="width: 120px; height: 120px; border-radius: 50%; position: relative; z-index: 2;" onerror="this.src='https://via.placeholder.com/120/bc13fe/fff?text=AI'">
-            </div>
-            <div class="loader-text" id="loader-status">Establishing Neural Link...</div>
-            <div id="loader-percent" class="loader-percent">0%</div>
-            <div class="loader-bar-bg"><div id="loader-fill" class="loader-bar-fill"></div></div>
-        </div>
-    </div>
+    <div id="loader-screen"><div class="loader-percent" id="loader-percent">0%</div></div>
 
     <div class="content-layer">
         <div class="header-card">
             <div class="lvl-icon" id="lvl-display">1</div>
-            <div style="flex-grow: 1;">
-                <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; color: #888; letter-spacing: 1px;">
-                    <span id="league-name">NEURAL LEAGUE</span>
-                    <span id="rank-id">ID: LOADING</span>
-                </div>
-                <div id="pnl-display" class="pnl-badge">PASSIVE: +0/h</div>
-            </div>
+            <div id="pnl-display" style="color: var(--neon-cyan); font-weight: bold; font-size: 12px;">+0/h</div>
         </div>
 
-        <div class="score-container">
-            <div class="jackpot-label">NEURAL TOKENS</div>
-            <div id="balance">0</div>
-        </div>
+        <div id="balance">0</div>
 
         <div class="main-wrapper">
-            <div class="click-area" id="tap-zone">
+            <div id="tap-zone" style="cursor:pointer">
                 <img src="logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/230/bc13fe/fff?text=AI'">
             </div>
             <div class="side-nav">
-                <div class="side-btn wallet-btn" onclick="connectWallet()">
-                    <img src="https://ton.org/download/ton_symbol.svg" class="ton-icon">
-                    WALLET
-                </div>
+                <div class="side-btn" id="wallet-btn" onclick="connectWallet()">WALLET</div>
                 <div class="side-btn" onclick="showInvite()">INVITE</div>
-                <div class="side-btn" onclick="tg.showAlert('Tasks update in 24h')">TASKS</div>
-                <div class="side-btn" style="color:#ffe600; border-color:rgba(255,230,0,0.4)" onclick="tg.showAlert('Daily Bonus available tomorrow!')">BONUS</div>
+                <div class="side-btn" onclick="tg.showAlert('Soon')">TASKS</div>
             </div>
         </div>
 
         <div class="energy-section">
-            <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 800; margin-bottom: 8px; color: #888;">
-                <span>⚡ ENERGY</span>
-                <span id="energy-text">1000/1000</span>
+            <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:5px;">
+                <span>⚡ ENERGY</span> <span id="energy-text">1000/1000</span>
             </div>
             <div class="energy-bar-wrap"><div id="energy-fill"></div></div>
         </div>
-
-        <div class="bottom-nav">
-            <div class="nav-btn" onclick="tg.showAlert('Upgrades loading...')">🚀 BOOST</div>
-            <div class="nav-btn" onclick="tg.showAlert('Mining starts at Level 5')">⛏️ MINE</div>
-            <div class="nav-btn" onclick="showLeaderboard()">📊 STATS</div>
-        </div>
     </div>
 
-    <script>
-        const tg = window.Telegram.WebApp;
-        tg.ready();
-        tg.expand();
+<script>
+    const tg = window.Telegram.WebApp;
+    tg.expand();
 
-        // 1. КОНФИГУРАЦИЯ
-        const BOT_USERNAME = "neural_pulse_bot"; 
-        const API_BASE = window.location.origin;
+    // Инициализация TON Connect
+    const tonConnectUI = new TONConnectUI.TonConnectUI({
+        manifestUrl: 'https://np.bothost.ru/tonconnect-manifest.json'
+    });
 
-        let state = { 
-            balance: 0, 
-            energy: 1000, 
-            max_energy: 1000, 
-            click_lvl: 1, 
-            pnl: 0, 
-            loaded: false, 
-            isDirty: false,
-            uid: tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('u')
-        };
+    let state = { 
+        balance: 0, energy: 1000, max_energy: 1000, 
+        click_lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id,
+        wallet: null, loaded: false, isDirty: false 
+    };
 
-        const tgUser = tg.initDataUnsafe?.user;
-        const currentUsername = tgUser ? (tgUser.username || tgUser.first_name) : "Игрок";
-
-        // 2. ЗАГРУЗКА ДАННЫХ
-        async function loadData() {
-            if(!state.uid) { 
-                console.warn("⚠️ [FRONT] Нет UID, демо-режим.");
-                state.loaded = true;
-                return; 
-            }
-            try {
-                const r = await fetch(`${API_BASE}/api/user/${state.uid}`);
-                if (!r.ok) throw new Error("Server Error");
-                const res = await r.json();
-                state.balance = Number(res.balance) || 0;
-                state.energy = Number(res.energy) || 1000;
-                state.pnl = Number(res.pnl) || 0;
-                state.click_lvl = Number(res.click_lvl) || 1;
-            } catch(e) { 
-                console.error("🚨 [FRONT] Ошибка API:", e.message); 
-            }
-            state.loaded = true;
-            updateUI();
+    // Слушаем кошелек
+    tonConnectUI.onStatusChange(wallet => {
+        const btn = document.getElementById('wallet-btn');
+        if (wallet) {
+            state.wallet = wallet.account.address;
+            state.isDirty = true;
+            btn.innerText = 'OK';
+            btn.classList.add('wallet-connected');
+        } else {
+            state.wallet = null;
+            btn.innerText = 'WALLET';
+            btn.classList.remove('wallet-connected');
         }
+    });
 
-        // 3. СОХРАНЕНИЕ
-        async function syncData() {
-            if(!state.uid || !state.loaded || !state.isDirty) return;
-            try {
-                await fetch(`${API_BASE}/api/save`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        userId: String(state.uid),
-                        username: currentUsername,
-                        balance: state.balance, 
-                        energy: state.energy,
-                        click_lvl: state.click_lvl,
-                        pnl: state.pnl
-                    })
-                });
-                state.isDirty = false;
-            } catch(e) { console.warn("☁️ [SYNC] Ошибка связи."); }
-        }
+    async function loadData() {
+        if(!state.uid) { state.loaded = true; hideLoader(); return; }
+        try {
+            const r = await fetch(`/api/user/${state.uid}`);
+            const res = await r.json();
+            state.balance = Number(res.balance) || 0;
+            state.energy = Number(res.energy) || 1000;
+            state.pnl = Number(res.pnl) || 0;
+            state.click_lvl = Number(res.click_lvl) || 1;
+            state.wallet = res.wallet || null;
+        } catch(e) {}
+        state.loaded = true;
+        updateUI();
+        hideLoader();
+    }
 
-        function updateUI() {
-            document.getElementById('balance').innerText = Math.floor(state.balance).toLocaleString();
-            document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
-            document.getElementById('energy-fill').style.width = `${(state.energy / state.max_energy) * 100}%`;
-            document.getElementById('lvl-display').innerText = state.click_lvl;
-            document.getElementById('pnl-display').innerText = `PASSIVE: +${Math.floor(state.pnl)}/h`;
-            if(state.uid) document.getElementById('rank-id').innerText = `ID: ${String(state.uid).slice(-6)}`;
-        }
+    function updateUI() {
+        document.getElementById('balance').innerText = Math.floor(state.balance).toLocaleString();
+        document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/${state.max_energy}`;
+        document.getElementById('energy-fill').style.width = `${(state.energy/state.max_energy)*100}%`;
+        document.getElementById('lvl-display').innerText = state.click_lvl;
+        document.getElementById('pnl-display').innerText = `+${Math.floor(state.pnl)}/h`;
+    }
 
-        // 4. ЛОГИКА ТАПОВ
-        const tapZone = document.getElementById('tap-zone');
-        const mainLogo = document.getElementById('main-logo');
-
-        tapZone.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            if (!state.loaded) return;
-
-            for(let i=0; i < e.changedTouches.length; i++) {
-                const touch = e.changedTouches[i];
-                if (state.energy < state.click_lvl) {
-                    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('warning');
-                    break;
-                }
-                state.balance += state.click_lvl;
-                state.energy -= state.click_lvl;
-                state.isDirty = true;
-
-                const num = document.createElement('div');
-                num.className = 'tap-text';
-                num.innerText = `+${state.click_lvl}`;
-                num.style.left = `${touch.clientX - 20}px`; 
-                num.style.top = `${touch.clientY - 40}px`;
-                document.body.appendChild(num);
-                setTimeout(() => num.remove(), 600);
-                if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-            }
-            mainLogo.style.transform = 'scale(0.94) rotate(-2deg)';
-            updateUI();
-        }, { passive: false });
-
-        tapZone.addEventListener('touchend', () => {
-            mainLogo.style.transform = 'scale(1) rotate(0deg)';
-        });
-
-        // 5. НОВАЯ ФУНКЦИЯ КОШЕЛЬКА
-        function connectWallet() {
-            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('heavy');
-            tg.showPopup({
-                title: '💎 TON WALLET',
-                message: 'Connect your TON wallet to withdraw NP tokens in the future.',
-                buttons: [
-                    {id: 'connect', type: 'default', text: 'CONNECT WALLET'},
-                    {type: 'cancel', text: 'LATER'}
-                ]
-            }, (btn) => {
-                if (btn === 'connect') {
-                    tg.showAlert('TON Connect integration is coming soon!');
-                }
-            });
-        }
-
-        setInterval(() => {
-            if (state.loaded && state.energy < state.max_energy) {
-                state.energy = Math.min(state.max_energy, state.energy + 1.5);
-                state.isDirty = true;
-                updateUI();
-            }
-        }, 1000);
-
-        setInterval(syncData, 4000); 
-
-        function startLoadingAnimation() {
-            let progress = 0;
-            const percentEl = document.getElementById('loader-percent');
-            const fillEl = document.getElementById('loader-fill');
-            const interval = setInterval(() => {
-                if (state.loaded) progress += 15;
-                else if (progress < 90) progress += 0.5;
-                if (progress >= 100) {
-                    progress = 100;
-                    clearInterval(interval);
-                    hideLoader();
-                }
-                const displayProgress = Math.floor(progress);
-                percentEl.innerText = `${displayProgress}%`;
-                fillEl.style.width = `${displayProgress}%`;
-            }, 50);
-        }
-
-        function hideLoader() {
-            const loader = document.getElementById('loader-screen');
-            loader.style.opacity = '0';
-            setTimeout(() => {
-                loader.style.display = 'none';
-                document.querySelector('.content-layer').classList.add('active');
-            }, 500);
-        }
-
-        window.onload = () => {
-            startLoadingAnimation();
-            loadData();
-        };
+    document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (state.energy < state.click_lvl) return;
         
-        function showInvite() {
-            const link = `https://t.me/${BOT_USERNAME}?start=${state.uid}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join me in Neural Pulse AI! 🧠`);
-        }
+        state.balance += state.click_lvl;
+        state.energy -= state.click_lvl;
+        state.isDirty = true;
 
-        function showLeaderboard() {
-            tg.showPopup({
-                title: '📈 STATS',
-                message: `Balance: ${Math.floor(state.balance)} NP\nEnergy: ${Math.floor(state.energy)}`,
-                buttons: [{type: 'close', text: 'CLOSE'}]
-            });
+        const touch = e.touches[0];
+        const num = document.createElement('div');
+        num.className = 'tap-text';
+        num.innerText = `+${state.click_lvl}`;
+        num.style.left = touch.clientX + 'px';
+        num.style.top = touch.clientY + 'px';
+        document.body.appendChild(num);
+        setTimeout(() => num.remove(), 700);
+        
+        updateUI();
+        tg.HapticFeedback.impactOccurred('medium');
+    });
+
+    async function connectWallet() {
+        if (state.wallet) {
+            tg.showPopup({ 
+                title: 'WALLET', 
+                message: 'Wallet is connected. Do you want to disconnect?', 
+                buttons: [{id: 'd', type: 'destructive', text: 'DISCONNECT'}, {type:'cancel'}]
+            }, (id) => { if(id==='d') tonConnectUI.disconnect(); });
+        } else {
+            await tonConnectUI.openModal();
         }
-    </script>
+    }
+
+    async function syncData() {
+        if(!state.uid || !state.isDirty) return;
+        await fetch('/api/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                userId: String(state.uid),
+                username: tg.initDataUnsafe?.user?.username || 'Player',
+                balance: state.balance,
+                energy: state.energy,
+                click_lvl: state.click_lvl,
+                pnl: state.pnl,
+                wallet: state.wallet
+            })
+        });
+        state.isDirty = false;
+    }
+
+    function hideLoader() {
+        document.getElementById('loader-screen').style.opacity = '0';
+        setTimeout(() => {
+            document.getElementById('loader-screen').style.display = 'none';
+            document.querySelector('.content-layer').classList.add('active');
+        }, 500);
+    }
+
+    setInterval(() => {
+        if (state.energy < state.max_energy) {
+            state.energy = Math.min(state.max_energy, state.energy + 1.5);
+            updateUI();
+        }
+    }, 1000);
+
+    setInterval(syncData, 4000);
+    window.onload = loadData;
+
+    function showInvite() {
+        const link = `https://t.me/neural_pulse_bot?start=${state.uid}`;
+        tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join me!`);
+    }
+</script>
 </body>
 </html>
