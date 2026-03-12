@@ -68,10 +68,11 @@ app.get('/api/user/:id', async (req, res) => {
         const lastSeen = parseInt(user.last_seen) || now;
         const secondsOffline = Math.max(0, now - lastSeen);
         
-        // Превращаем строки из PG в числа
+        // Превращаем строки из PG в числа для фронтенда
         user.balance = Number(user.balance) || 0;
         user.energy = parseInt(user.energy) || 1000;
         user.pnl = Number(user.pnl) || 0;
+        user.click_lvl = parseInt(user.click_lvl) || 1;
 
         let needsDbUpdate = false;
 
@@ -110,6 +111,12 @@ app.post('/api/save', async (req, res) => {
 
     if (uid && uid !== "undefined" && uid !== "null") {
         try {
+            // КРИТИЧЕСКАЯ ПРАВКА: Округляем значения перед сохранением в INTEGER
+            const safeEnergy = Math.floor(Number(energy) || 0);
+            const safeBalance = Number(balance) || 0;
+            const safePnl = Number(pnl) || 0;
+            const safeLvl = parseInt(click_lvl) || 1;
+
             await pool.query(`
                 INSERT INTO users (user_id, balance, energy, click_lvl, pnl, username, last_seen)
                 VALUES ($1, $2, $3, $4, $5, $6, extract(epoch from now()))
@@ -120,7 +127,7 @@ app.post('/api/save', async (req, res) => {
                 pnl = EXCLUDED.pnl, 
                 username = EXCLUDED.username, 
                 last_seen = extract(epoch from now())
-            `, [uid, balance, energy, click_lvl, pnl, username]);
+            `, [uid, safeBalance, safeEnergy, safeLvl, safePnl, username]);
             
             res.json({ status: 'ok' });
         } catch (e) {
@@ -148,7 +155,7 @@ bot.start(async (ctx) => {
         const result = await pool.query('SELECT balance FROM users WHERE user_id = $1', [uid]);
         const bal = Number(result.rows[0]?.balance) || 0;
 
-        // Создаем ссылку с "анти-кэшем"
+        // Ссылка с параметром времени для обхода кэша Telegram
         const gameUrl = `https://${DOMAIN}?v=${Date.now()}`;
 
         ctx.replyWithHTML(
