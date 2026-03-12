@@ -12,23 +12,23 @@ const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// Настройка пула БД с учетом возможных ограничений хостинга
+// --- НАСТРОЙКА БАЗЫ ДАННЫХ (БЕЗ SSL для Bothost) ---
 const pool = new Pool({ 
     connectionString: PG_URI,
-    ssl: { rejectUnauthorized: false } // Нужно для большинства облачных БД
+    ssl: false // Обязательно false для твоего текущего сервера
 });
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- ГЛОБАЛЬНАЯ МАТЕМАТИКА (Синхронно с фронтендом) ---
+// --- ГЛОБАЛЬНАЯ МАТЕМАТИКА ---
 const MATH = {
     CLICK_BASE: 500,
     CLICK_GROWTH: 1.45,
     PNL_BASE: 1200,
     PNL_GROWTH: 1.28,
-    PNL_STEP: 250 // Сколько PNL дает один апгрейд
+    PNL_STEP: 250
 };
 
 const getClickCost = (lvl) => Math.floor(MATH.CLICK_BASE * Math.pow(MATH.CLICK_GROWTH, lvl - 1));
@@ -40,7 +40,11 @@ const getPnlCost = (pnl) => {
 // Инициализация БД
 const initDB = async () => {
     try {
-        await pool.query(`
+        // Проверка соединения
+        const client = await pool.connect();
+        console.log("✅ [DB] Соединение с PostgreSQL установлено.");
+        
+        await client.query(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
                 username TEXT,
@@ -53,12 +57,15 @@ const initDB = async () => {
                 last_seen BIGINT DEFAULT extract(epoch from now())
             );
         `);
-        console.log("📦 [DB] Таблицы проверены.");
-    } catch (err) { console.error("❌ [DB] Ошибка инициализации:", err.message); }
+        client.release();
+        console.log("📦 [DB] Таблицы проверены и готовы.");
+    } catch (err) { 
+        console.error("❌ [DB] Ошибка подключения/инициализации:", err.message); 
+    }
 };
 initDB();
 
-// API получения данных пользователя
+// API: Данные пользователя
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
     const refBy = req.query.ref;
@@ -67,7 +74,6 @@ app.get('/api/user/:id', async (req, res) => {
         let result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
         
         if (result.rows.length === 0) {
-            // Регистрация + Бонус за реферала
             await pool.query(
                 'INSERT INTO users (user_id, referrer_id, last_seen) VALUES ($1, $2, extract(epoch from now()))', 
                 [uid, refBy]
@@ -82,9 +88,8 @@ app.get('/api/user/:id', async (req, res) => {
         const now = Math.floor(Date.now() / 1000);
         const diff = now - parseInt(user.last_seen);
 
-        // Начисление пассивного дохода и регенерация за время отсутствия
-        if (diff > 5 && user.pnl > 0) {
-            const passiveIncome = (parseFloat(user.pnl) / 3600) * Math.min(diff, 14400); // Ограничение 4 часа
+        if (diff > 5) {
+            const passiveIncome = user.pnl > 0 ? (parseFloat(user.pnl) / 3600) * Math.min(diff, 14400) : 0;
             const energyRegen = diff * 1.8;
             
             user.balance = parseFloat(user.balance) + passiveIncome;
@@ -96,15 +101,14 @@ app.get('/api/user/:id', async (req, res) => {
                 [user.balance, Math.floor(user.energy), user.last_seen, uid]
             );
         }
-
         res.json(user);
     } catch (e) { 
-        console.error("User Error:", e);
+        console.error("API Error (User):", e);
         res.status(500).json({ error: "DB Error" }); 
     }
 });
 
-// Сохранение прогресса (клики)
+// API: Сохранение кликов
 app.post('/api/save', async (req, res) => {
     const { userId, clicks, energy, wallet_address } = req.body;
     try {
@@ -125,7 +129,7 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Покупка улучшений
+// API: Улучшения
 app.post('/api/upgrade', async (req, res) => {
     const { userId, type } = req.body;
     try {
@@ -133,7 +137,6 @@ app.post('/api/upgrade', async (req, res) => {
         const user = userRes.rows[0];
 
         let cost, updateQuery;
-        
         if (type === 'click') {
             cost = getClickCost(user.click_lvl);
             updateQuery = 'UPDATE users SET balance=balance-$1, click_lvl=click_lvl+1 WHERE user_id=$2';
@@ -151,7 +154,7 @@ app.post('/api/upgrade', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Манифест для TON Connect
+// TON Manifest
 app.get('/tonconnect-manifest.json', (req, res) => {
     res.json({
         "url": `https://${DOMAIN}`,
@@ -160,6 +163,7 @@ app.get('/tonconnect-manifest.json', (req, res) => {
     });
 });
 
+// Bot Logic
 bot.start((ctx) => {
     const refId = ctx.payload || ''; 
     const gameUrl = `https://${DOMAIN}?u=${ctx.from.id}${refId ? '&ref=' + refId : ''}`;
@@ -171,6 +175,7 @@ bot.start((ctx) => {
     );
 });
 
+// Start Server
 app.listen(PORT, () => {
     bot.launch();
     console.log(`🚀 Server running on port ${PORT}`);
