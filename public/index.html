@@ -40,8 +40,22 @@
             100% { filter: drop-shadow(0 0 5px var(--neon-cyan)); }
         }
 
-        #shop-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(15px); }
-        .shop-card { background: var(--glass); width: 85%; padding: 20px; border-radius: 24px; border: 1px solid rgba(0, 242, 255, 0.3); margin-bottom: 15px; text-align: center; }
+        /* Модальные окна */
+        #shop-modal, #stats-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(15px); }
+        .shop-card, .leaderboard { background: var(--glass); width: 85%; padding: 20px; border-radius: 24px; border: 1px solid rgba(0, 242, 255, 0.3); text-align: center; }
+        
+        /* Стили списка лидеров */
+        .leaderboard { max-height: 60vh; overflow-y: auto; padding: 10px; }
+        .leader-item { display: flex; align-items: center; padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .leader-rank { width: 35px; font-weight: 900; color: var(--neon-cyan); font-size: 18px; }
+        .leader-info { flex-grow: 1; text-align: left; padding-left: 10px; }
+        .leader-name { font-weight: 800; font-size: 14px; }
+        .leader-balance { font-size: 12px; color: #888; }
+        
+        .leader-item:nth-child(1) .leader-rank { color: #FFD700; text-shadow: 0 0 10px #FFD700; }
+        .leader-item:nth-child(2) .leader-rank { color: #C0C0C0; }
+        .leader-item:nth-child(3) .leader-rank { color: #CD7F32; }
+
         .buy-btn { background: var(--neon-cyan); color: #000; border: none; width: 100%; padding: 14px; border-radius: 12px; font-weight: 900; margin-top: 10px; }
 
         .side-nav { position: absolute; right: -10px; display: flex; flex-direction: column; gap: 10px; }
@@ -82,12 +96,12 @@
     <div class="click-area" id="tap-zone">
         <img src="logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/230/bc13fe/fff?text=AI'">
         <div class="side-nav">
-            <div class="side-btn" id="ton-btn-root" style="border-color: #0088cc; overflow: hidden;">
+            <div class="side-btn" id="ton-btn-root" style="border-color: #0088cc; overflow: hidden; position: relative;">
                 <span id="addr-text">WALLET</span>
                 <div id="ton-connect-mount" style="position: absolute; inset: 0; opacity: 0.01;"></div>
             </div>
             <div class="side-btn" onclick="showInvite()">INVITE</div>
-            <div class="side-btn" onclick="tg.showAlert('Daily bonus: 1,000 NP collected!')">BONUS</div>
+            <div class="side-btn" onclick="tg.showAlert('Check back in 24h for a new bonus!')">BONUS</div>
         </div>
     </div>
 
@@ -112,12 +126,19 @@
             <p id="click-cost" style="color: #888; margin: 10px 0;">Cost: 500 NP</p>
             <button class="buy-btn" onclick="buy('click')">UPGRADE</button>
         </div>
-        <div class="shop-card">
+        <div class="shop-card" style="margin-top:15px">
             <h3 style="margin: 0; color: var(--neon-cyan);">⛏️ AUTO-MINING</h3>
             <p id="pnl-cost" style="color: #888; margin: 10px 0;">Cost: 1200 NP</p>
             <button class="buy-btn" onclick="buy('pnl')">UPGRADE</button>
         </div>
-        <button onclick="toggleShop()" style="background: none; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 12px 40px; border-radius: 12px; margin-top: 10px;">BACK</button>
+        <button onclick="toggleShop()" style="background: none; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 12px 40px; border-radius: 12px; margin-top: 20px;">BACK</button>
+    </div>
+
+    <div id="stats-modal">
+        <h2 style="margin-bottom: 20px; color: var(--neon-cyan); letter-spacing: 2px;">TOP 10 MINERS</h2>
+        <div class="leaderboard" id="leaderboard-list">
+            </div>
+        <button onclick="document.getElementById('stats-modal').style.display='none'" style="background: none; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 12px 40px; border-radius: 12px; margin-top: 20px;">CLOSE</button>
     </div>
 
     <script>
@@ -165,7 +186,6 @@
             document.getElementById('click-cost').innerText = `Cost: ${getClickCost(state.click_lvl).toLocaleString()} NP`;
             document.getElementById('pnl-cost').innerText = `Cost: ${getPnlCost(state.pnl).toLocaleString()} NP`;
 
-            // Обновление Лиги
             const league = state.balance > 1000000 ? "NEURAL DIAMOND" : state.balance > 100000 ? "NEURAL GOLD" : "NEURAL BRONZE";
             document.getElementById('league-name').innerText = league;
 
@@ -179,8 +199,7 @@
         function spawnParticles(x, y) {
             for(let i=0; i<6; i++) {
                 particles.push({
-                    x, y,
-                    vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
+                    x, y, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
                     life: 1.0, size: Math.random()*3 + 1,
                     color: Math.random() > 0.5 ? '#00f2ff' : '#bc13fe'
                 });
@@ -237,24 +256,22 @@
             const res = await r.json();
             if(res.success) {
                 tg.HapticFeedback.notificationOccurred('success');
-                init(); // Перезагружаем данные с сервера
+                init();
             } else tg.showAlert("Insufficient NP Balance!");
         }
 
         async function sync() {
             if(!state.loaded || state.unsavedClicks === 0) return;
             const clicksToSend = state.unsavedClicks;
-            state.unsavedClicks = 0; // Сбрасываем сразу, чтобы не дублировать
+            state.unsavedClicks = 0;
             
             try {
-                const r = await fetch('/api/save', {
+                await fetch('/api/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: state.uid, clicks: clicksToSend, energy: state.energy, username: tg.initDataUnsafe?.user?.username })
+                    body: JSON.stringify({ userId: state.uid, clicks: clicksToSend, energy: state.energy, username: tg.initDataUnsafe?.user?.username || 'User' })
                 });
-            } catch(e) { 
-                state.unsavedClicks += clicksToSend; // В случае ошибки возвращаем клики
-            }
+            } catch(e) { state.unsavedClicks += clicksToSend; }
         }
 
         function toggleShop() {
@@ -262,20 +279,34 @@
             m.style.display = (m.style.display === 'flex') ? 'none' : 'flex';
         }
 
+        async function showStats() {
+            const modal = document.getElementById('stats-modal');
+            const list = document.getElementById('leaderboard-list');
+            list.innerHTML = '<div style="padding: 20px">Scanning network...</div>';
+            modal.style.display = 'flex';
+
+            try {
+                const r = await fetch('/api/top');
+                const top = await r.json();
+                list.innerHTML = '';
+                top.forEach((u, i) => {
+                    const div = document.createElement('div');
+                    div.className = 'leader-item';
+                    div.innerHTML = `
+                        <div class="leader-rank">${i+1}</div>
+                        <div class="leader-info">
+                            <div class="leader-name">${u.username || 'Anonymous'}</div>
+                            <div class="leader-balance">${Math.floor(u.balance).toLocaleString()} NP</div>
+                        </div>
+                    `;
+                    list.appendChild(div);
+                });
+            } catch(e) { list.innerHTML = 'Error loading top'; }
+        }
+
         function showInvite() {
             const link = `https://t.me/neural_pulse_bot?start=${state.uid}`;
             tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my Neural Network! 🧠`);
-        }
-
-        function showStats() {
-            fetch('/api/top').then(r => r.json()).then(top => {
-                let list = top.map((u, i) => `${i+1}. ${u.username || 'User'}: ${Math.floor(u.balance)}`).join('\n');
-                tg.showPopup({ 
-                    title: '📊 GLOBAL LEADERS', 
-                    message: list || 'No data yet',
-                    buttons: [{type: 'close'}] 
-                });
-            });
         }
 
         setInterval(sync, 3500);
