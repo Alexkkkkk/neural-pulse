@@ -47,26 +47,46 @@
         #balance { font-size: 44px; font-weight: 900; margin-top: 25px; text-shadow: 0 0 25px rgba(0, 242, 255, 0.4); z-index: 10; }
         
         .click-area { width: 280px; height: 280px; display: flex; align-items: center; justify-content: center; margin-top: 20px; position: relative; z-index: 5; }
-        .main-logo { width: 220px; height: 220px; border-radius: 50%; transition: transform 0.05s; border: 4px solid rgba(255,255,255,0.05); object-fit: cover; }
+        .main-logo { width: 220px; height: 220px; border-radius: 50%; transition: transform 0.05s; border: 4px solid rgba(255,255,255,0.05); object-fit: cover; pointer-events: auto; }
         
-        /* Модалки - Z-INDEX ВЫШЕ ВСЕГО, КРОМЕ ЛОАДЕРА */
+        /* Модалки */
         #shop-modal, #stats-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 9000; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(15px); }
         .modal-content { background: #111; width: 85%; padding: 25px; border-radius: 24px; border: 1px solid var(--neon-cyan); text-align: center; }
 
         /* Навигация */
-        .side-nav { position: absolute; right: -15px; display: flex; flex-direction: column; gap: 12px; z-index: 100; }
-        .side-btn { background: rgba(20,20,20,0.9); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 12px; width: 65px; text-align: center; font-size: 10px; font-weight: 800; cursor: pointer; position: relative; }
+        .side-nav { position: absolute; right: -15px; display: flex; flex-direction: column; gap: 12px; z-index: 9500; }
+        .side-btn { 
+            background: rgba(20,20,20,0.95); 
+            border: 1px solid rgba(255,255,255,0.1); 
+            padding: 10px; 
+            border-radius: 12px; 
+            width: 75px; 
+            text-align: center; 
+            font-size: 10px; 
+            font-weight: 800; 
+            cursor: pointer; 
+            position: relative; 
+            overflow: hidden;
+        }
         
-        /* Кнопка кошелька - фикс кликабельности */
-        #ton-connect-mount { position: absolute; inset: 0; opacity: 0.01; z-index: 2; }
-        #addr-text { position: relative; z-index: 1; pointer-events: none; }
+        /* ГАРАНТИРОВАННЫЙ КЛИК WALLET */
+        #ton-connect-mount { 
+            position: absolute; 
+            inset: 0; 
+            opacity: 0; /* Полностью прозрачный, но кликабельный */
+            z-index: 9999; 
+            cursor: pointer;
+        }
+        #ton-connect-mount button { width: 100% !important; height: 100% !important; cursor: pointer !important; }
+
+        #addr-text { position: relative; z-index: 1; pointer-events: none; text-transform: uppercase; }
 
         .energy-section { width: 85%; margin-top: 20px; z-index: 10; }
         .energy-bar-wrap { width: 100%; height: 10px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; }
         #energy-fill { height: 100%; background: var(--neon-cyan); width: 100%; transition: width 0.1s; }
 
         .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: auto; margin-bottom: 35px; z-index: 10; }
-        .nav-btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 15px 5px; border-radius: 15px; text-align: center; font-size: 11px; font-weight: 800; }
+        .nav-btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 15px 5px; border-radius: 15px; text-align: center; font-size: 11px; font-weight: 800; cursor: pointer; }
         
         .tap-text { position: absolute; color: #fff; font-size: 32px; font-weight: 900; pointer-events: none; animation: floatUp 0.6s ease-out forwards; z-index: 1000; }
         @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
@@ -124,44 +144,25 @@
         <div class="nav-btn" onclick="showStats()">📊 STATS</div>
     </div>
 
-    <div id="shop-modal" onclick="toggleShop()">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <h3 style="color: var(--neon-cyan)">NEURAL UPGRADES</h3>
-            <div style="margin-bottom: 15px;">
-                <p id="click-cost" style="font-size:12px">Cost: 500 NP</p>
-                <button class="nav-btn" style="width:100%; background: var(--neon-cyan); color:#000" onclick="buy('click')">UPGRADE CLICK</button>
-            </div>
-            <div>
-                <p id="pnl-cost" style="font-size:12px">Cost: 1200 NP</p>
-                <button class="nav-btn" style="width:100%; background: var(--neon-purple); color:#fff" onclick="buy('pnl')">UPGRADE MINING</button>
-            </div>
-            <button onclick="toggleShop()" style="margin-top:20px; background:none; border:none; color:#555">Close</button>
-        </div>
-    </div>
-
-    <div id="stats-modal" onclick="document.getElementById('stats-modal').style.display='none'">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <h3 style="color: var(--neon-cyan)">TOP PLAYERS</h3>
-            <div id="leaderboard-list" style="text-align: left; max-height: 250px; overflow-y: auto;"></div>
-            <button onclick="document.getElementById('stats-modal').style.display='none'" style="margin-top:20px; background:none; border:none; color:#555">Back</button>
-        </div>
-    </div>
-
     <script>
         const tg = window.Telegram.WebApp;
         tg.ready(); tg.expand();
 
-        // TON Connect
+        // Улучшенная инициализация TON Connect
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: window.location.origin + '/tonconnect-manifest.json',
+            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
             buttonRootId: 'ton-connect-mount'
         });
 
         tonConnectUI.onStatusChange(wallet => {
+            const txt = document.getElementById('addr-text');
             if (wallet) {
                 const a = wallet.account.address;
-                document.getElementById('addr-text').innerText = a.slice(0,4) + '..' + a.slice(-4);
-                document.getElementById('addr-text').style.color = '#00ff66';
+                txt.innerText = a.slice(0,4) + '..' + a.slice(-4);
+                txt.style.color = '#00f2ff';
+            } else {
+                txt.innerText = 'WALLET';
+                txt.style.color = '#fff';
             }
         });
 
@@ -196,7 +197,11 @@
             document.getElementById('pnl-cost').innerText = `Cost: ${pCost.toLocaleString()} NP`;
         }
 
+        // Обработка клика по логотипу (с защитой от кнопок навигации)
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
+            // Если кликнули по боковому меню - выходим
+            if (e.target.closest('.side-nav')) return;
+
             e.preventDefault();
             if(!state.loaded || state.energy < state.click_lvl) return;
 
@@ -274,10 +279,11 @@
             init();
             let p = 0;
             const i = setInterval(() => {
-                p += state.loaded ? 10 : 1;
+                p += state.loaded ? 10 : 2;
+                if(p > 100) p = 100;
                 document.getElementById('loader-fill').style.width = p + '%';
                 document.getElementById('loader-percent').innerText = p + '%';
-                if(p >= 100) { 
+                if(p >= 100 && state.loaded) { 
                     clearInterval(i); 
                     document.getElementById('loader-screen').style.opacity = '0';
                     setTimeout(() => document.getElementById('loader-screen').style.display='none', 500);
