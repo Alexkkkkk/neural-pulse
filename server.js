@@ -3,14 +3,11 @@ const { Telegraf, Markup } = require('telegraf');
 const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
-const axios = require('axios');
 
-// Конфигурация
-const APP_VERSION = "1.0.4-STABLE";
+const APP_VERSION = "1.0.5-FIX";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 const DOMAIN = "neural-pulse.bothost.ru";
-const MY_WALLET = "EQB8m_p-6T_0Z_8...ВАШ_КОШЕЛЕК...";
 const PORT = process.env.PORT || 3000;
 
 const bot = new Telegraf(BOT_TOKEN);
@@ -19,88 +16,40 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'static'))); // Папка static по правилам
 
-const setupDB = async () => {
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS users (
-            user_id TEXT PRIMARY KEY,
-            username TEXT,
-            balance NUMERIC DEFAULT 0,
-            energy INTEGER DEFAULT 1000,
-            click_lvl INTEGER DEFAULT 1,
-            pnl NUMERIC DEFAULT 0,
-            last_seen BIGINT DEFAULT extract(epoch from now())
-        );
-        CREATE TABLE IF NOT EXISTS payments (
-            tx_hash TEXT PRIMARY KEY, 
-            user_id TEXT, 
-            amount NUMERIC,
-            created_at TIMESTAMP DEFAULT NOW()
-        );
-    `);
-};
-setupDB();
+// ВАЖНО: Указываем путь к папке static
+app.use(express.static(path.join(__dirname, 'static')));
 
+// Эндпоинт для проверки работы сервера
+app.get('/health', (req, res) => res.send(`Neural Core v${APP_VERSION} is Online`));
+
+// API
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
-    const uname = req.query.name || 'Agent';
     let r = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
     if (r.rows.length === 0) {
-        r = await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2) RETURNING *', [uid, uname]);
+        r = await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2) RETURNING *', [uid, 'Agent']);
     }
-    const user = r.rows[0];
-    const offSec = Math.floor(Date.now()/1000) - Number(user.last_seen);
-    const bonus = (Number(user.pnl)/3600) * Math.min(offSec, 172800);
-    res.json({ ...user, offline_bonus: bonus });
-});
-
-app.get('/api/leaderboard', async (req, res) => {
-    const r = await pool.query('SELECT username, balance FROM users ORDER BY balance DESC LIMIT 50');
-    res.json(r.rows);
+    res.json(r.rows[0]);
 });
 
 app.post('/api/save', async (req, res) => {
-    const { userId, balance, energy, click_lvl, pnl } = req.body;
+    const { userId, balance, energy, pnl } = req.body;
     await pool.query(`
-        UPDATE users SET balance = $2, energy = $3, click_lvl = $4, pnl = $5, last_seen = extract(epoch from now())
+        UPDATE users SET balance = $2, energy = $3, pnl = $4, last_seen = extract(epoch from now())
         WHERE user_id = $1
-    `, [String(userId), Number(balance), Math.floor(energy), Math.floor(click_lvl), Number(pnl)]);
+    `, [String(userId), Number(balance), Math.floor(energy), Number(pnl)]);
     res.json({ status: 'ok' });
 });
 
-app.get('/api/check-payment/:id', async (req, res) => {
-    const uid = String(req.params.id);
-    try {
-        const response = await axios.get(`https://toncenter.com/api/v2/getTransactions?address=${MY_WALLET}&limit=30`);
-        for (let tx of response.data.result) {
-            const hash = tx.transaction_id.hash;
-            const msg = tx.in_msg?.message;
-            if (msg && msg.includes(`ID${uid}`)) {
-                const check = await pool.query('SELECT * FROM payments WHERE tx_hash = $1', [hash]);
-                if (check.rows.length === 0) {
-                    await pool.query('INSERT INTO payments (tx_hash, user_id, amount) VALUES ($1, $2, $3)', [hash, uid, 1]);
-                    await pool.query('UPDATE users SET balance = balance + 1000000 WHERE user_id = $1', [uid]);
-                    return res.json({ success: true, added: 1000000 });
-                }
-            }
-        }
-    } catch (e) {}
-    res.json({ success: false });
-});
-
-// Кнопка Старт с версией
 bot.start(ctx => ctx.replyWithHTML(
-    `<b>NEURAL PULSE ACCESS GRANTED</b>\n\n` +
-    `Welcome, <b>${ctx.from.first_name}</b>\n` +
-    `Current build: <code>${APP_VERSION}</code>`, 
+    `<b>NEURAL PULSE ACCESS</b>\n\nBuild: <code>${APP_VERSION}</code>`, 
     Markup.inlineKeyboard([[Markup.button.webApp('⚡ INITIALIZE', `https://${DOMAIN}`)]])
 ));
 
 app.listen(PORT, () => { 
-    // Вывод в лог BotHost
-    console.log(`[BOOT] Neural Pulse Server Active`);
-    console.log(`[BOOT] Version: ${APP_VERSION}`);
-    console.log(`[BOOT] Domain: ${DOMAIN}`);
+    console.log(`[BOOT] === NEURAL PULSE SYSTEM ===`);
+    console.log(`[BOOT] Build: ${APP_VERSION}`);
+    console.log(`[BOOT] Static folder: ${path.join(__dirname, 'static')}`);
     bot.launch(); 
 });
