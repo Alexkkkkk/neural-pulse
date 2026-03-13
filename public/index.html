@@ -31,64 +31,49 @@
         }
 
         .loader-ring-visual {
-            width: 140px; height: 140px;
-            border-radius: 50%;
+            width: 140px; height: 140px; border-radius: 50%;
             border: 3px solid rgba(255, 255, 255, 0.03);
             border-top: 3px solid var(--neon-cyan);
             border-bottom: 3px solid var(--neon-purple);
             display: flex; align-items: center; justify-content: center;
             margin: 0 auto 20px;
             animation: spin-ai 1.8s cubic-bezier(0.5, 0, 0.5, 1) infinite;
-            box-shadow: 0 0 20px rgba(0, 242, 255, 0.1);
         }
 
-        .loader-logo-static {
-            width: 100px; height: 100px; border-radius: 50%; object-fit: cover;
-            animation: spin-reverse 1.8s cubic-bezier(0.5, 0, 0.5, 1) infinite;
-        }
+        .loader-logo-static { width: 100px; height: 100px; border-radius: 50%; object-fit: cover; animation: spin-reverse 1.8s infinite; }
 
         @keyframes spin-ai { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         @keyframes spin-reverse { 0% { transform: rotate(0deg); } 100% { transform: rotate(-360deg); } }
 
-        #loader-percent { 
-            font-size: 28px; font-weight: 900; color: var(--neon-cyan); 
-            font-family: monospace; text-shadow: 0 0 10px var(--neon-cyan); 
-        }
-
+        #loader-percent { font-size: 28px; font-weight: 900; color: var(--neon-cyan); font-family: monospace; }
         .loader-bar { width: 200px; height: 3px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin: 15px auto 0; }
         #loader-fill { width: 0%; height: 100%; background: var(--neon-cyan); transition: width 0.2s; }
 
         /* --- ИНТЕРФЕЙС --- */
         .header-card { width: 85%; margin-top: 15px; display: flex; align-items: center; gap: 12px; background: var(--glass); padding: 12px; border-radius: 20px; border: 1px solid rgba(0, 242, 255, 0.15); backdrop-filter: blur(10px); z-index: 10; }
-        #balance { font-size: 48px; font-weight: 900; margin-top: 25px; text-shadow: 0 0 30px rgba(0, 242, 255, 0.4); z-index: 10; font-variant-numeric: tabular-nums; }
+        #balance { font-size: 44px; font-weight: 900; margin-top: 25px; text-shadow: 0 0 25px rgba(0, 242, 255, 0.4); z-index: 10; }
         
-        .click-area { width: 280px; height: 280px; display: flex; align-items: center; justify-content: center; margin-top: 30px; position: relative; z-index: 5; }
-        .main-logo { width: 230px; height: 230px; border-radius: 50%; transition: transform 0.05s; border: 4px solid rgba(255,255,255,0.05); object-fit: cover; }
+        .click-area { width: 280px; height: 280px; display: flex; align-items: center; justify-content: center; margin-top: 20px; position: relative; z-index: 5; }
+        .main-logo { width: 220px; height: 220px; border-radius: 50%; transition: transform 0.05s; border: 4px solid rgba(255,255,255,0.05); object-fit: cover; }
         
-        .main-logo.active { animation: pulse-glow 2s infinite; }
-        @keyframes pulse-glow {
-            0% { filter: drop-shadow(0 0 5px var(--neon-cyan)); }
-            50% { filter: drop-shadow(0 0 25px var(--neon-cyan)); }
-            100% { filter: drop-shadow(0 0 5px var(--neon-cyan)); }
-        }
+        /* Модалки */
+        #shop-modal, #stats-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(15px); }
+        .modal-content { background: #111; width: 85%; padding: 25px; border-radius: 24px; border: 1px solid var(--neon-cyan); text-align: center; }
 
-        #shop-modal, #stats-modal, #admin-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(15px); }
-        .shop-card, .leaderboard, .admin-card { background: var(--glass); width: 85%; padding: 20px; border-radius: 24px; border: 1px solid rgba(0, 242, 255, 0.3); text-align: center; }
+        .side-nav { position: absolute; right: -15px; display: flex; flex-direction: column; gap: 12px; }
+        .side-btn { background: rgba(20,20,20,0.9); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 12px; width: 60px; text-align: center; font-size: 9px; font-weight: 800; }
         
-        .buy-btn { background: var(--neon-cyan); color: #000; border: none; width: 100%; padding: 14px; border-radius: 12px; font-weight: 900; margin-top: 10px; }
+        .energy-section { width: 85%; margin-top: 20px; z-index: 10; }
+        .energy-bar-wrap { width: 100%; height: 10px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; }
+        #energy-fill { height: 100%; background: var(--neon-cyan); width: 100%; transition: width 0.1s; }
 
-        .side-nav { position: absolute; right: -10px; display: flex; flex-direction: column; gap: 10px; }
-        .side-btn { background: rgba(20,20,20,0.8); border: 1px solid rgba(255,255,255,0.1); padding: 12px 5px; border-radius: 16px; width: 70px; text-align: center; font-size: 10px; font-weight: 800; cursor: pointer; }
+        .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: auto; margin-bottom: 30px; z-index: 10; }
+        .nav-btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 15px 5px; border-radius: 15px; text-align: center; font-size: 11px; font-weight: 800; }
         
-        .energy-section { width: 85%; margin-top: 25px; z-index: 10; }
-        .energy-bar-wrap { width: 100%; height: 12px; background: rgba(255,255,255,0.05); border-radius: 20px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); }
-        #energy-fill { height: 100%; background: linear-gradient(90deg, #00ff66, var(--neon-cyan)); width: 100%; transition: width 0.3s; }
-
-        .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: auto; margin-bottom: 35px; z-index: 10; }
-        .nav-btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 16px 5px; border-radius: 18px; text-align: center; font-size: 11px; font-weight: 800; cursor: pointer; }
+        .tap-text { position: absolute; color: #fff; font-size: 32px; font-weight: 900; pointer-events: none; animation: floatUp 0.6s ease-out forwards; z-index: 1000; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
         
-        .tap-text { position: absolute; color: #fff; font-size: 36px; font-weight: 900; pointer-events: none; animation: floatUp 0.6s ease-out forwards; text-shadow: 0 0 15px var(--neon-purple); z-index: 1000; }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.3); } }
+        .leader-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); }
     </style>
 </head>
 <body>
@@ -102,34 +87,32 @@
             </div>
             <div id="loader-percent">0%</div>
             <div class="loader-bar"><div id="loader-fill"></div></div>
-            <div style="margin-top: 10px; font-size: 9px; color: #444; letter-spacing: 2px;">NEURAL LINKING...</div>
         </div>
     </div>
 
     <div class="header-card">
-        <div id="lvl-badge" style="width: 44px; height: 44px; background: rgba(0,242,255,0.1); border: 1px solid var(--neon-cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--neon-cyan); font-size: 18px; cursor: pointer;">1</div>
+        <div id="lvl-badge" style="width: 40px; height: 40px; background: rgba(0,242,255,0.1); border: 1px solid var(--neon-cyan); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--neon-cyan);">1</div>
         <div style="flex-grow: 1;">
-            <div style="font-size: 10px; color: #888; letter-spacing: 1px;" id="league-name">NEURAL BRONZE</div>
-            <div id="pnl-display" style="color: var(--neon-cyan); font-weight: bold; font-size: 12px; margin-top: 2px;">PASSIVE: +0/h</div>
+            <div style="font-size: 10px; color: #888;" id="league-name">NEURAL BRONZE</div>
+            <div id="pnl-display" style="color: var(--neon-cyan); font-weight: bold; font-size: 12px;">PASSIVE: +0/h</div>
         </div>
     </div>
 
     <div id="balance">0</div>
 
     <div class="click-area" id="tap-zone">
-        <img src="logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/230/bc13fe/fff?text=AI'">
+        <img src="logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/220/bc13fe/fff?text=AI'">
         <div class="side-nav">
-            <div class="side-btn" id="ton-btn-root" style="border-color: #0088cc; overflow: hidden; position: relative;">
+            <div class="side-btn" id="ton-btn-root" style="border-color: #0088cc; position: relative;">
                 <span id="addr-text">WALLET</span>
                 <div id="ton-connect-mount" style="position: absolute; inset: 0; opacity: 0.01;"></div>
             </div>
             <div class="side-btn" onclick="showInvite()">INVITE</div>
-            <div class="side-btn" onclick="tg.showAlert('Check back in 24h for a new bonus!')">BONUS</div>
         </div>
     </div>
 
     <div class="energy-section">
-        <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 8px; color: #aaa;">
+        <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px;">
             <span>⚡ ENERGY</span>
             <span id="energy-text">1000/1000</span>
         </div>
@@ -142,40 +125,36 @@
         <div class="nav-btn" onclick="showStats()">📊 STATS</div>
     </div>
 
-    <div id="shop-modal">...</div>
-    <div id="stats-modal">...</div>
-    <div id="admin-modal">...</div>
+    <div id="shop-modal" onclick="toggleShop()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3 style="color: var(--neon-cyan)">UPGRADES</h3>
+            <div style="margin-bottom: 20px;">
+                <p id="click-cost">Cost: 500 NP</p>
+                <button class="nav-btn" style="width:100%; background: var(--neon-cyan); color:#000" onclick="buy('click')">UPGRADE CLICK</button>
+            </div>
+            <div>
+                <p id="pnl-cost">Cost: 1200 NP</p>
+                <button class="nav-btn" style="width:100%; background: var(--neon-purple); color:#fff" onclick="buy('pnl')">UPGRADE MINING</button>
+            </div>
+            <button onclick="toggleShop()" style="margin-top:20px; background:none; border:none; color:#555">Close</button>
+        </div>
+    </div>
+
+    <div id="stats-modal" onclick="document.getElementById('stats-modal').style.display='none'">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3 style="color: var(--neon-cyan)">TOP PLAYERS</h3>
+            <div id="leaderboard-list" style="text-align: left; max-height: 300px; overflow-y: auto;"></div>
+            <button onclick="document.getElementById('stats-modal').style.display='none'" style="margin-top:20px; background:none; border:none; color:#555">Close</button>
+        </div>
+    </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.ready(); tg.expand();
 
-        // Canvas Particles
-        const canvas = document.getElementById('particle-canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        let particles = [];
-
-        // --- TON Connect Инициализация ---
-        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: window.location.origin + '/tonconnect-manifest.json',
-            buttonRootId: 'ton-connect-mount'
-        });
-
-        // Слушатель кошелька
-        tonConnectUI.onStatusChange(wallet => {
-            if (wallet) {
-                const a = wallet.account.address;
-                document.getElementById('addr-text').innerText = a.slice(0,4) + '..' + a.slice(-4);
-                document.getElementById('addr-text').style.color = '#00ff66';
-            }
-        });
-
-        const params = new URLSearchParams(window.location.search);
         let state = { 
-            uid: params.get('u') || tg.initDataUnsafe?.user?.id || 'demo',
-            balance: 0, energy: 1000, click_lvl: 1, pnl: 0, loaded: false, unsavedClicks: 0
+            uid: new URLSearchParams(window.location.search).get('u') || tg.initDataUnsafe?.user?.id || 'demo',
+            balance: 0, energy: 1000, click_lvl: 1, pnl: 0, loaded: false, unsavedClicks: 0 
         };
 
         const getClickCost = (lvl) => Math.floor(500 * Math.pow(1.45, lvl - 1));
@@ -185,11 +164,16 @@
             try {
                 const r = await fetch(`/api/user/${state.uid}`);
                 const data = await r.json();
-                Object.assign(state, data);
+                state.balance = parseFloat(data.balance) || 0;
+                state.energy = parseFloat(data.energy) || 1000;
+                state.click_lvl = parseInt(data.click_lvl) || 1;
+                state.pnl = parseFloat(data.pnl) || 0;
                 state.loaded = true;
-                if(state.pnl > 0) document.getElementById('main-logo').classList.add('active');
                 updateUI();
-            } catch(e) { setTimeout(init, 2000); }
+            } catch(e) { 
+                console.error("Server init error, using local state");
+                state.loaded = true; // Всё равно разрешаем играть
+            }
         }
 
         function updateUI() {
@@ -200,94 +184,100 @@
             document.getElementById('pnl-display').innerText = `PASSIVE: +${Math.floor(state.pnl)}/h`;
             document.getElementById('click-cost').innerText = `Cost: ${getClickCost(state.click_lvl).toLocaleString()} NP`;
             document.getElementById('pnl-cost').innerText = `Cost: ${getPnlCost(state.pnl).toLocaleString()} NP`;
-            const league = state.balance > 1000000 ? "NEURAL DIAMOND" : state.balance > 100000 ? "NEURAL GOLD" : "NEURAL BRONZE";
-            document.getElementById('league-name').innerText = league;
         }
 
-        // --- Клик и анимации ---
+        // КЛИК
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
             e.preventDefault();
-            if(!state.loaded || state.energy < state.click_lvl) {
-                if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
-                return;
-            }
+            if(!state.loaded || state.energy < state.click_lvl) return;
+
             const t = e.touches[0];
             state.balance += state.click_lvl;
             state.energy -= state.click_lvl;
             state.unsavedClicks += 1;
             
-            spawnParticles(t.clientX, t.clientY);
-            
+            // Анимация текста
             const n = document.createElement('div');
             n.className = 'tap-text'; n.innerText = `+${state.click_lvl}`;
-            n.style.left = (t.clientX - 20) + 'px'; n.style.top = (t.clientY - 40) + 'px';
+            n.style.left = t.clientX + 'px'; n.style.top = t.clientY + 'px';
             document.body.appendChild(n);
             setTimeout(() => n.remove(), 600);
-            
-            document.getElementById('main-logo').style.transform = 'scale(0.94) rotate(1deg)';
+
             updateUI();
             if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
         });
 
-        document.getElementById('tap-zone').addEventListener('touchend', () => {
-            document.getElementById('main-logo').style.transform = 'scale(1) rotate(0deg)';
-        });
-
         async function sync() {
-            if(!state.loaded || state.unsavedClicks === 0) return;
-            const clicksToSend = state.unsavedClicks;
+            if(state.unsavedClicks === 0) return;
+            const send = state.unsavedClicks;
             state.unsavedClicks = 0;
             try {
-                await fetch('/api/save', {
+                const r = await fetch('/api/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ 
-                        userId: state.uid, clicks: clicksToSend, energy: state.energy, 
-                        username: tg.initDataUnsafe?.user?.username || tg.initDataUnsafe?.user?.first_name || 'User' 
-                    })
+                    body: JSON.stringify({ userId: state.uid, clicks: send, energy: state.energy })
                 });
-            } catch(e) { state.unsavedClicks += clicksToSend; }
+                const d = await r.json();
+                if(d.balance) state.balance = parseFloat(d.balance);
+            } catch(e) { state.unsavedClicks += send; }
         }
 
-        // Синхронизация при закрытии
-        tg.onEvent('viewportChanged', sync);
-        window.addEventListener('blur', sync);
-        window.addEventListener('beforeunload', sync);
+        function toggleShop() {
+            const m = document.getElementById('shop-modal');
+            m.style.display = (m.style.display === 'flex') ? 'none' : 'flex';
+        }
 
-        // Авто-реген и циклы
+        async function buy(type) {
+            try {
+                const r = await fetch('/api/upgrade', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ userId: state.uid, type })
+                });
+                const res = await r.json();
+                if(res.success) { init(); } else { tg.showAlert("Low balance!"); }
+            } catch(e) { tg.showAlert("Connect error"); }
+        }
+
+        async function showStats() {
+            const m = document.getElementById('stats-modal');
+            const l = document.getElementById('leaderboard-list');
+            m.style.display = 'flex';
+            l.innerHTML = 'Loading...';
+            try {
+                const r = await fetch('/api/top');
+                const top = await r.json();
+                l.innerHTML = top.map((u, i) => `
+                    <div class="leader-item">
+                        <span>${i+1}. ${u.username || 'Anon'}</span>
+                        <span style="color:var(--neon-cyan)">${Math.floor(u.balance)}</span>
+                    </div>
+                `).join('');
+            } catch(e) { l.innerHTML = 'Error'; }
+        }
+
+        function showInvite() {
+            const link = `https://t.me/neural_pulse_bot?start=${state.uid}`;
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my AI Network!`);
+        }
+
         setInterval(sync, 4000);
-        setInterval(() => { 
-            if(state.loaded) {
-                if(state.energy < 1000) state.energy = Math.min(1000, state.energy + 1.5);
-                updateUI();
-            }
-        }, 1000);
+        setInterval(() => { if(state.energy < 1000) { state.energy = Math.min(1000, state.energy + 1.5); updateUI(); } }, 1000);
 
-        // Лоадер
         window.onload = () => {
             init();
-            let progress = 0;
-            const loader = setInterval(() => {
-                progress += state.loaded ? 10 : 1; 
-                if(progress >= 100) { 
-                    progress = 100;
-                    clearInterval(loader); 
+            let p = 0;
+            const i = setInterval(() => {
+                p += state.loaded ? 10 : 1;
+                document.getElementById('loader-fill').style.width = p + '%';
+                document.getElementById('loader-percent').innerText = p + '%';
+                if(p >= 100) { 
+                    clearInterval(i); 
                     document.getElementById('loader-screen').style.opacity = '0';
                     setTimeout(() => document.getElementById('loader-screen').style.display='none', 500);
                 }
-                document.getElementById('loader-fill').style.width = progress + '%';
-                document.getElementById('loader-percent').innerText = progress + '%';
             }, 50);
         };
-
-        // Функции частиц, статистики и магазина (как в твоем коде)...
-        function spawnParticles(x, y) { /* ... */ }
-        function animate() { /* ... */ }
-        animate();
-        async function showStats() { /* ... */ }
-        function toggleShop() { /* ... */ }
-        async function buy(type) { /* ... */ }
-        function showInvite() { /* ... */ }
     </script>
 </body>
 </html>
