@@ -4,7 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const APP_VERSION = "1.0.7-FINAL-PATH";
+const APP_VERSION = "1.1.1-PUBLIC-FOLDER";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 const DOMAIN = "neural-pulse.bothost.ru";
@@ -17,13 +17,13 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 app.use(cors());
 app.use(express.json());
 
-// Явная привязка к папке static по твоим правилам
-const staticPath = path.join(__dirname, 'static');
-app.use(express.static(staticPath));
+// ПРАВИЛО: Файлы всегда в папке public (согласно структуре GitHub)
+const publicPath = path.join(__dirname, 'public');
+app.use(express.static(publicPath));
 
-// Маршрут по умолчанию для отдачи index.html
+// Явный роутинг для главной страницы из public
 app.get('/', (req, res) => {
-    res.sendFile(path.join(staticPath, 'index.html'));
+    res.sendFile(path.join(publicPath, 'index.html'));
 });
 
 // API
@@ -46,13 +46,13 @@ app.post('/api/save', async (req, res) => {
 });
 
 bot.start(ctx => ctx.replyWithHTML(
-    `<b>NEURAL PULSE ACCESS</b>\n\nBuild: <code>${APP_VERSION}</code>`, 
-    Markup.inlineKeyboard([[Markup.button.webApp('⚡ INITIALIZE', `https://${DOMAIN}`)]])
+    `<b>SYSTEM READY</b>\n\nBuild: <code>${APP_VERSION}</code>`, 
+    Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://${DOMAIN}`)]])
 ));
 
 app.listen(PORT, () => { 
-    console.log(`[BOOT] === NEURAL PULSE SYSTEM ===`);
-    console.log(`[BOOT] Build: ${APP_VERSION}`);
-    console.log(`[BOOT] Static root: ${staticPath}`);
+    console.log(`[BOOT] Neural Pulse: PUBLIC FOLDER MODE`);
+    console.log(`[BOOT] Version: ${APP_VERSION}`);
+    console.log(`[BOOT] Path: ${publicPath}`);
     bot.launch(); 
 });
