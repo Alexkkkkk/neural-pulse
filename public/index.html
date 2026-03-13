@@ -6,15 +6,13 @@
     <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #050505; --glass: rgba(255, 255, 255, 0.08); --ton: #0088cc; }
+        :root { --neon-cyan: #00f2ff; --bg-dark: #050505; --glass: rgba(255, 255, 255, 0.08); --ton: #0088cc; }
         body { margin: 0; padding: 0; background: var(--bg-dark); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
 
-        /* Лоадер */
-        #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; transition: 0.5s; }
+        #loader { position: fixed; inset: 0; background: #000; display: flex; align-items: center; justify-content: center; z-index: 10000; transition: 0.5s; }
         .ring { width: 50px; height: 50px; border: 3px solid rgba(0,242,255,0.1); border-top-color: var(--neon-cyan); border-radius: 50%; animation: s 1s linear infinite; }
         @keyframes s { to { transform: rotate(360deg); } }
 
-        /* Контент */
         .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; transition: 0.5s; }
         .app.ready { opacity: 1; }
 
@@ -42,14 +40,13 @@
     </style>
 </head>
 <body>
-
     <div id="loader"><div class="ring"></div></div>
 
     <div class="app" id="ui">
         <div class="header">
             <div class="lvl" id="l-v">1</div>
             <div>
-                <div style="font-size: 10px; color: #555;">NEURAL SYSTEM</div>
+                <div style="font-size: 10px; color: #555;">NEURAL NETWORK</div>
                 <div id="p-v" style="color: var(--neon-cyan); font-size: 12px;">PASSIVE: +0/h</div>
             </div>
         </div>
@@ -57,10 +54,11 @@
         <div class="bal" id="b-v">0</div>
 
         <div class="stage">
-            <img src="images/logo.png" class="logo" id="t-a" onerror="this.src='https://via.placeholder.com/230/bc13fe/fff?text=AI'">
+            <img src="logo.png" class="logo" id="t-a" onerror="this.src='https://via.placeholder.com/230/bc13fe/fff?text=AI'">
+            
             <div class="side">
-                <div class="btn btn-ton" onclick="tg.showAlert('TON Connect soon')">WALLET</div>
-                <div class="btn" onclick="tg.showAlert('Link copied!')">INVITE</div>
+                <div class="btn btn-ton" onclick="tg.showAlert('TON Wallet soon')">WALLET</div>
+                <div class="btn" onclick="tg.showAlert('Invite link copied!')">INVITE</div>
                 <div class="btn" onclick="tg.showAlert('Bonus: +1,000')">BONUS</div>
             </div>
         </div>
@@ -71,8 +69,8 @@
         </div>
 
         <div class="footer">
-            <div class="f-item" onclick="tg.showAlert('Upgrades available at Lvl 2')">🚀 BOOST</div>
-            <div class="f-item" onclick="tg.showAlert('Mining farm: Offline')">⛏️ MINE</div>
+            <div class="f-item" onclick="tg.showAlert('Boosts at Lvl 2')">🚀 BOOST</div>
+            <div class="f-item" onclick="tg.showAlert('Mining Offline')">⛏️ MINE</div>
             <div class="f-item" onclick="tg.showAlert('Stats updating...')">📊 STATS</div>
         </div>
     </div>
