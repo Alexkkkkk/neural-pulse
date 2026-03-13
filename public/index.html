@@ -10,9 +10,8 @@
         :root { 
             --neon-cyan: #00f2ff; 
             --neon-purple: #bc13fe; 
-            --bg-dark: #050505; 
-            --glass: rgba(255, 255, 255, 0.05); 
-            --border: rgba(0, 242, 255, 0.2);
+            --bg-dark: #000000; 
+            --glass: rgba(255, 255, 255, 0.03); 
         }
 
         body { 
@@ -29,66 +28,73 @@
 
         /* --- ВЕРХНЯЯ ПАНЕЛЬ --- */
         .header-box {
-            width: 88%; margin-top: 15px; background: var(--glass);
-            border: 1px solid var(--border); border-radius: 20px;
-            padding: 12px 15px; display: flex; align-items: center; gap: 15px; backdrop-filter: blur(10px);
+            width: 90%; margin-top: 20px; background: var(--glass);
+            border: 1px solid rgba(0, 242, 255, 0.15); border-radius: 24px;
+            padding: 15px; display: flex; align-items: center; gap: 15px; backdrop-filter: blur(10px);
         }
         .lvl-badge {
-            width: 42px; height: 42px; border: 1.5px solid var(--neon-cyan);
-            border-radius: 12px; display: flex; align-items: center; justify-content: center;
-            font-size: 20px; font-weight: bold; color: var(--neon-cyan);
+            width: 48px; height: 48px; border: 2px solid var(--neon-cyan);
+            border-radius: 14px; display: flex; align-items: center; justify-content: center;
+            font-size: 22px; font-weight: bold; color: var(--neon-cyan);
         }
 
-        .balance-text { font-size: 64px; font-weight: bold; margin-top: 25px; letter-spacing: -2px; text-shadow: 0 0 20px rgba(0,242,255,0.2); }
+        .balance-text { font-size: 80px; font-weight: bold; margin-top: 30px; letter-spacing: -2px; text-shadow: 0 0 30px rgba(0,242,255,0.1); }
 
-        /* --- ЦЕНТРАЛЬНАЯ ЗОНА --- */
-        .main-container { position: relative; margin-top: 30px; display: flex; justify-content: center; align-items: center; }
-        .logo-circle {
-            width: 260px; height: 260px; border-radius: 50%;
-            background: radial-gradient(circle, rgba(188, 19, 254, 0.1) 0%, transparent 70%);
+        /* --- ИГРОВАЯ ЗОНА --- */
+        .game-zone {
+            position: relative; width: 100%; flex-grow: 1;
             display: flex; align-items: center; justify-content: center;
-            cursor: pointer;
         }
-        .main-logo { width: 180px; pointer-events: none; transition: transform 0.1s; }
-        .logo-circle:active .main-logo { transform: scale(0.92); }
 
-        /* WALLET BUTTON (Как на скрине) */
-        .wallet-wrapper {
-            position: absolute; top: 15%; right: -25px; z-index: 100;
+        .logo-main {
+            width: 200px; height: 200px; border-radius: 50%;
+            filter: drop-shadow(0 0 25px rgba(188, 19, 254, 0.5));
+            z-index: 5; transition: transform 0.05s; pointer-events: auto;
         }
-        .wallet-overlay {
-            background: rgba(0, 136, 204, 0.15); border: 1px solid #0088cc;
-            padding: 7px 14px; border-radius: 14px; font-size: 13px; font-weight: bold;
-            color: #5dc2ff; backdrop-filter: blur(10px); cursor: pointer;
-            min-width: 80px; text-align: center;
+        .logo-main:active { transform: scale(0.95); }
+
+        /* Кошелек (стиль Pill со скрина) */
+        .wallet-pill {
+            position: absolute; top: 32%; right: 8%;
+            background: rgba(0, 242, 255, 0.05); border: 1.5px solid var(--neon-cyan);
+            padding: 8px 22px; border-radius: 50px; font-size: 14px; font-weight: bold;
+            color: var(--neon-cyan); z-index: 10; cursor: pointer;
         }
         #ton-mount { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
-        /* БОКОВОЕ МЕНЮ */
-        .side-nav { position: absolute; right: -70px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 12px; }
-        .side-btn { background: #111; border: 1px solid #333; padding: 10px; border-radius: 12px; width: 60px; text-align: center; font-size: 10px; font-weight: bold; }
-
-        /* --- НИЖНЯЯ ЧАСТЬ --- */
-        .energy-wrap { width: 88%; margin-top: auto; margin-bottom: 20px; }
-        .energy-bar { width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin-top: 8px; }
-        .energy-fill { height: 100%; background: var(--neon-cyan); width: 100%; transition: 0.2s; box-shadow: 0 0 10px var(--neon-cyan); }
-
-        .nav-grid { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 35px; }
-        .nav-btn {
-            background: #121212; border: 1px solid #222; border-radius: 18px;
-            padding: 16px 0; color: white; font-size: 12px; font-weight: 900;
-            display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;
+        /* Боковые кнопки справа */
+        .side-stack {
+            position: absolute; right: 5%; top: 46%;
+            display: flex; flex-direction: column; gap: 12px; z-index: 10;
         }
-        .nav-btn:active { transform: scale(0.95); background: #1a1a1a; }
+        .side-btn {
+            background: #111; border: 1.5px solid #222; border-radius: 14px;
+            padding: 12px 18px; min-width: 75px; text-align: center;
+            font-size: 11px; font-weight: 900; color: #888; text-transform: uppercase;
+        }
+
+        /* --- ЭНЕРГИЯ --- */
+        .energy-wrap { width: 90%; margin-bottom: 25px; }
+        .energy-bar { width: 100%; height: 10px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; margin-top: 10px; }
+        .energy-fill { height: 100%; background: var(--neon-cyan); width: 100%; transition: 0.2s; box-shadow: 0 0 15px var(--neon-cyan); }
+
+        /* --- КНОПКИ НАВИГАЦИИ --- */
+        .nav-grid { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 40px; }
+        .nav-btn {
+            background: #121212; border: 1.5px solid #1a1a1a; border-radius: 20px;
+            padding: 18px 0; color: white; font-size: 13px; font-weight: 900;
+            display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer;
+        }
+        .nav-btn:active { transform: scale(0.96); background: #1a1a1a; }
 
         /* АНИМАЦИЯ ТАПА */
-        .tap-anim { position: absolute; color: white; font-size: 32px; font-weight: 900; pointer-events: none; animation: fly 0.6s ease-out forwards; z-index: 1000; }
-        @keyframes fly { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px); } }
+        .tap-anim { position: absolute; color: white; font-size: 36px; font-weight: 900; pointer-events: none; animation: fly 0.6s ease-out forwards; z-index: 1000; }
+        @keyframes fly { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-130px); } }
 
         /* МОДАЛКИ */
         .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 5000; align-items: center; justify-content: center; backdrop-filter: blur(10px); }
         .modal-content { background: #111; width: 80%; padding: 30px; border-radius: 25px; border: 1px solid var(--neon-cyan); text-align: center; }
-        .close-btn { margin-top: 20px; padding: 10px 20px; background: var(--neon-cyan); color: black; border-radius: 10px; font-weight: bold; display: inline-block; }
+        .close-btn { margin-top: 20px; padding: 10px 20px; background: var(--neon-cyan); color: black; border-radius: 10px; font-weight: bold; display: inline-block; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -101,32 +107,32 @@
     <div class="header-box">
         <div class="lvl-badge" id="lvl-badge">1</div>
         <div style="flex-grow: 1;">
-            <div style="font-size: 10px; color: #666; font-weight: 900; text-transform: uppercase;">Neural Network</div>
-            <div style="font-size: 13px; color: var(--neon-cyan); font-weight: bold;" id="pnl-display">PASSIVE: +0/h</div>
+            <div style="font-size: 11px; color: #555; font-weight: 900; text-transform: uppercase;">Neural Network</div>
+            <div style="font-size: 14px; color: var(--neon-cyan); font-weight: bold;" id="pnl-display">PASSIVE: +0/h</div>
         </div>
     </div>
 
-    <div class="balance-text" id="balance">0</div>
+    <div class="balance-text" id="balance">246</div>
 
-    <div class="main-container">
-        <div class="logo-circle" id="tap-target">
-            <img src="logo.png" class="main-logo" onerror="this.src='https://via.placeholder.com/180/bc13fe/fff?text=AI'">
-        </div>
-        
-        <div class="wallet-wrapper">
-            <div class="wallet-overlay" id="addr-text">WALLET</div>
+    <div class="game-zone">
+        <div class="wallet-pill">
+            <span id="addr-text">WALLET</span>
             <div id="ton-mount"></div>
         </div>
 
-        <div class="side-nav">
-            <div class="side-btn" onclick="showInvite()">INVITE</div>
-            <div class="side-btn" onclick="tg.showAlert('Bonus: +1,000 NP')">BONUS</div>
+        <div id="tap-target" style="cursor: pointer;">
+            <img src="logo.png" class="logo-main" onerror="this.src='https://via.placeholder.com/200/bc13fe/fff?text=AI'">
+        </div>
+
+        <div class="side-stack">
+            <div class="side-btn" onclick="showInvite()">Invite</div>
+            <div class="side-btn" onclick="tg.showAlert('Bonus: +1,000 NP')">Bonus</div>
         </div>
     </div>
 
     <div class="energy-wrap">
-        <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 900; color: #888;">
-            <span>⚡ ENERGY</span>
+        <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 900;">
+            <span style="color: #666;">⚡ ENERGY</span>
             <span id="energy-text" style="color: white;">1000/1000</span>
         </div>
         <div class="energy-bar"><div class="energy-fill" id="energy-fill"></div></div>
@@ -156,7 +162,6 @@
             if (wallet) {
                 const a = wallet.account.address;
                 txt.innerText = a.slice(0,4) + '..' + a.slice(-4);
-                txt.style.borderColor = '#00f2ff';
             } else {
                 txt.innerText = 'WALLET';
             }
@@ -166,8 +171,7 @@
             balance: 246,
             energy: 1000,
             lvl: 1,
-            pnl: 0,
-            unsaved: 0
+            pnl: 0
         };
 
         function updateUI() {
@@ -178,7 +182,7 @@
             document.getElementById('pnl-display').innerText = `PASSIVE: +${state.pnl}/h`;
         }
 
-        // Клик (Тап)
+        // Тап по логотипу
         document.getElementById('tap-target').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (state.energy <= 0) return;
@@ -186,9 +190,8 @@
             const t = e.touches[0];
             state.balance += 1;
             state.energy -= 1;
-            state.unsaved += 1;
 
-            // Анимация цифры
+            // Анимация числа
             const n = document.createElement('div');
             n.className = 'tap-anim';
             n.innerText = '+1';
@@ -197,7 +200,7 @@
             document.body.appendChild(n);
             setTimeout(() => n.remove(), 600);
 
-            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
             updateUI();
         });
 
@@ -206,7 +209,10 @@
             document.getElementById(id).style.display = 'flex'; 
         }
         function closeModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
-        function showInvite() { tg.openTelegramLink(`https://t.me/share/url?url=https://t.me/n_pulse_bot?start=${tg.initDataUnsafe?.user?.id}&text=Connect to Neural Pulse!`); }
+        function showInvite() { 
+            const link = `https://t.me/share/url?url=https://t.me/n_pulse_bot?start=${tg.initDataUnsafe?.user?.id}&text=Join Neural Pulse!`;
+            tg.openTelegramLink(link); 
+        }
 
         // Лоадер
         let loadP = 0;
@@ -220,10 +226,10 @@
             }
         }, 30);
 
-        // Регенерация энергии
+        // Регенерация
         setInterval(() => {
             if(state.energy < 1000) {
-                state.energy = Math.min(1000, state.energy + 1.2);
+                state.energy = Math.min(1000, state.energy + 1.5);
                 updateUI();
             }
         }, 1000);
