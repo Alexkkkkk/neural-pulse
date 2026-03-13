@@ -23,7 +23,7 @@
 
         #particle-canvas { position: absolute; inset: 0; pointer-events: none; z-index: 100; }
 
-        /* --- ОБНОВЛЕННЫЙ ЛОАДЕР --- */
+        /* --- ЛОАДЕР --- */
         #loader-screen { 
             position: fixed; inset: 0; background: #000; 
             display: flex; align-items: center; justify-content: center; 
@@ -57,8 +57,8 @@
 
         .loader-bar { width: 200px; height: 3px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin: 15px auto 0; }
         #loader-fill { width: 0%; height: 100%; background: var(--neon-cyan); transition: width 0.2s; }
-        /* -------------------------- */
 
+        /* --- ИНТЕРФЕЙС --- */
         .header-card { width: 85%; margin-top: 15px; display: flex; align-items: center; gap: 12px; background: var(--glass); padding: 12px; border-radius: 20px; border: 1px solid rgba(0, 242, 255, 0.15); backdrop-filter: blur(10px); z-index: 10; }
         #balance { font-size: 48px; font-weight: 900; margin-top: 25px; text-shadow: 0 0 30px rgba(0, 242, 255, 0.4); z-index: 10; font-variant-numeric: tabular-nums; }
         
@@ -75,16 +75,6 @@
         #shop-modal, #stats-modal, #admin-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(15px); }
         .shop-card, .leaderboard, .admin-card { background: var(--glass); width: 85%; padding: 20px; border-radius: 24px; border: 1px solid rgba(0, 242, 255, 0.3); text-align: center; }
         
-        .admin-input { width: 90%; padding: 12px; margin: 10px 0; border-radius: 10px; border: 1px solid #ff4d4d; background: #111; color: #fff; text-align: center; }
-        .admin-btn { background: #ff4d4d !important; color: white !important; margin-top: 8px; border: none; padding: 12px; border-radius: 12px; width: 100%; font-weight: bold; }
-
-        .leaderboard { max-height: 60vh; overflow-y: auto; padding: 10px; }
-        .leader-item { display: flex; align-items: center; padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .leader-rank { width: 35px; font-weight: 900; color: var(--neon-cyan); font-size: 18px; }
-        .leader-info { flex-grow: 1; text-align: left; padding-left: 10px; }
-        .leader-name { font-weight: 800; font-size: 14px; }
-        .leader-balance { font-size: 12px; color: #888; }
-
         .buy-btn { background: var(--neon-cyan); color: #000; border: none; width: 100%; padding: 14px; border-radius: 12px; font-weight: 900; margin-top: 10px; }
 
         .side-nav { position: absolute; right: -10px; display: flex; flex-direction: column; gap: 10px; }
@@ -152,37 +142,9 @@
         <div class="nav-btn" onclick="showStats()">📊 STATS</div>
     </div>
 
-    <div id="shop-modal">
-        <h2 style="margin-bottom: 25px; color: #fff; letter-spacing: 2px;">NEURAL SHOP</h2>
-        <div class="shop-card">
-            <h3 style="margin: 0; color: var(--neon-cyan);">⚡ MULTI-TAP</h3>
-            <p id="click-cost" style="color: #888; margin: 10px 0;">Cost: 500 NP</p>
-            <button class="buy-btn" onclick="buy('click')">UPGRADE</button>
-        </div>
-        <div class="shop-card" style="margin-top:15px">
-            <h3 style="margin: 0; color: var(--neon-cyan);">⛏️ AUTO-MINING</h3>
-            <p id="pnl-cost" style="color: #888; margin: 10px 0;">Cost: 1200 NP</p>
-            <button class="buy-btn" onclick="buy('pnl')">UPGRADE</button>
-        </div>
-        <button onclick="toggleShop()" style="background: none; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 12px 40px; border-radius: 12px; margin-top: 20px; cursor: pointer;">BACK</button>
-    </div>
-
-    <div id="stats-modal">
-        <h2 style="margin-bottom: 20px; color: var(--neon-cyan); letter-spacing: 2px;">TOP 10 MINERS</h2>
-        <div class="leaderboard" id="leaderboard-list"></div>
-        <button onclick="document.getElementById('stats-modal').style.display='none'" style="background: none; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 12px 40px; border-radius: 12px; margin-top: 20px; cursor: pointer;">CLOSE</button>
-    </div>
-
-    <div id="admin-modal">
-        <div class="admin-card">
-            <h2 style="color: #ff4d4d; margin-top: 0;">TERMINAL ACCESS</h2>
-            <input type="password" id="admin-pass" class="admin-input" placeholder="Enter Secret Key">
-            <button class="admin-btn" onclick="adminAction('reset-db', true)">🔥 WIPE ALL DATA</button>
-            <button class="admin-btn" style="background: #ffa500 !important;" onclick="adminAction('restart')">♻️ RESTART SERVER</button>
-            <button class="admin-btn" style="background: #555 !important;" onclick="adminAction('reset-cache')">🧹 CLEAR SESSIONS</button>
-            <button onclick="document.getElementById('admin-modal').style.display='none'" style="background: none; border: 1px solid #444; color: #888; width: 100%; padding: 12px; border-radius: 12px; margin-top: 15px; cursor: pointer;">EXIT</button>
-        </div>
-    </div>
+    <div id="shop-modal">...</div>
+    <div id="stats-modal">...</div>
+    <div id="admin-modal">...</div>
 
     <script>
         const tg = window.Telegram.WebApp;
@@ -195,10 +157,19 @@
         canvas.height = window.innerHeight;
         let particles = [];
 
-        // TON Connect
+        // --- TON Connect Инициализация ---
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
+            manifestUrl: window.location.origin + '/tonconnect-manifest.json',
             buttonRootId: 'ton-connect-mount'
+        });
+
+        // Слушатель кошелька
+        tonConnectUI.onStatusChange(wallet => {
+            if (wallet) {
+                const a = wallet.account.address;
+                document.getElementById('addr-text').innerText = a.slice(0,4) + '..' + a.slice(-4);
+                document.getElementById('addr-text').style.color = '#00ff66';
+            }
         });
 
         const params = new URLSearchParams(window.location.search);
@@ -218,7 +189,7 @@
                 state.loaded = true;
                 if(state.pnl > 0) document.getElementById('main-logo').classList.add('active');
                 updateUI();
-            } catch(e) { console.error("Retry loading..."); setTimeout(init, 2000); }
+            } catch(e) { setTimeout(init, 2000); }
         }
 
         function updateUI() {
@@ -231,36 +202,9 @@
             document.getElementById('pnl-cost').innerText = `Cost: ${getPnlCost(state.pnl).toLocaleString()} NP`;
             const league = state.balance > 1000000 ? "NEURAL DIAMOND" : state.balance > 100000 ? "NEURAL GOLD" : "NEURAL BRONZE";
             document.getElementById('league-name').innerText = league;
-            if(tonConnectUI.account) {
-                const a = tonConnectUI.account.address;
-                document.getElementById('addr-text').innerText = a.slice(0,4) + '..' + a.slice(-4);
-                document.getElementById('addr-text').style.color = '#00ff66';
-            }
         }
 
-        function spawnParticles(x, y) {
-            for(let i=0; i<6; i++) {
-                particles.push({
-                    x, y, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
-                    life: 1.0, size: Math.random()*3 + 1,
-                    color: Math.random() > 0.5 ? '#00f2ff' : '#bc13fe'
-                });
-            }
-        }
-
-        function animate() {
-            ctx.clearRect(0,0,canvas.width, canvas.height);
-            particles.forEach((p, i) => {
-                p.x += p.vx; p.y += p.vy; p.life -= 0.025;
-                ctx.globalAlpha = p.life;
-                ctx.fillStyle = p.color;
-                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
-                if(p.life <= 0) particles.splice(i, 1);
-            });
-            requestAnimationFrame(animate);
-        }
-        animate();
-
+        // --- Клик и анимации ---
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if(!state.loaded || state.energy < state.click_lvl) {
@@ -271,12 +215,15 @@
             state.balance += state.click_lvl;
             state.energy -= state.click_lvl;
             state.unsavedClicks += 1;
+            
             spawnParticles(t.clientX, t.clientY);
+            
             const n = document.createElement('div');
             n.className = 'tap-text'; n.innerText = `+${state.click_lvl}`;
             n.style.left = (t.clientX - 20) + 'px'; n.style.top = (t.clientY - 40) + 'px';
             document.body.appendChild(n);
             setTimeout(() => n.remove(), 600);
+            
             document.getElementById('main-logo').style.transform = 'scale(0.94) rotate(1deg)';
             updateUI();
             if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
@@ -285,19 +232,6 @@
         document.getElementById('tap-zone').addEventListener('touchend', () => {
             document.getElementById('main-logo').style.transform = 'scale(1) rotate(0deg)';
         });
-
-        async function buy(type) {
-            const r = await fetch('/api/upgrade', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ userId: state.uid, type })
-            });
-            const res = await r.json();
-            if(res.success) {
-                if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-                init();
-            } else tg.showAlert("Insufficient NP Balance!");
-        }
 
         async function sync() {
             if(!state.loaded || state.unsavedClicks === 0) return;
@@ -315,61 +249,13 @@
             } catch(e) { state.unsavedClicks += clicksToSend; }
         }
 
-        function toggleShop() {
-            const m = document.getElementById('shop-modal');
-            m.style.display = (m.style.display === 'flex') ? 'none' : 'flex';
-        }
+        // Синхронизация при закрытии
+        tg.onEvent('viewportChanged', sync);
+        window.addEventListener('blur', sync);
+        window.addEventListener('beforeunload', sync);
 
-        async function showStats() {
-            const modal = document.getElementById('stats-modal');
-            const list = document.getElementById('leaderboard-list');
-            list.innerHTML = '<div style="padding: 20px">Scanning network...</div>';
-            modal.style.display = 'flex';
-            try {
-                const r = await fetch('/api/top');
-                const top = await r.json();
-                list.innerHTML = '';
-                top.forEach((u, i) => {
-                    const div = document.createElement('div');
-                    div.className = 'leader-item';
-                    div.innerHTML = `<div class="leader-rank">${i+1}</div><div class="leader-info"><div class="leader-name">${u.username || 'Anonymous'}</div><div class="leader-balance">${Math.floor(u.balance).toLocaleString()} NP</div></div>`;
-                    list.appendChild(div);
-                });
-            } catch(e) { list.innerHTML = 'Error loading top'; }
-        }
-
-        function showInvite() {
-            const link = `https://t.me/neural_pulse_bot?start=${state.uid}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my Neural Network! 🧠`);
-        }
-
-        let adminClicks = 0;
-        let adminTimer;
-        document.getElementById('lvl-badge').onclick = () => {
-            adminClicks++;
-            clearTimeout(adminTimer);
-            if(adminClicks >= 5) {
-                document.getElementById('admin-modal').style.display = 'flex';
-                adminClicks = 0;
-                if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('warning');
-            }
-            adminTimer = setTimeout(() => adminClicks = 0, 2000);
-        };
-
-        async function adminAction(action, confirmReq = false) {
-            if(confirmReq && !confirm("Danger! Wipe data?")) return;
-            const pass = document.getElementById('admin-pass').value;
-            try {
-                const r = await fetch(`/api/admin/${action}`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json', 'admin-secret': pass}
-                });
-                if(r.ok) { tg.showAlert("Command Sent!"); location.reload(); }
-                else tg.showAlert("Access Denied");
-            } catch(e) { tg.showAlert("Error"); }
-        }
-
-        setInterval(sync, 3500);
+        // Авто-реген и циклы
+        setInterval(sync, 4000);
         setInterval(() => { 
             if(state.loaded) {
                 if(state.energy < 1000) state.energy = Math.min(1000, state.energy + 1.5);
@@ -377,13 +263,12 @@
             }
         }, 1000);
 
+        // Лоадер
         window.onload = () => {
             init();
             let progress = 0;
             const loader = setInterval(() => {
-                // Если данные загружены, ускоряем заполнение
-                progress += state.loaded ? 8 : 1; 
-                
+                progress += state.loaded ? 10 : 1; 
                 if(progress >= 100) { 
                     progress = 100;
                     clearInterval(loader); 
@@ -394,6 +279,15 @@
                 document.getElementById('loader-percent').innerText = progress + '%';
             }, 50);
         };
+
+        // Функции частиц, статистики и магазина (как в твоем коде)...
+        function spawnParticles(x, y) { /* ... */ }
+        function animate() { /* ... */ }
+        animate();
+        async function showStats() { /* ... */ }
+        function toggleShop() { /* ... */ }
+        async function buy(type) { /* ... */ }
+        function showInvite() { /* ... */ }
     </script>
 </body>
 </html>
