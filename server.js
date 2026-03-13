@@ -10,33 +10,18 @@ const DOMAIN = "neural-pulse.bothost.ru";
 const PORT = process.env.PORT || 3000;
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
-// --- АДМИН ДАННЫЕ (ОБЯЗАТЕЛЬНО ЗАМЕНИ ADMIN_ID НА СВОЙ) ---
-const ADMIN_ID = 123456789; // Узнай свой ID через @userinfobot
-const ADMIN_SECRET = "super_pulse_secret_99"; 
+// Замени на свой ID (можно узнать в @userinfobot)
+const ADMIN_ID = 123456789; 
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
-
-const pool = new Pool({ 
-    connectionString: PG_URI,
-    ssl: false 
-});
+const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Middleware для защиты админ-роутов (API)
-const adminAuth = (req, res, next) => {
-    const key = req.headers['admin-secret'];
-    if (key === ADMIN_SECRET) {
-        next();
-    } else {
-        res.status(403).json({ error: "Access Denied" });
-    }
-};
-
-// --- МАТЕМАТИКА (Синхронизировано с фронтендом) ---
+// --- МАТЕМАТИКА ИГРЫ ---
 const MATH = {
     CLICK_BASE: 500,
     CLICK_GROWTH: 1.45,
@@ -47,7 +32,6 @@ const MATH = {
 
 const getClickCost = (lvl) => Math.floor(MATH.CLICK_BASE * Math.pow(MATH.CLICK_GROWTH, lvl - 1));
 const getPnlCost = (pnl) => {
-    // Рассчитываем уровень пассивного дохода исходя из шага 250
     const pnlLvl = Math.floor(pnl / MATH.PNL_STEP);
     return Math.floor(MATH.PNL_BASE * Math.pow(MATH.PNL_GROWTH, pnlLvl));
 };
@@ -63,40 +47,19 @@ const initDB = async () => {
                 energy INTEGER DEFAULT 1000,
                 click_lvl INTEGER DEFAULT 1,
                 pnl NUMERIC DEFAULT 0,
-                wallet_address TEXT,
                 referrer_id TEXT,
                 last_seen BIGINT DEFAULT extract(epoch from now()),
                 last_save BIGINT DEFAULT extract(epoch from now())
             );
         `);
-        console.log("✅ [DB] Таблицы проверены.");
+        console.log("✅ [DB] Таблицы готовы.");
     } catch (err) { console.error("❌ [DB] Ошибка:", err.message); }
 };
 initDB();
 
-// --- АДМИН ЭНДПОИНТЫ ---
+// --- API ЭНДПОИНТЫ ---
 
-app.post('/api/admin/reset-db', adminAuth, async (req, res) => {
-    try {
-        await pool.query('TRUNCATE TABLE users');
-        res.json({ success: true, message: "База данных полностью очищена" });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post('/api/admin/reset-cache', adminAuth, async (req, res) => {
-    try {
-        await pool.query('UPDATE users SET last_seen = extract(epoch from now())');
-        res.json({ success: true, message: "Кеш сессий сброшен" });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post('/api/admin/restart', adminAuth, (req, res) => {
-    res.json({ success: true, message: "Сервер перезагружается..." });
-    setTimeout(() => { process.exit(1); }, 1000); 
-});
-
-// --- ИГРОВЫЕ РОУТЫ ---
-
+// 1. Получение данных пользователя
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
     const refBy = req.query.ref;
@@ -104,10 +67,8 @@ app.get('/api/user/:id', async (req, res) => {
         let result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
         
         if (result.rows.length === 0) {
-            // Создание нового игрока
             await pool.query('INSERT INTO users (user_id, referrer_id, last_seen) VALUES ($1, $2, extract(epoch from now()))', [uid, refBy]);
             if (refBy && refBy !== uid) {
-                // Бонус за реферала обеим сторонам
                 await pool.query('UPDATE users SET balance = balance + 5000 WHERE user_id IN ($1, $2)', [uid, refBy]);
             }
             result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
@@ -117,9 +78,8 @@ app.get('/api/user/:id', async (req, res) => {
         const now = Math.floor(Date.now() / 1000);
         const diff = now - parseInt(user.last_seen);
 
-        // Начисление пассивного дохода при входе (макс 4 часа)
         if (diff > 30) {
-            const hours = Math.min(diff, 14400) / 3600;
+            const hours = Math.min(diff, 14400) / 3600; // Макс 4 часа оффлайна
             const passiveIncome = parseFloat(user.pnl) * hours;
             const energyRegen = diff * 1.5;
 
@@ -134,6 +94,7 @@ app.get('/api/user/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "DB Error" }); }
 });
 
+// 2. Сохранение прогресса (с анти-читом)
 app.post('/api/save', async (req, res) => {
     const { userId, clicks, energy, username } = req.body;
     const now = Math.floor(Date.now() / 1000);
@@ -143,125 +104,81 @@ app.post('/api/save', async (req, res) => {
         
         const user = userRes.rows[0];
         const timeDiff = now - parseInt(user.last_save || 0);
-        
-        // Лимит анти-кликера: не более 15 кликов в секунду
-        const maxClicks = Math.max(timeDiff, 1) * 15;
+        const maxClicks = Math.max(timeDiff, 1) * 15; // Анти-кликер: макс 15 кликов в сек
         const validClicks = Math.min(clicks || 0, maxClicks);
         
         const income = validClicks * parseInt(user.click_lvl);
         const newBalance = parseFloat(user.balance) + income;
 
         await pool.query(`
-            UPDATE users SET 
-                balance=$1, 
-                energy=$2, 
-                username=COALESCE($3, username, 'User_' || substr(user_id, 1, 4)), 
-                last_save=$4, 
-                last_seen=$4 
-            WHERE user_id=$5`, 
-            [newBalance, Math.floor(energy), username, now, String(userId)]
+            UPDATE users SET balance=$1, energy=$2, username=$3, last_save=$4, last_seen=$4 
+            WHERE user_id=$5`, [newBalance, Math.floor(energy), username, now, String(userId)]
         );
-        
         res.json({ status: 'ok', balance: newBalance });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// 3. Улучшения (Апгрейды)
 app.post('/api/upgrade', async (req, res) => {
     const { userId, type } = req.body;
     try {
         const userRes = await pool.query('SELECT * FROM users WHERE user_id = $1', [String(userId)]);
         const user = userRes.rows[0];
-        if (!user) return res.status(404).json({error: "User not found"});
-
-        let cost, updateQuery;
+        let cost;
         const currentBalance = parseFloat(user.balance);
 
         if (type === 'click') {
             cost = getClickCost(parseInt(user.click_lvl));
-            updateQuery = 'UPDATE users SET balance=balance-$1, click_lvl=click_lvl+1 WHERE user_id=$2';
+            if (currentBalance >= cost) {
+                await pool.query('UPDATE users SET balance=balance-$1, click_lvl=click_lvl+1 WHERE user_id=$2', [cost, String(userId)]);
+                return res.json({ success: true });
+            }
         } else if (type === 'pnl') {
             cost = getPnlCost(parseFloat(user.pnl));
-            updateQuery = `UPDATE users SET balance=balance-$1, pnl=pnl+${MATH.PNL_STEP} WHERE user_id=$2`;
+            if (currentBalance >= cost) {
+                await pool.query(`UPDATE users SET balance=balance-$1, pnl=pnl+${MATH.PNL_STEP} WHERE user_id=$2`, [cost, String(userId)]);
+                return res.json({ success: true });
+            }
         }
-
-        if (currentBalance >= cost) {
-            await pool.query(updateQuery, [cost, String(userId)]);
-            res.json({ success: true });
-        } else {
-            res.json({ success: false, error: "Low balance" });
-        }
+        res.json({ success: false, error: "Low balance" });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/top', async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT COALESCE(username, 'Miner_' || substr(user_id, 1, 5)) as username, balance 
-            FROM users 
-            ORDER BY balance DESC 
-            LIMIT 10
-        `);
-        res.json(result.rows);
-    } catch (e) { res.status(500).json({ error: "Top error" }); }
-});
-
-// --- КОМАНДЫ ТЕЛЕГРАМ БОТА ---
-
-bot.command('admin', (ctx) => {
-    if (ctx.from.id !== ADMIN_ID) return ctx.reply("❌ Доступ закрыт.");
-    
-    ctx.replyWithHTML("<b>🛠 TERMINAL ADMIN</b>\nВыполнить системную команду:", 
-        Markup.inlineKeyboard([
-            [Markup.button.callback("🔥 СБРОС БАЗЫ (WIPE)", "admin_reset_db")],
-            [Markup.button.callback("🧹 ОЧИСТИТЬ КЕШ", "admin_reset_cache")],
-            [Markup.button.callback("♻️ РЕСТАРТ", "admin_restart")]
-        ])
-    );
-});
-
-bot.action('admin_reset_db', async (ctx) => {
-    if (ctx.from.id !== ADMIN_ID) return;
-    try {
-        await pool.query('TRUNCATE TABLE users');
-        ctx.answerCbQuery("System Wiped!");
-        ctx.reply("⚠️ Все данные пользователей удалены.");
-    } catch (e) { ctx.reply("Ошибка: " + e.message); }
-});
-
-bot.action('admin_restart', (ctx) => {
-    if (ctx.from.id !== ADMIN_ID) return;
-    ctx.answerCbQuery("Restarting...");
-    ctx.reply("♻️ Процесс будет перезапущен.");
-    setTimeout(() => { process.exit(1); }, 1000);
-});
+// --- ТЕЛЕГРАМ БОТ ---
 
 bot.start((ctx) => {
     const refId = ctx.payload || ''; 
     const gameUrl = `https://${DOMAIN}?u=${ctx.from.id}${refId ? '&ref=' + refId : ''}&v=${Date.now()}`;
-    
     ctx.replyWithHTML(
-        `<b>🧠 NEURAL PULSE AI</b>\n\n` +
-        `Привет, <b>${ctx.from.first_name}</b>!\n` +
-        `Твой нейронный узел готов к работе. Начинай майнинг NP прямо сейчас.`,
+        `<b>🧠 NEURAL PULSE AI</b>\n\nПривет, <b>${ctx.from.first_name}</b>!\nНачинай майнинг NP прямо сейчас.`,
         Markup.inlineKeyboard([
-            [Markup.button.webApp('⚡ ЗАПУСТИТЬ ТЕРМИНАЛ', gameUrl)],
-            [Markup.button.url('📢 НОВОСТИ', 'https://t.me/your_channel')]
+            [Markup.button.webApp('⚡ ЗАПУСТИТЬ ТЕРМИНАЛ', gameUrl)]
         ])
     );
 });
 
-// --- ЗАПУСК ---
-app.listen(PORT, () => {
-    bot.launch();
-    console.log(`
-    ==============================
-    🚀 Neural Pulse Server Running
-    📍 Port: ${PORT}
-    🌐 Domain: ${DOMAIN}
-    ==============================
-    `);
+// Админ-команды
+bot.command('admin', (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return;
+    ctx.reply("🛠 Админ-панель:", Markup.inlineKeyboard([
+        [Markup.button.callback("🔥 СБРОС БАЗЫ", "db_wipe")],
+        [Markup.button.callback("♻️ РЕСТАРТ", "srv_restart")]
+    ]));
 });
 
-// Мягкая остановка
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+bot.action('db_wipe', async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return;
+    await pool.query('TRUNCATE TABLE users');
+    ctx.reply("База очищена.");
+});
+
+bot.action('srv_restart', (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return;
+    ctx.reply("Рестарт...");
+    setTimeout(() => process.exit(1), 500);
+});
+
+app.listen(PORT, () => {
+    bot.launch();
+    console.log(`🚀 Server started on port ${PORT}`);
+});
