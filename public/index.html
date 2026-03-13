@@ -6,26 +6,36 @@
     <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root { --neon-cyan: #00f2ff; --bg-dark: #050505; --glass: rgba(255, 255, 255, 0.08); --ton: #0088cc; }
+        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #000; --glass: rgba(255, 255, 255, 0.08); --ton: #0088cc; }
         body { margin: 0; padding: 0; background: var(--bg-dark); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
 
-        #loader { position: fixed; inset: 0; background: #000; display: flex; align-items: center; justify-content: center; z-index: 10000; transition: 0.5s; }
-        .ring { width: 50px; height: 50px; border: 3px solid rgba(0,242,255,0.1); border-top-color: var(--neon-cyan); border-radius: 50%; animation: s 1s linear infinite; }
-        @keyframes s { to { transform: rotate(360deg); } }
+        /* ВОССТАНОВЛЕННЫЙ ЭКРАН ЗАГРУЗКИ */
+        #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; transition: 0.5s; }
+        .loader-container { position: relative; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; }
+        .loader-circle { position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--neon-cyan); border-right: 2px solid var(--neon-purple); animation: spin 2s linear infinite; }
+        .loader-logo { width: 100px; height: 100px; z-index: 1; }
+        
+        .access-text { margin-top: 40px; letter-spacing: 4px; font-weight: bold; font-size: 14px; text-transform: uppercase; }
+        .percent { font-size: 32px; font-weight: 900; color: var(--neon-cyan); margin: 10px 0; }
+        .load-bar { width: 220px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
+        .load-fill { height: 100%; background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); width: 0%; transition: 0.1s linear; }
 
-        .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; transition: 0.5s; }
-        .app.ready { opacity: 1; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* ИНТЕРФЕЙС ИГРЫ */
+        .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; transition: 0.8s; visibility: hidden; }
+        .app.ready { opacity: 1; visibility: visible; }
 
         .header { width: 90%; margin-top: 20px; background: var(--glass); border-radius: 20px; padding: 15px; display: flex; align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.05); box-sizing: border-box; }
         .lvl { width: 45px; height: 45px; border: 2px solid var(--neon-cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--neon-cyan); }
 
-        .bal { font-size: 60px; font-weight: 900; margin-top: 40px; }
+        .bal { font-size: 64px; font-weight: 900; margin-top: 40px; }
 
         .stage { position: relative; width: 100%; flex-grow: 1; display: flex; align-items: center; justify-content: center; }
-        .logo { width: 230px; height: 230px; border-radius: 50%; transition: 0.05s; z-index: 1; }
+        .logo { width: 240px; height: 240px; border-radius: 50%; transition: 0.05s; z-index: 1; }
         
         .side { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
-        .btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 15px; width: 65px; text-align: center; font-size: 10px; font-weight: bold; }
+        .btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 15px; width: 65px; text-align: center; font-size: 10px; font-weight: bold; color: white; }
         .btn-ton { border-color: var(--ton); color: #5dc2ff; }
 
         .energy { width: 90%; margin-bottom: 30px; }
@@ -40,7 +50,15 @@
     </style>
 </head>
 <body>
-    <div id="loader"><div class="ring"></div></div>
+    <div id="loader">
+        <div class="loader-container">
+            <div class="loader-circle"></div>
+            <img src="logo.png" class="loader-logo" onerror="this.src='https://via.placeholder.com/100/bc13fe/fff?text=AI'">
+        </div>
+        <div class="access-text">ACCESS GRANTED</div>
+        <div class="percent" id="load-pct">0%</div>
+        <div class="load-bar"><div class="load-fill" id="load-f"></div></div>
+    </div>
 
     <div class="app" id="ui">
         <div class="header">
@@ -54,7 +72,7 @@
         <div class="bal" id="b-v">0</div>
 
         <div class="stage">
-            <img src="logo.png" class="logo" id="t-a" onerror="this.src='https://via.placeholder.com/230/bc13fe/fff?text=AI'">
+            <img src="logo.png" class="logo" id="t-a" onerror="this.src='https://via.placeholder.com/240/bc13fe/fff?text=AI'">
             
             <div class="side">
                 <div class="btn btn-ton" onclick="tg.showAlert('TON Wallet soon')">WALLET</div>
@@ -81,6 +99,30 @@
 
         let s = { bal: 0, eng: 1000, lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id || 0, up: false };
 
+        // Функция анимации загрузки
+        function startLoading() {
+            let progress = 0;
+            const fill = document.getElementById('load-f');
+            const pct = document.getElementById('load-pct');
+            
+            const interval = setInterval(() => {
+                progress += Math.floor(Math.random() * 5) + 2;
+                if (progress >= 99) {
+                    progress = 99;
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        document.getElementById('loader').style.opacity = '0';
+                        setTimeout(() => {
+                            document.getElementById('loader').style.display = 'none';
+                            document.getElementById('ui').classList.add('ready');
+                        }, 500);
+                    }, 500);
+                }
+                fill.style.width = progress + '%';
+                pct.innerText = progress + '%';
+            }, 80);
+        }
+
         async function init() {
             try {
                 const r = await fetch(`/api/user/${s.uid}`);
@@ -88,8 +130,8 @@
                 s.bal = Number(d.balance); s.eng = Number(d.energy);
                 s.lvl = Number(d.click_lvl); s.pnl = Number(d.pnl);
                 upd();
-            } catch(e) {}
-            setTimeout(() => { document.getElementById('loader').style.display='none'; document.getElementById('ui').classList.add('ready'); }, 1000);
+            } catch(e) { console.error("DB load error"); }
+            startLoading();
         }
 
         function upd() {
@@ -115,7 +157,7 @@
         });
 
         setInterval(async () => {
-            if(!s.up) return;
+            if(!s.up || !s.uid) return;
             await fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
