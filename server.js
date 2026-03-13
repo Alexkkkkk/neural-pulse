@@ -21,13 +21,11 @@ const pool = new Pool({
 
 // Парсинг числовых значений (NUMERIC -> Float)
 const types = require('pg').types;
-types.setTypeParser(1700, function(val) { return parseFloat(val); });
-
-pool.on('error', (err) => console.error('❌ [DB Pool Error]:', err.message));
+types.setTypeParser(1700, val => parseFloat(val));
 
 app.use(cors());
 app.use(express.json());
-// ВАЖНО: Используем папку static, как договаривались
+// Указываем папку static для раздачи фронтенда
 app.use(express.static(path.join(__dirname, 'static')));
 
 // --- МАТЕМАТИКА ---
@@ -40,10 +38,7 @@ const MATH = {
 };
 
 const getClickCost = (lvl) => Math.floor(MATH.CLICK_BASE * Math.pow(MATH.CLICK_GROWTH, lvl - 1));
-const getPnlCost = (pnl) => {
-    const pnlLvl = Math.floor(pnl / MATH.PNL_STEP);
-    return Math.floor(MATH.PNL_BASE * Math.pow(MATH.PNL_GROWTH, pnlLvl));
-};
+const getPnlCost = (pnl) => Math.floor(MATH.PNL_BASE * Math.pow(MATH.PNL_GROWTH, Math.floor(pnl / MATH.PNL_STEP)));
 
 // --- ИНИЦИАЛИЗАЦИЯ БД ---
 const initDB = async () => {
@@ -62,38 +57,28 @@ const initDB = async () => {
             );
             CREATE INDEX IF NOT EXISTS idx_balance ON users (balance DESC);
         `);
-
-        // Фикс колонки last_save
-        await pool.query(`
-            DO $$ 
-            BEGIN 
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='last_save') THEN
-                    ALTER TABLE users ADD COLUMN last_save BIGINT DEFAULT extract(epoch from now());
-                END IF;
-            END $$;
-        `);
         console.log("✅ [DB] Система готова.");
     } catch (err) { console.error("❌ [DB] Ошибка:", err.message); }
 };
 initDB();
 
-// --- API ---
+// --- API МАРШРУТЫ ---
 
-// 1. Получение данных юзера + Начисление офлайн дохода
+// Главная страница
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'static', 'index.html'));
+});
+
+// Получение данных и офлайн доход
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
     const refBy = req.query.ref;
     try {
         let result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
-        
         if (result.rows.length === 0) {
-            // Регистрация нового
             const refId = (refBy && refBy !== uid) ? String(refBy) : null;
             await pool.query('INSERT INTO users (user_id, referrer_id, last_seen, last_save) VALUES ($1, $2, extract(epoch from now()), extract(epoch from now()))', [uid, refId]);
-            
-            if (refId) {
-                await pool.query('UPDATE users SET balance = balance + 5000 WHERE user_id IN ($1, $2)', [uid, refId]);
-            }
+            if (refId) await pool.query('UPDATE users SET balance = balance + 5000 WHERE user_id IN ($1, $2)', [uid, refId]);
             result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
         }
 
@@ -101,30 +86,18 @@ app.get('/api/user/:id', async (req, res) => {
         const now = Math.floor(Date.now() / 1000);
         const diff = now - parseInt(user.last_seen);
 
-        // Офлайн доход (минимум через 1 минуту отсутствия)
         if (diff > 60 && parseFloat(user.pnl) > 0) {
-            const hours = Math.min(diff, 14400) / 3600; // Макс 4 часа офлайна
-            const passiveIncome = parseFloat(user.pnl) * hours;
-            user.balance = parseFloat(user.balance) + passiveIncome;
-            user.energy = Math.min(1000, parseFloat(user.energy) + (diff * 1.5));
+            const hours = Math.min(diff, 14400) / 3600;
+            user.balance = parseFloat(user.balance) + (parseFloat(user.pnl) * hours);
+            user.energy = Math.min(1000, user.energy + (diff * 1.5));
             user.last_seen = now;
-            
-            await pool.query('UPDATE users SET balance=$1, energy=$2, last_seen=$3 WHERE user_id=$4', 
-                [user.balance, Math.floor(user.energy), user.last_seen, uid]);
+            await pool.query('UPDATE users SET balance=$1, energy=$2, last_seen=$3 WHERE user_id=$4', [user.balance, Math.floor(user.energy), now, uid]);
         }
         res.json(user);
     } catch (e) { res.status(500).json({ error: "DB Error" }); }
 });
 
-// 2. Лидерборд
-app.get('/api/top', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10');
-        res.json(result.rows);
-    } catch (e) { res.status(500).json({ error: "Top Error" }); }
-});
-
-// 3. Сохранение с анти-читом
+// Сохранение (Анти-чит)
 app.post('/api/save', async (req, res) => {
     const { userId, clicks, energy, username } = req.body;
     const now = Math.floor(Date.now() / 1000);
@@ -133,24 +106,17 @@ app.post('/api/save', async (req, res) => {
         if (userRes.rows.length === 0) return res.status(404).json({error: "Not found"});
         
         const user = userRes.rows[0];
-        const lastSaveTime = parseInt(user.last_save || now);
-        const timeDiff = Math.max(now - lastSaveTime, 1);
-        
-        // Лимит: не более 15 кликов в секунду
-        const maxClicksAllowed = timeDiff * 15;
-        const finalClicks = Math.min(clicks || 0, maxClicksAllowed);
-        
-        const income = finalClicks * parseInt(user.click_lvl);
-        const newBalance = parseFloat(user.balance) + income;
+        const timeDiff = Math.max(now - parseInt(user.last_save), 1);
+        const finalClicks = Math.min(clicks || 0, timeDiff * 15);
+        const newBalance = parseFloat(user.balance) + (finalClicks * parseInt(user.click_lvl));
 
         await pool.query('UPDATE users SET balance=$1, energy=$2, username=$3, last_save=$4, last_seen=$4 WHERE user_id=$5', 
             [newBalance, Math.floor(energy), username || 'Player', now, String(userId)]);
-            
         res.json({ status: 'ok', balance: newBalance });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 4. Покупка улучшений
+// Апгрейды
 app.post('/api/upgrade', async (req, res) => {
     const { userId, type } = req.body;
     try {
@@ -158,13 +124,11 @@ app.post('/api/upgrade', async (req, res) => {
         const user = userRes.rows[0];
         if (!user) return res.json({ success: false });
 
-        let cost = type === 'click' ? getClickCost(parseInt(user.click_lvl)) : getPnlCost(parseFloat(user.pnl));
-        
+        let cost = type === 'click' ? getClickCost(user.click_lvl) : getPnlCost(user.pnl);
         if (parseFloat(user.balance) >= cost) {
             const query = type === 'click' 
                 ? 'UPDATE users SET balance=balance-$1, click_lvl=click_lvl+1 WHERE user_id=$2'
                 : `UPDATE users SET balance=balance-$1, pnl=pnl+${MATH.PNL_STEP} WHERE user_id=$2`;
-            
             await pool.query(query, [cost, String(userId)]);
             return res.json({ success: true });
         }
@@ -172,19 +136,14 @@ app.post('/api/upgrade', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// --- BOT ---
+// Бот
 bot.start((ctx) => {
-    const refId = ctx.payload || ''; 
-    // Добавляем v=Date.now() для сброса кэша Telegram
-    const gameUrl = `https://${DOMAIN}?u=${ctx.from.id}${refId ? '&ref=' + refId : ''}&v=${Date.now()}`;
-    
-    ctx.replyWithHTML(`<b>🧠 NEURAL PULSE AI</b>\n\nПривет, <b>${ctx.from.first_name}</b>!\nТвой нейронный узел готов к работе.`, 
+    const gameUrl = `https://${DOMAIN}?u=${ctx.from.id}${ctx.payload ? '&ref=' + ctx.payload : ''}&v=${Date.now()}`;
+    ctx.replyWithHTML(`<b>🧠 NEURAL PULSE AI</b>\n\nПривет, <b>${ctx.from.first_name}</b>!`, 
         Markup.inlineKeyboard([[Markup.button.webApp('⚡ ЗАПУСТИТЬ ТЕРМИНАЛ', gameUrl)]]));
 });
 
-bot.catch((err) => console.error('Telegraf error:', err));
-
 app.listen(PORT, () => {
-    bot.launch().catch(err => console.error("Bot launch failed:", err));
-    console.log(`🚀 Сервер запущен на порту ${PORT}`);
+    bot.launch().catch(err => console.error("Bot failed:", err));
+    console.log(`🚀 Сервер на порту ${PORT}`);
 });
