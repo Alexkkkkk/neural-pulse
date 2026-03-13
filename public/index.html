@@ -7,86 +7,115 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/sdk@latest/dist/tonconnect-sdk.min.js"></script>
     <style>
-        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #000; --glass: rgba(255, 255, 255, 0.08); --ton: #0088cc; }
-        body { margin: 0; padding: 0; background: var(--bg-dark); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
+        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #000; --glass: rgba(255, 255, 255, 0.08); --ton: #0088cc; --gold: #ffd700; }
+        body { margin: 0; padding: 0; background: var(--bg-dark); color: white; font-family: 'Segoe UI', Roboto, sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
 
+        /* LOADER */
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; transition: 0.5s; }
-        .loader-container { position: relative; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; }
-        .loader-circle { position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--neon-cyan); border-right: 2px solid var(--neon-purple); animation: spin 2s linear infinite; }
-        .loader-logo { width: 100px; height: 100px; z-index: 1; }
-        .access-text { margin-top: 40px; letter-spacing: 4px; font-weight: bold; font-size: 14px; text-transform: uppercase; }
-        .percent { font-size: 32px; font-weight: 900; color: var(--neon-cyan); margin: 10px 0; }
-        .load-bar { width: 220px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
-        .load-fill { height: 100%; background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); width: 0%; transition: 0.1s linear; }
+        .loader-container { position: relative; width: 180px; height: 180px; display: flex; align-items: center; justify-content: center; }
+        .loader-circle { position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--neon-cyan); border-right: 2px solid var(--neon-purple); animation: spin 1.5s linear infinite; }
+        .loader-logo { width: 90px; height: 90px; z-index: 1; border-radius: 50%; }
 
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+        /* APP */
         .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; transition: 0.8s; visibility: hidden; }
         .app.ready { opacity: 1; visibility: visible; }
 
         .header { width: 90%; margin-top: 20px; background: var(--glass); border-radius: 20px; padding: 15px; display: flex; align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.05); box-sizing: border-box; }
+        .lvl-box { position: relative; }
         .lvl { width: 45px; height: 45px; border: 2px solid var(--neon-cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--neon-cyan); }
-
-        .bal { font-size: 64px; font-weight: 900; margin-top: 40px; }
+        
+        .bal-container { text-align: center; margin-top: 30px; }
+        .bal { font-size: 56px; font-weight: 900; text-shadow: 0 0 20px rgba(0, 242, 255, 0.4); }
+        .pnl-text { color: var(--neon-cyan); font-size: 14px; font-weight: bold; margin-top: -5px; }
 
         .stage { position: relative; width: 100%; flex-grow: 1; display: flex; align-items: center; justify-content: center; }
-        .logo { width: 240px; height: 240px; border-radius: 50%; transition: 0.05s; z-index: 1; }
+        .logo-wrap { position: relative; padding: 10px; border-radius: 50%; transition: 0.3s; }
+        .logo { width: 240px; height: 240px; border-radius: 50%; z-index: 1; cursor: pointer; display: block; }
         
-        .side { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
-        .btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 15px; width: 75px; text-align: center; font-size: 10px; font-weight: bold; color: white; cursor: pointer; }
-        .btn-ton { border-color: var(--ton); color: #5dc2ff; }
+        /* Tiers */
+        .tier-none { border: 4px solid transparent; }
+        .tier-bronze { border: 4px solid #cd7f32; box-shadow: 0 0 20px #cd7f32; }
+        .tier-silver { border: 4px solid #c0c0c0; box-shadow: 0 0 20px #c0c0c0; }
+        .tier-gold { border: 4px solid var(--gold); box-shadow: 0 0 25px var(--gold); }
 
-        .energy { width: 90%; margin-bottom: 30px; }
-        .bar { width: 100%; height: 10px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; margin-top: 8px; }
-        .fill { height: 100%; background: var(--neon-cyan); width: 100%; transition: 0.3s; }
+        .side { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 12px; }
+        .btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 14px; width: 85px; text-align: center; font-size: 10px; font-weight: bold; cursor: pointer; transition: 0.2s; color: white; }
+        .btn-ton { border-color: var(--ton); color: #5dc2ff; }
+        .btn-ton.connected { border-color: #00ff00; color: #00ff00; }
+
+        .energy-box { width: 90%; margin-bottom: 25px; }
+        .e-bar { width: 100%; height: 8px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; margin-top: 8px; }
+        .e-fill { height: 100%; background: var(--neon-cyan); width: 100%; transition: 0.3s; }
 
         .footer { width: 92%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 30px; }
-        .f-item { background: #111; padding: 15px 0; border-radius: 15px; text-align: center; font-size: 11px; font-weight: bold; border: 1px solid #1a1a1a; cursor: pointer; }
+        .f-item { background: #0a0a0a; padding: 18px 0; border-radius: 16px; text-align: center; font-size: 11px; font-weight: bold; border: 1px solid #1a1a1a; }
 
-        .plus { position: absolute; font-size: 35px; font-weight: 900; animation: p 0.7s forwards; pointer-events: none; z-index: 100; }
-        @keyframes p { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px); } }
+        /* MODALS */
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.98); z-index: 20000; display: none; flex-direction: column; padding: 25px; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--glass); padding-bottom: 10px; }
+        .scroll-area { flex-grow: 1; overflow-y: auto; }
+        .tx-item { background: var(--glass); padding: 12px; border-radius: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; font-size: 12px; }
+
+        .plus { position: absolute; font-size: 32px; font-weight: 900; animation: p 0.8s forwards; pointer-events: none; color: var(--neon-cyan); }
+        @keyframes p { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-130px); } }
     </style>
 </head>
 <body>
+
     <div id="loader">
-        <div class="loader-container">
-            <div class="loader-circle"></div>
-            <img src="images/logo.png" class="loader-logo" onerror="this.src='https://via.placeholder.com/100/bc13fe/fff?text=AI'">
+        <div class="loader-container"><div class="loader-circle"></div><img src="images/logo.png" class="loader-logo"></div>
+        <div id="load-pct" style="margin-top:20px; font-weight:900; color:var(--neon-cyan);">0%</div>
+    </div>
+
+    <div id="modal-stats" class="modal">
+        <div class="modal-header">
+            <h3 style="margin:0; color:var(--neon-cyan);">NETWORK STATISTICS</h3>
+            <div class="btn" onclick="closeModal('modal-stats')">CLOSE</div>
         </div>
-        <div class="access-text">ACCESS GRANTED</div>
-        <div class="percent" id="load-pct">0%</div>
-        <div class="load-bar"><div class="load-fill" id="load-f"></div></div>
+        <div class="scroll-area">
+            <h4 style="color:#555;">TOP PLAYERS</h4>
+            <div id="lb-content"></div>
+            <h4 style="color:#555; margin-top:25px;">YOUR TON PAYMENTS</h4>
+            <div id="tx-content"></div>
+        </div>
     </div>
 
     <div class="app" id="ui">
         <div class="header">
-            <div class="lvl" id="l-v">1</div>
+            <div class="lvl-box"><div class="lvl" id="l-v">1</div></div>
             <div>
-                <div style="font-size: 10px; color: #555;">NEURAL NETWORK</div>
-                <div id="p-v" style="color: var(--neon-cyan); font-size: 12px;">PASSIVE: +0/h</div>
+                <div style="font-size: 10px; color: #555;">SYSTEM CORE</div>
+                <div id="tier-name" style="font-size: 11px; color: #888;">TIER: NONE</div>
             </div>
         </div>
 
-        <div class="bal" id="b-v">0</div>
+        <div class="bal-container">
+            <div class="bal" id="b-v">0</div>
+            <div class="pnl-text" id="p-v">+0/h</div>
+        </div>
 
         <div class="stage">
-            <img src="images/logo.png" class="logo" id="t-a" onerror="this.src='https://via.placeholder.com/240/bc13fe/fff?text=AI'">
+            <div class="logo-wrap tier-none" id="l-wrap">
+                <img src="images/logo.png" class="logo" id="t-a" onerror="this.src='https://via.placeholder.com/240/00f2ff'">
+            </div>
             <div class="side">
-                <div class="btn btn-ton" id="ton-btn" onclick="handleWallet()">CONNECT</div>
-                <div class="btn" onclick="tg.showAlert('Invite link copied!')">INVITE</div>
-                <div class="btn" onclick="buyBonus()">BUY BONUS</div>
+                <div class="btn btn-ton" id="ton-btn" onclick="handleWallet()">WALLET</div>
+                <div class="btn" onclick="tg.showAlert('Coming soon: Swap TON for Coins')">EXCHANGE</div>
+                <div class="btn" id="buy-btn" onclick="buyBonus()">+1M COINS</div>
             </div>
         </div>
 
-        <div class="energy">
-            <div style="display:flex; justify-content: space-between; font-size: 12px;"><span>⚡ ENERGY</span><span id="e-n">1000/1000</span></div>
-            <div class="bar"><div class="fill" id="e-f"></div></div>
+        <div class="energy-box">
+            <div style="display:flex; justify-content: space-between; font-size: 11px;"><span>⚡ ENERGY</span><span id="e-n">1000/1000</span></div>
+            <div class="e-bar"><div class="e-fill" id="e-f"></div></div>
         </div>
 
         <div class="footer">
-            <div class="f-item" onclick="tg.showAlert('Boosts at Lvl 2')">🚀 BOOST</div>
-            <div class="f-item" onclick="tg.showAlert('Mining Offline')">⛏️ MINE</div>
-            <div class="f-item" onclick="checkPaymentStatus()">📊 CHECK PAY</div>
+            <div class="f-item" onclick="tg.showAlert('Boost Level ' + s.lvl)">🚀 BOOST</div>
+            <div class="f-item" onclick="openMine()">⛏️ MINE</div>
+            <div class="f-item" onclick="openStats()">📊 STATS</div>
         </div>
     </div>
 
@@ -98,114 +127,105 @@
             manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
         });
 
-        let s = { bal: 0, eng: 1000, lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id || 0, up: false };
+        let s = { 
+            bal: 0, eng: 1000, lvl: 1, pnl: 0, 
+            uid: tg.initDataUnsafe?.user?.id || 0, 
+            name: tg.initDataUnsafe?.user?.first_name || "Agent",
+            up: false 
+        };
 
+        // TON Connect
         async function handleWallet() {
             if (tonConnect.connected) {
-                if (confirm("Disconnect wallet?")) await tonConnect.disconnect();
+                tg.showConfirm("Disconnect wallet?", (ok) => ok && tonConnect.disconnect());
             } else {
-                const walletsList = await tonConnect.getWallets();
-                const universalLink = tonConnect.connect(walletsList);
-                tg.openLink(universalLink);
+                const wallets = await tonConnect.getWallets();
+                tg.openLink(tonConnect.connect(wallets));
             }
         }
 
-        tonConnect.onStatusChange(wallet => {
+        tonConnect.onStatusChange(w => {
             const btn = document.getElementById('ton-btn');
-            if (wallet) {
-                const addr = wallet.account.address;
-                btn.innerText = addr.slice(0, 4) + '...' + addr.slice(-4);
-                btn.style.borderColor = "#00ff00";
+            if (w) {
+                btn.innerText = w.account.address.slice(0,4)+'...'+w.account.address.slice(-4);
+                btn.classList.add('connected');
             } else {
-                btn.innerText = "CONNECT";
-                btn.style.borderColor = "var(--ton)";
+                btn.innerText = "WALLET";
+                btn.classList.remove('connected');
             }
         });
 
-        // Покупка бонуса: 1 TON = 1,000,000 монет
         async function buyBonus() {
             if (!tonConnect.connected) return tg.showAlert("Connect wallet first!");
-            
-            // Генерируем уникальный комментарий (ID пользователя + время)
+            const btn = document.getElementById('buy-btn');
+            btn.innerText = "SENDING...";
             const payload = `ID${s.uid}_${Date.now()}`;
-            
-            const transaction = {
+            const tx = {
                 validUntil: Math.floor(Date.now() / 1000) + 300,
-                messages: [{
-                    address: "EQB8m_p-6T_0Z_8...ВАШ_КОШЕЛЕК...", // ЗАМЕНИТЕ НА ВАШ АДРЕС
-                    amount: "1000000000", // 1 TON в нанотонах
-                    payload: payload 
-                }]
+                messages: [{ address: "EQB8m_p-6T_0Z_8...ВАШ_КОШЕЛЕК...", amount: "1000000000", payload: payload }]
             };
-
             try {
-                await tonConnect.sendTransaction(transaction);
-                tg.showConfirm(`Payment sent! Comment: ${payload}. Check status in 1 minute?`, (ok) => {
-                    if(ok) checkPaymentStatus();
-                });
+                await tonConnect.sendTransaction(tx);
+                tg.showAlert("Success! Confirming on blockchain...");
             } catch (e) { tg.showAlert("Cancelled"); }
+            btn.innerText = "+1M COINS";
+        }
+
+        // Stats & Leaderboard
+        async function openStats() {
+            document.getElementById('modal-stats').style.display = 'flex';
+            // Load LB
+            const rLB = await fetch('/api/leaderboard');
+            const dLB = await rLB.json();
+            document.getElementById('lb-content').innerHTML = dLB.map((u,i) => `
+                <div class="tx-item"><span>#${i+1} ${u.username}</span><b>${Math.floor(u.balance).toLocaleString()}</b></div>
+            `).join('');
+            
+            // Load My TX
+            const rTX = await fetch(`/api/my-payments/${s.uid}`);
+            const dTX = await rTX.json();
+            document.getElementById('tx-content').innerHTML = dTX.length ? dTX.map(t => `
+                <div class="tx-item"><span>${new Date(t.created_at).toLocaleDateString()}</span><b style="color:#00ff00">+1,000,000</b></div>
+            `).join('') : '<div style="text-align:center; color:#444;">No payments yet</div>';
+            
+            checkPaymentStatus(); // Silent check
+        }
+
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+        function openMine() {
+            const cost = 1000 + (s.pnl * 15);
+            tg.showConfirm(`Upgrade Node?\nCost: ${cost}\nIncome: +50/h`, ok => {
+                if(ok && s.bal >= cost) { s.bal -= cost; s.pnl += 50; s.up = true; upd(); }
+                else if(ok) tg.showAlert("Low balance!");
+            });
         }
 
         async function checkPaymentStatus() {
-            tg.showScanQrPopup({ text: "Scan or wait..." });
             const r = await fetch(`/api/check-payment/${s.uid}`);
             const d = await r.json();
-            tg.closeScanQrPopup();
-            
-            if (d.success) {
-                tg.showAlert(`Success! Added ${d.added} coins!`);
-                s.bal += d.added;
-                upd();
-            } else {
-                tg.showAlert("No new payments found yet.");
-            }
+            if(d.success) { s.bal += d.added; upd(); tg.showAlert("Payment Confirmed! +1,000,000"); }
         }
 
-        function startLoading() {
-            let progress = 0;
-            const fill = document.getElementById('load-f');
-            const pct = document.getElementById('load-pct');
-            const interval = setInterval(() => {
-                progress += Math.floor(Math.random() * 5) + 2;
-                if (progress >= 100) {
-                    progress = 100;
-                    clearInterval(interval);
-                    setTimeout(() => {
-                        document.getElementById('loader').style.opacity = '0';
-                        setTimeout(() => {
-                            document.getElementById('loader').style.display = 'none';
-                            document.getElementById('ui').classList.add('ready');
-                        }, 500);
-                    }, 500);
-                }
-                fill.style.width = progress + '%';
-                pct.innerText = progress + '%';
-            }, 80);
-        }
-
-        async function init() {
-            try {
-                const r = await fetch(`/api/user/${s.uid}`);
-                const d = await r.json();
-                s.bal = Number(d.balance) || 0; 
-                s.eng = Number(d.energy) || 1000;
-                s.lvl = Number(d.click_lvl) || 1; 
-                s.pnl = Number(d.pnl) || 0;
-                upd();
-            } catch(e) {}
-            startLoading();
-            await tonConnect.restoreConnection();
-        }
-
+        // UI Updates
         function upd() {
             document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString();
             document.getElementById('e-n').innerText = `${Math.floor(s.eng)}/1000`;
             document.getElementById('e-f').style.width = (s.eng/10)+'%';
             document.getElementById('l-v').innerText = s.lvl;
-            document.getElementById('p-v').innerText = `PASSIVE: +${s.pnl}/h`;
+            document.getElementById('p-v').innerText = `+${s.pnl}/h`;
+            
+            // Tier Logic
+            const w = document.getElementById('l-wrap');
+            const tn = document.getElementById('tier-name');
+            if(s.bal > 1000000) { w.className="logo-wrap tier-gold"; tn.innerText="TIER: GOLD"; tn.style.color="var(--gold)"; }
+            else if(s.bal > 500000) { w.className="logo-wrap tier-silver"; tn.innerText="TIER: SILVER"; tn.style.color="#c0c0c0"; }
+            else if(s.bal > 100000) { w.className="logo-wrap tier-bronze"; tn.innerText="TIER: BRONZE"; tn.style.color="#cd7f32"; }
+            else { w.className="logo-wrap tier-none"; tn.innerText="TIER: NONE"; tn.style.color="#888"; }
         }
 
-        document.getElementById('t-a').addEventListener('touchstart', (e) => {
+        // Tapping
+        document.getElementById('t-a').addEventListener('touchstart', e => {
             e.preventDefault();
             if(s.eng < s.lvl) return;
             const t = e.touches[0];
@@ -214,20 +234,42 @@
             p.className = 'plus'; p.innerText = `+${s.lvl}`;
             p.style.left = t.clientX + 'px'; p.style.top = t.clientY + 'px';
             document.body.appendChild(p);
-            setTimeout(() => p.remove(), 700);
+            setTimeout(() => p.remove(), 800);
             if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
             upd();
         });
 
+        async function init() {
+            const r = await fetch(`/api/user/${s.uid}?name=${encodeURIComponent(s.name)}`);
+            const d = await r.json();
+            s.bal = Number(d.balance); s.eng = Number(d.energy);
+            s.lvl = Number(d.click_lvl); s.pnl = Number(d.pnl);
+            upd();
+            if(d.offline_bonus > 0) tg.showPopup({ title: 'System Restored', message: `Offline income: ${Math.floor(d.offline_bonus)} coins.` });
+            
+            let p = 0;
+            const i = setInterval(() => {
+                p += 10; document.getElementById('load-pct').innerText = p+'%';
+                if(p >= 100) { 
+                    clearInterval(i); 
+                    document.getElementById('loader').style.display='none'; 
+                    document.getElementById('ui').classList.add('ready');
+                }
+            }, 50);
+            await tonConnect.restoreConnection();
+        }
+
+        setInterval(() => { if(s.eng < 1000) { s.eng = Math.min(1000, s.eng + 1.2); upd(); } }, 1000);
+        setInterval(() => { if(s.pnl > 0) { s.bal += (s.pnl / 3600); upd(); s.up = true; } }, 1000);
         setInterval(async () => {
-            if(!s.up || !s.uid) return;
+            if(!s.up) return;
             await fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ userId: s.uid, balance: s.bal, energy: s.eng, click_lvl: s.lvl, pnl: s.pnl })
             });
             s.up = false;
-        }, 3000);
+        }, 5000);
 
         init();
     </script>
