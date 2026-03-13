@@ -36,7 +36,7 @@ const getPnlCost = (pnl) => {
     return Math.floor(MATH.PNL_BASE * Math.pow(MATH.PNL_GROWTH, pnlLvl));
 };
 
-// Инициализация БД (добавлена колонка для защиты)
+// Инициализация БД
 const initDB = async () => {
     try {
         await pool.query(`
@@ -72,7 +72,6 @@ app.get('/api/user/:id', async (req, res) => {
                 [uid, refBy]
             );
             if (refBy && refBy !== uid) {
-                // Бонус за приглашение
                 await pool.query('UPDATE users SET balance = balance + 5000 WHERE user_id IN ($1, $2)', [uid, refBy]);
             }
             result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
@@ -101,7 +100,7 @@ app.get('/api/user/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "DB Error" }); }
 });
 
-// [2] Сохранение прогресса (защищенное)
+// [2] Сохранение прогресса
 app.post('/api/save', async (req, res) => {
     const { userId, clicks, energy, username } = req.body;
     const now = Math.floor(Date.now() / 1000);
@@ -111,7 +110,6 @@ app.post('/api/save', async (req, res) => {
         if (userRes.rows.length === 0) return res.status(404).json({error: "Not found"});
         const user = userRes.rows[0];
 
-        // Простая проверка на читы (не более 15 кликов в секунду)
         const timeDiff = now - parseInt(user.last_save || 0);
         const maxClicks = Math.max(timeDiff, 1) * 15;
         const validClicks = Math.min(clicks || 0, maxClicks);
@@ -119,9 +117,10 @@ app.post('/api/save', async (req, res) => {
         const income = validClicks * parseInt(user.click_lvl);
         const newBalance = parseFloat(user.balance) + income;
 
+        // Важно: Сохраняем username, чтобы он появился в Топе
         await pool.query(`
             UPDATE users SET 
-                balance=$1, energy=$2, username=COALESCE($3, username), 
+                balance=$1, energy=$2, username=COALESCE($3, username, 'User_' || substr(user_id, 1, 4)), 
                 last_save=$4, last_seen=$4
             WHERE user_id=$5
         `, [newBalance, Math.floor(energy), username, now, String(userId)]);
@@ -130,7 +129,7 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// [3] Магазин (Апгрейды)
+// [3] Магазин
 app.post('/api/upgrade', async (req, res) => {
     const { userId, type } = req.body;
     try {
@@ -149,22 +148,32 @@ app.post('/api/upgrade', async (req, res) => {
         
         if (parseFloat(user.balance) >= cost) {
             await pool.query(updateQuery, [cost, userId]);
-            res.json({ success: true, newCost: type === 'click' ? getClickCost(user.click_lvl + 1) : getPnlCost(user.pnl + MATH.PNL_STEP) });
+            res.json({ success: true });
         } else {
-            res.json({ success: false, error: "Недостаточно средств" });
+            res.json({ success: false, error: "Low balance" });
         }
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// [4] ТОП Игроков
+// [4] ТОП-10 Игроков (Доработанный)
 app.get('/api/top', async (req, res) => {
     try {
-        const result = await pool.query('SELECT username, balance FROM users WHERE username IS NOT NULL ORDER BY balance DESC LIMIT 10');
+        // Выбираем топ 10, если username пустой — ставим 'Anonymous'
+        const result = await pool.query(`
+            SELECT 
+                COALESCE(username, 'Miner_' || substr(user_id, 1, 5)) as username, 
+                balance 
+            FROM users 
+            ORDER BY balance DESC 
+            LIMIT 10
+        `);
         res.json(result.rows);
-    } catch (e) { res.status(500).json({ error: "Top error" }); }
+    } catch (e) { 
+        console.error(e);
+        res.status(500).json({ error: "Top error" }); 
+    }
 });
 
-// Бот
 bot.start((ctx) => {
     const refId = ctx.payload || ''; 
     const gameUrl = `https://${DOMAIN}?u=${ctx.from.id}${refId ? '&ref=' + refId : ''}&v=${Date.now()}`;
