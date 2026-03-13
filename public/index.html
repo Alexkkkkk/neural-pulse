@@ -5,16 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@tonconnect/sdk@latest/dist/tonconnect-sdk.min.js"></script>
     <style>
         :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #000; --glass: rgba(255, 255, 255, 0.08); --ton: #0088cc; }
         body { margin: 0; padding: 0; background: var(--bg-dark); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
 
-        /* ЭКРАН ЗАГРУЗКИ */
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; transition: 0.5s; }
         .loader-container { position: relative; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; }
         .loader-circle { position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--neon-cyan); border-right: 2px solid var(--neon-purple); animation: spin 2s linear infinite; }
         .loader-logo { width: 100px; height: 100px; z-index: 1; }
-        
         .access-text { margin-top: 40px; letter-spacing: 4px; font-weight: bold; font-size: 14px; text-transform: uppercase; }
         .percent { font-size: 32px; font-weight: 900; color: var(--neon-cyan); margin: 10px 0; }
         .load-bar { width: 220px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
@@ -22,7 +21,6 @@
 
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* ИНТЕРФЕЙС ИГРЫ */
         .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; transition: 0.8s; visibility: hidden; }
         .app.ready { opacity: 1; visibility: visible; }
 
@@ -35,7 +33,7 @@
         .logo { width: 240px; height: 240px; border-radius: 50%; transition: 0.05s; z-index: 1; }
         
         .side { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
-        .btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 15px; width: 65px; text-align: center; font-size: 10px; font-weight: bold; color: white; }
+        .btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 15px; width: 75px; text-align: center; font-size: 10px; font-weight: bold; color: white; cursor: pointer; }
         .btn-ton { border-color: var(--ton); color: #5dc2ff; }
 
         .energy { width: 90%; margin-bottom: 30px; }
@@ -43,7 +41,7 @@
         .fill { height: 100%; background: var(--neon-cyan); width: 100%; transition: 0.3s; }
 
         .footer { width: 92%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 30px; }
-        .f-item { background: #111; padding: 15px 0; border-radius: 15px; text-align: center; font-size: 11px; font-weight: bold; border: 1px solid #1a1a1a; }
+        .f-item { background: #111; padding: 15px 0; border-radius: 15px; text-align: center; font-size: 11px; font-weight: bold; border: 1px solid #1a1a1a; cursor: pointer; }
 
         .plus { position: absolute; font-size: 35px; font-weight: 900; animation: p 0.7s forwards; pointer-events: none; z-index: 100; }
         @keyframes p { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px); } }
@@ -73,11 +71,10 @@
 
         <div class="stage">
             <img src="images/logo.png" class="logo" id="t-a" onerror="this.src='https://via.placeholder.com/240/bc13fe/fff?text=AI'">
-            
             <div class="side">
-                <div class="btn btn-ton" onclick="tg.showAlert('TON Wallet soon')">WALLET</div>
+                <div class="btn btn-ton" id="ton-btn" onclick="handleWallet()">CONNECT</div>
                 <div class="btn" onclick="tg.showAlert('Invite link copied!')">INVITE</div>
-                <div class="btn" onclick="tg.showAlert('Bonus: +1,000')">BONUS</div>
+                <div class="btn" onclick="buyBonus()">BUY BONUS</div>
             </div>
         </div>
 
@@ -89,7 +86,7 @@
         <div class="footer">
             <div class="f-item" onclick="tg.showAlert('Boosts at Lvl 2')">🚀 BOOST</div>
             <div class="f-item" onclick="tg.showAlert('Mining Offline')">⛏️ MINE</div>
-            <div class="f-item" onclick="tg.showAlert('Stats updating...')">📊 STATS</div>
+            <div class="f-item" onclick="checkPaymentStatus()">📊 CHECK PAY</div>
         </div>
     </div>
 
@@ -97,13 +94,77 @@
         const tg = window.Telegram.WebApp;
         tg.ready(); tg.expand();
 
+        const tonConnect = new TonConnectSDK.TonConnect({
+            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
+        });
+
         let s = { bal: 0, eng: 1000, lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id || 0, up: false };
+
+        async function handleWallet() {
+            if (tonConnect.connected) {
+                if (confirm("Disconnect wallet?")) await tonConnect.disconnect();
+            } else {
+                const walletsList = await tonConnect.getWallets();
+                const universalLink = tonConnect.connect(walletsList);
+                tg.openLink(universalLink);
+            }
+        }
+
+        tonConnect.onStatusChange(wallet => {
+            const btn = document.getElementById('ton-btn');
+            if (wallet) {
+                const addr = wallet.account.address;
+                btn.innerText = addr.slice(0, 4) + '...' + addr.slice(-4);
+                btn.style.borderColor = "#00ff00";
+            } else {
+                btn.innerText = "CONNECT";
+                btn.style.borderColor = "var(--ton)";
+            }
+        });
+
+        // Покупка бонуса: 1 TON = 1,000,000 монет
+        async function buyBonus() {
+            if (!tonConnect.connected) return tg.showAlert("Connect wallet first!");
+            
+            // Генерируем уникальный комментарий (ID пользователя + время)
+            const payload = `ID${s.uid}_${Date.now()}`;
+            
+            const transaction = {
+                validUntil: Math.floor(Date.now() / 1000) + 300,
+                messages: [{
+                    address: "EQB8m_p-6T_0Z_8...ВАШ_КОШЕЛЕК...", // ЗАМЕНИТЕ НА ВАШ АДРЕС
+                    amount: "1000000000", // 1 TON в нанотонах
+                    payload: payload 
+                }]
+            };
+
+            try {
+                await tonConnect.sendTransaction(transaction);
+                tg.showConfirm(`Payment sent! Comment: ${payload}. Check status in 1 minute?`, (ok) => {
+                    if(ok) checkPaymentStatus();
+                });
+            } catch (e) { tg.showAlert("Cancelled"); }
+        }
+
+        async function checkPaymentStatus() {
+            tg.showScanQrPopup({ text: "Scan or wait..." });
+            const r = await fetch(`/api/check-payment/${s.uid}`);
+            const d = await r.json();
+            tg.closeScanQrPopup();
+            
+            if (d.success) {
+                tg.showAlert(`Success! Added ${d.added} coins!`);
+                s.bal += d.added;
+                upd();
+            } else {
+                tg.showAlert("No new payments found yet.");
+            }
+        }
 
         function startLoading() {
             let progress = 0;
             const fill = document.getElementById('load-f');
             const pct = document.getElementById('load-pct');
-            
             const interval = setInterval(() => {
                 progress += Math.floor(Math.random() * 5) + 2;
                 if (progress >= 100) {
@@ -133,6 +194,7 @@
                 upd();
             } catch(e) {}
             startLoading();
+            await tonConnect.restoreConnection();
         }
 
         function upd() {
