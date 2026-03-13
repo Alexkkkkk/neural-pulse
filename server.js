@@ -4,6 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
+// Данные из ваших настроек
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 const DOMAIN = "neural-pulse.bothost.ru";
@@ -15,8 +16,9 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'static'))); // Папка static согласно вашим требованиям
 
+// Инициализация БД
 const initDB = async () => {
     try {
         await pool.query(`
@@ -34,6 +36,7 @@ const initDB = async () => {
 };
 initDB();
 
+// API: Получение данных
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
     try {
@@ -46,6 +49,7 @@ app.get('/api/user/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "DB Error" }); }
 });
 
+// API: Сохранение
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, click_lvl, pnl } = req.body;
     try {
@@ -61,7 +65,7 @@ app.post('/api/save', async (req, res) => {
 });
 
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI</b>`, 
+    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI</b>\nСистема запущена.`, 
     Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', `https://${DOMAIN}`)]]));
 });
 
