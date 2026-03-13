@@ -13,13 +13,13 @@ const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// --- ИСПРАВЛЕННОЕ ПОДКЛЮЧЕНИЕ К БД ---
+// --- ПОДКЛЮЧЕНИЕ К БД ---
 const pool = new Pool({ 
     connectionString: PG_URI, 
-    ssl: false // Оставляем false для Bothost
+    ssl: false 
 });
 
-// Парсинг числовых значений из БД (чтобы NUMERIC был числом, а не строкой)
+// Парсинг числовых значений
 const types = require('pg').types;
 types.setTypeParser(1700, function(val) { return parseFloat(val); });
 
@@ -46,9 +46,10 @@ const getPnlCost = (pnl) => {
     return Math.floor(MATH.PNL_BASE * Math.pow(MATH.PNL_GROWTH, pnlLvl));
 };
 
-// Инициализация
+// --- ИНИЦИАЛИЗАЦИЯ И ФИКС ТАБЛИЦЫ ---
 const initDB = async () => {
     try {
+        // 1. Создаем таблицу, если её нет
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
@@ -62,7 +63,18 @@ const initDB = async () => {
                 last_save BIGINT DEFAULT extract(epoch from now())
             );
         `);
-        console.log("✅ [DB] Таблицы готовы.");
+
+        // 2. ПРИНУДИТЕЛЬНО добавляем колонку last_save, если она исчезла (фикс твоей ошибки)
+        await pool.query(`
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='last_save') THEN
+                    ALTER TABLE users ADD COLUMN last_save BIGINT DEFAULT extract(epoch from now());
+                END IF;
+            END $$;
+        `);
+
+        console.log("✅ [DB] Таблицы проверены и готовы.");
     } catch (err) { 
         console.error("❌ [DB] Ошибка инициализации:", err.message); 
     }
@@ -87,7 +99,6 @@ app.get('/api/user/:id', async (req, res) => {
         const now = Math.floor(Date.now() / 1000);
         const diff = now - parseInt(user.last_seen);
 
-        // Пассивный доход при входе (макс 4 часа)
         if (diff > 60 && parseFloat(user.pnl) > 0) {
             const hours = Math.min(diff, 14400) / 3600;
             const passiveIncome = parseFloat(user.pnl) * hours;
@@ -116,9 +127,10 @@ app.post('/api/save', async (req, res) => {
         if (userRes.rows.length === 0) return res.status(404).json({error: "Not found"});
         
         const user = userRes.rows[0];
-        const timeDiff = Math.max(now - parseInt(user.last_save || now), 1);
+        // Используем last_save для анти-чита
+        const lastSaveTime = parseInt(user.last_save || now);
+        const timeDiff = Math.max(now - lastSaveTime, 1);
         
-        // Анти-чит: максимум 15 кликов в секунду
         const maxClicksAllowed = timeDiff * 15;
         const finalClicks = Math.min(clicks || 0, maxClicksAllowed);
         
