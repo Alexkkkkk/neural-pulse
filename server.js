@@ -4,7 +4,6 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-// --- КОНФИГУРАЦИЯ ---
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 const DOMAIN = "neural-pulse.bothost.ru";
@@ -18,7 +17,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- ИНИЦИАЛИЗАЦИЯ БАЗЫ ---
 const initDB = async () => {
     try {
         await pool.query(`
@@ -32,34 +30,22 @@ const initDB = async () => {
                 last_seen BIGINT DEFAULT extract(epoch from now())
             );
         `);
-        console.log("📦 [DB] PostgreSQL подключена и проверена.");
-    } catch (err) {
-        console.error("❌ [DB] Ошибка:", err.message);
-    }
+    } catch (err) { console.error("DB Error:", err.message); }
 };
 initDB();
 
-// --- API ЭНДПОИНТЫ ---
-
-// Получение данных игрока
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
     try {
         const result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
         if (result.rows.length === 0) {
-            const newUser = await pool.query(
-                'INSERT INTO users (user_id, last_seen) VALUES ($1, extract(epoch from now())) RETURNING *',
-                [uid]
-            );
+            const newUser = await pool.query('INSERT INTO users (user_id) VALUES ($1) RETURNING *', [uid]);
             return res.json(newUser.rows[0]);
         }
         res.json(result.rows[0]);
-    } catch (e) {
-        res.status(500).json({ error: "DB Error" });
-    }
+    } catch (e) { res.status(500).json({ error: "DB Error" }); }
 });
 
-// Сохранение прогресса
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, click_lvl, pnl } = req.body;
     try {
@@ -67,36 +53,19 @@ app.post('/api/save', async (req, res) => {
             INSERT INTO users (user_id, balance, energy, click_lvl, pnl, last_seen)
             VALUES ($1, $2, $3, $4, $5, extract(epoch from now()))
             ON CONFLICT (user_id) DO UPDATE SET
-            balance = EXCLUDED.balance,
-            energy = EXCLUDED.energy,
-            click_lvl = EXCLUDED.click_lvl,
-            pnl = EXCLUDED.pnl,
-            last_seen = EXCLUDED.last_seen
-        `, [
-            String(userId), 
-            Number(balance) || 0, 
-            Math.floor(Number(energy)) || 0, 
-            Math.floor(Number(click_lvl)) || 1, 
-            Number(pnl) || 0
-        ]);
+            balance = EXCLUDED.balance, energy = EXCLUDED.energy,
+            click_lvl = EXCLUDED.click_lvl, pnl = EXCLUDED.pnl, last_seen = EXCLUDED.last_seen
+        `, [String(userId), Number(balance), Math.floor(energy), Math.floor(click_lvl), Number(pnl)]);
         res.json({ status: 'ok' });
-    } catch (e) {
-        console.error("❌ [SAVE] Ошибка:", e.message);
-        res.status(500).json({ error: "Save Fail" });
-    }
+    } catch (e) { res.status(500).json({ error: "Save Fail" }); }
 });
 
-// --- ЛОГИКА БОТА ---
 bot.start((ctx) => {
-    const gameUrl = `https://${DOMAIN}`;
-    ctx.replyWithHTML(
-        `<b>🚀 NEURAL PULSE AI</b>\n\nДобро пожаловать в систему. Начни майнинг прямо сейчас!`,
-        Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', gameUrl)]])
-    );
+    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI</b>`, 
+    Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', `https://${DOMAIN}`)]]));
 });
 
-// --- ЗАПУСК ---
 app.listen(PORT, () => {
-    console.log(`🚀 Server: https://${DOMAIN}`);
-    bot.launch().catch(err => console.error("Bot Error:", err));
+    console.log(`Server: https://${DOMAIN}`);
+    bot.launch();
 });
