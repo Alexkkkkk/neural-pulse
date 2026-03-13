@@ -24,8 +24,9 @@
             width: 92%; margin-top: 20px; background: var(--glass); 
             border-radius: 24px; padding: 16px; display: flex; 
             align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.05); 
-            box-sizing: border-box; backdrop-filter: blur(15px); 
+            box-sizing: border-box; backdrop-filter: blur(15px); position: relative;
         }
+        .v-tag { position: absolute; top: 5px; right: 15px; font-size: 8px; color: #444; font-family: monospace; }
         .lvl-badge { 
             width: 50px; height: 50px; border: 2px solid var(--neon-cyan); 
             border-radius: 16px; display: flex; align-items: center; 
@@ -33,24 +34,21 @@
             box-shadow: 0 0 20px rgba(0, 242, 255, 0.3); background: rgba(0,0,0,0.5);
         }
 
-        /* BALANCE DISPLAY */
+        /* SCORE SECTION */
         .bal-wrap { text-align: center; margin-top: 20px; transition: transform 0.3s; }
         .bal { font-size: 68px; font-weight: 950; letter-spacing: -3px; text-shadow: 0 0 40px rgba(0, 242, 255, 0.6); }
         .pnl { color: var(--neon-cyan); font-size: 15px; font-weight: 800; margin-top: -8px; opacity: 0.9; }
 
-        /* CENTER LOGO & TIERS */
+        /* CENTER LOGO */
         .stage { position: relative; width: 100%; flex-grow: 1; display: flex; align-items: center; justify-content: center; }
         .logo-container { position: relative; padding: 10px; border-radius: 50%; transition: 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         .main-logo { width: 230px; height: 230px; border-radius: 50%; z-index: 5; cursor: pointer; display: block; filter: drop-shadow(0 0 30px rgba(188, 19, 254, 0.4)); }
-        .main-logo:active { transform: scale(0.92); }
-
-        /* Tier Styles */
+        
         .t-none { border: 4px solid transparent; }
         .t-bronze { border: 4px solid #cd7f32; box-shadow: 0 0 40px rgba(205, 127, 50, 0.5); }
         .t-silver { border: 4px solid #c0c0c0; box-shadow: 0 0 40px rgba(192, 192, 192, 0.5); }
         .t-gold { border: 4px solid var(--gold); box-shadow: 0 0 50px rgba(255, 215, 0, 0.6); }
 
-        /* DYNAMIC SIDEBAR */
         .side-nav { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 14px; }
         .action-btn { 
             background: var(--glass); border: 1px solid rgba(255,255,255,0.12); 
@@ -60,16 +58,13 @@
         }
         .btn-wallet { border-color: var(--ton); color: #5dc2ff; }
         .btn-wallet.active { border-color: var(--success); color: var(--success); box-shadow: 0 0 15px rgba(0, 255, 136, 0.2); }
-        .btn-premium { border-color: var(--neon-purple); background: linear-gradient(135deg, rgba(188, 19, 254, 0.1), transparent); }
 
-        /* BOTTOM NAV */
         .bottom-bar { width: 92%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 40px; }
         .nav-item { 
             background: rgba(20, 20, 20, 0.8); padding: 22px 0; border-radius: 22px; 
             text-align: center; font-size: 12px; font-weight: 800; 
             border: 1px solid rgba(255,255,255,0.06); transition: 0.2s;
         }
-        .nav-item:active { background: var(--glass); transform: translateY(2px); }
 
         /* MODALS */
         .modal-overlay { 
@@ -78,15 +73,10 @@
             animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
         }
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
-        .history-card { 
-            background: var(--glass); padding: 18px; border-radius: 20px; 
-            margin-bottom: 12px; display: flex; justify-content: space-between; 
-            align-items: center; border: 1px solid rgba(255,255,255,0.04); 
-        }
 
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         
-        /* CLICK ANIMATION */
         .tap-val { 
             position: absolute; font-size: 42px; font-weight: 900; 
             animation: tapFloat 0.8s ease-out forwards; pointer-events: none; 
@@ -102,7 +92,7 @@
             <div style="position:absolute; inset:0; border:3px solid var(--glass); border-top:3px solid var(--neon-cyan); border-radius:50%; animation: spin 1s infinite linear;"></div>
             <img src="images/logo.png" style="width:80px; position:absolute; top:20px; left:20px; border-radius:50%;">
         </div>
-        <div id="load-text" style="margin-top:30px; font-family:monospace; font-size:12px; color:var(--neon-cyan); letter-spacing:2px;">INITIALIZING CORE...</div>
+        <div id="load-text" style="margin-top:30px; font-family:monospace; font-size:10px; color:var(--neon-cyan); letter-spacing:2px; text-transform:uppercase;">Loading build v1.0.4...</div>
     </div>
 
     <div id="dash-modal" class="modal-overlay">
@@ -115,21 +105,20 @@
                 <small style="opacity:0.6; font-weight:bold;">CONNECTED WALLET</small>
                 <div id="addr-display" style="font-family:monospace; font-size:14px; margin-top:10px; word-break:break-all; color:#fff;">UNLINKED</div>
             </div>
-            <h4 style="color:#555; text-transform:uppercase; font-size:12px; margin-bottom:15px;">Transaction Log</h4>
             <div id="tx-log"></div>
-            <h4 style="color:#555; text-transform:uppercase; font-size:12px; margin:25px 0 15px 0;">Top Operators</h4>
             <div id="rankings"></div>
         </div>
     </div>
 
     <div class="app" id="main-ui" style="opacity:0; visibility:hidden; transition: 1s;">
         <div class="header">
+            <div class="v-tag">BUILD v1.0.4</div>
             <div class="lvl-badge" id="lvl-v">1</div>
             <div style="flex-grow:1">
                 <div style="font-size: 10px; color: #555; font-weight: 800;">SYSTEM STATUS</div>
                 <div id="tier-label" style="font-size: 13px; font-weight: 900;">NODE: DISCONNECTED</div>
             </div>
-            <div id="net-id" style="font-size:9px; background:rgba(0,242,255,0.1); color:var(--neon-cyan); padding:5px 10px; border-radius:10px; font-weight:bold;">TON MAINNET</div>
+            <div id="net-id" style="font-size:9px; background:rgba(0,242,255,0.1); color:var(--neon-cyan); padding:5px 10px; border-radius:10px; font-weight:bold;">MAINNET</div>
         </div>
 
         <div class="bal-wrap">
@@ -144,7 +133,7 @@
             <div class="side-nav">
                 <div class="action-btn btn-wallet" id="wallet-trigger" onclick="walletAction()">Wallet</div>
                 <div class="action-btn" onclick="tg.showAlert('Invite system launching in v2.0')">Invite</div>
-                <div class="action-btn btn-premium" id="pay-btn" onclick="buyCredit()">+1M COINS</div>
+                <div class="action-btn" id="pay-btn" onclick="buyCredit()" style="border-color:var(--neon-purple); background:rgba(188,19,254,0.05);">+1M COINS</div>
             </div>
         </div>
 
@@ -154,7 +143,7 @@
                 <span id="eng-v">1000/1000</span>
             </div>
             <div style="width:100%; height:8px; background:rgba(255,255,255,0.06); border-radius:12px; overflow:hidden;">
-                <div id="eng-f" style="height:100%; background:var(--neon-cyan); width:100%; transition:0.3s; box-shadow: 0 0 15px var(--neon-cyan);"></div>
+                <div id="eng-f" style="height:100%; background:var(--neon-cyan); width:100%; transition:0.3s;"></div>
             </div>
         </div>
 
@@ -169,26 +158,18 @@
         const tg = window.Telegram.WebApp;
         tg.ready(); tg.expand();
 
-        // Ультра-крутая инициализация TON
         const tonConnect = new TonConnectSDK.TonConnect({
             manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
         });
 
-        let state = { 
-            bal: 0, eng: 1000, lvl: 1, pnl: 0, 
-            uid: tg.initDataUnsafe?.user?.id || 0, 
-            name: tg.initDataUnsafe?.user?.first_name || "Agent",
-            sync: false 
-        };
+        let state = { bal: 0, eng: 1000, lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id || 0, sync: false };
 
-        // Логика кошелька
         async function walletAction() {
             if (tonConnect.connected) {
-                tg.showConfirm("Unlink your TON wallet from Neural Pulse?", (ok) => ok && tonConnect.disconnect());
+                tg.showConfirm("Unlink wallet?", ok => ok && tonConnect.disconnect());
             } else {
                 const wallets = await tonConnect.getWallets();
-                const connectUrl = tonConnect.connect(wallets);
-                tg.openLink(connectUrl);
+                tg.openLink(tonConnect.connect(wallets));
             }
         }
 
@@ -196,93 +177,53 @@
             const btn = document.getElementById('wallet-trigger');
             const addrBox = document.getElementById('addr-display');
             if (w) {
-                const a = w.account.address;
                 btn.innerText = "LINKED";
                 btn.classList.add('active');
-                addrBox.innerText = a;
+                addrBox.innerText = w.account.address;
                 addrBox.style.color = "var(--success)";
-                if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
             } else {
                 btn.innerText = "WALLET";
                 btn.classList.remove('active');
                 addrBox.innerText = "UNLINKED";
-                addrBox.style.color = "#fff";
             }
         });
 
-        // Покупка через блокчейн
         async function buyCredit() {
-            if (!tonConnect.connected) return tg.showPopup({title: 'Auth Required', message: 'Please link your TON wallet to purchase credits.'});
-            
+            if (!tonConnect.connected) return tg.showAlert('Connect wallet first!');
             const btn = document.getElementById('pay-btn');
-            btn.innerText = "PENDING...";
-            
+            btn.innerText = "...";
             const tx = {
                 validUntil: Math.floor(Date.now() / 1000) + 600,
-                messages: [{
-                    address: "EQB8m_p-6T_0Z_8...ВАШ_КОШЕЛЕК...", // ТВОЙ КОШЕЛЕК
-                    amount: "1000000000", // 1 TON
-                    payload: `ID${state.uid}`
-                }]
+                messages: [{ address: "EQB8m_p-6T_0Z_8...ВАШ_КОШЕЛЕК...", amount: "1000000000", payload: `ID${state.uid}` }]
             };
-
-            try {
-                await tonConnect.sendTransaction(tx);
-                tg.showAlert("Sequence initiated. Verification in progress.");
-            } catch (e) {
-                tg.showAlert("Sequence aborted by user.");
-            } finally {
-                btn.innerText = "+1M COINS";
-            }
+            try { await tonConnect.sendTransaction(tx); tg.showAlert("Tx sent!"); } catch (e) { tg.showAlert("Failed"); }
+            btn.innerText = "+1M COINS";
         }
 
         async function openDash() {
             document.getElementById('dash-modal').style.display = 'flex';
-            // Leaderboard
             const rLB = await fetch('/api/leaderboard');
             const dLB = await rLB.json();
             document.getElementById('rankings').innerHTML = dLB.map((u,i) => `
-                <div class="history-card">
-                    <span style="font-weight:900; opacity:0.3;">#${i+1}</span>
-                    <span style="flex-grow:1; margin-left:15px; font-weight:800;">${u.username}</span>
-                    <span style="color:var(--neon-cyan); font-weight:900;">${Math.floor(u.balance).toLocaleString()}</span>
+                <div style="background:var(--glass); padding:15px; border-radius:15px; margin-bottom:8px; display:flex; justify-content:space-between;">
+                    <span>#${i+1} ${u.username}</span><b>${Math.floor(u.balance).toLocaleString()}</b>
                 </div>
             `).join('');
-            
-            // Transactions
-            const rTX = await fetch(`/api/my-payments/${state.uid}`);
-            const dTX = await rTX.json();
-            document.getElementById('tx-log').innerHTML = dTX.length ? dTX.map(t => `
-                <div class="history-card">
-                    <div style="display:flex; flex-direction:column;">
-                        <small style="opacity:0.4; font-size:9px;">${new Date(t.created_at).toLocaleString()}</small>
-                        <span style="font-weight:bold; color:var(--success); font-size:11px;">BLOCKCHAIN SYNC SUCCESS</span>
-                    </div>
-                    <b style="color:white;">+1.000.000</b>
-                </div>
-            `).join('') : '<div style="text-align:center; padding:30px; color:#333; font-weight:bold;">NO LOGS FOUND</div>';
-            
             verifyPayment();
         }
 
         function closeDash() { document.getElementById('dash-modal').style.display = 'none'; }
 
-        function startMine() {
-            const cost = 2500 + (state.pnl * 25);
-            tg.showConfirm(`Activate Advanced Miner?\nPrice: ${cost} coins\nYield: +50/h`, ok => {
-                if(ok && state.bal >= cost) { state.bal -= cost; state.pnl += 50; state.sync = true; updateUI(); }
-                else if(ok) tg.showAlert("Insufficient core balance!");
-            });
-        }
-
         async function verifyPayment() {
             const r = await fetch(`/api/check-payment/${state.uid}`);
             const d = await r.json();
-            if(d.success) { 
-                state.bal += d.added; 
-                updateUI(); 
-                tg.showPopup({title: 'Sync Complete', message: `Vault updated: +${d.added.toLocaleString()} credits added.`});
-            }
+            if(d.success) { state.bal += d.added; updateUI(); }
+        }
+
+        function startMine() {
+            const cost = 2500 + (state.pnl * 25);
+            if(state.bal >= cost) { state.bal -= cost; state.pnl += 50; state.sync = true; updateUI(); }
+            else tg.showAlert("Insufficient coins!");
         }
 
         function updateUI() {
@@ -294,47 +235,38 @@
             
             const ring = document.getElementById('logo-ring');
             const lbl = document.getElementById('tier-label');
-            if(state.bal >= 1000000) { ring.className="logo-container t-gold"; lbl.innerText="TIER: PLATINUM NODE"; lbl.style.color="var(--gold)"; }
-            else if(state.bal >= 500000) { ring.className="logo-container t-silver"; lbl.innerText="TIER: ELITE NODE"; lbl.style.color="#c0c0c0"; }
-            else if(state.bal >= 100000) { ring.className="logo-container t-bronze"; lbl.innerText="TIER: VETERAN NODE"; lbl.style.color="#cd7f32"; }
-            else { ring.className="logo-container t-none"; lbl.innerText="TIER: RECRUIT NODE"; lbl.style.color="#555"; }
+            if(state.bal >= 1000000) { ring.className="logo-container t-gold"; lbl.innerText="PLATINUM NODE"; lbl.style.color="var(--gold)"; }
+            else if(state.bal >= 100000) { ring.className="logo-container t-bronze"; lbl.innerText="VETERAN NODE"; lbl.style.color="#cd7f32"; }
+            else { ring.className="logo-container t-none"; lbl.innerText="RECRUIT NODE"; lbl.style.color="#555"; }
         }
 
-        // Tapping Mechanic
         document.getElementById('clicker').addEventListener('touchstart', e => {
             e.preventDefault();
-            if(state.eng < state.lvl) {
-                if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('warning');
-                return;
-            }
+            if(state.eng < state.lvl) return;
             const t = e.touches[0];
             state.bal += state.lvl; state.eng -= state.lvl; state.sync = true;
-            
             const p = document.createElement('div');
             p.className = 'tap-val'; p.innerText = `+${state.lvl}`;
             p.style.left = t.clientX + 'px'; p.style.top = t.clientY + 'px';
             document.body.appendChild(p);
             setTimeout(() => p.remove(), 800);
-            
             if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
             updateUI();
         });
 
         async function init() {
             try {
-                const r = await fetch(`/api/user/${state.uid}?name=${encodeURIComponent(state.name)}`);
+                const r = await fetch(`/api/user/${state.uid}?name=${encodeURIComponent(tg.initDataUnsafe?.user?.first_name || 'Agent')}`);
                 const d = await r.json();
                 state.bal = Number(d.balance); state.eng = Number(d.energy);
                 state.lvl = Number(d.click_lvl); state.pnl = Number(d.pnl);
                 updateUI();
-                if(d.offline_bonus > 0) tg.showPopup({title: 'Offline Yield', message: `Systems generated ${Math.floor(d.offline_bonus)} coins while inactive.`});
             } catch(e) {}
-            
             setTimeout(() => {
                 document.getElementById('loading-screen').style.display='none'; 
                 document.getElementById('main-ui').style.opacity='1';
                 document.getElementById('main-ui').style.visibility='visible';
-            }, 1500);
+            }, 1000);
             await tonConnect.restoreConnection();
         }
 
