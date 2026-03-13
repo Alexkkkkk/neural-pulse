@@ -9,7 +9,7 @@
         :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #000; --glass: rgba(255, 255, 255, 0.08); --ton: #0088cc; }
         body { margin: 0; padding: 0; background: var(--bg-dark); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
 
-        /* ВОССТАНОВЛЕННЫЙ ЭКРАН ЗАГРУЗКИ */
+        /* ЭКРАН ЗАГРУЗКИ */
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; transition: 0.5s; }
         .loader-container { position: relative; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; }
         .loader-circle { position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--neon-cyan); border-right: 2px solid var(--neon-purple); animation: spin 2s linear infinite; }
@@ -99,7 +99,7 @@
 
         let s = { bal: 0, eng: 1000, lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id || 0, up: false };
 
-        // Функция анимации загрузки
+        // ИСПРАВЛЕНО: Теперь доходит до 100%
         function startLoading() {
             let progress = 0;
             const fill = document.getElementById('load-f');
@@ -107,8 +107,8 @@
             
             const interval = setInterval(() => {
                 progress += Math.floor(Math.random() * 5) + 2;
-                if (progress >= 99) {
-                    progress = 99;
+                if (progress >= 100) {
+                    progress = 100;
                     clearInterval(interval);
                     setTimeout(() => {
                         document.getElementById('loader').style.opacity = '0';
@@ -127,10 +127,12 @@
             try {
                 const r = await fetch(`/api/user/${s.uid}`);
                 const d = await r.json();
-                s.bal = Number(d.balance); s.eng = Number(d.energy);
-                s.lvl = Number(d.click_lvl); s.pnl = Number(d.pnl);
+                s.bal = Number(d.balance) || 0; 
+                s.eng = Number(d.energy) || 1000;
+                s.lvl = Number(d.click_lvl) || 1; 
+                s.pnl = Number(d.pnl) || 0;
                 upd();
-            } catch(e) { console.error("DB load error"); }
+            } catch(e) {}
             startLoading();
         }
 
