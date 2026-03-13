@@ -8,7 +8,7 @@ const axios = require('axios');
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 const DOMAIN = "neural-pulse.bothost.ru";
-const MY_WALLET = "EQB8m_p-6T_0Z_8...ВАШ_КОШЕЛЕК..."; // ЗАМЕНИТЕ НА СВОЙ
+const MY_WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"; 
 const PORT = process.env.PORT || 3000;
 
 const bot = new Telegraf(BOT_TOKEN);
@@ -28,7 +28,7 @@ const initDB = async () => {
                 energy INTEGER DEFAULT 1000,
                 click_lvl INTEGER DEFAULT 1,
                 pnl NUMERIC DEFAULT 0,
-                wallet_address TEXT
+                referred_by TEXT
             );
             CREATE TABLE IF NOT EXISTS payments (
                 tx_hash TEXT PRIMARY KEY,
@@ -40,32 +40,23 @@ const initDB = async () => {
 };
 initDB();
 
-// Проверка транзакций через Toncenter
 app.get('/api/check-payment/:id', async (req, res) => {
     const uid = String(req.params.id);
     try {
-        // Запрос последних транзакций вашего кошелька
-        const response = await axios.get(`https://toncenter.com/api/v2/getTransactions?address=${MY_WALLET}&limit=10`);
+        const response = await axios.get(`https://toncenter.com/api/v2/getTransactions?address=${MY_WALLET}&limit=15`);
         const txs = response.data.result;
-        
         for (let tx of txs) {
             const hash = tx.transaction_id.hash;
             const msg = tx.in_msg;
-            if (!msg) continue;
+            if (!msg || !msg.message) continue;
             
-            // Ищем комментарий, который начинается с ID пользователя
-            const comment = msg.message;
-            const amount = Number(msg.value) / 10**9; // Перевод в TON
-
-            if (comment && comment.includes(`ID${uid}`)) {
-                // Проверяем, не обрабатывали ли мы этот хэш ранее
+            if (msg.message.includes(`ID${uid}`)) {
                 const exist = await pool.query('SELECT * FROM payments WHERE tx_hash = $1', [hash]);
                 if (exist.rows.length === 0) {
-                    const bonusCoins = 1000000; // 1,000,000 монет за 1 TON
-                    await pool.query('INSERT INTO payments (tx_hash, user_id, amount) VALUES ($1, $2, $3)', [hash, uid, amount]);
-                    await pool.query('UPDATE users SET balance = balance + $1 WHERE user_id = $2', [bonusCoins, uid]);
-                    
-                    return res.json({ success: true, added: bonusCoins });
+                    const bonus = 1000000;
+                    await pool.query('INSERT INTO payments (tx_hash, user_id, amount) VALUES ($1, $2, $3)', [hash, uid, Number(msg.value)/10**9]);
+                    await pool.query('UPDATE users SET balance = balance + $1 WHERE user_id = $2', [bonus, uid]);
+                    return res.json({ success: true, added: bonus });
                 }
             }
         }
@@ -75,36 +66,41 @@ app.get('/api/check-payment/:id', async (req, res) => {
 
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
-    try {
-        const result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
-        if (result.rows.length === 0) {
-            const newUser = await pool.query('INSERT INTO users (user_id) VALUES ($1) RETURNING *', [uid]);
-            return res.json(newUser.rows[0]);
+    const refBy = req.query.refBy;
+    
+    let result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
+    
+    if (result.rows.length === 0) {
+        // Новый пользователь
+        await pool.query('INSERT INTO users (user_id, referred_by) VALUES ($1, $2)', [uid, refBy]);
+        
+        // Если есть пригласитель - даем ему бонус 50,000 монет
+        if (refBy && refBy !== uid) {
+            await pool.query('UPDATE users SET balance = balance + 50000 WHERE user_id = $1', [refBy]);
         }
-        res.json(result.rows[0]);
-    } catch (e) { res.status(500).json({ error: "DB Error" }); }
+        
+        result = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
+    }
+    res.json(result.rows[0]);
 });
 
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, click_lvl, pnl } = req.body;
-    try {
-        await pool.query(`
-            INSERT INTO users (user_id, balance, energy, click_lvl, pnl)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (user_id) DO UPDATE SET
-            balance = EXCLUDED.balance, energy = EXCLUDED.energy,
-            click_lvl = EXCLUDED.click_lvl, pnl = EXCLUDED.pnl
-        `, [String(userId), Number(balance), Math.floor(energy), Math.floor(click_lvl), Number(pnl)]);
-        res.json({ status: 'ok' });
-    } catch (e) { res.status(500).json({ error: "Save Fail" }); }
+    await pool.query(`
+        UPDATE users SET balance = $2, energy = $3, click_lvl = $4, pnl = $5 
+        WHERE user_id = $1
+    `, [String(userId), Number(balance), Math.floor(energy), Math.floor(click_lvl), Number(pnl)]);
+    res.json({ status: 'ok' });
 });
 
-bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI</b>`, 
-    Markup.inlineKeyboard([[Markup.button.webApp('⚡ ИГРАТЬ', `https://${DOMAIN}`)]]));
+bot.start(ctx => {
+    const startPayload = ctx.startPayload; // Это ID пригласителя из ссылки ?start=ID
+    ctx.replyWithHTML(
+        `<b>🚀 NEURAL PULSE AI</b>\n\nWelcome to the network. Start mining now!`, 
+        Markup.inlineKeyboard([[
+            Markup.button.webApp('⚡ START APP', `https://${DOMAIN}${startPayload ? '?tgWebAppStartParam=' + startPayload : ''}`)
+        ]])
+    );
 });
 
-app.listen(PORT, () => {
-    console.log(`Server: https://${DOMAIN}`);
-    bot.launch();
-});
+app.listen(PORT, () => { console.log(`Server running on port ${PORT}`); bot.launch(); });
