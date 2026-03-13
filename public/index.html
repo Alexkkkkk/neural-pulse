@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -44,7 +45,6 @@
         #shop-modal, #stats-modal, #admin-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(15px); }
         .shop-card, .leaderboard, .admin-card { background: var(--glass); width: 85%; padding: 20px; border-radius: 24px; border: 1px solid rgba(0, 242, 255, 0.3); text-align: center; }
         
-        /* Админ-панель специальные стили */
         #admin-modal { background: rgba(0,0,0,0.98); z-index: 5000; }
         .admin-card { border-color: rgba(255, 77, 77, 0.5); }
         .admin-input { width: 90%; padding: 12px; margin: 10px 0; border-radius: 10px; border: 1px solid #ff4d4d; background: #111; color: #fff; text-align: center; }
@@ -56,22 +56,18 @@
         .leader-info { flex-grow: 1; text-align: left; padding-left: 10px; }
         .leader-name { font-weight: 800; font-size: 14px; }
         .leader-balance { font-size: 12px; color: #888; }
-        
-        .leader-item:nth-child(1) .leader-rank { color: #FFD700; text-shadow: 0 0 10px #FFD700; }
-        .leader-item:nth-child(2) .leader-rank { color: #C0C0C0; }
-        .leader-item:nth-child(3) .leader-rank { color: #CD7F32; }
 
         .buy-btn { background: var(--neon-cyan); color: #000; border: none; width: 100%; padding: 14px; border-radius: 12px; font-weight: 900; margin-top: 10px; }
 
         .side-nav { position: absolute; right: -10px; display: flex; flex-direction: column; gap: 10px; }
-        .side-btn { background: rgba(20,20,20,0.8); border: 1px solid rgba(255,255,255,0.1); padding: 12px 5px; border-radius: 16px; width: 70px; text-align: center; font-size: 10px; font-weight: 800; }
+        .side-btn { background: rgba(20,20,20,0.8); border: 1px solid rgba(255,255,255,0.1); padding: 12px 5px; border-radius: 16px; width: 70px; text-align: center; font-size: 10px; font-weight: 800; cursor: pointer; }
         
         .energy-section { width: 85%; margin-top: 25px; z-index: 10; }
         .energy-bar-wrap { width: 100%; height: 12px; background: rgba(255,255,255,0.05); border-radius: 20px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); }
         #energy-fill { height: 100%; background: linear-gradient(90deg, #00ff66, var(--neon-cyan)); width: 100%; transition: width 0.3s; }
 
         .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: auto; margin-bottom: 35px; z-index: 10; }
-        .nav-btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 16px 5px; border-radius: 18px; text-align: center; font-size: 11px; font-weight: 800; }
+        .nav-btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 16px 5px; border-radius: 18px; text-align: center; font-size: 11px; font-weight: 800; cursor: pointer; }
         
         .tap-text { position: absolute; color: #fff; font-size: 36px; font-weight: 900; pointer-events: none; animation: floatUp 0.6s ease-out forwards; text-shadow: 0 0 15px var(--neon-purple); z-index: 1000; }
         @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.3); } }
@@ -136,25 +132,23 @@
             <p id="pnl-cost" style="color: #888; margin: 10px 0;">Cost: 1200 NP</p>
             <button class="buy-btn" onclick="buy('pnl')">UPGRADE</button>
         </div>
-        <button onclick="toggleShop()" style="background: none; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 12px 40px; border-radius: 12px; margin-top: 20px;">BACK</button>
+        <button onclick="toggleShop()" style="background: none; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 12px 40px; border-radius: 12px; margin-top: 20px; cursor: pointer;">BACK</button>
     </div>
 
     <div id="stats-modal">
         <h2 style="margin-bottom: 20px; color: var(--neon-cyan); letter-spacing: 2px;">TOP 10 MINERS</h2>
         <div class="leaderboard" id="leaderboard-list"></div>
-        <button onclick="document.getElementById('stats-modal').style.display='none'" style="background: none; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 12px 40px; border-radius: 12px; margin-top: 20px;">CLOSE</button>
+        <button onclick="document.getElementById('stats-modal').style.display='none'" style="background: none; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 12px 40px; border-radius: 12px; margin-top: 20px; cursor: pointer;">CLOSE</button>
     </div>
 
     <div id="admin-modal">
         <div class="admin-card">
             <h2 style="color: #ff4d4d; margin-top: 0;">TERMINAL ACCESS</h2>
             <input type="password" id="admin-pass" class="admin-input" placeholder="Enter Secret Key">
-            
             <button class="buy-btn admin-btn" onclick="adminAction('reset-db', true)">🔥 WIPE ALL DATA</button>
             <button class="buy-btn admin-btn" style="background: #ffa500 !important;" onclick="adminAction('restart')">♻️ RESTART SERVER</button>
             <button class="buy-btn admin-btn" style="background: #555 !important;" onclick="adminAction('reset-cache')">🧹 CLEAR SESSIONS</button>
-            
-            <button onclick="document.getElementById('admin-modal').style.display='none'" style="background: none; border: 1px solid #444; color: #888; width: 100%; padding: 12px; border-radius: 12px; margin-top: 15px;">EXIT</button>
+            <button onclick="document.getElementById('admin-modal').style.display='none'" style="background: none; border: 1px solid #444; color: #888; width: 100%; padding: 12px; border-radius: 12px; margin-top: 15px; cursor: pointer;">EXIT</button>
         </div>
     </div>
 
@@ -162,12 +156,14 @@
         const tg = window.Telegram.WebApp;
         tg.ready(); tg.expand();
 
+        // Canvas Particles
         const canvas = document.getElementById('particle-canvas');
         const ctx = canvas.getContext('2d');
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         let particles = [];
 
+        // TON Connect
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
             manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
             buttonRootId: 'ton-connect-mount'
@@ -239,7 +235,7 @@
         document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if(!state.loaded || state.energy < state.click_lvl) {
-                tg.HapticFeedback.notificationOccurred('error');
+                if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
                 return;
             }
 
@@ -257,7 +253,7 @@
 
             document.getElementById('main-logo').style.transform = 'scale(0.94) rotate(1deg)';
             updateUI();
-            tg.HapticFeedback.impactOccurred('light');
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
         });
 
         document.getElementById('tap-zone').addEventListener('touchend', () => {
@@ -272,7 +268,7 @@
             });
             const res = await r.json();
             if(res.success) {
-                tg.HapticFeedback.notificationOccurred('success');
+                if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
                 init();
             } else tg.showAlert("Insufficient NP Balance!");
         }
@@ -286,7 +282,12 @@
                 await fetch('/api/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: state.uid, clicks: clicksToSend, energy: state.energy, username: tg.initDataUnsafe?.user?.username || 'User' })
+                    body: JSON.stringify({ 
+                        userId: state.uid, 
+                        clicks: clicksToSend, 
+                        energy: state.energy, 
+                        username: tg.initDataUnsafe?.user?.username || tg.initDataUnsafe?.user?.first_name || 'User' 
+                    })
                 });
             } catch(e) { state.unsavedClicks += clicksToSend; }
         }
@@ -326,7 +327,7 @@
             tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my Neural Network! 🧠`);
         }
 
-        // --- ЛОГИКА АДМИН-ПАНЕЛИ ---
+        // Admin Secret Logic (5 taps on LVL badge)
         let adminClicks = 0;
         let adminTimer;
         document.getElementById('lvl-badge').onclick = () => {
@@ -335,7 +336,7 @@
             if(adminClicks >= 5) {
                 document.getElementById('admin-modal').style.display = 'flex';
                 adminClicks = 0;
-                tg.HapticFeedback.notificationOccurred('warning');
+                if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('warning');
             }
             adminTimer = setTimeout(() => adminClicks = 0, 2000);
         };
@@ -353,6 +354,7 @@
             } catch(e) { tg.showAlert("Error"); }
         }
 
+        // Intervals
         setInterval(sync, 3500);
         setInterval(() => { 
             if(state.loaded) {
