@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse AI | Pro Edition</title>
+    <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
@@ -11,147 +11,144 @@
             --neon-cyan: #00f2ff; 
             --neon-purple: #bc13fe; 
             --bg-dark: #050505; 
-            --glass: rgba(255, 255, 255, 0.07); 
-        }
-        
-        body { 
-            margin: 0; padding: 0; background-color: var(--bg-dark); color: white; 
-            font-family: 'Segoe UI', Roboto, sans-serif; overflow: hidden; 
-            display: flex; flex-direction: column; align-items: center; height: 100vh; 
-            touch-action: none; user-select: none; 
+            --glass: rgba(255, 255, 255, 0.05); 
+            --border: rgba(0, 242, 255, 0.2);
         }
 
-        #particle-canvas { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+        body { 
+            margin: 0; padding: 0; background: var(--bg-dark); 
+            color: white; font-family: 'Segoe UI', Roboto, sans-serif; 
+            overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh;
+            user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none;
+        }
 
         /* --- ЛОАДЕР --- */
-        #loader-screen { 
-            position: fixed; inset: 0; background: #000; 
-            display: flex; align-items: center; justify-content: center; 
-            z-index: 10000; transition: opacity 0.5s; 
+        #loader-screen { position: fixed; inset: 0; background: #000; display: flex; align-items: center; justify-content: center; z-index: 10000; transition: 0.5s; }
+        .loader-ring { width: 120px; height: 120px; border: 3px solid transparent; border-top: 3px solid var(--neon-cyan); border-radius: 50%; animation: rot 1s linear infinite; }
+        @keyframes rot { to { transform: rotate(360deg); } }
+
+        /* --- ВЕРХНЯЯ ПАНЕЛЬ --- */
+        .header-box {
+            width: 88%; margin-top: 15px; background: var(--glass);
+            border: 1px solid var(--border); border-radius: 20px;
+            padding: 12px 15px; display: flex; align-items: center; gap: 15px; backdrop-filter: blur(10px);
+        }
+        .lvl-badge {
+            width: 42px; height: 42px; border: 1.5px solid var(--neon-cyan);
+            border-radius: 12px; display: flex; align-items: center; justify-content: center;
+            font-size: 20px; font-weight: bold; color: var(--neon-cyan);
         }
 
-        .loader-ring-visual {
-            width: 140px; height: 140px; border-radius: 50%;
-            border: 3px solid rgba(255, 255, 255, 0.03);
-            border-top: 3px solid var(--neon-cyan);
-            border-bottom: 3px solid var(--neon-purple);
+        .balance-text { font-size: 64px; font-weight: bold; margin-top: 25px; letter-spacing: -2px; text-shadow: 0 0 20px rgba(0,242,255,0.2); }
+
+        /* --- ЦЕНТРАЛЬНАЯ ЗОНА --- */
+        .main-container { position: relative; margin-top: 30px; display: flex; justify-content: center; align-items: center; }
+        .logo-circle {
+            width: 260px; height: 260px; border-radius: 50%;
+            background: radial-gradient(circle, rgba(188, 19, 254, 0.1) 0%, transparent 70%);
             display: flex; align-items: center; justify-content: center;
-            margin: 0 auto 20px;
-            animation: spin-ai 1.8s cubic-bezier(0.5, 0, 0.5, 1) infinite;
-        }
-
-        @keyframes spin-ai { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        /* --- ИНТЕРФЕЙС --- */
-        .header-card { width: 85%; margin-top: 15px; display: flex; align-items: center; gap: 12px; background: var(--glass); padding: 12px; border-radius: 20px; border: 1px solid rgba(0, 242, 255, 0.15); backdrop-filter: blur(10px); z-index: 10; }
-        #balance { font-size: 44px; font-weight: 900; margin-top: 25px; text-shadow: 0 0 25px rgba(0, 242, 255, 0.4); z-index: 10; }
-        
-        .click-area { width: 280px; height: 280px; display: flex; align-items: center; justify-content: center; margin-top: 20px; position: relative; z-index: 5; }
-        .main-logo { width: 220px; height: 220px; border-radius: 50%; transition: transform 0.05s; border: 4px solid rgba(255,255,255,0.05); object-fit: cover; pointer-events: auto; }
-        
-        /* Модалки */
-        #shop-modal, #stats-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 9000; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(15px); }
-        .modal-content { background: #111; width: 85%; padding: 25px; border-radius: 24px; border: 1px solid var(--neon-cyan); text-align: center; }
-
-        /* Навигация */
-        .side-nav { position: absolute; right: -15px; display: flex; flex-direction: column; gap: 12px; z-index: 9500; }
-        .side-btn { 
-            background: rgba(20,20,20,0.95); 
-            border: 1px solid rgba(255,255,255,0.1); 
-            padding: 10px; 
-            border-radius: 12px; 
-            width: 75px; 
-            text-align: center; 
-            font-size: 10px; 
-            font-weight: 800; 
-            cursor: pointer; 
-            position: relative; 
-            overflow: hidden;
-        }
-        
-        /* ГАРАНТИРОВАННЫЙ КЛИК WALLET */
-        #ton-connect-mount { 
-            position: absolute; 
-            inset: 0; 
-            opacity: 0; /* Полностью прозрачный, но кликабельный */
-            z-index: 9999; 
             cursor: pointer;
         }
-        #ton-connect-mount button { width: 100% !important; height: 100% !important; cursor: pointer !important; }
+        .main-logo { width: 180px; pointer-events: none; transition: transform 0.1s; }
+        .logo-circle:active .main-logo { transform: scale(0.92); }
 
-        #addr-text { position: relative; z-index: 1; pointer-events: none; text-transform: uppercase; }
+        /* WALLET BUTTON (Как на скрине) */
+        .wallet-wrapper {
+            position: absolute; top: 15%; right: -25px; z-index: 100;
+        }
+        .wallet-overlay {
+            background: rgba(0, 136, 204, 0.15); border: 1px solid #0088cc;
+            padding: 7px 14px; border-radius: 14px; font-size: 13px; font-weight: bold;
+            color: #5dc2ff; backdrop-filter: blur(10px); cursor: pointer;
+            min-width: 80px; text-align: center;
+        }
+        #ton-mount { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
-        .energy-section { width: 85%; margin-top: 20px; z-index: 10; }
-        .energy-bar-wrap { width: 100%; height: 10px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; }
-        #energy-fill { height: 100%; background: var(--neon-cyan); width: 100%; transition: width 0.1s; }
+        /* БОКОВОЕ МЕНЮ */
+        .side-nav { position: absolute; right: -70px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 12px; }
+        .side-btn { background: #111; border: 1px solid #333; padding: 10px; border-radius: 12px; width: 60px; text-align: center; font-size: 10px; font-weight: bold; }
 
-        .bottom-nav { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: auto; margin-bottom: 35px; z-index: 10; }
-        .nav-btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 15px 5px; border-radius: 15px; text-align: center; font-size: 11px; font-weight: 800; cursor: pointer; }
-        
-        .tap-text { position: absolute; color: #fff; font-size: 32px; font-weight: 900; pointer-events: none; animation: floatUp 0.6s ease-out forwards; z-index: 1000; }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
-        
-        .leader-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        /* --- НИЖНЯЯ ЧАСТЬ --- */
+        .energy-wrap { width: 88%; margin-top: auto; margin-bottom: 20px; }
+        .energy-bar { width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin-top: 8px; }
+        .energy-fill { height: 100%; background: var(--neon-cyan); width: 100%; transition: 0.2s; box-shadow: 0 0 10px var(--neon-cyan); }
+
+        .nav-grid { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 35px; }
+        .nav-btn {
+            background: #121212; border: 1px solid #222; border-radius: 18px;
+            padding: 16px 0; color: white; font-size: 12px; font-weight: 900;
+            display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;
+        }
+        .nav-btn:active { transform: scale(0.95); background: #1a1a1a; }
+
+        /* АНИМАЦИЯ ТАПА */
+        .tap-anim { position: absolute; color: white; font-size: 32px; font-weight: 900; pointer-events: none; animation: fly 0.6s ease-out forwards; z-index: 1000; }
+        @keyframes fly { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px); } }
+
+        /* МОДАЛКИ */
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 5000; align-items: center; justify-content: center; backdrop-filter: blur(10px); }
+        .modal-content { background: #111; width: 80%; padding: 30px; border-radius: 25px; border: 1px solid var(--neon-cyan); text-align: center; }
+        .close-btn { margin-top: 20px; padding: 10px 20px; background: var(--neon-cyan); color: black; border-radius: 10px; font-weight: bold; display: inline-block; }
     </style>
 </head>
 <body>
 
-    <canvas id="particle-canvas"></canvas>
-
     <div id="loader-screen">
-        <div style="text-align: center;">
-            <div class="loader-ring-visual">
-                <img src="logo.png" style="width:100px; border-radius:50%" onerror="this.src='https://via.placeholder.com/100'">
-            </div>
-            <div id="loader-percent" style="font-size:24px; color:var(--neon-cyan)">0%</div>
-            <div style="width:200px; height:3px; background:#222; margin-top:15px"><div id="loader-fill" style="width:0%; height:100%; background:var(--neon-cyan)"></div></div>
-        </div>
+        <div class="loader-ring"></div>
+        <div id="load-pct" style="position: absolute; font-weight: 900; font-size: 18px;">0%</div>
     </div>
 
-    <div class="header-card">
-        <div id="lvl-badge" style="width: 40px; height: 40px; border: 1px solid var(--neon-cyan); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--neon-cyan);">1</div>
+    <div class="header-box">
+        <div class="lvl-badge" id="lvl-badge">1</div>
         <div style="flex-grow: 1;">
-            <div style="font-size: 10px; color: #888;">NEURAL NETWORK</div>
-            <div id="pnl-display" style="color: var(--neon-cyan); font-weight: bold; font-size: 12px;">PASSIVE: +0/h</div>
+            <div style="font-size: 10px; color: #666; font-weight: 900; text-transform: uppercase;">Neural Network</div>
+            <div style="font-size: 13px; color: var(--neon-cyan); font-weight: bold;" id="pnl-display">PASSIVE: +0/h</div>
         </div>
     </div>
 
-    <div id="balance">0</div>
+    <div class="balance-text" id="balance">0</div>
 
-    <div class="click-area" id="tap-zone">
-        <img src="logo.png" class="main-logo" id="main-logo" onerror="this.src='https://via.placeholder.com/220'">
+    <div class="main-container">
+        <div class="logo-circle" id="tap-target">
+            <img src="logo.png" class="main-logo" onerror="this.src='https://via.placeholder.com/180/bc13fe/fff?text=AI'">
+        </div>
+        
+        <div class="wallet-wrapper">
+            <div class="wallet-overlay" id="addr-text">WALLET</div>
+            <div id="ton-mount"></div>
+        </div>
+
         <div class="side-nav">
-            <div class="side-btn" id="ton-btn-root" style="border-color: #0088cc;">
-                <span id="addr-text">WALLET</span>
-                <div id="ton-connect-mount"></div>
-            </div>
             <div class="side-btn" onclick="showInvite()">INVITE</div>
-            <div class="side-btn" onclick="tg.showAlert('Daily Bonus: +1,000 NP collected!')">BONUS</div>
+            <div class="side-btn" onclick="tg.showAlert('Bonus: +1,000 NP')">BONUS</div>
         </div>
     </div>
 
-    <div class="energy-section">
-        <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px; color:#aaa">
+    <div class="energy-wrap">
+        <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 900; color: #888;">
             <span>⚡ ENERGY</span>
-            <span id="energy-text">1000/1000</span>
+            <span id="energy-text" style="color: white;">1000/1000</span>
         </div>
-        <div class="energy-bar-wrap"><div id="energy-fill"></div></div>
+        <div class="energy-bar"><div class="energy-fill" id="energy-fill"></div></div>
     </div>
 
-    <div class="bottom-nav">
-        <div class="nav-btn" onclick="toggleShop()">🚀 BOOST</div>
-        <div class="nav-btn" onclick="toggleShop()">⛏️ MINE</div>
-        <div class="nav-btn" onclick="showStats()">📊 STATS</div>
+    <div class="nav-grid">
+        <div class="nav-btn" onclick="openModal('shop')">🚀 BOOST</div>
+        <div class="nav-btn" onclick="openModal('shop')">⛏️ MINE</div>
+        <div class="nav-btn" onclick="openModal('stats')">📊 STATS</div>
     </div>
+
+    <div id="shop" class="modal"><div class="modal-content"><h3>Shop & Upgrades</h3><p>Coming Soon...</p><div class="close-btn" onclick="closeModals()">Close</div></div></div>
+    <div id="stats" class="modal"><div class="modal-content"><h3>Your Stats</h3><p id="stats-info"></p><div class="close-btn" onclick="closeModals()">Close</div></div></div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.ready(); tg.expand();
 
-        // Улучшенная инициализация TON Connect
+        // Инициализация TON Connect
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
             manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
-            buttonRootId: 'ton-connect-mount'
+            buttonRootId: 'ton-mount'
         });
 
         tonConnectUI.onStatusChange(wallet => {
@@ -159,137 +156,79 @@
             if (wallet) {
                 const a = wallet.account.address;
                 txt.innerText = a.slice(0,4) + '..' + a.slice(-4);
-                txt.style.color = '#00f2ff';
+                txt.style.borderColor = '#00f2ff';
             } else {
                 txt.innerText = 'WALLET';
-                txt.style.color = '#fff';
             }
         });
 
-        let state = { 
-            uid: new URLSearchParams(window.location.search).get('u') || tg.initDataUnsafe?.user?.id || 'demo',
-            balance: 0, energy: 1000, click_lvl: 1, pnl: 0, loaded: false, unsavedClicks: 0 
+        let state = {
+            balance: 246,
+            energy: 1000,
+            lvl: 1,
+            pnl: 0,
+            unsaved: 0
         };
-
-        async function init() {
-            try {
-                const r = await fetch(`/api/user/${state.uid}`);
-                const data = await r.json();
-                state.balance = parseFloat(data.balance) || 0;
-                state.energy = parseFloat(data.energy) || 1000;
-                state.click_lvl = parseInt(data.click_lvl) || 1;
-                state.pnl = parseFloat(data.pnl) || 0;
-                state.loaded = true;
-                updateUI();
-            } catch(e) { state.loaded = true; }
-        }
 
         function updateUI() {
             document.getElementById('balance').innerText = Math.floor(state.balance).toLocaleString();
             document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/1000`;
-            document.getElementById('energy-fill').style.width = (state.energy/10)+'%';
-            document.getElementById('lvl-badge').innerText = state.click_lvl;
-            document.getElementById('pnl-display').innerText = `PASSIVE: +${Math.floor(state.pnl)}/h`;
-            
-            const cCost = Math.floor(500 * Math.pow(1.45, state.click_lvl - 1));
-            const pCost = Math.floor(1200 * Math.pow(1.28, Math.floor(state.pnl/250) || 0));
-            document.getElementById('click-cost').innerText = `Cost: ${cCost.toLocaleString()} NP`;
-            document.getElementById('pnl-cost').innerText = `Cost: ${pCost.toLocaleString()} NP`;
+            document.getElementById('energy-fill').style.width = (state.energy/10) + '%';
+            document.getElementById('lvl-badge').innerText = state.lvl;
+            document.getElementById('pnl-display').innerText = `PASSIVE: +${state.pnl}/h`;
         }
 
-        // Обработка клика по логотипу (с защитой от кнопок навигации)
-        document.getElementById('tap-zone').addEventListener('touchstart', (e) => {
-            // Если кликнули по боковому меню - выходим
-            if (e.target.closest('.side-nav')) return;
-
+        // Клик (Тап)
+        document.getElementById('tap-target').addEventListener('touchstart', (e) => {
             e.preventDefault();
-            if(!state.loaded || state.energy < state.click_lvl) return;
+            if (state.energy <= 0) return;
 
             const t = e.touches[0];
-            state.balance += state.click_lvl;
-            state.energy -= state.click_lvl;
-            state.unsavedClicks += 1;
-            
+            state.balance += 1;
+            state.energy -= 1;
+            state.unsaved += 1;
+
+            // Анимация цифры
             const n = document.createElement('div');
-            n.className = 'tap-text'; n.innerText = `+${state.click_lvl}`;
-            n.style.left = t.clientX + 'px'; n.style.top = t.clientY + 'px';
+            n.className = 'tap-anim';
+            n.innerText = '+1';
+            n.style.left = t.clientX + 'px';
+            n.style.top = t.clientY + 'px';
             document.body.appendChild(n);
             setTimeout(() => n.remove(), 600);
 
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
             updateUI();
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
         });
 
-        async function sync() {
-            if(state.unsavedClicks === 0) return;
-            const send = state.unsavedClicks;
-            state.unsavedClicks = 0;
-            try {
-                const r = await fetch('/api/save', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: String(state.uid), clicks: Number(send), energy: Number(state.energy) })
-                });
-                const d = await r.json();
-                if(d.balance) state.balance = parseFloat(d.balance);
-            } catch(e) { state.unsavedClicks += send; }
+        function openModal(id) { 
+            if(id === 'stats') document.getElementById('stats-info').innerText = `Balance: ${state.balance} NP\nLevel: ${state.lvl}`;
+            document.getElementById(id).style.display = 'flex'; 
         }
+        function closeModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
+        function showInvite() { tg.openTelegramLink(`https://t.me/share/url?url=https://t.me/n_pulse_bot?start=${tg.initDataUnsafe?.user?.id}&text=Connect to Neural Pulse!`); }
 
-        function toggleShop() {
-            const m = document.getElementById('shop-modal');
-            m.style.display = (m.style.display === 'flex') ? 'none' : 'flex';
-        }
+        // Лоадер
+        let loadP = 0;
+        const loadIv = setInterval(() => {
+            loadP += 5;
+            document.getElementById('load-pct').innerText = loadP + '%';
+            if(loadP >= 100) {
+                clearInterval(loadIv);
+                document.getElementById('loader-screen').style.opacity = '0';
+                setTimeout(() => document.getElementById('loader-screen').remove(), 500);
+            }
+        }, 30);
 
-        async function buy(type) {
-            const r = await fetch('/api/upgrade', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ userId: state.uid, type })
-            });
-            const res = await r.json();
-            if(res.success) { init(); } else { tg.showAlert("Low balance!"); }
-        }
+        // Регенерация энергии
+        setInterval(() => {
+            if(state.energy < 1000) {
+                state.energy = Math.min(1000, state.energy + 1.2);
+                updateUI();
+            }
+        }, 1000);
 
-        async function showStats() {
-            const m = document.getElementById('stats-modal');
-            const l = document.getElementById('leaderboard-list');
-            m.style.display = 'flex';
-            l.innerHTML = 'Scanning...';
-            try {
-                const r = await fetch('/api/top');
-                const top = await r.json();
-                l.innerHTML = top.map((u, i) => `
-                    <div class="leader-item">
-                        <span>${i+1}. ${u.username || 'Anon'}</span>
-                        <span style="color:var(--neon-cyan)">${Math.floor(u.balance).toLocaleString()}</span>
-                    </div>
-                `).join('');
-            } catch(e) { l.innerHTML = 'Offline'; }
-        }
-
-        function showInvite() {
-            const link = `https://t.me/neural_pulse_bot?start=${state.uid}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my AI network!`);
-        }
-
-        setInterval(sync, 4000);
-        setInterval(() => { if(state.energy < 1000) { state.energy = Math.min(1000, state.energy + 1.5); updateUI(); } }, 1000);
-
-        window.onload = () => {
-            init();
-            let p = 0;
-            const i = setInterval(() => {
-                p += state.loaded ? 10 : 2;
-                if(p > 100) p = 100;
-                document.getElementById('loader-fill').style.width = p + '%';
-                document.getElementById('loader-percent').innerText = p + '%';
-                if(p >= 100 && state.loaded) { 
-                    clearInterval(i); 
-                    document.getElementById('loader-screen').style.opacity = '0';
-                    setTimeout(() => document.getElementById('loader-screen').style.display='none', 500);
-                }
-            }, 50);
-        };
+        updateUI();
     </script>
 </body>
 </html>
