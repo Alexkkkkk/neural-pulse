@@ -5,163 +5,91 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/sdk@latest/dist/tonconnect-sdk.min.js"></script>
     <style>
-        :root { 
-            --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #000; 
-            --glass: rgba(255, 255, 255, 0.08); --ton: #0088cc; --gold: #ffd700; 
-            --success: #00ff88; --error: #ff4b2b;
-        }
-        body { 
-            margin: 0; padding: 0; background: var(--bg-dark); color: white; 
-            font-family: 'Inter', system-ui, -apple-system, sans-serif; 
-            overflow: hidden; display: flex; flex-direction: column; 
-            align-items: center; height: 100vh; touch-action: none; 
-        }
+        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #000; --glass: rgba(255, 255, 255, 0.08); --ton: #0088cc; }
+        body { margin: 0; padding: 0; background: var(--bg-dark); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
 
-        /* HEADER & TIER SYSTEM */
-        .header { 
-            width: 92%; margin-top: 20px; background: var(--glass); 
-            border-radius: 24px; padding: 16px; display: flex; 
-            align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.05); 
-            box-sizing: border-box; backdrop-filter: blur(15px); 
-        }
-        .lvl-badge { 
-            width: 50px; height: 50px; border: 2px solid var(--neon-cyan); 
-            border-radius: 16px; display: flex; align-items: center; 
-            justify-content: center; font-weight: 900; color: var(--neon-cyan); 
-            box-shadow: 0 0 20px rgba(0, 242, 255, 0.3); background: rgba(0,0,0,0.5);
-        }
-
-        /* BALANCE DISPLAY */
-        .bal-wrap { text-align: center; margin-top: 20px; transition: transform 0.3s; }
-        .bal { font-size: 68px; font-weight: 950; letter-spacing: -3px; text-shadow: 0 0 40px rgba(0, 242, 255, 0.6); }
-        .pnl { color: var(--neon-cyan); font-size: 15px; font-weight: 800; margin-top: -8px; opacity: 0.9; }
-
-        /* CENTER LOGO & TIERS */
-        .stage { position: relative; width: 100%; flex-grow: 1; display: flex; align-items: center; justify-content: center; }
-        .logo-container { position: relative; padding: 10px; border-radius: 50%; transition: 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-        .main-logo { width: 230px; height: 230px; border-radius: 50%; z-index: 5; cursor: pointer; display: block; filter: drop-shadow(0 0 30px rgba(188, 19, 254, 0.4)); }
-        .main-logo:active { transform: scale(0.92); }
-
-        /* Tier Styles */
-        .t-none { border: 4px solid transparent; }
-        .t-bronze { border: 4px solid #cd7f32; box-shadow: 0 0 40px rgba(205, 127, 50, 0.5); }
-        .t-silver { border: 4px solid #c0c0c0; box-shadow: 0 0 40px rgba(192, 192, 192, 0.5); }
-        .t-gold { border: 4px solid var(--gold); box-shadow: 0 0 50px rgba(255, 215, 0, 0.6); }
-
-        /* DYNAMIC SIDEBAR */
-        .side-nav { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 14px; }
-        .action-btn { 
-            background: var(--glass); border: 1px solid rgba(255,255,255,0.12); 
-            padding: 15px; border-radius: 18px; width: 100px; text-align: center; 
-            font-size: 11px; font-weight: 800; cursor: pointer; transition: 0.3s; 
-            color: white; text-transform: uppercase; backdrop-filter: blur(10px);
-        }
-        .btn-wallet { border-color: var(--ton); color: #5dc2ff; }
-        .btn-wallet.active { border-color: var(--success); color: var(--success); box-shadow: 0 0 15px rgba(0, 255, 136, 0.2); }
-        .btn-premium { border-color: var(--neon-purple); background: linear-gradient(135deg, rgba(188, 19, 254, 0.1), transparent); }
-
-        /* BOTTOM NAV */
-        .bottom-bar { width: 92%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 40px; }
-        .nav-item { 
-            background: rgba(20, 20, 20, 0.8); padding: 22px 0; border-radius: 22px; 
-            text-align: center; font-size: 12px; font-weight: 800; 
-            border: 1px solid rgba(255,255,255,0.06); transition: 0.2s;
-        }
-        .nav-item:active { background: var(--glass); transform: translateY(2px); }
-
-        /* MODALS */
-        .modal-overlay { 
-            position: fixed; inset: 0; background: rgba(0,0,0,0.97); 
-            z-index: 20000; display: none; flex-direction: column; padding: 25px; 
-            animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
-        }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
-        .history-card { 
-            background: var(--glass); padding: 18px; border-radius: 20px; 
-            margin-bottom: 12px; display: flex; justify-content: space-between; 
-            align-items: center; border: 1px solid rgba(255,255,255,0.04); 
-        }
-
-        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        /* ЭКРАН ЗАГРУЗКИ */
+        #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; transition: 0.5s; }
+        .loader-container { position: relative; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; }
+        .loader-circle { position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--neon-cyan); border-right: 2px solid var(--neon-purple); animation: spin 2s linear infinite; }
+        .loader-logo { width: 100px; height: 100px; z-index: 1; }
         
-        /* CLICK ANIMATION */
-        .tap-val { 
-            position: absolute; font-size: 42px; font-weight: 900; 
-            animation: tapFloat 0.8s ease-out forwards; pointer-events: none; 
-            color: var(--neon-cyan); text-shadow: 0 0 20px var(--neon-cyan); 
-        }
-        @keyframes tapFloat { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-180px) scale(1.4); } }
+        .access-text { margin-top: 40px; letter-spacing: 4px; font-weight: bold; font-size: 14px; text-transform: uppercase; }
+        .percent { font-size: 32px; font-weight: 900; color: var(--neon-cyan); margin: 10px 0; }
+        .load-bar { width: 220px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
+        .load-fill { height: 100%; background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); width: 0%; transition: 0.1s linear; }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* ИНТЕРФЕЙС ИГРЫ */
+        .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; transition: 0.8s; visibility: hidden; }
+        .app.ready { opacity: 1; visibility: visible; }
+
+        .header { width: 90%; margin-top: 20px; background: var(--glass); border-radius: 20px; padding: 15px; display: flex; align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.05); box-sizing: border-box; }
+        .lvl { width: 45px; height: 45px; border: 2px solid var(--neon-cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--neon-cyan); }
+
+        .bal { font-size: 64px; font-weight: 900; margin-top: 40px; }
+
+        .stage { position: relative; width: 100%; flex-grow: 1; display: flex; align-items: center; justify-content: center; }
+        .logo { width: 240px; height: 240px; border-radius: 50%; transition: 0.05s; z-index: 1; }
+        
+        .side { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
+        .btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 15px; width: 65px; text-align: center; font-size: 10px; font-weight: bold; color: white; }
+        .btn-ton { border-color: var(--ton); color: #5dc2ff; }
+
+        .energy { width: 90%; margin-bottom: 30px; }
+        .bar { width: 100%; height: 10px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; margin-top: 8px; }
+        .fill { height: 100%; background: var(--neon-cyan); width: 100%; transition: 0.3s; }
+
+        .footer { width: 92%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 30px; }
+        .f-item { background: #111; padding: 15px 0; border-radius: 15px; text-align: center; font-size: 11px; font-weight: bold; border: 1px solid #1a1a1a; }
+
+        .plus { position: absolute; font-size: 35px; font-weight: 900; animation: p 0.7s forwards; pointer-events: none; z-index: 100; }
+        @keyframes p { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px); } }
     </style>
 </head>
 <body>
-
-    <div id="loading-screen" style="position:fixed; inset:0; background:#000; z-index:30000; display:flex; flex-direction:column; align-items:center; justify-content:center;">
-        <div style="position:relative; width:120px; height:120px;">
-            <div style="position:absolute; inset:0; border:3px solid var(--glass); border-top:3px solid var(--neon-cyan); border-radius:50%; animation: spin 1s infinite linear;"></div>
-            <img src="images/logo.png" style="width:80px; position:absolute; top:20px; left:20px; border-radius:50%;">
+    <div id="loader">
+        <div class="loader-container">
+            <div class="loader-circle"></div>
+            <img src="images/logo.png" class="loader-logo" onerror="this.src='https://via.placeholder.com/100/bc13fe/fff?text=AI'">
         </div>
-        <div id="load-text" style="margin-top:30px; font-family:monospace; font-size:12px; color:var(--neon-cyan); letter-spacing:2px;">INITIALIZING CORE...</div>
+        <div class="access-text">ACCESS GRANTED</div>
+        <div class="percent" id="load-pct">0%</div>
+        <div class="load-bar"><div class="load-fill" id="load-f"></div></div>
     </div>
 
-    <div id="dash-modal" class="modal-overlay">
-        <div class="modal-header">
-            <h2 style="margin:0; font-weight:950; letter-spacing:1px;">NETWORK DATA</h2>
-            <div class="action-btn" onclick="closeDash()">CLOSE</div>
-        </div>
-        <div style="overflow-y:auto; flex-grow:1;">
-            <div style="background:linear-gradient(135deg, var(--ton), transparent); padding:25px; border-radius:24px; margin-bottom:25px; border:1px solid rgba(255,255,255,0.1);">
-                <small style="opacity:0.6; font-weight:bold;">CONNECTED WALLET</small>
-                <div id="addr-display" style="font-family:monospace; font-size:14px; margin-top:10px; word-break:break-all; color:#fff;">UNLINKED</div>
-            </div>
-            <h4 style="color:#555; text-transform:uppercase; font-size:12px; margin-bottom:15px;">Transaction Log</h4>
-            <div id="tx-log"></div>
-            <h4 style="color:#555; text-transform:uppercase; font-size:12px; margin:25px 0 15px 0;">Top Operators</h4>
-            <div id="rankings"></div>
-        </div>
-    </div>
-
-    <div class="app" id="main-ui" style="opacity:0; visibility:hidden; transition: 1s;">
+    <div class="app" id="ui">
         <div class="header">
-            <div class="lvl-badge" id="lvl-v">1</div>
-            <div style="flex-grow:1">
-                <div style="font-size: 10px; color: #555; font-weight: 800;">SYSTEM STATUS</div>
-                <div id="tier-label" style="font-size: 13px; font-weight: 900;">NODE: DISCONNECTED</div>
+            <div class="lvl" id="l-v">1</div>
+            <div>
+                <div style="font-size: 10px; color: #555;">NEURAL NETWORK</div>
+                <div id="p-v" style="color: var(--neon-cyan); font-size: 12px;">PASSIVE: +0/h</div>
             </div>
-            <div id="net-id" style="font-size:9px; background:rgba(0,242,255,0.1); color:var(--neon-cyan); padding:5px 10px; border-radius:10px; font-weight:bold;">TON MAINNET</div>
         </div>
 
-        <div class="bal-wrap">
-            <div class="bal" id="bal-v">0</div>
-            <div class="pnl" id="pnl-v">+0/H</div>
-        </div>
+        <div class="bal" id="b-v">0</div>
 
         <div class="stage">
-            <div class="logo-container t-none" id="logo-ring">
-                <img src="images/logo.png" class="main-logo" id="clicker" onerror="this.src='https://via.placeholder.com/230/bc13fe'">
-            </div>
-            <div class="side-nav">
-                <div class="action-btn btn-wallet" id="wallet-trigger" onclick="walletAction()">Wallet</div>
-                <div class="action-btn" onclick="tg.showAlert('Invite system launching in v2.0')">Invite</div>
-                <div class="action-btn btn-premium" id="pay-btn" onclick="buyCredit()">+1M COINS</div>
-            </div>
-        </div>
-
-        <div style="width:90%; margin-bottom:30px;">
-            <div style="display:flex; justify-content: space-between; font-size: 11px; font-weight: 800; color: #666; margin-bottom:10px;">
-                <span>⚡ CORE POWER</span>
-                <span id="eng-v">1000/1000</span>
-            </div>
-            <div style="width:100%; height:8px; background:rgba(255,255,255,0.06); border-radius:12px; overflow:hidden;">
-                <div id="eng-f" style="height:100%; background:var(--neon-cyan); width:100%; transition:0.3s; box-shadow: 0 0 15px var(--neon-cyan);"></div>
+            <img src="images/logo.png" class="logo" id="t-a" onerror="this.src='https://via.placeholder.com/240/bc13fe/fff?text=AI'">
+            
+            <div class="side">
+                <div class="btn btn-ton" onclick="tg.showAlert('TON Wallet soon')">WALLET</div>
+                <div class="btn" onclick="tg.showAlert('Invite link copied!')">INVITE</div>
+                <div class="btn" onclick="tg.showAlert('Bonus: +1,000')">BONUS</div>
             </div>
         </div>
 
-        <div class="bottom-bar">
-            <div class="nav-item" onclick="tg.showAlert('Power-ups coming soon')">🚀 BOOST</div>
-            <div class="nav-item" onclick="startMine()">⛏️ MINE</div>
-            <div class="nav-item" onclick="openDash()">📊 DATA</div>
+        <div class="energy">
+            <div style="display:flex; justify-content: space-between; font-size: 12px;"><span>⚡ ENERGY</span><span id="e-n">1000/1000</span></div>
+            <div class="bar"><div class="fill" id="e-f"></div></div>
+        </div>
+
+        <div class="footer">
+            <div class="f-item" onclick="tg.showAlert('Boosts at Lvl 2')">🚀 BOOST</div>
+            <div class="f-item" onclick="tg.showAlert('Mining Offline')">⛏️ MINE</div>
+            <div class="f-item" onclick="tg.showAlert('Stats updating...')">📊 STATS</div>
         </div>
     </div>
 
@@ -169,186 +97,75 @@
         const tg = window.Telegram.WebApp;
         tg.ready(); tg.expand();
 
-        // Ультра-крутая инициализация TON
-        const tonConnect = new TonConnectSDK.TonConnect({
-            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
-        });
+        let s = { bal: 0, eng: 1000, lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id || 0, up: false };
 
-        let state = { 
-            bal: 0, eng: 1000, lvl: 1, pnl: 0, 
-            uid: tg.initDataUnsafe?.user?.id || 0, 
-            name: tg.initDataUnsafe?.user?.first_name || "Agent",
-            sync: false 
-        };
-
-        // Логика кошелька
-        async function walletAction() {
-            if (tonConnect.connected) {
-                tg.showConfirm("Unlink your TON wallet from Neural Pulse?", (ok) => ok && tonConnect.disconnect());
-            } else {
-                const wallets = await tonConnect.getWallets();
-                const connectUrl = tonConnect.connect(wallets);
-                tg.openLink(connectUrl);
-            }
+        function startLoading() {
+            let progress = 0;
+            const fill = document.getElementById('load-f');
+            const pct = document.getElementById('load-pct');
+            
+            const interval = setInterval(() => {
+                progress += Math.floor(Math.random() * 5) + 2;
+                if (progress >= 100) {
+                    progress = 100;
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        document.getElementById('loader').style.opacity = '0';
+                        setTimeout(() => {
+                            document.getElementById('loader').style.display = 'none';
+                            document.getElementById('ui').classList.add('ready');
+                        }, 500);
+                    }, 500);
+                }
+                fill.style.width = progress + '%';
+                pct.innerText = progress + '%';
+            }, 80);
         }
-
-        tonConnect.onStatusChange(w => {
-            const btn = document.getElementById('wallet-trigger');
-            const addrBox = document.getElementById('addr-display');
-            if (w) {
-                const a = w.account.address;
-                btn.innerText = "LINKED";
-                btn.classList.add('active');
-                addrBox.innerText = a;
-                addrBox.style.color = "var(--success)";
-                if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-            } else {
-                btn.innerText = "WALLET";
-                btn.classList.remove('active');
-                addrBox.innerText = "UNLINKED";
-                addrBox.style.color = "#fff";
-            }
-        });
-
-        // Покупка через блокчейн
-        async function buyCredit() {
-            if (!tonConnect.connected) return tg.showPopup({title: 'Auth Required', message: 'Please link your TON wallet to purchase credits.'});
-            
-            const btn = document.getElementById('pay-btn');
-            btn.innerText = "PENDING...";
-            
-            const tx = {
-                validUntil: Math.floor(Date.now() / 1000) + 600,
-                messages: [{
-                    address: "EQB8m_p-6T_0Z_8...ВАШ_КОШЕЛЕК...", // ТВОЙ КОШЕЛЕК
-                    amount: "1000000000", // 1 TON
-                    payload: `ID${state.uid}`
-                }]
-            };
-
-            try {
-                await tonConnect.sendTransaction(tx);
-                tg.showAlert("Sequence initiated. Verification in progress.");
-            } catch (e) {
-                tg.showAlert("Sequence aborted by user.");
-            } finally {
-                btn.innerText = "+1M COINS";
-            }
-        }
-
-        async function openDash() {
-            document.getElementById('dash-modal').style.display = 'flex';
-            // Leaderboard
-            const rLB = await fetch('/api/leaderboard');
-            const dLB = await rLB.json();
-            document.getElementById('rankings').innerHTML = dLB.map((u,i) => `
-                <div class="history-card">
-                    <span style="font-weight:900; opacity:0.3;">#${i+1}</span>
-                    <span style="flex-grow:1; margin-left:15px; font-weight:800;">${u.username}</span>
-                    <span style="color:var(--neon-cyan); font-weight:900;">${Math.floor(u.balance).toLocaleString()}</span>
-                </div>
-            `).join('');
-            
-            // Transactions
-            const rTX = await fetch(`/api/my-payments/${state.uid}`);
-            const dTX = await rTX.json();
-            document.getElementById('tx-log').innerHTML = dTX.length ? dTX.map(t => `
-                <div class="history-card">
-                    <div style="display:flex; flex-direction:column;">
-                        <small style="opacity:0.4; font-size:9px;">${new Date(t.created_at).toLocaleString()}</small>
-                        <span style="font-weight:bold; color:var(--success); font-size:11px;">BLOCKCHAIN SYNC SUCCESS</span>
-                    </div>
-                    <b style="color:white;">+1.000.000</b>
-                </div>
-            `).join('') : '<div style="text-align:center; padding:30px; color:#333; font-weight:bold;">NO LOGS FOUND</div>';
-            
-            verifyPayment();
-        }
-
-        function closeDash() { document.getElementById('dash-modal').style.display = 'none'; }
-
-        function startMine() {
-            const cost = 2500 + (state.pnl * 25);
-            tg.showConfirm(`Activate Advanced Miner?\nPrice: ${cost} coins\nYield: +50/h`, ok => {
-                if(ok && state.bal >= cost) { state.bal -= cost; state.pnl += 50; state.sync = true; updateUI(); }
-                else if(ok) tg.showAlert("Insufficient core balance!");
-            });
-        }
-
-        async function verifyPayment() {
-            const r = await fetch(`/api/check-payment/${state.uid}`);
-            const d = await r.json();
-            if(d.success) { 
-                state.bal += d.added; 
-                updateUI(); 
-                tg.showPopup({title: 'Sync Complete', message: `Vault updated: +${d.added.toLocaleString()} credits added.`});
-            }
-        }
-
-        function updateUI() {
-            document.getElementById('bal-v').innerText = Math.floor(state.bal).toLocaleString();
-            document.getElementById('eng-v').innerText = `${Math.floor(state.eng)}/1000`;
-            document.getElementById('eng-f').style.width = (state.eng/10)+'%';
-            document.getElementById('lvl-v').innerText = state.lvl;
-            document.getElementById('pnl-v').innerText = `+${state.pnl}/H`;
-            
-            const ring = document.getElementById('logo-ring');
-            const lbl = document.getElementById('tier-label');
-            if(state.bal >= 1000000) { ring.className="logo-container t-gold"; lbl.innerText="TIER: PLATINUM NODE"; lbl.style.color="var(--gold)"; }
-            else if(state.bal >= 500000) { ring.className="logo-container t-silver"; lbl.innerText="TIER: ELITE NODE"; lbl.style.color="#c0c0c0"; }
-            else if(state.bal >= 100000) { ring.className="logo-container t-bronze"; lbl.innerText="TIER: VETERAN NODE"; lbl.style.color="#cd7f32"; }
-            else { ring.className="logo-container t-none"; lbl.innerText="TIER: RECRUIT NODE"; lbl.style.color="#555"; }
-        }
-
-        // Tapping Mechanic
-        document.getElementById('clicker').addEventListener('touchstart', e => {
-            e.preventDefault();
-            if(state.eng < state.lvl) {
-                if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('warning');
-                return;
-            }
-            const t = e.touches[0];
-            state.bal += state.lvl; state.eng -= state.lvl; state.sync = true;
-            
-            const p = document.createElement('div');
-            p.className = 'tap-val'; p.innerText = `+${state.lvl}`;
-            p.style.left = t.clientX + 'px'; p.style.top = t.clientY + 'px';
-            document.body.appendChild(p);
-            setTimeout(() => p.remove(), 800);
-            
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-            updateUI();
-        });
 
         async function init() {
             try {
-                const r = await fetch(`/api/user/${state.uid}?name=${encodeURIComponent(state.name)}`);
+                const r = await fetch(`/api/user/${s.uid}`);
                 const d = await r.json();
-                state.bal = Number(d.balance); state.eng = Number(d.energy);
-                state.lvl = Number(d.click_lvl); state.pnl = Number(d.pnl);
-                updateUI();
-                if(d.offline_bonus > 0) tg.showPopup({title: 'Offline Yield', message: `Systems generated ${Math.floor(d.offline_bonus)} coins while inactive.`});
+                s.bal = Number(d.balance) || 0; 
+                s.eng = Number(d.energy) || 1000;
+                s.lvl = Number(d.click_lvl) || 1; 
+                s.pnl = Number(d.pnl) || 0;
+                upd();
             } catch(e) {}
-            
-            setTimeout(() => {
-                document.getElementById('loading-screen').style.display='none'; 
-                document.getElementById('main-ui').style.opacity='1';
-                document.getElementById('main-ui').style.visibility='visible';
-            }, 1500);
-            await tonConnect.restoreConnection();
+            startLoading();
         }
 
-        setInterval(() => { if(state.eng < 1000) { state.eng = Math.min(1000, state.eng + 1.8); updateUI(); } }, 1000);
-        setInterval(() => { if(state.pnl > 0) { state.bal += (state.pnl / 3600); updateUI(); state.sync = true; } }, 1000);
+        function upd() {
+            document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString();
+            document.getElementById('e-n').innerText = `${Math.floor(s.eng)}/1000`;
+            document.getElementById('e-f').style.width = (s.eng/10)+'%';
+            document.getElementById('l-v').innerText = s.lvl;
+            document.getElementById('p-v').innerText = `PASSIVE: +${s.pnl}/h`;
+        }
+
+        document.getElementById('t-a').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if(s.eng < s.lvl) return;
+            const t = e.touches[0];
+            s.bal += s.lvl; s.eng -= s.lvl; s.up = true;
+            const p = document.createElement('div');
+            p.className = 'plus'; p.innerText = `+${s.lvl}`;
+            p.style.left = t.clientX + 'px'; p.style.top = t.clientY + 'px';
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 700);
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+            upd();
+        });
+
         setInterval(async () => {
-            if(!state.sync) return;
+            if(!s.up || !s.uid) return;
             await fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ userId: state.uid, balance: state.bal, energy: state.eng, click_lvl: state.lvl, pnl: state.pnl })
+                body: JSON.stringify({ userId: s.uid, balance: s.bal, energy: s.eng, click_lvl: s.lvl, pnl: s.pnl })
             });
-            state.sync = false;
-        }, 5000);
+            s.up = false;
+        }, 3000);
 
         init();
     </script>
