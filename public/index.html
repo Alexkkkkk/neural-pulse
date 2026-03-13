@@ -3,112 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse AI v1.1.1</title>
+    <title>Neural Pulse AI v1.0.4-P</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/sdk@latest/dist/tonconnect-sdk.min.js"></script>
     <style>
         :root { 
-            --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #000; 
-            --glass: rgba(255, 255, 255, 0.08); --ton: #0088cc; --gold: #ffd700; 
-            --success: #00ff88;
+            --neon-cyan: #00f2ff; --bg-dark: #000; 
+            --glass: rgba(255, 255, 255, 0.08); --neon-purple: #bc13fe;
         }
         body { 
             margin: 0; padding: 0; background: var(--bg-dark); color: white; 
-            font-family: 'Inter', system-ui, -apple-system, sans-serif; 
-            overflow: hidden; display: flex; flex-direction: column; 
-            align-items: center; height: 100vh; touch-action: none; 
+            font-family: 'Inter', sans-serif; overflow: hidden; 
+            display: flex; flex-direction: column; align-items: center; 
+            height: 100vh; touch-action: none; 
         }
 
+        /* Фиксированный заголовок как в оригинале v1.0.4 */
         .header { 
             width: 92%; margin-top: 20px; background: var(--glass); 
-            border-radius: 24px; padding: 16px; display: flex; 
+            border-radius: 20px; padding: 15px; display: flex; 
             align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.05); 
-            box-sizing: border-box; backdrop-filter: blur(15px); position: relative;
+            box-sizing: border-box;
         }
-        .v-tag { position: absolute; top: 6px; right: 15px; font-size: 8px; color: #555; font-family: monospace; font-weight: bold; }
-        
         .lvl-badge { 
-            width: 50px; height: 50px; border: 2px solid var(--neon-cyan); 
-            border-radius: 16px; display: flex; align-items: center; 
+            width: 48px; height: 48px; border: 2px solid var(--neon-cyan); 
+            border-radius: 14px; display: flex; align-items: center; 
             justify-content: center; font-weight: 900; color: var(--neon-cyan); 
-            box-shadow: 0 0 20px rgba(0, 242, 255, 0.3); background: rgba(0,0,0,0.5);
         }
 
         .bal-wrap { text-align: center; margin-top: 20px; }
-        .bal { font-size: 68px; font-weight: 950; letter-spacing: -3px; text-shadow: 0 0 40px rgba(0, 242, 255, 0.6); }
-        .pnl { color: var(--neon-cyan); font-size: 15px; font-weight: 800; margin-top: -8px; }
+        .bal { font-size: 64px; font-weight: 900; letter-spacing: -2px; }
+        .pnl { color: var(--neon-cyan); font-size: 14px; margin-top: -5px; font-weight: 700; }
 
-        .stage { position: relative; width: 100%; flex-grow: 1; display: flex; align-items: center; justify-content: center; }
-        .logo-container { position: relative; padding: 10px; border-radius: 50%; }
-        .main-logo { width: 230px; height: 230px; border-radius: 50%; cursor: pointer; display: block; filter: drop-shadow(0 0 30px rgba(188, 19, 254, 0.4)); }
+        .stage { 
+            position: relative; width: 100%; flex-grow: 1; 
+            display: flex; flex-direction: column; align-items: center; 
+            justify-content: center; gap: 25px; 
+        }
+        /* Твой дизайн логотипа защищен */
+        .main-logo { width: 220px; height: 220px; border-radius: 50%; cursor: pointer; filter: drop-shadow(0 0 30px rgba(188,19,254,0.4)); }
         
-        .side-nav { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 14px; }
+        .side-nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; width: 90%; }
         .action-btn { 
-            background: var(--glass); border: 1px solid rgba(255,255,255,0.12); 
-            padding: 15px; border-radius: 18px; width: 100px; text-align: center; 
-            font-size: 11px; font-weight: 800; cursor: pointer; color: white; text-transform: uppercase;
-        }
-        .btn-wallet.active { border-color: var(--success); color: var(--success); }
-
-        .bottom-bar { width: 92%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 40px; }
-        .nav-item { 
-            background: rgba(20, 20, 20, 0.8); padding: 22px 0; border-radius: 22px; 
-            text-align: center; font-size: 12px; font-weight: 800; border: 1px solid rgba(255,255,255,0.06);
+            background: var(--glass); border: 1px solid rgba(255,255,255,0.1); 
+            padding: 14px 18px; border-radius: 16px; min-width: 100px;
+            text-align: center; font-size: 11px; font-weight: 800; color: white;
         }
 
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .footer { width: 92%; margin-bottom: 40px; }
+        .eng-bar { width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 10px; margin-top: 10px; overflow: hidden; }
+        .eng-fill { height: 100%; background: var(--neon-cyan); width: 100%; transition: 0.2s; }
+
+        .nav-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 25px; }
+        .nav-item { background: var(--glass); padding: 18px 0; border-radius: 18px; text-align: center; font-size: 12px; font-weight: 800; }
     </style>
 </head>
 <body>
 
-    <div id="loading-screen" style="position:fixed; inset:0; background:#000; z-index:30000; display:flex; flex-direction:column; align-items:center; justify-content:center;">
-        <div style="position:relative; width:120px; height:120px;">
-            <div style="position:absolute; inset:0; border:3px solid var(--glass); border-top:3px solid var(--neon-cyan); border-radius:50%; animation: spin 1s infinite linear;"></div>
-            <img src="logo.png" style="width:80px; position:absolute; top:20px; left:20px; border-radius:50%;">
+    <div class="header">
+        <div class="lvl-badge" id="lvl-v">1</div>
+        <div>
+            <div style="font-size: 10px; opacity: 0.6;">SYSTEM CORE</div>
+            <div style="font-size: 13px; font-weight: 800;">NEURAL PULSE v1.0.4</div>
         </div>
-        <div style="margin-top:30px; font-family:monospace; font-size:10px; color:var(--neon-cyan); letter-spacing:2px;">PUBLIC DEPLOY v1.1.1</div>
     </div>
 
-    <div class="app" id="main-ui" style="opacity:0; visibility:hidden; transition: 0.5s;">
-        <div class="header">
-            <div class="v-tag">BUILD v1.1.1</div>
-            <div class="lvl-badge" id="lvl-v">1</div>
-            <div style="flex-grow:1">
-                <div style="font-size: 10px; color: #555; font-weight: 800;">NEURAL PULSE</div>
-                <div id="tier-label" style="font-size: 13px; font-weight: 900;">PUBLIC NODE</div>
-            </div>
-        </div>
+    <div class="bal-wrap">
+        <div class="bal" id="bal-v">0</div>
+        <div class="pnl" id="pnl-v">PASSIVE: +0/h</div>
+    </div>
 
-        <div class="bal-wrap">
-            <div class="bal" id="bal-v">0</div>
-            <div class="pnl" id="pnl-v">+0/H</div>
+    <div class="stage">
+        <img src="logo.png" class="main-logo" id="clicker" onerror="this.src='https://via.placeholder.com/220'">
+        
+        <div class="side-nav">
+            <div class="action-btn" onclick="handleWallet()">CONNECT</div>
+            <div class="action-btn" onclick="tg.showAlert('Invite friends!')">INVITE</div>
+            <div class="action-btn" style="border-color: var(--neon-purple);">BUY BONUS</div>
         </div>
+    </div>
 
-        <div class="stage">
-            <div class="logo-container">
-                <img src="logo.png" class="main-logo" id="clicker" onerror="this.src='https://via.placeholder.com/230'">
-            </div>
-            <div class="side-nav">
-                <div class="action-btn btn-wallet" id="wallet-trigger" onclick="walletAction()">Wallet</div>
-                <div class="action-btn" onclick="tg.showAlert('Coming soon')">Daily</div>
-                <div class="action-btn" id="pay-btn" onclick="buyCredit()" style="border-color:var(--neon-purple);">Buy 1M</div>
-            </div>
+    <div class="footer">
+        <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 800;">
+            <span>⚡ ENERGY</span>
+            <span id="eng-v">1000/1000</span>
         </div>
+        <div class="eng-bar"><div class="eng-fill" id="eng-f"></div></div>
 
-        <div style="width:90%; margin-bottom:30px;">
-            <div style="display:flex; justify-content: space-between; font-size: 11px; font-weight: 800; color: #666; margin-bottom:10px;">
-                <span>ENERGY CORE</span>
-                <span id="eng-v">1000/1000</span>
-            </div>
-            <div style="width:100%; height:8px; background:rgba(255,255,255,0.06); border-radius:12px; overflow:hidden;">
-                <div id="eng-f" style="height:100%; background:var(--neon-cyan); width:100%;"></div>
-            </div>
-        </div>
-
-        <div class="bottom-bar">
+        <div class="nav-grid">
             <div class="nav-item">🚀 BOOST</div>
             <div class="nav-item" onclick="startMine()">⛏️ MINE</div>
-            <div class="nav-item" onclick="tg.showAlert('Dashboard loading...')">📊 STATS</div>
+            <div class="nav-item" id="stats-btn">📊 CHECK PAY</div>
         </div>
     </div>
 
@@ -116,64 +101,38 @@
         const tg = window.Telegram.WebApp;
         tg.ready(); tg.expand();
 
-        const tonConnect = new TonConnectSDK.TonConnect({
-            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
-        });
-
         let state = { bal: 0, eng: 1000, lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id || 0, sync: false };
-
-        async function walletAction() {
-            if (tonConnect.connected) {
-                tg.showConfirm("Disconnect?", ok => ok && tonConnect.disconnect());
-            } else {
-                const wallets = await tonConnect.getWallets();
-                tg.openLink(tonConnect.connect(wallets));
-            }
-        }
-
-        tonConnect.onStatusChange(w => {
-            const btn = document.getElementById('wallet-trigger');
-            if (w) { btn.innerText = "LINKED"; btn.classList.add('active'); } 
-            else { btn.innerText = "WALLET"; btn.classList.remove('active'); }
-        });
 
         function updateUI() {
             document.getElementById('bal-v').innerText = Math.floor(state.bal).toLocaleString();
             document.getElementById('eng-v').innerText = `${Math.floor(state.eng)}/1000`;
-            document.getElementById('eng-f').style.width = (state.eng/10)+'%';
-            document.getElementById('pnl-v').innerText = `+${state.pnl}/H`;
+            document.getElementById('eng-f').style.width = (state.eng / 10) + '%';
         }
 
-        document.getElementById('clicker').addEventListener('touchstart', e => {
+        document.getElementById('clicker').addEventListener('touchstart', (e) => {
             e.preventDefault();
-            if(state.eng < state.lvl) return;
+            if (state.eng < state.lvl) return;
             state.bal += state.lvl; state.eng -= state.lvl; state.sync = true;
             updateUI();
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
         });
 
         async function init() {
             try {
                 const r = await fetch(`/api/user/${state.uid}`);
                 const d = await r.json();
-                state.bal = Number(d.balance); state.eng = Number(d.energy);
-                state.pnl = Number(d.pnl);
+                state.bal = Number(d.balance) || 0;
+                state.eng = Number(d.energy) || 1000;
                 updateUI();
             } catch(e) {}
-            setTimeout(() => {
-                document.getElementById('loading-screen').style.display='none'; 
-                document.getElementById('main-ui').style.opacity='1';
-                document.getElementById('main-ui').style.visibility='visible';
-            }, 800);
-            await tonConnect.restoreConnection();
         }
 
         setInterval(async () => {
-            if(!state.sync) return;
+            if (!state.sync) return;
             await fetch('/api/save', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ userId: state.uid, balance: state.bal, energy: state.eng, pnl: state.pnl })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: state.uid, balance: state.bal, energy: state.eng })
             });
             state.sync = false;
         }, 5000);
