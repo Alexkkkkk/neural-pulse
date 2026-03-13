@@ -3,248 +3,216 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse AI | Pro</title>
+    <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
-        :root { 
-            --neon-cyan: #00f2ff; 
-            --neon-purple: #bc13fe; 
-            --bg-dark: #000000; 
-            --glass: rgba(255, 255, 255, 0.03); 
-        }
-
+        :root { --neon-cyan: #00f2ff; --bg-dark: #000; --glass: rgba(255, 255, 255, 0.03); }
         body { 
-            margin: 0; padding: 0; background: var(--bg-dark); 
-            color: white; font-family: 'Segoe UI', Roboto, sans-serif; 
-            overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh;
-            user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none;
+            margin: 0; padding: 0; background: var(--bg-dark); color: white; 
+            font-family: 'Segoe UI', sans-serif; overflow: hidden; 
+            display: flex; flex-direction: column; align-items: center; height: 100vh;
+            user-select: none; -webkit-tap-highlight-color: transparent;
         }
 
-        /* --- ЛОАДЕР --- */
-        #loader-screen { 
-            position: fixed; inset: 0; background: #000; 
-            display: flex; align-items: center; justify-content: center; 
-            z-index: 10000; transition: 0.5s; 
-        }
-        .loader-ring { 
-            width: 120px; height: 120px; border: 3px solid rgba(255,255,255,0.05); 
-            border-top: 3px solid var(--neon-cyan); border-radius: 50%; 
-            animation: rot 1s linear infinite; 
-        }
-        @keyframes rot { to { transform: rotate(360deg); } }
-
-        /* --- ВЕРХНЯЯ КАРТОЧКА --- */
+        /* --- HEADER --- */
         .header-box {
             width: 90%; margin-top: 20px; background: var(--glass);
-            border: 1px solid rgba(0, 242, 255, 0.15); border-radius: 24px;
-            padding: 15px; display: flex; align-items: center; gap: 15px; backdrop-filter: blur(10px);
-            z-index: 10;
+            border: 1px solid rgba(0, 242, 255, 0.15); border-radius: 20px;
+            padding: 12px; display: flex; align-items: center; gap: 12px; backdrop-filter: blur(10px);
         }
         .lvl-badge {
-            width: 48px; height: 48px; border: 2px solid var(--neon-cyan);
-            border-radius: 14px; display: flex; align-items: center; justify-content: center;
-            font-size: 22px; font-weight: bold; color: var(--neon-cyan);
+            width: 40px; height: 40px; border: 2px solid var(--neon-cyan);
+            border-radius: 10px; display: flex; align-items: center; justify-content: center;
+            font-size: 18px; font-weight: bold; color: var(--neon-cyan);
         }
 
-        .balance-text { font-size: 80px; font-weight: bold; margin-top: 30px; letter-spacing: -2px; z-index: 10; }
+        .balance-text { font-size: 70px; font-weight: bold; margin-top: 20px; letter-spacing: -2px; }
 
-        /* --- ИГРОВАЯ ЗОНА --- */
-        .game-zone {
-            position: relative; width: 100%; flex-grow: 1;
-            display: flex; align-items: center; justify-content: center;
-        }
-
-        .logo-main {
-            width: 200px; height: 200px; border-radius: 50%;
-            filter: drop-shadow(0 0 25px rgba(188, 19, 254, 0.5));
-            z-index: 5; transition: transform 0.05s;
-        }
-
-        /* Кнопка кошелька (Pill) */
+        /* --- GAME ZONE --- */
+        .game-zone { position: relative; width: 100%; flex-grow: 1; display: flex; align-items: center; justify-content: center; }
+        .logo-main { width: 220px; filter: drop-shadow(0 0 25px rgba(188, 19, 254, 0.4)); z-index: 5; transition: transform 0.05s; }
+        
         .wallet-pill {
-            position: absolute; top: 30%; right: 8%;
-            background: rgba(0, 242, 255, 0.05); border: 1.5px solid var(--neon-cyan);
-            padding: 8px 22px; border-radius: 50px; font-size: 14px; font-weight: bold;
-            color: var(--neon-cyan); z-index: 100; cursor: pointer;
+            position: absolute; top: 25%; right: 8%; background: rgba(0, 242, 255, 0.05); 
+            border: 1.5px solid var(--neon-cyan); padding: 8px 18px; border-radius: 50px; 
+            font-size: 12px; font-weight: bold; color: var(--neon-cyan); z-index: 10;
         }
-        #ton-mount { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+        #ton-mount { position: absolute; inset: 0; opacity: 0; }
 
-        /* Боковые кнопки */
-        .side-stack {
-            position: absolute; right: 5%; top: 46%;
-            display: flex; flex-direction: column; gap: 12px; z-index: 10;
-        }
-        .side-btn {
-            background: #111; border: 1.5px solid #222; border-radius: 14px;
-            padding: 12px 18px; min-width: 75px; text-align: center;
-            font-size: 11px; font-weight: 900; color: #888; text-transform: uppercase;
-            cursor: pointer;
-        }
+        .side-stack { position: absolute; right: 5%; top: 45%; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
+        .side-btn { background: #111; border: 1px solid #333; padding: 10px 15px; border-radius: 12px; font-size: 10px; font-weight: 900; color: #888; text-align: center; }
 
-        /* --- ЭНЕРГИЯ --- */
-        .energy-wrap { width: 90%; margin-bottom: 25px; z-index: 10; }
-        .energy-bar { width: 100%; height: 10px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; margin-top: 10px; }
-        .energy-fill { height: 100%; background: var(--neon-cyan); width: 100%; box-shadow: 0 0 15px var(--neon-cyan); transition: width 0.2s; }
+        /* --- FOOTER --- */
+        .energy-wrap { width: 90%; margin-bottom: 20px; }
+        .energy-bar { width: 100%; height: 8px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; margin-top: 8px; }
+        .energy-fill { height: 100%; background: var(--neon-cyan); width: 100%; transition: 0.3s; box-shadow: 0 0 10px var(--neon-cyan); }
 
-        /* --- НАВИГАЦИЯ --- */
-        .nav-grid { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 40px; z-index: 10; }
-        .nav-btn {
-            background: #121212; border: 1.5px solid #1a1a1a; border-radius: 20px;
-            padding: 18px 0; color: white; font-size: 13px; font-weight: 900;
-            display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer;
-        }
+        .nav-grid { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 30px; }
+        .nav-btn { background: #121212; border: 1px solid #222; border-radius: 18px; padding: 15px 0; font-size: 12px; font-weight: 900; text-align: center; cursor: pointer; }
 
-        /* АНИМАЦИЯ ТАПА */
-        .tap-anim { position: absolute; color: white; font-size: 36px; font-weight: 900; pointer-events: none; animation: fly 0.6s ease-out forwards; z-index: 1000; }
-        @keyframes fly { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-130px); } }
-
-        /* МОДАЛКИ */
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 5000; align-items: center; justify-content: center; backdrop-filter: blur(10px); }
-        .modal-content { background: #111; width: 80%; padding: 30px; border-radius: 25px; border: 1px solid var(--neon-cyan); text-align: center; }
-        .close-btn { margin-top: 20px; padding: 10px 20px; background: var(--neon-cyan); color: black; border-radius: 10px; font-weight: bold; cursor: pointer; display: inline-block; }
+        /* ANIMATION */
+        .tap-anim { position: absolute; color: white; font-size: 32px; font-weight: 900; pointer-events: none; animation: fly 0.6s ease-out forwards; z-index: 100; }
+        @keyframes fly { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
+        
+        #loader { position: fixed; inset: 0; background: #000; z-index: 1000; display: flex; align-items: center; justify-content: center; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <div id="loader-screen">
-        <div class="loader-ring"></div>
-        <div id="load-pct" style="position: absolute; font-weight: 900; font-size: 18px;">0%</div>
-    </div>
+    <div id="loader">LOADING 0%</div>
 
     <div class="header-box">
-        <div class="lvl-badge" id="lvl-badge">1</div>
-        <div>
-            <div style="font-size: 11px; color: #555; font-weight: 900; text-transform: uppercase;">Neural Network</div>
-            <div style="font-size: 14px; color: var(--neon-cyan); font-weight: bold;" id="pnl-display">PASSIVE: +0/h</div>
+        <div class="lvl-badge" id="lvl-ui">1</div>
+        <div style="flex-grow: 1;">
+            <div style="font-size: 10px; color: #555; font-weight: 900;">NEURAL SYSTEM</div>
+            <div style="font-size: 13px; color: var(--neon-cyan); font-weight: bold;" id="pnl-ui">PASSIVE: +0/h</div>
         </div>
     </div>
 
-    <div class="balance-text" id="balance">0</div>
+    <div class="balance-text" id="balance-ui">0</div>
 
     <div class="game-zone">
         <div class="wallet-pill">
             <span id="addr-text">WALLET</span>
             <div id="ton-mount"></div>
         </div>
-
         <img src="logo.png" class="logo-main" id="tap-target" onerror="this.src='https://via.placeholder.com/200/bc13fe/fff?text=AI'">
-
         <div class="side-stack">
-            <div class="side-btn" id="invite-btn">Invite</div>
-            <div class="side-btn" onclick="window.Telegram.WebApp.showAlert('Bonus: +1,000 NP')">Bonus</div>
+            <div class="side-btn" onclick="invite()">INVITE</div>
+            <div class="side-btn" onclick="tg.showAlert('Bonus System Coming Soon')">BONUS</div>
         </div>
     </div>
 
     <div class="energy-wrap">
-        <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 900;">
-            <span style="color: #666;">⚡ ENERGY</span>
+        <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 900; color: #666;">
+            <span>⚡ ENERGY</span>
             <span id="energy-text" style="color: white;">1000/1000</span>
         </div>
         <div class="energy-bar"><div class="energy-fill" id="energy-fill"></div></div>
     </div>
 
     <div class="nav-grid">
-        <div class="nav-btn" onclick="openModal('shop')">🚀 BOOST</div>
-        <div class="nav-btn" onclick="openModal('shop')">⛏️ MINE</div>
-        <div class="nav-btn" onclick="openModal('stats')">📊 STATS</div>
+        <div class="nav-btn" onclick="upgrade('click')">🚀 BOOST</div>
+        <div class="nav-btn" onclick="upgrade('pnl')">⛏️ MINE</div>
+        <div class="nav-btn" onclick="showStats()">📊 STATS</div>
     </div>
-
-    <div id="shop" class="modal"><div class="modal-content"><h3>Shop</h3><p>Coming Soon...</p><div class="close-btn" onclick="closeModals()">Close</div></div></div>
-    <div id="stats" class="modal"><div class="modal-content"><h3>Stats</h3><p id="stats-info"></p><div class="close-btn" onclick="closeModals()">Close</div></div></div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.ready(); tg.expand();
 
-        // 1. Кошелек
-        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
-            buttonRootId: 'ton-mount'
-        });
+        // Данные игрока
+        let user = {
+            id: tg.initDataUnsafe?.user?.id || 12345,
+            name: tg.initDataUnsafe?.user?.username || 'Player',
+            balance: 0,
+            energy: 1000,
+            lvl: 1,
+            pnl: 0,
+            unsavedClicks: 0
+        };
 
-        tonConnectUI.onStatusChange(wallet => {
-            const txt = document.getElementById('addr-text');
-            if (wallet) {
-                const a = wallet.account.address;
-                txt.innerText = a.slice(0,4) + '..' + a.slice(-4);
-            } else {
-                txt.innerText = 'WALLET';
-            }
-        });
-
-        // 2. Состояние
-        let state = { balance: 0, energy: 1000, lvl: 1, pnl: 0, loaded: false };
-
-        async function loadData() {
+        // Загрузка данных
+        async function loadUser() {
             try {
-                const uid = tg.initDataUnsafe?.user?.id || 'demo';
-                const r = await fetch(`/api/user/${uid}`);
-                const data = await r.json();
-                state.balance = data.balance || 0;
-                state.energy = data.energy || 1000;
-                state.lvl = data.click_lvl || 1;
-                state.pnl = data.pnl || 0;
-            } catch(e) { console.log("Offline mode"); }
-            state.loaded = true;
-            updateUI();
+                const res = await fetch(`/api/user/${user.id}`);
+                const data = await res.json();
+                user.balance = parseFloat(data.balance);
+                user.energy = data.energy;
+                user.lvl = data.click_lvl;
+                user.pnl = data.pnl;
+                updateUI();
+                document.getElementById('loader').style.display = 'none';
+            } catch(e) { console.error("Load error", e); }
         }
 
         function updateUI() {
-            document.getElementById('balance').innerText = Math.floor(state.balance).toLocaleString();
-            document.getElementById('energy-text').innerText = `${Math.floor(state.energy)}/1000`;
-            document.getElementById('energy-fill').style.width = (state.energy/10) + '%';
-            document.getElementById('lvl-badge').innerText = state.lvl;
-            document.getElementById('pnl-display').innerText = `PASSIVE: +${state.pnl}/h`;
+            document.getElementById('balance-ui').innerText = Math.floor(user.balance).toLocaleString();
+            document.getElementById('energy-text').innerText = `${Math.floor(user.energy)}/1000`;
+            document.getElementById('energy-fill').style.width = (user.energy/10) + '%';
+            document.getElementById('lvl-ui').innerText = user.lvl;
+            document.getElementById('pnl-ui').innerText = `PASSIVE: +${user.pnl}/h`;
         }
 
-        // 3. Клики
+        // Клик
         document.getElementById('tap-target').addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            if (state.energy <= 0) return;
+            if (user.energy < user.lvl) return;
+            
+            user.balance += user.lvl;
+            user.energy -= user.lvl;
+            user.unsavedClicks += 1;
 
             const t = e.touches[0];
-            state.balance += state.lvl;
-            state.energy -= state.lvl;
-
             const n = document.createElement('div');
             n.className = 'tap-anim';
-            n.innerText = `+${state.lvl}`;
+            n.innerText = `+${user.lvl}`;
             n.style.left = t.clientX + 'px';
             n.style.top = t.clientY + 'px';
             document.body.appendChild(n);
             setTimeout(() => n.remove(), 600);
 
-            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
             updateUI();
         });
 
-        // 4. Функции интерфейса
-        function openModal(id) { 
-            if(id === 'stats') document.getElementById('stats-info').innerText = `Balance: ${state.balance}\nLevel: ${state.lvl}`;
-            document.getElementById(id).style.display = 'flex'; 
+        // Сохранение (Auto-Save)
+        async function saveData() {
+            if (user.unsavedClicks === 0) return;
+            try {
+                await fetch('/api/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: user.id,
+                        clicks: user.unsavedClicks,
+                        energy: user.energy,
+                        username: user.name
+                    })
+                });
+                user.unsavedClicks = 0;
+                console.log("Progress Saved");
+            } catch(e) { console.error("Save error", e); }
         }
-        function closeModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
-        
-        document.getElementById('invite-btn').onclick = () => {
-            const link = `https://t.me/share/url?url=https://t.me/n_pulse_bot?start=${tg.initDataUnsafe?.user?.id}`;
+
+        // Апгрейды
+        async function upgrade(type) {
+            try {
+                const res = await fetch('/api/upgrade', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: user.id, type: type })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    tg.HapticFeedback.notificationOccurred('success');
+                    loadUser();
+                } else {
+                    tg.showAlert(data.error || "Недостаточно NP!");
+                }
+            } catch(e) { console.error("Upgrade error", e); }
+        }
+
+        function showStats() {
+            tg.showAlert(`ID: ${user.id}\nBalance: ${Math.floor(user.balance)} NP\nClick Lvl: ${user.lvl}\nPassive Income: ${user.pnl}/h`);
+        }
+
+        function invite() {
+            const link = `https://t.me/share/url?url=https://t.me/n_pulse_bot?start=${user.id}&text=Майни Neural Pulse вместе со мной!`;
             tg.openTelegramLink(link);
-        };
+        }
 
-        // 5. Лоадер (фикс "вечной загрузки")
-        let loadP = 0;
-        const loadIv = setInterval(() => {
-            loadP += state.loaded ? 10 : 2;
-            if(loadP > 100) loadP = 100;
-            document.getElementById('load-pct').innerText = loadP + '%';
-            if(loadP >= 100 && state.loaded) {
-                clearInterval(loadIv);
-                document.getElementById('loader-screen').style.opacity = '0';
-                setTimeout(() => document.getElementById('loader-screen').remove(), 500);
-            }
-        }, 50);
+        // Циклы
+        setInterval(saveData, 10000); // Раз в 10 сек сохраняем
+        setInterval(() => { if(user.energy < 1000) { user.energy = Math.min(1000, user.energy + 1.5); updateUI(); } }, 1000);
+        
+        loadUser();
 
-        loadData();
+        // TON Connect
+        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
+            buttonRootId: 'ton-mount'
+        });
     </script>
 </body>
 </html>
