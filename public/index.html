@@ -6,88 +6,74 @@
     <title>Neural Pulse AI</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #050505; --glass: rgba(255, 255, 255, 0.07); --ton: #0088cc; }
+        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg-dark: #050505; --glass: rgba(255, 255, 255, 0.08); --ton: #0088cc; }
         body { margin: 0; padding: 0; background: var(--bg-dark); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
 
-        /* ЛОАДЕР */
-        #loader-screen { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; transition: 0.5s; }
-        .loader-ring { width: 80px; height: 80px; border: 4px solid rgba(255,255,255,0.1); border-top: 4px solid var(--neon-cyan); border-radius: 50%; animation: rot 1s linear infinite; }
-        #load-pct { margin-top: 20px; font-weight: bold; color: var(--neon-cyan); font-family: monospace; }
-        @keyframes rot { to { transform: rotate(360deg); } }
+        /* Лоадер */
+        #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; transition: 0.5s; }
+        .ring { width: 50px; height: 50px; border: 3px solid rgba(0,242,255,0.1); border-top-color: var(--neon-cyan); border-radius: 50%; animation: s 1s linear infinite; }
+        @keyframes s { to { transform: rotate(360deg); } }
 
-        /* КОНТЕНТ */
-        .content { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; transition: 0.5s; transform: scale(0.9); }
-        .content.active { opacity: 1; transform: scale(1); }
+        /* Контент */
+        .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; transition: 0.5s; }
+        .app.ready { opacity: 1; }
 
-        .header-card { width: 88%; margin-top: 15px; background: var(--glass); border: 1px solid rgba(0,242,255,0.2); border-radius: 18px; padding: 12px; display: flex; align-items: center; gap: 12px; backdrop-filter: blur(10px); }
-        .lvl-badge { width: 40px; height: 40px; border: 2px solid var(--neon-cyan); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: var(--neon-cyan); }
+        .header { width: 90%; margin-top: 20px; background: var(--glass); border-radius: 20px; padding: 15px; display: flex; align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.05); box-sizing: border-box; }
+        .lvl { width: 45px; height: 45px; border: 2px solid var(--neon-cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--neon-cyan); }
 
-        .balance-txt { font-size: 50px; font-weight: 900; margin-top: 25px; text-shadow: 0 0 20px rgba(0,242,255,0.3); }
+        .bal { font-size: 60px; font-weight: 900; margin-top: 40px; }
 
-        /* ЦЕНТР И КНОПКИ */
-        .main-ui { position: relative; width: 100%; display: flex; justify-content: center; align-items: center; margin-top: 30px; }
-        .logo-btn { width: 250px; height: 250px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, rgba(188,19,254,0.15) 0%, transparent 70%); }
-        .logo-img { width: 200px; transition: 0.05s; pointer-events: none; border-radius: 50%; }
-        .logo-btn:active .logo-img { transform: scale(0.92); }
+        .stage { position: relative; width: 100%; flex-grow: 1; display: flex; align-items: center; justify-content: center; }
+        .logo { width: 230px; height: 230px; border-radius: 50%; transition: 0.05s; z-index: 1; }
+        
+        .side { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
+        .btn { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 15px; width: 65px; text-align: center; font-size: 10px; font-weight: bold; }
+        .btn-ton { border-color: var(--ton); color: #5dc2ff; }
 
-        /* БОКОВЫЕ КНОПКИ */
-        .side-menu { position: absolute; right: 15px; display: flex; flex-direction: column; gap: 10px; }
-        .btn-s { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 12px; width: 60px; text-align: center; font-size: 10px; font-weight: bold; }
-        .btn-wallet { border-color: var(--ton); background: rgba(0,136,204,0.1); color: #5dc2ff; }
+        .energy { width: 90%; margin-bottom: 30px; }
+        .bar { width: 100%; height: 10px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; margin-top: 8px; }
+        .fill { height: 100%; background: var(--neon-cyan); width: 100%; transition: 0.3s; }
 
-        .energy-box { width: 88%; margin-top: auto; margin-bottom: 20px; }
-        .energy-bar { width: 100%; height: 10px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin-top: 8px; }
-        .energy-fill { height: 100%; background: var(--neon-cyan); width: 100%; transition: 0.2s; }
+        .footer { width: 92%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 30px; }
+        .f-item { background: #111; padding: 15px 0; border-radius: 15px; text-align: center; font-size: 11px; font-weight: bold; border: 1px solid #1a1a1a; }
 
-        .nav-grid { width: 90%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 30px; }
-        .nav-item { background: #111; border: 1px solid #222; border-radius: 15px; padding: 15px 0; text-align: center; font-size: 11px; font-weight: bold; }
-
-        .pop-txt { position: absolute; font-size: 32px; font-weight: 900; color: white; pointer-events: none; animation: fly 0.6s ease-out forwards; }
-        @keyframes fly { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px); } }
+        .plus { position: absolute; font-size: 35px; font-weight: 900; animation: p 0.7s forwards; pointer-events: none; z-index: 100; }
+        @keyframes p { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px); } }
     </style>
 </head>
 <body>
 
-    <div id="loader-screen">
-        <div class="loader-ring"></div>
-        <div id="load-pct">0%</div>
-    </div>
+    <div id="loader"><div class="ring"></div></div>
 
-    <div class="content" id="app">
-        <div class="header-card">
-            <div class="lvl-badge" id="lvl">1</div>
+    <div class="app" id="ui">
+        <div class="header">
+            <div class="lvl" id="l-v">1</div>
             <div>
-                <div style="font-size: 10px; color: #666; font-weight: bold;">NEURAL NETWORK</div>
-                <div id="pnl" style="color: var(--neon-cyan); font-size: 12px; font-weight: bold;">PASSIVE: +0/h</div>
+                <div style="font-size: 10px; color: #555;">NEURAL SYSTEM</div>
+                <div id="p-v" style="color: var(--neon-cyan); font-size: 12px;">PASSIVE: +0/h</div>
             </div>
         </div>
 
-        <div class="balance-txt" id="bal">0</div>
+        <div class="bal" id="b-v">0</div>
 
-        <div class="main-ui">
-            <div class="logo-btn" id="tap-target">
-                <img src="logo.png" class="logo-img" onerror="this.src='https://via.placeholder.com/200/bc13fe/fff?text=AI'">
-            </div>
-            
-            <div class="side-menu">
-                <div class="btn-s btn-wallet" onclick="tg.showAlert('TON Wallet soon')">WALLET</div>
-                <div class="btn-s" onclick="showInvite()">INVITE</div>
-                <div class="btn-s" onclick="tg.showAlert('Daily Bonus: +1,000')">BONUS</div>
+        <div class="stage">
+            <img src="images/logo.png" class="logo" id="t-a" onerror="this.src='https://via.placeholder.com/230/bc13fe/fff?text=AI'">
+            <div class="side">
+                <div class="btn btn-ton" onclick="tg.showAlert('TON Connect soon')">WALLET</div>
+                <div class="btn" onclick="tg.showAlert('Link copied!')">INVITE</div>
+                <div class="btn" onclick="tg.showAlert('Bonus: +1,000')">BONUS</div>
             </div>
         </div>
 
-        <div class="energy-box">
-            <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: bold;">
-                <span>⚡ ENERGY</span>
-                <span id="eng-txt">1000/1000</span>
-            </div>
-            <div class="energy-bar"><div class="energy-fill" id="eng-fill"></div></div>
+        <div class="energy">
+            <div style="display:flex; justify-content: space-between; font-size: 12px;"><span>⚡ ENERGY</span><span id="e-n">1000/1000</span></div>
+            <div class="bar"><div class="fill" id="e-f"></div></div>
         </div>
 
-        <div class="nav-grid">
-            <div class="nav-item" onclick="tg.showAlert('Boosts loading...')">🚀 BOOST</div>
-            <div class="nav-item" onclick="tg.showAlert('Mining soon')">⛏️ MINE</div>
-            <div class="nav-item" onclick="tg.showAlert('Stats updating...')">📊 STATS</div>
+        <div class="footer">
+            <div class="f-item" onclick="tg.showAlert('Upgrades available at Lvl 2')">🚀 BOOST</div>
+            <div class="f-item" onclick="tg.showAlert('Mining farm: Offline')">⛏️ MINE</div>
+            <div class="f-item" onclick="tg.showAlert('Stats updating...')">📊 STATS</div>
         </div>
     </div>
 
@@ -95,71 +81,50 @@
         const tg = window.Telegram.WebApp;
         tg.ready(); tg.expand();
 
-        let user = { bal: 0, eng: 1000, lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id || 0, dirty: false };
+        let s = { bal: 0, eng: 1000, lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id || 0, up: false };
 
         async function init() {
             try {
-                const r = await fetch(`/api/user/${user.uid}`);
+                const r = await fetch(`/api/user/${s.uid}`);
                 const d = await r.json();
-                user.bal = Number(d.balance); user.eng = Number(d.energy);
-                user.lvl = Number(d.click_lvl); user.pnl = Number(d.pnl);
-                update();
+                s.bal = Number(d.balance); s.eng = Number(d.energy);
+                s.lvl = Number(d.click_lvl); s.pnl = Number(d.pnl);
+                upd();
             } catch(e) {}
-            startLoader();
+            setTimeout(() => { document.getElementById('loader').style.display='none'; document.getElementById('ui').classList.add('ready'); }, 1000);
         }
 
-        function startLoader() {
-            let p = 0;
-            const iv = setInterval(() => {
-                p += 5;
-                document.getElementById('load-pct').innerText = p + '%';
-                if(p >= 100) {
-                    clearInterval(iv);
-                    document.getElementById('loader-screen').style.opacity = '0';
-                    document.getElementById('app').classList.add('active');
-                    setTimeout(() => document.getElementById('loader-screen').remove(), 500);
-                }
-            }, 30);
+        function upd() {
+            document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString();
+            document.getElementById('e-n').innerText = `${Math.floor(s.eng)}/1000`;
+            document.getElementById('e-f').style.width = (s.eng/10)+'%';
+            document.getElementById('l-v').innerText = s.lvl;
+            document.getElementById('p-v').innerText = `PASSIVE: +${s.pnl}/h`;
         }
 
-        function update() {
-            document.getElementById('bal').innerText = Math.floor(user.bal).toLocaleString();
-            document.getElementById('eng-txt').innerText = `${Math.floor(user.eng)}/1000`;
-            document.getElementById('eng-fill').style.width = (user.eng/10) + '%';
-            document.getElementById('pnl').innerText = `PASSIVE: +${user.pnl}/h`;
-            document.getElementById('lvl').innerText = user.lvl;
-        }
-
-        document.getElementById('tap-target').addEventListener('touchstart', (e) => {
+        document.getElementById('t-a').addEventListener('touchstart', (e) => {
             e.preventDefault();
-            if(user.eng < user.lvl) return;
-            
+            if(s.eng < s.lvl) return;
             const t = e.touches[0];
-            user.bal += user.lvl; user.eng -= user.lvl; user.dirty = true;
-
-            const n = document.createElement('div');
-            n.className = 'pop-txt'; n.innerText = `+${user.lvl}`;
-            n.style.left = t.clientX + 'px'; n.style.top = t.clientY + 'px';
-            document.body.appendChild(n);
-            setTimeout(() => n.remove(), 600);
-            
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-            update();
+            s.bal += s.lvl; s.eng -= s.lvl; s.up = true;
+            const p = document.createElement('div');
+            p.className = 'plus'; p.innerText = `+${s.lvl}`;
+            p.style.left = t.clientX + 'px'; p.style.top = t.clientY + 'px';
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 700);
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+            upd();
         });
 
         setInterval(async () => {
-            if(!user.dirty) return;
+            if(!s.up) return;
             await fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ userId: user.uid, balance: user.bal, energy: user.eng, click_lvl: user.lvl, pnl: user.pnl })
+                body: JSON.stringify({ userId: s.uid, balance: s.bal, energy: s.eng, click_lvl: s.lvl, pnl: s.pnl })
             });
-            user.dirty = false;
+            s.up = false;
         }, 3000);
-
-        function showInvite() {
-            tg.openTelegramLink(`https://t.me/share/url?url=https://t.me/neural_pulse_bot?start=${user.uid}`);
-        }
 
         init();
     </script>
