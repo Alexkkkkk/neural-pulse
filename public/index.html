@@ -41,10 +41,15 @@
         }
 
         /* Модальные окна */
-        #shop-modal, #stats-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(15px); }
-        .shop-card, .leaderboard { background: var(--glass); width: 85%; padding: 20px; border-radius: 24px; border: 1px solid rgba(0, 242, 255, 0.3); text-align: center; }
+        #shop-modal, #stats-modal, #admin-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(15px); }
+        .shop-card, .leaderboard, .admin-card { background: var(--glass); width: 85%; padding: 20px; border-radius: 24px; border: 1px solid rgba(0, 242, 255, 0.3); text-align: center; }
         
-        /* Стили списка лидеров */
+        /* Админ-панель специальные стили */
+        #admin-modal { background: rgba(0,0,0,0.98); z-index: 5000; }
+        .admin-card { border-color: rgba(255, 77, 77, 0.5); }
+        .admin-input { width: 90%; padding: 12px; margin: 10px 0; border-radius: 10px; border: 1px solid #ff4d4d; background: #111; color: #fff; text-align: center; }
+        .admin-btn { background: #ff4d4d !important; color: white !important; margin-top: 8px; }
+
         .leaderboard { max-height: 60vh; overflow-y: auto; padding: 10px; }
         .leader-item { display: flex; align-items: center; padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
         .leader-rank { width: 35px; font-weight: 900; color: var(--neon-cyan); font-size: 18px; }
@@ -84,7 +89,7 @@
     </div>
 
     <div class="header-card">
-        <div id="lvl-badge" style="width: 44px; height: 44px; background: rgba(0,242,255,0.1); border: 1px solid var(--neon-cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--neon-cyan); font-size: 18px;">1</div>
+        <div id="lvl-badge" style="width: 44px; height: 44px; background: rgba(0,242,255,0.1); border: 1px solid var(--neon-cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--neon-cyan); font-size: 18px; cursor: pointer;">1</div>
         <div style="flex-grow: 1;">
             <div style="font-size: 10px; color: #888; letter-spacing: 1px;" id="league-name">NEURAL BRONZE</div>
             <div id="pnl-display" style="color: var(--neon-cyan); font-weight: bold; font-size: 12px; margin-top: 2px;">PASSIVE: +0/h</div>
@@ -136,9 +141,21 @@
 
     <div id="stats-modal">
         <h2 style="margin-bottom: 20px; color: var(--neon-cyan); letter-spacing: 2px;">TOP 10 MINERS</h2>
-        <div class="leaderboard" id="leaderboard-list">
-            </div>
+        <div class="leaderboard" id="leaderboard-list"></div>
         <button onclick="document.getElementById('stats-modal').style.display='none'" style="background: none; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 12px 40px; border-radius: 12px; margin-top: 20px;">CLOSE</button>
+    </div>
+
+    <div id="admin-modal">
+        <div class="admin-card">
+            <h2 style="color: #ff4d4d; margin-top: 0;">TERMINAL ACCESS</h2>
+            <input type="password" id="admin-pass" class="admin-input" placeholder="Enter Secret Key">
+            
+            <button class="buy-btn admin-btn" onclick="adminAction('reset-db', true)">🔥 WIPE ALL DATA</button>
+            <button class="buy-btn admin-btn" style="background: #ffa500 !important;" onclick="adminAction('restart')">♻️ RESTART SERVER</button>
+            <button class="buy-btn admin-btn" style="background: #555 !important;" onclick="adminAction('reset-cache')">🧹 CLEAR SESSIONS</button>
+            
+            <button onclick="document.getElementById('admin-modal').style.display='none'" style="background: none; border: 1px solid #444; color: #888; width: 100%; padding: 12px; border-radius: 12px; margin-top: 15px;">EXIT</button>
+        </div>
     </div>
 
     <script>
@@ -307,6 +324,33 @@
         function showInvite() {
             const link = `https://t.me/neural_pulse_bot?start=${state.uid}`;
             tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my Neural Network! 🧠`);
+        }
+
+        // --- ЛОГИКА АДМИН-ПАНЕЛИ ---
+        let adminClicks = 0;
+        let adminTimer;
+        document.getElementById('lvl-badge').onclick = () => {
+            adminClicks++;
+            clearTimeout(adminTimer);
+            if(adminClicks >= 5) {
+                document.getElementById('admin-modal').style.display = 'flex';
+                adminClicks = 0;
+                tg.HapticFeedback.notificationOccurred('warning');
+            }
+            adminTimer = setTimeout(() => adminClicks = 0, 2000);
+        };
+
+        async function adminAction(action, confirmReq = false) {
+            if(confirmReq && !confirm("Danger! Wipe data?")) return;
+            const pass = document.getElementById('admin-pass').value;
+            try {
+                const r = await fetch(`/api/admin/${action}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'admin-secret': pass}
+                });
+                if(r.ok) { tg.showAlert("Command Sent!"); location.reload(); }
+                else tg.showAlert("Access Denied");
+            } catch(e) { tg.showAlert("Error"); }
         }
 
         setInterval(sync, 3500);
