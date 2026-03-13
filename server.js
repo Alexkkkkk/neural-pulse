@@ -4,7 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const APP_VERSION = "1.0.5-FIX";
+const APP_VERSION = "1.0.7-FINAL-PATH";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 const DOMAIN = "neural-pulse.bothost.ru";
@@ -17,11 +17,14 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 app.use(cors());
 app.use(express.json());
 
-// ВАЖНО: Указываем путь к папке static
-app.use(express.static(path.join(__dirname, 'static')));
+// Явная привязка к папке static по твоим правилам
+const staticPath = path.join(__dirname, 'static');
+app.use(express.static(staticPath));
 
-// Эндпоинт для проверки работы сервера
-app.get('/health', (req, res) => res.send(`Neural Core v${APP_VERSION} is Online`));
+// Маршрут по умолчанию для отдачи index.html
+app.get('/', (req, res) => {
+    res.sendFile(path.join(staticPath, 'index.html'));
+});
 
 // API
 app.get('/api/user/:id', async (req, res) => {
@@ -50,6 +53,6 @@ bot.start(ctx => ctx.replyWithHTML(
 app.listen(PORT, () => { 
     console.log(`[BOOT] === NEURAL PULSE SYSTEM ===`);
     console.log(`[BOOT] Build: ${APP_VERSION}`);
-    console.log(`[BOOT] Static folder: ${path.join(__dirname, 'static')}`);
+    console.log(`[BOOT] Static root: ${staticPath}`);
     bot.launch(); 
 });
