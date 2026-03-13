@@ -23,9 +23,41 @@
 
         #particle-canvas { position: absolute; inset: 0; pointer-events: none; z-index: 100; }
 
-        #loader-screen { position: fixed; inset: 0; background: #050505; display: flex; align-items: center; justify-content: center; z-index: 10000; transition: opacity 0.5s; }
-        .loader-bar { width: 200px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin-top: 10px; }
+        /* --- ОБНОВЛЕННЫЙ ЛОАДЕР --- */
+        #loader-screen { 
+            position: fixed; inset: 0; background: #000; 
+            display: flex; align-items: center; justify-content: center; 
+            z-index: 10000; transition: opacity 0.5s; 
+        }
+
+        .loader-ring-visual {
+            width: 140px; height: 140px;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 255, 255, 0.03);
+            border-top: 3px solid var(--neon-cyan);
+            border-bottom: 3px solid var(--neon-purple);
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 20px;
+            animation: spin-ai 1.8s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+            box-shadow: 0 0 20px rgba(0, 242, 255, 0.1);
+        }
+
+        .loader-logo-static {
+            width: 100px; height: 100px; border-radius: 50%; object-fit: cover;
+            animation: spin-reverse 1.8s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+        }
+
+        @keyframes spin-ai { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes spin-reverse { 0% { transform: rotate(0deg); } 100% { transform: rotate(-360deg); } }
+
+        #loader-percent { 
+            font-size: 28px; font-weight: 900; color: var(--neon-cyan); 
+            font-family: monospace; text-shadow: 0 0 10px var(--neon-cyan); 
+        }
+
+        .loader-bar { width: 200px; height: 3px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin: 15px auto 0; }
         #loader-fill { width: 0%; height: 100%; background: var(--neon-cyan); transition: width 0.2s; }
+        /* -------------------------- */
 
         .header-card { width: 85%; margin-top: 15px; display: flex; align-items: center; gap: 12px; background: var(--glass); padding: 12px; border-radius: 20px; border: 1px solid rgba(0, 242, 255, 0.15); backdrop-filter: blur(10px); z-index: 10; }
         #balance { font-size: 48px; font-weight: 900; margin-top: 25px; text-shadow: 0 0 30px rgba(0, 242, 255, 0.4); z-index: 10; font-variant-numeric: tabular-nums; }
@@ -40,14 +72,11 @@
             100% { filter: drop-shadow(0 0 5px var(--neon-cyan)); }
         }
 
-        /* Модальные окна */
         #shop-modal, #stats-modal, #admin-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(15px); }
         .shop-card, .leaderboard, .admin-card { background: var(--glass); width: 85%; padding: 20px; border-radius: 24px; border: 1px solid rgba(0, 242, 255, 0.3); text-align: center; }
         
-        #admin-modal { background: rgba(0,0,0,0.98); z-index: 5000; }
-        .admin-card { border-color: rgba(255, 77, 77, 0.5); }
         .admin-input { width: 90%; padding: 12px; margin: 10px 0; border-radius: 10px; border: 1px solid #ff4d4d; background: #111; color: #fff; text-align: center; }
-        .admin-btn { background: #ff4d4d !important; color: white !important; margin-top: 8px; }
+        .admin-btn { background: #ff4d4d !important; color: white !important; margin-top: 8px; border: none; padding: 12px; border-radius: 12px; width: 100%; font-weight: bold; }
 
         .leaderboard { max-height: 60vh; overflow-y: auto; padding: 10px; }
         .leader-item { display: flex; align-items: center; padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
@@ -78,8 +107,12 @@
 
     <div id="loader-screen">
         <div style="text-align: center;">
-            <div id="loader-percent" style="font-size: 24px; font-weight: 900; color: var(--neon-cyan); font-family: monospace;">0%</div>
+            <div class="loader-ring-visual">
+                <img src="logo.png" class="loader-logo-static" onerror="this.src='https://via.placeholder.com/100/150a28/fff?text=AI'">
+            </div>
+            <div id="loader-percent">0%</div>
             <div class="loader-bar"><div id="loader-fill"></div></div>
+            <div style="margin-top: 10px; font-size: 9px; color: #444; letter-spacing: 2px;">NEURAL LINKING...</div>
         </div>
     </div>
 
@@ -144,9 +177,9 @@
         <div class="admin-card">
             <h2 style="color: #ff4d4d; margin-top: 0;">TERMINAL ACCESS</h2>
             <input type="password" id="admin-pass" class="admin-input" placeholder="Enter Secret Key">
-            <button class="buy-btn admin-btn" onclick="adminAction('reset-db', true)">🔥 WIPE ALL DATA</button>
-            <button class="buy-btn admin-btn" style="background: #ffa500 !important;" onclick="adminAction('restart')">♻️ RESTART SERVER</button>
-            <button class="buy-btn admin-btn" style="background: #555 !important;" onclick="adminAction('reset-cache')">🧹 CLEAR SESSIONS</button>
+            <button class="admin-btn" onclick="adminAction('reset-db', true)">🔥 WIPE ALL DATA</button>
+            <button class="admin-btn" style="background: #ffa500 !important;" onclick="adminAction('restart')">♻️ RESTART SERVER</button>
+            <button class="admin-btn" style="background: #555 !important;" onclick="adminAction('reset-cache')">🧹 CLEAR SESSIONS</button>
             <button onclick="document.getElementById('admin-modal').style.display='none'" style="background: none; border: 1px solid #444; color: #888; width: 100%; padding: 12px; border-radius: 12px; margin-top: 15px; cursor: pointer;">EXIT</button>
         </div>
     </div>
@@ -194,13 +227,10 @@
             document.getElementById('energy-fill').style.width = (state.energy/10)+'%';
             document.getElementById('lvl-badge').innerText = state.click_lvl;
             document.getElementById('pnl-display').innerText = `PASSIVE: +${Math.floor(state.pnl)}/h`;
-            
             document.getElementById('click-cost').innerText = `Cost: ${getClickCost(state.click_lvl).toLocaleString()} NP`;
             document.getElementById('pnl-cost').innerText = `Cost: ${getPnlCost(state.pnl).toLocaleString()} NP`;
-
             const league = state.balance > 1000000 ? "NEURAL DIAMOND" : state.balance > 100000 ? "NEURAL GOLD" : "NEURAL BRONZE";
             document.getElementById('league-name').innerText = league;
-
             if(tonConnectUI.account) {
                 const a = tonConnectUI.account.address;
                 document.getElementById('addr-text').innerText = a.slice(0,4) + '..' + a.slice(-4);
@@ -237,19 +267,16 @@
                 if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
                 return;
             }
-
             const t = e.touches[0];
             state.balance += state.click_lvl;
             state.energy -= state.click_lvl;
             state.unsavedClicks += 1;
-
             spawnParticles(t.clientX, t.clientY);
             const n = document.createElement('div');
             n.className = 'tap-text'; n.innerText = `+${state.click_lvl}`;
             n.style.left = (t.clientX - 20) + 'px'; n.style.top = (t.clientY - 40) + 'px';
             document.body.appendChild(n);
             setTimeout(() => n.remove(), 600);
-
             document.getElementById('main-logo').style.transform = 'scale(0.94) rotate(1deg)';
             updateUI();
             if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
@@ -276,15 +303,12 @@
             if(!state.loaded || state.unsavedClicks === 0) return;
             const clicksToSend = state.unsavedClicks;
             state.unsavedClicks = 0;
-            
             try {
                 await fetch('/api/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ 
-                        userId: state.uid, 
-                        clicks: clicksToSend, 
-                        energy: state.energy, 
+                        userId: state.uid, clicks: clicksToSend, energy: state.energy, 
                         username: tg.initDataUnsafe?.user?.username || tg.initDataUnsafe?.user?.first_name || 'User' 
                     })
                 });
@@ -301,7 +325,6 @@
             const list = document.getElementById('leaderboard-list');
             list.innerHTML = '<div style="padding: 20px">Scanning network...</div>';
             modal.style.display = 'flex';
-
             try {
                 const r = await fetch('/api/top');
                 const top = await r.json();
@@ -309,13 +332,7 @@
                 top.forEach((u, i) => {
                     const div = document.createElement('div');
                     div.className = 'leader-item';
-                    div.innerHTML = `
-                        <div class="leader-rank">${i+1}</div>
-                        <div class="leader-info">
-                            <div class="leader-name">${u.username || 'Anonymous'}</div>
-                            <div class="leader-balance">${Math.floor(u.balance).toLocaleString()} NP</div>
-                        </div>
-                    `;
+                    div.innerHTML = `<div class="leader-rank">${i+1}</div><div class="leader-info"><div class="leader-name">${u.username || 'Anonymous'}</div><div class="leader-balance">${Math.floor(u.balance).toLocaleString()} NP</div></div>`;
                     list.appendChild(div);
                 });
             } catch(e) { list.innerHTML = 'Error loading top'; }
@@ -326,7 +343,6 @@
             tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my Neural Network! 🧠`);
         }
 
-        // Admin Secret Logic (5 taps on LVL badge)
         let adminClicks = 0;
         let adminTimer;
         document.getElementById('lvl-badge').onclick = () => {
@@ -353,7 +369,6 @@
             } catch(e) { tg.showAlert("Error"); }
         }
 
-        // Intervals
         setInterval(sync, 3500);
         setInterval(() => { 
             if(state.loaded) {
@@ -366,7 +381,9 @@
             init();
             let progress = 0;
             const loader = setInterval(() => {
-                progress += state.loaded ? 15 : 2;
+                // Если данные загружены, ускоряем заполнение
+                progress += state.loaded ? 8 : 1; 
+                
                 if(progress >= 100) { 
                     progress = 100;
                     clearInterval(loader); 
@@ -375,7 +392,7 @@
                 }
                 document.getElementById('loader-fill').style.width = progress + '%';
                 document.getElementById('loader-percent').innerText = progress + '%';
-            }, 60);
+            }, 50);
         };
     </script>
 </body>
