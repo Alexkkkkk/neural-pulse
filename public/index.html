@@ -7,109 +7,115 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
-        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
-
-        /* ЗАГРУЗКА ИЗ СКРИНШОТА (ПРАВИЛО: НЕ МЕНЯТЬ) */
+        body { margin: 0; background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
+        
+        /* ЗАГРУЗКА (ИЗ СКРИНШОТА) */
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
         .loader-ring { position: relative; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; margin-bottom: 30px; }
         .loader-ring svg { position: absolute; transform: rotate(-90deg); width: 100%; height: 100%; }
-        .loader-ring circle { fill: none; stroke-width: 4; stroke: url(#grad); stroke-dasharray: 565; stroke-dashoffset: 565; transition: 0.1s; stroke-linecap: round; }
-        .loader-logo { width: 100px; filter: drop-shadow(0 0 15px var(--purple)); }
-        .access-txt { font-size: 14px; letter-spacing: 5px; font-weight: bold; margin-bottom: 15px; }
-        .percent-txt { font-size: 42px; font-weight: 900; color: var(--cyan); margin-bottom: 30px; }
-        .load-bar { width: 240px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
-        .load-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--cyan), var(--purple)); }
+        .loader-ring circle { fill: none; stroke-width: 4; stroke: url(#lg); stroke-dasharray: 565; stroke-dashoffset: 565; transition: 0.1s; stroke-linecap: round; }
+        .l-logo { width: 100px; filter: drop-shadow(0 0 15px var(--purple)); }
+        .acc-text { font-size: 14px; letter-spacing: 5px; font-weight: bold; margin: 20px 0 10px; }
+        .p-text { font-size: 42px; font-weight: 900; color: var(--cyan); margin-bottom: 25px; }
+        .l-bar { width: 240px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; }
+        .l-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: 0.1s; }
 
-        /* ИНТЕРФЕЙС ИЗ СКРИНШОТОВ */
-        .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; transition: 0.5s; visibility: hidden; }
+        .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; visibility: hidden; transition: 0.5s; }
         .app.ready { opacity: 1; visibility: visible; }
 
-        .header { width: 92%; margin-top: 20px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; padding: 10px; display: flex; align-items: center; gap: 12px; }
-        .avatar { width: 45px; height: 45px; border-radius: 10px; border: 2px solid var(--cyan); object-fit: cover; }
-        .u-info { flex-grow: 1; }
-        .u-name { font-size: 15px; font-weight: 900; }
-        .u-rank { font-size: 10px; color: var(--cyan); font-weight: bold; }
-        .lvl-badge { background: var(--cyan); color: black; padding: 3px 10px; border-radius: 8px; font-weight: 900; font-size: 12px; }
+        /* ВЕРХНЯЯ ПАНЕЛЬ */
+        .header { width: 90%; margin-top: 20px; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 10px 15px; display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); }
+        .u-av { width: 42px; height: 42px; border-radius: 12px; border: 2px solid var(--cyan); background: #111; }
+        .u-name { font-size: 14px; font-weight: 900; }
+        .u-rk { font-size: 10px; color: var(--cyan); font-weight: bold; }
+        .lvl-tag { margin-left: auto; background: var(--cyan); color: black; padding: 4px 10px; border-radius: 8px; font-weight: 900; font-size: 12px; }
 
-        .balance { font-size: 65px; font-weight: 900; margin-top: 25px; text-shadow: 0 0 20px rgba(0,242,255,0.2); }
+        .bal { font-size: 60px; font-weight: 900; margin: 25px 0; }
 
-        .stage { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
-        .ai-main { width: 250px; cursor: pointer; transition: 0.05s; }
-        .ai-main:active { transform: scale(0.95); }
+        /* ЦЕНТР И БОКОВЫЕ КНОПКИ */
+        .stage { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; position: relative; }
+        .main-ai { width: 250px; cursor: pointer; transition: 0.05s; }
+        .side-btns { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 12px; }
+        .s-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 12px; border-radius: 15px; font-size: 10px; font-weight: bold; width: 80px; text-align: center; }
 
-        .energy-wrap { width: 90%; margin-bottom: 20px; }
-        .energy-bar { width: 100%; height: 8px; background: #111; border-radius: 10px; overflow: hidden; }
-        .energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: 0.3s; }
+        /* ЭНЕРГИЯ И НИЗ */
+        .e-wrap { width: 90%; margin-bottom: 25px; }
+        .e-bar { width: 100%; height: 8px; background: #111; border-radius: 10px; overflow: hidden; }
+        .e-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: 0.3s; }
 
-        .footer { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 30px; }
-        .f-btn { background: #111; border: 1px solid #222; border-radius: 18px; padding: 15px 0; text-align: center; font-size: 10px; font-weight: bold; cursor: pointer; }
+        .footer { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 35px; }
+        .f-item { background: #111; border: 1px solid #222; border-radius: 20px; padding: 16px 0; text-align: center; font-size: 10px; font-weight: bold; }
 
-        /* МОДАЛКИ ПО СКРИНШОТАМ */
-        .modal { position: fixed; inset: 0; background: #000; z-index: 2000; display: none; flex-direction: column; padding: 25px; }
-        .m-title { color: var(--cyan); font-size: 26px; font-weight: 900; margin-bottom: 30px; text-transform: uppercase; }
-        .m-close { background: #111; border-radius: 20px; padding: 15px; text-align: center; margin-top: auto; color: #444; font-weight: bold; text-transform: uppercase; border: 1px solid #222; }
+        /* МОДАЛКИ (LEADERBOARD И ДР) */
+        .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 25px; }
+        .m-h { color: var(--cyan); font-size: 28px; font-weight: 900; margin-bottom: 20px; }
+        .m-close { background: #1a1a1a; padding: 15px; border-radius: 20px; text-align: center; margin-top: auto; font-weight: bold; color: #555; }
     </style>
 </head>
 <body>
     <div id="loader">
         <div class="loader-ring">
-            <svg><defs><linearGradient id="grad"><stop offset="0%" stop-color="var(--cyan)"/><stop offset="100%" stop-color="var(--purple)"/></linearGradient></defs>
-            <circle id="ring-arc" cx="100" cy="100" r="90"></circle></svg>
-            <img src="logo.png" class="loader-logo" onerror="this.src='images/logo.png'">
+            <svg><defs><linearGradient id="lg"><stop offset="0%" stop-color="var(--cyan)"/><stop offset="100%" stop-color="var(--purple)"/></linearGradient></defs>
+            <circle id="c-arc" cx="100" cy="100" r="90"></circle></svg>
+            <img src="logo.png" class="l-logo" onerror="this.src='images/logo.png'">
         </div>
-        <div class="access-txt">ACCESS GRANTED</div>
-        <div class="percent-txt" id="p-val">0%</div>
-        <div class="load-bar"><div class="load-fill" id="l-f"></div></div>
+        <div class="acc-text">ACCESS GRANTED</div>
+        <div class="p-text" id="p-txt">0%</div>
+        <div class="l-bar"><div class="l-fill" id="l-f"></div></div>
     </div>
 
     <div class="app" id="ui">
         <div class="header">
-            <img id="u-av" class="avatar" src="logo.png" onerror="this.src='images/logo.png'">
-            <div class="u-info">
-                <div id="u-nm" class="u-name">Player</div>
-                <div id="u-rk" class="u-rank">Bronze Node</div>
+            <img id="u-av" class="u-av" src="logo.png" onerror="this.src='images/logo.png'">
+            <div style="flex-grow:1">
+                <div id="u-nm" class="u-name">Terminal User</div>
+                <div id="u-rk" class="u-rk">Bronze Node</div>
             </div>
-            <div class="lvl-badge">LVL <span id="u-lv">1</span></div>
+            <div class="lvl-tag">LVL <span id="u-lv">1</span></div>
         </div>
 
-        <div class="balance" id="b-val">0</div>
+        <div class="bal" id="b-v">0</div>
 
         <div class="stage">
-            <img src="logo.png" class="ai-main" id="tap" onerror="this.src='images/logo.png'">
+            <img src="logo.png" class="main-ai" id="tap" onerror="this.src='images/logo.png'">
+            <div class="side-btns">
+                <div class="s-btn">WALLET</div>
+                <div class="s-btn">FRIENDS</div>
+                <div class="s-btn">BONUS</div>
+            </div>
         </div>
 
-        <div class="energy-wrap">
-            <div class="energy-bar"><div id="e-f" class="energy-fill"></div></div>
+        <div class="e-wrap">
+            <div class="e-bar"><div id="e-f" class="e-fill"></div></div>
         </div>
 
         <div class="footer">
-            <div class="f-btn" onclick="openM('up-ui')">BOOST</div>
-            <div class="f-btn" onclick="openM('mi-ui')">MINE</div>
-            <div class="f-btn" onclick="openM('ta-ui')">TASKS</div>
-            <div class="f-btn" onclick="openM('st-ui')">STATS</div>
+            <div class="f-item" onclick="openM('up-ui')">BOOST</div>
+            <div class="f-item" onclick="openM('mi-ui')">MINE</div>
+            <div class="f-item" onclick="openM('ta-ui')">TASKS</div>
+            <div class="f-item" onclick="showSt()">STATS</div>
         </div>
     </div>
 
-    <div id="st-ui" class="modal"><div class="m-title">Leaderboard</div><div id="st-list" style="overflow-y:auto; flex-grow:1;"></div><div class="m-close" onclick="closeM('st-ui')">BACK</div></div>
-    <div id="up-ui" class="modal"><div class="m-title">Upgrades</div><div class="m-close" onclick="closeM('up-ui')">CLOSE</div></div>
-    <div id="mi-ui" class="modal"><div class="m-title">Mine</div><div class="m-close" onclick="closeM('mi-ui')">CLOSE</div></div>
-    <div id="ta-ui" class="modal"><div class="m-title">Tasks</div><div class="m-close" onclick="closeM('ta-ui')">CLOSE</div></div>
+    <div id="st-ui" class="modal"><div class="m-h">LEADERBOARD</div><div id="st-list" style="overflow-y:auto; flex-grow:1;"></div><div class="m-close" onclick="closeM('st-ui')">BACK</div></div>
+    <div id="up-ui" class="modal"><div class="m-h">UPGRADES</div><div class="m-close" onclick="closeM('up-ui')">CLOSE</div></div>
+    <div id="mi-ui" class="modal"><div class="m-h">MINE</div><div class="m-close" onclick="closeM('mi-ui')">CLOSE</div></div>
+    <div id="ta-ui" class="modal"><div class="m-h">TASKS</div><div class="m-close" onclick="closeM('ta-ui')">CLOSE</div></div>
 
     <script>
         const tg = window.Telegram.WebApp;
         let s = { uid: tg.initDataUnsafe?.user?.id || 0, bal: 0, eng: 1000, max: 1000, lvl: 1, r: 'Bronze Node' };
 
-        // Анимация загрузки
         let p = 0;
         const iv = setInterval(() => {
             p++;
-            document.getElementById('p-val').innerText = p + '%';
-            document.getElementById('l-f').style.width = p + '%';
-            document.getElementById('ring-arc').style.strokeDashoffset = 565 - (565 * p / 100);
-            if(p >= 100) { clearInterval(iv); start(); }
+            document.getElementById('p-txt').innerText = p+'%';
+            document.getElementById('l-f').style.width = p+'%';
+            document.getElementById('c-arc').style.strokeDashoffset = 565 - (565 * p / 100);
+            if(p >= 100) { clearInterval(iv); load(); }
         }, 30);
 
-        async function start() {
+        async function load() {
             try {
                 const r = await fetch(`/api/user/${s.uid}`);
                 const d = await r.json();
@@ -123,19 +129,17 @@
         }
 
         function upd() {
-            document.getElementById('b-val').innerText = Math.floor(s.bal).toLocaleString();
+            document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString();
             document.getElementById('u-lv').innerText = s.lvl;
             document.getElementById('u-rk').innerText = s.r;
             document.getElementById('e-f').style.width = (s.eng / s.max * 100) + '%';
         }
 
-        function openM(id) { 
-            document.getElementById(id).style.display = 'flex'; 
-            if(id === 'st-ui') loadStats();
-        }
+        function openM(id) { document.getElementById(id).style.display = 'flex'; }
         function closeM(id) { document.getElementById(id).style.display = 'none'; }
 
-        async function loadStats() {
+        async function showSt() {
+            openM('st-ui');
             const res = await fetch('/api/stats');
             const data = await res.json();
             document.getElementById('st-list').innerHTML = data.map((u, i) => `
@@ -152,13 +156,7 @@
             upd();
         };
 
-        setInterval(() => {
-            fetch('/api/save', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ userId: s.uid, username: tg.initDataUnsafe?.user?.first_name, balance: s.bal, energy: s.eng, max_energy: s.max, click_lvl: s.lvl, rank: s.r }) 
-            });
-        }, 5000);
+        setInterval(() => fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ userId: s.uid, username: tg.initDataUnsafe?.user?.first_name, balance: s.bal, energy: s.eng, max_energy: s.max, click_lvl: s.lvl, rank: s.r }) }), 5000);
     </script>
 </body>
 </html>
