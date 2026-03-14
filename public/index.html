@@ -3,76 +3,91 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.1.2</title>
+    <title>Neural Pulse v1.1.4</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/sdk@latest/dist/tonconnect-sdk.min.js"></script>
     <style>
         :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg: #000; }
         body { margin: 0; padding: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; }
         
-        #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; transition: 0.5s; }
-        .load-fill { width: 0%; height: 4px; background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); transition: 0.1s; border-radius: 2px; }
+        /* Загрузочный экран по скриншоту */
+        #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
+        .loader-circle { width: 150px; height: 150px; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--neon-cyan); border-right: 2px solid var(--neon-purple); display: flex; align-items: center; justify-content: center; margin-bottom: 40px; }
+        .access-text { letter-spacing: 4px; font-size: 14px; margin-bottom: 15px; color: #fff; font-weight: 300; }
+        .pct { font-size: 32px; font-weight: bold; color: var(--neon-cyan); margin-bottom: 20px; }
+        .load-line { width: 60%; height: 2px; background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); box-shadow: 0 0 10px var(--neon-purple); }
 
-        .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; visibility: hidden; transition: 0.8s; }
+        .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; visibility: hidden; transition: 0.5s; }
         .app.ready { opacity: 1; visibility: visible; }
 
-        .header { width: 90%; margin-top: 20px; background: #111; border: 1px solid #222; border-radius: 25px; padding: 15px; display: flex; align-items: center; gap: 15px; position: relative; box-sizing: border-box; }
-        .lvl-box { width: 50px; height: 50px; border: 2px solid var(--neon-cyan); border-radius: 15px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; color: var(--neon-cyan); }
+        /* Хедер со скриншота */
+        .header { width: 90%; margin-top: 20px; background: rgba(255,255,255,0.05); border-radius: 25px; padding: 15px; display: flex; align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.1); }
+        .lvl-box { width: 50px; height: 50px; border: 2px solid var(--neon-cyan); border-radius: 15px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: bold; color: #fff; box-shadow: inset 0 0 10px rgba(0,242,255,0.2); }
 
-        .bal { font-size: 70px; font-weight: 900; margin-top: 20px; text-shadow: 0 0 20px rgba(0,242,255,0.4); }
+        .bal { font-size: 80px; font-weight: bold; margin-top: 20px; }
+        .pnl { color: var(--neon-cyan); font-weight: bold; margin-top: -10px; font-size: 14px; text-transform: uppercase; }
 
-        .stage { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
-        .main-logo { width: 210px; height: 210px; border-radius: 50%; cursor: pointer; filter: drop-shadow(0 0 25px var(--neon-purple)); }
+        /* Сцена с наложением кнопок поверх логотипа */
+        .stage { flex-grow: 1; position: relative; width: 100%; display: flex; align-items: center; justify-content: center; }
+        .main-logo { width: 220px; height: 220px; z-index: 1; filter: drop-shadow(0 0 30px rgba(188,19,254,0.3)); cursor: pointer; }
         
-        .pill-btn { background: #1a1a1a; border: 1px solid #333; color: white; padding: 12px 0; border-radius: 20px; font-size: 12px; font-weight: bold; width: 160px; text-align: center; margin: 5px; cursor: pointer; }
+        .overlay-btns { position: absolute; right: 15%; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
+        .btn-sm { background: rgba(30,30,30,0.8); border: 1px solid #444; color: white; padding: 10px 0; border-radius: 15px; width: 100px; text-align: center; font-size: 10px; font-weight: bold; backdrop-filter: blur(5px); }
+        .btn-purple { border: 1px solid var(--neon-purple); box-shadow: inset 0 0 5px var(--neon-purple); }
 
-        .energy-section { width: 85%; margin-bottom: 25px; }
-        .energy-bar { width: 100%; height: 6px; background: #111; border-radius: 10px; margin-top: 8px; overflow: hidden; }
-        .energy-fill { height: 100%; background: var(--neon-cyan); transition: 0.3s; width: 100%; }
+        .energy-box { width: 85%; margin-bottom: 25px; }
+        .energy-info { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 8px; font-weight: bold; color: #888; }
+        .energy-bar { width: 100%; height: 6px; background: #111; border-radius: 10px; overflow: hidden; }
+        .energy-fill { height: 100%; background: var(--neon-cyan); box-shadow: 0 0 10px var(--neon-cyan); transition: 0.3s; }
 
-        .footer { width: 92%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 35px; }
-        .f-item { background: #111; border: 1px solid #222; border-radius: 20px; padding: 16px 0; text-align: center; font-size: 11px; font-weight: bold; }
+        /* Футер с иконками */
+        .footer { width: 92%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 35px; }
+        .f-item { background: #1a1a1a; border: 1px solid #333; border-radius: 18px; padding: 15px 0; text-align: center; font-size: 11px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 5px; }
 
-        .plus { position: absolute; font-size: 30px; font-weight: 900; color: var(--neon-cyan); animation: float 0.7s forwards; pointer-events: none; }
-        @keyframes float { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
+        .plus { position: absolute; font-size: 35px; font-weight: 900; color: var(--neon-cyan); animation: p 0.7s forwards; pointer-events: none; z-index: 20; }
+        @keyframes p { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px); } }
     </style>
 </head>
 <body>
     <div id="loader">
-        <img src="images/logo.png" style="width: 80px;" onerror="this.src='https://via.placeholder.com/80'">
-        <div style="width: 200px; background: #222; height: 4px; margin-top: 20px;"><div class="load-fill" id="l-f"></div></div>
+        <div class="loader-circle">
+            <img src="images/logo.png" style="width: 80px;" onerror="this.src='https://via.placeholder.com/80/bc13fe/fff?text=AI'">
+        </div>
+        <div class="access-text">ACCESS GRANTED</div>
+        <div class="pct" id="load-pct">0%</div>
+        <div class="load-line"></div>
     </div>
 
     <div class="app" id="ui">
         <div class="header">
-            <div style="position:absolute; top:8px; right:20px; font-size:8px; color:#444;">VER 1.1.2</div>
             <div class="lvl-box" id="l-v">1</div>
             <div>
-                <div style="font-size: 10px; color: #666; font-weight: bold;">NEURAL PULSE</div>
-                <div style="font-size: 12px; font-weight: bold;">PUBLIC NODE</div>
+                <div style="font-size: 8px; color: #555; letter-spacing: 1px;">SYSTEM CORE</div>
+                <div style="font-size: 13px; font-weight: bold; letter-spacing: 1px;">NEURAL PULSE v1.1.4</div>
             </div>
         </div>
 
         <div class="bal" id="b-v">0</div>
-        <div style="color: var(--neon-cyan); margin-top: -10px; font-weight: bold;" id="p-v">+0/H</div>
+        <div class="pnl" id="p-v">PASSIVE: +0/h</div>
 
         <div class="stage">
-            <img src="images/logo.png" class="main-logo" id="t-a" onerror="this.src='https://via.placeholder.com/210'">
-            <div style="margin-top: 20px; display: flex; flex-direction: column; align-items: center;">
-                <div class="pill-btn" onclick="handleWallet()" id="ton-btn">WALLET</div>
-                <div class="pill-btn" onclick="invite()">FRIENDS</div>
+            <img src="images/logo.png" class="main-logo" id="t-a">
+            <div class="overlay-btns">
+                <div class="btn-sm" onclick="handleWallet()">WALLET</div>
+                <div class="btn-sm" onclick="invite()">DAILY</div>
+                <div class="btn-sm btn-purple" onclick="buyBonus()">BUY 1M</div>
             </div>
         </div>
 
-        <div class="energy-section">
-            <div style="display:flex; justify-content: space-between; font-size: 10px; color: #888;"><span>⚡ ENERGY CORE</span><span id="e-n">1000/1000</span></div>
+        <div class="energy-box">
+            <div class="energy-info"><span>⚡ ENERGY</span><span id="e-n">1000/1000</span></div>
             <div class="energy-bar"><div class="energy-fill" id="e-f"></div></div>
         </div>
 
         <div class="footer">
             <div class="f-item" onclick="upgrade()">🚀 BOOST</div>
-            <div class="f-item" onclick="tg.showAlert('Mining soon')">⛏️ MINE</div>
-            <div class="f-item" onclick="checkPay()">📊 CHECK</div>
+            <div class="f-item" onclick="tg.showAlert('Mining...')">⛏️ MINE</div>
+            <div class="f-item" onclick="checkPay()">📊 STATS</div>
         </div>
     </div>
 
@@ -85,16 +100,17 @@
         async function init() {
             let p = 0;
             const iv = setInterval(() => {
-                p += 10; document.getElementById('l-f').style.width = p + '%';
+                p += 1; 
+                document.getElementById('load-pct').innerText = p + '%';
                 if(p >= 100) {
                     clearInterval(iv);
-                    loadUser();
+                    loadData();
                 }
-            }, 50);
+            }, 30);
             setInterval(() => { if(s.eng < 1000) { s.eng++; upd(); } }, 1000);
         }
 
-        async function loadUser() {
+        async function loadData() {
             const r = await fetch(`/api/user/${s.uid}`);
             const d = await r.json();
             Object.assign(s, { bal: Number(d.balance), eng: d.energy, lvl: d.click_lvl, pnl: Number(d.pnl) });
@@ -108,7 +124,7 @@
             document.getElementById('e-n').innerText = `${s.eng}/1000`;
             document.getElementById('e-f').style.width = (s.eng/10)+'%';
             document.getElementById('l-v').innerText = s.lvl;
-            document.getElementById('p-v').innerText = `+${s.pnl}/H`;
+            document.getElementById('p-v').innerText = `PASSIVE: +${s.pnl}/h`;
         }
 
         document.getElementById('t-a').addEventListener('touchstart', (e) => {
@@ -120,20 +136,16 @@
             p.style.left = e.touches[0].clientX + 'px'; p.style.top = e.touches[0].clientY + 'px';
             document.body.appendChild(p);
             setTimeout(() => p.remove(), 700);
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
             upd();
         });
 
         async function upgrade() {
             const cost = s.lvl * 5000;
-            if(confirm(`Upgrade to Level ${s.lvl+1} for ${cost}?`)) {
+            if(confirm(`Level ${s.lvl+1} cost: ${cost}?`)) {
                 const r = await fetch('/api/upgrade/click', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({userId: s.uid}) });
                 if((await r.json()).success) { s.lvl++; s.bal -= cost; upd(); }
             }
-        }
-
-        async function checkPay() {
-            tg.showAlert("Checking transactions...");
         }
 
         function invite() {
