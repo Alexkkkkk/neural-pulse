@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.3.9</title>
+    <title>Neural Pulse v1.4.2</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
-        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg: #000; }
+        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg: #000; --turbo-gold: #f2ff00; }
         body { margin: 0; background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
         
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
@@ -17,7 +17,7 @@
         .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; visibility: hidden; transition: 0.8s; }
         .app.ready { opacity: 1; visibility: visible; }
 
-        .header { width: 90%; margin-top: 20px; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 12px; display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,255,255,0.1); }
+        .header { width: 90%; margin-top: 20px; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 12px; display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,255,255,0.1); box-sizing: border-box; }
         .lvl-box { width: 45px; height: 45px; border: 2px solid var(--neon-cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: bold; }
         
         .bal { font-size: 60px; font-weight: 900; margin-top: 15px; letter-spacing: -2px; text-shadow: 0 0 20px rgba(0,242,255,0.3); }
@@ -25,6 +25,8 @@
 
         .stage { flex-grow: 1; position: relative; width: 100%; display: flex; align-items: center; justify-content: center; }
         .main-logo { width: 230px; border-radius: 50%; filter: drop-shadow(0 0 30px rgba(188,19,254,0.3)); transition: 0.1s; cursor: pointer; }
+        .main-logo.turbo-active { filter: drop-shadow(0 0 40px var(--turbo-gold)); transform: scale(1.05); animation: shake 0.1s infinite; }
+        @keyframes shake { 0% { transform: translate(1px, 1px); } 50% { transform: translate(-1px, -1px); } 100% { transform: translate(1px, -1px); } }
 
         .overlay-btns { position: absolute; right: 8%; display: flex; flex-direction: column; gap: 12px; z-index: 10; }
         .btn-pill { background: rgba(20,20,20,0.85); border: 1px solid #444; color: white; padding: 12px 0; border-radius: 18px; width: 110px; text-align: center; font-size: 10px; font-weight: bold; cursor: pointer; }
@@ -35,13 +37,9 @@
         .modal { position: fixed; inset: 0; background: #000; z-index: 2000; display: none; padding: 25px; flex-direction: column; overflow-y: auto; }
         .card { background: #111; border: 1px solid #333; padding: 15px; border-radius: 20px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         
-        .plus { position: absolute; font-size: 40px; font-weight: 900; color: var(--neon-cyan); animation: float 0.7s forwards; pointer-events: none; }
+        .plus { position: absolute; font-size: 40px; font-weight: 900; color: var(--neon-cyan); animation: float 0.7s forwards; pointer-events: none; z-index: 100; }
+        .plus.turbo { color: var(--turbo-gold); text-shadow: 0 0 10px var(--turbo-gold); }
         @keyframes float { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-150px); } }
-
-        /* Стили для таблицы лидеров */
-        .stats-list { width: 100%; margin-top: 15px; }
-        .stat-row { display: flex; justify-content: space-between; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 12px; margin-bottom: 6px; font-size: 12px; border: 1px solid #222; }
-        .stat-rank { color: var(--neon-cyan); font-weight: bold; width: 25px; }
     </style>
 </head>
 <body>
@@ -59,11 +57,12 @@
         <div class="pnl" id="p-v">PNL: +0/H</div>
 
         <div class="stage">
+            <div id="turbo-timer" style="position:absolute; top:10%; color:var(--turbo-gold); font-weight:900; font-size:24px; display:none; z-index:100;">TURBO: 10s</div>
             <img src="logo.png" class="main-logo" id="t-a" onerror="this.src='images/logo.png'">
             <div class="overlay-btns">
                 <div class="btn-pill" onclick="handleWallet()">WALLET</div>
                 <div class="btn-pill" onclick="invite()">FRIENDS</div>
-                <div class="btn-pill" style="border-color:var(--neon-purple)" onclick="tg.showAlert('Bonus: +1000 Pulse!')">BONUS</div>
+                <div class="btn-pill" style="border-color:var(--neon-purple)" onclick="tg.showAlert('Bonus!')">BONUS</div>
             </div>
         </div>
 
@@ -80,35 +79,46 @@
         </div>
     </div>
 
-    <div id="tasks-ui" class="modal">
-        <h2 style="color:var(--neon-cyan)">MISSION CENTER</h2>
-        <div class="card">
-            <div><b>Subscribe</b><br><small>+5,000 Pulse</small></div>
-            <button class="btn-pill" style="width:70px;" onclick="doTask(5000)">GO</button>
+    <div id="boost-ui" class="modal">
+        <h2 style="color:var(--neon-cyan)">UPGRADES</h2>
+        <div class="card" style="border-color: var(--neon-purple);">
+            <div><b style="color:var(--neon-purple)">AUTO-TAP BOT</b><br><small>Works 24h for you</small></div>
+            <button class="btn-pill" style="width:80px; border-color:var(--neon-purple)" id="bot-btn" onclick="buyBoost('bot')">20000</button>
         </div>
-        <button class="f-item" style="margin-top:auto;" onclick="closeModal('tasks-ui')">CLOSE</button>
+        <div class="card" style="border-color: var(--turbo-gold);">
+            <div><b style="color:var(--turbo-gold)">TURBO MODE</b><br><small>5x Tap | 10s</small></div>
+            <button class="btn-pill" style="width:80px; border-color:var(--turbo-gold)" onclick="activateTurbo()">FREE</button>
+        </div>
+        <div class="card">
+            <div><b>Multitap</b><br><small>+1 per click</small></div>
+            <button class="btn-pill" style="width:80px;" id="mt-btn" onclick="buyBoost('tap')">1000</button>
+        </div>
+        <div class="card">
+            <div><b>Energy Limit</b><br><small>+500 cap</small></div>
+            <button class="btn-pill" style="width:80px;" id="el-btn" onclick="buyBoost('energy')">2000</button>
+        </div>
+        <button class="f-item" style="margin-top:auto; width:100%;" onclick="closeModal('boost-ui')">CLOSE</button>
     </div>
 
     <div id="stats-ui" class="modal">
-        <h2 style="color:var(--neon-cyan)">NETWORK LEADERS</h2>
-        <div id="stats-content" class="stats-list">Загрузка данных...</div>
-        <button class="f-item" style="margin-top:20px; width:100%;" onclick="closeModal('stats-ui')">BACK TO SYSTEM</button>
+        <h2 style="color:var(--neon-cyan)">TOP PLAYERS</h2>
+        <div id="stats-content"></div>
+        <button class="f-item" style="margin-top:20px;" onclick="closeModal('stats-ui')">BACK</button>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json', buttonRootId: null });
+        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json' });
 
-        const params = new URLSearchParams(window.location.search);
-        const refBy = params.get('ref');
-        let s = { bal: 0, eng: 1000, lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id || 0, r: 'Bronze Node' };
+        let s = { bal: 0, eng: 1000, max: 1000, lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id || 0, r: 'Bronze Node', bot: false };
+        let isTurbo = false;
 
         async function load() {
             try {
-                const r = await fetch(`/api/user/${s.uid}?ref=${refBy || ''}`);
+                const r = await fetch(`/api/user/${s.uid}`);
                 const d = await r.json();
-                Object.assign(s, { bal: Number(d.balance), eng: d.energy, lvl: d.click_lvl, pnl: Number(d.pnl), r: d.rank });
+                Object.assign(s, { bal: Number(d.balance), eng: d.energy, max: d.max_energy || 1000, lvl: d.click_lvl, pnl: Number(d.pnl), r: d.rank, bot: d.auto_bot });
                 upd();
                 document.getElementById('loader').style.display = 'none';
                 document.getElementById('ui').classList.add('ready');
@@ -117,44 +127,60 @@
 
         function upd() {
             document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString();
-            document.getElementById('e-n').innerText = `${s.eng}/1000`;
-            document.getElementById('e-f').style.width = (s.eng/10)+'%';
+            document.getElementById('e-n').innerText = `${Math.floor(s.eng)}/${s.max}`;
+            document.getElementById('e-f').style.width = (s.eng / s.max * 100) + '%';
             document.getElementById('l-v').innerText = s.lvl;
-            document.getElementById('r-b').innerText = s.r;
-            document.getElementById('p-v').innerText = `PNL: +${Math.floor(s.pnl)}/H`;
+            document.getElementById('mt-btn').innerText = (s.lvl * 1000);
+            document.getElementById('el-btn').innerText = (s.max * 2);
+            
+            const bBtn = document.getElementById('bot-btn');
+            if(s.bot) { bBtn.innerText = "ACTIVE"; bBtn.style.opacity = "0.5"; bBtn.onclick = null; }
+        }
+
+        function activateTurbo() {
+            if(isTurbo) return;
+            closeModal('boost-ui'); isTurbo = true;
+            let time = 10;
+            const timer = document.getElementById('turbo-timer');
+            timer.style.display = 'block';
+            document.getElementById('t-a').classList.add('turbo-active');
+            const iv = setInterval(() => {
+                time--; timer.innerText = `TURBO: ${time}s`;
+                if(time <= 0) { clearInterval(iv); isTurbo = false; timer.style.display = 'none'; document.getElementById('t-a').classList.remove('turbo-active'); }
+            }, 1000);
+        }
+
+        function buyBoost(type) {
+            let cost = 0;
+            if(type === 'tap') cost = s.lvl * 1000;
+            else if(type === 'energy') cost = s.max * 2;
+            else if(type === 'bot') cost = 20000;
+
+            if(s.bal >= cost) {
+                s.bal -= cost;
+                if(type === 'tap') s.lvl++;
+                else if(type === 'energy') { s.max += 500; s.eng = s.max; }
+                else if(type === 'bot') s.bot = true;
+                tg.showAlert("Upgrade Success!");
+                upd(); save();
+            } else tg.showAlert("Low Balance!");
         }
 
         async function openStats() {
             openModal('stats-ui');
-            const cont = document.getElementById('stats-content');
-            cont.innerHTML = "📡 Scanning Network...";
-            try {
-                const r = await fetch('/api/stats');
-                const data = await r.json();
-                cont.innerHTML = data.map((u, i) => `
-                    <div class="stat-row">
-                        <div style="display:flex; gap:10px;">
-                            <span class="stat-rank">#${i+1}</span>
-                            <span>ID: ${u.user_id.slice(0,6)}...</span>
-                        </div>
-                        <span style="font-weight:bold;">${Math.floor(u.balance).toLocaleString()}</span>
-                    </div>
-                `).join('');
-            } catch(e) { cont.innerHTML = "Error loading stats."; }
+            const r = await fetch('/api/stats');
+            const data = await r.json();
+            document.getElementById('stats-content').innerHTML = data.map((u, i) => `
+                <div style="padding:10px; border-bottom:1px solid #222; display:flex; justify-content:space-between;">
+                    <span>#${i+1} ID:${u.user_id.slice(0,6)}</span>
+                    <b>${Math.floor(u.balance).toLocaleString()}</b>
+                </div>
+            `).join('');
         }
 
         function invite() {
             const link = `https://t.me/n_pulse_bot?start=${s.uid}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${link}&text=Join my neural network!`);
-        }
-
-        async function handleWallet() {
-            tonConnectUI.connected ? await tonConnectUI.disconnect() : await tonConnectUI.openModal();
-        }
-
-        function doTask(amt) {
-            tg.openTelegramLink("https://t.me/your_channel");
-            setTimeout(() => { s.bal += amt; upd(); save(); tg.showAlert("Reward Claimed!"); }, 3000);
+            tg.openTelegramLink(`https://t.me/share/url?url=${link}&text=Join Pulse!`);
         }
 
         function openModal(id) { document.getElementById(id).style.display = 'flex'; }
@@ -162,27 +188,43 @@
 
         document.getElementById('t-a').addEventListener('touchstart', (e) => {
             e.preventDefault();
-            if(s.eng < s.lvl) return;
-            s.bal += s.lvl; s.eng -= s.lvl;
+            if(!isTurbo && s.eng < s.lvl) return;
+            let gain = isTurbo ? s.lvl * 5 : s.lvl;
+            s.bal += gain; if(!isTurbo) s.eng -= s.lvl;
             const t = e.touches[0];
             const p = document.createElement('div');
-            p.className = 'plus'; p.innerText = `+${s.lvl}`;
+            p.className = isTurbo ? 'plus turbo' : 'plus';
+            p.innerText = `+${gain}`;
             p.style.left = t.clientX + 'px'; p.style.top = t.clientY + 'px';
             document.body.appendChild(p);
             setTimeout(() => p.remove(), 700);
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred(isTurbo ? 'heavy' : 'medium');
             upd();
         });
 
         function save() {
-            fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({userId: s.uid, balance: s.bal, energy: s.eng, click_lvl: s.lvl, pnl: s.pnl, rank: s.r}) });
+            fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({userId: s.uid, balance: s.bal, energy: s.eng, max_energy: s.max, click_lvl: s.lvl, pnl: s.pnl, rank: s.r, auto_bot: s.bot}) });
         }
 
         let p = 0;
         const loadIv = setInterval(() => { p += 5; document.getElementById('l-p').innerText = p + '%'; if(p >= 100) { clearInterval(loadIv); load(); } }, 30);
         setInterval(save, 5000);
-        setInterval(() => { if(s.eng < 1000) { s.eng++; upd(); } }, 1000);
-        setInterval(() => { if(s.pnl > 0) { s.bal += (s.pnl/3600); upd(); } }, 1000);
+        
+        // Логика восстановления энергии и работы бота
+        setInterval(() => {
+            if(s.eng < s.max) {
+                let rec = s.max / 500;
+                s.eng += rec;
+                if(s.eng > s.max) s.eng = s.max;
+                
+                // Если бот куплен, он тратит энергию на клики автоматически
+                if(s.bot && s.eng >= s.lvl) {
+                    s.bal += s.lvl;
+                    s.eng -= s.lvl;
+                }
+                upd();
+            }
+        }, 1000);
     </script>
 </body>
 </html>
