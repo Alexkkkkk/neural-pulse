@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.4.8</title>
+    <title>Neural Pulse v1.5.0</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@tonconnect/sdk@latest/dist/tonconnect-sdk.min.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
         body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
         
-        /* ЭТАЛОННАЯ ЗАГРУЗКА */
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
         .loader-ring { position: relative; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; margin-bottom: 30px; }
         .loader-ring svg { position: absolute; transform: rotate(-90deg); width: 100%; height: 100%; }
@@ -23,7 +23,6 @@
         .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; visibility: hidden; transition: 0.5s; }
         .app.ready { opacity: 1; visibility: visible; }
 
-        /* ИНТЕРФЕЙС */
         .header { width: 90%; margin-top: 20px; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 10px 15px; display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,255,255,0.1); }
         .u-av { width: 42px; height: 42px; border-radius: 12px; border: 2px solid var(--cyan); }
         .u-nm { font-size: 14px; font-weight: 900; }
@@ -46,12 +45,12 @@
         .footer { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 35px; }
         .f-item { background: #111; border: 1px solid #222; border-radius: 20px; padding: 16px 0; text-align: center; font-size: 10px; font-weight: bold; cursor: pointer; }
 
-        /* МОДАЛКИ */
         .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 25px; }
         .m-h { color: var(--cyan); font-size: 28px; font-weight: 900; margin: 30px 0 20px; text-transform: uppercase; }
         .m-close { background: #1a1a1a; padding: 18px; border-radius: 22px; text-align: center; margin-top: auto; font-weight: bold; color: #555; border: 1px solid #222; cursor: pointer; }
         .btn-act { background: var(--cyan); color: #000; padding: 18px; border-radius: 18px; font-weight: 900; text-align: center; margin-top: 15px; }
         .btn-act.dis { background: #222; color: #555; }
+        .wal-addr { font-size: 12px; color: #aaa; word-break: break-all; background: #111; padding: 10px; border-radius: 10px; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -93,23 +92,59 @@
         </div>
     </div>
 
-    <div id="wal-ui" class="modal"><div class="m-h">WALLET</div><p>Подключите TON кошелек для вывода средств.</p><div class="btn-act" onclick="tg.showAlert('Coming Soon!')">CONNECT WALLET</div><div class="m-close" onclick="closeM('wal-ui')">BACK</div></div>
-    
-    <div id="fr-ui" class="modal"><div class="m-h">FRIENDS</div><p>Приглашай друзей и получай 10% от их прибыли.</p><div class="btn-act" onclick="copyLink()">INVITE FRIEND</div><div class="m-close" onclick="closeM('fr-ui')">BACK</div></div>
-    
-    <div id="bn-ui" class="modal"><div class="m-h">DAILY BONUS</div><p>Забирай 1,000 токенов каждый день!</p><div id="bn-btn" class="btn-act" onclick="claimBonus()">CLAIM 1,000</div><div class="m-close" onclick="closeM('bn-ui')">BACK</div></div>
+    <div id="wal-ui" class="modal">
+        <div class="m-h">TON WALLET</div>
+        <p id="wal-status">Кошелек не подключен</p>
+        <div id="wal-info" style="display:none;">
+            <div class="wal-addr" id="wal-addr"></div>
+            <p style="font-size: 14px; margin-top: 20px;">Теперь вы можете получать выплаты в TON.</p>
+        </div>
+        <div id="wal-btn" class="btn-act" onclick="connectWallet()">CONNECT TON WALLET</div>
+        <div id="wal-dis" class="btn-act dis" style="display:none; margin-top:10px;" onclick="disconnectWallet()">DISCONNECT</div>
+        <div class="m-close" onclick="closeM('wal-ui')">BACK</div>
+    </div>
 
-    <div id="up-ui" class="modal"><div class="m-h">BOOST</div><p>Увеличь силу клика.</p><div id="b-act" class="btn-act" onclick="buyUp()">LEVEL UP: <span id="c-v">500</span></div><div class="m-close" onclick="closeM('up-ui')">BACK</div></div>
-
-    <div id="mi-ui" class="modal"><div class="m-h">MINE</div><p>Пассивный доход: <span id="pnl-v">0</span>/sec</p><div class="btn-act" onclick="buyMine()">BUY CORE (+1/sec): 2000</div><div class="m-close" onclick="closeM('mi-ui')">BACK</div></div>
-
-    <div id="ta-ui" class="modal"><div class="m-h">TASKS</div><div style="background:#111; padding:15px; border-radius:15px; margin-bottom:10px;">Subscribe Channel <span style="color:var(--cyan)">+5000</span></div><div class="m-close" onclick="closeM('ta-ui')">BACK</div></div>
-
-    <div id="st-ui" class="modal"><div class="m-h">LEADERBOARD</div><div id="st-list" style="overflow-y:auto; flex-grow:1;"></div><div class="m-close" onclick="closeM('st-ui')">BACK</div></div>
+    <div id="fr-ui" class="modal"><div class="m-h">FRIENDS</div><div class="btn-act" onclick="copyLink()">INVITE</div><div class="m-close" onclick="closeM('fr-ui')">BACK</div></div>
+    <div id="bn-ui" class="modal"><div class="m-h">BONUS</div><div id="bn-btn" class="btn-act" onclick="claimBonus()">CLAIM</div><div class="m-close" onclick="closeM('bn-ui')">BACK</div></div>
+    <div id="up-ui" class="modal"><div class="m-h">BOOST</div><div id="b-act" class="btn-act" onclick="buyUp()">UPGRADE: <span id="c-v"></span></div><div class="m-close" onclick="closeM('up-ui')">BACK</div></div>
+    <div id="mi-ui" class="modal"><div class="m-h">MINE</div><p>Passive: <span id="pnl-v">0</span>/sec</p><div class="btn-act" onclick="buyMine()">UPGRADE MINE: 2000</div><div class="m-close" onclick="closeM('mi-ui')">BACK</div></div>
+    <div id="ta-ui" class="modal"><div class="m-h">TASKS</div><div class="m-close" onclick="closeM('ta-ui')">BACK</div></div>
+    <div id="st-ui" class="modal"><div class="m-h">STATS</div><div id="st-list"></div><div class="m-close" onclick="closeM('st-ui')">BACK</div></div>
 
     <script>
         const tg = window.Telegram.WebApp;
-        let s = { uid: tg.initDataUnsafe?.user?.id || 0, bal: 0, eng: 1000, max: 1000, lvl: 1, pnl: 0, r: 'Bronze Node' };
+        let s = { uid: tg.initDataUnsafe?.user?.id || 0, bal: 0, eng: 1000, max: 1000, lvl: 1, pnl: 0, r: 'Bronze Node', wallet: null };
+
+        // TON CONNECT LOGIC
+        const connector = new TonConnectSDK.TonConnect({ manifestUrl: `https://${window.location.host}/tonconnect-manifest.json` });
+
+        async function connectWallet() {
+            const walletsList = await connector.getWallets();
+            // В Telegram Mini App лучше всего использовать универсальную ссылку
+            const walletConnectionSource = { universalLink: 'https://tonkeeper.com/ton-connect', bridgeUrl: 'https://bridge.tonapi.io/bridge' };
+            const url = connector.connect(walletConnectionSource);
+            tg.openLink(url);
+        }
+
+        connector.onStatusChange(wallet => {
+            if (wallet) {
+                s.wallet = wallet.account.address;
+                document.getElementById('wal-status').innerText = "КОШЕЛЕК ПОДКЛЮЧЕН";
+                document.getElementById('wal-addr').innerText = s.wallet;
+                document.getElementById('wal-info').style.display = 'block';
+                document.getElementById('wal-btn').style.display = 'none';
+                document.getElementById('wal-dis').style.display = 'block';
+                save();
+            } else {
+                s.wallet = null;
+                document.getElementById('wal-status').innerText = "Кошелек не подключен";
+                document.getElementById('wal-info').style.display = 'none';
+                document.getElementById('wal-btn').style.display = 'block';
+                document.getElementById('wal-dis').style.display = 'none';
+            }
+        });
+
+        function disconnectWallet() { connector.disconnect(); }
 
         // ЗАГРУЗКА
         let p = 0;
@@ -125,8 +160,8 @@
             try {
                 const r = await fetch(`/api/user/${s.uid}`);
                 const d = await r.json();
-                Object.assign(s, { bal: Number(d.balance), eng: d.energy, max: d.max_energy, lvl: d.click_lvl, pnl: Number(d.pnl), r: d.rank });
-                document.getElementById('u-nm').innerText = tg.initDataUnsafe?.user?.first_name || "Neural User";
+                Object.assign(s, { bal: Number(d.balance), eng: d.energy, max: d.max_energy, lvl: d.click_lvl, pnl: Number(d.pnl), r: d.rank, wallet: d.wallet_address });
+                document.getElementById('u-nm').innerText = tg.initDataUnsafe?.user?.first_name || "User";
             } catch(e) {}
             upd();
             document.getElementById('loader').style.display = 'none';
@@ -139,7 +174,6 @@
             document.getElementById('u-lv').innerText = s.lvl;
             document.getElementById('pnl-v').innerText = s.pnl;
             document.getElementById('e-f').style.width = (s.eng / s.max * 100) + '%';
-            
             const cost = 500 * Math.pow(2, s.lvl - 1);
             document.getElementById('c-v').innerText = cost.toLocaleString();
             document.getElementById('b-act').className = s.bal >= cost ? 'btn-act' : 'btn-act dis';
@@ -147,7 +181,7 @@
 
         function mineTick() {
             if(s.pnl > 0) { s.bal += s.pnl; upd(); }
-            if(s.eng < s.max) { s.eng = Math.min(s.max, s.eng + 2); upd(); }
+            if(s.eng < s.max) { s.eng = Math.min(s.max, s.eng + 1); upd(); }
         }
 
         function buyUp() {
@@ -160,7 +194,7 @@
         }
 
         function claimBonus() {
-            s.bal += 1000; tg.showAlert('Вы получили 1,000 токенов!');
+            s.bal += 1000; tg.showAlert('Бонус 1,000 получен!');
             document.getElementById('bn-btn').className = 'btn-act dis';
             document.getElementById('bn-btn').onclick = null;
             upd(); save();
@@ -168,7 +202,7 @@
 
         function copyLink() {
             const link = `https://t.me/neural_pulse_bot?start=${s.uid}`;
-            tg.showAlert(`Твоя ссылка скопирована: ${link}`);
+            tg.showAlert(`Ссылка: ${link}`);
         }
 
         function openM(id) { document.getElementById(id).style.display = 'flex'; upd(); }
@@ -192,7 +226,7 @@
             fetch('/api/save', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ userId: s.uid, username: tg.initDataUnsafe?.user?.first_name, balance: s.bal, energy: s.eng, max_energy: s.max, click_lvl: s.lvl, pnl: s.pnl, rank: s.r }) 
+                body: JSON.stringify({ userId: s.uid, username: tg.initDataUnsafe?.user?.first_name, balance: s.bal, energy: s.eng, max_energy: s.max, click_lvl: s.lvl, pnl: s.pnl, rank: s.r, wallet: s.wallet }) 
             });
         }
         setInterval(save, 10000);
