@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.4.6.2</title>
+    <title>Neural Pulse v1.4.8</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
         body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
         
-        /* ЛОАДЕР (ИЗ СКРИНШОТА) */
+        /* ЭТАЛОННАЯ ЗАГРУЗКА */
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
         .loader-ring { position: relative; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; margin-bottom: 30px; }
         .loader-ring svg { position: absolute; transform: rotate(-90deg); width: 100%; height: 100%; }
@@ -30,28 +30,28 @@
         .u-rk { font-size: 10px; color: var(--cyan); font-weight: bold; }
         .lvl-tag { margin-left: auto; background: var(--cyan); color: black; padding: 4px 10px; border-radius: 8px; font-weight: 900; font-size: 12px; }
 
-        .bal { font-size: 60px; font-weight: 900; margin: 25px 0; }
+        .bal { font-size: 60px; font-weight: 900; margin: 25px 0; text-shadow: 0 0 20px rgba(0,242,255,0.3); }
 
         .stage { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; position: relative; }
-        .main-ai { width: 250px; cursor: pointer; }
+        .main-ai { width: 250px; cursor: pointer; transition: 0.05s; }
+        .main-ai:active { transform: scale(0.95); }
+
         .side-btns { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 12px; }
-        .s-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 12px; border-radius: 15px; font-size: 10px; font-weight: bold; width: 80px; text-align: center; }
+        .s-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 12px; border-radius: 15px; font-size: 10px; font-weight: bold; width: 80px; text-align: center; cursor: pointer; }
 
         .e-wrap { width: 90%; margin-bottom: 25px; }
         .e-bar { width: 100%; height: 8px; background: #111; border-radius: 10px; overflow: hidden; }
         .e-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: 0.3s; }
 
         .footer { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 35px; }
-        .f-item { background: #111; border: 1px solid #222; border-radius: 20px; padding: 16px 0; text-align: center; font-size: 10px; font-weight: bold; }
+        .f-item { background: #111; border: 1px solid #222; border-radius: 20px; padding: 16px 0; text-align: center; font-size: 10px; font-weight: bold; cursor: pointer; }
 
         /* МОДАЛКИ */
         .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 25px; }
-        .m-h { color: var(--cyan); font-size: 28px; font-weight: 900; margin: 30px 0 20px; }
-        .m-close { background: #1a1a1a; padding: 18px; border-radius: 22px; text-align: center; margin-top: auto; font-weight: bold; color: #555; border: 1px solid #222; }
-        
-        /* КНОПКА КУПИТЬ */
-        .buy-btn { background: var(--cyan); color: #000; padding: 20px; border-radius: 18px; font-weight: 900; text-align: center; margin-top: 20px; cursor: pointer; }
-        .buy-btn.disabled { background: #333; color: #555; pointer-events: none; }
+        .m-h { color: var(--cyan); font-size: 28px; font-weight: 900; margin: 30px 0 20px; text-transform: uppercase; }
+        .m-close { background: #1a1a1a; padding: 18px; border-radius: 22px; text-align: center; margin-top: auto; font-weight: bold; color: #555; border: 1px solid #222; cursor: pointer; }
+        .btn-act { background: var(--cyan); color: #000; padding: 18px; border-radius: 18px; font-weight: 900; text-align: center; margin-top: 15px; }
+        .btn-act.dis { background: #222; color: #555; }
     </style>
 </head>
 <body>
@@ -70,7 +70,7 @@
         <div class="header">
             <img id="u-av" class="u-av" src="logo.png" onerror="this.src='images/logo.png'">
             <div style="flex-grow:1">
-                <div id="u-nm" class="u-nm">...</div>
+                <div id="u-nm" class="u-nm">Neural User</div>
                 <div id="u-rk" class="u-rk">Bronze Node</div>
             </div>
             <div class="lvl-tag">LVL <span id="u-lv">1</span></div>
@@ -93,29 +93,25 @@
         </div>
     </div>
 
-    <div id="up-ui" class="modal">
-        <div class="m-h">UPGRADES</div>
-        <div style="flex-grow:1">
-            <div style="background:#111; padding:20px; border-radius:20px; border:1px solid #222;">
-                <h3 style="margin:0; color:var(--cyan)">Multitap</h3>
-                <p style="color:#aaa; font-size:14px;">+1 к силе клика за уровень</p>
-                <div id="buy-action" class="buy-btn" onclick="buyClick()">LVL UP: <span id="cost-v">500</span></div>
-            </div>
-        </div>
-        <div class="m-close" onclick="closeM('up-ui')">CLOSE</div>
-    </div>
+    <div id="wal-ui" class="modal"><div class="m-h">WALLET</div><p>Подключите TON кошелек для вывода средств.</p><div class="btn-act" onclick="tg.showAlert('Coming Soon!')">CONNECT WALLET</div><div class="m-close" onclick="closeM('wal-ui')">BACK</div></div>
+    
+    <div id="fr-ui" class="modal"><div class="m-h">FRIENDS</div><p>Приглашай друзей и получай 10% от их прибыли.</p><div class="btn-act" onclick="copyLink()">INVITE FRIEND</div><div class="m-close" onclick="closeM('fr-ui')">BACK</div></div>
+    
+    <div id="bn-ui" class="modal"><div class="m-h">DAILY BONUS</div><p>Забирай 1,000 токенов каждый день!</p><div id="bn-btn" class="btn-act" onclick="claimBonus()">CLAIM 1,000</div><div class="m-close" onclick="closeM('bn-ui')">BACK</div></div>
 
-    <div id="st-ui" class="modal"><div class="m-h">STATS</div><div id="st-list" style="overflow-y:auto; flex-grow:1;"></div><div class="m-close" onclick="closeM('st-ui')">BACK</div></div>
-    <div id="wal-ui" class="modal"><div class="m-h">WALLET</div><div class="m-close" onclick="closeM('wal-ui')">CLOSE</div></div>
-    <div id="fr-ui" class="modal"><div class="m-h">FRIENDS</div><div class="m-close" onclick="closeM('fr-ui')">CLOSE</div></div>
-    <div id="bn-ui" class="modal"><div class="m-h">BONUS</div><div class="m-close" onclick="closeM('bn-ui')">CLOSE</div></div>
-    <div id="mi-ui" class="modal"><div class="m-h">MINE</div><div class="m-close" onclick="closeM('mi-ui')">CLOSE</div></div>
-    <div id="ta-ui" class="modal"><div class="m-h">TASKS</div><div class="m-close" onclick="closeM('ta-ui')">CLOSE</div></div>
+    <div id="up-ui" class="modal"><div class="m-h">BOOST</div><p>Увеличь силу клика.</p><div id="b-act" class="btn-act" onclick="buyUp()">LEVEL UP: <span id="c-v">500</span></div><div class="m-close" onclick="closeM('up-ui')">BACK</div></div>
+
+    <div id="mi-ui" class="modal"><div class="m-h">MINE</div><p>Пассивный доход: <span id="pnl-v">0</span>/sec</p><div class="btn-act" onclick="buyMine()">BUY CORE (+1/sec): 2000</div><div class="m-close" onclick="closeM('mi-ui')">BACK</div></div>
+
+    <div id="ta-ui" class="modal"><div class="m-h">TASKS</div><div style="background:#111; padding:15px; border-radius:15px; margin-bottom:10px;">Subscribe Channel <span style="color:var(--cyan)">+5000</span></div><div class="m-close" onclick="closeM('ta-ui')">BACK</div></div>
+
+    <div id="st-ui" class="modal"><div class="m-h">LEADERBOARD</div><div id="st-list" style="overflow-y:auto; flex-grow:1;"></div><div class="m-close" onclick="closeM('st-ui')">BACK</div></div>
 
     <script>
         const tg = window.Telegram.WebApp;
-        let s = { uid: tg.initDataUnsafe?.user?.id || 0, bal: 0, eng: 1000, max: 1000, lvl: 1, r: 'Bronze Node' };
+        let s = { uid: tg.initDataUnsafe?.user?.id || 0, bal: 0, eng: 1000, max: 1000, lvl: 1, pnl: 0, r: 'Bronze Node' };
 
+        // ЗАГРУЗКА
         let p = 0;
         const iv = setInterval(() => {
             p++;
@@ -129,33 +125,50 @@
             try {
                 const r = await fetch(`/api/user/${s.uid}`);
                 const d = await r.json();
-                Object.assign(s, { bal: Number(d.balance), eng: d.energy, max: d.max_energy, lvl: d.click_lvl, r: d.rank });
-                document.getElementById('u-nm').innerText = tg.initDataUnsafe?.user?.first_name || "User";
+                Object.assign(s, { bal: Number(d.balance), eng: d.energy, max: d.max_energy, lvl: d.click_lvl, pnl: Number(d.pnl), r: d.rank });
+                document.getElementById('u-nm').innerText = tg.initDataUnsafe?.user?.first_name || "Neural User";
             } catch(e) {}
             upd();
             document.getElementById('loader').style.display = 'none';
             document.getElementById('ui').classList.add('ready');
+            setInterval(mineTick, 1000);
         }
 
         function upd() {
             document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString();
             document.getElementById('u-lv').innerText = s.lvl;
+            document.getElementById('pnl-v').innerText = s.pnl;
             document.getElementById('e-f').style.width = (s.eng / s.max * 100) + '%';
             
             const cost = 500 * Math.pow(2, s.lvl - 1);
-            document.getElementById('cost-v').innerText = cost.toLocaleString();
-            document.getElementById('buy-action').className = s.bal >= cost ? 'buy-btn' : 'buy-btn disabled';
+            document.getElementById('c-v').innerText = cost.toLocaleString();
+            document.getElementById('b-act').className = s.bal >= cost ? 'btn-act' : 'btn-act dis';
         }
 
-        function buyClick() {
+        function mineTick() {
+            if(s.pnl > 0) { s.bal += s.pnl; upd(); }
+            if(s.eng < s.max) { s.eng = Math.min(s.max, s.eng + 2); upd(); }
+        }
+
+        function buyUp() {
             const cost = 500 * Math.pow(2, s.lvl - 1);
-            if(s.bal >= cost) {
-                s.bal -= cost;
-                s.lvl += 1;
-                tg.HapticFeedback.notificationOccurred('success');
-                upd();
-                save();
-            }
+            if(s.bal >= cost) { s.bal -= cost; s.lvl++; tg.HapticFeedback.notificationOccurred('success'); upd(); save(); }
+        }
+
+        function buyMine() {
+            if(s.bal >= 2000) { s.bal -= 2000; s.pnl += 1; tg.HapticFeedback.impactOccurred('light'); upd(); save(); }
+        }
+
+        function claimBonus() {
+            s.bal += 1000; tg.showAlert('Вы получили 1,000 токенов!');
+            document.getElementById('bn-btn').className = 'btn-act dis';
+            document.getElementById('bn-btn').onclick = null;
+            upd(); save();
+        }
+
+        function copyLink() {
+            const link = `https://t.me/neural_pulse_bot?start=${s.uid}`;
+            tg.showAlert(`Твоя ссылка скопирована: ${link}`);
         }
 
         function openM(id) { document.getElementById(id).style.display = 'flex'; upd(); }
@@ -179,10 +192,10 @@
             fetch('/api/save', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ userId: s.uid, username: tg.initDataUnsafe?.user?.first_name, balance: s.bal, energy: s.eng, max_energy: s.max, click_lvl: s.lvl, rank: s.r }) 
+                body: JSON.stringify({ userId: s.uid, username: tg.initDataUnsafe?.user?.first_name, balance: s.bal, energy: s.eng, max_energy: s.max, click_lvl: s.lvl, pnl: s.pnl, rank: s.r }) 
             });
         }
-        setInterval(() => { if(s.eng < s.max) { s.eng = Math.min(s.max, s.eng + 1); upd(); } save(); }, 5000);
+        setInterval(save, 10000);
     </script>
 </body>
 </html>
