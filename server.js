@@ -4,7 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.5.3";
+const VERSION = "1.5.4";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 const DOMAIN = "neural-pulse.bothost.ru";
@@ -17,7 +17,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Супер-максимальная база данных
+// Инициализация БД со всеми функциями
 const initDB = async () => {
     await pool.query(`CREATE TABLE IF NOT EXISTS users (
         user_id TEXT PRIMARY KEY, 
@@ -31,7 +31,7 @@ const initDB = async () => {
         wallet_address TEXT,
         ref_count INTEGER DEFAULT 0,
         bonus_claimed BOOLEAN DEFAULT FALSE,
-        tasks_completed TEXT DEFAULT ''
+        tasks_done TEXT DEFAULT ''
     )`);
 };
 initDB();
@@ -48,7 +48,7 @@ app.get('/api/user/:id', async (req, res) => {
 
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, click_lvl, pnl, wallet, bonus, tasks } = req.body;
-    await pool.query(`UPDATE users SET balance=$2, energy=$3, click_lvl=$4, pnl=$5, wallet_address=$6, bonus_claimed=$7, tasks_completed=$8 WHERE user_id=$1`, 
+    await pool.query(`UPDATE users SET balance=$2, energy=$3, click_lvl=$4, pnl=$5, wallet_address=$6, bonus_claimed=$7, tasks_done=$8 WHERE user_id=$1`, 
     [String(userId), balance, energy, click_lvl, pnl, wallet, bonus, tasks]);
     res.json({ ok: true });
 });
@@ -62,6 +62,6 @@ bot.start(c => c.replyWithHTML(`<b>🚀 NEURAL PULSE v${VERSION}</b>`,
     Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://${DOMAIN}`)]])));
 
 app.listen(3000, () => {
-    console.log(`\n========================================\nNEURAL PULSE CORE RUNNING. VERSION: ${VERSION}\n========================================\n`);
+    console.log(`\n========================================\nSYSTEM READY. CORE v${VERSION} ACTIVE\n========================================\n`);
     bot.launch();
 });
