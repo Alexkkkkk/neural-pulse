@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.6.1</title>
+    <title>Neural Pulse v1.6.2</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; --gray-card: #111; --gray-btn: #1a1a1a; }
         body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; }
         
-        /* ЗАГРУЗКА (ПРАВИЛО №5) */
+        /* Loader (Rule #5) */
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
         .load-circle { width: 220px; height: 220px; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--cyan); border-right: 2px solid var(--purple); display: flex; align-items: center; justify-content: center; animation: rotate 2s linear infinite; }
         @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -20,31 +20,25 @@
         .p-bar-cont { width: 70%; height: 5px; background: #111; margin-top: 25px; border-radius: 5px; overflow: hidden; }
         .p-bar-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 0%; transition: 0.1s; }
 
-        /* HEADER ПО СКРИНШОТУ */
         .header { width: 92%; margin-top: 20px; display: flex; align-items: center; background: var(--gray-card); border-radius: 20px; padding: 15px; border: 1px solid #222; }
         .u-av-box { width: 55px; height: 55px; border-radius: 12px; border: 2px solid var(--cyan); margin-right: 15px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
         .u-av { width: 100%; height: 100%; }
         .lvl-tag { background: var(--cyan); color: #000; padding: 8px 15px; border-radius: 12px; font-weight: 900; font-size: 16px; margin-left: auto; }
 
         .bal { font-size: 84px; font-weight: 800; margin: 45px 0; letter-spacing: -2px; }
-        
-        /* ЦЕНТР */
         .stage { flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
         .main-ai { width: 230px; filter: drop-shadow(0 0 40px rgba(188, 19, 254, 0.4)); cursor: pointer; transition: 0.1s; }
         .side-bar { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 12px; }
         .s-btn { background: var(--gray-btn); border: 1px solid #333; color: white; padding: 18px; border-radius: 18px; font-size: 12px; font-weight: bold; width: 100px; text-align: center; }
 
-        /* ЭНЕРГИЯ */
         .eng-cont { width: 92%; margin-bottom: 20px; }
         .eng-header { display: flex; justify-content: space-between; font-size: 12px; color: #888; margin-bottom: 8px; text-transform: uppercase; font-weight: bold; }
         .eng-bar { width: 100%; height: 10px; background: #111; border-radius: 10px; overflow: hidden; border: 1px solid #222; }
         #eng-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; }
 
-        /* FOOTER */
         .footer { width: 94%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 35px; }
         .f-item { background: var(--gray-btn); border-radius: 20px; padding: 22px 0; text-align: center; font-size: 12px; font-weight: bold; border: 1px solid #222; text-transform: uppercase; }
 
-        /* МОДАЛКИ ПО СКРИНШОТАМ (ПРАВИЛО №6) */
         .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 40px 25px; }
         .m-h { color: var(--cyan); font-size: 48px; font-weight: 800; margin-bottom: 35px; text-transform: uppercase; }
         .m-close { background: #111; padding: 25px; border-radius: 25px; text-align: center; margin-top: auto; color: #444; font-weight: bold; text-transform: uppercase; letter-spacing: 3px; font-size: 18px; }
@@ -66,7 +60,7 @@
         <div class="u-av-box"><img src="logo.png" class="u-av"></div>
         <div>
             <div id="u-nm" style="font-weight:bold; font-size:18px;">Neural User</div>
-            <div id="u-ver" style="color:var(--cyan); font-size:11px">v1.6.1 Active Node</div>
+            <div id="u-ver" style="color:var(--cyan); font-size:11px">v1.6.2 Node</div>
         </div>
         <div class="lvl-tag">LVL <span id="u-lv">1</span></div>
     </div>
@@ -108,7 +102,7 @@
         <div class="m-close" onclick="closeM('fr-ui')">BACK</div>
     </div>
 
-    <div id="st-ui" class="modal"><div class="m-h">STATS</div><div style="text-align:center; color:#555; margin-top:50px;">Global ranking coming soon...</div><div class="m-close" onclick="closeM('st-ui')">BACK</div></div>
+    <div id="st-ui" class="modal"><div class="m-h">STATS</div><div class="m-close" onclick="closeM('st-ui')">BACK</div></div>
     <div id="up-ui" class="modal"><div class="m-h">BOOST</div><div class="m-close" onclick="closeM('up-ui')">BACK</div></div>
     <div id="mi-ui" class="modal"><div class="m-h">MINE</div><div class="m-close" onclick="closeM('mi-ui')">BACK</div></div>
     <div id="ta-ui" class="modal"><div class="m-h">TASKS</div><div class="m-close" onclick="closeM('ta-ui')">BACK</div></div>
@@ -121,20 +115,22 @@
         // Loader
         let p = 0;
         const lIv = setInterval(() => {
-            p += 2;
+            p += 4; // Ускорил для теста, можно вернуть 2
             document.getElementById('p-txt').innerText = p + '%';
             document.getElementById('p-bar').style.width = p + '%';
             if(p >= 100) { clearInterval(lIv); document.getElementById('loader').style.display='none'; load(); }
-        }, 20);
+        }, 30);
 
         async function load() {
-            const r = await fetch(`/api/user/${s.uid}`);
-            const d = await r.json();
-            s.bal = Number(d.balance); s.lvl = d.click_lvl; s.eng = d.energy; s.wallet = d.wallet_address; s.fr = d.friends_count;
-            document.getElementById('u-nm').innerText = tg.initDataUnsafe?.user?.first_name || d.username;
-            document.getElementById('fr-total').innerText = s.fr;
-            updateWalletUI(); upd();
-            setInterval(tick, 1000);
+            try {
+                const r = await fetch(`/api/user/${s.uid}`);
+                const d = await r.json();
+                s.bal = Number(d.balance); s.lvl = d.click_lvl; s.eng = d.energy; s.wallet = d.wallet_address; s.fr = d.friends_count;
+                document.getElementById('u-nm').innerText = tg.initDataUnsafe?.user?.first_name || d.username;
+                document.getElementById('fr-total').innerText = s.fr;
+                updateWalletUI(); upd();
+                setInterval(tick, 1000);
+            } catch(e) { console.error("Load fail", e); }
         }
 
         function upd() {
@@ -145,7 +141,11 @@
         }
 
         function doTap() {
-            if(s.eng >= s.lvl) { s.bal += s.lvl; s.eng -= s.lvl; tg.HapticFeedback.impactOccurred('medium'); upd(); }
+            if(s.eng >= s.lvl) { 
+                s.bal += s.lvl; s.eng -= s.lvl; 
+                tg.HapticFeedback.impactOccurred('medium'); 
+                upd(); 
+            }
         }
 
         function tick() {
@@ -153,16 +153,33 @@
             upd(); save();
         }
 
+        function save() {
+            if(!s.uid || s.uid === '0') return;
+            fetch('/api/save', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ 
+                    userId: s.uid, 
+                    balance: s.bal, 
+                    energy: s.eng, 
+                    click_lvl: s.lvl, 
+                    pnl: 0, 
+                    wallet: s.wallet, 
+                    friends_count: s.fr 
+                }) 
+            }).catch(e => console.error("Sync error", e));
+        }
+
         function copyRef() {
             const link = `https://t.me/n_pulse_bot?start=${s.uid}`;
             const i = document.createElement('input'); i.value = link; document.body.appendChild(i);
             i.select(); document.execCommand('copy'); document.body.removeChild(i);
             tg.HapticFeedback.notificationOccurred('success');
-            alert("Referral link copied!");
+            alert("Link Copied!");
         }
 
         function toggleWallet() {
-            s.wallet = s.wallet ? null : "CONNECTED_NODE_" + s.uid;
+            s.wallet = s.wallet ? null : "TON_ADDR_" + s.uid;
             updateWalletUI(); save();
         }
 
@@ -176,14 +193,6 @@
 
         function openM(id) { document.getElementById(id).style.display = 'flex'; }
         function closeM(id) { document.getElementById(id).style.display = 'none'; }
-
-        function save() {
-            fetch('/api/save', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ userId: s.uid, balance: s.bal, energy: s.eng, click_lvl: s.lvl, pnl: 0, wallet: s.wallet, friends_count: s.fr }) 
-            });
-        }
     </script>
 </body>
 </html>
