@@ -1,4 +1,4 @@
-// Версия 1.4.6
+// v1.4.6 - Восстановление функций
 const express = require('express');
 const { Telegraf, Markup } = require('telegraf');
 const path = require('path');
@@ -16,7 +16,6 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
 app.use(cors());
 app.use(express.json());
-// Статика строго в /public
 app.use(express.static(path.join(__dirname, 'public')));
 
 const initDB = async () => {
@@ -31,8 +30,8 @@ const initDB = async () => {
             pnl NUMERIC DEFAULT 0,
             rank TEXT DEFAULT 'Bronze Node'
         )`);
-        console.log("Database v1.4.6 Initialized");
-    } catch (err) { console.error(err); }
+        console.log("DB v1.4.6 Ready");
+    } catch (err) { console.error("DB Error:", err); }
 };
 initDB();
 
@@ -61,10 +60,10 @@ app.post('/api/save', async (req, res) => {
 
 app.get('/api/stats', async (req, res) => {
     try {
-        const r = await pool.query("SELECT username, balance FROM users ORDER BY balance DESC LIMIT 15");
+        const r = await pool.query("SELECT username, balance, rank FROM users ORDER BY balance DESC LIMIT 15");
         res.json(r.rows);
     } catch (e) { res.status(500).json([]); }
 });
 
 bot.start(c => c.replyWithHTML(`<b>🚀 NEURAL PULSE v1.4.6</b>`, Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://${DOMAIN}`)]])));
-app.listen(PORT, () => { console.log(`v1.4.6 Live on ${PORT}`); bot.launch(); });
+app.listen(PORT, () => { console.log(`Server v1.4.6 active`); bot.launch(); });
