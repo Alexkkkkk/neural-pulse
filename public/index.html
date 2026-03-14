@@ -3,70 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.5.5</title>
+    <title>Neural Pulse v1.5.8</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/sdk@latest/dist/tonconnect-sdk.min.js"></script>
     <style>
-        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; --panel: #111; }
+        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; --gray-btn: #1a1a1a; }
         body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; }
         
-        /* Loader v1.5.5 */
-        #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
-        .l-ring { position: relative; width: 180px; height: 180px; display: flex; align-items: center; justify-content: center; }
-        .l-ring svg { position: absolute; transform: rotate(-90deg); width: 100%; height: 100%; }
-        .l-ring circle { fill: none; stroke-width: 5; stroke: url(#lg); stroke-dasharray: 502; stroke-dashoffset: 502; stroke-linecap: round; }
+        /* Header */
+        .header { width: 92%; margin-top: 15px; display: flex; align-items: center; background: rgba(255,255,255,0.03); border-radius: 15px; padding: 12px; border: 1px solid #222; }
+        .u-av { width: 45px; height: 45px; border-radius: 10px; border: 1px solid var(--cyan); margin-right: 12px; }
+        .lvl-badge { background: var(--cyan); color: #000; padding: 5px 12px; border-radius: 10px; font-weight: 900; font-size: 14px; }
+
+        .bal { font-size: 72px; font-weight: 800; margin: 40px 0; }
         
-        /* Основной UI */
-        .header { width: 90%; margin-top: 20px; display: flex; align-items: center; background: var(--panel); border-radius: 18px; padding: 12px; border: 1px solid #222; }
-        .u-av { width: 45px; height: 45px; border-radius: 10px; margin-right: 12px; border: 1px solid var(--cyan); }
-        .bal { font-size: 64px; font-weight: 900; margin: 35px 0; }
-        
-        .stage { flex-grow: 1; width: 100%; position: relative; display: flex; align-items: center; justify-content: center; }
-        .main-ai { width: 230px; filter: drop-shadow(0 0 30px var(--purple)); cursor: pointer; transition: 0.1s; }
-        .main-ai:active { transform: scale(0.95); }
+        /* Center Area */
+        .stage { flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
+        .main-ai { width: 210px; filter: drop-shadow(0 0 35px var(--purple)); cursor: pointer; transition: 0.1s; }
+        .main-ai:active { transform: scale(0.92); }
 
-        /* ВОССТАНОВЛЕННЫЕ БОКОВЫЕ КНОПКИ */
-        .side-bar { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 12px; }
-        .s-btn { background: rgba(255,255,255,0.05); border: 1px solid #333; color: white; padding: 12px; border-radius: 15px; font-size: 10px; font-weight: bold; width: 85px; text-align: center; cursor: pointer; }
+        .side-bar { position: absolute; right: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .s-btn { background: var(--gray-btn); border: 1px solid #333; color: white; padding: 15px; border-radius: 15px; font-size: 11px; font-weight: bold; width: 85px; text-align: center; }
 
-        /* ЭНЕРГИЯ */
-        .eng-container { width: 90%; margin-bottom: 20px; }
-        .eng-bar { width: 100%; height: 8px; background: #222; border-radius: 10px; overflow: hidden; }
-        #eng-fill { height: 100%; background: linear-gradient(to right, var(--cyan), var(--purple)); width: 100%; transition: 0.3s; }
+        /* Energy */
+        .eng-cont { width: 92%; margin-bottom: 15px; }
+        .eng-header { display: flex; justify-content: space-between; font-size: 11px; color: #888; margin-bottom: 5px; text-transform: uppercase; }
+        .eng-bar { width: 100%; height: 8px; background: #111; border-radius: 10px; overflow: hidden; border: 1px solid #222; }
+        #eng-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; transition: 0.3s; }
 
-        /* НИЖНЯЯ ПАНЕЛЬ */
-        .footer { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 35px; }
-        .f-item { background: var(--panel); border: 1px solid #222; border-radius: 15px; padding: 15px 0; text-align: center; font-size: 10px; font-weight: bold; cursor: pointer; }
+        /* Footer */
+        .footer { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 30px; }
+        .f-item { background: var(--gray-btn); border-radius: 18px; padding: 18px 0; text-align: center; font-size: 11px; font-weight: bold; border: 1px solid #222; }
 
-        /* МОДАЛКИ */
-        .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 25px; }
-        .m-h { color: var(--cyan); font-size: 32px; font-weight: 900; margin-bottom: 25px; text-transform: uppercase; }
-        .m-close { background: #1a1a1a; padding: 20px; border-radius: 20px; text-align: center; margin-top: auto; font-weight: bold; cursor: pointer; color: #666; }
-        .card { background: var(--panel); border: 1px solid #222; padding: 18px; border-radius: 18px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-        .btn-act { background: var(--cyan); color: #000; padding: 18px; border-radius: 18px; font-weight: 900; text-align: center; border: none; width: 100%; cursor: pointer; }
+        /* Modals */
+        .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 30px 20px; }
+        .m-h { color: var(--cyan); font-size: 36px; font-weight: 800; margin-bottom: 25px; }
+        .m-close { background: #151515; padding: 20px; border-radius: 20px; text-align: center; margin-top: auto; color: #444; font-weight: bold; }
+
+        /* Wallet Specific */
+        .wal-card { background: #111; border: 1px solid #222; border-radius: 15px; padding: 20px; display: flex; justify-content: space-between; margin-bottom: 20px; }
+        .wal-btn { background: var(--cyan); color: #000; border: none; padding: 20px; border-radius: 15px; font-weight: 900; font-size: 14px; cursor: pointer; }
+        .wal-btn.on { background: #1a1a1a; color: #555; border: 1px solid #333; }
     </style>
 </head>
 <body>
-    <div id="loader">
-        <div class="l-ring">
-            <svg><defs><linearGradient id="lg"><stop offset="0%" stop-color="var(--cyan)"/><stop offset="100%" stop-color="var(--purple)"/></linearGradient></defs>
-            <circle id="c-arc" cx="90" cy="90" r="80"></circle></svg>
-            <img src="logo.png" style="width:100px" onerror="this.src='images/logo.png'">
-        </div>
-        <div style="margin-top:20px; letter-spacing:5px; font-weight:bold;">ACCESS GRANTED</div>
-        <div id="p-txt" style="font-size:42px; font-weight:900; color:var(--cyan); margin:15px 0;">0%</div>
-    </div>
 
     <div class="header">
         <img src="logo.png" class="u-av" onerror="this.src='images/logo.png'">
-        <div style="flex-grow:1"><div id="u-nm" style="font-weight:bold">Neural Player</div><div style="color:var(--cyan); font-size:10px">v1.5.5 Active Node</div></div>
-        <div style="background:var(--cyan); color:#000; padding:4px 10px; border-radius:8px; font-weight:900">LVL <span id="u-lv">1</span></div>
+        <div style="flex-grow:1">
+            <div id="u-nm" style="font-weight:bold;">User</div>
+            <div style="color:var(--cyan); font-size:10px">v1.5.8 Active Node</div>
+        </div>
+        <div class="lvl-badge">LVL <span id="u-lv">1</span></div>
     </div>
 
     <div class="bal" id="b-v">0</div>
 
     <div class="stage">
-        <img src="logo.png" class="main-ai" id="tap" onclick="doTap()">
+        <img src="logo.png" class="main-ai" onclick="doTap()">
         <div class="side-bar">
             <div class="s-btn" onclick="openM('wal-ui')">WALLET</div>
             <div class="s-btn" onclick="openM('fr-ui')">FRIENDS</div>
@@ -74,8 +67,8 @@
         </div>
     </div>
 
-    <div class="eng-container">
-        <div style="display:flex; justify-content:space-between; font-size:10px; margin-bottom:5px;"><span>ENERGY</span><span id="e-val">1000/1000</span></div>
+    <div class="eng-cont">
+        <div class="eng-header"><span>Energy</span><span id="e-count">1000/1000</span></div>
         <div class="eng-bar"><div id="eng-fill"></div></div>
     </div>
 
@@ -86,88 +79,93 @@
         <div class="f-item" onclick="openM('st-ui')">STATS</div>
     </div>
 
-    <div id="wal-ui" class="modal"><div class="m-h">Wallet</div><div class="card"><div>Status</div><div id="w-st">Disconnected</div></div><button class="btn-act" onclick="connectWallet()">CONNECT TON</button><div class="m-close" onclick="closeM('wal-ui')">BACK</div></div>
-    <div id="fr-ui" class="modal"><div class="m-h">Friends</div><div class="card"><div>Referrals</div><div id="f-ct">0</div></div><button class="btn-act" onclick="copyRef()">COPY INVITE LINK</button><div class="m-close" onclick="closeM('fr-ui')">BACK</div></div>
-    <div id="bn-ui" class="modal"><div class="m-h">Bonus</div><div class="card"><div>Daily Reward</div><div>+1,000</div></div><button id="bn-btn" class="btn-act" onclick="claimBonus()">CLAIM</button><div class="m-close" onclick="closeM('bn-ui')">BACK</div></div>
-    <div id="up-ui" class="modal"><div class="m-h">Boost</div><div class="card"><div>Tap Power</div><div id="c-lv-show">1</div></div><button id="b-act" class="btn-act" onclick="buyUp()">UPGRADE: <span id="c-cost">500</span></button><div class="m-close" onclick="closeM('up-ui')">BACK</div></div>
-    <div id="mi-ui" class="modal"><div class="m-h">Mine</div><div class="card"><div>Income</div><div id="pnl-v">0</div>/s</div><button class="btn-act" onclick="buyMine()">UPGRADE MINE: 2,000</button><div class="m-close" onclick="closeM('mi-ui')">BACK</div></div>
-    <div id="ta-ui" class="modal"><div class="m-h">Tasks</div><div class="card"><div>Official Channel</div><button class="btn-act" style="width:auto; padding:5px 15px;">+5,000</button></div><div class="m-close" onclick="closeM('ta-ui')">BACK</div></div>
-    <div id="st-ui" class="modal"><div class="m-h">Stats</div><div id="st-list" style="flex-grow:1; overflow-y:auto;"></div><div class="m-close" onclick="closeM('st-ui')">BACK</div></div>
+    <div id="wal-ui" class="modal">
+        <div class="m-h">WALLET</div>
+        <div class="wal-card">
+            <span style="color:#888">Status</span>
+            <span id="w-status" style="font-weight:bold">Disconnected</span>
+        </div>
+        <button id="w-btn" class="wal-btn" onclick="toggleWallet()">CONNECT TON</button>
+        <div class="m-close" onclick="closeM('wal-ui')">BACK</div>
+    </div>
+
+    <div id="st-ui" class="modal"><div class="m-h">STATS</div><div id="st-list"></div><div class="m-close" onclick="closeM('st-ui')">BACK</div></div>
+    <div id="up-ui" class="modal"><div class="m-h">BOOST</div><div class="m-close" onclick="closeM('up-ui')">BACK</div></div>
+    <div id="mi-ui" class="modal"><div class="m-h">MINE</div><div class="m-close" onclick="closeM('mi-ui')">BACK</div></div>
+    <div id="ta-ui" class="modal"><div class="m-h">TASKS</div><div class="m-close" onclick="closeM('ta-ui')">BACK</div></div>
+    <div id="fr-ui" class="modal"><div class="m-h">FRIENDS</div><div class="m-close" onclick="closeM('fr-ui')">BACK</div></div>
+    <div id="bn-ui" class="modal"><div class="m-h">BONUS</div><div class="m-close" onclick="closeM('bn-ui')">BACK</div></div>
 
     <script>
         const tg = window.Telegram.WebApp;
-        let s = { uid: tg.initDataUnsafe?.user?.id || 0, bal: 0, lvl: 1, pnl: 0, eng: 1000, maxE: 1000, bonus: false, wallet: null };
-
-        // Loader 
-        let p = 0;
-        const lIv = setInterval(() => {
-            p++; document.getElementById('p-txt').innerText = p+'%';
-            document.getElementById('c-arc').style.strokeDashoffset = 502 - (502 * p / 100);
-            if(p >= 100) { clearInterval(lIv); document.getElementById('loader').style.display='none'; load(); }
-        }, 15);
+        let s = { uid: tg.initDataUnsafe?.user?.id || '0', bal: 0, lvl: 1, eng: 1000, maxE: 1000, wallet: null };
 
         async function load() {
             const r = await fetch(`/api/user/${s.uid}`);
             const d = await r.json();
-            s.bal = Number(d.balance); s.lvl = d.click_lvl; s.pnl = Number(d.pnl); s.bonus = d.bonus_claimed;
-            s.eng = d.energy; s.maxE = d.max_energy; s.wallet = d.wallet_address;
-            document.getElementById('u-nm').innerText = d.username;
-            if(s.bonus) { document.getElementById('bn-btn').innerText = "CLAIMED"; document.getElementById('bn-btn').style.opacity = '0.5'; }
-            if(s.wallet) document.getElementById('w-st').innerText = "Connected";
+            s.bal = Number(d.balance); s.lvl = d.click_lvl; s.eng = d.energy; s.wallet = d.wallet_address;
+            document.getElementById('u-nm').innerText = tg.initDataUnsafe?.user?.first_name || d.username;
+            updateWalletUI();
             upd();
-            setInterval(passiveTick, 1000);
+            setInterval(tick, 1000);
         }
 
         function upd() {
             document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString();
             document.getElementById('u-lv').innerText = s.lvl;
-            document.getElementById('c-lv-show').innerText = s.lvl;
-            document.getElementById('pnl-v').innerText = s.pnl;
-            document.getElementById('e-val').innerText = `${Math.floor(s.eng)}/${s.maxE}`;
+            document.getElementById('e-count').innerText = `${Math.floor(s.eng)}/${s.maxE}`;
             document.getElementById('eng-fill').style.width = (s.eng / s.maxE * 100) + '%';
-            const cost = 500 * Math.pow(2, s.lvl - 1);
-            document.getElementById('c-cost').innerText = cost.toLocaleString();
-            document.getElementById('b-act').style.opacity = s.bal >= cost ? '1' : '0.5';
         }
 
         function doTap() {
             if(s.eng >= s.lvl) {
                 s.bal += s.lvl; s.eng -= s.lvl;
-                tg.HapticFeedback.impactOccurred('medium');
+                tg.HapticFeedback.impactOccurred('light');
                 upd();
             }
         }
 
-        function passiveTick() {
-            if(s.pnl > 0) s.bal += s.pnl;
+        function tick() {
             if(s.eng < s.maxE) s.eng = Math.min(s.maxE, s.eng + 3);
             upd();
-            save(); // Автосохранение раз в секунду
+            save();
         }
 
-        function buyUp() {
-            const cost = 500 * Math.pow(2, s.lvl - 1);
-            if(s.bal >= cost) { s.bal -= cost; s.lvl++; upd(); }
+        function toggleWallet() {
+            if (!s.wallet) {
+                s.wallet = "CONNECTED";
+                tg.HapticFeedback.notificationOccurred('success');
+            } else {
+                s.wallet = null;
+            }
+            updateWalletUI();
+            save();
         }
 
-        function buyMine() { if(s.bal >= 2000) { s.bal -= 2000; s.pnl += 1; upd(); } }
-        function claimBonus() { if(!s.bonus) { s.bal += 1000; s.bonus = true; upd(); alert('Bonus Claimed!'); } }
-        function copyRef() { alert('Invite Link: https://t.me/neural_pulse_bot?start=' + s.uid); }
+        function updateWalletUI() {
+            const btn = document.getElementById('w-btn');
+            const st = document.getElementById('w-status');
+            if (s.wallet) {
+                st.innerText = "Connected"; st.style.color = "var(--cyan)";
+                btn.innerText = "DISCONNECT"; btn.classList.add('on');
+            } else {
+                st.innerText = "Disconnected"; st.style.color = "#fff";
+                btn.innerText = "CONNECT TON"; btn.classList.remove('on');
+            }
+        }
 
-        function openM(id) { document.getElementById(id).style.display = 'flex'; if(id === 'st-ui') loadStats(); }
+        function openM(id) { document.getElementById(id).style.display = 'flex'; }
         function closeM(id) { document.getElementById(id).style.display = 'none'; }
 
-        async function loadStats() {
-            const r = await fetch('/api/stats');
-            const d = await r.json();
-            document.getElementById('st-list').innerHTML = d.map((u, i) => `<div class="card"><span>#${i+1} ${u.username}</span><span>${Math.floor(u.balance)}</span></div>`).join('');
-        }
-
         function save() {
-            fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ userId: s.uid, balance: s.bal, energy: s.eng, click_lvl: s.lvl, pnl: s.pnl, bonus: s.bonus, wallet: s.wallet }) });
+            fetch('/api/save', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ userId: s.uid, balance: s.bal, energy: s.eng, click_lvl: s.lvl, pnl: 0, wallet: s.wallet }) 
+            });
         }
 
-        function connectWallet() { alert("TON Connect v1.5.5 Ready"); }
+        load();
     </script>
 </body>
 </html>
