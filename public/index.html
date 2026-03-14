@@ -3,51 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.5.9</title>
+    <title>Neural Pulse v1.6.0</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; --gray-btn: #1a1a1a; }
         body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; }
         
-        /* Header */
+        /* КУЛЬТОВАЯ ЗАГРУЗКА */
+        #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
+        .load-circle { width: 200px; height: 200px; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--cyan); border-right: 2px solid var(--purple); display: flex; align-items: center; justify-content: center; position: relative; animation: rotate 2s linear infinite; }
+        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .load-logo { width: 100px; animation: unrotate 2s linear infinite; }
+        @keyframes unrotate { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+        .access-txt { margin-top: 40px; font-weight: bold; letter-spacing: 3px; font-size: 18px; text-transform: uppercase; }
+        .p-val { margin-top: 15px; font-size: 32px; font-weight: 900; color: var(--cyan); }
+        .p-bar-cont { width: 60%; height: 4px; background: #111; margin-top: 20px; border-radius: 2px; overflow: hidden; }
+        .p-bar-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 0%; transition: 0.1s; }
+
+        /* Основной интерфейс */
         .header { width: 92%; margin-top: 15px; display: flex; align-items: center; background: rgba(255,255,255,0.03); border-radius: 15px; padding: 12px; border: 1px solid #222; }
         .u-av { width: 45px; height: 45px; border-radius: 10px; border: 1px solid var(--cyan); margin-right: 12px; }
         .lvl-badge { background: var(--cyan); color: #000; padding: 5px 12px; border-radius: 10px; font-weight: 900; font-size: 14px; }
         .bal { font-size: 72px; font-weight: 800; margin: 40px 0; }
-        
-        /* Center Area */
         .stage { flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
         .main-ai { width: 210px; filter: drop-shadow(0 0 35px var(--purple)); cursor: pointer; transition: 0.1s; }
-        .main-ai:active { transform: scale(0.92); }
         .side-bar { position: absolute; right: 15px; display: flex; flex-direction: column; gap: 10px; }
         .s-btn { background: var(--gray-btn); border: 1px solid #333; color: white; padding: 15px; border-radius: 15px; font-size: 11px; font-weight: bold; width: 85px; text-align: center; }
-
-        /* UI Elements */
         .eng-cont { width: 92%; margin-bottom: 15px; }
         .eng-header { display: flex; justify-content: space-between; font-size: 11px; color: #888; margin-bottom: 5px; }
         .eng-bar { width: 100%; height: 8px; background: #111; border-radius: 10px; overflow: hidden; border: 1px solid #222; }
-        #eng-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; transition: 0.3s; }
+        #eng-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; }
         .footer { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 30px; }
         .f-item { background: var(--gray-btn); border-radius: 18px; padding: 18px 0; text-align: center; font-size: 11px; font-weight: bold; border: 1px solid #222; }
 
-        /* Modals */
+        /* Модалки */
         .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 30px 20px; }
         .m-h { color: var(--cyan); font-size: 36px; font-weight: 800; margin-bottom: 25px; }
         .m-close { background: #151515; padding: 20px; border-radius: 20px; text-align: center; margin-top: auto; color: #444; font-weight: bold; text-transform: uppercase; }
-
-        /* Friends UI */
         .ref-box { background: #111; border: 1px solid #222; border-radius: 15px; padding: 20px; margin-bottom: 15px; text-align: center; }
-        .ref-count { font-size: 42px; font-weight: 900; color: var(--cyan); }
-        .ref-btn { background: var(--cyan); color: #000; border: none; padding: 20px; border-radius: 15px; font-weight: 900; width: 100%; cursor: pointer; }
+        .ref-btn { background: var(--cyan); color: #000; border: none; padding: 20px; border-radius: 15px; font-weight: 900; width: 100%; }
     </style>
 </head>
 <body>
 
+    <div id="loader">
+        <div class="load-circle">
+            <img src="logo.png" class="load-logo" onerror="this.src='images/logo.png'">
+        </div>
+        <div class="access-txt">Access Granted</div>
+        <div class="p-val" id="p-txt">0%</div>
+        <div class="p-bar-cont"><div class="p-bar-fill" id="p-bar"></div></div>
+    </div>
+
     <div class="header">
         <img src="logo.png" class="u-av" onerror="this.src='images/logo.png'">
         <div style="flex-grow:1">
-            <div id="u-nm" style="font-weight:bold;">Loading...</div>
-            <div style="color:var(--cyan); font-size:10px">v1.5.9 Node</div>
+            <div id="u-nm" style="font-weight:bold;">User</div>
+            <div style="color:var(--cyan); font-size:10px">v1.6.0 Node</div>
         </div>
         <div class="lvl-badge">LVL <span id="u-lv">1</span></div>
     </div>
@@ -77,12 +89,8 @@
 
     <div id="fr-ui" class="modal">
         <div class="m-h">FRIENDS</div>
-        <div class="ref-box">
-            <div style="color:#888; font-size:12px; margin-bottom:10px;">Total Invited</div>
-            <div class="ref-count" id="fr-total">0</div>
-        </div>
-        <button class="ref-btn" onclick="copyRef()">INVITE FRIEND</button>
-        <div style="color:#555; font-size:11px; text-align:center; margin-top:15px;">+5,000 for every active node</div>
+        <div class="ref-box"><div style="color:#888; font-size:12px;">Invited</div><div id="fr-total" style="font-size:32px; color:var(--cyan);">0</div></div>
+        <button class="ref-btn" onclick="copyRef()">INVITE</button>
         <div class="m-close" onclick="closeM('fr-ui')">BACK</div>
     </div>
 
@@ -104,6 +112,15 @@
     <script>
         const tg = window.Telegram.WebApp;
         let s = { uid: tg.initDataUnsafe?.user?.id || '0', bal: 0, lvl: 1, eng: 1000, maxE: 1000, wallet: null, fr: 0 };
+
+        // Анимация загрузки по скриншоту
+        let p = 0;
+        const lIv = setInterval(() => {
+            p++;
+            document.getElementById('p-txt').innerText = p + '%';
+            document.getElementById('p-bar').style.width = p + '%';
+            if(p >= 100) { clearInterval(lIv); document.getElementById('loader').style.display='none'; load(); }
+        }, 15);
 
         async function load() {
             const r = await fetch(`/api/user/${s.uid}`);
@@ -138,7 +155,7 @@
             input.select(); document.execCommand('copy');
             document.body.removeChild(input);
             tg.HapticFeedback.notificationOccurred('success');
-            alert("Referral link copied!");
+            alert("Copied!");
         }
 
         function toggleWallet() {
@@ -164,7 +181,6 @@
                 body: JSON.stringify({ userId: s.uid, balance: s.bal, energy: s.eng, click_lvl: s.lvl, pnl: 0, wallet: s.wallet, friends_count: s.fr }) 
             });
         }
-        load();
     </script>
 </body>
 </html>
