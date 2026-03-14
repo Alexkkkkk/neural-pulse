@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.3.1</title>
+    <title>Neural Pulse v1.3.2</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
@@ -17,7 +17,7 @@
         .app.ready { opacity: 1; visibility: visible; }
         .header { width: 90%; margin-top: 20px; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 12px; display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,255,255,0.1); box-sizing: border-box; }
         .lvl-box { width: 45px; height: 45px; border: 2px solid var(--neon-cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: bold; }
-        .bal { font-size: 60px; font-weight: 900; margin-top: 15px; text-shadow: 0 0 20px rgba(0,242,252,0.3); }
+        .bal { font-size: 60px; font-weight: 900; margin-top: 15px; text-shadow: 0 0 20px rgba(0,242,255,0.3); }
         .pnl { color: var(--neon-cyan); font-weight: bold; margin-top: -10px; font-size: 13px; }
         .stage { flex-grow: 1; position: relative; width: 100%; display: flex; align-items: center; justify-content: center; }
         .main-logo { width: 220px; height: 220px; z-index: 1; border-radius: 50%; filter: drop-shadow(0 0 30px rgba(188,19,254,0.3)); cursor: pointer; transition: transform 0.1s; }
@@ -27,7 +27,7 @@
         .btn-pill.connected { border-color: var(--neon-cyan); color: var(--neon-cyan); }
         .energy-box { width: 85%; margin-bottom: 25px; }
         .e-bar { width: 100%; height: 6px; background: #111; border-radius: 10px; overflow: hidden; }
-        .e-fill { height: 100%; background: var(--neon-cyan); transition: 0.3s; width: 100%; }
+        .e-fill { height: 100%; background: var(--neon-cyan); transition: 0.3s; width: 100%; box-shadow: 0 0 10px var(--neon-cyan); }
         .footer { width: 92%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 35px; }
         .f-item { background: #151515; border: 1px solid #252525; border-radius: 20px; padding: 18px 0; text-align: center; font-size: 11px; font-weight: bold; cursor: pointer; }
         .modal { position: fixed; inset: 0; background: #000; z-index: 2000; display: none; padding: 25px; flex-direction: column; overflow-y: auto; }
@@ -45,7 +45,7 @@
     <div class="app" id="ui">
         <div class="header">
             <div class="lvl-box" id="l-v">1</div>
-            <div><div style="font-size: 9px; color: #555;">NODE ALPHA</div><div style="font-size: 14px; font-weight: 900;">NEURAL PULSE v1.3.1</div></div>
+            <div><div style="font-size: 9px; color: #555;">NODE ALPHA</div><div style="font-size: 14px; font-weight: 900;">NEURAL PULSE v1.3.2</div></div>
         </div>
         <div class="bal" id="b-v">0</div>
         <div class="pnl" id="p-v">PNL: +0/H</div>
@@ -74,18 +74,37 @@
     <div id="mine-ui" class="modal">
         <h2 style="color:var(--neon-purple)">MATH SHOP</h2>
         <div class="card">
-            <div><b>Addition (+)</b><br><small id="c-p-i">+350 PNL/h</small></div>
+            <div><b>Addition (+)</b><br><small>+350 PNL/h</small></div>
             <button class="btn-pill" id="c-p-b" onclick="buyCard('plus')">10K</button>
         </div>
         <div class="card">
-            <div><b>Multiplication (×)</b><br><small id="c-m-i">+2500 PNL/h</small></div>
+            <div><b>Multiplication (×)</b><br><small>+2500 PNL/h</small></div>
             <button class="btn-pill" id="c-m-b" onclick="buyCard('mult')">80K</button>
         </div>
         <button class="f-item" style="width:100%; margin-top:auto; padding: 20px;" onclick="closeModal('mine-ui')">CLOSE</button>
     </div>
 
-    <div id="boost-ui" class="modal">...</div>
-    <div id="stats-ui" class="modal">...</div>
+    <div id="boost-ui" class="modal">
+        <h2 style="color:var(--neon-cyan)">BOOSTERS</h2>
+        <div class="card">
+            <div><b>Multitap</b><br><small>Level up click power</small></div>
+            <button class="btn-pill" id="mt-btn" onclick="buyBoost('tap')">5000</button>
+        </div>
+        <div class="card">
+            <div><b>Full Energy</b><br><small>Refill core (1000)</small></div>
+            <button class="btn-pill" onclick="buyBoost('energy')">500</button>
+        </div>
+        <button class="f-item" style="width:100%; margin-top:auto; padding: 20px;" onclick="closeModal('boost-ui')">CLOSE</button>
+    </div>
+
+    <div id="stats-ui" class="modal">
+        <h2 style="color:white">NETWORK</h2>
+        <div class="card"><div>Global Users</div><div id="st-u">-</div></div>
+        <div class="card"><div>Total Supply</div><div id="st-s">-</div></div>
+        <h3 style="color:var(--neon-cyan); margin-top: 20px;">TOP 10 NODES</h3>
+        <div id="leaderboard-list" style="background: #111; border-radius: 15px; margin-bottom: 20px;"></div>
+        <button class="f-item" style="width:100%; margin-top:auto; padding: 20px;" onclick="closeModal('stats-ui')">CLOSE</button>
+    </div>
 
     <script>
         const tg = window.Telegram.WebApp;
@@ -100,13 +119,33 @@
         function openModal(id) { document.getElementById(id).style.display = 'flex'; }
         function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
+        async function openStats() {
+            openModal('stats-ui');
+            const rs = await fetch('/api/stats');
+            const ds = await rs.json();
+            document.getElementById('st-u').innerText = Number(ds.users).toLocaleString();
+            document.getElementById('st-s').innerText = Number(ds.circulating).toLocaleString();
+            const rl = await fetch('/api/leaderboard');
+            const dl = await rl.json();
+            const list = document.getElementById('leaderboard-list');
+            list.innerHTML = '';
+            dl.forEach((p, i) => {
+                const row = document.createElement('div');
+                row.style.padding = '12px'; row.style.display = 'flex'; row.style.justifyContent = 'space-between';
+                row.innerHTML = `<span>${i+1}. ID:${p.user_id}</span><span>${Math.floor(p.balance).toLocaleString()}</span>`;
+                list.appendChild(row);
+            });
+        }
+
         async function load() {
-            const r = await fetch(`/api/user/${s.uid}`);
-            const d = await r.json();
-            Object.assign(s, { bal: Number(d.balance), eng: d.energy, lvl: d.click_lvl, pnl: Number(d.pnl), c_p_l: d.card_plus_lvl, c_m_l: d.card_mult_lvl });
-            upd();
-            document.getElementById('loader').style.display = 'none';
-            document.getElementById('ui').classList.add('ready');
+            try {
+                const r = await fetch(`/api/user/${s.uid}`);
+                const d = await r.json();
+                Object.assign(s, { bal: Number(d.balance), eng: d.energy, lvl: d.click_lvl, pnl: Number(d.pnl), c_p_l: d.card_plus_lvl, c_m_l: d.card_mult_lvl });
+                upd();
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('ui').classList.add('ready');
+            } catch(e) { console.error(e); }
         }
 
         function upd() {
@@ -115,29 +154,31 @@
             document.getElementById('e-f').style.width = (s.eng/10)+'%';
             document.getElementById('l-v').innerText = s.lvl;
             document.getElementById('p-v').innerText = `PNL: +${Math.floor(s.pnl)}/H`;
-            
-            // Динамические цены (базовая цена * 1.5 за каждый уровень)
-            const p_cost = Math.floor(10000 * Math.pow(1.5, s.c_p_l));
-            const m_cost = Math.floor(80000 * Math.pow(1.6, s.c_m_l));
-            document.getElementById('c-p-b').innerText = p_cost.toLocaleString();
-            document.getElementById('c-m-b').innerText = m_cost.toLocaleString();
+            document.getElementById('mt-btn').innerText = (s.lvl * 5000).toLocaleString();
+            document.getElementById('c-p-b').innerText = Math.floor(10000 * Math.pow(1.5, s.c_p_l)).toLocaleString();
+            document.getElementById('c-m-b').innerText = Math.floor(80000 * Math.pow(1.6, s.c_m_l)).toLocaleString();
+        }
+
+        async function buyBoost(type) {
+            if(type === 'tap') {
+                const cost = s.lvl * 5000;
+                if(s.bal >= cost) { s.bal -= cost; s.lvl++; upd(); save(); }
+                else tg.showAlert("No coins!");
+            } else {
+                if(s.bal >= 500) { s.bal -= 500; s.eng = 1000; upd(); save(); closeModal('boost-ui'); }
+            }
         }
 
         async function buyCard(type) {
             let cost, inc;
             if(type === 'plus') {
-                cost = Math.floor(10000 * Math.pow(1.5, s.c_p_l));
-                inc = 350;
+                cost = Math.floor(10000 * Math.pow(1.5, s.c_p_l)); inc = 350;
                 if(s.bal >= cost) { s.bal -= cost; s.pnl += inc; s.c_p_l++; }
-                else return tg.showAlert("Need more coins!");
             } else {
-                cost = Math.floor(80000 * Math.pow(1.6, s.c_m_l));
-                inc = 2500;
+                cost = Math.floor(80000 * Math.pow(1.6, s.c_m_l)); inc = 2500;
                 if(s.bal >= cost) { s.bal -= cost; s.pnl += inc; s.c_m_l++; }
-                else return tg.showAlert("Need more coins!");
             }
-            upd();
-            save();
+            upd(); save();
         }
 
         function save() {
@@ -148,7 +189,6 @@
             });
         }
 
-        // Клик логотипа
         document.getElementById('t-a').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if(s.eng < s.lvl) return;
@@ -162,16 +202,31 @@
             upd();
         });
 
-        // Инициализация загрузки
+        async function getBonus() {
+            const r = await fetch('/api/bonus', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({userId: s.uid}) });
+            const d = await r.json();
+            if(d.success) { s.bal += d.amount; upd(); tg.showAlert("Claimed!"); }
+            else tg.showAlert(d.msg);
+        }
+
+        function handleWallet() {
+            if (tonConnectUI.connected) tonConnectUI.disconnect();
+            else tonConnectUI.openModal();
+        }
+
+        function invite() {
+            tg.openTelegramLink(`https://t.me/share/url?url=https://t.me/n_pulse_bot?start=${s.uid}`);
+        }
+
         let p = 0;
         const iv = setInterval(() => {
             p += 5; document.getElementById('l-p').innerText = p + '%';
             if(p >= 100) { clearInterval(iv); load(); }
         }, 30);
 
-        setInterval(save, 5000); // Автосохранение
-        setInterval(() => { if(s.eng < 1000) { s.eng++; upd(); } }, 1000); // Реген энергии
-        setInterval(() => { if(s.pnl > 0) { s.bal += (s.pnl/3600); upd(); } }, 1000); // PNL в реальном времени
+        setInterval(save, 5000);
+        setInterval(() => { if(s.eng < 1000) { s.eng++; upd(); } }, 1000);
+        setInterval(() => { if(s.pnl > 0) { s.bal += (s.pnl/3600); upd(); } }, 1000);
     </script>
 </body>
 </html>
