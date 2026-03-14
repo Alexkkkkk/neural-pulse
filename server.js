@@ -1,11 +1,10 @@
-// v1.5.2 - Обязательное логирование версии для Buthost
 const express = require('express');
 const { Telegraf, Markup } = require('telegraf');
 const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.5.2";
+const VERSION = "1.5.3";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 const DOMAIN = "neural-pulse.bothost.ru";
@@ -18,20 +17,22 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Супер-максимальная база данных
 const initDB = async () => {
-    try {
-        await pool.query(`CREATE TABLE IF NOT EXISTS users (
-            user_id TEXT PRIMARY KEY, 
-            username TEXT DEFAULT 'Neural Player',
-            balance NUMERIC DEFAULT 0,
-            energy INTEGER DEFAULT 1000,
-            max_energy INTEGER DEFAULT 1000,
-            click_lvl INTEGER DEFAULT 1,
-            pnl NUMERIC DEFAULT 0,
-            rank TEXT DEFAULT 'Bronze Node',
-            wallet_address TEXT
-        )`);
-    } catch (err) { console.error("DB Error:", err); }
+    await pool.query(`CREATE TABLE IF NOT EXISTS users (
+        user_id TEXT PRIMARY KEY, 
+        username TEXT DEFAULT 'Neural Player',
+        balance NUMERIC DEFAULT 0,
+        energy INTEGER DEFAULT 1000,
+        max_energy INTEGER DEFAULT 1000,
+        click_lvl INTEGER DEFAULT 1,
+        pnl NUMERIC DEFAULT 0,
+        rank TEXT DEFAULT 'Bronze Node',
+        wallet_address TEXT,
+        ref_count INTEGER DEFAULT 0,
+        bonus_claimed BOOLEAN DEFAULT FALSE,
+        tasks_completed TEXT DEFAULT ''
+    )`);
 };
 initDB();
 
@@ -46,9 +47,9 @@ app.get('/api/user/:id', async (req, res) => {
 });
 
 app.post('/api/save', async (req, res) => {
-    const { userId, balance, energy, click_lvl, pnl, wallet } = req.body;
-    await pool.query(`UPDATE users SET balance=$2, energy=$3, click_lvl=$4, pnl=$5, wallet_address=$6 WHERE user_id=$1`, 
-    [String(userId), balance, energy, click_lvl, pnl, wallet]);
+    const { userId, balance, energy, click_lvl, pnl, wallet, bonus, tasks } = req.body;
+    await pool.query(`UPDATE users SET balance=$2, energy=$3, click_lvl=$4, pnl=$5, wallet_address=$6, bonus_claimed=$7, tasks_completed=$8 WHERE user_id=$1`, 
+    [String(userId), balance, energy, click_lvl, pnl, wallet, bonus, tasks]);
     res.json({ ok: true });
 });
 
@@ -61,11 +62,6 @@ bot.start(c => c.replyWithHTML(`<b>🚀 NEURAL PULSE v${VERSION}</b>`,
     Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://${DOMAIN}`)]])));
 
 app.listen(3000, () => {
-    // ВЫВОД В ЛОГ БУТХОСТА (Согласно v1.5.2)
-    console.log("========================================");
-    console.log(`SERVER STARTED SUCCESSFULLY`);
-    console.log(`CURRENT PROJECT VERSION: ${VERSION}`);
-    console.log(`DOMAIN: ${DOMAIN}`);
-    console.log("========================================");
+    console.log(`\n========================================\nNEURAL PULSE CORE RUNNING. VERSION: ${VERSION}\n========================================\n`);
     bot.launch();
 });
