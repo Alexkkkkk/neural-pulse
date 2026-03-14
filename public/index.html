@@ -3,23 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.3.6 Hybrid</title>
+    <title>Neural Pulse v1.3.6</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
         :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg: #000; --gold: #ffd700; --silver: #c0c0c0; --bronze: #cd7f32; }
-        body { margin: 0; padding: 0; background: var(--bg); color: white; font-family: 'Segoe UI', Roboto, sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
+        body { margin: 0; padding: 0; background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
         
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
-        .loader-circle { width: 120px; height: 120px; border-radius: 50%; border: 3px solid transparent; border-top: 3px solid var(--neon-cyan); border-right: 3px solid var(--neon-purple); animation: spin 1s linear infinite; }
+        .loader-circle { width: 100px; height: 100px; border-radius: 50%; border: 3px solid transparent; border-top: 3px solid var(--neon-cyan); animation: spin 1s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
 
         .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; visibility: hidden; transition: 0.5s; }
         .app.ready { opacity: 1; visibility: visible; }
 
-        /* UI v1.3.0 Header + Synergy */
-        .header { width: 90%; margin-top: 15px; background: rgba(255,255,255,0.03); border-radius: 15px; padding: 12px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,0.05); box-sizing: border-box; }
-        .lvl-box { width: 42px; height: 42px; border: 2px solid var(--neon-purple); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 20px; box-shadow: 0 0 10px rgba(188,19,254,0.3); }
+        /* Header & Synergy */
+        .header { width: 90%; margin-top: 15px; background: rgba(255,255,255,0.03); border-radius: 15px; padding: 12px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,0.05); }
+        .lvl-box { width: 40px; height: 40px; border: 2px solid var(--neon-purple); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; box-shadow: 0 0 10px rgba(188,19,254,0.3); }
         .syn-badge { margin-left: auto; text-align: right; color: var(--neon-cyan); font-weight: 900; font-size: 14px; }
         
         .bal { font-size: 55px; font-weight: 900; margin-top: 10px; letter-spacing: -2px; text-shadow: 0 0 15px rgba(0,242,255,0.4); }
@@ -29,36 +29,31 @@
         .main-logo { width: 240px; height: 240px; border-radius: 50%; filter: drop-shadow(0 0 40px rgba(188,19,254,0.4)); transition: transform 0.05s; }
         
         .overlay-btns { position: absolute; right: 5%; display: flex; flex-direction: column; gap: 10px; }
-        .btn-pill { background: rgba(15,15,15,0.9); border: 1px solid #333; color: white; padding: 10px 15px; border-radius: 15px; font-size: 10px; font-weight: bold; cursor: pointer; backdrop-filter: blur(5px); min-width: 90px; text-align: center; }
-        .btn-purple { border-color: var(--neon-purple); box-shadow: inset 0 0 5px var(--neon-purple); }
+        .btn-pill { background: rgba(15,15,15,0.9); border: 1px solid #333; color: white; padding: 10px 15px; border-radius: 15px; font-size: 10px; font-weight: bold; cursor: pointer; backdrop-filter: blur(5px); text-align: center; }
 
         .footer { width: 92%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 30px; }
         .f-item { background: #0a0a0a; border: 1px solid #222; border-radius: 15px; padding: 15px 0; text-align: center; font-size: 11px; font-weight: bold; color: #aaa; }
 
-        /* Leaderboard v1.3.0 Style */
-        .modal { position: fixed; inset: 0; background: #000; z-index: 2000; display: none; padding: 20px; flex-direction: column; }
+        /* Modals */
+        .modal { position: fixed; inset: 0; background: #000; z-index: 2000; display: none; padding: 25px; flex-direction: column; }
+        .card { background: #0d0d0d; border: 1px solid #1a1a1a; padding: 15px; border-radius: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        
         .leader-item { display: flex; align-items: center; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 12px; margin-bottom: 8px; border: 1px solid transparent; }
-        .rank { width: 30px; font-weight: 900; font-size: 16px; color: #555; }
-        .rank-1 { border-color: var(--gold); background: linear-gradient(90deg, rgba(255,215,0,0.1), transparent); }
-        .rank-1 .rank { color: var(--gold); }
+        .rank-1 { border-color: var(--gold); }
         .me-row { border-color: var(--neon-purple) !important; }
 
-        /* Effects */
-        .plus { position: absolute; font-size: 28px; font-weight: 900; color: var(--neon-cyan); animation: float 0.6s forwards; pointer-events: none; z-index: 100; }
-        .jackpot-txt { position: absolute; font-size: 45px; font-weight: 900; color: var(--gold); animation: float 1s forwards; z-index: 200; text-shadow: 0 0 20px var(--gold); }
-        @keyframes float { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-130px) scale(1.5); } }
+        /* Plus Animation */
+        .plus { position: absolute; font-size: 32px; font-weight: 900; color: var(--neon-cyan); animation: float 0.6s forwards; pointer-events: none; z-index: 100; }
+        @keyframes float { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px); } }
     </style>
 </head>
 <body>
-    <div id="loader">
-        <div class="loader-circle"></div>
-        <div style="margin-top:20px; font-weight:bold; color:var(--neon-cyan)">QUANTUM SYNC...</div>
-    </div>
+    <div id="loader"><div class="loader-circle"></div></div>
 
     <div class="app" id="ui">
         <div class="header">
             <div class="lvl-box" id="l-v">1</div>
-            <div><div style="font-size: 8px; color: #666; letter-spacing: 1px;">NEURAL CORE</div><div style="font-size: 12px; font-weight: bold;" id="r-t">Initializing...</div></div>
+            <div><div style="font-size: 8px; color: #666;">NEURAL CORE</div><div style="font-size: 12px; font-weight: bold;" id="r-t">Initializing...</div></div>
             <div class="syn-badge" id="s-f">x1.0</div>
         </div>
         
@@ -66,19 +61,16 @@
         <div class="pnl" id="p-v">PNL: +0/H</div>
 
         <div class="stage">
-            <img src="logo.png" class="main-logo" id="t-a" onerror="this.src='images/logo.png'">
+            <img src="images/logo.png" class="main-logo" id="t-a" onerror="this.src='logo.png'">
             <div class="overlay-btns">
                 <div class="btn-pill" id="w-btn" onclick="handleWallet()">WALLET</div>
                 <div class="btn-pill" onclick="invite()">FRIENDS</div>
-                <div class="btn-pill btn-purple" onclick="getBonus()">BONUS</div>
             </div>
         </div>
 
         <div style="width: 85%; margin-bottom: 20px;">
-            <div style="display:flex; justify-content:space-between; font-size:9px; margin-bottom:5px; color:#555;"><span>⚡ ENERGY CORE</span><span id="e-n">1000/1000</span></div>
-            <div style="width:100%; height:4px; background:#111; border-radius:10px; overflow:hidden;">
-                <div id="e-f" style="height:100%; background:linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); width:100%; transition:0.3s;"></div>
-            </div>
+            <div style="display:flex; justify-content:space-between; font-size:9px; margin-bottom:5px; color:#555;"><span>ENERGY CORE</span><span id="e-n">1000/1000</span></div>
+            <div style="width:100%; height:4px; background:#111; border-radius:10px; overflow:hidden;"><div id="e-f" style="height:100%; background:var(--neon-cyan); width:100%; transition:0.3s;"></div></div>
         </div>
 
         <div class="footer">
@@ -88,22 +80,36 @@
         </div>
     </div>
 
+    <div id="boost-ui" class="modal">
+        <h2 style="color:var(--neon-cyan)">UPGRADES</h2>
+        <div class="card">
+            <div><b>Multitap</b><br><small id="boost-lvl-display">LVL 1</small></div>
+            <button class="btn-pill" id="mt-btn" onclick="buyB('tap')">5,000</button>
+        </div>
+        <div class="card">
+            <div><b>Full Energy</b><br><small>Восполнить 100%</small></div>
+            <button class="btn-pill" onclick="buyB('energy')">500 ⚡</button>
+        </div>
+        <button class="f-item" style="width:100%; margin-top:auto" onclick="closeM('boost-ui')">BACK</button>
+    </div>
+
     <div id="mine-ui" class="modal">
-        <h2 style="color:var(--neon-cyan)">MATH SHOP</h2>
+        <h2 style="color:var(--neon-purple)">MATH SHOP</h2>
         <div id="shop-list" style="overflow-y:auto; flex-grow:1"></div>
-        <button class="f-item" style="width:100%; margin-top:20px; color:white" onclick="closeM('mine-ui')">BACK</button>
+        <button class="f-item" style="width:100%; margin-top:20px" onclick="closeM('mine-ui')">BACK</button>
     </div>
 
     <div id="stats-ui" class="modal">
         <h2 style="margin:0">HALL OF FAME</h2>
-        <div id="leader-list" style="overflow-y:auto; flex-grow:1; margin: 20px 0;"></div>
-        <button class="f-item" style="width:100%" onclick="closeM('stats-ui')">CLOSE</button>
+        <div id="st-u" style="font-size:10px; color:var(--neon-cyan); margin-bottom:15px;">0 NODES ONLINE</div>
+        <div id="leader-list" style="overflow-y:auto; flex-grow:1"></div>
+        <button class="f-item" style="width:100%; margin-top:10px" onclick="closeM('stats-ui')">CLOSE</button>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         let s = { bal: 0, eng: 1000, lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id || 'GUEST', cards: 0 };
-        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json' });
+        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: 'https://' + location.host + '/tonconnect-manifest.json' });
 
         const cardsData = [
             { name: 'Linear Algebra', cost: 1200, pnl: 65 },
@@ -119,11 +125,7 @@
             list.innerHTML = '';
             cardsData.forEach((c, i) => {
                 const cost = Math.floor(c.cost * Math.pow(1.25, (s.pnl / (c.pnl * 6))));
-                list.innerHTML += `
-                    <div style="background:#0d0d0d; padding:15px; border-radius:15px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; border:1px solid #1a1a1a">
-                        <div><b>${c.name}</b><br><small style="color:var(--neon-cyan)">+${c.pnl}/h</small></div>
-                        <button class="btn-pill" onclick="buyCard(${i}, ${cost})">${cost.toLocaleString()}</button>
-                    </div>`;
+                list.innerHTML += `<div class="card"><div><b>${c.name}</b><br><small>+${c.pnl}/h</small></div><button class="btn-pill" onclick="buyCard(${i}, ${cost})">${cost.toLocaleString()}</button></div>`;
             });
         }
 
@@ -132,29 +134,32 @@
             else tg.showAlert("Need more coins!");
         }
 
+        async function buyB(type) {
+            if(type === 'tap') {
+                const cost = s.lvl * 5000;
+                if(s.bal >= cost) { s.bal -= cost; s.lvl++; if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success'); upd(); }
+            } else if(type === 'energy') {
+                if(s.bal >= 500) { s.bal -= 500; s.eng = 1000; upd(); closeM('boost-ui'); }
+            }
+        }
+
         document.getElementById('t-a').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if(s.eng < s.lvl) return;
-
-            let isJackpot = Math.random() < 0.001;
             let syn = 1 + (s.cards * 0.05);
             let gain = Math.floor(s.lvl * syn);
-            if(isJackpot) { gain += Math.floor(s.pnl); showJack(e.touches[0]); }
-
             s.bal += gain; s.eng -= s.lvl;
-            showPlus(e.touches[0], gain, isJackpot);
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred(isJackpot ? 'heavy' : 'light');
-            upd();
-        });
-
-        function showPlus(t, v, j) {
+            
+            const t = e.touches[0];
             const p = document.createElement('div');
-            p.className = j ? 'jackpot-txt' : 'plus';
-            p.innerText = j ? 'JACKPOT!' : `+${v}`;
+            p.className = 'plus'; p.innerText = `+${gain}`;
             p.style.left = t.clientX + 'px'; p.style.top = t.clientY + 'px';
             document.body.appendChild(p);
-            setTimeout(() => p.remove(), 800);
-        }
+            setTimeout(() => p.remove(), 600);
+            
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            upd();
+        });
 
         function upd() {
             let syn = 1 + (s.cards * 0.05);
@@ -163,28 +168,28 @@
             document.getElementById('e-n').innerText = `${Math.floor(s.eng)}/1000`;
             document.getElementById('e-f').style.width = (s.eng/10)+'%';
             document.getElementById('s-f').innerText = `x${syn.toFixed(2)}`;
-            
+            document.getElementById('l-v').innerText = s.lvl;
+            document.getElementById('mt-btn').innerText = (s.lvl * 5000).toLocaleString();
+            document.getElementById('boost-lvl-display').innerText = `LVL ${s.lvl}`;
             const ranks = ["Novice", "Advanced", "Elite", "Neural God"];
             document.getElementById('r-t').innerText = ranks[Math.min(3, Math.floor(s.bal/1000000))] + " Node";
         }
 
         async function openStats() {
             openM('stats-ui');
-            const r = await fetch('/api/leaderboard');
-            const data = await r.json();
+            const [sR, lR] = await Promise.all([fetch('/api/stats'), fetch('/api/leaderboard')]);
+            const stats = await sR.json();
+            const leaders = await lR.json();
+            document.getElementById('st-u').innerText = `${stats.users} NODES ONLINE`;
             const list = document.getElementById('leader-list');
             list.innerHTML = '';
-            data.forEach((p, i) => {
+            leaders.forEach((p, i) => {
                 const isMe = String(p.user_id) === String(s.uid);
-                list.innerHTML += `
-                    <div class="leader-item ${i<3 ? 'rank-'+(i+1) : ''} ${isMe ? 'me-row' : ''}">
-                        <div class="rank">${i+1}</div>
-                        <div style="flex-grow:1; margin-left:10px">
-                            <div style="font-size:12px; font-family:monospace">ID:${p.user_id}</div>
-                            <div style="font-size:10px; color:var(--neon-cyan)">+${Math.floor(p.pnl)}/H</div>
-                        </div>
-                        <div style="font-weight:900">${Math.floor(p.balance).toLocaleString()}</div>
-                    </div>`;
+                list.innerHTML += `<div class="leader-item ${i<3?'rank-1':''} ${isMe?'me-row':''}">
+                    <div style="width:30px; font-weight:900">${i+1}</div>
+                    <div style="flex-grow:1"><div>ID:${p.user_id}</div><small style="color:var(--neon-cyan)">+${Math.floor(p.pnl)}/H</small></div>
+                    <div style="font-weight:900">${Math.floor(p.balance).toLocaleString()}</div>
+                </div>`;
             });
         }
 
@@ -203,6 +208,8 @@
 
         setInterval(() => { if(s.eng < 1000) { s.eng += (s.bal > 500000 ? 4 : 2); upd(); } }, 1000);
         init();
+        function invite() { tg.openTelegramLink(`https://t.me/share/url?url=https://t.me/n_pulse_bot?start=${s.uid}`); }
+        function handleWallet() { if (tonConnectUI.connected) tonConnectUI.disconnect(); else tonConnectUI.openModal(); }
     </script>
 </body>
 </html>
