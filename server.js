@@ -5,7 +5,7 @@ const { Pool } = require('pg');
 const cors = require('cors');
 const axios = require('axios');
 
-const VERSION = "1.1.0";
+const VERSION = "1.1.1";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 const DOMAIN = "neural-pulse.bothost.ru";
@@ -18,7 +18,9 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'static'))); // static по твоей структуре
+
+// ИСПРАВЛЕНИЕ: указываем папку public, как на твоем GitHub
+app.use(express.static(path.join(__dirname, 'public')));
 
 const initDB = async () => {
     try {
@@ -36,30 +38,28 @@ const initDB = async () => {
                 tx_hash TEXT PRIMARY KEY, user_id TEXT, amount NUMERIC
             );
         `);
-        console.log(`DB Initialized. Version ${VERSION}`);
+        console.log(`v${VERSION} запущен. Папка: public`);
     } catch (err) { console.error("DB Error:", err.message); }
 };
 initDB();
 
-// Математический цикл: Энергия + Пассивный доход
+// Математика: +1 энергия и доход в секунду
 setInterval(async () => {
     try {
         await pool.query(`
             UPDATE users 
             SET energy = LEAST(1000, energy + 1),
                 balance = balance + (pnl / 3600)
-            WHERE last_active > NOW() - INTERVAL '12 hours'
+            WHERE last_active > NOW() - INTERVAL '24 hours'
         `);
-    } catch (e) { /* silent fail */ }
+    } catch (e) {}
 }, 1000);
 
-// API: Лидерборд
 app.get('/api/leaderboard', async (req, res) => {
     const result = await pool.query('SELECT user_id, balance FROM users ORDER BY balance DESC LIMIT 10');
     res.json(result.rows);
 });
 
-// API: Улучшение клика
 app.post('/api/upgrade/click', async (req, res) => {
     const { userId } = req.body;
     const user = await pool.query('SELECT * FROM users WHERE user_id = $1', [String(userId)]);
@@ -115,5 +115,5 @@ app.get('/api/check-payment/:id', async (req, res) => {
     } catch (e) { res.status(500).send(); }
 });
 
-bot.start(ctx => ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI v${VERSION}</b>`, Markup.inlineKeyboard([[Markup.button.webApp('⚡ PLAY', `https://${DOMAIN}${ctx.startPayload ? '?tgWebAppStartParam=' + ctx.startPayload : ''}`)]])));
-app.listen(PORT, () => { console.log(`v${VERSION} Running`); bot.launch(); });
+bot.start(ctx => ctx.replyWithHTML(`<b>🚀 NEURAL PULSE AI v${VERSION}</b>`, Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://${DOMAIN}${ctx.startPayload ? '?tgWebAppStartParam=' + ctx.startPayload : ''}`)]])));
+app.listen(PORT, () => { console.log(`Server v${VERSION} ON`); bot.launch(); });
