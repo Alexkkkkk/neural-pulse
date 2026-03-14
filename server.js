@@ -4,10 +4,9 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.5.9";
+const VERSION = "1.6.0";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
-const BOT_USERNAME = "YourBotUsername"; // Замени на username твоего бота без @
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
@@ -58,23 +57,20 @@ app.post('/api/save', async (req, res) => {
 
 bot.start(async (ctx) => {
     const uid = String(ctx.from.id);
-    const refId = ctx.startPayload; // Получаем ID пригласителя
-
+    const refId = ctx.startPayload;
     let r = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
     if (r.rows.length === 0) {
         await pool.query('INSERT INTO users (user_id, username, referrer_id) VALUES ($1, $2, $3)', 
         [uid, ctx.from.first_name, refId || null]);
-        
         if (refId) {
             await pool.query('UPDATE users SET balance = balance + 5000, friends_count = friends_count + 1 WHERE user_id = $1', [refId]);
         }
     }
-
     ctx.replyWithHTML(`<b>🚀 NEURAL PULSE v${VERSION}</b>`, 
     Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://neural-pulse.bothost.ru`)]]));
 });
 
 app.listen(3000, () => {
-    console.log(`[ v${VERSION} ] SERVER RUNNING. PORT 3000.`);
+    console.log(`[ v${VERSION} ] SERVER ACTIVE. PUBLIC ONLY.`);
     bot.launch();
 });
