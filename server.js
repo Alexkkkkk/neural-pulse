@@ -4,7 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.6.1";
+const VERSION = "1.6.2";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
@@ -17,18 +17,21 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public'))); 
 
 const initDB = async () => {
-    await pool.query(`CREATE TABLE IF NOT EXISTS users (
-        user_id TEXT PRIMARY KEY, 
-        username TEXT DEFAULT 'Neural Player',
-        balance NUMERIC DEFAULT 0,
-        energy INTEGER DEFAULT 1000,
-        max_energy INTEGER DEFAULT 1000,
-        click_lvl INTEGER DEFAULT 1,
-        pnl NUMERIC DEFAULT 0,
-        wallet_address TEXT DEFAULT NULL,
-        referrer_id TEXT DEFAULT NULL,
-        friends_count INTEGER DEFAULT 0
-    )`);
+    try {
+        await pool.query(`CREATE TABLE IF NOT EXISTS users (
+            user_id TEXT PRIMARY KEY, 
+            username TEXT DEFAULT 'Neural Player',
+            balance NUMERIC DEFAULT 0,
+            energy INTEGER DEFAULT 1000,
+            max_energy INTEGER DEFAULT 1000,
+            click_lvl INTEGER DEFAULT 1,
+            pnl NUMERIC DEFAULT 0,
+            wallet_address TEXT DEFAULT NULL,
+            referrer_id TEXT DEFAULT NULL,
+            friends_count INTEGER DEFAULT 0
+        )`);
+        console.log("DB Initialized");
+    } catch (e) { console.error("DB Init Error:", e); }
 };
 initDB();
 
@@ -46,31 +49,38 @@ app.get('/api/user/:id', async (req, res) => {
 
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, click_lvl, pnl, wallet, friends_count } = req.body;
+    if (!userId) return res.status(400).json({ error: "No UID" });
     try {
         await pool.query(
             `UPDATE users SET balance=$2, energy=$3, click_lvl=$4, pnl=$5, wallet_address=$6, friends_count=$7 WHERE user_id=$1`, 
             [String(userId), balance, energy, click_lvl, pnl, wallet, friends_count || 0]
         );
         res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+        console.error("Save Error:", e.message);
+        res.status(500).json({ error: e.message }); 
+    }
 });
 
 bot.start(async (ctx) => {
     const uid = String(ctx.from.id);
     const refId = ctx.startPayload;
-    let r = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
-    if (r.rows.length === 0) {
-        await pool.query('INSERT INTO users (user_id, username, referrer_id) VALUES ($1, $2, $3)', 
-        [uid, ctx.from.first_name, refId || null]);
-        if (refId) {
-            await pool.query('UPDATE users SET balance = balance + 5000, friends_count = friends_count + 1 WHERE user_id = $1', [refId]);
+    try {
+        let r = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
+        if (r.rows.length === 0) {
+            await pool.query('INSERT INTO users (user_id, username, referrer_id) VALUES ($1, $2, $3)', 
+            [uid, ctx.from.first_name, refId || null]);
+            if (refId) {
+                await pool.query('UPDATE users SET balance = balance + 5000, friends_count = friends_count + 1 WHERE user_id = $1', [refId]);
+            }
         }
-    }
+    } catch(e) { console.error("Start Error:", e); }
+    
     ctx.replyWithHTML(`<b>🚀 NEURAL PULSE v${VERSION}</b>`, 
     Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://neural-pulse.bothost.ru`)]]));
 });
 
 app.listen(3000, () => {
-    console.log(`[ v${VERSION} ] SERVER STARTED. ALL SYSTEMS NOMINAL.`);
+    console.log(`[ v${VERSION} ] SERVER RUNNING. DB SYNC ACTIVE.`);
     bot.launch();
 });
