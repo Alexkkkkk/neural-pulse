@@ -3,16 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.4.7</title>
+    <title>Neural Pulse v1.4.8</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg: #000; }
-        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
+        body { margin: 0; background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
         
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
         .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; visibility: hidden; transition: 0.5s; }
         .app.ready { opacity: 1; visibility: visible; }
 
+        /* HEADER */
         .header { width: 90%; margin-top: 20px; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 10px 15px; display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); }
         .user-avatar { width: 42px; height: 42px; border-radius: 12px; border: 2px solid var(--neon-cyan); background: #111; object-fit: cover; }
         .user-info { flex-grow: 1; }
@@ -21,31 +22,39 @@
 
         .bal { font-size: 55px; font-weight: 900; margin-top: 20px; text-shadow: 0 0 20px rgba(0,242,255,0.3); }
 
+        /* STAGE & SIDE BUTTONS */
         .stage { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; position: relative; }
         .main-logo { width: 250px; cursor: pointer; filter: drop-shadow(0 0 30px rgba(188,19,254,0.3)); transition: 0.05s; }
         .main-logo:active { transform: scale(0.96); }
 
-        .footer { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 35px; }
-        .f-item { background: #111; border: 1px solid #222; border-radius: 18px; padding: 15px 0; text-align: center; font-size: 10px; font-weight: bold; cursor: pointer; }
+        .side-btns { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .btn-s { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 10px 15px; border-radius: 15px; font-size: 10px; font-weight: bold; width: 80px; text-align: center; backdrop-filter: blur(5px); }
 
-        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; display: none; padding: 25px; flex-direction: column; backdrop-filter: blur(15px); }
+        /* FOOTER */
+        .footer { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 35px; }
+        .f-item { background: #111; border: 1px solid #222; border-radius: 18px; padding: 15px 0; text-align: center; font-size: 10px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .f-item:active { background: #222; }
+
+        /* MODALS */
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.98); z-index: 2000; display: none; padding: 25px; flex-direction: column; backdrop-filter: blur(15px); overflow-y: auto; }
+        .card { background: rgba(255,255,255,0.05); border: 1px solid #333; padding: 15px; border-radius: 20px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         .leader-row { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 15px; margin-bottom: 8px; border: 1px solid #222; }
         
-        .energy-bar { width: 85%; height: 10px; background: #111; border-radius: 10px; border: 1px solid #222; overflow: hidden; margin-bottom: 20px; }
+        .energy-bar { width: 85%; height: 8px; background: #111; border-radius: 10px; border: 1px solid #222; overflow: hidden; margin-bottom: 25px; }
         .energy-fill { height: 100%; background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); transition: width 0.3s; }
 
-        .plus { position: absolute; font-size: 40px; font-weight: 900; color: var(--neon-cyan); pointer-events: none; animation: float 0.7s forwards; text-shadow: 0 0 10px black; }
+        .plus { position: absolute; font-size: 40px; font-weight: 900; color: var(--neon-cyan); pointer-events: none; animation: float 0.7s forwards; text-shadow: 0 0 10px black; z-index: 1000; }
         @keyframes float { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-150px); } }
     </style>
 </head>
 <body>
-    <div id="loader"><div id="l-p" style="color:var(--neon-cyan); font-weight:bold;">INITIALIZING... 0%</div></div>
+    <div id="loader"><div id="l-p" style="color:var(--neon-cyan); font-weight:bold;">SYSTEM LOADING... 0%</div></div>
 
     <div class="app" id="ui">
         <div class="header">
             <img src="" id="u-av" class="user-avatar" onerror="this.src='images/logo.png'">
             <div class="user-info">
-                <div id="u-nm" class="user-name">Terminal User</div>
+                <div id="u-nm" class="user-name">Terminal...</div>
                 <div id="r-b" class="user-rank">Bronze Node</div>
             </div>
             <div style="background:var(--neon-cyan); color:black; padding:4px 10px; border-radius:8px; font-weight:900; font-size:12px;">LVL <span id="l-v">1</span></div>
@@ -53,8 +62,20 @@
         
         <div class="bal" id="b-v">0</div>
         
-        <div class="stage"><img src="logo.png" class="main-logo" id="t-a" onerror="this.src='images/logo.png'"></div>
+        <div class="stage">
+            <img src="logo.png" class="main-logo" id="t-a" onerror="this.src='images/logo.png'">
+            
+            <div class="side-btns">
+                <div class="btn-s" onclick="tg.showAlert('Coming Soon')">WALLET</div>
+                <div class="btn-s" onclick="tg.showAlert('Referral system active soon')">FRIENDS</div>
+                <div class="btn-s" style="border-color:var(--neon-purple)" onclick="tg.showAlert('Daily Bonus: +100')">BONUS</div>
+            </div>
+        </div>
 
+        <div style="width:85%; display:flex; justify-content:space-between; font-size:10px; margin-bottom:5px; color:#666;">
+            <span>ENERGY CORE</span>
+            <span id="e-n">1000/1000</span>
+        </div>
         <div class="energy-bar"><div id="e-f" class="energy-fill" style="width:100%;"></div></div>
 
         <div class="footer">
@@ -65,15 +86,27 @@
         </div>
     </div>
 
+    <div id="boost-ui" class="modal">
+        <h2 style="color:var(--neon-cyan)">UPGRADES</h2>
+        <div class="card">
+            <div><b>Multitap</b><br><small>+1 per click</small></div>
+            <button class="btn-s" id="mt-btn" onclick="buyBoost('tap')">1000</button>
+        </div>
+        <div class="card">
+            <div><b>Energy Limit</b><br><small>+500 capacity</small></div>
+            <button class="btn-s" id="el-btn" onclick="buyBoost('energy')">2000</button>
+        </div>
+        <button class="f-item" style="margin-top:auto; width:100%; border:none; background:#222;" onclick="closeModal('boost-ui')">CLOSE</button>
+    </div>
+
     <div id="stats-ui" class="modal">
         <h1 style="color:var(--neon-cyan); text-align:center;">LEADERBOARD</h1>
         <div id="stats-content" style="overflow-y:auto; flex-grow:1;"></div>
         <button class="f-item" style="margin-top:20px; width:100%; background:var(--neon-purple)" onclick="closeModal('stats-ui')">BACK</button>
     </div>
 
-    <div id="boost-ui" class="modal"><h2 style="color:var(--neon-cyan)">UPGRADES</h2><button class="f-item" onclick="closeModal('boost-ui')">CLOSE</button></div>
-    <div id="mine-ui" class="modal"><h2 style="color:var(--neon-cyan)">MINING</h2><button class="f-item" onclick="closeModal('mine-ui')">CLOSE</button></div>
-    <div id="tasks-ui" class="modal"><h2 style="color:var(--neon-cyan)">TASKS</h2><button class="f-item" onclick="closeModal('tasks-ui')">CLOSE</button></div>
+    <div id="mine-ui" class="modal"><h2>MINING</h2><p>Coming in v1.5</p><button class="f-item" onclick="closeModal('mine-ui')">CLOSE</button></div>
+    <div id="tasks-ui" class="modal"><h2>TASKS</h2><p>Check back later</p><button class="f-item" onclick="closeModal('tasks-ui')">CLOSE</button></div>
 
     <script>
         const tg = window.Telegram.WebApp;
@@ -95,9 +128,11 @@
 
         async function load() {
             setupUI();
-            const r = await fetch(`/api/user/${s.uid}`);
-            const d = await r.json();
-            Object.assign(s, { bal: Number(d.balance), eng: d.energy, max: d.max_energy || 1000, lvl: d.click_lvl, r: d.rank });
+            try {
+                const r = await fetch(`/api/user/${s.uid}`);
+                const d = await r.json();
+                Object.assign(s, { bal: Number(d.balance), eng: d.energy, max: d.max_energy || 1000, lvl: d.click_lvl, r: d.rank });
+            } catch(e) { console.log("New User"); }
             upd();
             document.getElementById('loader').style.display = 'none';
             document.getElementById('ui').classList.add('ready');
@@ -107,7 +142,10 @@
             document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString();
             document.getElementById('l-v').innerText = s.lvl;
             document.getElementById('r-b').innerText = s.r;
+            document.getElementById('e-n').innerText = `${Math.floor(s.eng)}/${s.max}`;
             document.getElementById('e-f').style.width = (s.eng / s.max * 100) + '%';
+            document.getElementById('mt-btn').innerText = (s.lvl * 1000).toLocaleString();
+            document.getElementById('el-btn').innerText = (s.max * 2).toLocaleString();
         }
 
         function openModal(id) { document.getElementById(id).style.display = 'flex'; }
@@ -116,7 +154,7 @@
         async function openStats() {
             openModal('stats-ui');
             const content = document.getElementById('stats-content');
-            content.innerHTML = '<div style="text-align:center; padding:20px;">LOADING...</div>';
+            content.innerHTML = '<div style="text-align:center; padding:20px;">SYNCING...</div>';
             try {
                 const res = await fetch('/api/stats');
                 const data = await res.json();
@@ -130,7 +168,18 @@
                         <span style="font-weight:900;">${Math.floor(u.balance).toLocaleString()}</span>
                     </div>
                 `).join('');
-            } catch (e) { content.innerHTML = '<div style="color:red">ERROR</div>'; }
+            } catch (e) { content.innerHTML = 'ERROR LOADING STATS'; }
+        }
+
+        function buyBoost(type) {
+            let cost = type === 'tap' ? s.lvl * 1000 : s.max * 2;
+            if(s.bal >= cost) {
+                s.bal -= cost;
+                if(type === 'tap') s.lvl++;
+                else { s.max += 500; s.eng = s.max; }
+                upd(); save();
+                tg.HapticFeedback.notificationOccurred('success');
+            } else tg.showAlert("Insufficient balance");
         }
 
         document.getElementById('t-a').addEventListener('touchstart', (e) => {
@@ -143,7 +192,7 @@
             p.style.left = t.clientX + 'px'; p.style.top = t.clientY + 'px';
             document.body.appendChild(p);
             setTimeout(() => p.remove(), 700);
-            tg.HapticFeedback.impactOccurred('light');
+            tg.HapticFeedback.impactOccurred('medium');
             upd();
         });
 
@@ -155,10 +204,10 @@
         }
 
         let p = 0;
-        const loadIv = setInterval(() => { p += 10; document.getElementById('l-p').innerText = `SYNCING... ${p}%`; if(p >= 100) { clearInterval(loadIv); load(); } }, 50);
+        const loadIv = setInterval(() => { p += 5; document.getElementById('l-p').innerText = `SYSTEM LOADING... ${p}%`; if(p >= 100) { clearInterval(loadIv); load(); } }, 40);
 
         setInterval(save, 5000);
-        setInterval(() => { if(s.eng < s.max) { s.eng += 1; upd(); } }, 1000);
+        setInterval(() => { if(s.eng < s.max) { s.eng += (s.max/500); if(s.eng > s.max) s.eng = s.max; upd(); } }, 1000);
     </script>
 </body>
 </html>
