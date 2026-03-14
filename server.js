@@ -4,7 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.6.3";
+const VERSION = "1.6.4";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
@@ -16,8 +16,10 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public'))); 
 
+// УЛУЧШЕННАЯ ИНИЦИАЛИЗАЦИЯ И МИГРАЦИЯ БД
 const initDB = async () => {
     try {
+        // Создаем таблицу, если её нет
         await pool.query(`CREATE TABLE IF NOT EXISTS users (
             user_id TEXT PRIMARY KEY, 
             username TEXT DEFAULT 'Neural Player',
@@ -25,12 +27,28 @@ const initDB = async () => {
             energy INTEGER DEFAULT 1000,
             max_energy INTEGER DEFAULT 1000,
             click_lvl INTEGER DEFAULT 1,
-            pnl NUMERIC DEFAULT 0,
-            wallet_address TEXT DEFAULT NULL,
-            referrer_id TEXT DEFAULT NULL,
-            friends_count INTEGER DEFAULT 0
+            pnl NUMERIC DEFAULT 0
         )`);
-    } catch (e) { console.error("DB Error", e); }
+
+        // ПРОВЕРКА И ДОБАВЛЕНИЕ ОТСУТСТВУЮЩИХ КОЛОНОК (Миграция)
+        const cols = await pool.query(`SELECT column_name FROM information_schema.columns WHERE table_name='users'`);
+        const existingCols = cols.rows.map(c => c.column_name);
+
+        if (!existingCols.includes('wallet_address')) {
+            await pool.query('ALTER TABLE users ADD COLUMN wallet_address TEXT DEFAULT NULL');
+            console.log("Column wallet_address added.");
+        }
+        if (!existingCols.includes('referrer_id')) {
+            await pool.query('ALTER TABLE users ADD COLUMN referrer_id TEXT DEFAULT NULL');
+            console.log("Column referrer_id added.");
+        }
+        if (!existingCols.includes('friends_count')) {
+            await pool.query('ALTER TABLE users ADD COLUMN friends_count INTEGER DEFAULT 0');
+            console.log("Column friends_count added.");
+        }
+
+        console.log("DB System: Verified and Ready.");
+    } catch (e) { console.error("DB Critical Error:", e); }
 };
 initDB();
 
@@ -55,7 +73,10 @@ app.post('/api/save', async (req, res) => {
             [String(userId), balance, energy, click_lvl, pnl, wallet, friends_count || 0]
         );
         res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+        console.error("Save Error:", e.message); // Теперь этой ошибки не будет
+        res.status(500).json({ error: e.message }); 
+    }
 });
 
 bot.start(async (ctx) => {
@@ -76,5 +97,6 @@ bot.start(async (ctx) => {
 });
 
 app.listen(3000, () => {
+    console.log(`[ v${VERSION} ] SERVER RUNNING.`);
     bot.launch();
 });
