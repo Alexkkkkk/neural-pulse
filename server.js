@@ -1,11 +1,11 @@
-// v1.5.0 - Консольное логирование версии для Бутхоста
+// v1.5.2 - Обязательное логирование версии для Buthost
 const express = require('express');
 const { Telegraf, Markup } = require('telegraf');
 const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.5.0";
+const VERSION = "1.5.2";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 const DOMAIN = "neural-pulse.bothost.ru";
@@ -46,13 +46,13 @@ app.get('/api/user/:id', async (req, res) => {
 });
 
 app.post('/api/save', async (req, res) => {
-    const { userId, username, balance, energy, max_energy, click_lvl, pnl, rank, wallet } = req.body;
-    await pool.query(`UPDATE users SET username=$2, balance=$3, energy=$4, max_energy=$5, click_lvl=$6, pnl=$7, rank=$8, wallet_address=$9 WHERE user_id=$1`, 
-    [String(userId), username, Number(balance), Math.floor(energy), Math.floor(max_energy), Math.floor(click_lvl), Number(pnl), rank, wallet]);
+    const { userId, balance, energy, click_lvl, pnl, wallet } = req.body;
+    await pool.query(`UPDATE users SET balance=$2, energy=$3, click_lvl=$4, pnl=$5, wallet_address=$6 WHERE user_id=$1`, 
+    [String(userId), balance, energy, click_lvl, pnl, wallet]);
     res.json({ ok: true });
 });
 
-app.get('/api/leaderboard', async (req, res) => {
+app.get('/api/stats', async (req, res) => {
     const r = await pool.query("SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10");
     res.json(r.rows);
 });
@@ -61,9 +61,11 @@ bot.start(c => c.replyWithHTML(`<b>🚀 NEURAL PULSE v${VERSION}</b>`,
     Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://${DOMAIN}`)]])));
 
 app.listen(3000, () => {
+    // ВЫВОД В ЛОГ БУТХОСТА (Согласно v1.5.2)
     console.log("========================================");
-    console.log(`SERVER STARTED. VERSION: ${VERSION}`);
-    console.log(`URL: https://${DOMAIN}`);
+    console.log(`SERVER STARTED SUCCESSFULLY`);
+    console.log(`CURRENT PROJECT VERSION: ${VERSION}`);
+    console.log(`DOMAIN: ${DOMAIN}`);
     console.log("========================================");
     bot.launch();
 });
