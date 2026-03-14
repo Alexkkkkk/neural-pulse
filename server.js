@@ -4,7 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.1.6";
+const VERSION = "1.1.8";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 const DOMAIN = "neural-pulse.bothost.ru";
@@ -31,15 +31,15 @@ const initDB = async () => {
                 last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
-        // Исправляем структуру, если таблица старая
+        // Force update columns for older DB versions
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pnl NUMERIC DEFAULT 0`);
-        console.log(`v${VERSION} запущен. Система готова.`);
+        console.log(`v${VERSION} Running. DB Sync OK.`);
     } catch (err) { console.error("DB Error:", err.message); }
 };
 initDB();
 
-// Математика: Регенерация энергии + Начисление PNL (доход в час)
+// Passive income & Energy regen math
 setInterval(async () => {
     try {
         await pool.query(`
@@ -71,15 +71,10 @@ app.post('/api/save', async (req, res) => {
     res.json({ status: 'ok' });
 });
 
-// Математика: Покупка карточки для мамы
-app.post('/api/mine/buy', async (req, res) => {
-    const { userId, cost, income } = req.body;
-    const user = await pool.query('SELECT balance FROM users WHERE user_id = $1', [String(userId)]);
-    if (user.rows[0] && Number(user.rows[0].balance) >= cost) {
-        await pool.query('UPDATE users SET balance = balance - $1, pnl = pnl + $2 WHERE user_id = $1', [userId, cost, income]);
-        return res.json({ success: true });
-    }
-    res.json({ success: false });
+app.post('/api/upgrade/click', async (req, res) => {
+    const { userId, cost } = req.body;
+    await pool.query('UPDATE users SET balance = balance - $2, click_lvl = click_lvl + 1 WHERE user_id = $1', [String(userId), cost]);
+    res.json({ success: true });
 });
 
 bot.start(ctx => ctx.replyWithHTML(`<b>🚀 NEURAL PULSE v${VERSION}</b>`, Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://${DOMAIN}`)]])));
