@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.4.4</title>
+    <title>Neural Pulse v1.4.5</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
@@ -17,8 +17,13 @@
         .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; visibility: hidden; transition: 0.8s; }
         .app.ready { opacity: 1; visibility: visible; }
 
-        .header { width: 90%; margin-top: 20px; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 12px; display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); }
-        .lvl-box { width: 45px; height: 45px; border: 2px solid var(--neon-cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: bold; box-shadow: 0 0 10px var(--neon-cyan); }
+        /* HEADER STYLES */
+        .header { width: 90%; margin-top: 20px; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 10px 15px; display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); }
+        .user-avatar { width: 40px; height: 40px; border-radius: 12px; border: 2px solid var(--neon-cyan); object-fit: cover; background: #111; }
+        .user-info { flex-grow: 1; }
+        .user-name { font-size: 14px; font-weight: 900; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+        .user-rank { font-size: 10px; color: var(--neon-cyan); font-weight: bold; text-transform: uppercase; }
+        .lvl-badge { background: var(--neon-cyan); color: black; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 900; }
         
         .bal { font-size: 55px; font-weight: 900; margin-top: 15px; letter-spacing: -2px; text-shadow: 0 0 25px rgba(0,242,255,0.4); }
         .pnl { color: var(--neon-cyan); font-weight: bold; margin-top: -10px; font-size: 13px; }
@@ -39,7 +44,7 @@
         .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; display: none; padding: 25px; flex-direction: column; backdrop-filter: blur(15px); overflow-y: auto; }
         .card { background: rgba(255,255,255,0.03); border: 1px solid #333; padding: 18px; border-radius: 24px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
         
-        .plus { position: absolute; font-size: 40px; font-weight: 900; color: var(--neon-cyan); animation: float 0.7s forwards; pointer-events: none; z-index: 100; }
+        .plus { position: absolute; font-size: 40px; font-weight: 900; color: var(--neon-cyan); animation: float 0.7s forwards; pointer-events: none; z-index: 100; text-shadow: 0 0 10px black; }
         @keyframes float { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-150px); } }
     </style>
 </head>
@@ -51,11 +56,12 @@
 
     <div class="app" id="ui">
         <div class="header">
-            <div class="lvl-box" id="l-v">1</div>
-            <div>
-                <div style="font-size: 9px; color: #777;">NEURAL NETWORK</div>
-                <div id="r-b" style="font-size: 14px; font-weight: 900; color: var(--neon-cyan);">Bronze Node</div>
+            <img src="" id="u-av" class="user-avatar" alt="?">
+            <div class="user-info">
+                <div id="u-nm" class="user-name">Loading...</div>
+                <div id="r-b" class="user-rank">Bronze Node</div>
             </div>
+            <div class="lvl-badge">LVL <span id="l-v">1</span></div>
         </div>
         
         <div class="bal" id="b-v">0</div>
@@ -66,7 +72,7 @@
             <div class="overlay-btns">
                 <div class="btn-pill" onclick="handleWallet()">WALLET</div>
                 <div class="btn-pill" onclick="invite()">FRIENDS</div>
-                <div class="btn-pill" style="border-color:var(--neon-purple)" onclick="tg.showAlert('Daily Bonus!')">BONUS</div>
+                <div class="btn-pill" style="border-color:var(--neon-purple)" onclick="tg.showAlert('Bonus!')">BONUS</div>
             </div>
         </div>
 
@@ -94,26 +100,20 @@
             <div><b>AUTO-TAP BOT</b><br><small>Farms while away</small></div>
             <button class="btn-pill" id="bot-btn" onclick="buyBoost('bot')">20000</button>
         </div>
-        <div class="card">
-            <div><b>Multitap</b><br><small>+1 per click</small></div>
-            <button class="btn-pill" id="mt-btn" onclick="buyBoost('tap')">1000</button>
-        </div>
-        <div class="card">
-            <div><b>Energy Limit</b><br><small>+500 capacity</small></div>
-            <button class="btn-pill" id="el-btn" onclick="buyBoost('energy')">2000</button>
-        </div>
+        <div class="card"><div><b>Multitap</b><br><small>+1 per click</small></div><button class="btn-pill" id="mt-btn" onclick="buyBoost('tap')">1000</button></div>
+        <div class="card"><div><b>Energy Limit</b><br><small>+500 cap</small></div><button class="btn-pill" id="el-btn" onclick="buyBoost('energy')">2000</button></div>
         <button class="f-item" style="margin-top:auto; width:100%;" onclick="closeModal('boost-ui')">CLOSE</button>
     </div>
 
     <div id="mine-ui" class="modal">
-        <h2 style="color:var(--neon-cyan)">MINING RIGS</h2>
-        <div class="card"><div><b>Gpu Rig v1</b><br><small>+500 PNL/H</small></div><button class="btn-pill">5000</button></div>
+        <h2 style="color:var(--neon-cyan)">MINING</h2>
+        <div class="card"><div><b>CPU Miner</b><br><small>+100 PNL/H</small></div><button class="btn-pill">5000</button></div>
         <button class="f-item" style="margin-top:auto;" onclick="closeModal('mine-ui')">CLOSE</button>
     </div>
 
     <div id="tasks-ui" class="modal">
-        <h2 style="color:var(--neon-cyan)">MISSION CENTER</h2>
-        <div class="card"><div><b>Follow X</b><br><small>+5000 Coins</small></div><button class="btn-pill">GO</button></div>
+        <h2 style="color:var(--neon-cyan)">TASKS</h2>
+        <div class="card"><div><b>Join TG Channel</b><br><small>+5000 Coins</small></div><button class="btn-pill">GO</button></div>
         <button class="f-item" style="margin-top:auto;" onclick="closeModal('tasks-ui')">CLOSE</button>
     </div>
 
@@ -129,7 +129,23 @@
         
         let s = { bal: 0, eng: 1000, max: 1000, lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id || 0, r: 'Bronze Node', bot: false };
 
+        // ПОДТЯГИВАЕМ ДАННЫЕ ИЗ ТЕЛЕГРАМА
+        function setupUser() {
+            const user = tg.initDataUnsafe?.user;
+            if(user) {
+                document.getElementById('u-nm').innerText = user.first_name + (user.last_name ? ' ' + user.last_name : '');
+                if(user.photo_url) {
+                    document.getElementById('u-av').src = user.photo_url;
+                } else {
+                    document.getElementById('u-av').style.display = 'none'; // Скрыть если нет фото
+                }
+            } else {
+                document.getElementById('u-nm').innerText = "Unknown User";
+            }
+        }
+
         async function load() {
+            setupUser();
             try {
                 const r = await fetch(`/api/user/${s.uid}`);
                 const d = await r.json();
@@ -151,14 +167,8 @@
             if(s.bot) { document.getElementById('bot-btn').innerText = "ACTIVE"; }
         }
 
-        function openModal(id) { 
-            const el = document.getElementById(id);
-            if(el) el.style.display = 'flex'; 
-        }
-        function closeModal(id) { 
-            const el = document.getElementById(id);
-            if(el) el.style.display = 'none'; 
-        }
+        function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
         async function openStats() {
             openModal('stats-ui');
@@ -166,7 +176,7 @@
             const data = await r.json();
             document.getElementById('stats-content').innerHTML = data.map((u, i) => `
                 <div style="padding:10px; border-bottom:1px solid #222; display:flex; justify-content:space-between;">
-                    <span>#${i+1} ID:${u.user_id.slice(0,6)}</span>
+                    <span>#${i+1} ${u.user_id.slice(0,6)}</span>
                     <b>${Math.floor(u.balance).toLocaleString()}</b>
                 </div>
             `).join('');
@@ -203,10 +213,7 @@
         }
 
         let p = 0;
-        const loadIv = setInterval(() => { 
-            p += 4; document.getElementById('l-p').innerText = `SYNCING... ${p}%`; 
-            if(p >= 100) { clearInterval(loadIv); load(); } 
-        }, 30);
+        const loadIv = setInterval(() => { p += 4; document.getElementById('l-p').innerText = `SYNCING... ${p}%`; if(p >= 100) { clearInterval(loadIv); load(); } }, 30);
 
         setInterval(save, 5000);
         setInterval(() => {
