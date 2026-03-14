@@ -1,4 +1,4 @@
-// v1.4.6 - Восстановление функций
+// v1.4.6.2 - Support for Upgrades
 const express = require('express');
 const { Telegraf, Markup } = require('telegraf');
 const path = require('path');
@@ -30,8 +30,8 @@ const initDB = async () => {
             pnl NUMERIC DEFAULT 0,
             rank TEXT DEFAULT 'Bronze Node'
         )`);
-        console.log("DB v1.4.6 Ready");
-    } catch (err) { console.error("DB Error:", err); }
+        console.log("Database Online");
+    } catch (err) { console.error(err); }
 };
 initDB();
 
@@ -58,12 +58,12 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/stats', async (req, res) => {
+app.get('/api/leaderboard', async (req, res) => {
     try {
-        const r = await pool.query("SELECT username, balance, rank FROM users ORDER BY balance DESC LIMIT 15");
+        const r = await pool.query("SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10");
         res.json(r.rows);
     } catch (e) { res.status(500).json([]); }
 });
 
-bot.start(c => c.replyWithHTML(`<b>🚀 NEURAL PULSE v1.4.6</b>`, Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://${DOMAIN}`)]])));
-app.listen(PORT, () => { console.log(`Server v1.4.6 active`); bot.launch(); });
+bot.start(c => c.replyWithHTML(`<b>🚀 NEURAL PULSE v1.4.6.2</b>`, Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://${DOMAIN}`)]])));
+app.listen(PORT, () => { bot.launch(); });
