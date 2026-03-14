@@ -1,11 +1,11 @@
-// Version: 1.4.6
+// Version: 1.4.7
 const express = require('express');
 const { Telegraf, Markup } = require('telegraf');
 const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.4.6";
+const VERSION = "1.4.7";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 const DOMAIN = "neural-pulse.bothost.ru";
@@ -23,7 +23,7 @@ const initDB = async () => {
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, balance NUMERIC DEFAULT 0)`);
         const updates = [
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT DEFAULT 'Unknown'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT DEFAULT 'Neural Player'",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS energy INTEGER DEFAULT 1000",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS max_energy INTEGER DEFAULT 1000",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS click_lvl INTEGER DEFAULT 1",
@@ -32,7 +32,7 @@ const initDB = async () => {
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_bot BOOLEAN DEFAULT FALSE"
         ];
         for (let cmd of updates) { try { await pool.query(cmd); } catch(e){} }
-        console.log(`v${VERSION} Engine Synchronized`);
+        console.log(`v${VERSION} Engine Ready`);
     } catch (err) { console.error(err); }
 };
 initDB();
@@ -61,9 +61,10 @@ app.post('/api/save', async (req, res) => {
 });
 
 app.get('/api/stats', async (req, res) => {
-    // Получаем топ игроков по балансу
-    const r = await pool.query('SELECT username, balance, rank FROM users ORDER BY balance DESC LIMIT 15');
-    res.json(r.rows);
+    try {
+        const r = await pool.query("SELECT COALESCE(username, 'Player') as username, balance, rank FROM users ORDER BY balance DESC LIMIT 15");
+        res.json(r.rows);
+    } catch (e) { res.status(500).json([]); }
 });
 
 bot.start(c => c.replyWithHTML(`<b>🚀 NEURAL PULSE v${VERSION}</b>`, Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://${DOMAIN}`)]])));
