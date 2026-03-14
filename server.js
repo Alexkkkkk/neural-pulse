@@ -1,11 +1,11 @@
-// Version: 1.4.4
+// Version: 1.4.5
 const express = require('express');
 const { Telegraf, Markup } = require('telegraf');
 const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.4.4";
+const VERSION = "1.4.5";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 const DOMAIN = "neural-pulse.bothost.ru";
@@ -22,7 +22,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const initDB = async () => {
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, balance NUMERIC DEFAULT 0)`);
-        const columns = [
+        const cols = [
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS energy INTEGER DEFAULT 1000",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS max_energy INTEGER DEFAULT 1000",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS click_lvl INTEGER DEFAULT 1",
@@ -30,8 +30,8 @@ const initDB = async () => {
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS rank TEXT DEFAULT 'Bronze Node'",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_bot BOOLEAN DEFAULT FALSE"
         ];
-        for (let cmd of columns) { try { await pool.query(cmd); } catch (e) {} }
-        console.log(`v${VERSION} Database Synchronized`);
+        for (let c of cols) { try { await pool.query(c); } catch(e){} }
+        console.log(`v${VERSION} Engine Ready`);
     } catch (err) { console.error(err); }
 };
 initDB();
@@ -68,4 +68,4 @@ bot.start((ctx) => {
     ctx.replyWithHTML(`<b>🚀 NEURAL PULSE v${VERSION}</b>`, Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://${DOMAIN}`)]]));
 });
 
-app.listen(PORT, () => { console.log(`v${VERSION} Engine Online`); bot.launch(); });
+app.listen(PORT, () => { console.log(`v${VERSION} Running`); bot.launch(); });
