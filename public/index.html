@@ -3,114 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.1.4</title>
+    <title>Neural Pulse v1.1.6</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/sdk@latest/dist/tonconnect-sdk.min.js"></script>
     <style>
         :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg: #000; }
         body { margin: 0; padding: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; }
         
-        /* Загрузочный экран по скриншоту */
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
-        .loader-circle { width: 150px; height: 150px; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--neon-cyan); border-right: 2px solid var(--neon-purple); display: flex; align-items: center; justify-content: center; margin-bottom: 40px; }
-        .access-text { letter-spacing: 4px; font-size: 14px; margin-bottom: 15px; color: #fff; font-weight: 300; }
-        .pct { font-size: 32px; font-weight: bold; color: var(--neon-cyan); margin-bottom: 20px; }
-        .load-line { width: 60%; height: 2px; background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); box-shadow: 0 0 10px var(--neon-purple); }
+        .loader-circle { width: 140px; height: 140px; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--neon-cyan); border-right: 2px solid var(--neon-purple); display: flex; align-items: center; justify-content: center; animation: spin 2s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .pct { font-size: 30px; font-weight: bold; color: var(--neon-cyan); margin: 20px 0; }
 
         .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; visibility: hidden; transition: 0.5s; }
         .app.ready { opacity: 1; visibility: visible; }
 
-        /* Хедер со скриншота */
-        .header { width: 90%; margin-top: 20px; background: rgba(255,255,255,0.05); border-radius: 25px; padding: 15px; display: flex; align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.1); }
-        .lvl-box { width: 50px; height: 50px; border: 2px solid var(--neon-cyan); border-radius: 15px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: bold; color: #fff; box-shadow: inset 0 0 10px rgba(0,242,255,0.2); }
+        .header { width: 90%; margin-top: 15px; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 12px; display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,255,255,0.1); }
+        .lvl-box { width: 45px; height: 45px; border: 2px solid var(--neon-cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; }
 
-        .bal { font-size: 80px; font-weight: bold; margin-top: 20px; }
-        .pnl { color: var(--neon-cyan); font-weight: bold; margin-top: -10px; font-size: 14px; text-transform: uppercase; }
+        .bal { font-size: 65px; font-weight: 900; margin-top: 15px; }
+        .pnl { color: var(--neon-cyan); font-weight: bold; margin-top: -10px; font-size: 12px; }
 
-        /* Сцена с наложением кнопок поверх логотипа */
         .stage { flex-grow: 1; position: relative; width: 100%; display: flex; align-items: center; justify-content: center; }
-        .main-logo { width: 220px; height: 220px; z-index: 1; filter: drop-shadow(0 0 30px rgba(188,19,254,0.3)); cursor: pointer; }
+        .main-logo { width: 220px; height: 220px; border-radius: 50%; filter: drop-shadow(0 0 20px rgba(188,19,254,0.3)); }
         
-        .overlay-btns { position: absolute; right: 15%; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
-        .btn-sm { background: rgba(30,30,30,0.8); border: 1px solid #444; color: white; padding: 10px 0; border-radius: 15px; width: 100px; text-align: center; font-size: 10px; font-weight: bold; backdrop-filter: blur(5px); }
-        .btn-purple { border: 1px solid var(--neon-purple); box-shadow: inset 0 0 5px var(--neon-purple); }
+        .overlay-btns { position: absolute; right: 10%; display: flex; flex-direction: column; gap: 10px; }
+        .btn-sm { background: rgba(20,20,20,0.9); border: 1px solid #333; color: white; padding: 10px 0; border-radius: 15px; width: 90px; text-align: center; font-size: 9px; font-weight: bold; }
 
-        .energy-box { width: 85%; margin-bottom: 25px; }
-        .energy-info { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 8px; font-weight: bold; color: #888; }
-        .energy-bar { width: 100%; height: 6px; background: #111; border-radius: 10px; overflow: hidden; }
-        .energy-fill { height: 100%; background: var(--neon-cyan); box-shadow: 0 0 10px var(--neon-cyan); transition: 0.3s; }
+        .energy-box { width: 85%; margin-bottom: 20px; }
+        .energy-fill { height: 100%; background: var(--neon-cyan); box-shadow: 0 0 8px var(--neon-cyan); transition: 0.3s; width: 100%; }
 
-        /* Футер с иконками */
-        .footer { width: 92%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 35px; }
-        .f-item { background: #1a1a1a; border: 1px solid #333; border-radius: 18px; padding: 15px 0; text-align: center; font-size: 11px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 5px; }
+        .footer { width: 92%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 30px; }
+        .f-btn { background: #111; border: 1px solid #222; border-radius: 15px; padding: 15px 0; text-align: center; font-size: 11px; font-weight: bold; }
 
-        .plus { position: absolute; font-size: 35px; font-weight: 900; color: var(--neon-cyan); animation: p 0.7s forwards; pointer-events: none; z-index: 20; }
-        @keyframes p { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-120px); } }
+        /* Окно MINE */
+        #mine-modal { position: fixed; bottom: -100%; left: 0; width: 100%; height: 70%; background: #0a0a0a; border-top: 2px solid var(--neon-purple); transition: 0.4s; z-index: 1000; padding: 20px; box-sizing: border-box; }
+        #mine-modal.open { bottom: 0; }
+        .card { background: #151515; border: 1px solid #333; border-radius: 15px; padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
     </style>
 </head>
 <body>
     <div id="loader">
-        <div class="loader-circle">
-            <img src="images/logo.png" style="width: 80px;" onerror="this.src='https://via.placeholder.com/80/bc13fe/fff?text=AI'">
-        </div>
-        <div class="access-text">ACCESS GRANTED</div>
-        <div class="pct" id="load-pct">0%</div>
-        <div class="load-line"></div>
+        <div class="loader-circle"><img src="images/logo.png" style="width: 70px;"></div>
+        <div class="pct" id="l-p">0%</div>
+        <div style="font-size: 10px; color: #444;">ACCESS GRANTED</div>
     </div>
 
     <div class="app" id="ui">
-        <div class="header">
-            <div class="lvl-box" id="l-v">1</div>
-            <div>
-                <div style="font-size: 8px; color: #555; letter-spacing: 1px;">SYSTEM CORE</div>
-                <div style="font-size: 13px; font-weight: bold; letter-spacing: 1px;">NEURAL PULSE v1.1.4</div>
-            </div>
-        </div>
-
+        <div class="header"><div class="lvl-box" id="l-v">1</div><div><div style="font-size:10px; font-weight:bold;">NEURAL PULSE</div><div style="font-size:8px; color:#555;">SYSTEM CORE v1.1.6</div></div></div>
         <div class="bal" id="b-v">0</div>
-        <div class="pnl" id="p-v">PASSIVE: +0/h</div>
+        <div class="pnl" id="p-v">PNL: +0/H</div>
 
         <div class="stage">
-            <img src="images/logo.png" class="main-logo" id="t-a">
+            <img src="images/logo.png" class="main-logo" id="tap">
             <div class="overlay-btns">
-                <div class="btn-sm" onclick="handleWallet()">WALLET</div>
-                <div class="btn-sm" onclick="invite()">DAILY</div>
-                <div class="btn-sm btn-purple" onclick="buyBonus()">BUY 1M</div>
+                <div class="btn-sm" onclick="tg.showAlert('Coming soon')">WALLET</div>
+                <div class="btn-sm" onclick="tg.showAlert('Daily Bonus!')">DAILY</div>
+                <div class="btn-sm" style="border-color: var(--neon-purple)" onclick="tg.showAlert('Donate')">BUY</div>
             </div>
         </div>
 
         <div class="energy-box">
-            <div class="energy-info"><span>⚡ ENERGY</span><span id="e-n">1000/1000</span></div>
-            <div class="energy-bar"><div class="energy-fill" id="e-f"></div></div>
+            <div style="display:flex; justify-content:space-between; font-size:9px; margin-bottom:5px;"><span>⚡ ENERGY</span><span id="e-n">1000/1000</span></div>
+            <div style="width:100%; height:4px; background:#111; border-radius:5px; overflow:hidden;"><div class="energy-fill" id="e-f"></div></div>
         </div>
 
         <div class="footer">
-            <div class="f-item" onclick="upgrade()">🚀 BOOST</div>
-            <div class="f-item" onclick="tg.showAlert('Mining...')">⛏️ MINE</div>
-            <div class="f-item" onclick="checkPay()">📊 STATS</div>
+            <div class="f-btn" onclick="upgrade()">🚀 BOOST</div>
+            <div class="f-btn" onclick="openMine()">⛏️ MINE</div>
+            <div class="f-btn" onclick="tg.showAlert('Stats updated')">📊 STATS</div>
         </div>
+    </div>
+
+    <div id="mine-modal">
+        <div style="display:flex; justify-content:space-between; margin-bottom:20px;"><b>MATH CARDS</b><span onclick="openMine()" style="color:var(--neon-purple)">CLOSE</span></div>
+        <div class="card"><div><b>Add (+)</b><br><small>+500/h</small></div><button onclick="buyCard(50000, 500)" class="btn-sm">50K</button></div>
+        <div class="card"><div><b>Multiply (×)</b><br><small>+1500/h</small></div><button onclick="buyCard(150000, 1500)" class="btn-sm">150K</button></div>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
-        tg.expand();
-        const tonConnect = new TonConnectSDK.TonConnect({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json' });
         let s = { bal: 0, eng: 1000, lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id || 0 };
 
         async function init() {
             let p = 0;
             const iv = setInterval(() => {
-                p += 1; 
-                document.getElementById('load-pct').innerText = p + '%';
-                if(p >= 100) {
-                    clearInterval(iv);
-                    loadData();
-                }
+                p += 5; document.getElementById('l-p').innerText = p + '%';
+                if(p >= 100) { clearInterval(iv); load(); }
             }, 30);
             setInterval(() => { if(s.eng < 1000) { s.eng++; upd(); } }, 1000);
         }
 
-        async function loadData() {
+        async function load() {
             const r = await fetch(`/api/user/${s.uid}`);
             const d = await r.json();
             Object.assign(s, { bal: Number(d.balance), eng: d.energy, lvl: d.click_lvl, pnl: Number(d.pnl) });
@@ -124,41 +107,30 @@
             document.getElementById('e-n').innerText = `${s.eng}/1000`;
             document.getElementById('e-f').style.width = (s.eng/10)+'%';
             document.getElementById('l-v').innerText = s.lvl;
-            document.getElementById('p-v').innerText = `PASSIVE: +${s.pnl}/h`;
+            document.getElementById('p-v').innerText = `PNL: +${Math.floor(s.pnl)}/H`;
         }
 
-        document.getElementById('t-a').addEventListener('touchstart', (e) => {
-            e.preventDefault();
+        document.getElementById('tap').addEventListener('touchstart', (e) => {
             if(s.eng < s.lvl) return;
-            s.bal += s.lvl; s.eng -= s.lvl;
-            const p = document.createElement('div');
-            p.className = 'plus'; p.innerText = `+${s.lvl}`;
-            p.style.left = e.touches[0].clientX + 'px'; p.style.top = e.touches[0].clientY + 'px';
-            document.body.appendChild(p);
-            setTimeout(() => p.remove(), 700);
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-            upd();
+            s.bal += s.lvl; s.eng -= s.lvl; upd();
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
         });
+
+        function openMine() { document.getElementById('mine-modal').classList.toggle('open'); }
+
+        async function buyCard(cost, income) {
+            if(s.bal < cost) return tg.showAlert("Not enough coins!");
+            const r = await fetch('/api/mine/buy', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({userId: s.uid, cost, income}) });
+            const d = await r.json();
+            if(d.success) { s.bal -= cost; s.pnl += income; upd(); tg.showAlert("Card Activated!"); }
+        }
 
         async function upgrade() {
             const cost = s.lvl * 5000;
-            if(confirm(`Level ${s.lvl+1} cost: ${cost}?`)) {
-                const r = await fetch('/api/upgrade/click', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({userId: s.uid}) });
-                if((await r.json()).success) { s.lvl++; s.bal -= cost; upd(); }
-            }
-        }
-
-        function invite() {
-            tg.openTelegramLink(`https://t.me/share/url?url=https://t.me/n_pulse_bot?start=${s.uid}`);
+            if(s.bal >= cost) { s.bal -= cost; s.lvl++; upd(); }
         }
 
         setInterval(() => fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({userId: s.uid, balance: s.bal, energy: s.eng, click_lvl: s.lvl, pnl: s.pnl}) }), 3000);
-        
-        async function handleWallet() {
-            if (tonConnect.connected) await tonConnect.disconnect();
-            else tg.openLink(tonConnect.connect(await tonConnect.getWallets()));
-        }
-
         init();
     </script>
 </body>
