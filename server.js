@@ -1,51 +1,100 @@
-const express = require('express');
-const { Telegraf, Markup } = require('telegraf');
-const path = require('path');
-const { Pool } = require('pg');
-const cors = require('cors');
+import os
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from telebot import TeleBot, types
 
-const VERSION = "1.3.5";
-const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
-const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
-const DOMAIN = "neural-pulse.bothost.ru";
-const PORT = process.env.PORT || 3000;
+VERSION = "1.3.6"
+BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw"
+PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f"
+DOMAIN = "neural-pulse.bothost.ru"
 
-const bot = new Telegraf(BOT_TOKEN);
-const app = express();
-const pool = new Pool({ connectionString: PG_URI, ssl: false });
+app = Flask(__name__, static_folder='static')
+CORS(app)
+bot = TeleBot(BOT_TOKEN)
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+def get_db_connection():
+    return psycopg2.connect(PG_URI, sslmode='disable')
 
-// Квантовое начисление: Энергия восстанавливается быстрее, если баланс выше
-setInterval(async () => {
-    try {
-        await pool.query(`
-            UPDATE users SET 
-                balance = balance + (pnl / 3600),
-                energy = LEAST(1000, energy + CASE WHEN balance > 1000000 THEN 5 ELSE 3 END)
-            WHERE last_active > NOW() - INTERVAL '12 hours'
-        `);
-    } catch (e) {}
-}, 1000);
+def init_db():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            user_id TEXT PRIMARY KEY,
+            balance NUMERIC DEFAULT 0,
+            energy INTEGER DEFAULT 1000,
+            click_lvl INTEGER DEFAULT 1,
+            pnl NUMERIC DEFAULT 0,
+            last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    cur.close()
+    conn.close()
 
-app.get('/api/user/:id', async (req, res) => {
-    const uid = String(req.params.id);
-    let r = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
-    if (r.rows.length === 0) {
-        await pool.query('INSERT INTO users (user_id) VALUES ($1)', [uid]);
-        r = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
-    }
-    res.json(r.rows[0]);
-});
+init_db()
 
-app.post('/api/save', async (req, res) => {
-    const { userId, balance, energy, click_lvl, pnl } = req.body;
-    await pool.query(`UPDATE users SET balance = $2, energy = $3, click_lvl = $4, pnl = $5, last_active = CURRENT_TIMESTAMP WHERE user_id = $1`, 
-    [String(userId), Number(balance), Math.floor(energy), Math.floor(click_lvl), Number(pnl)]);
-    res.json({ status: 'ok' });
-});
+@app.route('/')
+def serve_index():
+    return send_from_directory(app.static_folder, 'index.html')
 
-bot.start(ctx => ctx.replyWithHTML(`<b>🚀 NEURAL PULSE v${VERSION}</b>`, Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://${DOMAIN}`)]])));
-app.listen(PORT, () => { console.log(`Quantum Engine v${VERSION} Online`); bot.launch(); });
+@app.route('/api/user/<user_id>')
+def get_user(user_id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute('SELECT * FROM users WHERE user_id = %s', (user_id,))
+    user = cur.fetchone()
+    if not user:
+        cur.execute('INSERT INTO users (user_id) VALUES (%s) RETURNING *', (user_id,))
+        user = cur.fetchone()
+        conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify(user)
+
+@app.route('/api/save', method=['POST'])
+def save_data():
+    data = request.json
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('''
+        UPDATE users SET balance=%s, energy=%s, click_lvl=%s, pnl=%s, last_active=CURRENT_TIMESTAMP 
+        WHERE user_id=%s
+    ''', (data['balance'], data['energy'], data['click_lvl'], data['pnl'], data['userId']))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"status": "ok"})
+
+@app.route('/api/leaderboard')
+def get_leaderboard():
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute('SELECT user_id, balance, pnl FROM users ORDER BY balance DESC LIMIT 15')
+    leaders = cur.fetchall()
+    cur.close()
+    conn.close()
+    return jsonify(leaders)
+
+@app.route('/api/stats')
+def get_stats():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('SELECT COUNT(*) FROM users')
+    count = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    return jsonify({"users": count})
+
+@bot.message_handler(commands=['start'])
+def start(message):
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("⚡ START PULSE", web_app=types.WebAppInfo(url=f"https://{DOMAIN}")))
+    bot.send_message(message.chat.id, f"<b>🚀 NEURAL PULSE v{VERSION}</b>\nQuantum synergy active.", parse_mode='HTML', reply_markup=markup)
+
+if __name__ == '__main__':
+    import threading
+    threading.Thread(target=lambda: bot.infinity_polling(), daemon=True).start()
+    app.run(host='0.0.0.0', port=3000)
