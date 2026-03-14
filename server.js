@@ -4,7 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.5.4";
+const VERSION = "1.5.5";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 const DOMAIN = "neural-pulse.bothost.ru";
@@ -17,7 +17,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Инициализация БД со всеми функциями
+// Инициализация СУПЕР-БАЗЫ (v1.5.5)
 const initDB = async () => {
     await pool.query(`CREATE TABLE IF NOT EXISTS users (
         user_id TEXT PRIMARY KEY, 
@@ -62,6 +62,6 @@ bot.start(c => c.replyWithHTML(`<b>🚀 NEURAL PULSE v${VERSION}</b>`,
     Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://${DOMAIN}`)]])));
 
 app.listen(3000, () => {
-    console.log(`\n========================================\nSYSTEM READY. CORE v${VERSION} ACTIVE\n========================================\n`);
+    console.log(`\n========================================\n[ v${VERSION} ] SYSTEM READY. ALL FUNCTIONS STACKED.\n========================================\n`);
     bot.launch();
 });
