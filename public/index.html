@@ -3,61 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.6.4</title>
+    <title>Neural Pulse v1.6.6</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; --gray-card: #111; --gray-btn: #1a1a1a; }
+        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; --panel: #111; --gray-btn: #1a1a1a; }
         body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; }
         
-        /* Loader (Rule #5) */
+        /* Loader по скриншоту (Неприкосновенен - Rule #5) */
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
         .load-circle { width: 220px; height: 220px; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--cyan); border-right: 2px solid var(--purple); display: flex; align-items: center; justify-content: center; animation: rotate 2s linear infinite; }
         @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .load-logo { width: 110px; animation: unrotate 2s linear infinite; }
         @keyframes unrotate { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
-        .access-txt { margin-top: 50px; font-weight: bold; letter-spacing: 4px; font-size: 20px; text-transform: uppercase; }
+        .access-txt { margin-top: 50px; font-weight: bold; letter-spacing: 4px; font-size: 20px; text-transform: uppercase; color: #fff; }
         .p-val { margin-top: 20px; font-size: 38px; font-weight: 900; color: var(--cyan); }
         .p-bar-cont { width: 70%; height: 5px; background: #111; margin-top: 25px; border-radius: 5px; overflow: hidden; }
         .p-bar-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 0%; transition: 0.1s; }
 
-        .header { width: 92%; margin-top: 20px; display: flex; align-items: center; background: var(--gray-card); border-radius: 20px; padding: 15px; border: 1px solid #222; }
-        .u-av-box { width: 55px; height: 55px; border-radius: 12px; border: 2px solid var(--cyan); margin-right: 15px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-        .lvl-tag { background: var(--cyan); color: #000; padding: 8px 15px; border-radius: 12px; font-weight: 900; font-size: 16px; margin-left: auto; }
-        .bal { font-size: 84px; font-weight: 800; margin: 45px 0; letter-spacing: -2px; }
-        .stage { flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
-        .main-ai { width: 230px; filter: drop-shadow(0 0 40px rgba(188, 19, 254, 0.4)); cursor: pointer; transition: 0.1s; }
-        .side-bar { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 12px; }
-        .s-btn { background: var(--gray-btn); border: 1px solid #333; color: white; padding: 18px; border-radius: 18px; font-size: 12px; font-weight: bold; width: 100px; text-align: center; }
+        /* HEADER ПО СКРИНШОТУ (v1.6.6 Style) */
+        .header { width: 92%; margin-top: 20px; display: flex; align-items: center; background: rgba(255,255,255,0.03); border-radius: 15px; padding: 12px; border: 1px solid #222; }
+        .u-av-box { width: 50px; height: 50px; border-radius: 10px; border: 1px solid var(--cyan); margin-right: 12px; overflow: hidden; }
+        .u-av { width: 100%; height: 100%; }
+        .lvl-tag { background: var(--cyan); color: #000; padding: 6px 15px; border-radius: 10px; font-weight: 900; font-size: 15px; margin-left: auto; }
 
+        /* БАЛАНС ПО ЦЕНТРУ */
+        .bal { font-size: 72px; font-weight: 800; margin: 40px 0; letter-spacing: -2px; }
+        
+        /* AI И БОКОВОЕ МЕНЮ */
+        .stage { flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
+        .main-ai { width: 220px; filter: drop-shadow(0 0 30px rgba(188, 19, 254, 0.5)); cursor: pointer; transition: 0.1s; }
+        .main-ai:active { transform: scale(0.92); }
+        .side-bar { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .s-btn { background: var(--gray-btn); border: 1px solid #333; color: white; padding: 15px; border-radius: 15px; font-size: 11px; font-weight: bold; width: 85px; text-align: center; }
+
+        /* ЭНЕРГИЯ ПО СКРИНШОТУ */
         .eng-cont { width: 92%; margin-bottom: 20px; }
-        .eng-header { display: flex; justify-content: space-between; font-size: 12px; color: #888; margin-bottom: 8px; font-weight: bold; text-transform: uppercase; }
-        .eng-bar { width: 100%; height: 10px; background: #111; border-radius: 10px; overflow: hidden; border: 1px solid #222; }
+        .eng-header { display: flex; justify-content: space-between; font-size: 11px; color: #888; margin-bottom: 5px; text-transform: uppercase; font-weight: bold; }
+        .eng-bar { width: 100%; height: 8px; background: #111; border-radius: 10px; overflow: hidden; border: 1px solid #222; }
         #eng-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; }
 
-        .footer { width: 94%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 35px; }
-        .f-item { background: var(--gray-btn); border-radius: 20px; padding: 22px 0; text-align: center; font-size: 12px; font-weight: bold; border: 1px solid #222; text-transform: uppercase; }
+        /* FOOTER */
+        .footer { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 30px; }
+        .f-item { background: var(--gray-btn); border-radius: 15px; padding: 18px 0; text-align: center; font-size: 11px; font-weight: bold; border: 1px solid #222; text-transform: uppercase; }
 
-        .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 40px 25px; }
-        .m-h { color: var(--cyan); font-size: 48px; font-weight: 800; margin-bottom: 35px; text-transform: uppercase; }
-        .m-close { background: #111; padding: 25px; border-radius: 25px; text-align: center; margin-top: auto; color: #444; font-weight: bold; text-transform: uppercase; font-size: 18px; }
-        .card { background: var(--gray-card); border: 1px solid #222; border-radius: 20px; padding: 25px; display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }
-        .action-btn { background: var(--cyan); color: #000; border: none; padding: 22px; border-radius: 20px; font-weight: 900; font-size: 16px; width: 100%; text-transform: uppercase; }
+        /* МОДАЛКИ (Rule #6) */
+        .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 30px 20px; }
+        .m-h { color: var(--cyan); font-size: 36px; font-weight: 800; margin-bottom: 25px; text-transform: uppercase; }
+        .m-close { background: #151515; padding: 20px; border-radius: 20px; text-align: center; margin-top: auto; color: #444; font-weight: bold; text-transform: uppercase; }
+        .ref-box { background: #111; border: 1px solid #222; border-radius: 15px; padding: 20px; margin-bottom: 15px; text-align: center; }
+        .ref-btn { background: var(--cyan); color: #000; border: none; padding: 18px; border-radius: 15px; font-weight: 900; width: 100%; }
     </style>
 </head>
 <body>
 
     <div id="loader">
-        <div class="load-circle"><img src="logo.png" class="load-logo" onerror="this.src='images/logo.png'"></div>
+        <div class="load-circle"><img src="logo.png" class="load-logo"></div>
         <div class="access-txt">Access Granted</div>
         <div class="p-val" id="p-txt">0%</div>
         <div class="p-bar-cont"><div class="p-bar-fill" id="p-bar"></div></div>
     </div>
 
     <div class="header">
-        <div class="u-av-box"><img src="logo.png" class="u-av" onerror="this.src='images/logo.png'"></div>
+        <div class="u-av-box"><img src="logo.png" class="u-av"></div>
         <div>
-            <div id="u-nm" style="font-weight:bold; font-size:18px;">Neural User</div>
-            <div style="color:var(--cyan); font-size:11px">v1.6.4 Active Node</div>
+            <div id="u-nm" style="font-weight:bold; font-size:16px;">User</div>
+            <div style="color:var(--cyan); font-size:10px">v1.6.6 Active Node</div>
         </div>
         <div class="lvl-tag">LVL <span id="u-lv">1</span></div>
     </div>
@@ -87,23 +97,25 @@
 
     <div id="wal-ui" class="modal">
         <div class="m-h">WALLET</div>
-        <div class="card"><span style="color:#888">Status</span><span id="w-status">Disconnected</span></div>
-        <button id="w-btn" class="action-btn" onclick="toggleWallet()">CONNECT TON</button>
+        <div style="background:#111; padding:20px; border-radius:15px; border:1px solid #222; display:flex; justify-content:space-between; margin-bottom:20px;">
+            <span style="color:#888">Status</span><span id="w-status">Disconnected</span>
+        </div>
+        <button id="w-btn" class="ref-btn" onclick="toggleWallet()">CONNECT TON</button>
         <div class="m-close" onclick="closeM('wal-ui')">BACK</div>
     </div>
 
     <div id="fr-ui" class="modal">
         <div class="m-h">FRIENDS</div>
-        <div class="card"><span style="color:#888">Invited</span><span id="fr-total" style="color:var(--cyan); font-size:24px; font-weight:bold">0</span></div>
-        <button class="action-btn" onclick="copyRef()">INVITE FRIEND</button>
+        <div class="ref-box"><div style="color:#888; font-size:12px;">Invited</div><div id="fr-total" style="font-size:32px; color:var(--cyan);">0</div></div>
+        <button class="ref-btn" onclick="copyRef()">INVITE FRIEND</button>
         <div class="m-close" onclick="closeM('fr-ui')">BACK</div>
     </div>
 
+    <div id="bn-ui" class="modal"><div class="m-h">BONUS</div><div style="text-align:center; color:#555; padding:30px;">Ежедневные награды в разработке...</div><div class="m-close" onclick="closeM('bn-ui')">BACK</div></div>
     <div id="st-ui" class="modal"><div class="m-h">STATS</div><div class="m-close" onclick="closeM('st-ui')">BACK</div></div>
     <div id="up-ui" class="modal"><div class="m-h">BOOST</div><div class="m-close" onclick="closeM('up-ui')">BACK</div></div>
     <div id="mi-ui" class="modal"><div class="m-h">MINE</div><div class="m-close" onclick="closeM('mi-ui')">BACK</div></div>
     <div id="ta-ui" class="modal"><div class="m-h">TASKS</div><div class="m-close" onclick="closeM('ta-ui')">BACK</div></div>
-    <div id="bn-ui" class="modal"><div class="m-h">BONUS</div><div class="m-close" onclick="closeM('bn-ui')">BACK</div></div>
 
     <script>
         const tg = window.Telegram.WebApp;
@@ -118,15 +130,13 @@
         }, 20);
 
         async function load() {
-            try {
-                const r = await fetch(`/api/user/${s.uid}`);
-                const d = await r.json();
-                s.bal = Number(d.balance); s.lvl = d.click_lvl; s.eng = d.energy; s.wallet = d.wallet_address; s.fr = d.friends_count;
-                document.getElementById('u-nm').innerText = tg.initDataUnsafe?.user?.first_name || d.username;
-                document.getElementById('fr-total').innerText = s.fr || 0;
-                updateWalletUI(); upd();
-                setInterval(tick, 1000);
-            } catch(e) { console.error("Load fail", e); }
+            const r = await fetch(`/api/user/${s.uid}`);
+            const d = await r.json();
+            s.bal = Number(d.balance); s.lvl = d.click_lvl; s.eng = d.energy; s.wallet = d.wallet_address; s.fr = d.friends_count;
+            document.getElementById('u-nm').innerText = tg.initDataUnsafe?.user?.first_name || d.username;
+            document.getElementById('fr-total').innerText = s.fr;
+            updateWalletUI(); upd();
+            setInterval(tick, 1000);
         }
 
         function upd() {
@@ -145,25 +155,8 @@
             upd(); save();
         }
 
-        async function save() {
-            if(s.uid === '0') return;
-            fetch('/api/save', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ userId: s.uid, balance: s.bal, energy: s.eng, click_lvl: s.lvl, pnl: 0, wallet: s.wallet, friends_count: s.fr }) 
-            });
-        }
-
-        function copyRef() {
-            const link = `https://t.me/neural_pulse_bot?start=${s.uid}`;
-            const i = document.createElement('input'); i.value = link; document.body.appendChild(i);
-            i.select(); document.execCommand('copy'); document.body.removeChild(i);
-            tg.HapticFeedback.notificationOccurred('success');
-            alert("Copied!");
-        }
-
         function toggleWallet() {
-            s.wallet = s.wallet ? null : "ADDR_" + s.uid;
+            s.wallet = s.wallet ? null : "CONNECTED_NODE_" + s.uid;
             updateWalletUI(); save();
         }
 
@@ -176,7 +169,15 @@
         }
 
         function openM(id) { document.getElementById(id).style.display = 'flex'; }
-        function closeM(id) { document.getElementById(id).style.display = 'none'; save(); }
+        function closeM(id) { document.getElementById(id).style.display = 'none'; }
+
+        function save() {
+            fetch('/api/save', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ userId: s.uid, balance: s.bal, energy: s.eng, click_lvl: s.lvl, pnl: 0, wallet: s.wallet, friends_count: s.fr }) 
+            });
+        }
     </script>
 </body>
 </html>
