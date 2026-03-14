@@ -1,129 +1,121 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse</title>
+    <title>Neural Pulse v1.4.6</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg: #000; }
-        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; }
-        
+        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
+        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
+
+        /* ЗАГРУЗКА ИЗ СКРИНШОТА (ПРАВИЛО: НЕ МЕНЯТЬ) */
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
-        .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; visibility: hidden; transition: 0.5s; }
+        .loader-ring { position: relative; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; margin-bottom: 30px; }
+        .loader-ring svg { position: absolute; transform: rotate(-90deg); width: 100%; height: 100%; }
+        .loader-ring circle { fill: none; stroke-width: 4; stroke: url(#grad); stroke-dasharray: 565; stroke-dashoffset: 565; transition: 0.1s; stroke-linecap: round; }
+        .loader-logo { width: 100px; filter: drop-shadow(0 0 15px var(--purple)); }
+        .access-txt { font-size: 14px; letter-spacing: 5px; font-weight: bold; margin-bottom: 15px; }
+        .percent-txt { font-size: 42px; font-weight: 900; color: var(--cyan); margin-bottom: 30px; }
+        .load-bar { width: 240px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
+        .load-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--cyan), var(--purple)); }
+
+        /* ИНТЕРФЕЙС ИЗ СКРИНШОТОВ */
+        .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; transition: 0.5s; visibility: hidden; }
         .app.ready { opacity: 1; visibility: visible; }
 
-        /* HEADER */
-        .header { width: 90%; margin-top: 20px; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 10px 15px; display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); }
-        .user-avatar { width: 42px; height: 42px; border-radius: 12px; border: 2px solid var(--neon-cyan); background: #111; object-fit: cover; }
-        .user-info { flex-grow: 1; }
-        .user-name { font-size: 14px; font-weight: 900; }
-        .user-rank { font-size: 10px; color: var(--neon-cyan); font-weight: bold; }
+        .header { width: 92%; margin-top: 20px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; padding: 10px; display: flex; align-items: center; gap: 12px; }
+        .avatar { width: 45px; height: 45px; border-radius: 10px; border: 2px solid var(--cyan); object-fit: cover; }
+        .u-info { flex-grow: 1; }
+        .u-name { font-size: 15px; font-weight: 900; }
+        .u-rank { font-size: 10px; color: var(--cyan); font-weight: bold; }
+        .lvl-badge { background: var(--cyan); color: black; padding: 3px 10px; border-radius: 8px; font-weight: 900; font-size: 12px; }
 
-        .bal-wrap { text-align: center; margin-top: 15px; }
-        .bal { font-size: 58px; font-weight: 900; }
-        .pnl { font-size: 14px; color: var(--neon-cyan); font-weight: bold; }
+        .balance { font-size: 65px; font-weight: 900; margin-top: 25px; text-shadow: 0 0 20px rgba(0,242,255,0.2); }
 
-        /* STAGE */
-        .stage { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; position: relative; }
-        .main-logo { width: 260px; cursor: pointer; filter: drop-shadow(0 0 30px rgba(188,19,254,0.3)); }
+        .stage { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
+        .ai-main { width: 250px; cursor: pointer; transition: 0.05s; }
+        .ai-main:active { transform: scale(0.95); }
 
-        .side-btns { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 10px; }
-        .btn-s { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 12px 0; border-radius: 15px; font-size: 10px; font-weight: bold; width: 90px; text-align: center; backdrop-filter: blur(5px); }
+        .energy-wrap { width: 90%; margin-bottom: 20px; }
+        .energy-bar { width: 100%; height: 8px; background: #111; border-radius: 10px; overflow: hidden; }
+        .energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: 0.3s; }
 
-        /* FOOTER */
-        .footer-info { width: 85%; margin-bottom: 5px; font-size: 10px; display: flex; justify-content: space-between; color: #777; }
-        .energy-bar { width: 85%; height: 8px; background: #111; border-radius: 10px; border: 1px solid #222; overflow: hidden; margin-bottom: 25px; }
-        .energy-fill { height: 100%; background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); transition: width 0.3s; }
+        .footer { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 30px; }
+        .f-btn { background: #111; border: 1px solid #222; border-radius: 18px; padding: 15px 0; text-align: center; font-size: 10px; font-weight: bold; cursor: pointer; }
 
-        .footer { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 35px; }
-        .f-item { background: #111; border: 1px solid #222; border-radius: 18px; padding: 15px 0; text-align: center; font-size: 10px; font-weight: bold; cursor: pointer; }
-
-        /* MODALS */
-        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.98); z-index: 2000; display: none; padding: 25px; flex-direction: column; backdrop-filter: blur(15px); }
-        .modal h2 { color: var(--neon-cyan); text-align: center; margin-bottom: 20px; }
-        .card { background: rgba(255,255,255,0.05); border: 1px solid #333; padding: 15px; border-radius: 20px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-
-        .plus { position: absolute; font-size: 40px; font-weight: 900; color: var(--neon-cyan); pointer-events: none; animation: float 0.7s forwards; text-shadow: 0 0 10px black; }
-        @keyframes float { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-150px); } }
+        /* МОДАЛКИ ПО СКРИНШОТАМ */
+        .modal { position: fixed; inset: 0; background: #000; z-index: 2000; display: none; flex-direction: column; padding: 25px; }
+        .m-title { color: var(--cyan); font-size: 26px; font-weight: 900; margin-bottom: 30px; text-transform: uppercase; }
+        .m-close { background: #111; border-radius: 20px; padding: 15px; text-align: center; margin-top: auto; color: #444; font-weight: bold; text-transform: uppercase; border: 1px solid #222; }
     </style>
 </head>
 <body>
-    <div id="loader"><div id="l-p">LOADING... 0%</div></div>
+    <div id="loader">
+        <div class="loader-ring">
+            <svg><defs><linearGradient id="grad"><stop offset="0%" stop-color="var(--cyan)"/><stop offset="100%" stop-color="var(--purple)"/></linearGradient></defs>
+            <circle id="ring-arc" cx="100" cy="100" r="90"></circle></svg>
+            <img src="logo.png" class="loader-logo" onerror="this.src='images/logo.png'">
+        </div>
+        <div class="access-txt">ACCESS GRANTED</div>
+        <div class="percent-txt" id="p-val">0%</div>
+        <div class="load-bar"><div class="load-fill" id="l-f"></div></div>
+    </div>
 
     <div class="app" id="ui">
         <div class="header">
-            <img src="images/logo.png" id="u-av" class="user-avatar" onerror="this.src='logo.png'">
-            <div class="user-info">
-                <div id="u-nm" class="user-name">Terminal User</div>
-                <div id="r-b" class="user-rank">Bronze Node</div>
+            <img id="u-av" class="avatar" src="logo.png" onerror="this.src='images/logo.png'">
+            <div class="u-info">
+                <div id="u-nm" class="u-name">Player</div>
+                <div id="u-rk" class="u-rank">Bronze Node</div>
             </div>
-            <div style="background:var(--neon-cyan); color:black; padding:4px 10px; border-radius:8px; font-weight:900; font-size:12px;">LVL <span id="l-v">1</span></div>
-        </div>
-        
-        <div class="bal-wrap">
-            <div class="bal" id="b-v">0</div>
-            <div class="pnl">PNL: +<span id="pnl-v">0</span>/H</div>
-        </div>
-        
-        <div class="stage">
-            <img src="logo.png" class="main-logo" id="t-a" onerror="this.src='images/logo.png'">
-            <div class="side-btns">
-                <div class="btn-s" onclick="tg.showAlert('Coming Soon')">WALLET</div>
-                <div class="btn-s" onclick="tg.showAlert('Invites active soon')">FRIENDS</div>
-                <div class="btn-s" style="border-color:var(--neon-purple)" onclick="tg.showAlert('Bonus +100')">BONUS</div>
-            </div>
+            <div class="lvl-badge">LVL <span id="u-lv">1</span></div>
         </div>
 
-        <div class="footer-info"><span>ENERGY</span><span id="e-n">1000/1000</span></div>
-        <div class="energy-bar"><div id="e-f" class="energy-fill"></div></div>
+        <div class="balance" id="b-val">0</div>
+
+        <div class="stage">
+            <img src="logo.png" class="ai-main" id="tap" onerror="this.src='images/logo.png'">
+        </div>
+
+        <div class="energy-wrap">
+            <div class="energy-bar"><div id="e-f" class="energy-fill"></div></div>
+        </div>
 
         <div class="footer">
-            <div class="f-item" onclick="openModal('boost-ui')">BOOST</div>
-            <div class="f-item" onclick="openModal('mine-ui')">MINE</div>
-            <div class="f-item" onclick="openModal('tasks-ui')">TASKS</div>
-            <div class="f-item" onclick="openStats()">STATS</div>
+            <div class="f-btn" onclick="openM('up-ui')">BOOST</div>
+            <div class="f-btn" onclick="openM('mi-ui')">MINE</div>
+            <div class="f-btn" onclick="openM('ta-ui')">TASKS</div>
+            <div class="f-btn" onclick="openM('st-ui')">STATS</div>
         </div>
     </div>
 
-    <div id="boost-ui" class="modal">
-        <h2>UPGRADES</h2>
-        <div class="card"><div><b>Multitap</b><br><small>Level <span id="m-l">1</span></small></div><button class="btn-s" onclick="buy('tap')">BUY</button></div>
-        <button class="f-item" onclick="closeModal('boost-ui')">CLOSE</button>
-    </div>
-
-    <div id="mine-ui" class="modal">
-        <h2>MINING</h2>
-        <div class="card"><div><b>AI Node</b><br><small>+50 PNL</small></div><button class="btn-s" onclick="buy('mine')">5000</button></div>
-        <button class="f-item" onclick="closeModal('mine-ui')">CLOSE</button>
-    </div>
-
-    <div id="tasks-ui" class="modal">
-        <h2>TASKS</h2>
-        <div class="card"><div><b>Daily Check</b><br><small>+1000</small></div><button class="btn-s" onclick="tg.showAlert('Completed')">CLAIM</button></div>
-        <button class="f-item" onclick="closeModal('tasks-ui')">CLOSE</button>
-    </div>
-
-    <div id="stats-ui" class="modal">
-        <h2>LEADERBOARD</h2>
-        <div id="stats-content" style="overflow-y:auto; flex-grow:1;"></div>
-        <button class="f-item" onclick="closeModal('stats-ui')">BACK</button>
-    </div>
+    <div id="st-ui" class="modal"><div class="m-title">Leaderboard</div><div id="st-list" style="overflow-y:auto; flex-grow:1;"></div><div class="m-close" onclick="closeM('st-ui')">BACK</div></div>
+    <div id="up-ui" class="modal"><div class="m-title">Upgrades</div><div class="m-close" onclick="closeM('up-ui')">CLOSE</div></div>
+    <div id="mi-ui" class="modal"><div class="m-title">Mine</div><div class="m-close" onclick="closeM('mi-ui')">CLOSE</div></div>
+    <div id="ta-ui" class="modal"><div class="m-title">Tasks</div><div class="m-close" onclick="closeM('ta-ui')">CLOSE</div></div>
 
     <script>
         const tg = window.Telegram.WebApp;
-        let s = { uid: tg.initDataUnsafe?.user?.id || 0, name: tg.initDataUnsafe?.user?.first_name || "User", bal: 0, eng: 1000, max: 1000, lvl: 1, pnl: 0, r: 'Bronze Node' };
+        let s = { uid: tg.initDataUnsafe?.user?.id || 0, bal: 0, eng: 1000, max: 1000, lvl: 1, r: 'Bronze Node' };
 
-        async function load() {
-            const user = tg.initDataUnsafe?.user;
-            if(user) {
-                document.getElementById('u-nm').innerText = user.first_name;
-                if(user.photo_url) document.getElementById('u-av').src = user.photo_url;
-            }
+        // Анимация загрузки
+        let p = 0;
+        const iv = setInterval(() => {
+            p++;
+            document.getElementById('p-val').innerText = p + '%';
+            document.getElementById('l-f').style.width = p + '%';
+            document.getElementById('ring-arc').style.strokeDashoffset = 565 - (565 * p / 100);
+            if(p >= 100) { clearInterval(iv); start(); }
+        }, 30);
+
+        async function start() {
             try {
                 const r = await fetch(`/api/user/${s.uid}`);
                 const d = await r.json();
-                Object.assign(s, { bal: Number(d.balance), eng: d.energy, max: d.max_energy, lvl: d.click_lvl, pnl: Number(d.pnl), r: d.rank });
+                Object.assign(s, { bal: Number(d.balance), eng: d.energy, max: d.max_energy, lvl: d.click_lvl, r: d.rank });
+                document.getElementById('u-nm').innerText = tg.initDataUnsafe?.user?.first_name || "User";
+                if(tg.initDataUnsafe?.user?.photo_url) document.getElementById('u-av').src = tg.initDataUnsafe.user.photo_url;
             } catch(e) {}
             upd();
             document.getElementById('loader').style.display = 'none';
@@ -131,48 +123,42 @@
         }
 
         function upd() {
-            document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString();
-            document.getElementById('pnl-v').innerText = s.pnl;
-            document.getElementById('l-v').innerText = s.lvl;
-            document.getElementById('m-l').innerText = s.lvl;
-            document.getElementById('e-n').innerText = `${Math.floor(s.eng)}/${s.max}`;
+            document.getElementById('b-val').innerText = Math.floor(s.bal).toLocaleString();
+            document.getElementById('u-lv').innerText = s.lvl;
+            document.getElementById('u-rk').innerText = s.r;
             document.getElementById('e-f').style.width = (s.eng / s.max * 100) + '%';
         }
 
-        function openModal(id) { document.getElementById(id).style.display = 'flex'; }
-        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+        function openM(id) { 
+            document.getElementById(id).style.display = 'flex'; 
+            if(id === 'st-ui') loadStats();
+        }
+        function closeM(id) { document.getElementById(id).style.display = 'none'; }
 
-        async function openStats() {
-            openModal('stats-ui');
+        async function loadStats() {
             const res = await fetch('/api/stats');
             const data = await res.json();
-            document.getElementById('stats-content').innerHTML = data.map((u, i) => `
-                <div class="card"><span>#${i+1} ${u.username}</span><b>${Math.floor(u.balance)}</b></div>
+            document.getElementById('st-list').innerHTML = data.map((u, i) => `
+                <div style="display:flex; justify-content:space-between; padding:15px 0; border-bottom:1px solid #222; font-weight:bold;">
+                    <span>#${i+1} ${u.username}</span><span>${Math.floor(u.balance)}</span>
+                </div>
             `).join('');
         }
 
-        document.getElementById('t-a').addEventListener('touchstart', (e) => {
-            e.preventDefault();
+        document.getElementById('tap').onclick = () => {
             if(s.eng < s.lvl) return;
             s.bal += s.lvl; s.eng -= s.lvl;
-            const t = e.touches[0];
-            const p = document.createElement('div');
-            p.className = 'plus'; p.innerText = `+${s.lvl}`;
-            p.style.left = t.clientX + 'px'; p.style.top = t.clientY + 'px';
-            document.body.appendChild(p);
-            setTimeout(() => p.remove(), 700);
             tg.HapticFeedback.impactOccurred('medium');
             upd();
-        });
+        };
 
-        function save() {
-            fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ userId: s.uid, username: s.name, balance: s.bal, energy: s.eng, max_energy: s.max, click_lvl: s.lvl, pnl: s.pnl, rank: s.r }) });
-        }
-
-        setInterval(() => { if(s.eng < s.max) { s.eng += 1; upd(); } }, 1000);
-        setInterval(save, 5000);
-        let p = 0;
-        const loadIv = setInterval(() => { p += 10; document.getElementById('l-p').innerText = `LOADING... ${p}%`; if(p >= 100) { clearInterval(loadIv); load(); } }, 50);
+        setInterval(() => {
+            fetch('/api/save', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ userId: s.uid, username: tg.initDataUnsafe?.user?.first_name, balance: s.bal, energy: s.eng, max_energy: s.max, click_lvl: s.lvl, rank: s.r }) 
+            });
+        }, 5000);
     </script>
 </body>
 </html>
