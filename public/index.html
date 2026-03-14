@@ -3,42 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.4.6</title>
+    <title>Neural Pulse v1.4.6.2</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
-        body { margin: 0; background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
+        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
         
-        /* ЗАГРУЗКА (ИЗ СКРИНШОТА) */
+        /* ЛОАДЕР (ИЗ СКРИНШОТА) */
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
         .loader-ring { position: relative; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; margin-bottom: 30px; }
         .loader-ring svg { position: absolute; transform: rotate(-90deg); width: 100%; height: 100%; }
-        .loader-ring circle { fill: none; stroke-width: 4; stroke: url(#lg); stroke-dasharray: 565; stroke-dashoffset: 565; transition: 0.1s; stroke-linecap: round; }
+        .loader-ring circle { fill: none; stroke-width: 4; stroke: url(#lg); stroke-dasharray: 565; stroke-dashoffset: 565; stroke-linecap: round; }
         .l-logo { width: 100px; filter: drop-shadow(0 0 15px var(--purple)); }
         .acc-text { font-size: 14px; letter-spacing: 5px; font-weight: bold; margin: 20px 0 10px; }
         .p-text { font-size: 42px; font-weight: 900; color: var(--cyan); margin-bottom: 25px; }
         .l-bar { width: 240px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; }
-        .l-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: 0.1s; }
+        .l-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--cyan), var(--purple)); }
 
         .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; visibility: hidden; transition: 0.5s; }
         .app.ready { opacity: 1; visibility: visible; }
 
-        /* ВЕРХНЯЯ ПАНЕЛЬ */
-        .header { width: 90%; margin-top: 20px; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 10px 15px; display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); }
-        .u-av { width: 42px; height: 42px; border-radius: 12px; border: 2px solid var(--cyan); background: #111; }
-        .u-name { font-size: 14px; font-weight: 900; }
+        /* ИНТЕРФЕЙС */
+        .header { width: 90%; margin-top: 20px; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 10px 15px; display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,255,255,0.1); }
+        .u-av { width: 42px; height: 42px; border-radius: 12px; border: 2px solid var(--cyan); }
+        .u-nm { font-size: 14px; font-weight: 900; }
         .u-rk { font-size: 10px; color: var(--cyan); font-weight: bold; }
         .lvl-tag { margin-left: auto; background: var(--cyan); color: black; padding: 4px 10px; border-radius: 8px; font-weight: 900; font-size: 12px; }
 
         .bal { font-size: 60px; font-weight: 900; margin: 25px 0; }
 
-        /* ЦЕНТР И БОКОВЫЕ КНОПКИ */
         .stage { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; position: relative; }
-        .main-ai { width: 250px; cursor: pointer; transition: 0.05s; }
+        .main-ai { width: 250px; cursor: pointer; }
         .side-btns { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 12px; }
         .s-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 12px; border-radius: 15px; font-size: 10px; font-weight: bold; width: 80px; text-align: center; }
 
-        /* ЭНЕРГИЯ И НИЗ */
         .e-wrap { width: 90%; margin-bottom: 25px; }
         .e-bar { width: 100%; height: 8px; background: #111; border-radius: 10px; overflow: hidden; }
         .e-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: 0.3s; }
@@ -46,10 +44,14 @@
         .footer { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 35px; }
         .f-item { background: #111; border: 1px solid #222; border-radius: 20px; padding: 16px 0; text-align: center; font-size: 10px; font-weight: bold; }
 
-        /* МОДАЛКИ (LEADERBOARD И ДР) */
+        /* МОДАЛКИ */
         .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 25px; }
-        .m-h { color: var(--cyan); font-size: 28px; font-weight: 900; margin-bottom: 20px; }
-        .m-close { background: #1a1a1a; padding: 15px; border-radius: 20px; text-align: center; margin-top: auto; font-weight: bold; color: #555; }
+        .m-h { color: var(--cyan); font-size: 28px; font-weight: 900; margin: 30px 0 20px; }
+        .m-close { background: #1a1a1a; padding: 18px; border-radius: 22px; text-align: center; margin-top: auto; font-weight: bold; color: #555; border: 1px solid #222; }
+        
+        /* КНОПКА КУПИТЬ */
+        .buy-btn { background: var(--cyan); color: #000; padding: 20px; border-radius: 18px; font-weight: 900; text-align: center; margin-top: 20px; cursor: pointer; }
+        .buy-btn.disabled { background: #333; color: #555; pointer-events: none; }
     </style>
 </head>
 <body>
@@ -68,37 +70,45 @@
         <div class="header">
             <img id="u-av" class="u-av" src="logo.png" onerror="this.src='images/logo.png'">
             <div style="flex-grow:1">
-                <div id="u-nm" class="u-name">Terminal User</div>
+                <div id="u-nm" class="u-nm">...</div>
                 <div id="u-rk" class="u-rk">Bronze Node</div>
             </div>
             <div class="lvl-tag">LVL <span id="u-lv">1</span></div>
         </div>
-
         <div class="bal" id="b-v">0</div>
-
         <div class="stage">
             <img src="logo.png" class="main-ai" id="tap" onerror="this.src='images/logo.png'">
             <div class="side-btns">
-                <div class="s-btn">WALLET</div>
-                <div class="s-btn">FRIENDS</div>
-                <div class="s-btn">BONUS</div>
+                <div class="s-btn" onclick="openM('wal-ui')">WALLET</div>
+                <div class="s-btn" onclick="openM('fr-ui')">FRIENDS</div>
+                <div class="s-btn" onclick="openM('bn-ui')">BONUS</div>
             </div>
         </div>
-
-        <div class="e-wrap">
-            <div class="e-bar"><div id="e-f" class="e-fill"></div></div>
-        </div>
-
+        <div class="e-wrap"><div class="e-bar"><div id="e-f" class="e-fill"></div></div></div>
         <div class="footer">
             <div class="f-item" onclick="openM('up-ui')">BOOST</div>
             <div class="f-item" onclick="openM('mi-ui')">MINE</div>
             <div class="f-item" onclick="openM('ta-ui')">TASKS</div>
-            <div class="f-item" onclick="showSt()">STATS</div>
+            <div class="f-item" onclick="showStats()">STATS</div>
         </div>
     </div>
 
-    <div id="st-ui" class="modal"><div class="m-h">LEADERBOARD</div><div id="st-list" style="overflow-y:auto; flex-grow:1;"></div><div class="m-close" onclick="closeM('st-ui')">BACK</div></div>
-    <div id="up-ui" class="modal"><div class="m-h">UPGRADES</div><div class="m-close" onclick="closeM('up-ui')">CLOSE</div></div>
+    <div id="up-ui" class="modal">
+        <div class="m-h">UPGRADES</div>
+        <div style="flex-grow:1">
+            <div style="background:#111; padding:20px; border-radius:20px; border:1px solid #222;">
+                <h3 style="margin:0; color:var(--cyan)">Multitap</h3>
+                <p style="color:#aaa; font-size:14px;">+1 к силе клика за уровень</p>
+                <div id="buy-action" class="buy-btn" onclick="buyClick()">LVL UP: <span id="cost-v">500</span></div>
+            </div>
+        </div>
+        <div class="m-close" onclick="closeM('up-ui')">CLOSE</div>
+    </div>
+
+    <div id="st-ui" class="modal"><div class="m-h">STATS</div><div id="st-list" style="overflow-y:auto; flex-grow:1;"></div><div class="m-close" onclick="closeM('st-ui')">BACK</div></div>
+    <div id="wal-ui" class="modal"><div class="m-h">WALLET</div><div class="m-close" onclick="closeM('wal-ui')">CLOSE</div></div>
+    <div id="fr-ui" class="modal"><div class="m-h">FRIENDS</div><div class="m-close" onclick="closeM('fr-ui')">CLOSE</div></div>
+    <div id="bn-ui" class="modal"><div class="m-h">BONUS</div><div class="m-close" onclick="closeM('bn-ui')">CLOSE</div></div>
     <div id="mi-ui" class="modal"><div class="m-h">MINE</div><div class="m-close" onclick="closeM('mi-ui')">CLOSE</div></div>
     <div id="ta-ui" class="modal"><div class="m-h">TASKS</div><div class="m-close" onclick="closeM('ta-ui')">CLOSE</div></div>
 
@@ -121,7 +131,6 @@
                 const d = await r.json();
                 Object.assign(s, { bal: Number(d.balance), eng: d.energy, max: d.max_energy, lvl: d.click_lvl, r: d.rank });
                 document.getElementById('u-nm').innerText = tg.initDataUnsafe?.user?.first_name || "User";
-                if(tg.initDataUnsafe?.user?.photo_url) document.getElementById('u-av').src = tg.initDataUnsafe.user.photo_url;
             } catch(e) {}
             upd();
             document.getElementById('loader').style.display = 'none';
@@ -131,22 +140,32 @@
         function upd() {
             document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString();
             document.getElementById('u-lv').innerText = s.lvl;
-            document.getElementById('u-rk').innerText = s.r;
             document.getElementById('e-f').style.width = (s.eng / s.max * 100) + '%';
+            
+            const cost = 500 * Math.pow(2, s.lvl - 1);
+            document.getElementById('cost-v').innerText = cost.toLocaleString();
+            document.getElementById('buy-action').className = s.bal >= cost ? 'buy-btn' : 'buy-btn disabled';
         }
 
-        function openM(id) { document.getElementById(id).style.display = 'flex'; }
+        function buyClick() {
+            const cost = 500 * Math.pow(2, s.lvl - 1);
+            if(s.bal >= cost) {
+                s.bal -= cost;
+                s.lvl += 1;
+                tg.HapticFeedback.notificationOccurred('success');
+                upd();
+                save();
+            }
+        }
+
+        function openM(id) { document.getElementById(id).style.display = 'flex'; upd(); }
         function closeM(id) { document.getElementById(id).style.display = 'none'; }
 
-        async function showSt() {
+        async function showStats() {
             openM('st-ui');
-            const res = await fetch('/api/stats');
+            const res = await fetch('/api/leaderboard');
             const data = await res.json();
-            document.getElementById('st-list').innerHTML = data.map((u, i) => `
-                <div style="display:flex; justify-content:space-between; padding:15px 0; border-bottom:1px solid #222; font-weight:bold;">
-                    <span>#${i+1} ${u.username}</span><span>${Math.floor(u.balance)}</span>
-                </div>
-            `).join('');
+            document.getElementById('st-list').innerHTML = data.map((u, i) => `<div style="display:flex; justify-content:space-between; padding:15px 0; border-bottom:1px solid #222;"><span>#${i+1} ${u.username}</span><span>${Math.floor(u.balance)}</span></div>`).join('');
         }
 
         document.getElementById('tap').onclick = () => {
@@ -156,7 +175,14 @@
             upd();
         };
 
-        setInterval(() => fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ userId: s.uid, username: tg.initDataUnsafe?.user?.first_name, balance: s.bal, energy: s.eng, max_energy: s.max, click_lvl: s.lvl, rank: s.r }) }), 5000);
+        function save() {
+            fetch('/api/save', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ userId: s.uid, username: tg.initDataUnsafe?.user?.first_name, balance: s.bal, energy: s.eng, max_energy: s.max, click_lvl: s.lvl, rank: s.r }) 
+            });
+        }
+        setInterval(() => { if(s.eng < s.max) { s.eng = Math.min(s.max, s.eng + 1); upd(); } save(); }, 5000);
     </script>
 </body>
 </html>
