@@ -3,230 +3,188 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.3.2</title>
+    <title>Neural Pulse v1.3.4</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
-        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg: #000; }
-        body { margin: 0; padding: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
-        #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; transition: 0.5s; }
-        .loader-circle { width: 140px; height: 140px; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--neon-cyan); border-right: 2px solid var(--neon-purple); display: flex; align-items: center; justify-content: center; animation: spin 2s linear infinite; margin-bottom: 25px; }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        .pct { font-size: 32px; font-weight: bold; color: var(--neon-cyan); }
-        .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; visibility: hidden; transition: 0.8s; }
+        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg: #000; --turbo-gold: #f2ff00; --silver: #c0c0c0; }
+        body { margin: 0; padding: 0; background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
+        
+        .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; visibility: hidden; transition: 0.5s; }
         .app.ready { opacity: 1; visibility: visible; }
-        .header { width: 90%; margin-top: 20px; background: rgba(255,255,255,0.05); border-radius: 20px; padding: 12px; display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,255,255,0.1); box-sizing: border-box; }
-        .lvl-box { width: 45px; height: 45px; border: 2px solid var(--neon-cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: bold; }
-        .bal { font-size: 60px; font-weight: 900; margin-top: 15px; text-shadow: 0 0 20px rgba(0,242,255,0.3); }
-        .pnl { color: var(--neon-cyan); font-weight: bold; margin-top: -10px; font-size: 13px; }
-        .stage { flex-grow: 1; position: relative; width: 100%; display: flex; align-items: center; justify-content: center; }
-        .main-logo { width: 220px; height: 220px; z-index: 1; border-radius: 50%; filter: drop-shadow(0 0 30px rgba(188,19,254,0.3)); cursor: pointer; transition: transform 0.1s; }
-        .main-logo:active { transform: scale(0.95); }
-        .overlay-btns { position: absolute; right: 8%; display: flex; flex-direction: column; gap: 12px; z-index: 10; }
-        .btn-pill { background: rgba(20,20,20,0.85); border: 1px solid #444; color: white; padding: 12px 0; border-radius: 18px; width: 110px; text-align: center; font-size: 10px; font-weight: bold; backdrop-filter: blur(8px); cursor: pointer; }
-        .btn-pill.connected { border-color: var(--neon-cyan); color: var(--neon-cyan); }
-        .energy-box { width: 85%; margin-bottom: 25px; }
-        .e-bar { width: 100%; height: 6px; background: #111; border-radius: 10px; overflow: hidden; }
-        .e-fill { height: 100%; background: var(--neon-cyan); transition: 0.3s; width: 100%; box-shadow: 0 0 10px var(--neon-cyan); }
-        .footer { width: 92%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 35px; }
-        .f-item { background: #151515; border: 1px solid #252525; border-radius: 20px; padding: 18px 0; text-align: center; font-size: 11px; font-weight: bold; cursor: pointer; }
-        .modal { position: fixed; inset: 0; background: #000; z-index: 2000; display: none; padding: 25px; flex-direction: column; overflow-y: auto; }
-        .card { background: #111; border: 1px solid #333; padding: 18px; border-radius: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
-        .plus { position: absolute; font-size: 35px; font-weight: 900; color: var(--neon-cyan); animation: float 0.7s forwards; pointer-events: none; z-index: 100; text-shadow: 0 0 10px var(--neon-cyan); }
-        @keyframes float { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-130px); } }
+
+        /* Дизайн заголовка с рангом */
+        .header { width: 90%; margin-top: 20px; background: rgba(255,255,255,0.03); border-radius: 24px; padding: 15px; display: flex; align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .rank-badge { padding: 4px 10px; border-radius: 8px; font-size: 10px; font-weight: 900; text-transform: uppercase; background: var(--neon-cyan); color: #000; margin-top: 4px; display: inline-block; }
+        
+        .bal { font-size: 54px; font-weight: 900; margin-top: 10px; background: linear-gradient(to bottom, #fff, #888); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 15px rgba(255,255,255,0.2)); }
+        
+        .stage { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; position: relative; }
+        .main-logo { width: 240px; height: 240px; border-radius: 50%; border: 4px solid rgba(255,255,255,0.05); transition: 0.1s; z-index: 5; }
+        .main-logo:active { transform: scale(0.96); }
+
+        /* Крутые бусты */
+        .modal { position: fixed; inset: 0; background: radial-gradient(circle at top, #111, #000); z-index: 2000; display: none; padding: 25px; flex-direction: column; }
+        .card { background: linear-gradient(145deg, #111, #080808); border: 1px solid #222; padding: 20px; border-radius: 28px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 5px 5px 15px rgba(0,0,0,0.4); }
+        
+        /* Мониторинг всех ботов */
+        .monitor-list { flex-grow: 1; overflow-y: auto; background: #050505; border-radius: 20px; padding: 10px; border: 1px solid #111; font-family: monospace; font-size: 11px; }
+        .monitor-row { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #111; color: #0f0; }
+
+        .footer { width: 92%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 30px; }
+        .f-item { background: #0c0c0c; border: 1px solid #1a1a1a; border-radius: 22px; padding: 15px 0; text-align: center; font-size: 12px; font-weight: bold; }
+        
+        .plus { position: absolute; font-size: 45px; font-weight: 900; animation: float 0.6s ease-out forwards; pointer-events: none; }
+        @keyframes float { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: translateY(-160px) scale(1.2); } }
     </style>
 </head>
 <body>
-    <div id="loader">
-        <div class="loader-circle"><img src="logo.png" style="width: 75px;" onerror="this.src='images/logo.png'"></div>
-        <div class="pct" id="l-p">0%</div>
+    <div id="loader" style="position:fixed; inset:0; background:#000; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:10000;">
+        <img src="logo.png" style="width:100px; animation: pulse 2s infinite;" onerror="this.src='images/logo.png'">
+        <div id="l-p" style="color:var(--neon-cyan); font-weight:bold; margin-top:20px;">0%</div>
     </div>
 
     <div class="app" id="ui">
         <div class="header">
-            <div class="lvl-box" id="l-v">1</div>
-            <div><div style="font-size: 9px; color: #555;">NODE ALPHA</div><div style="font-size: 14px; font-weight: 900;">NEURAL PULSE v1.3.2</div></div>
-        </div>
-        <div class="bal" id="b-v">0</div>
-        <div class="pnl" id="p-v">PNL: +0/H</div>
-
-        <div class="stage">
-            <img src="logo.png" class="main-logo" id="t-a" onerror="this.src='images/logo.png'">
-            <div class="overlay-btns">
-                <div class="btn-pill" id="w-btn" onclick="handleWallet()">WALLET</div>
-                <div class="btn-pill" onclick="invite()">FRIENDS</div>
-                <div class="btn-pill" style="border-color:var(--neon-purple)" onclick="getBonus()">BONUS</div>
+            <div style="width:50px; height:50px; background:#111; border-radius:15px; display:flex; align-items:center; justify-content:center; border: 2px solid var(--neon-cyan); font-size:24px;" id="l-v">1</div>
+            <div>
+                <div style="font-size:14px; font-weight:900;">NEURAL PULSE v1.3.4</div>
+                <div class="rank-badge" id="r-b">BRONZE NODE</div>
             </div>
         </div>
 
-        <div class="energy-box">
-            <div style="display:flex; justify-content:space-between; font-size:10px; margin-bottom:8px; color:#666;"><span>⚡ ENERGY CORE</span><span id="e-n">1000/1000</span></div>
-            <div class="e-bar"><div class="e-fill" id="e-f"></div></div>
+        <div class="bal" id="b-v">0</div>
+        <div class="pnl" id="p-v" style="color:var(--neon-cyan); font-size:12px; font-weight:bold; margin-top:-5px;">PNL: +0/H</div>
+
+        <div class="stage">
+            <img src="logo.png" class="main-logo" id="t-a" onerror="this.src='images/logo.png'">
+            <div style="position:absolute; right:5%; display:flex; flex-direction:column; gap:10px;">
+                <button class="btn-pill" style="background:rgba(255,255,255,0.05); border:1px solid #333; color:white; padding:10px; border-radius:15px; font-size:10px; font-weight:bold;" onclick="handleWallet()">WALLET</button>
+                <button class="btn-pill" style="background:rgba(255,255,255,0.05); border:1px solid #333; color:white; padding:10px; border-radius:15px; font-size:10px; font-weight:bold;" onclick="openModal('monitor-ui')">NETWORK</button>
+            </div>
+        </div>
+
+        <div style="width:85%; margin-bottom:25px;">
+            <div style="display:flex; justify-content:space-between; font-size:10px; margin-bottom:5px; color:#555;"><span>ENERGY STORAGE</span><span id="e-n">1000/1000</span></div>
+            <div style="width:100%; height:8px; background:#111; border-radius:10px;"><div id="e-f" style="height:100%; background:var(--neon-cyan); border-radius:10px; transition:0.3s; width:100%; box-shadow:0 0 15px var(--neon-cyan);"></div></div>
         </div>
 
         <div class="footer">
             <div class="f-item" onclick="openModal('boost-ui')">🚀 BOOST</div>
             <div class="f-item" onclick="openModal('mine-ui')">⛏️ MINE</div>
-            <div class="f-item" onclick="openStats()">📊 STATS</div>
+            <div class="f-item" onclick="openModal('stats-ui')">📊 STATS</div>
         </div>
     </div>
 
-    <div id="mine-ui" class="modal">
-        <h2 style="color:var(--neon-purple)">MATH SHOP</h2>
-        <div class="card">
-            <div><b>Addition (+)</b><br><small>+350 PNL/h</small></div>
-            <button class="btn-pill" id="c-p-b" onclick="buyCard('plus')">10K</button>
+    <div id="monitor-ui" class="modal">
+        <h2 style="color:var(--neon-cyan)">NODE MONITOR (LIVE)</h2>
+        <div class="monitor-list" id="m-l">
+            <div style="padding:20px; text-align:center; color:#333;">Connecting to core...</div>
         </div>
-        <div class="card">
-            <div><b>Multiplication (×)</b><br><small>+2500 PNL/h</small></div>
-            <button class="btn-pill" id="c-m-b" onclick="buyCard('mult')">80K</button>
-        </div>
-        <button class="f-item" style="width:100%; margin-top:auto; padding: 20px;" onclick="closeModal('mine-ui')">CLOSE</button>
+        <button class="f-item" style="margin-top:20px; width:100%;" onclick="closeModal('monitor-ui')">BACK TO DASHBOARD</button>
     </div>
 
     <div id="boost-ui" class="modal">
-        <h2 style="color:var(--neon-cyan)">BOOSTERS</h2>
+        <h2 style="color:var(--neon-cyan)">BOOST CORE</h2>
         <div class="card">
-            <div><b>Multitap</b><br><small>Level up click power</small></div>
-            <button class="btn-pill" id="mt-btn" onclick="buyBoost('tap')">5000</button>
+            <div><b>Multitap</b><br><small>Level Up</small></div>
+            <button class="f-item" id="mt-btn" style="width:100px; padding:10px;" onclick="buyBoost('tap')">0</button>
         </div>
-        <div class="card">
-            <div><b>Full Energy</b><br><small>Refill core (1000)</small></div>
-            <button class="btn-pill" onclick="buyBoost('energy')">500</button>
+        <div class="card" style="border-color:var(--turbo-gold)">
+            <div><b style="color:var(--turbo-gold)">Turbo Pulse</b><br><small>X10 Power</small></div>
+            <button class="f-item" style="width:100px; padding:10px; border-color:var(--turbo-gold); color:var(--turbo-gold)" onclick="activateTurbo()">FREE</button>
         </div>
-        <button class="f-item" style="width:100%; margin-top:auto; padding: 20px;" onclick="closeModal('boost-ui')">CLOSE</button>
-    </div>
-
-    <div id="stats-ui" class="modal">
-        <h2 style="color:white">NETWORK</h2>
-        <div class="card"><div>Global Users</div><div id="st-u">-</div></div>
-        <div class="card"><div>Total Supply</div><div id="st-s">-</div></div>
-        <h3 style="color:var(--neon-cyan); margin-top: 20px;">TOP 10 NODES</h3>
-        <div id="leaderboard-list" style="background: #111; border-radius: 15px; margin-bottom: 20px;"></div>
-        <button class="f-item" style="width:100%; margin-top:auto; padding: 20px;" onclick="closeModal('stats-ui')">CLOSE</button>
+        <button class="f-item" style="margin-top:auto; width:100%;" onclick="closeModal('boost-ui')">CLOSE</button>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
-            buttonRootId: null
-        });
+        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json', buttonRootId: null });
 
-        let s = { bal: 0, eng: 1000, lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id || 0, c_p_l: 0, c_m_l: 0 };
-
-        function openModal(id) { document.getElementById(id).style.display = 'flex'; }
-        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
-
-        async function openStats() {
-            openModal('stats-ui');
-            const rs = await fetch('/api/stats');
-            const ds = await rs.json();
-            document.getElementById('st-u').innerText = Number(ds.users).toLocaleString();
-            document.getElementById('st-s').innerText = Number(ds.circulating).toLocaleString();
-            const rl = await fetch('/api/leaderboard');
-            const dl = await rl.json();
-            const list = document.getElementById('leaderboard-list');
-            list.innerHTML = '';
-            dl.forEach((p, i) => {
-                const row = document.createElement('div');
-                row.style.padding = '12px'; row.style.display = 'flex'; row.style.justifyContent = 'space-between';
-                row.innerHTML = `<span>${i+1}. ID:${p.user_id}</span><span>${Math.floor(p.balance).toLocaleString()}</span>`;
-                list.appendChild(row);
-            });
-        }
+        let s = { bal: 0, eng: 1000, lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id || 0, r: 'Bronze Node', turbo: false };
 
         async function load() {
-            try {
-                const r = await fetch(`/api/user/${s.uid}`);
-                const d = await r.json();
-                Object.assign(s, { bal: Number(d.balance), eng: d.energy, lvl: d.click_lvl, pnl: Number(d.pnl), c_p_l: d.card_plus_lvl, c_m_l: d.card_mult_lvl });
-                upd();
-                document.getElementById('loader').style.display = 'none';
-                document.getElementById('ui').classList.add('ready');
-            } catch(e) { console.error(e); }
+            const r = await fetch(`/api/user/${s.uid}`);
+            const d = await r.json();
+            Object.assign(s, { bal: Number(d.balance), eng: d.energy, lvl: d.click_lvl, pnl: Number(d.pnl), r: d.rank });
+            upd();
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('ui').classList.add('ready');
         }
 
         function upd() {
+            // Логика рангов
+            if (s.bal > 1000000) s.r = 'Neural Overlord';
+            else if (s.bal > 500000) s.r = 'Diamond Core';
+            else if (s.bal > 100000) s.r = 'Gold Node';
+            else if (s.bal > 10000) s.r = 'Silver Node';
+
             document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString();
             document.getElementById('e-n').innerText = `${s.eng}/1000`;
             document.getElementById('e-f').style.width = (s.eng/10)+'%';
             document.getElementById('l-v').innerText = s.lvl;
+            document.getElementById('r-b').innerText = s.r;
             document.getElementById('p-v').innerText = `PNL: +${Math.floor(s.pnl)}/H`;
             document.getElementById('mt-btn').innerText = (s.lvl * 5000).toLocaleString();
-            document.getElementById('c-p-b').innerText = Math.floor(10000 * Math.pow(1.5, s.c_p_l)).toLocaleString();
-            document.getElementById('c-m-b').innerText = Math.floor(80000 * Math.pow(1.6, s.c_m_l)).toLocaleString();
         }
 
-        async function buyBoost(type) {
-            if(type === 'tap') {
-                const cost = s.lvl * 5000;
-                if(s.bal >= cost) { s.bal -= cost; s.lvl++; upd(); save(); }
-                else tg.showAlert("No coins!");
-            } else {
-                if(s.bal >= 500) { s.bal -= 500; s.eng = 1000; upd(); save(); closeModal('boost-ui'); }
+        async function openModal(id) {
+            document.getElementById(id).style.display = 'flex';
+            if(id === 'monitor-ui') {
+                const r = await fetch('/api/admin/monitor');
+                const d = await r.json();
+                const list = document.getElementById('m-l');
+                list.innerHTML = d.map(u => `
+                    <div class="monitor-row">
+                        <span>ID:${u.user_id.slice(0,6)}...</span>
+                        <span style="color:var(--neon-cyan)">$${Math.floor(u.balance)}</span>
+                        <span style="color:#444">${new Date(u.last_active).toLocaleTimeString()}</span>
+                    </div>
+                `).join('');
             }
         }
 
-        async function buyCard(type) {
-            let cost, inc;
-            if(type === 'plus') {
-                cost = Math.floor(10000 * Math.pow(1.5, s.c_p_l)); inc = 350;
-                if(s.bal >= cost) { s.bal -= cost; s.pnl += inc; s.c_p_l++; }
-            } else {
-                cost = Math.floor(80000 * Math.pow(1.6, s.c_m_l)); inc = 2500;
-                if(s.bal >= cost) { s.bal -= cost; s.pnl += inc; s.c_m_l++; }
-            }
-            upd(); save();
-        }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+        // Клик с вибрацией и эффектами
+        document.getElementById('t-a').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if(!s.turbo && s.eng < s.lvl) return;
+            const power = s.turbo ? (s.lvl * 10) : s.lvl;
+            s.bal += power;
+            if(!s.turbo) s.eng -= s.lvl;
+            
+            const t = e.touches[0];
+            const p = document.createElement('div');
+            p.className = 'plus';
+            p.innerText = `+${power}`;
+            p.style.left = t.clientX + 'px'; p.style.top = t.clientY + 'px';
+            p.style.color = s.turbo ? 'var(--turbo-gold)' : 'var(--neon-cyan)';
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 600);
+            
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred(s.turbo ? 'heavy' : 'light');
+            upd();
+        });
 
         function save() {
             fetch('/api/save', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({userId: s.uid, balance: s.bal, energy: s.eng, click_lvl: s.lvl, pnl: s.pnl, card_plus_lvl: s.c_p_l, card_mult_lvl: s.c_m_l}) 
+                body: JSON.stringify({userId: s.uid, balance: s.bal, energy: s.eng, click_lvl: s.lvl, pnl: s.pnl, rank: s.r}) 
             });
         }
 
-        document.getElementById('t-a').addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            if(s.eng < s.lvl) return;
-            s.bal += s.lvl; s.eng -= s.lvl;
-            const t = e.touches[0];
-            const p = document.createElement('div');
-            p.className = 'plus'; p.innerText = `+${s.lvl}`;
-            p.style.left = t.clientX + 'px'; p.style.top = t.clientY + 'px';
-            document.body.appendChild(p);
-            setTimeout(() => p.remove(), 700);
-            upd();
-        });
-
-        async function getBonus() {
-            const r = await fetch('/api/bonus', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({userId: s.uid}) });
-            const d = await r.json();
-            if(d.success) { s.bal += d.amount; upd(); tg.showAlert("Claimed!"); }
-            else tg.showAlert(d.msg);
-        }
-
-        function handleWallet() {
-            if (tonConnectUI.connected) tonConnectUI.disconnect();
-            else tonConnectUI.openModal();
-        }
-
-        function invite() {
-            tg.openTelegramLink(`https://t.me/share/url?url=https://t.me/n_pulse_bot?start=${s.uid}`);
-        }
+        setInterval(save, 5000);
+        setInterval(() => { if(s.eng < 1000) { s.eng++; upd(); } }, 1000);
+        setInterval(() => { if(s.pnl > 0) { s.bal += (s.pnl/3600); upd(); } }, 1000);
 
         let p = 0;
         const iv = setInterval(() => {
             p += 5; document.getElementById('l-p').innerText = p + '%';
             if(p >= 100) { clearInterval(iv); load(); }
         }, 30);
-
-        setInterval(save, 5000);
-        setInterval(() => { if(s.eng < 1000) { s.eng++; upd(); } }, 1000);
-        setInterval(() => { if(s.pnl > 0) { s.bal += (s.pnl/3600); upd(); } }, 1000);
     </script>
 </body>
 </html>
