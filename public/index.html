@@ -3,52 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.3.4</title>
+    <title>Neural Pulse v1.3.5</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
-        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg: #000; --turbo-gold: #f2ff00; --silver: #c0c0c0; }
+        :root { --neon-cyan: #00f2ff; --neon-purple: #bc13fe; --bg: #000; --turbo-gold: #f2ff00; }
         body { margin: 0; padding: 0; background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; touch-action: none; }
         
         .app { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; opacity: 0; visibility: hidden; transition: 0.5s; }
         .app.ready { opacity: 1; visibility: visible; }
 
-        /* Дизайн заголовка с рангом */
-        .header { width: 90%; margin-top: 20px; background: rgba(255,255,255,0.03); border-radius: 24px; padding: 15px; display: flex; align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .rank-badge { padding: 4px 10px; border-radius: 8px; font-size: 10px; font-weight: 900; text-transform: uppercase; background: var(--neon-cyan); color: #000; margin-top: 4px; display: inline-block; }
+        .header { width: 90%; margin-top: 20px; background: rgba(255,255,255,0.03); border-radius: 24px; padding: 15px; display: flex; align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.08); box-sizing: border-box; }
+        .rank-badge { padding: 4px 10px; border-radius: 8px; font-size: 10px; font-weight: 900; background: var(--neon-cyan); color: #000; margin-top: 4px; display: inline-block; text-transform: uppercase; }
         
-        .bal { font-size: 54px; font-weight: 900; margin-top: 10px; background: linear-gradient(to bottom, #fff, #888); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 15px rgba(255,255,255,0.2)); }
+        .bal { font-size: 54px; font-weight: 900; margin-top: 10px; background: linear-gradient(to bottom, #fff, #888); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         
         .stage { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; position: relative; }
-        .main-logo { width: 240px; height: 240px; border-radius: 50%; border: 4px solid rgba(255,255,255,0.05); transition: 0.1s; z-index: 5; }
-        .main-logo:active { transform: scale(0.96); }
+        .main-logo { width: 240px; height: 240px; border-radius: 50%; transition: 0.1s; z-index: 5; filter: drop-shadow(0 0 20px rgba(0,242,255,0.2)); }
+        .main-logo.turbo-active { filter: drop-shadow(0 0 40px var(--turbo-gold)); animation: shake 0.1s infinite; }
+        @keyframes shake { 0% { transform: translate(1px, 1px); } 50% { transform: translate(-1px, -1px); } 100% { transform: translate(1px, -1px); } }
 
-        /* Крутые бусты */
         .modal { position: fixed; inset: 0; background: radial-gradient(circle at top, #111, #000); z-index: 2000; display: none; padding: 25px; flex-direction: column; }
-        .card { background: linear-gradient(145deg, #111, #080808); border: 1px solid #222; padding: 20px; border-radius: 28px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 5px 5px 15px rgba(0,0,0,0.4); }
+        .card { background: #0c0c0c; border: 1px solid #222; padding: 20px; border-radius: 28px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
         
-        /* Мониторинг всех ботов */
-        .monitor-list { flex-grow: 1; overflow-y: auto; background: #050505; border-radius: 20px; padding: 10px; border: 1px solid #111; font-family: monospace; font-size: 11px; }
-        .monitor-row { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #111; color: #0f0; }
+        .monitor-list { flex-grow: 1; overflow-y: auto; background: #050505; border-radius: 20px; padding: 10px; border: 1px solid #111; font-family: monospace; }
+        .monitor-row { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #111; font-size: 11px; }
 
         .footer { width: 92%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 30px; }
-        .f-item { background: #0c0c0c; border: 1px solid #1a1a1a; border-radius: 22px; padding: 15px 0; text-align: center; font-size: 12px; font-weight: bold; }
+        .f-item { background: #0c0c0c; border: 1px solid #1a1a1a; border-radius: 22px; padding: 15px 0; text-align: center; font-size: 12px; font-weight: bold; cursor: pointer; }
         
-        .plus { position: absolute; font-size: 45px; font-weight: 900; animation: float 0.6s ease-out forwards; pointer-events: none; }
+        .plus { position: absolute; font-size: 45px; font-weight: 900; animation: float 0.6s ease-out forwards; pointer-events: none; text-shadow: 0 0 10px rgba(0,242,255,0.5); }
         @keyframes float { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: translateY(-160px) scale(1.2); } }
+        
+        #t-timer { position: absolute; top: 10%; color: var(--turbo-gold); font-weight: 900; font-size: 20px; display: none; z-index: 100; }
     </style>
 </head>
 <body>
     <div id="loader" style="position:fixed; inset:0; background:#000; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:10000;">
-        <img src="logo.png" style="width:100px; animation: pulse 2s infinite;" onerror="this.src='images/logo.png'">
+        <div style="width:80px; height:80px; border:3px solid var(--neon-cyan); border-radius:50%; border-top-color:transparent; animation:spin 1s linear infinite;"></div>
         <div id="l-p" style="color:var(--neon-cyan); font-weight:bold; margin-top:20px;">0%</div>
     </div>
 
+    <div id="t-timer">TURBO: 20s</div>
+
     <div class="app" id="ui">
         <div class="header">
-            <div style="width:50px; height:50px; background:#111; border-radius:15px; display:flex; align-items:center; justify-content:center; border: 2px solid var(--neon-cyan); font-size:24px;" id="l-v">1</div>
+            <div style="width:50px; height:50px; background:#111; border-radius:15px; display:flex; align-items:center; justify-content:center; border: 2px solid var(--neon-cyan); font-size:22px; font-weight:900;" id="l-v">1</div>
             <div>
-                <div style="font-size:14px; font-weight:900;">NEURAL PULSE v1.3.4</div>
+                <div style="font-size:14px; font-weight:900;">NEURAL PULSE v1.3.5</div>
                 <div class="rank-badge" id="r-b">BRONZE NODE</div>
             </div>
         </div>
@@ -59,14 +61,14 @@
         <div class="stage">
             <img src="logo.png" class="main-logo" id="t-a" onerror="this.src='images/logo.png'">
             <div style="position:absolute; right:5%; display:flex; flex-direction:column; gap:10px;">
-                <button class="btn-pill" style="background:rgba(255,255,255,0.05); border:1px solid #333; color:white; padding:10px; border-radius:15px; font-size:10px; font-weight:bold;" onclick="handleWallet()">WALLET</button>
-                <button class="btn-pill" style="background:rgba(255,255,255,0.05); border:1px solid #333; color:white; padding:10px; border-radius:15px; font-size:10px; font-weight:bold;" onclick="openModal('monitor-ui')">NETWORK</button>
+                <button class="f-item" style="padding:10px; width:100px; border-radius:15px;" onclick="handleWallet()">WALLET</button>
+                <button class="f-item" style="padding:10px; width:100px; border-radius:15px; border-color:var(--neon-purple)" onclick="openModal('monitor-ui')">NETWORK</button>
             </div>
         </div>
 
         <div style="width:85%; margin-bottom:25px;">
             <div style="display:flex; justify-content:space-between; font-size:10px; margin-bottom:5px; color:#555;"><span>ENERGY STORAGE</span><span id="e-n">1000/1000</span></div>
-            <div style="width:100%; height:8px; background:#111; border-radius:10px;"><div id="e-f" style="height:100%; background:var(--neon-cyan); border-radius:10px; transition:0.3s; width:100%; box-shadow:0 0 15px var(--neon-cyan);"></div></div>
+            <div style="width:100%; height:8px; background:#111; border-radius:10px;"><div id="e-f" style="height:100%; background:var(--neon-cyan); border-radius:10px; transition:0.3s; width:100%;"></div></div>
         </div>
 
         <div class="footer">
@@ -77,22 +79,20 @@
     </div>
 
     <div id="monitor-ui" class="modal">
-        <h2 style="color:var(--neon-cyan)">NODE MONITOR (LIVE)</h2>
-        <div class="monitor-list" id="m-l">
-            <div style="padding:20px; text-align:center; color:#333;">Connecting to core...</div>
-        </div>
-        <button class="f-item" style="margin-top:20px; width:100%;" onclick="closeModal('monitor-ui')">BACK TO DASHBOARD</button>
+        <h2 style="color:var(--neon-cyan)">GLOBAL NETWORK</h2>
+        <div class="monitor-list" id="m-l"></div>
+        <button class="f-item" style="margin-top:20px; width:100%;" onclick="closeModal('monitor-ui')">CLOSE</button>
     </div>
 
     <div id="boost-ui" class="modal">
-        <h2 style="color:var(--neon-cyan)">BOOST CORE</h2>
+        <h2 style="color:var(--neon-cyan)">UPGRADES</h2>
         <div class="card">
-            <div><b>Multitap</b><br><small>Level Up</small></div>
-            <button class="f-item" id="mt-btn" style="width:100px; padding:10px;" onclick="buyBoost('tap')">0</button>
+            <div><b>Multitap</b><br><small>+1 per click</small></div>
+            <button class="f-item" id="mt-btn" style="width:100px;" onclick="buyBoost('tap')">0</button>
         </div>
         <div class="card" style="border-color:var(--turbo-gold)">
-            <div><b style="color:var(--turbo-gold)">Turbo Pulse</b><br><small>X10 Power</small></div>
-            <button class="f-item" style="width:100px; padding:10px; border-color:var(--turbo-gold); color:var(--turbo-gold)" onclick="activateTurbo()">FREE</button>
+            <div><b style="color:var(--turbo-gold)">Turbo Pulse</b><br><small>X10 Power (20s)</small></div>
+            <button class="f-item" style="width:100px; color:var(--turbo-gold)" onclick="activateTurbo()">FREE</button>
         </div>
         <button class="f-item" style="margin-top:auto; width:100%;" onclick="closeModal('boost-ui')">CLOSE</button>
     </div>
@@ -102,21 +102,21 @@
         tg.expand();
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json', buttonRootId: null });
 
-        let s = { bal: 0, eng: 1000, lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id || 0, r: 'Bronze Node', turbo: false };
+        let s = { bal: 0, eng: 1000, lvl: 1, pnl: 0, uid: tg.initDataUnsafe?.user?.id || 0, r: 'Bronze Node', turbo: false, cpl: 0, cml: 0 };
 
         async function load() {
-            const r = await fetch(`/api/user/${s.uid}`);
-            const d = await r.json();
-            Object.assign(s, { bal: Number(d.balance), eng: d.energy, lvl: d.click_lvl, pnl: Number(d.pnl), r: d.rank });
-            upd();
-            document.getElementById('loader').style.display = 'none';
-            document.getElementById('ui').classList.add('ready');
+            try {
+                const r = await fetch(`/api/user/${s.uid}`);
+                const d = await r.json();
+                Object.assign(s, { bal: Number(d.balance), eng: d.energy, lvl: d.click_lvl, pnl: Number(d.pnl), r: d.rank, cpl: d.card_plus_lvl, cml: d.card_mult_lvl });
+                upd();
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('ui').classList.add('ready');
+            } catch(e) { console.error(e); }
         }
 
         function upd() {
-            // Логика рангов
             if (s.bal > 1000000) s.r = 'Neural Overlord';
-            else if (s.bal > 500000) s.r = 'Diamond Core';
             else if (s.bal > 100000) s.r = 'Gold Node';
             else if (s.bal > 10000) s.r = 'Silver Node';
 
@@ -134,12 +134,11 @@
             if(id === 'monitor-ui') {
                 const r = await fetch('/api/admin/monitor');
                 const d = await r.json();
-                const list = document.getElementById('m-l');
-                list.innerHTML = d.map(u => `
+                document.getElementById('m-l').innerHTML = d.map(u => `
                     <div class="monitor-row">
-                        <span>ID:${u.user_id.slice(0,6)}...</span>
-                        <span style="color:var(--neon-cyan)">$${Math.floor(u.balance)}</span>
-                        <span style="color:#444">${new Date(u.last_active).toLocaleTimeString()}</span>
+                        <span style="color:#666">ID:${u.user_id.slice(0,5)}</span>
+                        <span style="color:var(--neon-cyan)">${Math.floor(u.balance).toLocaleString()}</span>
+                        <span style="color:var(--turbo-gold)">${u.rank}</span>
                     </div>
                 `).join('');
             }
@@ -147,23 +146,41 @@
 
         function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-        // Клик с вибрацией и эффектами
+        function activateTurbo() {
+            if(s.turbo) return;
+            s.turbo = true;
+            closeModal('boost-ui');
+            const timer = document.getElementById('t-timer');
+            const logo = document.getElementById('t-a');
+            timer.style.display = 'block';
+            logo.classList.add('turbo-active');
+            let time = 20;
+            const iv = setInterval(() => {
+                time--;
+                timer.innerText = `TURBO: ${time}s`;
+                if(time <= 0) { clearInterval(iv); s.turbo = false; timer.style.display = 'none'; logo.classList.remove('turbo-active'); }
+            }, 1000);
+        }
+
+        async function buyBoost(type) {
+            if(type === 'tap') {
+                const cost = s.lvl * 5000;
+                if(s.bal >= cost) { s.bal -= cost; s.lvl++; upd(); save(); }
+            }
+        }
+
         document.getElementById('t-a').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if(!s.turbo && s.eng < s.lvl) return;
-            const power = s.turbo ? (s.lvl * 10) : s.lvl;
-            s.bal += power;
-            if(!s.turbo) s.eng -= s.lvl;
-            
+            const pwr = s.turbo ? (s.lvl * 10) : s.lvl;
+            s.bal += pwr; if(!s.turbo) s.eng -= s.lvl;
             const t = e.touches[0];
             const p = document.createElement('div');
-            p.className = 'plus';
-            p.innerText = `+${power}`;
+            p.className = 'plus'; p.innerText = `+${pwr}`;
             p.style.left = t.clientX + 'px'; p.style.top = t.clientY + 'px';
             p.style.color = s.turbo ? 'var(--turbo-gold)' : 'var(--neon-cyan)';
             document.body.appendChild(p);
             setTimeout(() => p.remove(), 600);
-            
             if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred(s.turbo ? 'heavy' : 'light');
             upd();
         });
@@ -172,18 +189,18 @@
             fetch('/api/save', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({userId: s.uid, balance: s.bal, energy: s.eng, click_lvl: s.lvl, pnl: s.pnl, rank: s.r}) 
+                body: JSON.stringify({userId: s.uid, balance: s.bal, energy: s.eng, click_lvl: s.lvl, pnl: s.pnl, rank: s.r, card_plus_lvl: s.cpl, card_mult_lvl: s.cml}) 
             });
         }
 
         setInterval(save, 5000);
         setInterval(() => { if(s.eng < 1000) { s.eng++; upd(); } }, 1000);
         setInterval(() => { if(s.pnl > 0) { s.bal += (s.pnl/3600); upd(); } }, 1000);
-
+        
         let p = 0;
-        const iv = setInterval(() => {
+        const loadIv = setInterval(() => {
             p += 5; document.getElementById('l-p').innerText = p + '%';
-            if(p >= 100) { clearInterval(iv); load(); }
+            if(p >= 100) { clearInterval(loadIv); load(); }
         }, 30);
     </script>
 </body>
