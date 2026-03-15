@@ -4,7 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "2.0.1";
+const VERSION = "2.1.0";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
@@ -27,16 +27,12 @@ const initDB = async () => {
             click_lvl INTEGER DEFAULT 1,
             pnl NUMERIC DEFAULT 0,
             wallet_address TEXT DEFAULT NULL,
-            friends_count INTEGER DEFAULT 0
+            friends_count INTEGER DEFAULT 0,
+            last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
-        await pool.query(`
-            DO $$ BEGIN 
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='last_sync') THEN
-                    ALTER TABLE users ADD COLUMN last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
-                END IF;
-            END $$;
-        `);
-        console.log(`[v${VERSION}] DB Synchronized`);
+        // Проверка колонки last_sync для старых БД
+        await pool.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='last_sync') THEN ALTER TABLE users ADD COLUMN last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP; END IF; END $$;`);
+        console.log(`[v${VERSION}] Database Engine Active`);
     } catch (e) { console.error("DB Init Error:", e); }
 };
 initDB();
