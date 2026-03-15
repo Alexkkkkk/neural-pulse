@@ -3,102 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.7.3</title>
+    <title>Neural Pulse v1.7.5</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; --panel: #111; --gray-btn: #1a1a1a; }
         body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; }
-        
-        #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
-        .load-circle { width: 220px; height: 220px; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--cyan); border-right: 2px solid var(--purple); display: flex; align-items: center; justify-content: center; animation: rotate 2s linear infinite; }
-        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .load-logo { width: 110px; animation: unrotate 2s linear infinite; }
-        @keyframes unrotate { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
-        .p-val { margin-top: 20px; font-size: 38px; font-weight: 900; color: var(--cyan); }
-
         .header { width: 92%; margin-top: 20px; display: flex; align-items: center; background: rgba(255,255,255,0.03); border-radius: 15px; padding: 12px; border: 1px solid #222; }
         .u-av-box { width: 50px; height: 50px; border-radius: 10px; border: 1px solid var(--cyan); margin-right: 12px; overflow: hidden; }
-        .lvl-tag { background: var(--cyan); color: #000; padding: 6px 15px; border-radius: 10px; font-weight: 900; font-size: 15px; margin-left: auto; }
-        
         .bal { font-size: 72px; font-weight: 800; margin: 40px 0; letter-spacing: -2px; }
-        
         .stage { flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
-        .main-ai { width: 220px; filter: drop-shadow(0 0 30px rgba(188, 19, 254, 0.5)); cursor: pointer; transition: 0.1s; }
-        .side-bar { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 10px; }
-        .s-btn { background: var(--gray-btn); border: 1px solid #333; color: white; padding: 15px; border-radius: 15px; font-size: 11px; font-weight: bold; width: 90px; text-align: center; }
-
-        .eng-cont { width: 92%; margin-bottom: 20px; }
-        .eng-header { display: flex; justify-content: space-between; font-size: 11px; color: #888; margin-bottom: 5px; }
-        .eng-bar { width: 100%; height: 8px; background: #111; border-radius: 10px; overflow: hidden; border: 1px solid #222; }
-        #eng-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; }
-
+        .main-ai { width: 200px; filter: drop-shadow(0 0 30px rgba(188, 19, 254, 0.5)); cursor: pointer; transition: 0.1s; }
+        .eng-bar { width: 92%; height: 8px; background: #111; border-radius: 10px; overflow: hidden; border: 1px solid #222; margin-bottom: 20px; }
+        #eng-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; transition: 0.3s; }
         .footer { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 30px; }
-        .f-item { background: var(--gray-btn); border-radius: 15px; padding: 18px 0; text-align: center; font-size: 11px; font-weight: bold; border: 1px solid #222; }
-
-        .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 30px 20px; overflow-y: auto; }
-        .m-h { color: var(--cyan); font-size: 36px; font-weight: 800; margin-bottom: 25px; }
-        .card { background: #111; border: 1px solid #222; border-radius: 15px; padding: 20px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
-        .act-btn { background: var(--cyan); color: #000; border: none; padding: 12px 20px; border-radius: 10px; font-weight: 900; cursor: pointer; }
-        .m-close { background: #151515; padding: 20px; border-radius: 20px; text-align: center; margin-top: auto; color: #444; font-weight: bold; cursor: pointer; }
+        .f-item { background: var(--gray-btn); border-radius: 15px; padding: 18px 0; text-align: center; font-size: 11px; font-weight: bold; border: 1px solid #222; text-transform: uppercase; }
     </style>
 </head>
 <body>
-
-    <div id="loader">
-        <div class="load-circle"><img src="logo.png" class="load-logo"></div>
-        <div class="p-val" id="p-txt">0%</div>
-    </div>
-
     <div class="header">
         <div class="u-av-box"><img src="images/logo.png" style="width:100%"></div>
         <div>
-            <div id="u-nm" style="font-weight:bold; font-size:16px;">Kander</div>
-            <div style="color:var(--cyan); font-size:10px">v1.7.3 Active Node</div>
+            <div style="font-weight:bold;">Node</div>
+            <div style="color:var(--cyan); font-size:10px">v1.7.5 Active</div>
         </div>
-        <div class="lvl-tag">LVL <span id="u-lv">1</span></div>
+        <div style="margin-left:auto; background:var(--cyan); color:#000; padding:5px 10px; border-radius:8px; font-weight:bold;">LVL <span id="u-lv">1</span></div>
     </div>
 
     <div class="bal" id="b-v">0</div>
 
     <div class="stage">
         <img src="logo.png" class="main-ai" onclick="doTap()">
-        <div class="side-bar">
-            <div class="s-btn" onclick="openM('wal-ui')">WALLET</div>
-            <div class="s-btn" onclick="openM('fr-ui')">FRIENDS</div>
-            <div class="s-btn" onclick="openM('bn-ui')">BONUS</div>
-        </div>
     </div>
 
-    <div class="eng-cont">
-        <div class="eng-header"><span>ENERGY</span><span id="e-count">1000/1000</span></div>
-        <div class="eng-bar"><div id="eng-fill"></div></div>
+    <div style="width:92%; display:flex; justify-content:space-between; font-size:11px; color:#888; margin-bottom:5px;">
+        <span>ENERGY</span><span id="e-txt">1000/1000</span>
     </div>
+    <div class="eng-bar"><div id="eng-fill"></div></div>
 
     <div class="footer">
-        <div class="f-item" onclick="openM('up-ui')">BOOST</div>
-        <div class="f-item" onclick="openM('mi-ui')">MINE</div>
-        <div class="f-item" onclick="openM('ta-ui')">TASKS</div>
-        <div class="f-item" onclick="openM('st-ui')">STATS</div>
+        <div class="f-item">BOOST</div>
+        <div class="f-item">MINE</div>
+        <div class="f-item">TASKS</div>
+        <div class="f-item">STATS</div>
     </div>
-
-    <div id="wal-ui" class="modal"><div class="m-h">WALLET</div><div class="card"><span>Status</span><span id="w-st" style="color:var(--cyan)">Disconnected</span></div><button class="act-btn" style="width:100%" onclick="toggleWal()">CONNECT TON</button><div class="m-close" onclick="closeM('wal-ui')">BACK</div></div>
-    <div id="up-ui" class="modal"><div class="m-h">BOOST</div><div class="card"><div><b>Multitap</b><br><small id="up-c">Cost: 1000</small></div><button class="act-btn" onclick="buyUp()">UPGRADE</button></div><div class="m-close" onclick="closeM('up-ui')">BACK</div></div>
-    <div id="fr-ui" class="modal"><div class="m-h">FRIENDS</div><div class="card"><span>Ref count:</span><span id="fr-cnt">0</span></div><button class="act-btn" onclick="copyRef()">COPY LINK</button><div class="m-close" onclick="closeM('fr-ui')">BACK</div></div>
-    <div id="mi-ui" class="modal"><div class="m-h">MINE</div><div class="card"><span>Profit/Sec:</span><span id="mi-pnl">0</span></div><div class="m-close" onclick="closeM('mi-ui')">BACK</div></div>
-    <div id="st-ui" class="modal"><div class="m-h">STATS</div><div class="card"><span>Total:</span><span id="st-bal">0</span></div><div class="m-close" onclick="closeM('st-ui')">BACK</div></div>
-    <div id="ta-ui" class="modal"><div class="m-h">TASKS</div><div class="card">Join Telegram +10k</div><div class="m-close" onclick="closeM('ta-ui')">BACK</div></div>
-    <div id="bn-ui" class="modal"><div class="m-h">BONUS</div><div class="card">Daily rewards soon...</div><div class="m-close" onclick="closeM('bn-ui')">BACK</div></div>
 
     <script>
         const tg = window.Telegram.WebApp;
-        let s = { uid: tg.initDataUnsafe?.user?.id || '0', bal: 0, lvl: 1, eng: 1000, maxE: 1000, wallet: null, fr: 0, pnl: 0, hasBot: false };
-
-        // Loader
-        let p = 0;
-        const lIv = setInterval(() => {
-            p += 2; document.getElementById('p-txt').innerText = p + '%';
-            if(p >= 100) { clearInterval(lIv); document.getElementById('loader').style.display='none'; load(); }
-        }, 20);
+        let s = { uid: tg.initDataUnsafe?.user?.id || '0', bal: 0, lvl: 1, eng: 1000, maxE: 1000 };
 
         async function load() {
             try {
@@ -108,25 +59,16 @@
                 s.lvl = Number(d.click_lvl) || 1;
                 s.eng = Number(d.energy) || 1000;
                 s.maxE = Number(d.max_energy) || 1000;
-                s.wallet = d.wallet_address;
-                s.fr = Number(d.friends_count) || 0;
-                s.pnl = Number(d.pnl) || 0;
-                s.hasBot = d.has_bot;
-                
-                upd(); setInterval(tick, 1000);
+                upd();
+                setInterval(tick, 1000);
             } catch(e) { console.error("Sync Error"); }
         }
 
         function upd() {
             document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString();
             document.getElementById('u-lv').innerText = s.lvl;
-            document.getElementById('e-count').innerText = `${Math.floor(s.eng)}/${s.maxE}`;
-            document.getElementById('eng-fill').style.width = ((s.eng / s.maxE) * 100) + '%';
-            document.getElementById('st-bal').innerText = Math.floor(s.bal).toLocaleString();
-            document.getElementById('w-st').innerText = s.wallet ? "Connected" : "Disconnected";
-            document.getElementById('fr-cnt').innerText = s.fr;
-            document.getElementById('mi-pnl').innerText = s.pnl;
-            document.getElementById('up-c').innerText = `Cost: ${s.lvl * 1000}`;
+            document.getElementById('e-txt').innerText = `${Math.floor(s.eng)}/${s.maxE}`;
+            document.getElementById('eng-fill').style.width = (s.eng / s.maxE * 100) + '%';
         }
 
         function doTap() {
@@ -137,37 +79,20 @@
             }
         }
 
-        function buyUp() {
-            let c = s.lvl * 1000;
-            if(s.bal >= c) { s.bal -= c; s.lvl++; upd(); save(); }
-        }
-
-        function toggleWal() {
-            s.wallet = s.wallet ? null : "UQ_TON_WALLET_MOCK";
-            upd(); save();
-        }
-
-        function copyRef() {
-            const link = `https://t.me/neural_pulse_bot?start=${s.uid}`;
-            alert("Copied: " + link);
-        }
-
         function tick() {
             if(s.eng < s.maxE) s.eng = Math.min(s.maxE, s.eng + 3);
-            if(s.pnl > 0) s.bal += (s.pnl / 1);
-            upd(); save();
+            upd();
+            save();
         }
 
         function save() {
             fetch('/api/save', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ userId: s.uid, balance: s.bal, energy: s.eng, max_energy: s.maxE, click_lvl: s.lvl, pnl: s.pnl, wallet: s.wallet, friends_count: s.fr, has_bot: s.hasBot }) 
+                body: JSON.stringify({ userId: s.uid, balance: s.bal, energy: s.eng, max_energy: s.maxE, click_lvl: s.lvl, pnl: 0 }) 
             });
         }
-
-        function openM(id) { document.getElementById(id).style.display = 'flex'; upd(); }
-        function closeM(id) { document.getElementById(id).style.display = 'none'; }
+        load();
     </script>
 </body>
 </html>
