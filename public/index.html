@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.8.7</title>
+    <title>Neural Pulse v1.8.8</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
     <style>
@@ -11,13 +11,11 @@
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; align-items: center; }
 
-        /* Loader */
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
         .load-circle { width: 220px; height: 220px; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--cyan); border-right: 2px solid var(--purple); display: flex; align-items: center; justify-content: center; animation: rotate 2s linear infinite; }
         @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .load-logo { width: 100px; }
 
-        /* Header */
         .header { width: 90%; margin-top: 20px; background: #080808; border: 1px solid #1a1a1a; border-radius: 15px; padding: 10px 15px; display: flex; align-items: center; justify-content: space-between; }
         .user-info { display: flex; align-items: center; gap: 10px; }
         .avatar { width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--cyan); overflow: hidden; }
@@ -26,36 +24,38 @@
         .u-ver { font-size: 10px; color: var(--cyan); }
         .lvl-badge { background: var(--cyan); color: black; font-weight: 900; padding: 5px 12px; border-radius: 8px; font-size: 14px; }
 
-        /* Main UI */
-        .balance { font-size: 60px; font-weight: 800; margin-top: 40px; }
+        .balance { font-size: 54px; font-weight: 800; margin-top: 20px; text-align: center; line-height: 1; }
+        .pnl-badge { font-size: 14px; color: var(--purple); font-weight: bold; margin-top: 5px; }
+        
         .stage { flex-grow: 1; width: 100%; position: relative; display: flex; align-items: center; justify-content: center; }
-        .main-ai { width: 200px; cursor: pointer; transition: transform 0.1s; filter: drop-shadow(0 0 20px rgba(188, 19, 254, 0.3)); }
+        .main-ai { width: 200px; cursor: pointer; transition: transform 0.1s; filter: drop-shadow(0 0 20px rgba(188, 19, 254, 0.3)); z-index: 5; }
         .main-ai:active { transform: scale(0.95); }
 
-        .side-menu { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 12px; }
-        .side-btn { background: var(--btn); border: 1px solid #222; color: white; width: 100px; padding: 12px 0; border-radius: 12px; font-size: 10px; font-weight: bold; text-align: center; text-transform: uppercase; }
+        .side-menu { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 12px; z-index: 10; }
+        .side-btn { background: var(--btn); border: 1px solid #222; color: white; width: 100px; padding: 12px 0; border-radius: 12px; font-size: 10px; font-weight: bold; text-align: center; text-transform: uppercase; cursor: pointer; }
 
-        /* Energy Section */
         .energy-box { width: 90%; margin-bottom: 20px; }
         .e-info { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 5px; color: #888; text-transform: uppercase; }
         .e-bar { width: 100%; height: 6px; background: #111; border-radius: 10px; overflow: hidden; border: 1px solid #1a1a1a; }
         .e-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: width 0.3s; }
 
-        /* Bottom Navigation */
         .bottom-nav { width: 90%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 30px; }
-        .nav-item { background: var(--btn); border: 1px solid #222; border-radius: 12px; padding: 15px 0; text-align: center; font-size: 10px; font-weight: bold; text-transform: uppercase; }
+        .nav-item { background: var(--btn); border: 1px solid #222; border-radius: 12px; padding: 15px 0; text-align: center; font-size: 10px; font-weight: bold; text-transform: uppercase; cursor: pointer; }
 
-        /* Modals */
-        .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 25px; }
+        .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 25px; overflow-y: auto; }
         .m-title { font-size: 28px; font-weight: 800; color: var(--cyan); margin-bottom: 20px; text-transform: uppercase; }
-        .m-close { margin-top: auto; background: #111; padding: 20px; border-radius: 15px; text-align: center; font-weight: bold; cursor: pointer; }
+        .m-close { margin-top: auto; background: #111; padding: 20px; border-radius: 15px; text-align: center; font-weight: bold; cursor: pointer; border: 1px solid #222; }
+        
+        .list-item { background: var(--btn); border: 1px solid #222; padding: 15px; border-radius: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .buy-btn { background: var(--cyan); color: black; border: none; padding: 8px 15px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .buy-btn:disabled { background: #333; color: #666; cursor: not-allowed; }
     </style>
 </head>
 <body>
 
 <div id="loader">
     <div class="load-circle"><img src="logo.png" class="load-logo"></div>
-    <div style="margin-top:25px; font-weight:bold; letter-spacing:2px">ACCESS GRANTED</div>
+    <div style="margin-top:25px; font-weight:bold; letter-spacing:2px">CORE LOADING</div>
     <div id="p-txt" style="font-size:24px; color:var(--cyan); margin-top:10px">0%</div>
 </div>
 
@@ -64,13 +64,16 @@
         <div class="avatar"><img src="images/logo.png" style="width:100%"></div>
         <div class="u-det">
             <span class="u-name" id="u-nm">Neural Player</span>
-            <span class="u-ver">v1.8.7 Active Node</span>
+            <span class="u-ver">v1.8.8 Active Node</span>
         </div>
     </div>
     <div class="lvl-badge">LVL <span id="u-lv">1</span></div>
 </div>
 
-<div class="balance" id="b-v">0</div>
+<div style="display:flex; flex-direction:column; align-items:center">
+    <div class="balance" id="b-v">0</div>
+    <div class="pnl-badge">+<span id="p-v">0</span> / sec</div>
+</div>
 
 <div class="stage">
     <img src="logo.png" class="main-ai" onclick="doTap()">
@@ -87,32 +90,89 @@
 </div>
 
 <div class="bottom-nav">
-    <div class="nav-item" onclick="openM('bs-m')">Boost</div>
-    <div class="nav-item" onclick="openM('mi-m')">Mine</div>
-    <div class="nav-item" onclick="openM('ta-m')">Tasks</div>
-    <div class="nav-item" onclick="openM('tp-m')">Top</div>
+    <div class="nav-item" onclick="openBoost()">Boost</div>
+    <div class="nav-item" onclick="openMine()">Mine</div>
+    <div class="nav-item" onclick="openTasks()">Tasks</div>
+    <div class="nav-item" onclick="openTop()">Top</div>
 </div>
 
 <div id="wal-m" class="modal">
     <div class="m-title">Wallet</div>
-    <div id="ton-connect" style="display:flex; justify-content:center"></div>
+    <div id="ton-connect" style="display:flex; justify-content:center; margin-bottom: 20px;"></div>
+    <div class="list-item" style="flex-direction:column; align-items:flex-start">
+        <small style="color:#888">Address:</small>
+        <div id="w-addr" style="font-size:12px; color:var(--cyan); word-break:break-all; margin-top:5px;">Not connected</div>
+    </div>
     <div class="m-close" onclick="closeM('wal-m')">Back</div>
 </div>
-<div id="fr-m" class="modal"><div class="m-title">Friends</div><div class="m-close" onclick="closeM('fr-m')">Back</div></div>
-<div id="bn-m" class="modal"><div class="m-title">Bonus</div><div class="m-close" onclick="closeM('bn-m')">Back</div></div>
-<div id="bs-m" class="modal"><div class="m-title">Boost</div><div class="m-close" onclick="closeM('bs-m')">Back</div></div>
-<div id="mi-m" class="modal"><div class="m-title">Mine</div><div class="m-close" onclick="closeM('mi-m')">Back</div></div>
-<div id="ta-m" class="modal"><div class="m-title">Tasks</div><div class="m-close" onclick="closeM('ta-m')">Back</div></div>
+
+<div id="fr-m" class="modal">
+    <div class="m-title">Friends</div>
+    <div class="list-item">
+        <div>Invited Friends:</div>
+        <div style="font-weight:bold; color:var(--cyan)" id="f-cnt">0</div>
+    </div>
+    <div class="list-item" style="flex-direction:column; gap:10px">
+        <div style="font-size:12px; color:#888">Your Referral Link:</div>
+        <div id="ref-link" style="font-size:10px; word-break:break-all; background:#000; padding:10px; border-radius:8px; width:100%"></div>
+        <button class="buy-btn" style="width:100%" onclick="copyRef()">Copy Link</button>
+    </div>
+    <div class="m-close" onclick="closeM('fr-m')">Back</div>
+</div>
+
+<div id="bn-m" class="modal">
+    <div class="m-title">Bonus</div>
+    <div class="list-item">
+        <div>
+            <div style="font-weight:bold">Daily Node Reboot</div>
+            <div style="font-size:10px; color:#888">+5000 Pulse</div>
+        </div>
+        <button class="buy-btn" onclick="claimBonus(this, 5000)">Claim</button>
+    </div>
+    <div class="m-close" onclick="closeM('bn-m')">Back</div>
+</div>
+
+<div id="bs-m" class="modal">
+    <div class="m-title">Boost</div>
+    <div id="boost-list"></div>
+    <div class="m-close" onclick="closeM('bs-m')">Back</div>
+</div>
+
+<div id="mi-m" class="modal">
+    <div class="m-title">Mine</div>
+    <div style="color:#888; font-size:12px; margin-bottom:15px">Buy AI Nodes to increase passive income.</div>
+    <div id="mine-list"></div>
+    <div class="m-close" onclick="closeM('mi-m')">Back</div>
+</div>
+
+<div id="ta-m" class="modal">
+    <div class="m-title">Tasks</div>
+    <div class="list-item">
+        <div>
+            <div style="font-weight:bold">Join Neural Channel</div>
+            <div style="font-size:10px; color:#888">+10000 Pulse</div>
+        </div>
+        <button class="buy-btn" onclick="claimBonus(this, 10000)">Check</button>
+    </div>
+    <div class="m-close" onclick="closeM('ta-m')">Back</div>
+</div>
+
 <div id="tp-m" class="modal">
     <div class="m-title">Top Players</div>
-    <div style="color:#555; text-align:center; margin-top:50px;">Rating update in progress...</div>
+    <div id="top-list"></div>
     <div class="m-close" onclick="closeM('tp-m')">Back</div>
 </div>
 
 <script>
     const tg = window.Telegram.WebApp;
+    tg.expand();
+    
     let tonConnectUI;
-    let s = { uid: tg.initDataUnsafe?.user?.id || '0', bal: 0, lvl: 1, eng: 1000, maxE: 1000 };
+    let s = { 
+        uid: tg.initDataUnsafe?.user?.id || '0', 
+        name: tg.initDataUnsafe?.user?.first_name || 'Neural Player',
+        bal: 0, lvl: 1, eng: 1000, maxE: 1000, pnl: 0, fr: 0, wal: null 
+    };
 
     let p = 0;
     const lIv = setInterval(() => {
@@ -121,22 +181,37 @@
     }, 30);
 
     async function init() {
+        document.getElementById('u-nm').innerText = s.name;
+        document.getElementById('ref-link').innerText = `https://t.me/n_pulse_bot?start=${s.uid}`;
+        
         tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
             manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
             buttonRootId: 'ton-connect'
         });
+        
+        tonConnectUI.onStatusChange(wallet => {
+            s.wal = wallet ? wallet.account.address : null;
+            document.getElementById('w-addr').innerText = s.wal || "Not connected";
+            save();
+        });
+
         await load();
     }
 
     async function load() {
         try {
-            const r = await fetch(`/api/user/${s.uid}`);
+            const r = await fetch(`/api/user/${s.uid}?name=${encodeURIComponent(s.name)}`);
             const d = await r.json();
             s.bal = Number(d.balance); s.lvl = Number(d.click_lvl);
             s.eng = Number(d.energy); s.maxE = Number(d.max_energy);
+            s.pnl = Number(d.pnl); s.fr = Number(d.friends_count);
+            s.wal = d.wallet_address;
+            document.getElementById('w-addr').innerText = s.wal || "Not connected";
+            document.getElementById('f-cnt').innerText = s.fr;
             upd();
             setInterval(tick, 1000);
-        } catch(e) { console.error("Cloud sync fail"); }
+            setInterval(save, 5000); // Автосейв каждые 5 сек
+        } catch(e) { console.error("Sync error"); }
     }
 
     function doTap() {
@@ -149,11 +224,13 @@
 
     function tick() {
         if(s.eng < s.maxE) s.eng = Math.min(s.maxE, s.eng + 3);
-        upd(); save();
+        if(s.pnl > 0) s.bal += s.pnl; // Пассивный доход каждую секунду
+        upd();
     }
 
     function upd() {
         document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString();
+        document.getElementById('p-v').innerText = s.pnl.toLocaleString();
         document.getElementById('u-lv').innerText = s.lvl;
         document.getElementById('e-val').innerText = `${Math.floor(s.eng)}/${s.maxE}`;
         document.getElementById('e-f').style.width = (s.eng / s.maxE * 100) + '%';
@@ -163,10 +240,94 @@
         fetch('/api/save', { 
             method: 'POST', 
             headers: {'Content-Type': 'application/json'}, 
-            body: JSON.stringify({ userId: s.uid, balance: s.bal, energy: s.eng, max_energy: s.maxE, click_lvl: s.lvl }) 
+            body: JSON.stringify({ 
+                userId: s.uid, username: s.name, balance: s.bal, 
+                energy: s.eng, max_energy: s.maxE, click_lvl: s.lvl, 
+                pnl: s.pnl, wallet: s.wal, friends_count: s.fr 
+            }) 
         });
     }
 
+    // Вспомогательные функции кнопок
+    function copyRef() {
+        const txt = document.getElementById('ref-link').innerText;
+        navigator.clipboard.writeText(txt);
+        tg.showAlert("Referral link copied!");
+    }
+
+    function claimBonus(btn, amount) {
+        s.bal += amount;
+        btn.innerText = "Claimed";
+        btn.disabled = true;
+        upd(); save();
+    }
+
+    // Окно Boost
+    function openBoost() {
+        const costLvl = s.lvl * 1000;
+        const costEng = s.maxE;
+        document.getElementById('boost-list').innerHTML = `
+            <div class="list-item">
+                <div><div style="font-weight:bold">Multitap (Lvl ${s.lvl+1})</div><div style="font-size:10px; color:var(--cyan)">Cost: ${costLvl}</div></div>
+                <button class="buy-btn" onclick="buyBoost('lvl', ${costLvl})" ${s.bal < costLvl ? 'disabled':''}>Buy</button>
+            </div>
+            <div class="list-item">
+                <div><div style="font-weight:bold">Energy Limit (+500)</div><div style="font-size:10px; color:var(--cyan)">Cost: ${costEng}</div></div>
+                <button class="buy-btn" onclick="buyBoost('eng', ${costEng})" ${s.bal < costEng ? 'disabled':''}>Buy</button>
+            </div>
+        `;
+        openM('bs-m');
+    }
+
+    function buyBoost(type, cost) {
+        if(s.bal >= cost) {
+            s.bal -= cost;
+            if(type === 'lvl') s.lvl++;
+            if(type === 'eng') s.maxE += 500;
+            upd(); save(); openBoost(); // ререндер окна
+        }
+    }
+
+    // Окно Mine
+    function openMine() {
+        const costPnl = (s.pnl + 10) * 100;
+        document.getElementById('mine-list').innerHTML = `
+            <div class="list-item">
+                <div><div style="font-weight:bold">Micro Node (+10/s)</div><div style="font-size:10px; color:var(--purple)">Cost: ${costPnl}</div></div>
+                <button class="buy-btn" onclick="buyMine(${costPnl}, 10)" ${s.bal < costPnl ? 'disabled':''}>Buy</button>
+            </div>
+        `;
+        openM('mi-m');
+    }
+
+    function buyMine(cost, income) {
+        if(s.bal >= cost) {
+            s.bal -= cost;
+            s.pnl += income;
+            upd(); save(); openMine();
+        }
+    }
+
+    // Окно Top
+    async function openTop() {
+        openM('tp-m');
+        document.getElementById('top-list').innerHTML = '<div style="text-align:center; color:#888; margin-top:20px;">Loading data...</div>';
+        try {
+            const r = await fetch('/api/top');
+            const data = await r.json();
+            let html = '';
+            data.forEach((u, i) => {
+                let color = i === 0 ? 'var(--cyan)' : 'white';
+                html += `<div class="list-item" style="padding:10px 15px;">
+                    <div style="color:${color}; font-weight:bold;">#${i+1} ${u.username}</div>
+                    <div style="font-size:12px; font-weight:bold;">${Number(u.balance).toLocaleString()}</div>
+                </div>`;
+            });
+            document.getElementById('top-list').innerHTML = html;
+        } catch(e) { document.getElementById('top-list').innerHTML = '<div style="color:red; text-align:center;">Load failed</div>'; }
+    }
+
+    function openTasks() { openM('ta-m'); }
     function openM(id) { document.getElementById(id).style.display = 'flex'; }
     function closeM(id) { document.getElementById(id).style.display = 'none'; }
 </script>
