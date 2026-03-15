@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.8.0</title>
+    <title>Neural Pulse v1.8.2</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; --panel: #111; --gray-btn: #1a1a1a; }
         body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; }
@@ -25,7 +26,6 @@
         
         .stage { flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
         .main-ai { width: 220px; filter: drop-shadow(0 0 30px rgba(188, 19, 254, 0.5)); cursor: pointer; transition: 0.1s; z-index: 5; }
-        .main-ai:active { transform: scale(0.95); }
         
         .side-bar { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 10px; }
         .s-btn { background: var(--gray-btn); border: 1px solid #333; color: white; padding: 15px; border-radius: 15px; font-size: 11px; font-weight: bold; width: 90px; text-align: center; }
@@ -41,10 +41,8 @@
         .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 30px 20px; overflow-y: auto; }
         .m-h { color: var(--cyan); font-size: 32px; font-weight: 800; margin-bottom: 20px; text-transform: uppercase; }
         .card { background: #111; border: 1px solid #222; border-radius: 15px; padding: 18px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        .card-info b { display: block; font-size: 16px; margin-bottom: 4px; }
-        .card-info small { color: #888; }
-        .act-btn { background: var(--cyan); color: #000; border: none; padding: 10px 15px; border-radius: 10px; font-weight: 900; font-size: 12px; }
-        .m-close { background: #151515; padding: 20px; border-radius: 20px; text-align: center; margin-top: 20px; font-weight: bold; cursor: pointer; }
+        .act-btn { background: var(--cyan); color: #000; border: none; padding: 15px 20px; border-radius: 10px; font-weight: 900; width: 100%; }
+        .m-close { background: #151515; padding: 20px; border-radius: 20px; text-align: center; margin-top: 20px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -59,7 +57,7 @@
         <div class="u-av-box"><img src="images/logo.png" style="width:100%"></div>
         <div>
             <div id="u-nm" style="font-weight:bold;">Neural Player</div>
-            <div style="color:var(--cyan); font-size:10px">v1.8.0 Online</div>
+            <div style="color:var(--cyan); font-size:10px">v1.8.2 Active</div>
         </div>
         <div class="lvl-tag">LVL <span id="u-lv">1</span></div>
     </div>
@@ -87,90 +85,40 @@
         <div class="f-item" onclick="openM('st-ui')">STATS</div>
     </div>
 
-    <div id="up-ui" class="modal">
-        <div class="m-h">BOOSTERS</div>
-        <div class="card">
-            <div class="card-info"><b>Multitap</b><small id="up-c">Cost: 1000</small></div>
-            <button class="act-btn" onclick="buyUp()">LEVEL UP</button>
-        </div>
-        <div class="card">
-            <div class="card-info"><b>Full Energy</b><small>Daily Refill</small></div>
-            <button class="act-btn" onclick="refill()">USE</button>
-        </div>
-        <div class="m-close" onclick="closeM('up-ui')">CLOSE SYSTEM</div>
-    </div>
-
-    <div id="mi-ui" class="modal">
-        <div class="m-h">NEURAL MINING</div>
-        <p style="color:#888; font-size:12px">Profit per second: <span id="pnl-val" style="color:var(--cyan)">0</span></p>
-        <div class="card">
-            <div class="card-info"><b>AI Processor</b><small>+5/sec | Cost: 5k</small></div>
-            <button class="act-btn" onclick="buyMine(5, 5000)">BUY</button>
-        </div>
-        <div class="card">
-            <div class="card-info"><b>Data Center</b><small>+20/sec | Cost: 25k</small></div>
-            <button class="act-btn" onclick="buyMine(20, 25000)">BUY</button>
-        </div>
-        <div class="card">
-            <div class="card-info"><b>Quantum Core</b><small>+100/sec | Cost: 150k</small></div>
-            <button class="act-btn" onclick="buyMine(100, 150000)">BUY</button>
-        </div>
-        <div class="m-close" onclick="closeM('mi-ui')">CLOSE SYSTEM</div>
-    </div>
-
-    <div id="ta-ui" class="modal">
-        <div class="m-h">SOCIAL TASKS</div>
-        <div class="card">
-            <div class="card-info"><b>Join Telegram</b><small>+10,000 Pulse</small></div>
-            <button class="act-btn" onclick="doTask(10000)">CLAIM</button>
-        </div>
-        <div class="card">
-            <div class="card-info"><b>Follow X/Twitter</b><small>+5,000 Pulse</small></div>
-            <button class="act-btn" onclick="doTask(5000)">CLAIM</button>
-        </div>
-        <div class="m-close" onclick="closeM('ta-ui')">CLOSE SYSTEM</div>
-    </div>
-
-    <div id="st-ui" class="modal">
-        <div class="m-h">USER STATS</div>
-        <div class="card"><span>User ID</span><span id="st-id">0</span></div>
-        <div class="card"><span>Total Pulse</span><span id="st-bal">0</span></div>
-        <div class="card"><span>Mining Rate</span><span id="st-pnl">0</span></div>
-        <div class="card"><span>Referrals</span><span id="st-fr">0</span></div>
-        <div class="m-close" onclick="closeM('st-ui')">CLOSE SYSTEM</div>
-    </div>
-
     <div id="wal-ui" class="modal">
-        <div class="m-h">WALLET</div>
-        <div class="card" style="flex-direction:column; align-items:flex-start; gap:10px">
-            <small>Status:</small>
-            <b id="w-addr" style="font-size:12px; word-break:break-all">Disconnected</b>
+        <div class="m-h">TON WALLET</div>
+        <div id="ton-connect-button" style="margin-bottom: 20px;"></div>
+        <div class="card" style="flex-direction:column; gap:10px; align-items: flex-start;">
+            <small>Address:</small>
+            <b id="w-addr" style="font-size:12px; word-break: break-all; color: var(--cyan);">Not Connected</b>
         </div>
-        <button class="act-btn" style="width:100%; padding:20px" onclick="connWal()">CONNECT TON WALLET</button>
         <div class="m-close" onclick="closeM('wal-ui')">CLOSE SYSTEM</div>
     </div>
 
-    <div id="fr-ui" class="modal">
-        <div class="m-h">FRIENDS</div>
-        <div class="card"><span>Your Referrals</span><b id="fr-list-cnt">0</b></div>
-        <button class="act-btn" style="width:100%; padding:20px" onclick="copyRef()">INVITE FRIEND (+2.5k)</button>
-        <div class="m-close" onclick="closeM('fr-ui')">CLOSE SYSTEM</div>
+    <div id="up-ui" class="modal">
+        <div class="m-h">BOOST</div>
+        <div class="card"><span>Multitap (Lvl <span id="m-lvl">1</span>)</span><button class="act-btn" style="width:auto" onclick="buyUp()">UP</button></div>
+        <div class="m-close" onclick="closeM('up-ui')">CLOSE</div>
     </div>
-
-    <div id="bn-ui" class="modal">
-        <div class="m-h">BONUS</div>
-        <div class="card">
-            <div class="card-info"><b>Daily Reward</b><small>Ready to claim</small></div>
-            <button class="act-btn" onclick="claimDaily()">CLAIM 1K</button>
-        </div>
-        <div class="m-close" onclick="closeM('bn-ui')">CLOSE SYSTEM</div>
+    <div id="mi-ui" class="modal">
+        <div class="m-h">MINE</div>
+        <div class="card"><span>Passive Profit</span><b id="m-pnl">0</b></div>
+        <div class="m-close" onclick="closeM('mi-ui')">CLOSE</div>
     </div>
+    <div id="ta-ui" class="modal"><div class="m-h">TASKS</div><div class="card">Join Channel +5k</div><div class="m-close" onclick="closeM('ta-ui')">CLOSE</div></div>
+    <div id="st-ui" class="modal"><div class="m-h">STATS</div><div id="st-data"></div><div class="m-close" onclick="closeM('st-ui')">CLOSE</div></div>
+    <div id="fr-ui" class="modal"><div class="m-h">FRIENDS</div><div class="card">Invited: <b id="fr-c">0</b></div><div class="m-close" onclick="closeM('fr-ui')">CLOSE</div></div>
+    <div id="bn-ui" class="modal"><div class="m-h">BONUS</div><button class="act-btn" onclick="alert('Claimed!')">Daily Reward</button><div class="m-close" onclick="closeM('bn-ui')">CLOSE</div></div>
 
     <script>
         const tg = window.Telegram.WebApp;
+        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
+            buttonRootId: 'ton-connect-button'
+        });
+
         let s = { uid: tg.initDataUnsafe?.user?.id || '0', bal: 0, lvl: 1, eng: 1000, maxE: 1000, pnl: 0, wal: null, fr: 0 };
 
-        // Loader
         let p = 0;
         const lIv = setInterval(() => {
             p += 2; document.getElementById('p-txt').innerText = p + '%';
@@ -181,18 +129,12 @@
             try {
                 const r = await fetch(`/api/user/${s.uid}`);
                 const d = await r.json();
-                s.bal = Number(d.balance) || 0;
-                s.lvl = Number(d.click_lvl) || 1;
-                s.eng = Number(d.energy) || 1000;
-                s.maxE = Number(d.max_energy) || 1000;
-                s.pnl = Number(d.pnl) || 0;
-                s.wal = d.wallet_address;
-                s.fr = Number(d.friends_count) || 0;
-                
-                document.getElementById('u-nm').innerText = tg.initDataUnsafe?.user?.first_name || "Neural Player";
+                s.bal = Number(d.balance); s.lvl = Number(d.click_lvl); 
+                s.eng = Number(d.energy); s.maxE = Number(d.max_energy);
+                s.pnl = Number(d.pnl); s.wal = d.wallet_address; s.fr = Number(d.friends_count);
                 upd();
                 setInterval(tick, 1000);
-            } catch(e) { document.getElementById('loader').style.display='none'; }
+            } catch(e) { console.error(e); }
         }
 
         function upd() {
@@ -200,44 +142,33 @@
             document.getElementById('u-lv').innerText = s.lvl;
             document.getElementById('e-count').innerText = `${Math.floor(s.eng)}/${s.maxE}`;
             document.getElementById('eng-fill').style.width = (s.eng / s.maxE * 100) + '%';
-            
-            // Внутренние элементы модалок
-            document.getElementById('up-c').innerText = `Cost: ${(s.lvl * 1000).toLocaleString()}`;
-            document.getElementById('pnl-val').innerText = s.pnl + "/sec";
-            document.getElementById('st-id').innerText = s.uid;
-            document.getElementById('st-bal').innerText = Math.floor(s.bal).toLocaleString();
-            document.getElementById('st-pnl').innerText = s.pnl + "/sec";
-            document.getElementById('st-fr').innerText = s.fr;
-            document.getElementById('w-addr').innerText = s.wal || "Disconnected";
-            document.getElementById('fr-list-cnt').innerText = s.fr;
+            document.getElementById('w-addr').innerText = s.wal || "Not Connected";
+            document.getElementById('m-lvl').innerText = s.lvl;
+            document.getElementById('m-pnl').innerText = s.pnl;
+            document.getElementById('fr-c').innerText = s.fr;
         }
 
-        function doTap() {
-            if(s.eng >= s.lvl) { 
-                s.bal += s.lvl; s.eng -= s.lvl; 
-                tg.HapticFeedback.impactOccurred('medium'); 
-                upd(); 
+        // Следим за кошельком
+        tonConnectUI.onStatusChange(wallet => {
+            if (wallet) {
+                s.wal = wallet.account.address;
+            } else {
+                s.wal = null;
             }
+            upd(); save();
+        });
+
+        function doTap() {
+            if(s.eng >= s.lvl) { s.bal += s.lvl; s.eng -= s.lvl; tg.HapticFeedback.impactOccurred('medium'); upd(); }
         }
 
         function buyUp() {
-            let cost = s.lvl * 1000;
-            if(s.bal >= cost) { s.bal -= cost; s.lvl++; upd(); save(); }
+            if(s.bal >= s.lvl * 1000) { s.bal -= s.lvl * 1000; s.lvl++; upd(); save(); }
         }
-
-        function buyMine(add, cost) {
-            if(s.bal >= cost) { s.bal -= cost; s.pnl += add; upd(); save(); }
-        }
-
-        function refill() { s.eng = s.maxE; upd(); save(); }
-        function doTask(reward) { s.bal += reward; upd(); save(); alert("Task Completed!"); }
-        function claimDaily() { s.bal += 1000; upd(); save(); alert("Daily Bonus Claimed!"); }
-        function connWal() { s.wal = "UQ_NEURAL_" + s.uid.slice(-4); upd(); save(); }
-        function copyRef() { alert("Invite Link Copied!"); }
 
         function tick() {
             if(s.eng < s.maxE) s.eng = Math.min(s.maxE, s.eng + 3);
-            if(s.pnl > 0) s.bal += s.pnl;
+            if(s.pnl > 0) s.bal += s.pnl / 10; // Начисление чаще для плавности
             upd(); save();
         }
 
@@ -249,7 +180,7 @@
             });
         }
 
-        function openM(id) { document.getElementById(id).style.display = 'flex'; upd(); }
+        function openM(id) { document.getElementById(id).style.display = 'flex'; }
         function closeM(id) { document.getElementById(id).style.display = 'none'; }
     </script>
 </body>
