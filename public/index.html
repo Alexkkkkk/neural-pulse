@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.9.3</title>
+    <title>Neural Pulse v1.9.4</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
     <style>
-        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; --card: rgba(15, 15, 15, 0.9); --gold: #ffd700; --silver: #c0c0c0; --bronze: #cd7f32; }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: 'Inter', sans-serif; }
+        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; --card: rgba(20, 20, 20, 0.9); --gold: #ffd700; --silver: #c0c0c0; --bronze: #cd7f32; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: sans-serif; }
         body { margin: 0; background: var(--bg); color: white; overflow: hidden; height: 100vh; display: flex; flex-direction: column; align-items: center; }
 
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; transition: 0.5s; }
@@ -16,50 +16,46 @@
 
         .header { width: 92%; margin-top: 15px; background: var(--card); border: 1px solid #222; border-radius: 16px; padding: 10px 15px; display: flex; align-items: center; justify-content: space-between; }
         .u-info { display: flex; align-items: center; gap: 12px; }
-        .u-avatar { width: 42px; height: 42px; border-radius: 10px; border: 1px solid var(--cyan); object-fit: cover; background: #111; }
-        .u-name { font-weight: 800; font-size: 14px; display: block; }
-        .u-ver { font-size: 10px; color: var(--cyan); text-transform: uppercase; letter-spacing: 0.5px; }
+        .u-avatar { width: 42px; height: 42px; border-radius: 10px; border: 1px solid var(--cyan); object-fit: cover; }
+        .u-name { font-weight: 800; font-size: 14px; }
         .lvl-badge { background: var(--cyan); color: black; font-weight: 900; padding: 6px 12px; border-radius: 8px; font-size: 12px; }
 
-        .balance { font-size: 64px; font-weight: 900; margin-top: 30px; letter-spacing: -2px; }
+        .balance { font-size: 56px; font-weight: 900; margin-top: 20px; letter-spacing: -1px; }
         .pnl-badge { font-size: 14px; color: #888; margin-top: 5px; }
         .pnl-badge span { color: var(--purple); font-weight: 800; }
 
         .stage { flex-grow: 1; width: 100%; position: relative; display: flex; align-items: center; justify-content: center; }
         .main-ai { width: 220px; cursor: pointer; transition: 0.1s; filter: drop-shadow(0 0 25px rgba(188, 19, 254, 0.4)); }
-        .main-ai:active { transform: scale(0.94); }
+        .main-ai:active { transform: scale(0.92); }
 
         .side-menu { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 12px; }
-        .side-btn { background: rgba(255,255,255,0.05); border: 1px solid #222; color: white; width: 100px; padding: 14px 0; border-radius: 14px; font-size: 10px; font-weight: 800; text-align: center; text-transform: uppercase; }
+        .side-btn { background: #111; border: 1px solid #222; color: white; width: 100px; padding: 12px 0; border-radius: 12px; font-size: 10px; font-weight: 800; text-align: center; text-transform: uppercase; }
 
         .energy-box { width: 90%; margin-bottom: 25px; }
         .e-bar { width: 100%; height: 8px; background: #111; border-radius: 10px; overflow: hidden; border: 1px solid #222; margin-top: 6px; }
-        .e-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: width 0.3s; box-shadow: 0 0 10px var(--cyan); }
+        .e-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: width 0.3s; }
 
         .bottom-nav { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 30px; }
         .nav-item { background: #111; border: 1px solid #222; border-radius: 15px; padding: 16px 0; text-align: center; font-size: 10px; font-weight: 800; text-transform: uppercase; color: #666; }
 
         .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 25px; }
         .m-title { font-size: 32px; font-weight: 900; text-transform: uppercase; margin-bottom: 20px; }
-        .m-close { margin-top: auto; background: #111; padding: 20px; border-radius: 18px; text-align: center; font-weight: 800; text-transform: uppercase; color: #888; border: 1px solid #222; }
+        .m-close { margin-top: auto; background: #111; padding: 20px; border-radius: 18px; text-align: center; font-weight: 800; text-transform: uppercase; border: 1px solid #222; }
 
-        /* КРУТОЙ ТОП */
-        .top-container { flex-grow: 1; overflow-y: auto; padding-right: 5px; }
-        .top-item { background: rgba(255,255,255,0.03); border: 1px solid #1a1a1a; padding: 12px 15px; border-radius: 16px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; transition: 0.3s; }
-        .top-rank { font-size: 18px; font-weight: 900; width: 30px; color: #444; }
-        .top-user { display: flex; align-items: center; gap: 12px; flex-grow: 1; }
-        .top-img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; background: #222; border: 1px solid #333; }
-        .top-name { font-weight: 700; font-size: 14px; }
-        .top-bal { color: var(--cyan); font-weight: 800; font-size: 14px; }
+        .list-item { background: #080808; border: 1px solid #1a1a1a; padding: 15px; border-radius: 16px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+        .buy-btn { background: var(--cyan); color: black; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 800; font-size: 12px; }
+        .buy-btn:disabled { background: #222; color: #444; }
 
-        /* Стили для лидеров */
-        .rank-1 { background: rgba(255, 215, 0, 0.07) !important; border-color: var(--gold) !important; }
-        .rank-1 .top-rank { color: var(--gold); }
-        .rank-2 { background: rgba(192, 192, 192, 0.07) !important; border-color: var(--silver) !important; }
-        .rank-2 .top-rank { color: var(--silver); }
-        .rank-3 { background: rgba(205, 127, 50, 0.07) !important; border-color: var(--bronze) !important; }
-        .rank-3 .top-rank { color: var(--bronze); }
-        .my-score { border: 1px solid var(--cyan) !important; box-shadow: 0 0 10px rgba(0,242,255,0.1); }
+        /* Rating Styles */
+        .top-container { flex-grow: 1; overflow-y: auto; }
+        .top-item { background: #080808; border: 1px solid #1a1a1a; padding: 10px 15px; border-radius: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; }
+        .rank-num { font-weight: 900; width: 25px; color: #444; }
+        .top-av { width: 35px; height: 35px; border-radius: 50%; border: 1px solid #222; }
+        .top-name { flex-grow: 1; font-weight: 700; font-size: 13px; }
+        .top-val { color: var(--cyan); font-weight: 800; }
+        .rank-1 { border-color: var(--gold); background: rgba(255,215,0,0.05); }
+        .rank-2 { border-color: var(--silver); background: rgba(192,192,192,0.05); }
+        .rank-3 { border-color: var(--bronze); background: rgba(205,127,50,0.05); }
     </style>
 </head>
 <body>
@@ -74,14 +70,14 @@
         <img id="u-av" class="u-avatar" src="images/logo.png">
         <div>
             <span class="u-name" id="u-nm">Neural Player</span>
-            <span class="u-ver">v1.9.3 Node</span>
+            <span style="font-size:9px; color:var(--cyan); display:block">STABLE v1.9.4</span>
         </div>
     </div>
     <div class="lvl-badge">LVL <span id="u-lv">1</span></div>
 </div>
 
 <div class="balance" id="b-v">0</div>
-<div class="pnl-badge">Neural Profit: <span id="p-v">0</span>/s</div>
+<div class="pnl-badge">Profit: <span id="p-v">0</span>/s</div>
 
 <div class="stage">
     <img src="logo.png" class="main-ai" onclick="doTap()">
@@ -93,9 +89,8 @@
 </div>
 
 <div class="energy-box">
-    <div style="display:flex; justify-content:space-between; font-size:10px; color:#555; font-weight:800; text-transform:uppercase">
-        <span>Energy core</span>
-        <span id="e-val">1000/1000</span>
+    <div style="display:flex; justify-content:space-between; font-size:10px; color:#555; font-weight:800;">
+        <span>ENERGY</span><span id="e-val">1000/1000</span>
     </div>
     <div class="e-bar"><div class="e-fill" id="e-f"></div></div>
 </div>
@@ -107,28 +102,20 @@
     <div class="nav-item" onclick="openM('tp-m')">Rating</div>
 </div>
 
-<div id="tp-m" class="modal">
-    <div class="m-title">Global<br><span style="color:var(--cyan)">Rating</span></div>
-    <div class="top-container" id="top-list">
-        </div>
-    <div class="m-close" onclick="closeM('tp-m')">Close</div>
-</div>
-
+<div id="tp-m" class="modal"><div class="m-title">Rating</div><div class="top-container" id="top-list"></div><div class="m-close" onclick="closeM('tp-m')">Close</div></div>
+<div id="bs-m" class="modal"><div class="m-title">Boost</div><div id="boost-list"></div><div class="m-close" onclick="closeM('bs-m')">Close</div></div>
+<div id="mi-m" class="modal"><div class="m-title">Mine</div><div id="mine-list"></div><div class="m-close" onclick="closeM('mi-m')">Close</div></div>
 <div id="wal-m" class="modal">
     <div class="m-title">Wallet</div>
-    <div style="background:#111; padding:25px; border-radius:20px; border:1px solid #222; text-align:center">
-        <div style="font-size:10px; color:#555; margin-bottom:10px">CONNECTED ADDRESS</div>
-        <div id="w-addr" style="font-size:12px; color:var(--cyan); word-break:all">Not connected</div>
+    <div class="list-item" style="flex-direction:column; gap:10px; padding:30px 10px">
+        <div id="w-addr" style="font-size:12px; color:var(--cyan); text-align:center">Not connected</div>
     </div>
-    <button id="connect-trigger" style="width:100%; padding:20px; border-radius:18px; border:none; background:var(--cyan); font-weight:900; margin-top:20px" onclick="handleWalletAction()">Connect Wallet</button>
-    <div class="m-close" onclick="closeM('wal-m')">Back</div>
+    <button id="connect-trigger" style="width:100%; padding:20px; border-radius:15px; border:none; background:var(--cyan); font-weight:900; margin-top:20px" onclick="handleWalletAction()">Connect Wallet</button>
+    <div class="m-close" onclick="closeM('wal-m')">Close</div>
 </div>
-
-<div id="bs-m" class="modal"><div class="m-title">Boost</div><div class="m-close" onclick="closeM('bs-m')">Back</div></div>
-<div id="mi-m" class="modal"><div class="m-title">Mine</div><div class="m-close" onclick="closeM('mi-m')">Back</div></div>
-<div id="ta-m" class="modal"><div class="m-title">Tasks</div><div class="m-close" onclick="closeM('ta-m')">Back</div></div>
-<div id="fr-m" class="modal"><div class="m-title">Friends</div><div class="m-close" onclick="closeM('fr-m')">Back</div></div>
-<div id="bn-m" class="modal"><div class="m-title">Bonus</div><div class="m-close" onclick="closeM('bn-m')">Back</div></div>
+<div id="ta-m" class="modal"><div class="m-title">Tasks</div><div class="m-close" onclick="closeM('ta-m')">Close</div></div>
+<div id="fr-m" class="modal"><div class="m-title">Friends</div><div class="m-close" onclick="closeM('fr-m')">Close</div></div>
+<div id="bn-m" class="modal"><div class="m-title">Bonus</div><div class="m-close" onclick="closeM('bn-m')">Close</div></div>
 
 <script>
     const tg = window.Telegram.WebApp;
@@ -145,27 +132,23 @@
     let p = 0;
     const lIv = setInterval(() => {
         p += 5; document.getElementById('p-txt').innerText = p + '%';
-        if(p >= 100) { clearInterval(lIv); document.getElementById('loader').style.opacity='0'; setTimeout(()=>document.getElementById('loader').remove(),500); init(); }
+        if(p >= 100) { clearInterval(lIv); document.getElementById('loader').style.display='none'; init(); }
     }, 30);
 
     async function init() {
         document.getElementById('u-nm').innerText = s.name;
         if(s.photo) document.getElementById('u-av').src = s.photo;
-        
-        tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
-        });
-
+        tonConnectUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json' });
         tonConnectUI.onStatusChange(wallet => {
             const btn = document.getElementById('connect-trigger');
             if (wallet) {
                 s.wal = wallet.account.address;
                 document.getElementById('w-addr').innerText = s.wal.slice(0,10)+"..."+s.wal.slice(-10);
-                btn.innerText = "Disconnect"; btn.style.background = "#333"; btn.style.color = "white";
+                btn.innerText = "Disconnect"; btn.style.background = "#333";
             } else {
                 s.wal = null;
                 document.getElementById('w-addr').innerText = "Not connected";
-                btn.innerText = "Connect Wallet"; btn.style.background = "var(--cyan)"; btn.style.color = "black";
+                btn.innerText = "Connect Wallet"; btn.style.background = "var(--cyan)";
             }
             save();
         });
@@ -220,29 +203,34 @@
 
     function openM(id) { 
         if(id === 'tp-m') renderTop();
+        if(id === 'bs-m') renderBoost();
+        if(id === 'mi-m') renderMine();
         document.getElementById(id).style.display = 'flex'; 
     }
     function closeM(id) { document.getElementById(id).style.display = 'none'; }
 
+    function renderBoost() {
+        const cost = s.lvl * 2000;
+        document.getElementById('boost-list').innerHTML = `<div class="list-item"><div><b>Multitap</b><br><small>${cost}</small></div><button class="buy-btn" onclick="buyB(${cost})" ${s.bal < cost ? 'disabled':''}>BUY</button></div>`;
+    }
+    function buyB(c) { if(s.bal >= c) { s.bal -= c; s.lvl++; upd(); renderBoost(); save(); } }
+
+    function renderMine() {
+        const cost = (s.pnl + 10) * 250;
+        document.getElementById('mine-list').innerHTML = `<div class="list-item"><div><b>AI Mining</b><br><small>+10/s | Cost: ${cost}</small></div><button class="buy-btn" onclick="buyM(${cost})" ${s.bal < cost ? 'disabled':''}>BUY</button></div>`;
+    }
+    function buyM(c) { if(s.bal >= c) { s.bal -= c; s.pnl += 10; upd(); renderMine(); save(); } }
+
     async function renderTop() {
         const r = await fetch('/api/top');
         const d = await r.json();
-        const list = document.getElementById('top-list');
-        list.innerHTML = d.map((u, i) => {
-            let cls = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
-            if(u.username === s.name) cls += ' my-score';
-            const photo = u.photo_url && u.photo_url !== 'null' ? u.photo_url : 'images/logo.png';
-            return `
-                <div class="top-item ${cls}">
-                    <div class="top-rank">#${i+1}</div>
-                    <div class="top-user">
-                        <img src="${photo}" class="top-img">
-                        <div class="top-name">${u.username}</div>
-                    </div>
-                    <div class="top-bal">${Number(u.balance).toLocaleString()}</div>
-                </div>
-            `;
-        }).join('');
+        document.getElementById('top-list').innerHTML = d.map((u, i) => `
+            <div class="top-item ${i<3 ? 'rank-'+(i+1) : ''}">
+                <div class="rank-num">#${i+1}</div>
+                <img src="${u.photo_url || 'images/logo.png'}" class="top-av">
+                <div class="top-name">${u.username}</div>
+                <div class="top-val">${Number(u.balance).toLocaleString()}</div>
+            </div>`).join('');
     }
 </script>
 </body>
