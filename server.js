@@ -4,7 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.8.3";
+const VERSION = "1.8.5"; // ТУТ ВЕРСИЯ ДЛЯ БУТХОСТА
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
@@ -16,14 +16,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Явный роут для манифеста с правильным заголовком
 app.get('/tonconnect-manifest.json', (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.sendFile(path.join(__dirname, 'public', 'tonconnect-manifest.json'));
-});
-
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 const initDB = async () => {
@@ -40,7 +35,8 @@ const initDB = async () => {
             friends_count INTEGER DEFAULT 0,
             last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
-    } catch (e) { console.error("DB Error", e); }
+        console.log(`[v${VERSION}] DB Connected`);
+    } catch (e) { console.error(`[v${VERSION}] DB Error:`, e); }
 };
 initDB();
 
@@ -52,7 +48,7 @@ app.get('/api/user/:id', async (req, res) => {
             await pool.query('INSERT INTO users (user_id) VALUES ($1)', [uid]);
             r = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
         }
-        res.json(r.rows[0]);
+        res.json({ ...r.rows[0], server_v: VERSION });
     } catch (e) { res.status(500).json({ error: "Read Error" }); }
 });
 
@@ -72,4 +68,9 @@ bot.start((ctx) => {
     Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://neural-pulse.bothost.ru`)]]));
 });
 
-app.listen(3000, () => { bot.launch(); });
+app.listen(3000, () => { 
+    console.log(`\n--------------------------`);
+    console.log(`  SERVER RUNNING v${VERSION}`);
+    console.log(`--------------------------\n`);
+    bot.launch(); 
+});
