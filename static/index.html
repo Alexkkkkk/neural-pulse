@@ -3,128 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v2.1.9</title>
+    <title>Neural Pulse</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
     <style>
-        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #050505; }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
-        body { background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; height: 100vh; }
+        /* Твой дизайн и цветовая схема */
+        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
+        body { background: var(--bg); color: #fff; font-family: 'Segoe UI', sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; }
         
-        /* Твой дизайн спиннера */
-        #loading-screen { position: fixed; inset: 0; background: #000; z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .spinner-container { position: relative; width: 150px; height: 150px; }
-        .spinner-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-        .spinner-circle { fill: none; stroke-width: 6; stroke-linecap: round; stroke: url(#spinner-gradient); stroke-dasharray: 314; stroke-dashoffset: 314; animation: spinner-loading 2s ease-in-out infinite; }
-        @keyframes spinner-loading { 0% { stroke-dashoffset: 314; transform: rotate(0deg); } 50% { stroke-dashoffset: 0; transform: rotate(180deg); } 100% { stroke-dashoffset: 314; transform: rotate(360deg); } }
-        #p-txt { font-size: 32px; font-weight: 900; color: var(--cyan); margin-top: 20px; }
-
-        /* Интерфейс */
-        #app { display: none; flex-direction: column; align-items: center; height: 100vh; width: 100%; }
-        .balance { font-size: 56px; font-weight: 900; margin-top: 30px; text-shadow: 0 0 20px rgba(0, 242, 255, 0.3); }
-        .main-ai { width: 260px; filter: drop-shadow(0 0 30px rgba(188, 19, 254, 0.4)); cursor: pointer; transition: transform 0.05s; }
-        .main-ai:active { transform: scale(0.96); }
-
-        /* Кнопки и модалки */
-        .modal { position: fixed; inset: 0; background: #000; z-index: 500; display: none; flex-direction: column; padding: 40px 25px; }
-        .item-row { background: #111; padding: 15px 20px; border-radius: 15px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.05); }
-        .buy-btn { background: var(--cyan); color: #000; border: none; padding: 10px 15px; border-radius: 12px; font-weight: 900; }
-        .close-bar { margin-top: auto; background: #fff; color: #000; padding: 15px; border-radius: 10px; text-align: center; font-weight: 900; }
+        .balance { font-size: 52px; margin-top: 40px; font-weight: 900; text-shadow: 0 0 15px var(--cyan); }
+        
+        .click-area { height: 60vh; display: flex; align-items: center; justify-content: center; width: 100%; }
+        
+        /* Твоя картинка logo.png не меняется */
+        .main-img { width: 220px; cursor: pointer; transition: transform 0.05s; filter: drop-shadow(0 0 20px var(--purple)); }
+        .main-img:active { transform: scale(0.95); }
+        
+        /* Навигация согласно твоему расположению в v2.1.5 */
+        .footer { position: fixed; bottom: 30px; width: 100%; display: flex; justify-content: space-around; padding: 0 10px; box-sizing: border-box; }
+        .btn { background: #111; padding: 15px 5px; border-radius: 12px; font-size: 11px; width: 22%; font-weight: bold; border: 1px solid #222; }
     </style>
 </head>
 <body>
-
-<div id="loading-screen">
-    <div class="spinner-container">
-        <svg class="spinner-svg" viewBox="0 0 110 110">
-            <defs><linearGradient id="spinner-gradient"><stop offset="0%" stop-color="var(--cyan)"/><stop offset="100%" stop-color="var(--purple)"/></linearGradient></defs>
-            <circle cx="55" cy="55" r="50" stroke="rgba(255,255,255,0.05)" stroke-width="6" fill="none" />
-            <circle class="spinner-circle" cx="55" cy="55" r="50" stroke="url(#spinner-gradient)" fill="none" />
-        </svg>
-    </div>
-    <div id="p-txt">0%</div>
-</div>
-
-<div id="app">
-    <div class="balance" id="b-v">0</div>
-    <div style="flex:1; display:flex; align-items:center; justify-content:center; width:100%;">
-        <img src="images/logo.png" class="main-ai" onclick="doTap()">
-    </div>
+    <div class="balance" id="bal">0</div>
     
-    <div style="width:90%; display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin-bottom:40px;">
-        <button onclick="openM('bs-m')" style="background:#111; padding:15px; border-radius:15px; color:#fff; border:none; font-size:10px; font-weight:900;">BOOST</button>
-        <button onclick="openM('mi-m')" style="background:#111; padding:15px; border-radius:15px; color:#fff; border:none; font-size:10px; font-weight:900;">MINE</button>
-        <button onclick="openM('ta-m')" style="background:#111; padding:15px; border-radius:15px; color:#fff; border:none; font-size:10px; font-weight:900;">TASKS</button>
-        <button onclick="openM('tp-m')" style="background:#111; padding:15px; border-radius:15px; color:#fff; border:none; font-size:10px; font-weight:900;">STATS</button>
+    <div class="click-area">
+        <img src="logo.png" class="main-img" id="coin" onclick="handleTap(event)">
     </div>
-</div>
 
-<div id="bs-m" class="modal"><h2>Boost</h2><div id="boost-list"></div><div class="close-bar" onclick="closeM('bs-m')">CLOSE</div></div>
+    <div class="footer">
+        <div class="btn">BOOST</div>
+        <div class="btn">MINE</div>
+        <div class="btn">TASKS</div>
+        <div class="btn">STATS</div>
+    </div>
 
-<script>
-    const tg = window.Telegram.WebApp;
-    let s = { uid: tg.initDataUnsafe?.user?.id || '0', name: tg.initDataUnsafe?.user?.first_name || 'Player', bal: 0, lvl: 1, eLvl: 1, sLvl: 1, eng: 1000, maxE: 1000, pnl: 0, wal: null };
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
 
-    async function init() {
-        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json' });
-        await load();
-        
-        // Восстановление энергии по правилам Notcoin
-        setInterval(() => { 
-            const recovery = 1 + s.sLvl;
-            if(s.eng < s.maxE) s.eng = Math.min(s.maxE, s.eng + recovery); 
-            if(s.pnl > 0) s.bal += (s.pnl / 10);
-            upd(); 
-        }, 1000);
-        
-        let p = 0;
-        const iv = setInterval(() => { p+=5; document.getElementById('p-txt').innerText=p+'%'; if(p>=100){ clearInterval(iv); document.getElementById('loading-screen').style.display='none'; document.getElementById('app').style.display='flex'; } }, 50);
-    }
+        let state = {
+            balance: 0,
+            userId: tg.initDataUnsafe?.user?.id || "0",
+            name: tg.initDataUnsafe?.user?.first_name || "User"
+        };
 
-    function doTap() { if(s.eng >= s.lvl) { s.bal += s.lvl; s.eng -= s.lvl; tg.HapticFeedback.impactOccurred('light'); upd(); } }
-    function upd() { document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString(); }
-    
-    async function load() {
-        try {
-            const r = await fetch(`/api/user/${s.uid}?name=${encodeURIComponent(s.name)}`);
-            const d = await r.json();
-            Object.assign(s, { bal:Number(d.balance), lvl:Number(d.click_lvl), eLvl:Number(d.energy_lvl), sLvl:Number(d.speed_lvl), maxE:Number(d.max_energy), pnl:Number(d.pnl), wal:d.wallet_address });
-            upd();
-        } catch(e) {}
-    }
-
-    function save() { 
-        fetch('/api/save', { 
-            method: 'POST', 
-            headers: {'Content-Type': 'application/json'}, 
-            body: JSON.stringify({ userId: s.uid, balance: s.bal, click_lvl: s.lvl, energy_lvl: s.eLvl, speed_lvl: s.sLvl, max_energy: s.maxE, energy: s.eng, pnl: s.pnl, wallet: s.wal }) 
-        }); 
-    }
-
-    function renderBoost() {
-        const list = document.getElementById('boost-list');
-        const mC = s.lvl * 1000, eC = s.eLvl * 1500, sC = s.sLvl * 2000;
-        list.innerHTML = `
-            <div class="item-row"><div>Multitap (Lvl ${s.lvl})</div><button class="buy-btn" onclick="buy('m',${mC})">${mC}</button></div>
-            <div class="item-row"><div>Energy Limit (Lvl ${s.eLvl})</div><button class="buy-btn" onclick="buy('e',${eC})">${eC}</button></div>
-            <div class="item-row"><div>Recharge (Lvl ${s.sLvl})</div><button class="buy-btn" onclick="buy('s',${sC})">${sC}</button></div>`;
-    }
-
-    function buy(t, c) {
-        if(s.bal >= c) {
-            s.bal -= c;
-            if(t==='m') s.lvl++;
-            if(t==='e'){ s.eLvl++; s.maxE += 500; }
-            if(t==='s') s.sLvl++;
-            renderBoost(); upd(); save();
-            tg.HapticFeedback.notificationOccurred('success');
+        // Загрузка данных из БД
+        async function loadData() {
+            try {
+                const response = await fetch(`/api/user/${state.userId}?name=${encodeURIComponent(state.name)}`);
+                const data = await response.json();
+                state.balance = Number(data.balance);
+                updateUI();
+            } catch (e) {
+                console.error("Load error:", e);
+            }
         }
-    }
 
-    function openM(id) { if(id==='bs-m') renderBoost(); document.getElementById(id).style.display='flex'; }
-    function closeM(id) { document.getElementById(id).style.display='none'; }
+        // Логика клика (Notcoin style)
+        function handleTap(e) {
+            state.balance += 1;
+            updateUI();
+            tg.HapticFeedback.impactOccurred('medium');
+            saveData();
+        }
 
-    init();
-</script>
+        function updateUI() {
+            document.getElementById('bal').innerText = Math.floor(state.balance).toLocaleString();
+        }
+
+        // Сохранение данных
+        function saveData() {
+            fetch('/api/save', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ 
+                    userId: state.userId, 
+                    balance: state.balance 
+                })
+            });
+        }
+
+        // Запуск при загрузке страницы
+        loadData();
+    </script>
 </body>
 </html>
