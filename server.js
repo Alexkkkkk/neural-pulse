@@ -4,7 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.6.9.1";
+const VERSION = "1.7.3";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
@@ -14,7 +14,8 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'static'))); 
+// Раздаем файлы напрямую из корня/public согласно GitHub
+app.use(express.static(__dirname)); 
 
 const initDB = async () => {
     try {
@@ -32,8 +33,8 @@ const initDB = async () => {
             has_bot BOOLEAN DEFAULT FALSE,
             last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
-        console.log(`[ v${VERSION} ] System: Synced.`);
-    } catch (e) { console.error("DB Error", e); }
+        console.log(`[ v${VERSION} ] Database connected.`);
+    } catch (e) { console.error("DB Init Error:", e); }
 };
 initDB();
 
@@ -45,18 +46,22 @@ app.get('/api/user/:id', async (req, res) => {
             await pool.query('INSERT INTO users (user_id) VALUES ($1)', [uid]);
             r = await pool.query('SELECT *, 0 as seconds_off FROM users WHERE user_id = $1', [uid]);
         }
-        const user = r.rows[0];
+        const u = r.rows[0];
+        // Жесткое предотвращение NaN
         res.json({
-            ...user,
-            balance: Number(user.balance || 0),
-            energy: Number(user.energy || 1000),
-            max_energy: Number(user.max_energy || 1000),
-            click_lvl: Number(user.click_lvl || 1),
-            pnl: Number(user.pnl || 0),
-            friends_count: Number(user.friends_count || 0),
-            has_bot: user.has_bot || false
+            user_id: u.user_id,
+            username: u.username || "User",
+            balance: Number(u.balance) || 0,
+            energy: Number(u.energy) || 1000,
+            max_energy: Number(u.max_energy) || 1000,
+            click_lvl: Number(u.click_lvl) || 1,
+            pnl: Number(u.pnl) || 0,
+            wallet_address: u.wallet_address,
+            friends_count: Number(u.friends_count) || 0,
+            has_bot: u.has_bot || false,
+            seconds_off: Number(u.seconds_off) || 0
         });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { res.status(500).json({ error: "DB Read Error" }); }
 });
 
 app.post('/api/save', async (req, res) => {
@@ -64,24 +69,13 @@ app.post('/api/save', async (req, res) => {
     try {
         await pool.query(
             `UPDATE users SET balance=$2, energy=$3, max_energy=$4, click_lvl=$5, pnl=$6, wallet_address=$7, friends_count=$8, has_bot=$9, last_sync=NOW() WHERE user_id=$1`, 
-            [String(userId), balance, energy, max_energy, click_lvl, pnl, wallet, friends_count, has_bot]
+            [String(userId), balance || 0, energy || 0, max_energy || 1000, click_lvl || 1, pnl || 0, wallet || null, friends_count || 0, has_bot || false]
         );
         res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { res.status(500).json({ error: "DB Save Error" }); }
 });
 
-bot.start(async (ctx) => {
-    const uid = String(ctx.from.id);
-    const refId = ctx.startPayload;
-    try {
-        let r = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
-        if (r.rows.length === 0) {
-            await pool.query('INSERT INTO users (user_id, username, referrer_id) VALUES ($1, $2, $3)', [uid, ctx.from.first_name, refId || null]);
-            if (refId && refId !== uid) {
-                await pool.query('UPDATE users SET balance = balance + 5000, friends_count = friends_count + 1 WHERE user_id = $1', [refId]);
-            }
-        }
-    } catch(e) {}
+bot.start((ctx) => {
     ctx.replyWithHTML(`<b>🚀 NEURAL PULSE v${VERSION}</b>`, Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://neural-pulse.bothost.ru`)]]));
 });
 
