@@ -3,147 +3,169 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.8.5</title>
+    <title>Neural Pulse v1.8.6</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
     <style>
-        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; --panel: #111; --gray-btn: #1a1a1a; }
-        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; }
-        
+        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; --card: #111; --btn: #1a1a1a; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; align-items: center; }
+
+        /* Loader */
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
         .load-circle { width: 220px; height: 220px; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--cyan); border-right: 2px solid var(--purple); display: flex; align-items: center; justify-content: center; animation: rotate 2s linear infinite; }
         @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .load-logo { width: 110px; animation: unrotate 2s linear infinite; }
-        @keyframes unrotate { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
-        
-        .header { width: 92%; margin-top: 20px; display: flex; align-items: center; background: rgba(255,255,255,0.03); border-radius: 15px; padding: 12px; border: 1px solid #222; }
-        .u-av-box { width: 50px; height: 50px; border-radius: 10px; border: 1px solid var(--cyan); overflow: hidden; margin-right: 12px; }
-        .lvl-tag { background: var(--cyan); color: #000; padding: 6px 15px; border-radius: 10px; font-weight: 900; margin-left: auto; }
-        
-        .bal { font-size: 64px; font-weight: 800; margin: 30px 0; letter-spacing: -2px; }
-        
-        .stage { flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
-        .main-ai { width: 220px; filter: drop-shadow(0 0 30px rgba(188, 19, 254, 0.5)); cursor: pointer; transition: 0.1s; }
-        
-        .footer { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 30px; }
-        .f-item { background: var(--gray-btn); border-radius: 15px; padding: 18px 0; text-align: center; font-size: 10px; font-weight: bold; border: 1px solid #222; }
+        .load-logo { width: 100px; }
 
-        .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 30px 20px; }
-        .m-h { color: var(--cyan); font-size: 32px; font-weight: 800; margin-bottom: 20px; text-transform: uppercase; }
-        .m-close { background: #151515; padding: 20px; border-radius: 20px; text-align: center; margin-top: auto; font-weight: bold; }
+        /* Header */
+        .header { width: 90%; margin-top: 20px; background: #080808; border: 1px solid #1a1a1a; border-radius: 15px; padding: 10px 15px; display: flex; align-items: center; justify-content: space-between; }
+        .user-info { display: flex; align-items: center; gap: 10px; }
+        .avatar { width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--cyan); overflow: hidden; }
+        .u-det { display: flex; flex-direction: column; }
+        .u-name { font-weight: bold; font-size: 14px; }
+        .u-ver { font-size: 10px; color: var(--cyan); }
+        .lvl-badge { background: var(--cyan); color: black; font-weight: 900; padding: 5px 12px; border-radius: 8px; font-size: 14px; }
 
-        #debug-console { position: fixed; bottom: 0; width: 100%; height: 100px; background: rgba(0,0,0,0.9); font-size: 9px; font-family: monospace; color: #0f0; overflow-y: auto; z-index: 10001; pointer-events: none; padding: 5px; border-top: 1px solid #333; display: none; }
+        /* Main */
+        .balance { font-size: 60px; font-weight: 800; margin-top: 40px; }
+        .stage { flex-grow: 1; width: 100%; position: relative; display: flex; align-items: center; justify-content: center; }
+        .main-ai { width: 200px; cursor: pointer; transition: transform 0.1s; filter: drop-shadow(0 0 20px rgba(0, 242, 255, 0.2)); }
+        .main-ai:active { transform: scale(0.95); }
+
+        .side-menu { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 12px; }
+        .side-btn { background: var(--btn); border: 1px solid #222; color: white; width: 100px; padding: 12px 0; border-radius: 12px; font-size: 10px; font-weight: bold; text-align: center; text-transform: uppercase; }
+
+        /* Energy */
+        .energy-box { width: 90%; margin-bottom: 20px; }
+        .e-info { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 5px; color: #888; text-transform: uppercase; }
+        .e-bar { width: 100%; height: 6px; background: #111; border-radius: 10px; overflow: hidden; border: 1px solid #1a1a1a; }
+        .e-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: width 0.3s; }
+
+        /* Bottom Menu */
+        .bottom-nav { width: 90%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 30px; }
+        .nav-item { background: var(--btn); border: 1px solid #222; border-radius: 12px; padding: 15px 0; text-align: center; font-size: 10px; font-weight: bold; text-transform: uppercase; }
+
+        /* Modals */
+        .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 25px; }
+        .m-title { font-size: 28px; font-weight: 800; color: var(--cyan); margin-bottom: 20px; }
+        .m-close { margin-top: auto; background: #111; padding: 20px; border-radius: 15px; text-align: center; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <div id="loader">
-        <div class="load-circle"><img src="logo.png" class="load-logo"></div>
-        <div style="margin-top:20px; font-weight:bold; letter-spacing:2px">CORE LOADING...</div>
-        <div id="p-txt" style="font-size:24px; color:var(--cyan); margin-top:10px">0%</div>
-    </div>
+<div id="loader">
+    <div class="load-circle"><img src="logo.png" class="load-logo"></div>
+    <div style="margin-top:25px; font-weight:bold; letter-spacing:2px">ACCESS GRANTED</div>
+    <div id="p-txt" style="font-size:24px; color:var(--cyan); margin-top:10px">0%</div>
+</div>
 
-    <div id="debug-console"></div>
-
-    <div class="header">
-        <div class="u-av-box"><img src="images/logo.png" style="width:100%"></div>
-        <div>
-            <div id="u-nm" style="font-weight:bold;">User</div>
-            <div id="v-tag" style="color:var(--cyan); font-size:10px">v1.8.5 Online</div>
+<div class="header">
+    <div class="user-info">
+        <div class="avatar"><img src="images/logo.png" style="width:100%"></div>
+        <div class="u-det">
+            <span class="u-name" id="u-nm">Neural Player</span>
+            <span class="u-ver">v1.8.6 Active Node</span>
         </div>
-        <div class="lvl-tag">LVL <span id="u-lv">1</span></div>
     </div>
+    <div class="lvl-badge">LVL <span id="u-lv">1</span></div>
+</div>
 
-    <div class="bal" id="b-v">0</div>
+<div class="balance" id="b-v">0</div>
 
-    <div class="stage">
-        <img src="logo.png" class="main-ai" onclick="doTap()">
+<div class="stage">
+    <img src="logo.png" class="main-ai" onclick="doTap()">
+    <div class="side-menu">
+        <div class="side-btn" onclick="openM('wal-m')">Wallet</div>
+        <div class="side-btn" onclick="openM('fr-m')">Friends</div>
+        <div class="side-btn" onclick="openM('bn-m')">Bonus</div>
     </div>
+</div>
 
-    <div class="footer">
-        <div class="f-item" onclick="openM('wal-ui')">WALLET</div>
-        <div class="f-item" onclick="openM('mi-ui')">MINE</div>
-        <div class="f-item" onclick="openM('ta-ui')">TASKS</div>
-        <div class="f-item" onclick="toggleDebug()">DEBUG</div>
-    </div>
+<div class="energy-box">
+    <div class="e-info"><span>Energy</span><span id="e-val">1000/1000</span></div>
+    <div class="e-bar"><div class="e-fill" id="e-f" style="width: 100%;"></div></div>
+</div>
 
-    <div id="wal-ui" class="modal">
-        <div class="m-h">WALLET</div>
-        <div id="ton-button" style="display: flex; justify-content: center; margin-bottom: 20px;"></div>
-        <div id="w-addr" style="font-size:10px; color:#888; text-align:center; word-break:all">Not Connected</div>
-        <div class="m-close" onclick="closeM('wal-ui')">CLOSE</div>
-    </div>
+<div class="bottom-nav">
+    <div class="nav-item" onclick="openM('bs-m')">Boost</div>
+    <div class="nav-item" onclick="openM('mi-m')">Mine</div>
+    <div class="nav-item" onclick="openM('ta-m')">Tasks</div>
+    <div class="nav-item" onclick="openM('st-m')">Stats</div>
+</div>
 
-    <div id="mi-ui" class="modal"><div class="m-h">MINE</div><div class="m-close" onclick="closeM('mi-ui')">BACK</div></div>
-    <div id="ta-ui" class="modal"><div class="m-h">TASKS</div><div class="m-close" onclick="closeM('ta-ui')">BACK</div></div>
+<div id="wal-m" class="modal">
+    <div class="m-title">Wallet</div>
+    <div id="ton-connect" style="display:flex; justify-content:center"></div>
+    <div class="m-close" onclick="closeM('wal-m')">Back</div>
+</div>
+<div id="fr-m" class="modal"><div class="m-title">Friends</div><div class="m-close" onclick="closeM('fr-m')">Back</div></div>
+<div id="bn-m" class="modal"><div class="m-title">Bonus</div><div class="m-close" onclick="closeM('bn-m')">Back</div></div>
+<div id="bs-m" class="modal"><div class="m-title">Boost</div><div class="m-close" onclick="closeM('bs-m')">Back</div></div>
+<div id="mi-m" class="modal"><div class="m-title">Mine</div><div class="m-close" onclick="closeM('mi-m')">Back</div></div>
+<div id="ta-m" class="modal"><div class="m-title">Tasks</div><div class="m-close" onclick="closeM('ta-m')">Back</div></div>
+<div id="st-m" class="modal"><div class="m-title">Stats</div><div class="m-close" onclick="closeM('st-m')">Back</div></div>
 
-    <script>
-        const tg = window.Telegram.WebApp;
-        const VERSION = "1.8.5";
-        let tonConnectUI;
-        let s = { uid: tg.initDataUnsafe?.user?.id || '0', bal: 0, lvl: 1, pnl: 0, wal: null };
+<script>
+    const tg = window.Telegram.WebApp;
+    let tonConnectUI;
+    let s = { uid: tg.initDataUnsafe?.user?.id || '0', bal: 0, lvl: 1, eng: 1000, maxE: 1000, wal: null };
 
-        function log(msg) {
-            const dbg = document.getElementById('debug-console');
-            dbg.innerHTML += `[${VERSION}] ${msg}<br>`;
-            dbg.scrollTop = dbg.scrollHeight;
+    // Loader logic
+    let p = 0;
+    const lIv = setInterval(() => {
+        p += 5; document.getElementById('p-txt').innerText = p + '%';
+        if(p >= 100) { clearInterval(lIv); document.getElementById('loader').style.display='none'; init(); }
+    }, 40);
+
+    async function init() {
+        tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
+            buttonRootId: 'ton-connect'
+        });
+        await load();
+    }
+
+    async function load() {
+        try {
+            const r = await fetch(`/api/user/${s.uid}`);
+            const d = await r.json();
+            s.bal = Number(d.balance); s.lvl = Number(d.click_lvl);
+            s.eng = Number(d.energy); s.maxE = Number(d.max_energy);
+            upd();
+            setInterval(tick, 1000);
+        } catch(e) { console.error("Sync error"); }
+    }
+
+    function doTap() {
+        if(s.eng >= s.lvl) {
+            s.bal += s.lvl; s.eng -= s.lvl;
+            tg.HapticFeedback.impactOccurred('medium');
+            upd();
         }
+    }
 
-        function toggleDebug() {
-            const dbg = document.getElementById('debug-console');
-            dbg.style.display = (dbg.style.display === 'none') ? 'block' : 'none';
-        }
+    function tick() {
+        if(s.eng < s.maxE) s.eng = Math.min(s.maxE, s.eng + 3);
+        upd(); save();
+    }
 
-        let p = 0;
-        const lIv = setInterval(() => {
-            p += 4; document.getElementById('p-txt').innerText = p + '%';
-            if(p >= 100) { clearInterval(lIv); document.getElementById('loader').style.display='none'; initApp(); }
-        }, 30);
+    function upd() {
+        document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString();
+        document.getElementById('u-lv').innerText = s.lvl;
+        document.getElementById('e-val').innerText = `${Math.floor(s.eng)}/${s.maxE}`;
+        document.getElementById('e-f').style.width = (s.eng / s.maxE * 100) + '%';
+    }
 
-        async function initApp() {
-            log("Init v" + VERSION);
-            tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
-                buttonRootId: 'ton-button'
-            });
+    function save() {
+        fetch('/api/save', { 
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'}, 
+            body: JSON.stringify({ userId: s.uid, balance: s.bal, energy: s.eng, max_energy: s.maxE, click_lvl: s.lvl }) 
+        });
+    }
 
-            tonConnectUI.onStatusChange(wallet => {
-                s.wal = wallet ? wallet.account.address : null;
-                log(s.wal ? "Wallet Link OK" : "Wallet Unlinked");
-                upd(); save();
-            });
-
-            await loadData();
-        }
-
-        async function loadData() {
-            try {
-                const r = await fetch(`/api/user/${s.uid}`);
-                const d = await r.json();
-                s.bal = Number(d.balance); s.lvl = Number(d.click_lvl); s.wal = d.wallet_address;
-                log("Data Synced (Server v" + d.server_v + ")");
-                upd();
-            } catch(e) { log("Sync Error"); }
-        }
-
-        function doTap() { s.bal += s.lvl; tg.HapticFeedback.impactOccurred('light'); upd(); save(); }
-
-        function upd() {
-            document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString();
-            document.getElementById('u-lv').innerText = s.lvl;
-            document.getElementById('w-addr').innerText = s.wal || "Not Connected";
-        }
-
-        function save() {
-            fetch('/api/save', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ userId: s.uid, balance: s.bal, click_lvl: s.lvl, wallet: s.wal }) 
-            });
-        }
-
-        function openM(id) { document.getElementById(id).style.display = 'flex'; }
-        function closeM(id) { document.getElementById(id).style.display = 'none'; }
-    </script>
+    function openM(id) { document.getElementById(id).style.display = 'flex'; }
+    function closeM(id) { document.getElementById(id).style.display = 'none'; }
+</script>
 </body>
 </html>
