@@ -3,13 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.9.0</title>
+    <title>Neural Pulse v1.9.1</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; --card: #111; --btn: #1a1a1a; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; align-items: center; }
+
+        /* ВАЖНО: Стили для перекрытия всех окон библиотекой TON */
+        #tc-widget-root { z-index: 9999 !important; position: relative; }
 
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
         .load-circle { width: 220px; height: 220px; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--cyan); border-right: 2px solid var(--purple); display: flex; align-items: center; justify-content: center; animation: rotate 2s linear infinite; }
@@ -47,8 +50,6 @@
         .m-close { margin-top: auto; background: #111; padding: 20px; border-radius: 15px; text-align: center; font-weight: bold; border: 1px solid #222; cursor: pointer; }
         
         .list-item { background: var(--btn); border: 1px solid #222; padding: 15px; border-radius: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        
-        /* Специальная кнопка для кошелька в стиле дизайна */
         .wallet-action-btn { width: 100%; background: var(--cyan); color: black; border: none; padding: 18px; border-radius: 12px; font-weight: 900; text-transform: uppercase; cursor: pointer; margin-top: 20px; }
     </style>
 </head>
@@ -56,7 +57,7 @@
 
 <div id="loader">
     <div class="load-circle"><img src="logo.png" class="load-logo"></div>
-    <div style="margin-top:25px; font-weight:bold; letter-spacing:2px">CORE v1.9.0</div>
+    <div style="margin-top:25px; font-weight:bold; letter-spacing:2px">STABLE NODE 1.9.1</div>
     <div id="p-txt" style="font-size:24px; color:var(--cyan); margin-top:10px">0%</div>
 </div>
 
@@ -65,7 +66,7 @@
         <div class="avatar"><img src="images/logo.png" style="width:100%"></div>
         <div class="u-det">
             <span class="u-name" id="u-nm">Neural Player</span>
-            <span class="u-ver">v1.9.0 Active Node</span>
+            <span class="u-ver">v1.9.1</span>
         </div>
     </div>
     <div class="lvl-badge">LVL <span id="u-lv">1</span></div>
@@ -98,18 +99,16 @@
 <div id="wal-m" class="modal">
     <div class="m-title">Wallet</div>
     <div class="list-item" style="flex-direction:column; align-items:center; gap:10px; padding: 30px 15px;">
-        <div style="font-size:10px; color:#888; text-transform:uppercase">Current Status</div>
+        <div style="font-size:10px; color:#888; text-transform:uppercase">Address</div>
         <div id="w-addr" style="font-size:12px; color:var(--cyan); word-break:all; text-align:center">Not connected</div>
     </div>
-    
     <button id="connect-trigger" class="wallet-action-btn" onclick="handleWalletAction()">Connect Wallet</button>
-
     <div class="m-close" onclick="closeM('wal-m')">Back</div>
 </div>
 
 <div id="bs-m" class="modal"><div class="m-title">Boost</div><div id="boost-list"></div><div class="m-close" onclick="closeM('bs-m')">Back</div></div>
 <div id="mi-m" class="modal"><div class="m-title">Mine</div><div id="mine-list"></div><div class="m-close" onclick="closeM('mi-m')">Back</div></div>
-<div id="tp-m" class="modal"><div class="m-title">Top Players</div><div id="top-list"></div><div class="m-close" onclick="closeM('tp-m')">Back</div></div>
+<div id="tp-m" class="modal"><div class="m-title">Top Chart</div><div id="top-list"></div><div class="m-close" onclick="closeM('tp-m')">Back</div></div>
 <div id="fr-m" class="modal"><div class="m-title">Friends</div><div class="m-close" onclick="closeM('fr-m')">Back</div></div>
 <div id="bn-m" class="modal"><div class="m-title">Bonus</div><div class="m-close" onclick="closeM('bn-m')">Back</div></div>
 <div id="ta-m" class="modal"><div class="m-title">Tasks</div><div class="m-close" onclick="closeM('ta-m')">Back</div></div>
@@ -134,9 +133,11 @@
     async function init() {
         document.getElementById('u-nm').innerText = s.name;
         
-        // Инициализация TON Connect БЕЗ привязки к кнопке в DOM (программный режим)
         tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
+            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
+            uiOptions: {
+                twaReturnUrl: 'https://t.me/n_pulse_bot/start'
+            }
         });
 
         tonConnectUI.onStatusChange(wallet => {
@@ -144,8 +145,8 @@
             if (wallet) {
                 s.wal = wallet.account.address;
                 document.getElementById('w-addr').innerText = s.wal;
-                btn.innerText = "Disconnect Wallet";
-                btn.style.background = "#ff4b4b"; // Красный для дисконнекта
+                btn.innerText = "Disconnect";
+                btn.style.background = "#ff4b4b";
             } else {
                 s.wal = null;
                 document.getElementById('w-addr').innerText = "Not connected";
@@ -158,11 +159,11 @@
         await load();
     }
 
-    // Программное управление модалкой кошелька
     async function handleWalletAction() {
         if (tonConnectUI.connected) {
             await tonConnectUI.disconnect();
         } else {
+            // ФОРСИРОВАННОЕ ОТКРЫТИЕ ПОВЕРХ ВСЕХ ОКОН
             await tonConnectUI.openModal();
         }
     }
