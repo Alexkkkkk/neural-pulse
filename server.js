@@ -4,7 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.9.2";
+const VERSION = "1.9.6";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
@@ -16,15 +16,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/tonconnect-manifest.json', (req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.sendFile(path.join(__dirname, 'public', 'tonconnect-manifest.json'));
-});
-
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
+// Инициализация таблицы с гарантированными значениями по умолчанию
 const initDB = async () => {
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS users (
@@ -36,11 +28,10 @@ const initDB = async () => {
             click_lvl INTEGER DEFAULT 1,
             pnl NUMERIC DEFAULT 0,
             wallet_address TEXT DEFAULT NULL,
-            friends_count INTEGER DEFAULT 0,
             last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
-        console.log(`[v${VERSION}] DB Connected`);
-    } catch (e) { console.error(`[v${VERSION}] DB Error:`, e); }
+        console.log(`[DB] Таблица проверена, версия ${VERSION}`);
+    } catch (e) { console.error("DB Error:", e); }
 };
 initDB();
 
@@ -54,27 +45,41 @@ app.get('/api/user/:id', async (req, res) => {
             r = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
         }
         const u = r.rows[0];
-        res.json({ 
-            ...u, 
-            balance: Number(u.balance) || 0, 
+        // СТРОГАЯ ПРОВЕРКА ТИПОВ ДЛЯ ИГРЫ
+        res.json({
+            user_id: u.user_id,
+            username: u.username,
+            balance: Number(u.balance) || 0,
             pnl: Number(u.pnl) || 0,
-            server_v: VERSION 
+            energy: Number(u.energy) || 0,
+            max_energy: Number(u.max_energy) || 1000,
+            click_lvl: Number(u.click_lvl) || 1,
+            wallet_address: u.wallet_address
         });
-    } catch (e) { res.status(500).json({ error: "Read Error" }); }
+    } catch (e) { res.status(500).json({ error: "DB Read Fail" }); }
 });
 
 app.post('/api/save', async (req, res) => {
     const { userId, username, balance, energy, max_energy, click_lvl, pnl, wallet } = req.body;
     try {
+        // COALESCE гарантирует, что в БД не попадет NULL
         await pool.query(
-            `UPDATE users SET username=$2, balance=$3, energy=$4, max_energy=$5, click_lvl=$6, pnl=$7, wallet_address=$8, last_sync=NOW() WHERE user_id=$1`, 
+            `UPDATE users SET 
+                username = $2, 
+                balance = $3, 
+                energy = $4, 
+                max_energy = $5, 
+                click_lvl = $6, 
+                pnl = $7, 
+                wallet_address = $8, 
+                last_sync = NOW() 
+            WHERE user_id = $1`, 
             [String(userId), username, Number(balance) || 0, Number(energy) || 0, Number(max_energy) || 1000, Number(click_lvl) || 1, Number(pnl) || 0, wallet]
         );
         res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: "Save Error" }); }
+    } catch (e) { res.status(500).json({ error: "DB Save Fail" }); }
 });
 
-// ОБНОВЛЕНО: Получаем ID для аватарок в рейтинге
 app.get('/api/top', async (req, res) => {
     try {
         const r = await pool.query('SELECT user_id, username, balance FROM users ORDER BY balance DESC LIMIT 10');
@@ -84,7 +89,7 @@ app.get('/api/top', async (req, res) => {
 
 bot.start((ctx) => {
     ctx.replyWithHTML(`<b>🚀 NEURAL PULSE v${VERSION}</b>`, 
-    Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://neural-pulse.bothost.ru`)]]));
+    Markup.inlineKeyboard([[Markup.button.webApp('⚡ START NODE', `https://neural-pulse.bothost.ru`)]]));
 });
 
 app.listen(3000, () => { console.log(`Server v${VERSION} Online`); bot.launch(); });
