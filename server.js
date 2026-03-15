@@ -4,7 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.7.5";
+const VERSION = "1.7.7";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
@@ -14,11 +14,8 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
 app.use(cors());
 app.use(express.json());
-
-// ВАЖНО: Указываем папку public как источник статических файлов
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Явно отдаем index.html из папки public при обращении к корню
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -38,8 +35,7 @@ const initDB = async () => {
             has_bot BOOLEAN DEFAULT FALSE,
             last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
-        console.log(`[ v${VERSION} ] System linked to /public folder.`);
-    } catch (e) { console.error("DB Init Error:", e); }
+    } catch (e) { console.error("DB Error", e); }
 };
 initDB();
 
@@ -57,17 +53,19 @@ app.get('/api/user/:id', async (req, res) => {
             energy: Number(u.energy) || 1000,
             max_energy: Number(u.max_energy) || 1000,
             click_lvl: Number(u.click_lvl) || 1,
-            pnl: Number(u.pnl) || 0
+            pnl: Number(u.pnl) || 0,
+            wallet_address: u.wallet_address,
+            friends_count: Number(u.friends_count) || 0
         });
-    } catch (e) { res.status(500).json({ error: "Sync Error" }); }
+    } catch (e) { res.status(500).json({ error: "Read Error" }); }
 });
 
 app.post('/api/save', async (req, res) => {
-    const { userId, balance, energy, max_energy, click_lvl, pnl } = req.body;
+    const { userId, balance, energy, max_energy, click_lvl, pnl, wallet, friends_count } = req.body;
     try {
         await pool.query(
-            `UPDATE users SET balance=$2, energy=$3, max_energy=$4, click_lvl=$5, pnl=$6, last_sync=NOW() WHERE user_id=$1`, 
-            [String(userId), balance || 0, energy || 0, max_energy || 1000, click_lvl || 1, pnl || 0]
+            `UPDATE users SET balance=$2, energy=$3, max_energy=$4, click_lvl=$5, pnl=$6, wallet_address=$7, friends_count=$8, last_sync=NOW() WHERE user_id=$1`, 
+            [String(userId), balance || 0, energy || 0, max_energy || 1000, click_lvl || 1, pnl || 0, wallet, friends_count || 0]
         );
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: "Save Error" }); }
