@@ -1,1 +1,170 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Neural Pulse v2.1.1</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
+    <style>
+        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #050505; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+        body { background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; height: 100vh; }
+        
+        /* ЗАГРУЗКА ИЗ v1.9.2 */
+        #loading-screen { position: fixed; inset: 0; background: #000; z-index: 100000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .ai-logo { font-size: 60px; font-weight: 900; background: linear-gradient(to bottom, #fff, var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px; }
 
+        /* ОСНОВНОЙ КОНТЕНТ */
+        #app { display: none; flex-direction: column; align-items: center; height: 100vh; width: 100%; position: relative; z-index: 1; }
+        .header { width: 90%; margin-top: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .balance { font-size: 56px; font-weight: 900; margin-top: 30px; }
+        
+        .stage { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
+        .main-ai { width: 260px; filter: drop-shadow(0 0 30px rgba(188, 19, 254, 0.4)); }
+
+        /* БОКОВЫЕ КНОПКИ */
+        .side-menu { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 15px; }
+        .side-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); width: 85px; padding: 12px 0; border-radius: 15px; font-size: 9px; font-weight: 800; text-align: center; color: #fff; text-transform: uppercase; }
+
+        /* НИЖНЕЕ МЕНЮ */
+        .bottom-nav { width: 90%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 40px; }
+        .nav-item { background: #111; border-radius: 18px; padding: 18px 0; text-align: center; font-size: 9px; font-weight: 900; color: #555; text-transform: uppercase; }
+
+        /* МОДАЛЬНЫЕ ОКНА (ТЕПЕРЬ ПОВЕРХ ВСЕГО) */
+        .modal { 
+            position: fixed; 
+            top: 0; left: 0; width: 100%; height: 100%; 
+            background: #000; 
+            z-index: 200000; /* Выше чем всё остальное */
+            display: none; 
+            flex-direction: column; 
+            padding: 40px 25px; 
+        }
+        .modal h2 { font-size: 32px; font-weight: 900; margin-bottom: 30px; }
+        .close-bar { margin-top: auto; background: #fff; color: #000; padding: 15px; border-radius: 10px; text-align: center; font-weight: 900; text-transform: uppercase; }
+        
+        .item-row { background: #111; padding: 20px; border-radius: 15px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.05); }
+    </style>
+</head>
+<body>
+
+<div id="loading-screen">
+    <div class="ai-logo">AI</div>
+    <div style="letter-spacing:4px; font-size:12px; color:#fff">ACCESS GRANTED</div>
+    <div id="p-txt" style="font-size:32px; font-weight:900; color:var(--cyan); margin-top:15px;">0%</div>
+</div>
+
+<div id="app">
+    <div class="header">
+        <div style="display:flex; align-items:center; gap:10px">
+            <img src="images/logo.png" style="width:42px; height:42px; border-radius:10px; border:1px solid var(--cyan)">
+            <div><div id="u-nm" style="font-weight:800;">...</div><div style="font-size:9px; color:var(--cyan)">NODE v2.1.1</div></div>
+        </div>
+        <div style="background:linear-gradient(135deg, var(--cyan), var(--purple)); padding:6px 15px; border-radius:10px; font-weight:900;">LVL <span id="u-lv">1</span></div>
+    </div>
+
+    <div class="balance" id="b-v">0</div>
+
+    <div class="stage">
+        <img src="logo.png" class="main-ai" onclick="doTap()">
+        <div class="side-menu">
+            <div class="side-btn" onclick="openM('wal-m')">Wallet</div>
+            <div class="side-btn" onclick="openM('fr-m')">Friends</div>
+            <div class="side-btn" onclick="openM('bn-m')">Bonus</div>
+        </div>
+    </div>
+
+    <div style="width:90%; margin-bottom:30px;">
+        <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:800; color:#444"><span>ENERGY</span><span id="e-val">1000/1000</span></div>
+        <div style="width:100%; height:8px; background:rgba(255,255,255,0.05); border-radius:10px; margin-top:8px; overflow:hidden;"><div id="e-f" style="height:100%; background:linear-gradient(90deg, var(--cyan), var(--purple)); transition:width 0.3s;"></div></div>
+    </div>
+
+    <div class="bottom-nav">
+        <div class="nav-item" onclick="openM('bs-m')">Boost</div>
+        <div class="nav-item" onclick="openM('mi-m')">Mine</div>
+        <div class="nav-item" onclick="openM('ta-m')">Tasks</div>
+        <div class="nav-item" onclick="openM('tp-m')">Stats</div>
+    </div>
+</div>
+
+<div id="wal-m" class="modal">
+    <h2>Wallet</h2>
+    <div id="w-addr" style="font-size:14px; color:var(--cyan); margin-bottom:30px; word-break:break-all;">Not connected</div>
+    <button onclick="handleWalletAction()" style="width:100%; padding:25px; border-radius:20px; border:none; background:var(--cyan); color:#000; font-weight:900; font-size:18px;">CONNECT TON WALLET</button>
+    <div class="close-bar" onclick="closeM('wal-m')">CLOSE SYSTEM</div>
+</div>
+
+<div id="bs-m" class="modal"><h2>Boost</h2><div id="boost-list"></div><div class="close-bar" onclick="closeM('bs-m')">CLOSE</div></div>
+<div id="mi-m" class="modal"><h2>Mining</h2><div id="mine-list"></div><div class="close-bar" onclick="closeM('mi-m')">CLOSE</div></div>
+<div id="tp-m" class="modal"><h2>Stats</h2><div id="top-list"></div><div class="close-bar" onclick="closeM('tp-m')">CLOSE</div></div>
+<div id="ta-m" class="modal"><h2>Tasks</h2><div style="text-align:center; color:#444; margin-top:100px;">NO TASKS</div><div class="close-bar" onclick="closeM('ta-m')">CLOSE</div></div>
+<div id="fr-m" class="modal"><h2>Friends</h2><div class="close-bar" onclick="closeM('fr-m')">CLOSE</div></div>
+<div id="bn-m" class="modal"><h2>Bonus</h2><div class="close-bar" onclick="closeM('bn-m')">CLOSE</div></div>
+
+<script>
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+    let tonConnectUI, s = { uid: tg.initDataUnsafe?.user?.id || '0', name: tg.initDataUnsafe?.user?.first_name || 'Player', bal: 0, lvl: 1, eng: 1000, maxE: 1000, pnl: 0, wal: null };
+
+    // ЭКРАН ЗАГРУЗКИ
+    let p = 0;
+    const lIv = setInterval(() => {
+        p += 2;
+        if(p >= 100) { p = 100; clearInterval(lIv); setTimeout(() => { document.getElementById('loading-screen').style.display='none'; document.getElementById('app').style.display='flex'; }, 500); }
+        document.getElementById('p-txt').innerText = p + '%';
+    }, 30);
+
+    async function init() {
+        document.getElementById('u-nm').innerText = s.name.toUpperCase();
+        tonConnectUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json' });
+        tonConnectUI.onStatusChange(w => { s.wal = w ? w.account.address : null; document.getElementById('w-addr').innerText = s.wal || "Not connected"; save(); });
+        await load();
+        setInterval(() => { if(s.eng < s.maxE) s.eng = Math.min(s.maxE, s.eng + 2); if(s.pnl > 0) s.bal += (s.pnl / 10); upd(); }, 1000);
+        setInterval(save, 5000);
+    }
+
+    async function load() {
+        const r = await fetch(`/api/user/${s.uid}?name=${encodeURIComponent(s.name)}`);
+        const d = await r.json();
+        Object.assign(s, { bal:Number(d.balance), lvl:Number(d.click_lvl), eng:Number(d.energy), maxE:Number(d.max_energy), pnl:Number(d.pnl), wal:d.wallet_address });
+        upd();
+    }
+
+    function doTap() { if(s.eng >= s.lvl) { s.bal += s.lvl; s.eng -= s.lvl; tg.HapticFeedback.impactOccurred('medium'); upd(); } }
+    function upd() { document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString(); document.getElementById('u-lv').innerText = s.lvl; document.getElementById('e-val').innerText = `${Math.floor(s.eng)}/${s.maxE}`; document.getElementById('e-f').style.width = (s.eng / s.maxE * 100) + '%'; }
+    function save() { fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ userId: s.uid, username: s.name, balance: s.bal, energy: s.eng, max_energy: s.maxE, click_lvl: s.lvl, pnl: s.pnl, wallet: s.wal }) }); }
+    
+    async function handleWalletAction() { if (tonConnectUI.connected) await tonConnectUI.disconnect(); else await tonConnectUI.openModal(); }
+    
+    // ОТКРЫТИЕ ПОВЕРХ ВСЕХ ОКОН
+    function openM(id) { 
+        if(id === 'tp-m') renderTop(); 
+        if(id === 'bs-m') renderBoost();
+        if(id === 'mi-m') renderMine();
+        document.getElementById(id).style.display = 'flex'; 
+    }
+    function closeM(id) { document.getElementById(id).style.display = 'none'; }
+
+    function renderBoost() {
+        const cost = s.lvl * 2500;
+        document.getElementById('boost-list').innerHTML = `<div class="item-row"><span>UPGRADE LVL ${s.lvl+1}</span><button style="background:var(--cyan); color:#000; border:none; padding:10px 15px; border-radius:10px; font-weight:900;" onclick="buyB(${cost})">${cost}</button></div>`;
+    }
+    function buyB(c) { if(s.bal >= c) { s.bal -= c; s.lvl++; upd(); renderBoost(); save(); } }
+
+    function renderMine() {
+        const cost = (s.pnl + 10) * 300;
+        document.getElementById('mine-list').innerHTML = `<div class="item-row"><span>+10 PNL/SEC</span><button style="background:var(--cyan); color:#000; border:none; padding:10px 15px; border-radius:10px; font-weight:900;" onclick="buyM(${cost})">${cost}</button></div>`;
+    }
+    function buyM(c) { if(s.bal >= c) { s.bal -= c; s.pnl += 10; upd(); renderMine(); save(); } }
+
+    async function renderTop() {
+        const r = await fetch('/api/top');
+        const d = await r.json();
+        document.getElementById('top-list').innerHTML = d.map((u,i) => `<div class="item-row"><span>#${i+1} ${u.username}</span><b>${Math.floor(u.balance)}</b></div>`).join('');
+    }
+
+    init();
+</script>
+</body>
+</html>
