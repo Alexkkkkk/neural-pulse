@@ -4,7 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.9.9.6";
+const VERSION = "1.9.9.7";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
@@ -15,15 +15,6 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-
-app.get('/tonconnect-manifest.json', (req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.sendFile(path.join(__dirname, 'public', 'tonconnect-manifest.json'));
-});
-
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
 
 const initDB = async () => {
     try {
@@ -39,11 +30,12 @@ const initDB = async () => {
             friends_count INTEGER DEFAULT 0,
             last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
-        console.log(`[v${VERSION}] DB Connected`);
+        console.log(`[v${VERSION}] DB Connected & Verified`);
     } catch (e) { console.error(`[v${VERSION}] DB Error:`, e); }
 };
 initDB();
 
+// API: Загрузка пользователя с проверкой ID
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
     const name = req.query.name || 'Neural Player';
@@ -53,19 +45,32 @@ app.get('/api/user/:id', async (req, res) => {
             await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2)', [uid, name]);
             r = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
         }
+        // Отправляем полные данные для синхронизации клиента
         res.json({ ...r.rows[0], server_v: VERSION });
-    } catch (e) { res.status(500).json({ error: "Read Error" }); }
+    } catch (e) { 
+        console.error("API Read Error:", e);
+        res.status(500).json({ error: "Read Error" }); 
+    }
 });
 
+// API: Сохранение с жесткой привязкой к ID
 app.post('/api/save', async (req, res) => {
-    const { userId, username, balance, energy, max_energy, click_lvl, pnl, wallet, friends_count } = req.body;
+    const { userId, username, balance, energy, max_energy, click_lvl, pnl, wallet } = req.body;
+    if (!userId) return res.status(400).json({ error: "No ID" });
+
     try {
         await pool.query(
-            `UPDATE users SET username=$2, balance=$3, energy=$4, max_energy=$5, click_lvl=$6, pnl=$7, wallet_address=$8, friends_count=$9, last_sync=NOW() WHERE user_id=$1`, 
-            [String(userId), username, Number(balance), Number(energy), Number(max_energy), Number(click_lvl), Number(pnl), wallet, Number(friends_count)]
+            `UPDATE users SET 
+                username=$2, balance=$3, energy=$4, max_energy=$5, 
+                click_lvl=$6, pnl=$7, wallet_address=$8, last_sync=NOW() 
+            WHERE user_id=$1`, 
+            [String(userId), username, Number(balance), Number(energy), Number(max_energy), Number(click_lvl), Number(pnl), wallet]
         );
         res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: "Save Error" }); }
+    } catch (e) { 
+        console.error("API Save Error:", e);
+        res.status(500).json({ error: "Save Error" }); 
+    }
 });
 
 app.get('/api/top', async (req, res) => {
@@ -80,4 +85,7 @@ bot.start((ctx) => {
     Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://neural-pulse.bothost.ru`)]]));
 });
 
-app.listen(3000, () => { console.log(`Server v${VERSION} Online`); bot.launch(); });
+app.listen(3000, () => { 
+    console.log(`Server v${VERSION} Online`); 
+    bot.launch().catch(err => console.error("Bot launch failed:", err));
+});
