@@ -16,6 +16,15 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.get('/tonconnect-manifest.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.sendFile(path.join(__dirname, 'public', 'tonconnect-manifest.json'));
+});
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 const initDB = async () => {
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS users (
@@ -49,11 +58,11 @@ app.get('/api/user/:id', async (req, res) => {
 });
 
 app.post('/api/save', async (req, res) => {
-    const { userId, username, balance, energy, max_energy, click_lvl, pnl, wallet } = req.body;
+    const { userId, username, balance, energy, max_energy, click_lvl, pnl, wallet, friends_count } = req.body;
     try {
         await pool.query(
-            `UPDATE users SET username=$2, balance=$3, energy=$4, max_energy=$5, click_lvl=$6, pnl=$7, wallet_address=$8, last_sync=NOW() WHERE user_id=$1`, 
-            [String(userId), username, Number(balance), Number(energy), Number(max_energy), Number(click_lvl), Number(pnl), wallet]
+            `UPDATE users SET username=$2, balance=$3, energy=$4, max_energy=$5, click_lvl=$6, pnl=$7, wallet_address=$8, friends_count=$9, last_sync=NOW() WHERE user_id=$1`, 
+            [String(userId), username, Number(balance), Number(energy), Number(max_energy), Number(click_lvl), Number(pnl), wallet, Number(friends_count)]
         );
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: "Save Error" }); }
