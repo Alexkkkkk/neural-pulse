@@ -3,36 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse OS v1.9.6</title>
+    <title>Neural Pulse v1.9.7</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #050505; --card: rgba(25, 25, 25, 0.9); }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { margin: 0; background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; align-items: center; }
+        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; align-items: center; }
         
-        /* Loader */
+        /* Лоадер */
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
         .load-circle { width: 180px; height: 180px; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--cyan); border-right: 2px solid var(--purple); animation: rotate 1.5s linear infinite; display: flex; align-items: center; justify-content: center; }
         @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        
-        /* UI Elements */
+
+        /* Хедер */
         .header { width: 92%; margin-top: 15px; background: var(--card); border-radius: 20px; padding: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.08); }
-        .balance { font-size: 52px; font-weight: 900; margin-top: 20px; letter-spacing: -1px; }
-        .pnl-text { color: #888; font-size: 13px; margin-top: 5px; font-weight: bold; }
-        .stage { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
-        .main-ai { width: 230px; cursor: pointer; transition: transform 0.1s; filter: drop-shadow(0 0 20px rgba(0, 242, 255, 0.2)); }
+        .balance { font-size: 52px; font-weight: 900; margin-top: 20px; }
+
+        /* Игровая зона с кнопками справа */
+        .stage { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; position: relative; }
+        .main-ai { width: 230px; cursor: pointer; transition: 0.1s; z-index: 1; }
         .main-ai:active { transform: scale(0.92); }
         
-        /* Energy & Nav */
-        .energy-box { width: 90%; margin-bottom: 25px; }
-        .e-bar { width: 100%; height: 10px; background: #1a1a1a; border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05); }
-        .e-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .nav { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 30px; }
-        .nav-btn { background: var(--card); padding: 16px 0; text-align: center; border-radius: 18px; font-size: 10px; font-weight: 900; color: #666; border: 1px solid rgba(255,255,255,0.05); }
+        .side-menu { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 12px; z-index: 2; }
+        .side-btn { background: var(--card); border: 1px solid rgba(255,255,255,0.1); width: 100px; padding: 15px 0; border-radius: 18px; font-size: 11px; text-align: center; font-weight: 900; color: white; }
 
-        /* Modal */
+        /* Энергия и навигация */
+        .energy-box { width: 90%; margin-bottom: 25px; }
+        .e-bar { width: 100%; height: 8px; background: #1a1a1a; border-radius: 10px; overflow: hidden; }
+        .e-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: 0.3s; }
+        
+        .nav { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 30px; }
+        .nav-btn { background: var(--card); padding: 18px 0; text-align: center; border-radius: 18px; font-size: 10px; font-weight: 900; color: #666; border: 1px solid rgba(255,255,255,0.05); }
+
         .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 30px 20px; }
-        .list-item { background: rgba(255,255,255,0.03); padding: 18px; border-radius: 20px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; border: 1px solid rgba(255,255,255,0.05); }
     </style>
 </head>
 <body>
@@ -43,75 +46,68 @@
 </div>
 
 <div class="header">
-    <div style="display:flex; align-items:center; gap:12px">
-        <img src="images/logo.png" style="width:42px; border-radius:12px; border:1px solid var(--cyan)">
-        <div>
-            <div id="u-nm" style="font-weight:900; font-size:14px">Player</div>
-            <div style="font-size:9px; color:var(--cyan); font-weight:bold">NODE v1.9.6</div>
-        </div>
+    <div style="display:flex; align-items:center; gap:10px">
+        <img src="images/logo.png" style="width:40px; border-radius:10px; border:1px solid var(--cyan)">
+        <div id="u-nm" style="font-weight:900;">Player</div>
     </div>
-    <div style="background:linear-gradient(135deg, var(--cyan), var(--purple)); color:white; padding:7px 15px; border-radius:12px; font-weight:900; font-size:13px">LVL <span id="u-lv">1</span></div>
+    <div style="background:var(--cyan); color:black; padding:6px 14px; border-radius:12px; font-weight:900; font-size:12px">LVL <span id="u-lv">1</span></div>
 </div>
 
 <div class="balance" id="b-v">0</div>
-<div class="pnl-text">PROFIT: <span id="p-v" style="color:var(--purple)">0</span> / SEC</div>
+<div style="color:#666; font-size:12px; font-weight:bold">Profit: <span id="p-v" style="color:var(--purple)">0</span>/s</div>
 
 <div class="stage">
-    <img src="logo.png" id="tap-target" class="main-ai" onclick="doTap()">
+    <img src="logo.png" class="main-ai" onclick="doTap()">
+    <div class="side-menu">
+        <div class="side-btn" onclick="openM('wal-m')">WALLET</div>
+        <div class="side-btn" onclick="openM('fr-m')">FRIENDS</div>
+        <div class="side-btn" onclick="openM('bn-m')">BONUS</div>
+    </div>
 </div>
 
 <div class="energy-box">
-    <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:8px; font-weight:900; color:#555">ENERGY CORE <span id="e-val">1000/1000</span></div>
+    <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:5px; font-weight:900; color:#444">ENERGY <span id="e-val">1000/1000</span></div>
     <div class="e-bar"><div class="e-fill" id="e-f"></div></div>
 </div>
 
 <div class="nav">
-    <div class="nav-btn" onclick="openM('tp-m')">RATING</div>
     <div class="nav-btn" onclick="openM('bs-m')">BOOST</div>
-    <div class="nav-btn" onclick="openM('mi-m')">MINING</div>
+    <div class="nav-btn" onclick="openM('mi-m')">MINE</div>
     <div class="nav-btn" onclick="openM('ta-m')">TASKS</div>
+    <div class="nav-btn" onclick="openM('tp-m')">RATING</div>
 </div>
 
 <div id="tp-m" class="modal">
-    <h1 style="font-size:38px; font-weight:900; margin-bottom:25px">GLOBAL<br><span style="color:var(--cyan)">RATING</span></h1>
+    <h1 style="font-size:38px; font-weight:900">GLOBAL RATING</h1>
     <div id="top-list" style="flex-grow:1; overflow-y:auto"></div>
-    <button style="background:var(--card); color:white; border:1px solid #333; padding:22px; border-radius:20px; font-weight:900; margin-top:15px" onclick="closeM('tp-m')">BACK TO NODE</button>
+    <button style="background:var(--card); color:white; padding:20px; border-radius:15px; margin-top:15px" onclick="closeM('tp-m')">CLOSE</button>
 </div>
+<div id="wal-m" class="modal"><h1 style="font-size:38px">WALLET</h1><button onclick="closeM('wal-m')">CLOSE</button></div>
+<div id="fr-m" class="modal"><h1 style="font-size:38px">FRIENDS</h1><button onclick="closeM('fr-m')">CLOSE</button></div>
+<div id="bn-m" class="modal"><h1 style="font-size:38px">BONUS</h1><button onclick="closeM('bn-m')">CLOSE</button></div>
+<div id="bs-m" class="modal"><h1 style="font-size:38px">BOOST</h1><button onclick="closeM('bs-m')">CLOSE</button></div>
+<div id="mi-m" class="modal"><h1 style="font-size:38px">MINE</h1><button onclick="closeM('mi-m')">CLOSE</button></div>
+<div id="ta-m" class="modal"><h1 style="font-size:38px">TASKS</h1><button onclick="closeM('ta-m')">CLOSE</button></div>
 
 <script>
     const tg = window.Telegram.WebApp;
     tg.expand();
+    let s = { uid: tg.initDataUnsafe?.user?.id || '0', name: tg.initDataUnsafe?.user?.first_name || 'Player', bal: 0, lvl: 1, eng: 1000, maxE: 1000, pnl: 0 };
 
-    // Состояние игры с защитой от пустых данных
-    let s = { 
-        uid: tg.initDataUnsafe?.user?.id || '0', 
-        name: tg.initDataUnsafe?.user?.first_name || 'Neural Player', 
-        bal: 0, lvl: 1, eng: 1000, maxE: 1000, pnl: 0 
-    };
-
-    // Лоадер 0-100%
     let p = 0;
     const lIv = setInterval(() => {
         p += 5; document.getElementById('p-txt').innerText = p + '%';
-        if(p >= 100) { 
-            clearInterval(lIv); 
-            document.getElementById('loader').style.display='none'; 
-            init(); 
-        }
+        if(p >= 100) { clearInterval(lIv); document.getElementById('loader').style.display='none'; init(); }
     }, 30);
 
     async function init() {
         document.getElementById('u-nm').innerText = s.name;
         await load();
-        
-        // Игровой цикл (1 раз в секунду)
         setInterval(() => {
-            if(s.eng < s.maxE) s.eng = Math.min(s.maxE, s.eng + 3); // Реген +3
+            if(s.eng < s.maxE) s.eng = Math.min(s.maxE, s.eng + 2);
             if(s.pnl > 0) s.bal += s.pnl;
             upd();
         }, 1000);
-
-        // Автосохранение (раз в 5 секунд)
         setInterval(save, 5000);
     }
 
@@ -119,30 +115,27 @@
         try {
             const r = await fetch(`/api/user/${s.uid}?name=${encodeURIComponent(s.name)}`);
             const d = await r.json();
-            // ПРИНУДИТЕЛЬНОЕ ПРЕОБРАЗОВАНИЕ В ЧИСЛА (Защита от NaN)
             s.bal = Number(d.balance) || 0;
             s.pnl = Number(d.pnl) || 0;
             s.lvl = Number(d.click_lvl) || 1;
             s.eng = Number(d.energy) || 0;
             s.maxE = Number(d.max_energy) || 1000;
             upd();
-        } catch(e) { console.error("Load Error"); }
+        } catch(e) {}
     }
 
     function doTap() {
         if(s.eng >= s.lvl) {
-            s.bal += s.lvl; 
-            s.eng -= s.lvl;
-            tg.HapticFeedback.impactOccurred('medium');
+            s.bal += s.lvl; s.eng -= s.lvl;
+            tg.HapticFeedback.impactOccurred('light');
             upd();
         }
     }
 
     function upd() {
-        // Вывод данных с защитой
         document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString();
         document.getElementById('p-v').innerText = Math.floor(s.pnl).toLocaleString();
-        document.getElementById('u-lv').innerText = Math.floor(s.lvl);
+        document.getElementById('u-lv').innerText = s.lvl;
         document.getElementById('e-val').innerText = `${Math.floor(s.eng)}/${s.maxE}`;
         document.getElementById('e-f').style.width = (s.eng / s.maxE * 100) + '%';
     }
@@ -151,34 +144,23 @@
         fetch('/api/save', { 
             method: 'POST', 
             headers: {'Content-Type': 'application/json'}, 
-            body: JSON.stringify({ 
-                userId: s.uid, 
-                username: s.name, 
-                balance: s.bal, 
-                energy: s.eng, 
-                max_energy: s.maxE, 
-                click_lvl: s.lvl, 
-                pnl: s.pnl 
-            }) 
+            body: JSON.stringify({ userId: s.uid, username: s.name, balance: s.bal, energy: s.eng, max_energy: s.maxE, click_lvl: s.lvl, pnl: s.pnl }) 
         });
     }
 
-    function openM(id) { 
-        if(id === 'tp-m') renderTop();
-        document.getElementById(id).style.display = 'flex'; 
-    }
+    function openM(id) { if(id === 'tp-m') renderTop(); document.getElementById(id).style.display = 'flex'; }
     function closeM(id) { document.getElementById(id).style.display = 'none'; }
 
     async function renderTop() {
         const r = await fetch('/api/top');
         const d = await r.json();
         document.getElementById('top-list').innerHTML = d.map((u, i) => `
-            <div class="list-item" style="${u.user_id == s.uid ? 'border: 1px solid var(--cyan); background: rgba(0,242,255,0.05)' : ''}">
-                <div style="display:flex; align-items:center; gap:12px">
-                    <img src="https://api.dicebear.com/7.x/identicon/svg?seed=${u.user_id}" style="width:32px; border-radius:8px">
-                    <b style="font-size:14px">${u.username}</b>
+            <div style="display:flex; justify-content:space-between; padding:15px; background:rgba(255,255,255,0.03); margin-bottom:10px; border-radius:15px; border:1px solid rgba(255,255,255,0.05)">
+                <div style="display:flex; align-items:center; gap:10px">
+                    <img src="https://api.dicebear.com/7.x/identicon/svg?seed=${u.user_id}" style="width:30px; border-radius:5px">
+                    <b>${u.username}</b>
                 </div>
-                <div style="color:var(--cyan); font-weight:900">${Math.floor(u.balance).toLocaleString()}</div>
+                <span style="color:var(--cyan); font-weight:bold">${Math.floor(u.balance).toLocaleString()}</span>
             </div>`).join('');
     }
 </script>
