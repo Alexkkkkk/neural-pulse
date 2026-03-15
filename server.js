@@ -14,7 +14,9 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+
+// ПРАВИЛЬНАЯ СТРУКТУРА: Использование папки static
+app.use(express.static(path.join(__dirname, 'static')));
 
 const initDB = async () => {
     try {
@@ -27,10 +29,10 @@ const initDB = async () => {
             click_lvl INTEGER DEFAULT 1,
             pnl NUMERIC DEFAULT 0,
             wallet_address TEXT DEFAULT NULL,
-            friends_count INTEGER DEFAULT 0
+            friends_count INTEGER DEFAULT 0,
+            last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
-        await pool.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='last_sync') THEN ALTER TABLE users ADD COLUMN last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP; END IF; END $$;`);
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("DB Init Error:", e); }
 };
 initDB();
 
@@ -65,11 +67,15 @@ app.get('/api/top', async (req, res) => {
     } catch (e) { res.status(500).json([]); }
 });
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+// Отдача index.html из папки static
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'static', 'index.html')));
 
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE v${VERSION}</b>`, 
-    Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://neural-pulse.bothost.ru`)]]));
+    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE v${VERSION}</b>\n\n<i>Node is active. Connection secured.</i>`, 
+    Markup.inlineKeyboard([[Markup.button.webApp('⚡ START NODE', `https://neural-pulse.bothost.ru`)]]));
 });
 
-app.listen(3000, () => { console.log(`Server v${VERSION} Online`); bot.launch(); });
+app.listen(3000, () => { 
+    console.log(`Server v${VERSION} Online`); 
+    bot.launch().catch(err => console.error("Bot launch failed:", err)); 
+});
