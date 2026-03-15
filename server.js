@@ -4,7 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.9.9.8";
+const VERSION = "2.0.0";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
@@ -14,12 +14,12 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
 app.use(cors());
 app.use(express.json());
-// ТВОЕ ПРАВИЛО: Статика в папке static
-app.use(express.static(path.join(__dirname, 'static')));
+
+// ПРАВИЛО: Раздаем статику из папки public
+app.use(express.static(path.join(__dirname, 'public')));
 
 const initDB = async () => {
     try {
-        // Создаем базу, если её нет
         await pool.query(`CREATE TABLE IF NOT EXISTS users (
             user_id TEXT PRIMARY KEY, 
             username TEXT DEFAULT 'Neural Player',
@@ -32,19 +32,22 @@ const initDB = async () => {
             friends_count INTEGER DEFAULT 0
         )`);
 
-        // ИСПРАВЛЕНИЕ ОШИБКИ ИЗ ЛОГОВ: Добавляем колонку, если база старая
+        // Проверка колонки last_sync
         await pool.query(`
-            DO $$ 
-            BEGIN 
+            DO $$ BEGIN 
                 IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='last_sync') THEN
                     ALTER TABLE users ADD COLUMN last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
                 END IF;
             END $$;
         `);
-        console.log(`[v${VERSION}] DB Sync OK`);
+        console.log(`[v${VERSION}] DB Ready. Folder: public/`);
     } catch (e) { console.error("DB Init Error:", e); }
 };
 initDB();
+
+// Маршруты для папки public
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/tonconnect-manifest.json', (req, res) => res.sendFile(path.join(__dirname, 'public', 'tonconnect-manifest.json')));
 
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
@@ -67,7 +70,7 @@ app.post('/api/save', async (req, res) => {
             [String(userId), username, Number(balance), Number(energy), Number(max_energy), Number(click_lvl), Number(pnl), wallet]
         );
         res.json({ ok: true });
-    } catch (e) { console.error("API Save Error:", e); res.status(500).json({ error: "Save Error" }); }
+    } catch (e) { res.status(500).json({ error: "Save Error" }); }
 });
 
 app.get('/api/top', async (req, res) => {
@@ -77,11 +80,12 @@ app.get('/api/top', async (req, res) => {
     } catch (e) { res.status(500).json([]); }
 });
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'static', 'index.html')));
-
 bot.start((ctx) => {
     ctx.replyWithHTML(`<b>🚀 NEURAL PULSE v${VERSION}</b>`, 
     Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://neural-pulse.bothost.ru`)]]));
 });
 
-app.listen(3000, () => { console.log(`Server v${VERSION} Online`); bot.launch(); });
+app.listen(3000, () => { 
+    console.log(`Server v${VERSION} Online. Using /public`); 
+    bot.launch(); 
+});
