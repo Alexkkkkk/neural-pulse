@@ -4,7 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.9.9.5";
+const VERSION = "1.9.9.6";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
@@ -30,7 +30,7 @@ const initDB = async () => {
             friends_count INTEGER DEFAULT 0,
             last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
-        console.log(`[v${VERSION}] Database Synced`);
+        console.log(`[v${VERSION}] DB Connected`);
     } catch (e) { console.error(`[v${VERSION}] DB Error:`, e); }
 };
 initDB();
@@ -60,8 +60,10 @@ app.post('/api/save', async (req, res) => {
 });
 
 app.get('/api/top', async (req, res) => {
-    const r = await pool.query('SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10');
-    res.json(r.rows);
+    try {
+        const r = await pool.query('SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10');
+        res.json(r.rows);
+    } catch (e) { res.status(500).json([]); }
 });
 
 bot.start((ctx) => {
