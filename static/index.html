@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v2.1.3</title>
+    <title>Neural Pulse v2.1.4</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
     <style>
@@ -12,7 +12,7 @@
         body { background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; height: 100vh; }
         
         /* ЭКРАН ЗАГРУЗКИ */
-        #loading-screen { position: fixed; inset: 0; background: #000; z-index: 100000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #loading-screen { position: fixed; inset: 0; background: #000; z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .spinner-container { position: relative; width: 150px; height: 150px; margin-bottom: 30px; }
         .spinner-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
         .spinner-bg { fill: none; stroke: rgba(255,255,255,0.05); stroke-width: 6; }
@@ -33,11 +33,14 @@
         .bottom-nav { width: 90%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 40px; }
         .nav-item { background: #111; border-radius: 18px; padding: 18px 0; text-align: center; font-size: 9px; font-weight: 900; color: #555; text-transform: uppercase; }
 
-        /* МОДАЛЬНЫЕ ОКНА */
-        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 200000; display: none; flex-direction: column; padding: 40px 25px; }
+        /* МОДАЛЬНЫЕ ОКНА - ВАЖНО: z-index снижен до 500, чтобы TON Connect (у которого 1000+) был выше */
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 500; display: none; flex-direction: column; padding: 40px 25px; }
         .modal h2 { font-size: 32px; font-weight: 900; margin-bottom: 30px; }
         .close-bar { margin-top: auto; background: #fff; color: #000; padding: 15px; border-radius: 10px; text-align: center; font-weight: 900; text-transform: uppercase; }
         .item-row { background: #111; padding: 20px; border-radius: 15px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.05); }
+
+        /* Фикс для того, чтобы кнопки внутри модалок работали корректно */
+        button { cursor: pointer; position: relative; z-index: 600; }
     </style>
 </head>
 <body>
@@ -48,7 +51,7 @@
             <defs><linearGradient id="spinner-gradient"><stop offset="0%" stop-color="var(--cyan)"/><stop offset="100%" stop-color="var(--purple)"/></linearGradient></defs>
             <circle class="spinner-bg" cx="55" cy="55" r="50" /><circle class="spinner-circle" cx="55" cy="55" r="50" />
         </svg>
-        <div class="spinner-version">v2.1.3</div>
+        <div class="spinner-version">v2.1.4</div>
     </div>
     <div class="access-granted">ACCESS GRANTED</div>
     <div id="p-txt">0%</div>
@@ -58,7 +61,7 @@
     <div class="header">
         <div style="display:flex; align-items:center; gap:10px">
             <img src="logo.png" style="width:42px; height:42px; border-radius:10px; border:1px solid var(--cyan)">
-            <div><div id="u-nm" style="font-weight:800;">...</div><div style="font-size:9px; color:var(--cyan)">NODE v2.1.3</div></div>
+            <div><div id="u-nm" style="font-weight:800;">...</div><div style="font-size:9px; color:var(--cyan)">NODE v2.1.4</div></div>
         </div>
         <div style="background:linear-gradient(135deg, var(--cyan), var(--purple)); padding:6px 15px; border-radius:10px; font-weight:900;">LVL <span id="u-lv">1</span></div>
     </div>
@@ -116,10 +119,8 @@
     async function init() {
         document.getElementById('u-nm').innerText = s.name.toUpperCase();
         
-        // Исправленная инициализация
         tonConnectUI = new TON_CONNECT_UI.TonConnectUI({ 
-            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
-            buttonRootId: null // Мы используем свою кнопку
+            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
         });
 
         tonConnectUI.onStatusChange(w => { 
@@ -148,13 +149,14 @@
     function upd() { document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString(); document.getElementById('u-lv').innerText = s.lvl; document.getElementById('e-val').innerText = `${Math.floor(s.eng)}/${s.maxE}`; document.getElementById('e-f').style.width = (s.eng / s.maxE * 100) + '%'; }
     function save() { fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ userId: s.uid, username: s.name, balance: s.bal, energy: s.eng, max_energy: s.maxE, click_lvl: s.lvl, pnl: s.pnl, wallet: s.wal }) }); }
     
-    // Прямой вызов модалки TON Connect
     async function handleWalletAction() { 
-        if (tonConnectUI.connected) {
-            await tonConnectUI.disconnect();
-        } else {
-            await tonConnectUI.openModal();
-        }
+        try {
+            if (tonConnectUI.connected) {
+                await tonConnectUI.disconnect();
+            } else {
+                await tonConnectUI.openModal();
+            }
+        } catch(e) { console.error("Wallet Error:", e); }
     }
 
     function openM(id) { 
