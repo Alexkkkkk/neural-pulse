@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.8.6</title>
+    <title>Neural Pulse v1.8.7</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
     <style>
@@ -26,29 +26,29 @@
         .u-ver { font-size: 10px; color: var(--cyan); }
         .lvl-badge { background: var(--cyan); color: black; font-weight: 900; padding: 5px 12px; border-radius: 8px; font-size: 14px; }
 
-        /* Main */
+        /* Main UI */
         .balance { font-size: 60px; font-weight: 800; margin-top: 40px; }
         .stage { flex-grow: 1; width: 100%; position: relative; display: flex; align-items: center; justify-content: center; }
-        .main-ai { width: 200px; cursor: pointer; transition: transform 0.1s; filter: drop-shadow(0 0 20px rgba(0, 242, 255, 0.2)); }
+        .main-ai { width: 200px; cursor: pointer; transition: transform 0.1s; filter: drop-shadow(0 0 20px rgba(188, 19, 254, 0.3)); }
         .main-ai:active { transform: scale(0.95); }
 
         .side-menu { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 12px; }
         .side-btn { background: var(--btn); border: 1px solid #222; color: white; width: 100px; padding: 12px 0; border-radius: 12px; font-size: 10px; font-weight: bold; text-align: center; text-transform: uppercase; }
 
-        /* Energy */
+        /* Energy Section */
         .energy-box { width: 90%; margin-bottom: 20px; }
         .e-info { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 5px; color: #888; text-transform: uppercase; }
         .e-bar { width: 100%; height: 6px; background: #111; border-radius: 10px; overflow: hidden; border: 1px solid #1a1a1a; }
         .e-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: width 0.3s; }
 
-        /* Bottom Menu */
+        /* Bottom Navigation */
         .bottom-nav { width: 90%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 30px; }
         .nav-item { background: var(--btn); border: 1px solid #222; border-radius: 12px; padding: 15px 0; text-align: center; font-size: 10px; font-weight: bold; text-transform: uppercase; }
 
         /* Modals */
         .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 25px; }
-        .m-title { font-size: 28px; font-weight: 800; color: var(--cyan); margin-bottom: 20px; }
-        .m-close { margin-top: auto; background: #111; padding: 20px; border-radius: 15px; text-align: center; font-weight: bold; }
+        .m-title { font-size: 28px; font-weight: 800; color: var(--cyan); margin-bottom: 20px; text-transform: uppercase; }
+        .m-close { margin-top: auto; background: #111; padding: 20px; border-radius: 15px; text-align: center; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -64,7 +64,7 @@
         <div class="avatar"><img src="images/logo.png" style="width:100%"></div>
         <div class="u-det">
             <span class="u-name" id="u-nm">Neural Player</span>
-            <span class="u-ver">v1.8.6 Active Node</span>
+            <span class="u-ver">v1.8.7 Active Node</span>
         </div>
     </div>
     <div class="lvl-badge">LVL <span id="u-lv">1</span></div>
@@ -90,7 +90,7 @@
     <div class="nav-item" onclick="openM('bs-m')">Boost</div>
     <div class="nav-item" onclick="openM('mi-m')">Mine</div>
     <div class="nav-item" onclick="openM('ta-m')">Tasks</div>
-    <div class="nav-item" onclick="openM('st-m')">Stats</div>
+    <div class="nav-item" onclick="openM('tp-m')">Top</div>
 </div>
 
 <div id="wal-m" class="modal">
@@ -103,19 +103,22 @@
 <div id="bs-m" class="modal"><div class="m-title">Boost</div><div class="m-close" onclick="closeM('bs-m')">Back</div></div>
 <div id="mi-m" class="modal"><div class="m-title">Mine</div><div class="m-close" onclick="closeM('mi-m')">Back</div></div>
 <div id="ta-m" class="modal"><div class="m-title">Tasks</div><div class="m-close" onclick="closeM('ta-m')">Back</div></div>
-<div id="st-m" class="modal"><div class="m-title">Stats</div><div class="m-close" onclick="closeM('st-m')">Back</div></div>
+<div id="tp-m" class="modal">
+    <div class="m-title">Top Players</div>
+    <div style="color:#555; text-align:center; margin-top:50px;">Rating update in progress...</div>
+    <div class="m-close" onclick="closeM('tp-m')">Back</div>
+</div>
 
 <script>
     const tg = window.Telegram.WebApp;
     let tonConnectUI;
-    let s = { uid: tg.initDataUnsafe?.user?.id || '0', bal: 0, lvl: 1, eng: 1000, maxE: 1000, wal: null };
+    let s = { uid: tg.initDataUnsafe?.user?.id || '0', bal: 0, lvl: 1, eng: 1000, maxE: 1000 };
 
-    // Loader logic
     let p = 0;
     const lIv = setInterval(() => {
         p += 5; document.getElementById('p-txt').innerText = p + '%';
         if(p >= 100) { clearInterval(lIv); document.getElementById('loader').style.display='none'; init(); }
-    }, 40);
+    }, 30);
 
     async function init() {
         tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
@@ -133,7 +136,7 @@
             s.eng = Number(d.energy); s.maxE = Number(d.max_energy);
             upd();
             setInterval(tick, 1000);
-        } catch(e) { console.error("Sync error"); }
+        } catch(e) { console.error("Cloud sync fail"); }
     }
 
     function doTap() {
