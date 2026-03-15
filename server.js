@@ -4,7 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "2.1.4";
+const VERSION = "2.1.5";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
@@ -58,12 +58,41 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).send(e.message); }
 });
 
+// --- ОБНОВЛЕННЫЙ ТОП API v2.1.5 ---
+// Теперь возвращает user_id, чтобы фронтенд мог запросить фото
 app.get('/api/top', async (req, res) => {
     try {
-        const r = await pool.query('SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10');
+        const r = await pool.query('SELECT user_id, username, balance FROM users ORDER BY balance DESC LIMIT 10');
         res.json(r.rows);
     } catch (e) { res.status(500).json([]); }
 });
+
+/* --- НОВЫЙ МАРШРУТ GET PHOTO v2.1.5 --- */
+// Этот API запрашивает у Telegram URL аватарки пользователя по его ID
+app.get('/api/photo/:id', async (req, res) => {
+    const uid = Number(req.params.id);
+    if (!uid || isNaN(uid) || uid <= 0) return res.status(404).send('No photo');
+
+    try {
+        // 1. Запрашиваем у TG список фото пользователя
+        const photos = await bot.telegram.getUserProfilePhotos(uid);
+        if (!photos || photos.total_count === 0) return res.status(404).send('No photo');
+
+        // Берем самое первое фото, самый маленький размер
+        const fileId = photos.photos[0][0].file_id;
+        
+        // 2. Получаем прямую ссылку на файл
+        const fileUrl = await bot.telegram.getFileLink(fileId);
+        
+        // 3. Перенаправляем браузер на эту ссылку
+        res.redirect(fileUrl.href);
+    } catch (e) {
+        // Если ошибка (например, старый ID или нет фото)
+        console.log(`Photo error for ${uid}`);
+        res.status(404).send('Error');
+    }
+});
+/* ------------------------------------- */
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'static', 'index.html')));
 
