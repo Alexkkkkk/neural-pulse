@@ -53,31 +53,31 @@ app.get('/api/user/:id', async (req, res) => {
             await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2)', [uid, name]);
             r = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
         }
-        // ЗАЩИТА ОТ NaN: принудительное преобразование перед отправкой
-        const userData = r.rows[0];
-        res.json({
-            ...userData,
-            balance: Number(userData.balance) || 0,
-            pnl: Number(userData.pnl) || 0,
-            server_v: VERSION
+        const u = r.rows[0];
+        res.json({ 
+            ...u, 
+            balance: Number(u.balance) || 0, 
+            pnl: Number(u.pnl) || 0,
+            server_v: VERSION 
         });
     } catch (e) { res.status(500).json({ error: "Read Error" }); }
 });
 
 app.post('/api/save', async (req, res) => {
-    const { userId, username, balance, energy, max_energy, click_lvl, pnl, wallet, friends_count } = req.body;
+    const { userId, username, balance, energy, max_energy, click_lvl, pnl, wallet } = req.body;
     try {
         await pool.query(
-            `UPDATE users SET username=$2, balance=$3, energy=$4, max_energy=$5, click_lvl=$6, pnl=$7, wallet_address=$8, friends_count=$9, last_sync=NOW() WHERE user_id=$1`, 
-            [String(userId), username, Number(balance) || 0, Number(energy) || 0, Number(max_energy) || 1000, Number(click_lvl) || 1, Number(pnl) || 0, wallet, Number(friends_count) || 0]
+            `UPDATE users SET username=$2, balance=$3, energy=$4, max_energy=$5, click_lvl=$6, pnl=$7, wallet_address=$8, last_sync=NOW() WHERE user_id=$1`, 
+            [String(userId), username, Number(balance) || 0, Number(energy) || 0, Number(max_energy) || 1000, Number(click_lvl) || 1, Number(pnl) || 0, wallet]
         );
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: "Save Error" }); }
 });
 
+// ОБНОВЛЕНО: Получаем ID для аватарок в рейтинге
 app.get('/api/top', async (req, res) => {
     try {
-        const r = await pool.query('SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10');
+        const r = await pool.query('SELECT user_id, username, balance FROM users ORDER BY balance DESC LIMIT 10');
         res.json(r.rows);
     } catch (e) { res.status(500).json([]); }
 });
