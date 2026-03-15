@@ -4,7 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.9.3";
+const VERSION = "1.9.4";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
@@ -15,11 +15,6 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-
-app.get('/tonconnect-manifest.json', (req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.sendFile(path.join(__dirname, 'public', 'tonconnect-manifest.json'));
-});
 
 const initDB = async () => {
     try {
@@ -51,7 +46,6 @@ app.get('/api/user/:id', async (req, res) => {
             await pool.query('INSERT INTO users (user_id, username, photo_url) VALUES ($1, $2, $3)', [uid, name, photo]);
             r = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
         } else {
-            // Обновляем фото и имя при каждом входе
             await pool.query('UPDATE users SET username=$2, photo_url=$3 WHERE user_id=$1', [uid, name, photo]);
         }
         res.json({ ...r.rows[0], server_v: VERSION });
@@ -74,6 +68,11 @@ app.get('/api/top', async (req, res) => {
         const r = await pool.query('SELECT username, balance, photo_url FROM users WHERE username != \'null\' ORDER BY balance DESC LIMIT 50');
         res.json(r.rows);
     } catch (e) { res.status(500).json([]); }
+});
+
+app.get('/tonconnect-manifest.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.sendFile(path.join(__dirname, 'public', 'tonconnect-manifest.json'));
 });
 
 bot.start((ctx) => {
