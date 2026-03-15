@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.8.2</title>
+    <title>Neural Pulse v1.8.3</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; --panel: #111; --gray-btn: #1a1a1a; }
         body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; }
@@ -41,8 +41,7 @@
         .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 30px 20px; overflow-y: auto; }
         .m-h { color: var(--cyan); font-size: 32px; font-weight: 800; margin-bottom: 20px; text-transform: uppercase; }
         .card { background: #111; border: 1px solid #222; border-radius: 15px; padding: 18px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        .act-btn { background: var(--cyan); color: #000; border: none; padding: 15px 20px; border-radius: 10px; font-weight: 900; width: 100%; }
-        .m-close { background: #151515; padding: 20px; border-radius: 20px; text-align: center; margin-top: 20px; font-weight: bold; }
+        .m-close { background: #151515; padding: 20px; border-radius: 20px; text-align: center; margin-top: auto; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -57,7 +56,7 @@
         <div class="u-av-box"><img src="images/logo.png" style="width:100%"></div>
         <div>
             <div id="u-nm" style="font-weight:bold;">Neural Player</div>
-            <div style="color:var(--cyan); font-size:10px">v1.8.2 Active</div>
+            <div style="color:var(--cyan); font-size:10px">v1.8.3 Active</div>
         </div>
         <div class="lvl-tag">LVL <span id="u-lv">1</span></div>
     </div>
@@ -87,54 +86,65 @@
 
     <div id="wal-ui" class="modal">
         <div class="m-h">TON WALLET</div>
-        <div id="ton-connect-button" style="margin-bottom: 20px;"></div>
+        <div id="ton-button" style="display: flex; justify-content: center; margin-bottom: 20px;"></div>
+        
         <div class="card" style="flex-direction:column; gap:10px; align-items: flex-start;">
-            <small>Address:</small>
-            <b id="w-addr" style="font-size:12px; word-break: break-all; color: var(--cyan);">Not Connected</b>
+            <small>Current Status:</small>
+            <b id="w-addr" style="font-size:12px; word-break: break-all; color: var(--cyan);">Checking...</b>
         </div>
         <div class="m-close" onclick="closeM('wal-ui')">CLOSE SYSTEM</div>
     </div>
 
-    <div id="up-ui" class="modal">
-        <div class="m-h">BOOST</div>
-        <div class="card"><span>Multitap (Lvl <span id="m-lvl">1</span>)</span><button class="act-btn" style="width:auto" onclick="buyUp()">UP</button></div>
-        <div class="m-close" onclick="closeM('up-ui')">CLOSE</div>
-    </div>
-    <div id="mi-ui" class="modal">
-        <div class="m-h">MINE</div>
-        <div class="card"><span>Passive Profit</span><b id="m-pnl">0</b></div>
-        <div class="m-close" onclick="closeM('mi-ui')">CLOSE</div>
-    </div>
-    <div id="ta-ui" class="modal"><div class="m-h">TASKS</div><div class="card">Join Channel +5k</div><div class="m-close" onclick="closeM('ta-ui')">CLOSE</div></div>
-    <div id="st-ui" class="modal"><div class="m-h">STATS</div><div id="st-data"></div><div class="m-close" onclick="closeM('st-ui')">CLOSE</div></div>
-    <div id="fr-ui" class="modal"><div class="m-h">FRIENDS</div><div class="card">Invited: <b id="fr-c">0</b></div><div class="m-close" onclick="closeM('fr-ui')">CLOSE</div></div>
-    <div id="bn-ui" class="modal"><div class="m-h">BONUS</div><button class="act-btn" onclick="alert('Claimed!')">Daily Reward</button><div class="m-close" onclick="closeM('bn-ui')">CLOSE</div></div>
+    <div id="up-ui" class="modal"><div class="m-h">BOOST</div><div class="m-close" onclick="closeM('up-ui')">BACK</div></div>
+    <div id="mi-ui" class="modal"><div class="m-h">MINE</div><div class="m-close" onclick="closeM('mi-ui')">BACK</div></div>
+    <div id="ta-ui" class="modal"><div class="m-h">TASKS</div><div class="m-close" onclick="closeM('ta-ui')">BACK</div></div>
+    <div id="st-ui" class="modal"><div class="m-h">STATS</div><div class="m-close" onclick="closeM('st-ui')">BACK</div></div>
+    <div id="fr-ui" class="modal"><div class="m-h">FRIENDS</div><div class="m-close" onclick="closeM('fr-ui')">BACK</div></div>
+    <div id="bn-ui" class="modal"><div class="m-h">BONUS</div><div class="m-close" onclick="closeM('bn-ui')">BACK</div></div>
 
     <script>
         const tg = window.Telegram.WebApp;
-        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
-            buttonRootId: 'ton-connect-button'
-        });
+        let tonConnectUI;
+        let s = { uid: tg.initDataUnsafe?.user?.id || '0', bal: 0, lvl: 1, eng: 1000, maxE: 1000, pnl: 0, wal: null };
 
-        let s = { uid: tg.initDataUnsafe?.user?.id || '0', bal: 0, lvl: 1, eng: 1000, maxE: 1000, pnl: 0, wal: null, fr: 0 };
-
+        // 1. Инициализация лоадера
         let p = 0;
         const lIv = setInterval(() => {
             p += 2; document.getElementById('p-txt').innerText = p + '%';
-            if(p >= 100) { clearInterval(lIv); document.getElementById('loader').style.display='none'; load(); }
+            if(p >= 100) { clearInterval(lIv); document.getElementById('loader').style.display='none'; initApp(); }
         }, 20);
 
-        async function load() {
+        async function initApp() {
+            // 2. Инициализация TON Connect ПОСЛЕ загрузки DOM
+            tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+                manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
+                buttonRootId: 'ton-button'
+            });
+
+            // Слушатель статуса кошелька
+            tonConnectUI.onStatusChange(wallet => {
+                if (wallet) {
+                    s.wal = wallet.account.address;
+                    console.log("Wallet connected:", s.wal);
+                } else {
+                    s.wal = null;
+                }
+                upd(); save();
+            });
+
+            await loadData();
+        }
+
+        async function loadData() {
             try {
                 const r = await fetch(`/api/user/${s.uid}`);
                 const d = await r.json();
                 s.bal = Number(d.balance); s.lvl = Number(d.click_lvl); 
                 s.eng = Number(d.energy); s.maxE = Number(d.max_energy);
-                s.pnl = Number(d.pnl); s.wal = d.wallet_address; s.fr = Number(d.friends_count);
+                s.pnl = Number(d.pnl); s.wal = d.wallet_address;
                 upd();
                 setInterval(tick, 1000);
-            } catch(e) { console.error(e); }
+            } catch(e) { console.error("Load Error"); }
         }
 
         function upd() {
@@ -142,33 +152,16 @@
             document.getElementById('u-lv').innerText = s.lvl;
             document.getElementById('e-count').innerText = `${Math.floor(s.eng)}/${s.maxE}`;
             document.getElementById('eng-fill').style.width = (s.eng / s.maxE * 100) + '%';
-            document.getElementById('w-addr').innerText = s.wal || "Not Connected";
-            document.getElementById('m-lvl').innerText = s.lvl;
-            document.getElementById('m-pnl').innerText = s.pnl;
-            document.getElementById('fr-c').innerText = s.fr;
+            document.getElementById('w-addr').innerText = s.wal ? s.wal : "Not Connected";
         }
-
-        // Следим за кошельком
-        tonConnectUI.onStatusChange(wallet => {
-            if (wallet) {
-                s.wal = wallet.account.address;
-            } else {
-                s.wal = null;
-            }
-            upd(); save();
-        });
 
         function doTap() {
             if(s.eng >= s.lvl) { s.bal += s.lvl; s.eng -= s.lvl; tg.HapticFeedback.impactOccurred('medium'); upd(); }
         }
 
-        function buyUp() {
-            if(s.bal >= s.lvl * 1000) { s.bal -= s.lvl * 1000; s.lvl++; upd(); save(); }
-        }
-
         function tick() {
             if(s.eng < s.maxE) s.eng = Math.min(s.maxE, s.eng + 3);
-            if(s.pnl > 0) s.bal += s.pnl / 10; // Начисление чаще для плавности
+            if(s.pnl > 0) s.bal += s.pnl / 10;
             upd(); save();
         }
 
@@ -176,7 +169,7 @@
             fetch('/api/save', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ userId: s.uid, balance: s.bal, energy: s.eng, max_energy: s.maxE, click_lvl: s.lvl, pnl: s.pnl, wallet: s.wal, friends_count: s.fr }) 
+                body: JSON.stringify({ userId: s.uid, balance: s.bal, energy: s.eng, max_energy: s.maxE, click_lvl: s.lvl, pnl: s.pnl, wallet: s.wal }) 
             });
         }
 
