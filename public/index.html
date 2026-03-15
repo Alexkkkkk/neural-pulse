@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.6.9</title>
+    <title>Neural Pulse v1.6.9.1</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; --panel: #111; --gray-btn: #1a1a1a; }
         body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; height: 100vh; }
         
-        /* Loader */
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
         .load-circle { width: 220px; height: 220px; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--cyan); border-right: 2px solid var(--purple); display: flex; align-items: center; justify-content: center; animation: rotate 2s linear infinite; }
         @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -20,17 +19,13 @@
         .p-bar-cont { width: 70%; height: 5px; background: #111; margin-top: 25px; border-radius: 5px; overflow: hidden; }
         .p-bar-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 0%; transition: 0.1s; }
 
-        /* Header (Fix: LVL undefined) */
         .header { width: 92%; margin-top: 20px; display: flex; align-items: center; background: rgba(255,255,255,0.03); border-radius: 15px; padding: 12px; border: 1px solid #222; }
         .u-av-box { width: 50px; height: 50px; border-radius: 10px; border: 1px solid var(--cyan); margin-right: 12px; overflow: hidden; }
         .lvl-tag { background: var(--cyan); color: #000; padding: 6px 15px; border-radius: 10px; font-weight: 900; font-size: 15px; margin-left: auto; }
-
-        /* Bal (Fix: не число) */
-        .bal { font-size: 72px; font-weight: 800; margin: 40px 0; letter-spacing: -2px; text-align: center; width: 100%; }
+        .bal { font-size: 72px; font-weight: 800; margin: 40px 0; letter-spacing: -2px; }
         
-        /* Layout */
         .stage { flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
-        .main-ai { width: 220px; filter: drop-shadow(0 0 30px rgba(188, 19, 254, 0.5)); cursor: pointer; transition: 0.1s; }
+        .main-ai { width: 220px; filter: drop-shadow(0 0 30px rgba(188, 19, 254, 0.5)); cursor: pointer; transition: 0.1s; z-index: 10; }
         .side-bar { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 10px; }
         .s-btn { background: var(--gray-btn); border: 1px solid #333; color: white; padding: 15px; border-radius: 15px; font-size: 11px; font-weight: bold; width: 85px; text-align: center; }
 
@@ -42,28 +37,27 @@
         .footer { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 30px; }
         .f-item { background: var(--gray-btn); border-radius: 15px; padding: 18px 0; text-align: center; font-size: 11px; font-weight: bold; border: 1px solid #222; text-transform: uppercase; }
 
-        /* Modals (Full functionality) */
         .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 30px 20px; overflow-y: auto; }
         .m-h { color: var(--cyan); font-size: 36px; font-weight: 800; margin-bottom: 25px; text-transform: uppercase; }
         .card { background: #111; border: 1px solid #222; border-radius: 15px; padding: 20px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
         .act-btn { background: var(--cyan); color: #000; border: none; padding: 12px 20px; border-radius: 10px; font-weight: 900; }
-        .m-close { background: #151515; padding: 20px; border-radius: 20px; text-align: center; margin-top: auto; color: #444; font-weight: bold; text-transform: uppercase; }
+        .m-close { background: #151515; padding: 20px; border-radius: 20px; text-align: center; margin-top: auto; color: #444; font-weight: bold; text-transform: uppercase; flex-shrink: 0; }
     </style>
 </head>
 <body>
 
     <div id="loader">
-        <div class="load-circle"><img src="logo.png" style="width:110px"></div>
+        <div class="load-circle"><img src="images/logo.png" class="load-logo"></div>
         <div class="access-txt">Access Granted</div>
         <div class="p-val" id="p-txt">0%</div>
         <div class="p-bar-cont"><div class="p-bar-fill" id="p-bar"></div></div>
     </div>
 
     <div class="header">
-        <div class="u-av-box"><img src="logo.png" style="width:100%"></div>
+        <div class="u-av-box"><img src="images/logo.png" style="width:100%"></div>
         <div>
-            <div id="u-nm" style="font-weight:bold; font-size:16px;">Loading...</div>
-            <div style="color:var(--cyan); font-size:10px">v1.6.9 Active Node</div>
+            <div id="u-nm" style="font-weight:bold; font-size:16px;">Node</div>
+            <div style="color:var(--cyan); font-size:10px">v1.6.9.1 Active</div>
         </div>
         <div class="lvl-tag">LVL <span id="u-lv">1</span></div>
     </div>
@@ -71,7 +65,7 @@
     <div class="bal" id="b-v">0</div>
 
     <div class="stage">
-        <img src="logo.png" class="main-ai" onclick="doTap()">
+        <img src="images/logo.png" class="main-ai" onclick="doTap()">
         <div class="side-bar">
             <div class="s-btn" onclick="openM('wal-ui')">WALLET</div>
             <div class="s-btn" onclick="openM('fr-ui')">FRIENDS</div>
@@ -94,56 +88,28 @@
     <div id="up-ui" class="modal">
         <div class="m-h">BOOST</div>
         <div class="card"><div><b>Multitap</b><br><small id="up-c">Cost: 1000</small></div><button class="act-btn" onclick="buyUp()">UPGRADE</button></div>
+        <div class="card"><div><b>Energy Limit</b><br><small id="en-c">Cost: 2000</small></div><button class="act-btn" onclick="buyEnergyLimit()">UPGRADE</button></div>
+        <div class="card"><div><b>Turbo Pulse (x5)</b><br><small id="turbo-status">Available</small></div><button class="act-btn" id="turbo-btn" onclick="activateTurbo()">ACTIVATE</button></div>
+        <div class="card"><div><b>Auto-Tap Bot</b><br><small id="bot-status">Cost: 50,000</small></div><button class="act-btn" id="bot-btn" onclick="buyBot()">BUY</button></div>
+        <div class="card"><div><b>Full Energy</b><br><small>Refill now</small></div><button class="act-btn" onclick="refillEnergy()">FREE</button></div>
         <div class="m-close" onclick="closeM('up-ui')">BACK</div>
     </div>
 
-    <div id="mi-ui" class="modal">
-        <div class="m-h">MINE</div>
-        <div class="card"><div><b>Neural Processor</b><br><small id="mi-c">Cost: 5000 (+10/sec)</small></div><button class="act-btn" onclick="buyMine()">UPGRADE</button></div>
-        <div class="card"><span>Total Profit/Sec</span><span id="mi-pnl" style="color:var(--cyan)">0</span></div>
-        <div class="m-close" onclick="closeM('mi-ui')">BACK</div>
-    </div>
-
-    <div id="ta-ui" class="modal">
-        <div class="m-h">TASKS</div>
-        <div class="card"><div><b>Telegram Group</b><br><small>+10,000 NP</small></div><button class="act-btn" onclick="doTask(10000)">JOIN</button></div>
-        <div class="m-close" onclick="closeM('ta-ui')">BACK</div>
-    </div>
-
-    <div id="st-ui" class="modal">
-        <div class="m-h">STATS</div>
-        <div class="card"><span>Balance</span><span id="st-bal">0</span></div>
-        <div class="card"><span>Tap Power</span><span id="st-pwr">1</span></div>
-        <div class="card"><span>Friends</span><span id="st-fr">0</span></div>
-        <div class="m-close" onclick="closeM('st-ui')">BACK</div>
-    </div>
-
-    <div id="wal-ui" class="modal">
-        <div class="m-h">WALLET</div>
-        <div class="card"><span>Status</span><span id="w-st">Disconnected</span></div>
-        <button class="act-btn" style="width:100%" onclick="toggleWal()">CONNECT TON</button>
-        <div class="m-close" onclick="closeM('wal-ui')">BACK</div>
-    </div>
-
-    <div id="fr-ui" class="modal">
-        <div class="m-h">FRIENDS</div>
-        <div class="card"><span>Referrals</span><span id="fr-cnt">0</span></div>
-        <button class="act-btn" style="width:100%" onclick="copyRef()">INVITE</button>
-        <div class="m-close" onclick="closeM('fr-ui')">BACK</div>
-    </div>
-
-    <div id="bn-ui" class="modal"><div class="m-h">BONUS</div><div class="card">Available soon...</div><div class="m-close" onclick="closeM('bn-ui')">BACK</div></div>
+    <div id="mi-ui" class="modal"><div class="m-h">MINE</div><div class="card"><div><b>Neural Processor</b><br><small id="mi-c">Cost: 5000</small></div><button class="act-btn" onclick="buyMine()">BUY</button></div><div class="card"><span>Profit/Sec</span><span id="mi-pnl">0</span></div><div class="m-close" onclick="closeM('mi-ui')">BACK</div></div>
+    <div id="st-ui" class="modal"><div class="m-h">STATS</div><div class="card"><span>Balance</span><span id="st-bal">0</span></div><div class="card"><span>Tap Power</span><span id="st-pwr">1</span></div><div class="card"><span>Friends</span><span id="st-fr">0</span></div><div class="m-close" onclick="closeM('st-ui')">BACK</div></div>
+    <div id="fr-ui" class="modal"><div class="m-h">FRIENDS</div><div class="card"><span>Invited</span><span id="fr-cnt">0</span></div><button class="act-btn" style="width:100%" onclick="copyRef()">COPY LINK</button><div class="m-close" onclick="closeM('fr-ui')">BACK</div></div>
+    <div id="wal-ui" class="modal"><div class="m-h">WALLET</div><div class="card"><span>Status</span><span id="w-st">No</span></div><button class="act-btn" style="width:100%" onclick="toggleWal()">CONNECT</button><div class="m-close" onclick="closeM('wal-ui')">BACK</div></div>
+    <div id="ta-ui" class="modal"><div class="m-h">TASKS</div><div class="card"><div><b>Telegram</b><br><small>+10k NP</small></div><button class="act-btn" onclick="doTask(10000)">GO</button></div><div class="m-close" onclick="closeM('ta-ui')">BACK</div></div>
+    <div id="bn-ui" class="modal"><div class="m-h">BONUS</div><div class="card">Daily rewards soon...</div><div class="m-close" onclick="closeM('bn-ui')">BACK</div></div>
 
     <script>
         const tg = window.Telegram.WebApp;
-        let s = { uid: tg.initDataUnsafe?.user?.id || '0', bal: 0, lvl: 1, eng: 1000, maxE: 1000, wallet: null, fr: 0, pnl: 0 };
+        let s = { uid: tg.initDataUnsafe?.user?.id || '0', bal: 0, lvl: 1, eng: 1000, maxE: 1000, wallet: null, fr: 0, pnl: 0, hasBot: false };
+        let isTurbo = false, lastRefill = 0;
 
-        // Инициализация загрузки
         let p = 0;
         const lIv = setInterval(() => {
-            p += 2;
-            document.getElementById('p-bar').style.width = p + '%';
-            document.getElementById('p-txt').innerText = p + '%';
+            p += 2; document.getElementById('p-bar').style.width = p + '%'; document.getElementById('p-txt').innerText = p + '%';
             if(p >= 100) { clearInterval(lIv); document.getElementById('loader').style.display='none'; load(); }
         }, 20);
 
@@ -151,74 +117,76 @@
             try {
                 const r = await fetch(`/api/user/${s.uid}`);
                 const d = await r.json();
-                s.bal = d.balance || 0; s.lvl = d.click_lvl || 1; s.eng = d.energy || 1000;
-                s.wallet = d.wallet_address; s.fr = d.friends_count || 0; s.pnl = d.pnl || 0;
-
-                // Доход за время отсутствия
+                s.bal = d.balance; s.lvl = d.click_lvl; s.eng = d.energy; s.maxE = d.max_energy;
+                s.wallet = d.wallet_address; s.fr = d.friends_count; s.pnl = d.pnl; s.hasBot = d.has_bot;
+                
                 if(s.pnl > 0 && d.seconds_off > 0) {
-                    let earned = Math.floor(s.pnl * Math.min(d.seconds_off, 10800)); // Макс 3 часа
-                    s.bal += earned;
-                    alert(`Neural mining offline: +${earned} NP`);
+                    let off = Math.floor(s.pnl * Math.min(d.seconds_off, 10800));
+                    s.bal += off; alert(`Offline Mining: +${off} NP`);
                 }
-
                 document.getElementById('u-nm').innerText = tg.initDataUnsafe?.user?.first_name || d.username;
-                upd();
-                setInterval(tick, 1000);
-            } catch(e) { console.error("Load failed"); }
+                upd(); setInterval(tick, 1000);
+            } catch(e) { console.error("API error"); }
         }
 
         function upd() {
-            // Исправляем NaN (проверка через || 0)
             document.getElementById('b-v').innerText = Math.floor(s.bal || 0).toLocaleString();
             document.getElementById('u-lv').innerText = s.lvl || 1;
-            document.getElementById('e-count').innerText = `${Math.floor(s.eng || 0)}/1000`;
-            document.getElementById('eng-fill').style.width = ((s.eng || 0) / 10).toFixed(1) + '%';
+            document.getElementById('e-count').innerText = `${Math.floor(s.eng || 0)}/${s.maxE || 1000}`;
+            document.getElementById('eng-fill').style.width = ((s.eng / s.maxE) * 100) + '%';
             
-            // Внутренние данные вкладок
-            if(document.getElementById('up-c')) document.getElementById('up-c').innerText = `Cost: ${(s.lvl * 1000).toLocaleString()}`;
-            if(document.getElementById('mi-pnl')) document.getElementById('mi-pnl').innerText = (s.pnl || 0).toLocaleString();
-            if(document.getElementById('mi-c')) document.getElementById('mi-c').innerText = `Cost: ${(5000 + s.pnl * 100).toLocaleString()} (+10/sec)`;
-            if(document.getElementById('st-bal')) document.getElementById('st-bal').innerText = Math.floor(s.bal || 0).toLocaleString();
-            if(document.getElementById('st-pwr')) document.getElementById('st-pwr').innerText = s.lvl || 1;
-            if(document.getElementById('st-fr')) document.getElementById('st-fr').innerText = s.fr || 0;
-            if(document.getElementById('fr-cnt')) document.getElementById('fr-cnt').innerText = s.fr || 0;
-            if(document.getElementById('w-st')) document.getElementById('w-st').innerText = s.wallet ? "Connected" : "Disconnected";
+            document.getElementById('up-c').innerText = `Cost: ${(s.lvl * 1000).toLocaleString()}`;
+            document.getElementById('en-c').innerText = `Cost: ${(s.maxE * 2).toLocaleString()}`;
+            document.getElementById('mi-c').innerText = `Cost: ${(5000 + s.pnl * 100).toLocaleString()}`;
+            document.getElementById('mi-pnl').innerText = s.pnl || 0;
+            document.getElementById('st-bal').innerText = Math.floor(s.bal).toLocaleString();
+            document.getElementById('st-pwr').innerText = s.lvl;
+            document.getElementById('st-fr').innerText = s.fr;
+            document.getElementById('fr-cnt').innerText = s.fr;
+            document.getElementById('w-st').innerText = s.wallet ? "Linked" : "No";
+            document.getElementById('bot-status').innerText = s.hasBot ? "Active" : "Cost: 50,000";
+            if(s.hasBot) document.getElementById('bot-btn').style.display = "none";
         }
 
         function doTap() {
-            if(s.eng >= s.lvl) { 
-                s.bal += s.lvl; s.eng -= s.lvl; 
-                tg.HapticFeedback.impactOccurred('medium'); 
-                upd(); 
+            let pwr = isTurbo ? s.lvl * 5 : s.lvl;
+            if(isTurbo || s.eng >= s.lvl) { 
+                s.bal += pwr; if(!isTurbo) s.eng -= s.lvl; 
+                tg.HapticFeedback.impactOccurred('medium'); upd(); 
             }
         }
 
-        function buyUp() {
-            let cost = s.lvl * 1000;
-            if(s.bal >= cost) { s.bal -= cost; s.lvl++; upd(); save(); }
+        function buyUp() { let c = s.lvl * 1000; if(s.bal >= c) { s.bal -= c; s.lvl++; upd(); save(); } }
+        function buyEnergyLimit() { let c = s.maxE * 2; if(s.bal >= c) { s.bal -= c; s.maxE += 500; s.eng = s.maxE; upd(); save(); } }
+        function buyMine() { let c = 5000 + s.pnl * 100; if(s.bal >= c) { s.bal -= c; s.pnl += 10; upd(); save(); } }
+        function buyBot() { if(s.bal >= 50000) { s.bal -= 50000; s.hasBot = true; upd(); save(); } }
+        
+        function activateTurbo() {
+            if(isTurbo) return; isTurbo = true;
+            document.getElementById('turbo-btn').innerText = "!!!";
+            document.querySelector('.main-ai').style.filter = "drop-shadow(0 0 50px #00f2ff)";
+            setTimeout(() => { 
+                isTurbo = false; document.getElementById('turbo-btn').innerText = "ACTIVATE";
+                document.querySelector('.main-ai').style.filter = "drop-shadow(0 0 30px rgba(188, 19, 254, 0.5))";
+            }, 20000);
         }
 
-        function buyMine() {
-            let cost = 5000 + s.pnl * 100;
-            if(s.bal >= cost) { s.bal -= cost; s.pnl += 10; upd(); save(); }
+        function refillEnergy() { 
+            if(Date.now() - lastRefill > 86400000) { s.eng = s.maxE; lastRefill = Date.now(); upd(); } 
+            else alert("Available once a day!");
         }
 
-        function doTask(reward) {
-            s.bal += reward; alert("Reward claimed!"); upd(); save();
-        }
-
+        function doTask(r) { s.bal += r; alert("Reward!"); upd(); save(); }
         function toggleWal() { s.wallet = s.wallet ? null : "TON_ADDR"; upd(); save(); }
-
         function copyRef() {
-            const link = `https://t.me/n_pulse_bot?start=${s.uid}`;
-            const el = document.createElement('textarea'); el.value = link; document.body.appendChild(el);
-            el.select(); document.execCommand('copy'); document.body.removeChild(el);
-            alert("Link copied!");
+            const link = `https://t.me/neural_pulse_bot?start=${s.uid}`;
+            const i = document.createElement('textarea'); i.value = link; document.body.appendChild(i);
+            i.select(); document.execCommand('copy'); document.body.removeChild(i); alert("Copied!");
         }
 
         function tick() {
-            if(s.eng < 1000) s.eng = Math.min(1000, s.eng + 3);
-            if(s.pnl > 0) s.bal += s.pnl;
+            if(s.eng < s.maxE) s.eng = Math.min(s.maxE, s.eng + 3);
+            if(s.pnl > 0) s.bal += (s.pnl / 1);
             upd(); save();
         }
 
@@ -226,7 +194,7 @@
             fetch('/api/save', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ userId: s.uid, balance: s.bal, energy: s.eng, click_lvl: s.lvl, pnl: s.pnl, wallet: s.wallet, friends_count: s.fr }) 
+                body: JSON.stringify({ userId: s.uid, balance: s.bal, energy: s.eng, max_energy: s.maxE, click_lvl: s.lvl, pnl: s.pnl, wallet: s.wallet, friends_count: s.fr, has_bot: s.hasBot }) 
             });
         }
 
