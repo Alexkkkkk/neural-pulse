@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v2.1.2</title>
+    <title>Neural Pulse v2.1.3</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
     <style>
@@ -11,7 +11,7 @@
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
         body { background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; height: 100vh; }
         
-        /* ЭКРАН ЗАГРУЗКИ (v2.1.2) */
+        /* ЭКРАН ЗАГРУЗКИ */
         #loading-screen { position: fixed; inset: 0; background: #000; z-index: 100000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .spinner-container { position: relative; width: 150px; height: 150px; margin-bottom: 30px; }
         .spinner-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
@@ -35,11 +35,9 @@
 
         /* МОДАЛЬНЫЕ ОКНА */
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 200000; display: none; flex-direction: column; padding: 40px 25px; }
-        #wal-connect-m { z-index: 300000; background: rgba(0,0,0,0.95); backdrop-filter: blur(10px); }
         .modal h2 { font-size: 32px; font-weight: 900; margin-bottom: 30px; }
         .close-bar { margin-top: auto; background: #fff; color: #000; padding: 15px; border-radius: 10px; text-align: center; font-weight: 900; text-transform: uppercase; }
         .item-row { background: #111; padding: 20px; border-radius: 15px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.05); }
-        .wallet-option { background: #111; padding: 25px; border-radius: 20px; margin-bottom: 15px; display: flex; align-items: center; gap: 20px; border: 1px solid var(--cyan); }
     </style>
 </head>
 <body>
@@ -50,7 +48,7 @@
             <defs><linearGradient id="spinner-gradient"><stop offset="0%" stop-color="var(--cyan)"/><stop offset="100%" stop-color="var(--purple)"/></linearGradient></defs>
             <circle class="spinner-bg" cx="55" cy="55" r="50" /><circle class="spinner-circle" cx="55" cy="55" r="50" />
         </svg>
-        <div class="spinner-version">v2.1.2</div>
+        <div class="spinner-version">v2.1.3</div>
     </div>
     <div class="access-granted">ACCESS GRANTED</div>
     <div id="p-txt">0%</div>
@@ -60,7 +58,7 @@
     <div class="header">
         <div style="display:flex; align-items:center; gap:10px">
             <img src="logo.png" style="width:42px; height:42px; border-radius:10px; border:1px solid var(--cyan)">
-            <div><div id="u-nm" style="font-weight:800;">...</div><div style="font-size:9px; color:var(--cyan)">NODE v2.1.2</div></div>
+            <div><div id="u-nm" style="font-weight:800;">...</div><div style="font-size:9px; color:var(--cyan)">NODE v2.1.3</div></div>
         </div>
         <div style="background:linear-gradient(135deg, var(--cyan), var(--purple)); padding:6px 15px; border-radius:10px; font-weight:900;">LVL <span id="u-lv">1</span></div>
     </div>
@@ -92,17 +90,8 @@
 <div id="wal-m" class="modal">
     <h2>Wallet</h2>
     <div id="w-addr" style="font-size:14px; color:var(--cyan); margin-bottom:30px; word-break:break-all;">Not connected</div>
-    <button onclick="openM('wal-connect-m')" style="width:100%; padding:25px; border-radius:20px; border:none; background:var(--cyan); color:#000; font-weight:900; font-size:18px;">CONNECT TON WALLET</button>
+    <button id="connect-btn" onclick="handleWalletAction()" style="width:100%; padding:25px; border-radius:20px; border:none; background:var(--cyan); color:#000; font-weight:900; font-size:18px;">CONNECT WALLET</button>
     <div class="close-bar" onclick="closeM('wal-m')">CLOSE SYSTEM</div>
-</div>
-
-<div id="wal-connect-m" class="modal">
-    <h2>Select Wallet</h2>
-    <div class="wallet-option" onclick="handleWalletAction()">
-        <img src="https://ton.org/download/ton_symbol.png" width="40">
-        <div style="font-weight:900;">TON CONNECT</div>
-    </div>
-    <div class="close-bar" onclick="closeM('wal-connect-m')">BACK</div>
 </div>
 
 <div id="bs-m" class="modal"><h2>Boost</h2><div id="boost-list"></div><div class="close-bar" onclick="closeM('bs-m')">CLOSE</div></div>
@@ -126,13 +115,21 @@
 
     async function init() {
         document.getElementById('u-nm').innerText = s.name.toUpperCase();
-        tonConnectUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json' });
+        
+        // Исправленная инициализация
+        tonConnectUI = new TON_CONNECT_UI.TonConnectUI({ 
+            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
+            buttonRootId: null // Мы используем свою кнопку
+        });
+
         tonConnectUI.onStatusChange(w => { 
             s.wal = w ? w.account.address : null; 
-            document.getElementById('w-addr').innerText = s.wal || "Not connected"; 
-            if(s.wal) closeM('wal-connect-m');
+            const addrDisplay = s.wal ? s.wal.slice(0,6)+'...'+s.wal.slice(-4) : "Not connected";
+            document.getElementById('w-addr').innerText = addrDisplay; 
+            document.getElementById('connect-btn').innerText = s.wal ? "DISCONNECT" : "CONNECT WALLET";
             save(); 
         });
+
         await load();
         setInterval(() => { if(s.eng < s.maxE) s.eng = Math.min(s.maxE, s.eng + 2); if(s.pnl > 0) s.bal += (s.pnl / 10); upd(); }, 1000);
         setInterval(save, 5000);
@@ -151,7 +148,15 @@
     function upd() { document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString(); document.getElementById('u-lv').innerText = s.lvl; document.getElementById('e-val').innerText = `${Math.floor(s.eng)}/${s.maxE}`; document.getElementById('e-f').style.width = (s.eng / s.maxE * 100) + '%'; }
     function save() { fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ userId: s.uid, username: s.name, balance: s.bal, energy: s.eng, max_energy: s.maxE, click_lvl: s.lvl, pnl: s.pnl, wallet: s.wal }) }); }
     
-    async function handleWalletAction() { if (tonConnectUI.connected) await tonConnectUI.disconnect(); else await tonConnectUI.openModal(); }
+    // Прямой вызов модалки TON Connect
+    async function handleWalletAction() { 
+        if (tonConnectUI.connected) {
+            await tonConnectUI.disconnect();
+        } else {
+            await tonConnectUI.openModal();
+        }
+    }
+
     function openM(id) { 
         if(id === 'tp-m') renderTop(); 
         if(id === 'bs-m') renderBoost();
