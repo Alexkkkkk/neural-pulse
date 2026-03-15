@@ -4,7 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.8.7";
+const VERSION = "1.8.8";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
@@ -39,36 +39,47 @@ const initDB = async () => {
             friends_count INTEGER DEFAULT 0,
             last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
-        console.log(`[v${VERSION}] DB Connected`);
+        console.log(`[v${VERSION}] DB Connected & Synced`);
     } catch (e) { console.error(`[v${VERSION}] DB Error:`, e); }
 };
 initDB();
 
+// Получение профиля
 app.get('/api/user/:id', async (req, res) => {
     const uid = String(req.params.id);
+    const name = req.query.name || 'Neural Player';
     try {
         let r = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
         if (r.rows.length === 0) {
-            await pool.query('INSERT INTO users (user_id) VALUES ($1)', [uid]);
+            await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2)', [uid, name]);
             r = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
         }
         res.json({ ...r.rows[0], server_v: VERSION });
     } catch (e) { res.status(500).json({ error: "Read Error" }); }
 });
 
+// Сохранение всех данных профиля
 app.post('/api/save', async (req, res) => {
-    const { userId, balance, energy, max_energy, click_lvl, pnl, wallet, friends_count } = req.body;
+    const { userId, username, balance, energy, max_energy, click_lvl, pnl, wallet, friends_count } = req.body;
     try {
         await pool.query(
-            `UPDATE users SET balance=$2, energy=$3, max_energy=$4, click_lvl=$5, pnl=$6, wallet_address=$7, friends_count=$8, last_sync=NOW() WHERE user_id=$1`, 
-            [String(userId), balance, energy, max_energy, click_lvl, pnl, wallet, friends_count]
+            `UPDATE users SET username=$2, balance=$3, energy=$4, max_energy=$5, click_lvl=$6, pnl=$7, wallet_address=$8, friends_count=$9, last_sync=NOW() WHERE user_id=$1`, 
+            [String(userId), username, Number(balance), Number(energy), Number(max_energy), Number(click_lvl), Number(pnl), wallet, Number(friends_count)]
         );
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: "Save Error" }); }
 });
 
+// Получение рейтинга игроков
+app.get('/api/top', async (req, res) => {
+    try {
+        const r = await pool.query('SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10');
+        res.json(r.rows);
+    } catch (e) { res.status(500).json([]); }
+});
+
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE v${VERSION}</b>`, 
+    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE v${VERSION}</b>\n\nСистема обновлена. Нажми START для входа.`, 
     Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://neural-pulse.bothost.ru`)]]));
 });
 
