@@ -4,7 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const cors = require('cors');
 
-const VERSION = "1.6.8";
+const VERSION = "1.6.9";
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
@@ -31,7 +31,6 @@ const initDB = async () => {
             friends_count INTEGER DEFAULT 0,
             last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
-        console.log(`[ v${VERSION} ] DB System: Active and Synced.`);
     } catch (e) { console.error("DB Error", e); }
 };
 initDB();
@@ -44,13 +43,21 @@ app.get('/api/user/:id', async (req, res) => {
             await pool.query('INSERT INTO users (user_id) VALUES ($1)', [uid]);
             r = await pool.query('SELECT *, 0 as seconds_off FROM users WHERE user_id = $1', [uid]);
         }
-        res.json(r.rows[0]);
+        // Гарантируем числа для фронтенда
+        const user = r.rows[0];
+        res.json({
+            ...user,
+            balance: Number(user.balance || 0),
+            energy: Number(user.energy || 1000),
+            click_lvl: Number(user.click_lvl || 1),
+            pnl: Number(user.pnl || 0),
+            friends_count: Number(user.friends_count || 0)
+        });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, click_lvl, pnl, wallet, friends_count } = req.body;
-    if (!userId || userId === '0') return res.status(400).end();
     try {
         await pool.query(
             `UPDATE users SET balance=$2, energy=$3, click_lvl=$4, pnl=$5, wallet_address=$6, friends_count=$7, last_sync=NOW() WHERE user_id=$1`, 
@@ -73,11 +80,8 @@ bot.start(async (ctx) => {
             }
         }
     } catch(e) {}
-    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE v${VERSION}</b>\nДобро пожаловать в сеть!`, 
-    Markup.inlineKeyboard([[Markup.button.webApp('⚡ ЗАПУСТИТЬ', `https://neural-pulse.bothost.ru`)]]));
+    ctx.replyWithHTML(`<b>🚀 NEURAL PULSE v${VERSION}</b>`, 
+    Markup.inlineKeyboard([[Markup.button.webApp('⚡ START', `https://neural-pulse.bothost.ru`)]]));
 });
 
-app.listen(3000, () => {
-    console.log(`[ v${VERSION} ] SERVER RUNNING.`);
-    bot.launch();
-});
+app.listen(3000, () => { bot.launch(); });
