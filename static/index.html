@@ -11,9 +11,9 @@
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
         body { background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; height: 100vh; }
         
-        /* ЗАГРУЗКА ИЗ v1.9.2 */
+        /* ЭКРАН ЗАГРУЗКИ */
         #loading-screen { position: fixed; inset: 0; background: #000; z-index: 100000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .ai-logo { font-size: 60px; font-weight: 900; background: linear-gradient(to bottom, #fff, var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px; }
+        .ai-logo-loading { font-size: 60px; font-weight: 900; background: linear-gradient(to bottom, #fff, var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px; }
 
         /* ОСНОВНОЙ КОНТЕНТ */
         #app { display: none; flex-direction: column; align-items: center; height: 100vh; width: 100%; position: relative; z-index: 1; }
@@ -21,7 +21,7 @@
         .balance { font-size: 56px; font-weight: 900; margin-top: 30px; }
         
         .stage { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
-        .main-ai { width: 260px; filter: drop-shadow(0 0 30px rgba(188, 19, 254, 0.4)); }
+        .main-ai { width: 260px; filter: drop-shadow(0 0 30px rgba(188, 19, 254, 0.4)); cursor: pointer; }
 
         /* БОКОВЫЕ КНОПКИ */
         .side-menu { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 15px; }
@@ -31,16 +31,8 @@
         .bottom-nav { width: 90%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 40px; }
         .nav-item { background: #111; border-radius: 18px; padding: 18px 0; text-align: center; font-size: 9px; font-weight: 900; color: #555; text-transform: uppercase; }
 
-        /* МОДАЛЬНЫЕ ОКНА (ТЕПЕРЬ ПОВЕРХ ВСЕГО) */
-        .modal { 
-            position: fixed; 
-            top: 0; left: 0; width: 100%; height: 100%; 
-            background: #000; 
-            z-index: 200000; /* Выше чем всё остальное */
-            display: none; 
-            flex-direction: column; 
-            padding: 40px 25px; 
-        }
+        /* МОДАЛЬНЫЕ ОКНА */
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 200000; display: none; flex-direction: column; padding: 40px 25px; }
         .modal h2 { font-size: 32px; font-weight: 900; margin-bottom: 30px; }
         .close-bar { margin-top: auto; background: #fff; color: #000; padding: 15px; border-radius: 10px; text-align: center; font-weight: 900; text-transform: uppercase; }
         
@@ -50,7 +42,7 @@
 <body>
 
 <div id="loading-screen">
-    <div class="ai-logo">AI</div>
+    <div class="ai-logo-loading">AI</div>
     <div style="letter-spacing:4px; font-size:12px; color:#fff">ACCESS GRANTED</div>
     <div id="p-txt" style="font-size:32px; font-weight:900; color:var(--cyan); margin-top:15px;">0%</div>
 </div>
@@ -58,7 +50,7 @@
 <div id="app">
     <div class="header">
         <div style="display:flex; align-items:center; gap:10px">
-            <img src="images/logo.png" style="width:42px; height:42px; border-radius:10px; border:1px solid var(--cyan)">
+            <img src="logo.png" style="width:42px; height:42px; border-radius:10px; border:1px solid var(--cyan)">
             <div><div id="u-nm" style="font-weight:800;">...</div><div style="font-size:9px; color:var(--cyan)">NODE v2.1.1</div></div>
         </div>
         <div style="background:linear-gradient(135deg, var(--cyan), var(--purple)); padding:6px 15px; border-radius:10px; font-weight:900;">LVL <span id="u-lv">1</span></div>
@@ -107,7 +99,7 @@
     tg.expand();
     let tonConnectUI, s = { uid: tg.initDataUnsafe?.user?.id || '0', name: tg.initDataUnsafe?.user?.first_name || 'Player', bal: 0, lvl: 1, eng: 1000, maxE: 1000, pnl: 0, wal: null };
 
-    // ЭКРАН ЗАГРУЗКИ
+    // ЗАГРУЗКА
     let p = 0;
     const lIv = setInterval(() => {
         p += 2;
@@ -125,10 +117,12 @@
     }
 
     async function load() {
-        const r = await fetch(`/api/user/${s.uid}?name=${encodeURIComponent(s.name)}`);
-        const d = await r.json();
-        Object.assign(s, { bal:Number(d.balance), lvl:Number(d.click_lvl), eng:Number(d.energy), maxE:Number(d.max_energy), pnl:Number(d.pnl), wal:d.wallet_address });
-        upd();
+        try {
+            const r = await fetch(`/api/user/${s.uid}?name=${encodeURIComponent(s.name)}`);
+            const d = await r.json();
+            Object.assign(s, { bal:Number(d.balance), lvl:Number(d.click_lvl), eng:Number(d.energy), maxE:Number(d.max_energy), pnl:Number(d.pnl), wal:d.wallet_address });
+            upd();
+        } catch(e) { console.log("Load error"); }
     }
 
     function doTap() { if(s.eng >= s.lvl) { s.bal += s.lvl; s.eng -= s.lvl; tg.HapticFeedback.impactOccurred('medium'); upd(); } }
@@ -137,7 +131,6 @@
     
     async function handleWalletAction() { if (tonConnectUI.connected) await tonConnectUI.disconnect(); else await tonConnectUI.openModal(); }
     
-    // ОТКРЫТИЕ ПОВЕРХ ВСЕХ ОКОН
     function openM(id) { 
         if(id === 'tp-m') renderTop(); 
         if(id === 'bs-m') renderBoost();
