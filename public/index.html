@@ -3,23 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.9.7</title>
+    <title>Neural Pulse v1.9.8</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #050505; --card: rgba(25, 25, 25, 0.9); }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; align-items: center; }
         
-        /* Лоадер */
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
         .load-circle { width: 180px; height: 180px; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--cyan); border-right: 2px solid var(--purple); animation: rotate 1.5s linear infinite; display: flex; align-items: center; justify-content: center; }
         @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-        /* Хедер */
         .header { width: 92%; margin-top: 15px; background: var(--card); border-radius: 20px; padding: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.08); }
         .balance { font-size: 52px; font-weight: 900; margin-top: 20px; }
 
-        /* Игровая зона с кнопками справа */
         .stage { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; position: relative; }
         .main-ai { width: 230px; cursor: pointer; transition: 0.1s; z-index: 1; }
         .main-ai:active { transform: scale(0.92); }
@@ -27,7 +24,6 @@
         .side-menu { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 12px; z-index: 2; }
         .side-btn { background: var(--card); border: 1px solid rgba(255,255,255,0.1); width: 100px; padding: 15px 0; border-radius: 18px; font-size: 11px; text-align: center; font-weight: 900; color: white; }
 
-        /* Энергия и навигация */
         .energy-box { width: 90%; margin-bottom: 25px; }
         .e-bar { width: 100%; height: 8px; background: #1a1a1a; border-radius: 10px; overflow: hidden; }
         .e-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: 0.3s; }
@@ -48,7 +44,7 @@
 <div class="header">
     <div style="display:flex; align-items:center; gap:10px">
         <img src="images/logo.png" style="width:40px; border-radius:10px; border:1px solid var(--cyan)">
-        <div id="u-nm" style="font-weight:900;">Player</div>
+        <div id="u-nm" style="font-weight:900;">Neural Player</div>
     </div>
     <div style="background:var(--cyan); color:black; padding:6px 14px; border-radius:12px; font-weight:900; font-size:12px">LVL <span id="u-lv">1</span></div>
 </div>
@@ -82,16 +78,10 @@
     <div id="top-list" style="flex-grow:1; overflow-y:auto"></div>
     <button style="background:var(--card); color:white; padding:20px; border-radius:15px; margin-top:15px" onclick="closeM('tp-m')">CLOSE</button>
 </div>
-<div id="wal-m" class="modal"><h1 style="font-size:38px">WALLET</h1><button onclick="closeM('wal-m')">CLOSE</button></div>
-<div id="fr-m" class="modal"><h1 style="font-size:38px">FRIENDS</h1><button onclick="closeM('fr-m')">CLOSE</button></div>
-<div id="bn-m" class="modal"><h1 style="font-size:38px">BONUS</h1><button onclick="closeM('bn-m')">CLOSE</button></div>
-<div id="bs-m" class="modal"><h1 style="font-size:38px">BOOST</h1><button onclick="closeM('bs-m')">CLOSE</button></div>
-<div id="mi-m" class="modal"><h1 style="font-size:38px">MINE</h1><button onclick="closeM('mi-m')">CLOSE</button></div>
-<div id="ta-m" class="modal"><h1 style="font-size:38px">TASKS</h1><button onclick="closeM('ta-m')">CLOSE</button></div>
-
 <script>
     const tg = window.Telegram.WebApp;
     tg.expand();
+    // Инициализация с защитой от пустых данных
     let s = { uid: tg.initDataUnsafe?.user?.id || '0', name: tg.initDataUnsafe?.user?.first_name || 'Player', bal: 0, lvl: 1, eng: 1000, maxE: 1000, pnl: 0 };
 
     let p = 0;
@@ -104,7 +94,7 @@
         document.getElementById('u-nm').innerText = s.name;
         await load();
         setInterval(() => {
-            if(s.eng < s.maxE) s.eng = Math.min(s.maxE, s.eng + 2);
+            if(s.eng < s.maxE) s.eng = Math.min(s.maxE, s.eng + 3);
             if(s.pnl > 0) s.bal += s.pnl;
             upd();
         }, 1000);
@@ -115,13 +105,14 @@
         try {
             const r = await fetch(`/api/user/${s.uid}?name=${encodeURIComponent(s.name)}`);
             const d = await r.json();
+            // СТРОГИЙ ФИКС: Все значения через Number() или значение по умолчанию
             s.bal = Number(d.balance) || 0;
             s.pnl = Number(d.pnl) || 0;
             s.lvl = Number(d.click_lvl) || 1;
-            s.eng = Number(d.energy) || 0;
+            s.eng = Number(d.energy) || 1000;
             s.maxE = Number(d.max_energy) || 1000;
             upd();
-        } catch(e) {}
+        } catch(e) { console.error("Ошибка загрузки данных"); }
     }
 
     function doTap() {
@@ -133,11 +124,12 @@
     }
 
     function upd() {
-        document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString();
-        document.getElementById('p-v').innerText = Math.floor(s.pnl).toLocaleString();
-        document.getElementById('u-lv').innerText = s.lvl;
-        document.getElementById('e-val').innerText = `${Math.floor(s.eng)}/${s.maxE}`;
-        document.getElementById('e-f').style.width = (s.eng / s.maxE * 100) + '%';
+        // Проверка перед отрисовкой, чтобы не было "не число"
+        document.getElementById('b-v').innerText = Math.floor(s.bal || 0).toLocaleString();
+        document.getElementById('p-v').innerText = Math.floor(s.pnl || 0).toLocaleString();
+        document.getElementById('u-lv').innerText = s.lvl || 1;
+        document.getElementById('e-val').innerText = `${Math.floor(s.eng || 0)}/${s.maxE || 1000}`;
+        document.getElementById('e-f').style.width = ((s.eng / s.maxE) * 100 || 0) + '%';
     }
 
     function save() {
@@ -158,9 +150,9 @@
             <div style="display:flex; justify-content:space-between; padding:15px; background:rgba(255,255,255,0.03); margin-bottom:10px; border-radius:15px; border:1px solid rgba(255,255,255,0.05)">
                 <div style="display:flex; align-items:center; gap:10px">
                     <img src="https://api.dicebear.com/7.x/identicon/svg?seed=${u.user_id}" style="width:30px; border-radius:5px">
-                    <b>${u.username}</b>
+                    <b>${u.username || 'User'}</b>
                 </div>
-                <span style="color:var(--cyan); font-weight:bold">${Math.floor(u.balance).toLocaleString()}</span>
+                <span style="color:var(--cyan); font-weight:bold">${Math.floor(u.balance || 0).toLocaleString()}</span>
             </div>`).join('');
     }
 </script>
