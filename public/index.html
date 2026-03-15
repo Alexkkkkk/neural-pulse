@@ -3,54 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.9.8</title>
+    <title>Neural Pulse v1.9.9</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #050505; --card: rgba(25, 25, 25, 0.9); }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; --card: #111; }
         body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; align-items: center; }
         
+        /* Loader */
         #loader { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; }
-        .load-circle { width: 180px; height: 180px; border-radius: 50%; border: 2px solid transparent; border-top: 2px solid var(--cyan); border-right: 2px solid var(--purple); animation: rotate 1.5s linear infinite; display: flex; align-items: center; justify-content: center; }
-        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .load-circle { width: 120px; height: 120px; border-radius: 50%; border-top: 3px solid var(--cyan); animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        .header { width: 92%; margin-top: 15px; background: var(--card); border-radius: 20px; padding: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.08); }
-        .balance { font-size: 52px; font-weight: 900; margin-top: 20px; }
-
-        .stage { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; position: relative; }
-        .main-ai { width: 230px; cursor: pointer; transition: 0.1s; z-index: 1; }
-        .main-ai:active { transform: scale(0.92); }
+        .header { width: 90%; margin-top: 15px; display: flex; justify-content: space-between; align-items: center; background: var(--card); padding: 10px; border-radius: 15px; }
+        .balance { font-size: 48px; font-weight: 900; margin-top: 20px; }
         
-        .side-menu { position: absolute; right: 20px; display: flex; flex-direction: column; gap: 12px; z-index: 2; }
-        .side-btn { background: var(--card); border: 1px solid rgba(255,255,255,0.1); width: 100px; padding: 15px 0; border-radius: 18px; font-size: 11px; text-align: center; font-weight: 900; color: white; }
+        .stage { flex-grow: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
+        .main-ai { width: 220px; z-index: 1; }
+        .side-menu { position: absolute; right: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .side-btn { background: var(--card); padding: 12px; border-radius: 12px; font-size: 10px; font-weight: bold; border: 1px solid #222; text-align: center; min-width: 80px; }
 
-        .energy-box { width: 90%; margin-bottom: 25px; }
-        .e-bar { width: 100%; height: 8px; background: #1a1a1a; border-radius: 10px; overflow: hidden; }
-        .e-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: 0.3s; }
-        
-        .nav { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 30px; }
-        .nav-btn { background: var(--card); padding: 18px 0; text-align: center; border-radius: 18px; font-size: 10px; font-weight: 900; color: #666; border: 1px solid rgba(255,255,255,0.05); }
+        .energy-box { width: 90%; margin-bottom: 20px; }
+        .e-bar { width: 100%; height: 8px; background: #222; border-radius: 5px; overflow: hidden; margin-top: 5px; }
+        .e-fill { height: 100%; background: var(--cyan); transition: 0.3s; }
 
-        .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 30px 20px; }
+        .nav { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 25px; }
+        .nav-btn { background: var(--card); padding: 15px 5px; border-radius: 12px; text-align: center; font-size: 10px; color: #888; border: 1px solid #222; }
+
+        .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 25px; overflow-y: auto; }
+        .modal h1 { font-size: 32px; margin-bottom: 20px; color: var(--cyan); }
+        .item { background: #111; padding: 15px; border-radius: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #222; }
+        .btn-buy { background: var(--cyan); color: black; padding: 8px 15px; border-radius: 10px; font-weight: bold; }
+        .close-btn { background: #222; color: white; padding: 15px; border-radius: 15px; border: none; font-weight: bold; margin-top: auto; }
     </style>
 </head>
 <body>
 
 <div id="loader">
-    <div class="load-circle"><img src="images/logo.png" style="width:90px"></div>
-    <div id="p-txt" style="font-size:32px; font-weight:900; color:var(--cyan); margin-top:20px">0%</div>
+    <div class="load-circle"></div>
+    <div id="p-txt" style="margin-top:20px; font-weight:bold">0%</div>
 </div>
 
 <div class="header">
     <div style="display:flex; align-items:center; gap:10px">
-        <img src="images/logo.png" style="width:40px; border-radius:10px; border:1px solid var(--cyan)">
-        <div id="u-nm" style="font-weight:900;">Neural Player</div>
+        <img src="images/logo.png" style="width:35px">
+        <span id="u-nm" style="font-weight:bold">Player</span>
     </div>
-    <div style="background:var(--cyan); color:black; padding:6px 14px; border-radius:12px; font-weight:900; font-size:12px">LVL <span id="u-lv">1</span></div>
+    <div style="color:var(--cyan); font-weight:bold">LVL <span id="u-lv">1</span></div>
 </div>
 
 <div class="balance" id="b-v">0</div>
-<div style="color:#666; font-size:12px; font-weight:bold">Profit: <span id="p-v" style="color:var(--purple)">0</span>/s</div>
+<div style="color:#555; font-weight:bold">PROFIT: <span id="p-v" style="color:var(--purple)">0</span>/S</div>
 
 <div class="stage">
     <img src="logo.png" class="main-ai" onclick="doTap()">
@@ -62,7 +64,7 @@
 </div>
 
 <div class="energy-box">
-    <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:5px; font-weight:900; color:#444">ENERGY <span id="e-val">1000/1000</span></div>
+    <div style="display:flex; justify-content:space-between; font-size:10px; font-weight:bold">ENERGY <span id="e-val">1000/1000</span></div>
     <div class="e-bar"><div class="e-fill" id="e-f"></div></div>
 </div>
 
@@ -73,22 +75,49 @@
     <div class="nav-btn" onclick="openM('tp-m')">RATING</div>
 </div>
 
-<div id="tp-m" class="modal">
-    <h1 style="font-size:38px; font-weight:900">GLOBAL RATING</h1>
-    <div id="top-list" style="flex-grow:1; overflow-y:auto"></div>
-    <button style="background:var(--card); color:white; padding:20px; border-radius:15px; margin-top:15px" onclick="closeM('tp-m')">CLOSE</button>
+<div id="bs-m" class="modal">
+    <h1>BOOSTERS</h1>
+    <div class="item">
+        <div><b>Multi-Tap</b><br><small>+1 per click</small></div>
+        <div class="btn-buy" onclick="buyBoost('tap')">500</div>
+    </div>
+    <div class="item">
+        <div><b>Energy Cap</b><br><small>+500 Max Energy</small></div>
+        <div class="btn-buy" onclick="buyBoost('eng')">1000</div>
+    </div>
+    <button class="close-btn" onclick="closeM('bs-m')">BACK TO NODE</button>
 </div>
+
+<div id="tp-m" class="modal">
+    <h1>TOP NODES</h1>
+    <div id="top-list"></div>
+    <button class="close-btn" onclick="closeM('tp-m')">BACK TO NODE</button>
+</div>
+
+<div id="wal-m" class="modal">
+    <h1>WALLET</h1>
+    <div class="item">
+        <div id="w-addr">Not Connected</div>
+        <div class="btn-buy" onclick="alert('TON Connect soon')">CONNECT</div>
+    </div>
+    <button class="close-btn" onclick="closeM('wal-m')">BACK TO NODE</button>
+</div>
+
+<div id="fr-m" class="modal"><h1>FRIENDS</h1><p>Invite system coming soon...</p><button class="close-btn" onclick="closeM('fr-m')">CLOSE</button></div>
+<div id="bn-m" class="modal"><h1>BONUS</h1><p>Daily rewards coming soon...</p><button class="close-btn" onclick="closeM('bn-m')">CLOSE</button></div>
+<div id="mi-m" class="modal"><h1>MINING</h1><p>GPU Nodes coming soon...</p><button class="close-btn" onclick="closeM('mi-m')">CLOSE</button></div>
+<div id="ta-m" class="modal"><h1>TASKS</h1><p>No tasks available</p><button class="close-btn" onclick="closeM('ta-m')">CLOSE</button></div>
+
 <script>
     const tg = window.Telegram.WebApp;
     tg.expand();
-    // Инициализация с защитой от пустых данных
-    let s = { uid: tg.initDataUnsafe?.user?.id || '0', name: tg.initDataUnsafe?.user?.first_name || 'Player', bal: 0, lvl: 1, eng: 1000, maxE: 1000, pnl: 0 };
+    let s = { uid: tg.initDataUnsafe?.user?.id || '0', name: tg.initDataUnsafe?.user?.first_name || 'User', bal: 0, lvl: 1, eng: 1000, maxE: 1000, pnl: 0 };
 
     let p = 0;
     const lIv = setInterval(() => {
-        p += 5; document.getElementById('p-txt').innerText = p + '%';
+        p += 10; document.getElementById('p-txt').innerText = p + '%';
         if(p >= 100) { clearInterval(lIv); document.getElementById('loader').style.display='none'; init(); }
-    }, 30);
+    }, 50);
 
     async function init() {
         document.getElementById('u-nm').innerText = s.name;
@@ -102,42 +131,32 @@
     }
 
     async function load() {
-        try {
-            const r = await fetch(`/api/user/${s.uid}?name=${encodeURIComponent(s.name)}`);
-            const d = await r.json();
-            // СТРОГИЙ ФИКС: Все значения через Number() или значение по умолчанию
-            s.bal = Number(d.balance) || 0;
-            s.pnl = Number(d.pnl) || 0;
-            s.lvl = Number(d.click_lvl) || 1;
-            s.eng = Number(d.energy) || 1000;
-            s.maxE = Number(d.max_energy) || 1000;
-            upd();
-        } catch(e) { console.error("Ошибка загрузки данных"); }
+        const r = await fetch(`/api/user/${s.uid}?name=${encodeURIComponent(s.name)}`);
+        const d = await r.json();
+        s.bal = d.balance; s.lvl = d.click_lvl; s.eng = d.energy; s.maxE = d.max_energy; s.pnl = d.pnl;
+        upd();
     }
 
     function doTap() {
-        if(s.eng >= s.lvl) {
-            s.bal += s.lvl; s.eng -= s.lvl;
-            tg.HapticFeedback.impactOccurred('light');
-            upd();
-        }
+        if(s.eng >= s.lvl) { s.bal += s.lvl; s.eng -= s.lvl; tg.HapticFeedback.impactOccurred('light'); upd(); }
     }
 
     function upd() {
-        // Проверка перед отрисовкой, чтобы не было "не число"
-        document.getElementById('b-v').innerText = Math.floor(s.bal || 0).toLocaleString();
-        document.getElementById('p-v').innerText = Math.floor(s.pnl || 0).toLocaleString();
-        document.getElementById('u-lv').innerText = s.lvl || 1;
-        document.getElementById('e-val').innerText = `${Math.floor(s.eng || 0)}/${s.maxE || 1000}`;
-        document.getElementById('e-f').style.width = ((s.eng / s.maxE) * 100 || 0) + '%';
+        document.getElementById('b-v').innerText = Math.floor(s.bal).toLocaleString();
+        document.getElementById('p-v').innerText = Math.floor(s.pnl);
+        document.getElementById('u-lv').innerText = s.lvl;
+        document.getElementById('e-val').innerText = `${Math.floor(s.eng)}/${s.maxE}`;
+        document.getElementById('e-f').style.width = (s.eng/s.maxE*100) + '%';
     }
 
     function save() {
-        fetch('/api/save', { 
-            method: 'POST', 
-            headers: {'Content-Type': 'application/json'}, 
-            body: JSON.stringify({ userId: s.uid, username: s.name, balance: s.bal, energy: s.eng, max_energy: s.maxE, click_lvl: s.lvl, pnl: s.pnl }) 
-        });
+        fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ userId: s.uid, username: s.name, balance: s.bal, energy: s.eng, max_energy: s.maxE, click_lvl: s.lvl, pnl: s.pnl }) });
+    }
+
+    function buyBoost(type) {
+        if(type === 'tap' && s.bal >= 500) { s.bal -= 500; s.lvl++; alert('Level UP!'); }
+        if(type === 'eng' && s.bal >= 1000) { s.bal -= 1000; s.maxE += 500; alert('Energy UP!'); }
+        upd(); save();
     }
 
     function openM(id) { if(id === 'tp-m') renderTop(); document.getElementById(id).style.display = 'flex'; }
@@ -146,14 +165,7 @@
     async function renderTop() {
         const r = await fetch('/api/top');
         const d = await r.json();
-        document.getElementById('top-list').innerHTML = d.map((u, i) => `
-            <div style="display:flex; justify-content:space-between; padding:15px; background:rgba(255,255,255,0.03); margin-bottom:10px; border-radius:15px; border:1px solid rgba(255,255,255,0.05)">
-                <div style="display:flex; align-items:center; gap:10px">
-                    <img src="https://api.dicebear.com/7.x/identicon/svg?seed=${u.user_id}" style="width:30px; border-radius:5px">
-                    <b>${u.username || 'User'}</b>
-                </div>
-                <span style="color:var(--cyan); font-weight:bold">${Math.floor(u.balance || 0).toLocaleString()}</span>
-            </div>`).join('');
+        document.getElementById('top-list').innerHTML = d.map(u => `<div class="item"><span>${u.username}</span><b>${Math.floor(u.balance)}</b></div>`).join('');
     }
 </script>
 </body>
