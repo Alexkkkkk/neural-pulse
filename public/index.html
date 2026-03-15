@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v1.8.9</title>
+    <title>Neural Pulse v1.9.0</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
     <style>
@@ -43,25 +43,20 @@
         .nav-item { background: var(--btn); border: 1px solid #222; border-radius: 12px; padding: 15px 0; text-align: center; font-size: 10px; font-weight: bold; text-transform: uppercase; cursor: pointer; }
 
         .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 25px; }
-        /* Исправление для Wallet: позволяем модальному окну не блокировать попапы библиотеки */
-        #wal-m { z-index: 4999; } 
-        
         .m-title { font-size: 28px; font-weight: 800; color: var(--cyan); margin-bottom: 20px; text-transform: uppercase; }
         .m-close { margin-top: auto; background: #111; padding: 20px; border-radius: 15px; text-align: center; font-weight: bold; border: 1px solid #222; cursor: pointer; }
         
         .list-item { background: var(--btn); border: 1px solid #222; padding: 15px; border-radius: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        .buy-btn { background: var(--cyan); color: black; border: none; padding: 8px 15px; border-radius: 8px; font-weight: bold; }
-        .buy-btn:disabled { background: #333; color: #666; }
-
-        /* Специальный контейнер для кнопки подключения */
-        #ton-connect-wrapper { display: flex; justify-content: center; margin: 30px 0; min-height: 40px; }
+        
+        /* Специальная кнопка для кошелька в стиле дизайна */
+        .wallet-action-btn { width: 100%; background: var(--cyan); color: black; border: none; padding: 18px; border-radius: 12px; font-weight: 900; text-transform: uppercase; cursor: pointer; margin-top: 20px; }
     </style>
 </head>
 <body>
 
 <div id="loader">
     <div class="load-circle"><img src="logo.png" class="load-logo"></div>
-    <div style="margin-top:25px; font-weight:bold; letter-spacing:2px">SYNCHRONIZING</div>
+    <div style="margin-top:25px; font-weight:bold; letter-spacing:2px">CORE v1.9.0</div>
     <div id="p-txt" style="font-size:24px; color:var(--cyan); margin-top:10px">0%</div>
 </div>
 
@@ -70,7 +65,7 @@
         <div class="avatar"><img src="images/logo.png" style="width:100%"></div>
         <div class="u-det">
             <span class="u-name" id="u-nm">Neural Player</span>
-            <span class="u-ver">v1.8.9 Node</span>
+            <span class="u-ver">v1.9.0 Active Node</span>
         </div>
     </div>
     <div class="lvl-badge">LVL <span id="u-lv">1</span></div>
@@ -94,21 +89,21 @@
 </div>
 
 <div class="bottom-nav">
-    <div class="nav-item" onclick="openBoost()">Boost</div>
-    <div class="nav-item" onclick="openMine()">Mine</div>
-    <div class="nav-item" onclick="openTasks()">Tasks</div>
-    <div class="nav-item" onclick="openTop()">Top</div>
+    <div class="nav-item" onclick="openM('bs-m')">Boost</div>
+    <div class="nav-item" onclick="openM('mi-m')">Mine</div>
+    <div class="nav-item" onclick="openM('ta-m')">Tasks</div>
+    <div class="nav-item" onclick="openM('tp-m')">Top</div>
 </div>
 
 <div id="wal-m" class="modal">
     <div class="m-title">Wallet</div>
-    <div id="ton-connect-wrapper">
-        <div id="ton-connect"></div>
+    <div class="list-item" style="flex-direction:column; align-items:center; gap:10px; padding: 30px 15px;">
+        <div style="font-size:10px; color:#888; text-transform:uppercase">Current Status</div>
+        <div id="w-addr" style="font-size:12px; color:var(--cyan); word-break:all; text-align:center">Not connected</div>
     </div>
-    <div class="list-item" style="flex-direction:column; align-items:flex-start">
-        <span style="font-size:10px; color:#555; text-transform:uppercase">Address:</span>
-        <div id="w-addr" style="font-size:11px; color:var(--cyan); word-break:all; margin-top:5px">Not connected</div>
-    </div>
+    
+    <button id="connect-trigger" class="wallet-action-btn" onclick="handleWalletAction()">Connect Wallet</button>
+
     <div class="m-close" onclick="closeM('wal-m')">Back</div>
 </div>
 
@@ -139,25 +134,37 @@
     async function init() {
         document.getElementById('u-nm').innerText = s.name;
         
-        // Инициализация TON Connect
+        // Инициализация TON Connect БЕЗ привязки к кнопке в DOM (программный режим)
         tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
-            buttonRootId: 'ton-connect'
+            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
         });
 
         tonConnectUI.onStatusChange(wallet => {
+            const btn = document.getElementById('connect-trigger');
             if (wallet) {
                 s.wal = wallet.account.address;
                 document.getElementById('w-addr').innerText = s.wal;
-                save();
+                btn.innerText = "Disconnect Wallet";
+                btn.style.background = "#ff4b4b"; // Красный для дисконнекта
             } else {
                 s.wal = null;
                 document.getElementById('w-addr').innerText = "Not connected";
-                save();
+                btn.innerText = "Connect Wallet";
+                btn.style.background = "var(--cyan)";
             }
+            save();
         });
 
         await load();
+    }
+
+    // Программное управление модалкой кошелька
+    async function handleWalletAction() {
+        if (tonConnectUI.connected) {
+            await tonConnectUI.disconnect();
+        } else {
+            await tonConnectUI.openModal();
+        }
     }
 
     async function load() {
@@ -183,7 +190,7 @@
 
     function tick() {
         if(s.eng < s.maxE) s.eng = Math.min(s.maxE, s.eng + 3);
-        if(s.pnl > 0) s.bal += (s.pnl / 1); 
+        if(s.pnl > 0) s.bal += s.pnl; 
         upd();
     }
 
@@ -204,31 +211,36 @@
         });
     }
 
-    // Функции окон
-    function openBoost() {
+    function openM(id) { 
+        if(id === 'bs-m') renderBoost();
+        if(id === 'mi-m') renderMine();
+        if(id === 'tp-m') renderTop();
+        document.getElementById(id).style.display = 'flex'; 
+    }
+
+    function closeM(id) { document.getElementById(id).style.display = 'none'; }
+
+    function renderBoost() {
         const cost = s.lvl * 1500;
         document.getElementById('boost-list').innerHTML = `
             <div class="list-item">
                 <div><b>Multitap (Lvl ${s.lvl+1})</b><br><small>${cost} Pulse</small></div>
                 <button class="buy-btn" onclick="buyB(${cost})" ${s.bal < cost ? 'disabled':''}>Buy</button>
             </div>`;
-        openM('bs-m');
     }
-    function buyB(c) { if(s.bal >= c) { s.bal -= c; s.lvl++; upd(); openBoost(); save(); } }
+    function buyB(c) { if(s.bal >= c) { s.bal -= c; s.lvl++; upd(); renderBoost(); save(); } }
 
-    function openMine() {
+    function renderMine() {
         const cost = (s.pnl + 5) * 200;
         document.getElementById('mine-list').innerHTML = `
             <div class="list-item">
                 <div><b>AI Module (+5/s)</b><br><small>${cost} Pulse</small></div>
                 <button class="buy-btn" onclick="buyM(${cost})" ${s.bal < cost ? 'disabled':''}>Buy</button>
             </div>`;
-        openM('mi-m');
     }
-    function buyM(c) { if(s.bal >= c) { s.bal -= c; s.pnl += 5; upd(); openMine(); save(); } }
+    function buyM(c) { if(s.bal >= c) { s.bal -= c; s.pnl += 5; upd(); renderMine(); save(); } }
 
-    async function openTop() {
-        openM('tp-m');
+    async function renderTop() {
         const r = await fetch('/api/top');
         const d = await r.json();
         document.getElementById('top-list').innerHTML = d.map((u,i) => `
@@ -237,9 +249,6 @@
                 <b>${Number(u.balance).toLocaleString()}</b>
             </div>`).join('');
     }
-
-    function openM(id) { document.getElementById(id).style.display = 'flex'; }
-    function closeM(id) { document.getElementById(id).style.display = 'none'; }
 </script>
 </body>
 </html>
