@@ -13,7 +13,7 @@ const pool = new Pool({ connectionString: PG_URI });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Инициализация БД: автоматическое создание всех нужных колонок
+// Автоматическая инициализация структуры БД
 const initDB = async () => {
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS users (
@@ -27,20 +27,14 @@ const initDB = async () => {
             speed_lvl INTEGER DEFAULT 1,
             pnl NUMERIC DEFAULT 0
         )`);
-        
-        // Проверка на случай, если таблица уже была, но без новых колонок
-        const checkCols = ['energy_lvl', 'speed_lvl', 'max_energy', 'energy'];
-        for (let col of checkCols) {
-            await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${col} INTEGER DEFAULT ${col.includes('max') ? 1000 : 1}`);
-        }
-        console.log("DB Neural Pulse: Status OK");
+        console.log("Database Sync: Neural Pulse Online");
     } catch (e) { console.error("DB Error:", e); }
 };
 initDB();
 
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>🚀 Neural Pulse System</b>`, Markup.inlineKeyboard([
-        [Markup.button.webApp("Запустить", "https://neural-pulse.bothost.ru")]
+    ctx.replyWithHTML(`<b>Neural Pulse System</b>`, Markup.inlineKeyboard([
+        [Markup.button.webApp("ENTER TERMINAL", "https://neural-pulse.bothost.ru")]
     ]));
 });
 
@@ -48,7 +42,7 @@ app.get('/api/user/:id', async (req, res) => {
     try {
         let r = await pool.query('SELECT * FROM users WHERE user_id = $1', [req.params.id]);
         if (r.rows.length === 0) {
-            await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2)', [req.params.id, req.query.name || 'Player']);
+            await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2)', [req.params.id, req.query.name || 'Agent']);
             r = await pool.query('SELECT * FROM users WHERE user_id = $1', [req.params.id]);
         }
         res.json(r.rows[0]);
@@ -67,6 +61,6 @@ app.post('/api/save', async (req, res) => {
 });
 
 app.listen(3000, () => { 
-    console.log("Server v2.1.12 Online");
+    console.log("Neural Server v2.1.16 Active");
     bot.launch();
 });
