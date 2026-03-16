@@ -8,65 +8,65 @@
     <script src="https://unpkg.com/@tonconnect/sdk@latest/dist/tonconnect-sdk.min.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
-        body { background: var(--bg); color: #fff; font-family: 'Segoe UI', sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; }
+        body { background: var(--bg); color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; }
         
-        /* ORIGINAL LOADER FROM SCREENSHOT */
+        /* Loader Design */
         #loader { position: fixed; inset: 0; background: #000; z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .l-circle { width: 160px; height: 160px; border: 3px solid #111; border-top: 3px solid var(--cyan); border-radius: 50%; display: flex; align-items: center; justify-content: center; animation: spin 2s linear infinite; }
-        .l-logo { width: 85px; animation: none; filter: drop-shadow(0 0 15px var(--purple)); }
-        .l-title { margin-top: 45px; font-weight: 900; letter-spacing: 3px; font-size: 14px; color: #fff; text-transform: uppercase; }
-        .l-pct { margin-top: 15px; font-size: 42px; font-weight: 900; color: var(--cyan); }
-        .l-bar-bg { width: 220px; height: 4px; background: #111; margin-top: 25px; border-radius: 10px; overflow: hidden; }
+        .l-circle { width: 160px; height: 160px; border: 2px solid #111; border-top: 2px solid var(--cyan); border-radius: 50%; display: flex; align-items: center; justify-content: center; animation: spin 2s linear infinite; }
+        .l-logo { width: 80px; filter: drop-shadow(0 0 15px var(--purple)); }
+        .l-title { margin-top: 40px; font-weight: 900; letter-spacing: 3px; font-size: 14px; text-transform: uppercase; }
+        .l-pct { margin-top: 15px; font-size: 38px; font-weight: 900; color: var(--cyan); }
+        .l-bar-bg { width: 220px; height: 4px; background: #111; margin-top: 20px; border-radius: 10px; overflow: hidden; }
         .l-bar-f { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 0%; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
 
         #app { display: none; height: 100vh; flex-direction: column; align-items: center; padding: 20px; box-sizing: border-box; }
 
-        /* UI Panel (v1.5.5 Design) */
-        .header-box { width: 100%; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; }
-        .user-data { display: flex; align-items: center; gap: 12px; }
-        .avatar-ui { width: 44px; height: 44px; border: 2px solid var(--cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; background: #111; }
+        /* UI Elements */
+        .header { width: 100%; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; }
+        .user-info { display: flex; align-items: center; gap: 12px; }
+        .avatar { width: 44px; height: 44px; border: 2px solid var(--cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; background: #111; }
         .lvl-pill { background: var(--cyan); color: #000; padding: 6px 14px; border-radius: 10px; font-weight: 900; font-size: 14px; }
 
-        .balance { font-size: 68px; font-weight: 900; margin: 15px 0; }
+        .balance { font-size: 70px; font-weight: 900; margin: 15px 0; }
 
-        .game-core { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
-        .logo-btn { width: 230px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; z-index: 5; }
-        .logo-btn:active { transform: scale(0.94); }
+        .game-zone { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
+        .main-logo { width: 230px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; z-index: 5; }
+        .main-logo:active { transform: scale(0.95); }
 
-        .side-stack { position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px; }
-        .btn-side { background: #0d0d0d; border: 1px solid #222; color: #fff; padding: 14px 0; border-radius: 15px; font-size: 11px; font-weight: 900; width: 105px; }
+        .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px; }
+        .side-btn { background: #0d0d0d; border: 1px solid #222; color: #fff; padding: 14px 0; border-radius: 15px; font-size: 11px; font-weight: 900; width: 105px; }
 
-        .eng-section { width: 100%; margin-bottom: 30px; }
-        .eng-meta { display: flex; justify-content: space-between; font-size: 11px; font-weight: 900; color: #444; margin-bottom: 8px; }
-        .bar-wrap { width: 100%; height: 8px; background: #111; border-radius: 10px; border: 1px solid #1a1a1a; overflow: hidden; }
-        .bar-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; }
+        /* Energy Layout */
+        .energy-box { width: 100%; margin-bottom: 30px; }
+        .energy-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 900; color: #555; margin-bottom: 8px; }
+        .energy-bar-bg { width: 100%; height: 8px; background: #111; border-radius: 10px; border: 1px solid #1a1a1a; overflow: hidden; }
+        .energy-bar-f { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; }
 
-        .footer-grid { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
-        .btn-foot { background: #080808; border: 1px solid #1a1a1a; padding: 18px 0; border-radius: 15px; font-size: 10px; font-weight: 900; }
+        .footer { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
+        .footer-btn { background: #080808; border: 1px solid #1a1a1a; padding: 18px 0; border-radius: 15px; font-size: 10px; font-weight: 900; }
 
-        /* Modals */
+        /* Wallet & Stats Modals */
         .modal { position: fixed; inset: 0; background: #000; z-index: 20000; display: none; flex-direction: column; padding: 40px 20px; text-align: left; }
-        .m-title { font-size: 36px; font-weight: 900; margin-bottom: 30px; }
-        .m-view { flex: 1; overflow-y: auto; }
-        .card-ui { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 20px; border-radius: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
-        .btn-main { background: var(--cyan); color: #000; border: none; padding: 15px; border-radius: 15px; font-weight: 900; width: 100%; font-size: 16px; }
-        .btn-back { background: #fff; color: #000; padding: 20px; border-radius: 15px; font-weight: 900; width: 100%; border: none; margin-top: 20px; }
+        .modal-title { font-size: 34px; font-weight: 900; margin-bottom: 30px; }
+        .card { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 20px; border-radius: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .action-btn { background: var(--cyan); color: #000; border: none; padding: 15px; border-radius: 15px; font-weight: 900; width: 100%; font-size: 16px; }
+        .close-btn { background: #fff; color: #000; padding: 20px; border-radius: 15px; font-weight: 900; width: 100%; border: none; margin-top: auto; }
     </style>
 </head>
 <body>
 
 <div id="loader">
-    <div class="l-circle"><img src="logo.png" class="l-logo"></div>
+    <div class="l-circle"><img src="logo.png" class="l-logo" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'"></div>
     <div class="l-title">Access Granted</div>
     <div class="l-pct" id="l-pct">0%</div>
     <div class="l-bar-bg"><div class="l-bar-f" id="l-bar-f"></div></div>
 </div>
 
 <div id="app">
-    <div class="header-box">
-        <div class="user-data">
-            <div class="avatar-ui"><img src="logo.png" width="32"></div>
+    <div class="header">
+        <div class="user-info">
+            <div class="avatar"><img src="logo.png" width="30" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'"></div>
             <div style="text-align:left;">
                 <span id="u-name" style="font-weight:900; font-size:16px;">Agent</span><br>
                 <span style="font-size:10px; color:var(--cyan);">v1.5.5 Active Node</span>
@@ -77,84 +77,70 @@
 
     <div class="balance" id="balance">0</div>
     
-    <div class="game-core">
-        <img src="logo.png" class="logo-btn" onclick="tap(event)">
-        <div class="side-stack">
-            <div class="btn-side" onclick="openM('wallet')">WALLET</div>
-            <div class="btn-side" onclick="openM('friends')">FRIENDS</div>
-            <div class="btn-side" onclick="openM('bonus')">BONUS</div>
+    <div class="game-zone">
+        <img src="logo.png" class="main-logo" onclick="tap(event)" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'">
+        <div class="side-menu">
+            <div class="side-btn" onclick="openM('wallet')">WALLET</div>
+            <div class="side-btn">FRIENDS</div>
+            <div class="side-btn">BONUS</div>
         </div>
     </div>
 
-    <div class="eng-section">
-        <div class="eng-meta"><span>ENERGY</span><span id="eng-val">1000/1000</span></div>
-        <div class="bar-wrap"><div class="bar-fill" id="eng-fill"></div></div>
+    <div class="energy-box">
+        <div class="energy-header"><span>ENERGY</span><span id="eng-val">1000 / 1000</span></div>
+        <div class="energy-bar-bg"><div class="energy-bar-f" id="eng-fill"></div></div>
     </div>
     
-    <div class="footer-grid">
-        <div class="btn-foot" onclick="openM('boost')">BOOST</div>
-        <div class="btn-foot">MINE</div>
-        <div class="btn-foot">TASKS</div>
-        <div class="btn-foot" onclick="openM('stats')">STATS</div>
+    <div class="footer">
+        <div class="footer-btn" onclick="openM('boost')">BOOST</div>
+        <div class="footer-btn">MINE</div>
+        <div class="footer-btn">TASKS</div>
+        <div class="footer-btn" onclick="openM('stats')">STATS</div>
     </div>
 </div>
 
 <div id="m-wallet" class="modal">
-    <div class="m-title">Wallet</div>
-    <div class="m-view">
-        <div class="card-ui" id="wallet-status">
-            <div style="text-align:left;">
-                <b>TON Network</b><br>
-                <small id="wallet-addr">Not Connected</small>
-            </div>
-            <img src="https://ton.org/download/ton_symbol.png" width="30">
+    <div class="modal-title">Wallet</div>
+    <div class="card" id="wallet-card">
+        <div style="text-align:left;">
+            <b>TON Network</b><br>
+            <small id="wallet-addr" style="color:#555">Not Connected</small>
         </div>
-        <button class="btn-main" id="btn-connect" onclick="toggleWallet()">CONNECT WALLET</button>
+        <img src="https://ton.org/download/ton_symbol.png" width="30">
     </div>
-    <button class="btn-back" onclick="closeM()">BACK</button>
+    <button class="action-btn" id="conn-btn" onclick="toggleWallet()">CONNECT WALLET</button>
+    <button class="close-btn" onclick="closeM()">BACK</button>
 </div>
 
 <div id="m-stats" class="modal">
-    <div class="m-title">Top Agents</div>
-    <div id="stats-list" class="m-view"></div>
-    <button class="btn-back" onclick="closeM()">CLOSE</button>
-</div>
-
-<div id="m-boost" class="modal">
-    <div class="m-title">Boost</div>
-    <div class="m-view">
-        <div class="card-ui">
-            <div><b>Multitap</b><br><small id="b-cost">Cost: 2500</small></div>
-            <button style="background:var(--cyan); border:none; padding:10px 18px; border-radius:10px; font-weight:900;" onclick="buyB()">UPGRADE</button>
-        </div>
-    </div>
-    <button class="btn-back" onclick="closeM()">CLOSE</button>
+    <div class="modal-title">Top Agents</div>
+    <div id="stats-list" style="flex:1; overflow-y:auto;"></div>
+    <button class="close-btn" onclick="closeM()">CLOSE</button>
 </div>
 
 <script>
     const tg = window.Telegram.WebApp;
     tg.expand();
     
-    // TonConnect Logic from v2.1.5
+    // TonConnect v2.1.5 Logic
     const ton = new TonConnectSDK.TonConnect({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json' });
 
     let s = { id: tg.initDataUnsafe?.user?.id || "0", bal: 0, lvl: 1, eng: 1000, max: 1000, name: tg.initDataUnsafe?.user?.first_name || "Agent", wallet: null };
 
-    async function start() {
+    async function init() {
         let p = 0;
         const i = setInterval(() => {
-            p += Math.floor(Math.random() * 6) + 2;
+            p += Math.floor(Math.random() * 5) + 3;
             if(p >= 100) { 
                 p = 100; clearInterval(i); 
-                setTimeout(() => { document.getElementById('loader').style.display = 'none'; document.getElementById('app').style.display = 'flex'; }, 400);
+                document.getElementById('loader').style.display = 'none'; 
+                document.getElementById('app').style.display = 'flex'; 
             }
             document.getElementById('l-pct').innerText = p + '%';
             document.getElementById('l-bar-f').style.width = p + '%';
         }, 50);
-        
         await load();
 
-        // Listen for Wallet Changes
         ton.onStatusChange(w => {
             if (w) {
                 s.wallet = w.account.address;
@@ -185,21 +171,19 @@
         document.getElementById('balance').innerText = Math.floor(s.bal).toLocaleString();
         document.getElementById('u-name').innerText = s.name;
         document.getElementById('u-lvl').innerText = `LVL ${s.lvl}`;
-        document.getElementById('eng-val').innerText = `${s.eng}/${s.max}`;
+        document.getElementById('eng-val').innerText = `${s.eng} / ${s.max}`;
         document.getElementById('eng-fill').style.width = `${(s.eng / s.max) * 100}%`;
-        document.getElementById('b-cost').innerText = `Cost: ${s.lvl * 2500}`;
         
-        // Wallet UI Update
         const addrTxt = document.getElementById('wallet-addr');
-        const btnTxt = document.getElementById('btn-connect');
+        const connBtn = document.getElementById('conn-btn');
         if(s.wallet) {
             addrTxt.innerText = s.wallet.slice(0,6) + "..." + s.wallet.slice(-4);
             addrTxt.style.color = "var(--cyan)";
-            btnTxt.innerText = "DISCONNECT";
+            connBtn.innerText = "DISCONNECT";
         } else {
             addrTxt.innerText = "Not Connected";
-            addrTxt.style.color = "#444";
-            btnTxt.innerText = "CONNECT WALLET";
+            addrTxt.style.color = "#555";
+            connBtn.innerText = "CONNECT WALLET";
         }
     }
 
@@ -229,16 +213,11 @@
     async function loadStats() {
         const r = await fetch('/api/stats');
         const d = await r.json();
-        document.getElementById('stats-list').innerHTML = d.map((x, i) => `<div class="card-ui"><span>#${i+1} ${x.username}</span><b>${Math.floor(x.balance)}</b></div>`).join('');
-    }
-
-    function buyB() {
-        const cost = s.lvl * 2500;
-        if(s.bal >= cost) { s.bal -= cost; s.lvl++; upd(); save(); }
+        document.getElementById('stats-list').innerHTML = d.map((x, i) => `<div class="card"><span>#${i+1} ${x.username}</span><b>${Math.floor(x.balance)}</b></div>`).join('');
     }
 
     setInterval(() => { if(s.eng < s.max) { s.eng = Math.min(s.max, s.eng + 1); upd(); } }, 1000);
-    start();
+    init();
 </script>
 </body>
 </html>
