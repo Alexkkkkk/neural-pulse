@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v2.9.7</title>
+    <title>Neural Pulse v2.9.8</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
@@ -28,12 +28,11 @@
         .header { width: 100%; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; box-sizing: border-box; }
         .u-info { display: flex; align-items: center; gap: 12px; }
         .avatar { width: 44px; height: 44px; border: 1px solid var(--cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; background: #111; overflow: hidden; }
+        .avatar img { width: 100%; height: 100%; object-fit: cover; }
         .lvl-pill { background: var(--cyan); color: #000; padding: 6px 14px; border-radius: 10px; font-weight: 900; font-size: 14px; }
         .balance { font-size: 60px; font-weight: 900; margin: 20px 0; letter-spacing: -2px; }
-        
         .play-area { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
         .main-logo { width: 230px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; cursor: pointer; -webkit-user-drag: none; }
-        
         .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px; }
         .side-btn { background: #0d0d0d; border: 1px solid #222; color: #fff; padding: 14px 0; border-radius: 15px; font-size: 11px; font-weight: 900; width: 105px; text-transform: uppercase; }
 
@@ -46,10 +45,7 @@
         .f-btn { background: #080808; border: 1px solid #1a1a1a; padding: 18px 0; border-radius: 15px; font-size: 10px; font-weight: 900; text-transform: uppercase; }
 
         /* ANIMATIONS */
-        @keyframes floatUp {
-            0% { transform: translateY(0) scale(1); opacity: 1; }
-            100% { transform: translateY(-120px) scale(1.3); opacity: 0; }
-        }
+        @keyframes floatUp { 0% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: translateY(-120px) scale(1.3); opacity: 0; } }
         .float-text { position: fixed; pointer-events: none; z-index: 10000; font-weight: 900; animation: floatUp 0.7s ease-out forwards; }
 
         /* MODALS */
@@ -60,7 +56,15 @@
         .b-btn { background: var(--cyan); color: #000; padding: 12px; border-radius: 12px; font-weight: 900; border: none; min-width: 90px; }
         .b-btn:disabled { background: #222; color: #444; }
         .top-list { flex: 1; overflow-y: auto; margin-bottom: 20px; }
-        .top-card { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 15px; border-radius: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        
+        /* ОБНОВЛЕННЫЙ СТИЛЬ КАРТОЧЕК ТОП */
+        .top-card { background: #0d0d0d; border: 1px solid #222; padding: 12px; border-radius: 15px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; }
+        .t-left { display: flex; align-items: center; gap: 12px; }
+        .t-rank-img { width: 24px; text-align: center; font-weight: 900; font-size: 16px; color: var(--cyan); }
+        .t-avatar { width: 36px; height: 36px; border: 1px solid #333; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: #111; overflow: hidden; }
+        .t-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .t-name { font-weight: 900; font-size: 16px; color: #fff; }
+        .t-value { font-weight: 900; font-size: 16px; color: var(--cyan); }
     </style>
 </head>
 <body>
@@ -81,11 +85,8 @@
 <div id="app">
     <div class="header">
         <div class="u-info">
-            <div class="avatar"><img src="./logo.png" width="28" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'"></div>
-            <div style="text-align:left;">
-                <span id="u-name" style="font-weight:900;">Agent</span><br>
-                <small style="color:var(--cyan); font-size:9px;">v2.9.7 Quantum Node</small>
-            </div>
+            <div class="avatar" id="u-avatar-box"><img src="./logo.png" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'"></div>
+            <div style="text-align:left;"><span id="u-name" style="font-weight:900;">Agent</span><br><small style="color:var(--cyan); font-size:9px;">v2.9.8 Quantum Node</small></div>
         </div>
         <div class="lvl-pill" id="u-lvl">LVL 1</div>
     </div>
@@ -154,11 +155,16 @@
     tg.expand();
     const tonUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json' });
     
+    // Иконки кубков для ТОП-3
+    const trophyArr = ['🏆','🥈','🥉'];
+
     let s = { 
         id: tg.initDataUnsafe?.user?.id || "0", 
         bal: 0, lvl: 1, eng: 1000, max: 1000, 
         name: tg.initDataUnsafe?.user?.first_name || "Agent", 
-        wallet: null, bot: false 
+        wallet: null, bot: false,
+        // Поле для хранения URL аватарки
+        avatarUrl: tg.initDataUnsafe?.user?.photo_url || "" 
     };
 
     async function init() {
@@ -174,7 +180,7 @@
     }
 
     async function load() {
-        const r = await fetch(`/api/user/${s.id}?name=${encodeURIComponent(s.name)}`);
+        const r = await fetch(`/api/user/${s.id}?name=${encodeURIComponent(s.name)}&photo=${encodeURIComponent(s.avatarUrl)}`);
         const d = await r.json();
         s.bal = Number(d.balance); s.lvl = d.click_lvl; s.eng = d.energy; 
         s.max = d.max_energy; s.wallet = d.wallet_addr; s.bot = d.has_bot;
@@ -210,8 +216,8 @@
         const f = document.createElement('div');
         f.className = 'float-text';
         f.innerText = txt;
-        f.style.left = `${e.clientX || e.touches[0].clientX}px`;
-        f.style.top = `${e.clientY || e.touches[0].clientY}px`;
+        f.style.left = `${e.clientX || (e.touches && e.touches[0].clientX)}px`;
+        f.style.top = `${e.clientY || (e.touches && e.touches[0].clientY)}px`;
         f.style.color = crit ? 'var(--purple)' : 'var(--cyan)';
         f.style.fontSize = crit ? '32px' : '22px';
         document.body.appendChild(f);
@@ -221,9 +227,15 @@
     function upd() {
         document.getElementById('balance').innerText = Math.floor(s.bal).toLocaleString();
         document.getElementById('u-lvl').innerText = `LVL ${s.lvl}`;
+        document.getElementById('u-name').innerText = s.name;
         document.getElementById('eng-val').innerText = `${s.eng} / ${s.max}`;
         document.getElementById('eng-fill').style.width = `${(s.eng / s.max) * 100}%`;
         
+        // Установка аватарки пользователя в хедер
+        if(s.avatarUrl) {
+            document.getElementById('u-avatar-box').innerHTML = `<img src="${s.avatarUrl}" alt="u">`;
+        }
+
         let mtCost = Math.floor(250 * Math.pow(1.618, s.lvl - 1));
         let elCost = Math.floor(400 * Math.pow(1.5, (s.max / 500) - 1));
         
@@ -261,10 +273,29 @@
     async function loadTop() {
         openM('top');
         const cont = document.getElementById('top-container');
-        cont.innerHTML = 'LOADING...';
+        cont.innerHTML = '<div style="text-align:center; padding-top:10px;">LOADING NODES...</div>';
         const r = await fetch('/api/top');
         const data = await r.json();
-        cont.innerHTML = data.map((u, i) => `<div class="top-card" style="${u.user_id == s.id ? 'border-color:var(--cyan)' : ''}"><div><span style="color:var(--cyan);">#${i+1}</span> <b>${u.username}</b></div><span>${Math.floor(u.balance).toLocaleString()}</span></div>`).join('');
+        
+        cont.innerHTML = data.map((u, i) => {
+            // Математика нумерации: ТОП-3 с кубками, остальные с #
+            const rankShow = i < 3 ? trophyArr[i] : `<span style="opacity:0.6; font-size:14px;">#${i+1}</span>`;
+            // Подстановка аватарки или лого
+            const avatarShow = u.avatar_url ? `<img src="${u.avatar_url}" alt="t">` : `<img src="./logo.png" style="width:20px; opacity:0.3;">`;
+            
+            // Если у вас в базе есть пользователь (с нулевым балансом), но у него нет имени, сервер.js теперь подставляет 'Agent'
+
+            return `
+                <div class="top-card" style="${u.user_id == s.id ? 'border-color:var(--cyan);' : ''}">
+                    <div class="t-left">
+                        <div class="t-rank-img">${rankShow}</div>
+                        <div class="t-avatar">${avatarShow}</div>
+                        <div class="t-name">${u.username}</div>
+                    </div>
+                    <div class="t-value">${Math.floor(u.balance).toLocaleString()}</div>
+                </div>
+            `;
+        }).join('');
     }
 
     function save() { fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ userId: s.id, balance: s.bal, click_lvl: s.lvl, energy: s.eng, max_energy: s.max, wallet: s.wallet, has_bot: s.bot }) }); }
