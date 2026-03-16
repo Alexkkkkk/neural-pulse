@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v3.5.2</title>
+    <title>Neural Pulse v3.6.0</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
@@ -78,7 +78,7 @@
         </svg>
         <img src="./logo.png" class="l-logo-mid" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'">
     </div>
-    <div class="l-status">ACCESS GRANTED</div>
+    <div class="l-status">SYNCING QUANTUM NODES</div>
     <div class="l-pct" id="l-pct">0%</div>
     <div class="l-line-bg"><div class="l-line-fill" id="l-line-fill"></div></div>
 </div>
@@ -87,7 +87,7 @@
     <div class="header">
         <div class="u-info">
             <div class="avatar" id="u-avatar-box"><img src="./logo.png" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'"></div>
-            <div style="text-align:left;"><span id="u-name" style="font-weight:900;">Agent</span><br><small style="color:var(--cyan); font-size:9px;">v3.5.2 Quantum Core</small></div>
+            <div style="text-align:left;"><span id="u-name" style="font-weight:900;">Agent</span><br><small style="color:var(--cyan); font-size:9px;">v3.6.0 Quantum Math</small></div>
         </div>
         <div class="lvl-pill" id="u-lvl">LVL 1</div>
     </div>
@@ -114,9 +114,9 @@
 
 <div id="m-boost" class="modal">
     <div class="m-title">🚀 BOOSTERS</div>
-    <div class="card"><div style="text-align:left;"><b>⚡ Multitap</b><br><small>Fibonacci Scale</small></div><button id="btn-mt" class="b-btn" onclick="buyB('mt')">0</button></div>
-    <div class="card"><div style="text-align:left;"><b>🔋 Energy</b><br><small>Max Capacity</small></div><button id="btn-el" class="b-btn" onclick="buyB('el')">0</button></div>
-    <div class="card"><div style="text-align:left;"><b>🤖 Tap Bot</b><br><small>24h Autoclick</small></div><button id="btn-bot" class="b-btn" onclick="buyB('bot')">5000</button></div>
+    <div class="card"><div style="text-align:left;"><b>⚡ Multitap</b><br><small>Fibonacci Curve</small></div><button id="btn-mt" class="b-btn" onclick="buyB('mt')">0</button></div>
+    <div class="card"><div style="text-align:left;"><b>🔋 Energy</b><br><small>Log Scale</small></div><button id="btn-el" class="b-btn" onclick="buyB('el')">0</button></div>
+    <div class="card"><div style="text-align:left;"><b>🤖 Tap Bot</b><br><small>24h Autoclick</small></div><button id="btn-bot" class="b-btn" onclick="buyB('bot')">15000</button></div>
     <button class="btn-cls" onclick="closeM()">BACK</button>
 </div>
 
@@ -165,6 +165,10 @@
         avatarUrl: tg.initDataUnsafe?.user?.photo_url || "" 
     };
 
+    // ГЕОМЕТРИЧЕСКАЯ МАТЕМАТИКА
+    const calcCostMT = (lvl) => Math.floor(500 * Math.pow(1.618, lvl - 1));
+    const calcCostEL = (max) => Math.floor(1000 * Math.pow(1.5, (max / 500) - 2));
+
     async function init() {
         let p = 0; const circ = document.getElementById('l-circle-bar');
         const i = setInterval(() => {
@@ -187,8 +191,11 @@
         if(s.bot && d.last_seen) {
             const diff = Math.floor((Date.now() - new Date(d.last_seen).getTime()) / 1000);
             if(diff > 60) {
-                const profit = Math.floor(Math.min(diff, 86400) * (s.lvl * 0.15));
-                if(profit > 0) { s.bal += profit; tg.showAlert(`Bot mined: +${profit.toLocaleString()} units.`); }
+                // Математика прибыли бота: базовый доход + бонус за уровень (логарифмический)
+                const baseProfit = Math.min(diff, 86400) * (s.lvl * 0.25);
+                const bonusProfit = Math.log10(s.lvl + 1) * 100;
+                const totalProfit = Math.floor(baseProfit + bonusProfit);
+                if(totalProfit > 0) { s.bal += totalProfit; tg.showAlert(`Bot mined: +${totalProfit.toLocaleString()} units.`); }
             }
         }
         upd();
@@ -196,11 +203,15 @@
 
     function tap(e) {
         if(s.eng >= s.lvl) {
-            let isCrit = Math.random() < 0.05;
-            let pwr = isCrit ? s.lvl * 2 : s.lvl;
+            // Критический удар теперь зависит от уровня (шанс растет логарифмически)
+            let critChance = 0.05 + (Math.log10(s.lvl) * 0.02);
+            let isCrit = Math.random() < critChance;
+            let pwr = isCrit ? Math.floor(s.lvl * 2.5) : s.lvl;
+            
             s.bal += pwr; s.eng -= s.lvl;
             createFloat(e, isCrit ? `💥 CRIT +${pwr}` : `+${pwr}`, isCrit);
             tg.HapticFeedback.impactOccurred(isCrit ? 'heavy' : 'light');
+            
             const img = document.getElementById('tap-img');
             img.style.transform = 'scale(0.92) rotate('+(Math.random()*6-3)+'deg)';
             setTimeout(() => img.style.transform='scale(1)', 50);
@@ -212,8 +223,8 @@
         const f = document.createElement('div');
         f.className = 'float-text';
         f.innerText = txt;
-        f.style.left = `${(e.clientX || e.touches?.[0].clientX) || 100}px`;
-        f.style.top = `${(e.clientY || e.touches?.[0].clientY) || 100}px`;
+        f.style.left = `${(e.clientX || e.touches?.[0].clientX) || window.innerWidth/2}px`;
+        f.style.top = `${(e.clientY || e.touches?.[0].clientY) || window.innerHeight/2}px`;
         f.style.color = crit ? 'var(--purple)' : 'var(--cyan)';
         f.style.fontSize = crit ? '32px' : '22px';
         document.body.appendChild(f);
@@ -228,11 +239,18 @@
         document.getElementById('eng-fill').style.width = `${(s.eng / s.max) * 100}%`;
         if(s.avatarUrl) document.getElementById('u-avatar-box').innerHTML = `<img src="${s.avatarUrl}" alt="u">`;
 
-        let mtCost = Math.floor(250 * Math.pow(1.618, s.lvl - 1));
-        let elCost = Math.floor(400 * Math.pow(1.5, (s.max / 500) - 1));
+        // Обновление стоимости по новой формуле
+        let mtCost = calcCostMT(s.lvl);
+        let elCost = calcCostEL(s.max);
+        
         document.getElementById('btn-mt').innerText = mtCost.toLocaleString();
         document.getElementById('btn-el').innerText = elCost.toLocaleString();
-        if(s.bot) { document.getElementById('btn-bot').innerText = "ACTIVE"; document.getElementById('btn-bot').disabled = true; }
+        
+        if(s.bot) { 
+            document.getElementById('btn-bot').innerText = "ACTIVE"; 
+            document.getElementById('btn-bot').disabled = true; 
+        }
+        
         const addr = document.getElementById('wallet-addr');
         if(s.wallet) addr.innerText = s.wallet.slice(0,6)+"..."+s.wallet.slice(-4);
     }
@@ -240,13 +258,13 @@
     function buyB(t) {
         let cost = 0;
         if(t === 'mt') { 
-            cost = Math.floor(250 * Math.pow(1.618, s.lvl - 1));
+            cost = calcCostMT(s.lvl);
             if(s.bal >= cost) { s.bal -= cost; s.lvl++; }
         } else if(t === 'el') {
-            cost = Math.floor(400 * Math.pow(1.5, (s.max / 500) - 1));
-            if(s.bal >= cost) { s.bal -= cost; s.max += 500; s.eng += 500; }
+            cost = calcCostEL(s.max);
+            if(s.bal >= cost) { s.bal -= cost; s.max += 500; s.eng = s.max; }
         } else if(t === 'bot') {
-            if(s.bal >= 5000 && !s.bot) { s.bal -= 5000; s.bot = true; }
+            if(s.bal >= 15000 && !s.bot) { s.bal -= 15000; s.bot = true; }
         }
         upd(); save();
     }
@@ -257,7 +275,7 @@
         cont.innerHTML = 'SYNCING...';
         const r = await fetch(`/api/friends/${s.id}`);
         const data = await r.json();
-        cont.innerHTML = data.length ? data.map(f => `<div class="top-card"><b>${f.username}</b><span style="color:var(--cyan);">+5,000</span></div>`).join('') : 'Squad is empty.';
+        cont.innerHTML = data.length ? data.map(f => `<div class="top-card"><b>${f.username}</b><span style="color:var(--cyan);">+10,000</span></div>`).join('') : 'Squad is empty.';
     }
 
     async function loadTop() {
@@ -293,7 +311,14 @@
     function closeM() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
     function handleWalletAction() { if (tonUI.connected) tonUI.disconnect(); else { closeM(); tonUI.openModal(); } }
     
-    setInterval(() => { if(s.eng < s.max) { s.eng = Math.min(s.max, s.eng + 1); upd(); } }, 1000);
+    // Энергия восстанавливается быстрее, если уровень высокий (математический бонус)
+    setInterval(() => { 
+        if(s.eng < s.max) { 
+            let regen = 1 + Math.floor(s.lvl / 10);
+            s.eng = Math.min(s.max, s.eng + regen); 
+            upd(); 
+        } 
+    }, 1000);
     init();
 </script>
 </body>
