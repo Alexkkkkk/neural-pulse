@@ -22,16 +22,15 @@ const initDB = async () => {
             energy INTEGER DEFAULT 1000,
             max_energy INTEGER DEFAULT 1000,
             click_lvl INTEGER DEFAULT 1,
-            energy_lvl INTEGER DEFAULT 1,
-            speed_lvl INTEGER DEFAULT 1,
             pnl NUMERIC DEFAULT 0
         )`);
-    } catch (e) { console.error("Database Error:", e); }
+        console.log("Neural Pulse DB: Connected");
+    } catch (e) { console.error("DB Error:", e); }
 };
 initDB();
 
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v1.5.6</b>`, Markup.inlineKeyboard([
+    ctx.replyWithHTML(`<b>Neural Pulse v2.2.0</b>`, Markup.inlineKeyboard([
         [Markup.button.webApp("OPEN TERMINAL", "https://neural-pulse.bothost.ru")]
     ]));
 });
@@ -40,7 +39,7 @@ app.get('/api/user/:id', async (req, res) => {
     try {
         let r = await pool.query('SELECT * FROM users WHERE user_id = $1', [req.params.id]);
         if (r.rows.length === 0) {
-            await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2)', [req.params.id, req.query.name || 'User']);
+            await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2)', [req.params.id, req.query.name || 'Agent']);
             r = await pool.query('SELECT * FROM users WHERE user_id = $1', [req.params.id]);
         }
         res.json(r.rows[0]);
@@ -55,17 +54,11 @@ app.get('/api/stats', async (req, res) => {
 });
 
 app.post('/api/save', async (req, res) => {
-    const { userId, balance, click_lvl, energy, max_energy } = req.body;
+    const { userId, balance, energy, click_lvl } = req.body;
     try {
-        await pool.query(
-            `UPDATE users SET balance=$2, click_lvl=$3, energy=$4, max_energy=$5 WHERE user_id=$1`,
-            [userId, balance, click_lvl, energy, max_energy]
-        );
+        await pool.query('UPDATE users SET balance=$2, energy=$3, click_lvl=$4 WHERE user_id=$1', [userId, balance, energy, click_lvl]);
         res.json({ok: true});
     } catch (e) { res.status(500).send(e.message); }
 });
 
-app.listen(3000, () => { 
-    console.log("Server v1.5.6 Online");
-    bot.launch();
-});
+app.listen(3000, () => { bot.launch(); });
