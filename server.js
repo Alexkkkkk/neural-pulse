@@ -9,7 +9,6 @@ const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// ПРАВИЛО: SSL отключен для совместимости с Bothost
 const pool = new Pool({ 
     connectionString: PG_URI,
     ssl: false 
@@ -18,9 +17,10 @@ const pool = new Pool({
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Инициализация и проверка структуры таблиц
+// ПРАВИЛО: Принудительное исправление типов данных без удаления таблицы
 const initDB = async () => {
     try {
+        // 1. Создаем базу, если пусто
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
@@ -36,16 +36,30 @@ const initDB = async () => {
             )
         `);
 
-        // ПРАВИЛО: Принудительное добавление колонок, если они отсутствуют
+        // 2. Исправляем существующие колонки (если типы не те)
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT ''`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_addr TEXT`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS has_bot BOOLEAN DEFAULT FALSE`);
         
-        console.log("Database Engine: FULL SYNC (v3.1.6)");
+        // ПРАВИЛО: Исправление ошибки "last_seen is bigint but expression is timestamp"
+        await pool.query(`
+            DO $$ 
+            BEGIN 
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name='users' AND column_name='last_seen' AND data_type='bigint'
+                ) THEN 
+                    ALTER TABLE users ALTER COLUMN last_seen TYPE TIMESTAMP WITHOUT TIME ZONE 
+                    USING (to_timestamp(last_seen / 1000));
+                END IF;
+            END $$;
+        `);
+
+        console.log("Database Engine: REPAIRED & SYNCED (v3.1.7)");
     } catch (e) { console.error("FATAL DB ERROR:", e); }
 };
 initDB();
 
-// API: Получение/Создание пользователя
 app.get('/api/user/:id', async (req, res) => {
     const uid = req.params.id;
     const { name, photo } = req.query;
@@ -68,7 +82,6 @@ app.get('/api/user/:id', async (req, res) => {
     }
 });
 
-// API: Сохранение прогресса
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, max_energy, click_lvl, wallet, has_bot } = req.body;
     if (!userId || userId === "0") return res.status(400).json({ error: "Invalid ID" });
@@ -101,7 +114,6 @@ app.post('/api/save', async (req, res) => {
     }
 });
 
-// API: Лидерборд
 app.get('/api/top', async (req, res) => {
     try {
         const r = await pool.query('SELECT user_id, username, avatar_url, balance FROM users ORDER BY balance DESC LIMIT 50');
@@ -110,11 +122,8 @@ app.get('/api/top', async (req, res) => {
 });
 
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v3.1.6</b>\nСтатус системы: Стабильно.`,
+    ctx.replyWithHTML(`<b>Neural Pulse v3.1.7</b>\nБаза данных принудительно синхронизирована.`,
         Markup.inlineKeyboard([[Markup.button.webApp("OPEN CLUSTER", "https://neural-pulse.bothost.ru")]]));
 });
 
-app.listen(3000, () => { 
-    console.log("Pulse Server v3.1.6 Live"); 
-    bot.launch().catch(err => console.error("Bot launch fail:", err));
-});
+app.listen(3000, () => { console.log("Pulse Server v3.1.7 Live"); bot.launch(); });
