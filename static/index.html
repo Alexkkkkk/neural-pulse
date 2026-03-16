@@ -5,71 +5,65 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/sdk@latest/dist/tonconnect-sdk.min.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
         body { background: var(--bg); color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; }
         
-        /* Loader Design */
+        /* Loader v2.1.5 */
         #loader { position: fixed; inset: 0; background: #000; z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .l-circle { width: 160px; height: 160px; border: 2px solid #111; border-top: 2px solid var(--cyan); border-radius: 50%; display: flex; align-items: center; justify-content: center; animation: spin 2s linear infinite; }
+        .l-circle { width: 150px; height: 150px; border: 2px solid #111; border-top: 2px solid var(--cyan); border-radius: 50%; display: flex; align-items: center; justify-content: center; animation: spin 2s linear infinite; }
         .l-logo { width: 80px; filter: drop-shadow(0 0 15px var(--purple)); }
-        .l-title { margin-top: 40px; font-weight: 900; letter-spacing: 3px; font-size: 14px; text-transform: uppercase; }
-        .l-pct { margin-top: 15px; font-size: 38px; font-weight: 900; color: var(--cyan); }
-        .l-bar-bg { width: 220px; height: 4px; background: #111; margin-top: 20px; border-radius: 10px; overflow: hidden; }
-        .l-bar-f { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 0%; }
+        .l-pct { margin-top: 20px; font-size: 38px; font-weight: 900; color: var(--cyan); }
         @keyframes spin { 100% { transform: rotate(360deg); } }
 
         #app { display: none; height: 100vh; flex-direction: column; align-items: center; padding: 20px; box-sizing: border-box; }
 
-        /* UI Elements */
-        .header { width: 100%; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; }
-        .user-info { display: flex; align-items: center; gap: 12px; }
+        /* UI Panel */
+        .header { width: 100%; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; box-sizing: border-box; }
         .avatar { width: 44px; height: 44px; border: 2px solid var(--cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; background: #111; }
         .lvl-pill { background: var(--cyan); color: #000; padding: 6px 14px; border-radius: 10px; font-weight: 900; font-size: 14px; }
 
-        .balance { font-size: 70px; font-weight: 900; margin: 15px 0; }
+        .balance { font-size: 70px; font-weight: 900; margin: 20px 0; }
 
-        .game-zone { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
-        .main-logo { width: 230px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; z-index: 5; }
+        .play-area { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
+        .main-logo { width: 230px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; }
         .main-logo:active { transform: scale(0.95); }
 
         .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px; }
         .side-btn { background: #0d0d0d; border: 1px solid #222; color: #fff; padding: 14px 0; border-radius: 15px; font-size: 11px; font-weight: 900; width: 105px; }
 
-        /* Energy Layout */
-        .energy-box { width: 100%; margin-bottom: 30px; }
-        .energy-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 900; color: #555; margin-bottom: 8px; }
-        .energy-bar-bg { width: 100%; height: 8px; background: #111; border-radius: 10px; border: 1px solid #1a1a1a; overflow: hidden; }
-        .energy-bar-f { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; }
+        /* Energy Above Bar */
+        .eng-wrap { width: 100%; margin-bottom: 30px; }
+        .eng-info { display: flex; justify-content: space-between; font-size: 11px; font-weight: 900; color: #555; margin-bottom: 8px; }
+        .bar-bg { width: 100%; height: 8px; background: #111; border-radius: 10px; border: 1px solid #1a1a1a; overflow: hidden; }
+        .bar-f { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; }
 
         .footer { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
-        .footer-btn { background: #080808; border: 1px solid #1a1a1a; padding: 18px 0; border-radius: 15px; font-size: 10px; font-weight: 900; }
+        .f-btn { background: #080808; border: 1px solid #1a1a1a; padding: 18px 0; border-radius: 15px; font-size: 10px; font-weight: 900; }
 
-        /* Wallet & Stats Modals */
-        .modal { position: fixed; inset: 0; background: #000; z-index: 20000; display: none; flex-direction: column; padding: 40px 20px; text-align: left; }
-        .modal-title { font-size: 34px; font-weight: 900; margin-bottom: 30px; }
+        /* Modals */
+        .modal { position: fixed; inset: 0; background: #000; z-index: 20000; display: none; flex-direction: column; padding: 40px 20px; }
+        .m-title { font-size: 34px; font-weight: 900; margin-bottom: 30px; text-align: left; }
         .card { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 20px; border-radius: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
-        .action-btn { background: var(--cyan); color: #000; border: none; padding: 15px; border-radius: 15px; font-weight: 900; width: 100%; font-size: 16px; }
-        .close-btn { background: #fff; color: #000; padding: 20px; border-radius: 15px; font-weight: 900; width: 100%; border: none; margin-top: auto; }
+        .btn-act { background: var(--cyan); color: #000; border: none; padding: 16px; border-radius: 15px; font-weight: 900; width: 100%; font-size: 16px; }
+        .btn-cls { background: #fff; color: #000; padding: 20px; border-radius: 15px; font-weight: 900; width: 100%; border: none; margin-top: auto; }
     </style>
 </head>
 <body>
 
 <div id="loader">
     <div class="l-circle"><img src="logo.png" class="l-logo" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'"></div>
-    <div class="l-title">Access Granted</div>
     <div class="l-pct" id="l-pct">0%</div>
-    <div class="l-bar-bg"><div class="l-bar-f" id="l-bar-f"></div></div>
 </div>
 
 <div id="app">
     <div class="header">
-        <div class="user-info">
+        <div style="display:flex; align-items:center; gap:12px;">
             <div class="avatar"><img src="logo.png" width="30" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'"></div>
             <div style="text-align:left;">
-                <span id="u-name" style="font-weight:900; font-size:16px;">Agent</span><br>
-                <span style="font-size:10px; color:var(--cyan);">v1.5.5 Active Node</span>
+                <span id="u-name" style="font-weight:900;">Agent</span><br>
+                <small style="color:var(--cyan); font-size:9px;">v1.5.5 Active Node</small>
             </div>
         </div>
         <div class="lvl-pill" id="u-lvl">LVL 1</div>
@@ -77,7 +71,7 @@
 
     <div class="balance" id="balance">0</div>
     
-    <div class="game-zone">
+    <div class="play-area">
         <img src="logo.png" class="main-logo" onclick="tap(event)" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'">
         <div class="side-menu">
             <div class="side-btn" onclick="openM('wallet')">WALLET</div>
@@ -86,70 +80,78 @@
         </div>
     </div>
 
-    <div class="energy-box">
-        <div class="energy-header"><span>ENERGY</span><span id="eng-val">1000 / 1000</span></div>
-        <div class="energy-bar-bg"><div class="energy-bar-f" id="eng-fill"></div></div>
+    <div class="eng-wrap">
+        <div class="eng-info"><span>ENERGY</span><span id="eng-val">1000 / 1000</span></div>
+        <div class="bar-bg"><div class="bar-f" id="eng-fill"></div></div>
     </div>
     
     <div class="footer">
-        <div class="footer-btn" onclick="openM('boost')">BOOST</div>
-        <div class="footer-btn">MINE</div>
-        <div class="footer-btn">TASKS</div>
-        <div class="footer-btn" onclick="openM('stats')">STATS</div>
+        <div class="f-btn" onclick="openM('boost')">BOOST</div>
+        <div class="f-btn">MINE</div>
+        <div class="f-btn">TASKS</div>
+        <div class="f-btn" onclick="openM('stats')">STATS</div>
     </div>
 </div>
 
 <div id="m-wallet" class="modal">
-    <div class="modal-title">Wallet</div>
-    <div class="card" id="wallet-card">
+    <div class="m-title">Wallet</div>
+    <div class="card">
         <div style="text-align:left;">
-            <b>TON Network</b><br>
+            <b>TON Connect</b><br>
             <small id="wallet-addr" style="color:#555">Not Connected</small>
         </div>
         <img src="https://ton.org/download/ton_symbol.png" width="30">
     </div>
-    <button class="action-btn" id="conn-btn" onclick="toggleWallet()">CONNECT WALLET</button>
-    <button class="close-btn" onclick="closeM()">BACK</button>
+    <div id="ton-connect-button" style="display:none"></div>
+    <button class="btn-act" id="custom-wallet-btn" onclick="connectWallet()">CONNECT WALLET</button>
+    <button class="btn-cls" onclick="closeM()">BACK</button>
 </div>
 
 <div id="m-stats" class="modal">
-    <div class="modal-title">Top Agents</div>
+    <div class="m-title">Leaderboard</div>
     <div id="stats-list" style="flex:1; overflow-y:auto;"></div>
-    <button class="close-btn" onclick="closeM()">CLOSE</button>
+    <button class="btn-cls" onclick="closeM()">CLOSE</button>
 </div>
 
 <script>
     const tg = window.Telegram.WebApp;
     tg.expand();
-    
-    // TonConnect v2.1.5 Logic
-    const ton = new TonConnectSDK.TonConnect({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json' });
+
+    // Правильная инициализация TON Connect UI
+    const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+        manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
+        buttonRootId: 'ton-connect-button' 
+    });
 
     let s = { id: tg.initDataUnsafe?.user?.id || "0", bal: 0, lvl: 1, eng: 1000, max: 1000, name: tg.initDataUnsafe?.user?.first_name || "Agent", wallet: null };
 
     async function init() {
         let p = 0;
         const i = setInterval(() => {
-            p += Math.floor(Math.random() * 5) + 3;
-            if(p >= 100) { 
-                p = 100; clearInterval(i); 
-                document.getElementById('loader').style.display = 'none'; 
-                document.getElementById('app').style.display = 'flex'; 
-            }
+            p += 4;
+            if(p >= 100) { p = 100; clearInterval(i); document.getElementById('loader').style.display = 'none'; document.getElementById('app').style.display = 'flex'; }
             document.getElementById('l-pct').innerText = p + '%';
-            document.getElementById('l-bar-f').style.width = p + '%';
         }, 50);
         await load();
 
-        ton.onStatusChange(w => {
-            if (w) {
-                s.wallet = w.account.address;
+        // Мониторинг кошелька
+        tonConnectUI.onStatusChange(wallet => {
+            if (wallet) {
+                s.wallet = wallet.account.address;
                 upd(); save();
             } else {
                 s.wallet = null;
                 upd();
             }
         });
+    }
+
+    async function connectWallet() {
+        if (tonConnectUI.connected) {
+            await tonConnectUI.disconnect();
+        } else {
+            await tonConnectUI.openModal();
+        }
     }
 
     async function load() {
@@ -175,32 +177,19 @@
         document.getElementById('eng-fill').style.width = `${(s.eng / s.max) * 100}%`;
         
         const addrTxt = document.getElementById('wallet-addr');
-        const connBtn = document.getElementById('conn-btn');
+        const btnTxt = document.getElementById('custom-wallet-btn');
         if(s.wallet) {
             addrTxt.innerText = s.wallet.slice(0,6) + "..." + s.wallet.slice(-4);
             addrTxt.style.color = "var(--cyan)";
-            connBtn.innerText = "DISCONNECT";
+            btnTxt.innerText = "DISCONNECT";
         } else {
             addrTxt.innerText = "Not Connected";
-            addrTxt.style.color = "#555";
-            connBtn.innerText = "CONNECT WALLET";
+            btnTxt.innerText = "CONNECT WALLET";
         }
     }
 
     function save() {
         fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ userId: s.id, balance: s.bal, click_lvl: s.lvl, energy: s.eng, wallet: s.wallet }) });
-    }
-
-    async function toggleWallet() {
-        if (ton.connected) {
-            await ton.disconnect();
-        } else {
-            const wallets = await ton.getWallets();
-            if (wallets.length > 0) {
-                const url = await ton.connect(wallets[0]);
-                if (url) window.location.href = url;
-            }
-        }
     }
 
     function openM(id) {
