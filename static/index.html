@@ -3,155 +3,192 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v2.1.16</title>
+    <title>Neural Pulse</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@tonconnect/sdk@latest/dist/tonconnect-sdk.min.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
         body { background: var(--bg); color: #fff; font-family: 'Segoe UI', sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; }
         
-        /* Правило: Экран загрузки Access Granted */
+        /* Экран загрузки (Access Granted) */
         #loader { position: fixed; inset: 0; background: #000; z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .l-img { width: 140px; filter: drop-shadow(0 0 20px var(--cyan)); margin-bottom: 25px; }
-        .l-txt { font-weight: 900; letter-spacing: 4px; font-size: 16px; margin-bottom: 10px; }
-        .l-pct { font-size: 36px; font-weight: 900; color: var(--cyan); }
-        .l-bar-bg { width: 200px; height: 4px; background: #111; margin-top: 25px; border-radius: 10px; overflow: hidden; }
-        .l-bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: width 0.1s; }
+        .l-pct { font-size: 48px; font-weight: 900; color: var(--cyan); text-shadow: 0 0 20px var(--cyan); }
 
-        /* Основной интерфейс */
-        #app { display: none; height: 100vh; flex-direction: column; align-items: center; padding-top: 30px; }
-        .balance { font-size: 54px; font-weight: 900; text-shadow: 0 0 20px var(--cyan); margin-bottom: 5px; }
-        
-        /* Контейнер для боковых кнопок */
-        .game-zone { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
-        .logo-btn { width: 240px; z-index: 5; filter: drop-shadow(0 0 40px var(--purple)); cursor: pointer; transition: transform 0.05s; }
-        .logo-btn:active { transform: scale(0.96); }
+        #app { display: none; height: 100vh; flex-direction: column; align-items: center; padding: 20px; box-sizing: border-box; }
 
-        /* Боковое меню по твоим правилам */
-        .side-menu { position: absolute; right: 15px; display: flex; flex-direction: column; gap: 12px; }
-        .menu-item { background: rgba(15,15,15,0.9); border: 1px solid #222; color: #fff; padding: 12px 0; border-radius: 12px; font-size: 10px; font-weight: 900; width: 85px; text-align: center; backdrop-filter: blur(4px); }
+        /* Верхняя панель (Screenshot v1.5.5) */
+        .header-ui { width: 100%; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; }
+        .user-box { display: flex; align-items: center; gap: 12px; }
+        .avatar { width: 42px; height: 42px; border: 2px solid var(--cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; background: #111; font-weight: 900; color: var(--cyan); }
+        .u-info { text-align: left; }
+        .u-name { font-weight: 900; font-size: 16px; display: block; }
+        .u-status { font-size: 10px; color: var(--cyan); opacity: 0.8; }
+        .lvl-pill { background: var(--cyan); color: #000; padding: 6px 14px; border-radius: 10px; font-weight: 900; font-size: 14px; }
+
+        .balance { font-size: 68px; font-weight: 900; margin: 15px 0; }
+
+        /* Центр и боковые кнопки */
+        .play-zone { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
+        .logo { width: 230px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; z-index: 5; }
+        .logo:active { transform: scale(0.94); }
+
+        .side-bar { position: absolute; right: 0; display: flex; flex-direction: column; gap: 12px; }
+        .s-item { background: #0d0d0d; border: 1px solid #222; color: #fff; padding: 15px 0; border-radius: 15px; font-size: 11px; font-weight: 900; width: 105px; text-align: center; }
 
         /* Энергия */
-        .energy-section { width: 85%; margin-bottom: 35px; }
-        .energy-info { display: flex; justify-content: space-between; font-size: 11px; color: #666; margin-bottom: 6px; font-weight: 900; letter-spacing: 1px; }
-        .energy-bg { width: 100%; height: 6px; background: #111; border-radius: 10px; border: 1px solid #1a1a1a; overflow: hidden; }
-        .energy-fill { height: 100%; background: var(--cyan); width: 100%; transition: width 0.2s; }
+        .eng-container { width: 100%; margin-bottom: 30px; }
+        .eng-text { display: flex; justify-content: space-between; font-size: 11px; font-weight: 900; color: #444; margin-bottom: 8px; }
+        .eng-bg { width: 100%; height: 8px; background: #111; border-radius: 10px; border: 1px solid #1a1a1a; overflow: hidden; }
+        .eng-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; transition: width 0.3s; }
 
-        /* Нижняя навигация */
-        .nav-grid { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 30px; }
-        .nav-card { background: #080808; border: 1px solid #1a1a1a; padding: 16px 0; border-radius: 14px; font-size: 10px; font-weight: 900; color: #fff; }
+        /* Футер */
+        .footer-nav { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
+        .f-btn { background: #080808; border: 1px solid #1a1a1a; padding: 18px 0; border-radius: 15px; font-size: 10px; font-weight: 900; }
+
+        /* Модальные окна */
+        .modal { position: fixed; inset: 0; background: #000; z-index: 20000; display: none; flex-direction: column; padding: 40px 20px; text-align: left; }
+        .m-title { font-size: 36px; font-weight: 900; margin-bottom: 30px; }
+        .m-body { flex: 1; overflow-y: auto; }
+        .card { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 20px; border-radius: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .btn-buy { background: var(--cyan); color: #000; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 900; }
+        .btn-close { background: #fff; color: #000; padding: 20px; border-radius: 15px; font-weight: 900; width: 100%; border: none; margin-top: 20px; }
     </style>
 </head>
 <body>
 
-<div id="loader">
-    <img src="logo.png" class="l-img">
-    <div class="l-txt">ACCESS GRANTED</div>
-    <div class="l-pct" id="l-pct">0%</div>
-    <div class="l-bar-bg"><div class="l-bar-fill" id="l-fill"></div></div>
-</div>
+<div id="loader"><div class="l-pct" id="l-pct">0%</div></div>
 
 <div id="app">
+    <div class="header-ui">
+        <div class="user-box">
+            <div class="avatar">AI</div>
+            <div class="u-info"><span class="u-name" id="u-name">...</span><span class="u-status">v1.5.6 Active Node</span></div>
+        </div>
+        <div class="lvl-pill" id="u-lvl">LVL 1</div>
+    </div>
+
     <div class="balance" id="balance">0</div>
     
-    <div class="game-zone">
-        <img src="logo.png" class="logo-btn" onclick="handleTap(event)">
-        
-        <div class="side-menu">
-            <div class="menu-item">WALLET</div>
-            <div class="menu-item">FRIENDS</div>
-            <div class="menu-item">BONUS</div>
+    <div class="play-zone">
+        <img src="logo.png" class="logo" onclick="tap(event)">
+        <div class="side-bar">
+            <div class="s-item" onclick="openM('wallet')">WALLET</div>
+            <div class="s-item" onclick="openM('friends')">FRIENDS</div>
+            <div class="s-item" onclick="openM('bonus')">BONUS</div>
         </div>
     </div>
 
-    <div class="energy-section">
-        <div class="energy-info"><span>ENERGY</span><span id="energy-text">1000/1000</span></div>
-        <div class="energy-bg"><div class="energy-fill" id="energy-fill"></div></div>
+    <div class="eng-container">
+        <div class="eng-text"><span>ENERGY</span><span id="eng-val">1000/1000</span></div>
+        <div class="eng-bg"><div class="eng-fill" id="eng-fill"></div></div>
     </div>
     
-    <div class="nav-grid">
-        <div class="nav-card">BOOST</div>
-        <div class="nav-card">MINE</div>
-        <div class="nav-card">TASKS</div>
-        <div class="nav-card">STATS</div>
+    <div class="footer-nav">
+        <div class="f-btn" onclick="openM('boost')">BOOST</div>
+        <div class="f-btn">MINE</div>
+        <div class="f-btn">TASKS</div>
+        <div class="f-btn" onclick="openM('stats')">STATS</div>
     </div>
+</div>
+
+<div id="m-wallet" class="modal">
+    <div class="m-title">Select Wallet</div>
+    <div class="m-body">
+        <div class="card" onclick="connectTon()" style="cursor:pointer; border-color:var(--cyan)">
+            <span style="font-weight:900;">TON CONNECT</span>
+            <img src="https://ton.org/download/ton_symbol.png" width="24">
+        </div>
+    </div>
+    <button class="btn-close" onclick="closeM()">BACK</button>
+</div>
+
+<div id="m-stats" class="modal">
+    <div class="m-title">Stats</div>
+    <div id="stats-list" class="m-body"></div>
+    <button class="btn-close" onclick="closeM()">CLOSE</button>
+</div>
+
+<div id="m-boost" class="modal">
+    <div class="m-title">Boost</div>
+    <div class="m-body">
+        <div class="card">
+            <div><b style="font-size:18px;">Multitap</b><br><small id="b-cost">Cost: 2500</small></div>
+            <button class="btn-buy" onclick="buyB()">UPGRADE</button>
+        </div>
+    </div>
+    <button class="btn-close" onclick="closeM()">CLOSE</button>
 </div>
 
 <script>
     const tg = window.Telegram.WebApp;
     tg.expand();
+    const ton = new TonConnectSDK.TonConnect({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json' });
 
-    let user = { id: tg.initDataUnsafe?.user?.id || "0", bal: 0, lvl: 1, eng: 1000, maxE: 1000 };
+    let s = { id: tg.initDataUnsafe?.user?.id || "0", bal: 0, lvl: 1, eng: 1000, maxE: 1000, name: tg.initDataUnsafe?.user?.first_name || "User" };
 
-    async function startApp() {
-        // Симуляция загрузки согласно дизайну
-        let progress = 0;
-        const interval = setInterval(() => {
-            progress += Math.floor(Math.random() * 4) + 2;
-            if(progress >= 100) {
-                progress = 100;
-                clearInterval(interval);
-                document.getElementById('loader').style.display = 'none';
-                document.getElementById('app').style.display = 'flex';
-            }
-            document.getElementById('l-pct').innerText = progress + '%';
-            document.getElementById('l-fill').style.width = progress + '%';
-        }, 40);
-
-        await fetchData();
+    async function start() {
+        let p = 0;
+        const i = setInterval(() => {
+            p += Math.floor(Math.random() * 5) + 3;
+            if(p >= 100) { p = 100; clearInterval(i); document.getElementById('loader').style.display = 'none'; document.getElementById('app').style.display = 'flex'; }
+            document.getElementById('l-pct').innerText = p + '%';
+        }, 50);
+        await load();
     }
 
-    async function fetchData() {
-        try {
-            const res = await fetch(`/api/user/${user.id}?name=${encodeURIComponent(tg.initDataUnsafe?.user?.first_name || 'User')}`);
-            const data = await res.json();
-            user.bal = Number(data.balance);
-            user.lvl = Number(data.click_lvl || 1);
-            user.maxE = Number(data.max_energy || 1000);
-            user.eng = Number(data.energy || 1000);
-            updateView();
-        } catch(e) {}
+    async function load() {
+        const r = await fetch(`/api/user/${s.id}?name=${encodeURIComponent(s.name)}`);
+        const d = await r.json();
+        s.bal = Number(d.balance); s.lvl = d.click_lvl; s.eng = d.energy; s.maxE = d.max_energy;
+        upd();
     }
 
-    function handleTap(e) {
-        if(user.eng >= user.lvl) {
-            user.bal += user.lvl;
-            user.eng -= user.lvl;
+    function tap(e) {
+        if(s.eng >= s.lvl) {
+            s.bal += s.lvl; s.eng -= s.lvl;
             tg.HapticFeedback.impactOccurred('medium');
-            updateView();
-            syncData();
+            upd(); save();
         }
     }
 
-    function updateView() {
-        document.getElementById('balance').innerText = Math.floor(user.bal).toLocaleString();
-        document.getElementById('energy-text').innerText = `${user.eng}/${user.maxE}`;
-        document.getElementById('energy-fill').style.width = `${(user.eng / user.maxE) * 100}%`;
+    function upd() {
+        document.getElementById('balance').innerText = Math.floor(s.bal).toLocaleString();
+        document.getElementById('u-name').innerText = s.name;
+        document.getElementById('u-lvl').innerText = `LVL ${s.lvl}`;
+        document.getElementById('eng-val').innerText = `${s.eng}/${s.maxE}`;
+        document.getElementById('eng-fill').style.width = `${(s.eng / s.maxE) * 100}%`;
+        document.getElementById('b-cost').innerText = `Cost: ${s.lvl * 2500}`;
     }
 
-    function syncData() {
-        fetch('/api/save', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ 
-                userId: user.id, 
-                balance: user.bal, 
-                click_lvl: user.lvl, 
-                energy: user.eng, 
-                max_energy: user.maxE 
-            })
-        });
+    function save() {
+        fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ userId: s.id, balance: s.bal, click_lvl: s.lvl, energy: s.eng, max_energy: s.maxE }) });
     }
 
-    // Регенерация системы
-    setInterval(() => {
-        if(user.eng < user.maxE) {
-            user.eng = Math.min(user.maxE, user.eng + 1);
-            updateView();
-        }
-    }, 1000);
+    function openM(id) {
+        if(id === 'stats') loadStats();
+        document.getElementById('m-' + id).style.display = 'flex';
+    }
 
-    startApp();
+    function closeM() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
+
+    async function loadStats() {
+        const r = await fetch('/api/stats');
+        const d = await r.json();
+        document.getElementById('stats-list').innerHTML = d.map((x, i) => `<div class="card"><span>#${i+1} ${x.username}</span><b>${Math.floor(x.balance)}</b></div>`).join('');
+    }
+
+    function buyB() {
+        const c = s.lvl * 2500;
+        if(s.bal >= c) { s.bal -= c; s.lvl++; upd(); save(); }
+    }
+
+    async function connectTon() {
+        const w = await ton.getWallets();
+        ton.connect(w[0]);
+    }
+
+    setInterval(() => { if(s.eng < s.maxE) { s.eng = Math.min(s.maxE, s.eng + 1); upd(); } }, 1000);
+    start();
 </script>
-
 </body>
 </html>
