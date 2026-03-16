@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v3.1.4</title>
+    <title>Neural Pulse v3.1.6</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
         body { background: var(--bg); color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; user-select: none; }
         
-        /* Loader */
+        /* Лоадер */
         #loader { position: fixed; inset: 0; background: #000; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .l-circle-wrap { position: relative; width: 160px; height: 160px; }
         .l-circle-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
@@ -64,7 +64,7 @@
     <div class="header">
         <div class="u-info">
             <div class="avatar" id="u-avatar-box"><img src="./images/logo.png" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'"></div>
-            <div style="text-align:left;"><span id="u-name" style="font-weight:900;">...</span><br><small style="color:var(--cyan); font-size:9px;">v3.1.4 Stable</small></div>
+            <div style="text-align:left;"><span id="u-name" style="font-weight:900;">...</span><br><small style="color:var(--cyan); font-size:9px;">v3.1.6 Stable</small></div>
         </div>
         <div class="lvl-pill" id="u-lvl">LVL 1</div>
     </div>
@@ -73,7 +73,7 @@
         <img src="./images/logo.png" class="main-logo" id="tap-img" onpointerdown="tap(event)" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'">
         <div class="side-menu">
             <div class="side-btn" onclick="openM('wallet')">👛 WALLET</div>
-            <div class="side-btn" onclick="openFriends()">🤝 FRIENDS</div>
+            <div class="side-btn" onclick="openM('friends')">🤝 FRIENDS</div>
             <div class="side-btn" onclick="openM('bonus')">🎁 BONUS</div>
         </div>
     </div>
@@ -150,6 +150,7 @@
         document.getElementById('u-name').innerText = s.name;
         document.getElementById('eng-val').innerText = `${s.eng} / ${s.max}`;
         document.getElementById('eng-fill').style.width = `${(s.eng / s.max) * 100}%`;
+        if(s.photo && s.photo !== "null") document.getElementById('u-avatar-box').innerHTML = `<img src="${s.photo}">`;
         
         const mtCost = Math.floor(250 * Math.pow(1.618, s.lvl - 1));
         const elCost = Math.floor(400 * Math.pow(1.5, (s.max / 500) - 1));
