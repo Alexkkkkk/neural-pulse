@@ -9,7 +9,7 @@ const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// ПРАВИЛО: No-SSL для корректной работы на Bothost
+// ПРАВИЛО: SSL отключен для совместимости с Bothost
 const pool = new Pool({ 
     connectionString: PG_URI,
     ssl: false 
@@ -18,7 +18,7 @@ const pool = new Pool({
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Инициализация базы данных
+// Инициализация и проверка структуры таблиц
 const initDB = async () => {
     try {
         await pool.query(`
@@ -35,12 +35,17 @@ const initDB = async () => {
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
-        console.log("Database Engine: CONNECTED (v3.1.4)");
+
+        // ПРАВИЛО: Принудительное добавление колонок, если они отсутствуют
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_addr TEXT`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS has_bot BOOLEAN DEFAULT FALSE`);
+        
+        console.log("Database Engine: FULL SYNC (v3.1.6)");
     } catch (e) { console.error("FATAL DB ERROR:", e); }
 };
 initDB();
 
-// API: Загрузка или создание пользователя
+// API: Получение/Создание пользователя
 app.get('/api/user/:id', async (req, res) => {
     const uid = req.params.id;
     const { name, photo } = req.query;
@@ -63,7 +68,7 @@ app.get('/api/user/:id', async (req, res) => {
     }
 });
 
-// API: Сохранение данных (Типы данных принудительно очищаются)
+// API: Сохранение прогресса
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, max_energy, click_lvl, wallet, has_bot } = req.body;
     if (!userId || userId === "0") return res.status(400).json({ error: "Invalid ID" });
@@ -96,6 +101,7 @@ app.post('/api/save', async (req, res) => {
     }
 });
 
+// API: Лидерборд
 app.get('/api/top', async (req, res) => {
     try {
         const r = await pool.query('SELECT user_id, username, avatar_url, balance FROM users ORDER BY balance DESC LIMIT 50');
@@ -104,8 +110,11 @@ app.get('/api/top', async (req, res) => {
 });
 
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v3.1.4</b>\nСтатус: База данных в норме.`,
+    ctx.replyWithHTML(`<b>Neural Pulse v3.1.6</b>\nСтатус системы: Стабильно.`,
         Markup.inlineKeyboard([[Markup.button.webApp("OPEN CLUSTER", "https://neural-pulse.bothost.ru")]]));
 });
 
-app.listen(3000, () => { console.log("Pulse Server v3.1.4 Live"); bot.launch(); });
+app.listen(3000, () => { 
+    console.log("Pulse Server v3.1.6 Live"); 
+    bot.launch().catch(err => console.error("Bot launch fail:", err));
+});
