@@ -3,52 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse</title>
+    <title>Neural Pulse v2.2.0</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/sdk@latest/dist/tonconnect-sdk.min.js"></script>
     <style>
-        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
+        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; --panel: #0a0a0a; }
         body { background: var(--bg); color: #fff; font-family: 'Segoe UI', sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; }
         
-        /* Экран загрузки (Access Granted) */
+        /* Loader: Access Granted */
         #loader { position: fixed; inset: 0; background: #000; z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .l-pct { font-size: 48px; font-weight: 900; color: var(--cyan); text-shadow: 0 0 20px var(--cyan); }
+        .l-txt { font-weight: 900; letter-spacing: 4px; font-size: 14px; margin-top: 10px; color: #fff; }
 
         #app { display: none; height: 100vh; flex-direction: column; align-items: center; padding: 20px; box-sizing: border-box; }
 
-        /* Верхняя панель (Screenshot v1.5.5) */
-        .header-ui { width: 100%; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; }
+        /* Top Panel (Screenshot 2026-03-14) */
+        .header-ui { width: 100%; background: var(--panel); border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; }
         .user-box { display: flex; align-items: center; gap: 12px; }
-        .avatar { width: 42px; height: 42px; border: 2px solid var(--cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; background: #111; font-weight: 900; color: var(--cyan); }
+        .avatar { width: 44px; height: 44px; border: 2px solid var(--cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; background: #111; font-weight: 900; color: var(--cyan); }
         .u-info { text-align: left; }
         .u-name { font-weight: 900; font-size: 16px; display: block; }
-        .u-status { font-size: 10px; color: var(--cyan); opacity: 0.8; }
+        .u-status { font-size: 10px; color: var(--cyan); }
         .lvl-pill { background: var(--cyan); color: #000; padding: 6px 14px; border-radius: 10px; font-weight: 900; font-size: 14px; }
 
-        .balance { font-size: 68px; font-weight: 900; margin: 15px 0; }
+        .balance { font-size: 64px; font-weight: 900; margin: 15px 0; }
 
-        /* Центр и боковые кнопки */
+        /* Game Zone + Side Buttons */
         .play-zone { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
-        .logo { width: 230px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; z-index: 5; }
-        .logo:active { transform: scale(0.94); }
+        .logo-main { width: 220px; filter: drop-shadow(0 0 35px var(--purple)); transition: transform 0.05s; z-index: 5; }
+        .logo-main:active { transform: scale(0.95); }
 
-        .side-bar { position: absolute; right: 0; display: flex; flex-direction: column; gap: 12px; }
-        .s-item { background: #0d0d0d; border: 1px solid #222; color: #fff; padding: 15px 0; border-radius: 15px; font-size: 11px; font-weight: 900; width: 105px; text-align: center; }
+        .side-bar { position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px; }
+        .s-btn { background: #0d0d0d; border: 1px solid #222; color: #fff; padding: 14px 0; border-radius: 15px; font-size: 11px; font-weight: 900; width: 100px; text-align: center; }
 
-        /* Энергия */
+        /* Energy Bar */
         .eng-container { width: 100%; margin-bottom: 30px; }
-        .eng-text { display: flex; justify-content: space-between; font-size: 11px; font-weight: 900; color: #444; margin-bottom: 8px; }
-        .eng-bg { width: 100%; height: 8px; background: #111; border-radius: 10px; border: 1px solid #1a1a1a; overflow: hidden; }
-        .eng-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; transition: width 0.3s; }
+        .eng-labels { display: flex; justify-content: space-between; font-size: 11px; font-weight: 900; color: #555; margin-bottom: 6px; }
+        .bar-bg { width: 100%; height: 8px; background: #111; border-radius: 10px; border: 1px solid #1a1a1a; overflow: hidden; }
+        .bar-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; transition: width 0.3s; }
 
-        /* Футер */
-        .footer-nav { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
-        .f-btn { background: #080808; border: 1px solid #1a1a1a; padding: 18px 0; border-radius: 15px; font-size: 10px; font-weight: 900; }
+        /* Navigation Grid */
+        .nav-grid { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
+        .nav-card { background: #080808; border: 1px solid #1a1a1a; padding: 18px 0; border-radius: 15px; font-size: 10px; font-weight: 900; }
 
-        /* Модальные окна */
+        /* Modals */
         .modal { position: fixed; inset: 0; background: #000; z-index: 20000; display: none; flex-direction: column; padding: 40px 20px; text-align: left; }
-        .m-title { font-size: 36px; font-weight: 900; margin-bottom: 30px; }
-        .m-body { flex: 1; overflow-y: auto; }
+        .m-header { font-size: 34px; font-weight: 900; margin-bottom: 30px; }
+        .m-list { flex: 1; overflow-y: auto; }
         .card { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 20px; border-radius: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
         .btn-buy { background: var(--cyan); color: #000; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 900; }
         .btn-close { background: #fff; color: #000; padding: 20px; border-radius: 15px; font-weight: 900; width: 100%; border: none; margin-top: 20px; }
@@ -56,13 +57,16 @@
 </head>
 <body>
 
-<div id="loader"><div class="l-pct" id="l-pct">0%</div></div>
+<div id="loader">
+    <div class="l-pct" id="l-pct">0%</div>
+    <div class="l-txt">ACCESS GRANTED</div>
+</div>
 
 <div id="app">
     <div class="header-ui">
         <div class="user-box">
             <div class="avatar">AI</div>
-            <div class="u-info"><span class="u-name" id="u-name">...</span><span class="u-status">v1.5.6 Active Node</span></div>
+            <div class="u-info"><span class="u-name" id="u-name">Loading...</span><span class="u-status">v2.2.0 Active Node</span></div>
         </div>
         <div class="lvl-pill" id="u-lvl">LVL 1</div>
     </div>
@@ -70,61 +74,37 @@
     <div class="balance" id="balance">0</div>
     
     <div class="play-zone">
-        <img src="logo.png" class="logo" onclick="tap(event)">
+        <img src="logo.png" class="logo-main" onclick="tap(event)">
         <div class="side-bar">
-            <div class="s-item" onclick="openM('wallet')">WALLET</div>
-            <div class="s-item" onclick="openM('friends')">FRIENDS</div>
-            <div class="s-item" onclick="openM('bonus')">BONUS</div>
+            <div class="s-btn" onclick="openM('wallet')">WALLET</div>
+            <div class="s-btn" onclick="openM('friends')">FRIENDS</div>
+            <div class="s-btn" onclick="openM('bonus')">BONUS</div>
         </div>
     </div>
 
     <div class="eng-container">
-        <div class="eng-text"><span>ENERGY</span><span id="eng-val">1000/1000</span></div>
-        <div class="eng-bg"><div class="eng-fill" id="eng-fill"></div></div>
+        <div class="eng-labels"><span>ENERGY</span><span id="eng-val">1000/1000</span></div>
+        <div class="bar-bg"><div class="bar-fill" id="eng-fill"></div></div>
     </div>
     
-    <div class="footer-nav">
-        <div class="f-btn" onclick="openM('boost')">BOOST</div>
-        <div class="f-btn">MINE</div>
-        <div class="f-btn">TASKS</div>
-        <div class="f-btn" onclick="openM('stats')">STATS</div>
+    <div class="nav-grid">
+        <div class="nav-card" onclick="openM('boost')">BOOST</div>
+        <div class="nav-card">MINE</div>
+        <div class="nav-card">TASKS</div>
+        <div class="nav-card" onclick="openM('stats')">STATS</div>
     </div>
 </div>
 
-<div id="m-wallet" class="modal">
-    <div class="m-title">Select Wallet</div>
-    <div class="m-body">
-        <div class="card" onclick="connectTon()" style="cursor:pointer; border-color:var(--cyan)">
-            <span style="font-weight:900;">TON CONNECT</span>
-            <img src="https://ton.org/download/ton_symbol.png" width="24">
-        </div>
-    </div>
-    <button class="btn-close" onclick="closeM()">BACK</button>
-</div>
-
-<div id="m-stats" class="modal">
-    <div class="m-title">Stats</div>
-    <div id="stats-list" class="m-body"></div>
-    <button class="btn-close" onclick="closeM()">CLOSE</button>
-</div>
-
-<div id="m-boost" class="modal">
-    <div class="m-title">Boost</div>
-    <div class="m-body">
-        <div class="card">
-            <div><b style="font-size:18px;">Multitap</b><br><small id="b-cost">Cost: 2500</small></div>
-            <button class="btn-buy" onclick="buyB()">UPGRADE</button>
-        </div>
-    </div>
-    <button class="btn-close" onclick="closeM()">CLOSE</button>
-</div>
+<div id="m-wallet" class="modal"><div class="m-header">Wallet</div><button class="btn-close" onclick="closeM()">CLOSE</button></div>
+<div id="m-stats" class="modal"><div class="m-header">Top Agents</div><div id="stats-list" class="m-list"></div><button class="btn-close" onclick="closeM()">CLOSE</button></div>
+<div id="m-boost" class="modal"><div class="m-header">Boosters</div><div class="m-list"><div class="card"><div><b>Multitap</b><br><small id="b-cost">Cost: 2500</small></div><button class="btn-buy" onclick="buyB()">UPGRADE</button></div></div><button class="btn-close" onclick="closeM()">CLOSE</button></div>
 
 <script>
     const tg = window.Telegram.WebApp;
     tg.expand();
     const ton = new TonConnectSDK.TonConnect({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json' });
 
-    let s = { id: tg.initDataUnsafe?.user?.id || "0", bal: 0, lvl: 1, eng: 1000, maxE: 1000, name: tg.initDataUnsafe?.user?.first_name || "User" };
+    let s = { id: tg.initDataUnsafe?.user?.id || "0", bal: 0, lvl: 1, eng: 1000, max: 1000, name: tg.initDataUnsafe?.user?.first_name || "Agent" };
 
     async function start() {
         let p = 0;
@@ -139,7 +119,7 @@
     async function load() {
         const r = await fetch(`/api/user/${s.id}?name=${encodeURIComponent(s.name)}`);
         const d = await r.json();
-        s.bal = Number(d.balance); s.lvl = d.click_lvl; s.eng = d.energy; s.maxE = d.max_energy;
+        s.bal = Number(d.balance); s.lvl = d.click_lvl; s.eng = d.energy;
         upd();
     }
 
@@ -155,13 +135,13 @@
         document.getElementById('balance').innerText = Math.floor(s.bal).toLocaleString();
         document.getElementById('u-name').innerText = s.name;
         document.getElementById('u-lvl').innerText = `LVL ${s.lvl}`;
-        document.getElementById('eng-val').innerText = `${s.eng}/${s.maxE}`;
-        document.getElementById('eng-fill').style.width = `${(s.eng / s.maxE) * 100}%`;
+        document.getElementById('eng-val').innerText = `${s.eng}/${s.max}`;
+        document.getElementById('eng-fill').style.width = `${(s.eng / s.max) * 100}%`;
         document.getElementById('b-cost').innerText = `Cost: ${s.lvl * 2500}`;
     }
 
     function save() {
-        fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ userId: s.id, balance: s.bal, click_lvl: s.lvl, energy: s.eng, max_energy: s.maxE }) });
+        fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ userId: s.id, balance: s.bal, click_lvl: s.lvl, energy: s.eng }) });
     }
 
     function openM(id) {
@@ -182,12 +162,7 @@
         if(s.bal >= c) { s.bal -= c; s.lvl++; upd(); save(); }
     }
 
-    async function connectTon() {
-        const w = await ton.getWallets();
-        ton.connect(w[0]);
-    }
-
-    setInterval(() => { if(s.eng < s.maxE) { s.eng = Math.min(s.maxE, s.eng + 1); upd(); } }, 1000);
+    setInterval(() => { if(s.eng < s.max) { s.eng = Math.min(s.max, s.eng + 1); upd(); } }, 1000);
     start();
 </script>
 </body>
