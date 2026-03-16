@@ -8,12 +8,17 @@ const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
-const pool = new Pool({ connectionString: PG_URI, ssl: { rejectUnauthorized: false } });
+
+// ПРАВИЛО: No-SSL для корректной работы на Bothost
+const pool = new Pool({ 
+    connectionString: PG_URI,
+    ssl: false 
+});
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Глубокая проверка и инициализация таблиц
+// Инициализация базы данных
 const initDB = async () => {
     try {
         await pool.query(`
@@ -30,17 +35,16 @@ const initDB = async () => {
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
-        console.log("Database Engine: FULL SYNC ACTIVE");
+        console.log("Database Engine: CONNECTED (v3.1.4)");
     } catch (e) { console.error("FATAL DB ERROR:", e); }
 };
 initDB();
 
-// API получения данных
+// API: Загрузка или создание пользователя
 app.get('/api/user/:id', async (req, res) => {
     const uid = req.params.id;
     const { name, photo } = req.query;
     try {
-        // Используем UPSERT (INSERT OR UPDATE) сразу при входе, чтобы гарантировать наличие записи
         const query = `
             INSERT INTO users (user_id, username, avatar_url)
             VALUES ($1, $2, $3)
@@ -55,24 +59,27 @@ app.get('/api/user/:id', async (req, res) => {
         res.json(r.rows[0]);
     } catch (e) { 
         console.error("Fetch Error:", e);
-        res.status(500).json({ error: "DB Fetch Failed" }); 
+        res.status(500).json({ error: "Sync Failed" }); 
     }
 });
 
-// API сохранения — КРИТИЧЕСКИЙ УЗЕЛ
+// API: Сохранение данных (Типы данных принудительно очищаются)
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, max_energy, click_lvl, wallet, has_bot } = req.body;
-    
     if (!userId || userId === "0") return res.status(400).json({ error: "Invalid ID" });
 
     try {
-        // Принудительное приведение к типам данных базы (NUMERIC и INT)
+        const cleanBalance = isNaN(parseFloat(balance)) ? 0 : parseFloat(balance);
+        const cleanEnergy = isNaN(parseInt(energy)) ? 0 : parseInt(energy);
+        const cleanMax = isNaN(parseInt(max_energy)) ? 1000 : parseInt(max_energy);
+        const cleanLvl = isNaN(parseInt(click_lvl)) ? 1 : parseInt(click_lvl);
+
         const saveQuery = `
             UPDATE users SET 
-                balance = GREATEST(balance, $2::NUMERIC), 
-                energy = $3::INTEGER, 
-                max_energy = $4::INTEGER, 
-                click_lvl = $5::INTEGER, 
+                balance = GREATEST(balance, $2), 
+                energy = $3, 
+                max_energy = $4, 
+                click_lvl = $5, 
                 wallet_addr = $6, 
                 has_bot = $7, 
                 last_seen = CURRENT_TIMESTAMP 
@@ -80,16 +87,9 @@ app.post('/api/save', async (req, res) => {
         `;
         
         await pool.query(saveQuery, [
-            userId, 
-            balance || 0, 
-            energy || 0, 
-            max_energy || 1000, 
-            click_lvl || 1, 
-            wallet || null, 
-            has_bot || false
+            userId, cleanBalance, cleanEnergy, cleanMax, cleanLvl, wallet || null, has_bot || false
         ]);
-        
-        res.json({ success: true, timestamp: Date.now() });
+        res.json({ success: true });
     } catch (e) { 
         console.error("SAVE ERROR:", e);
         res.status(500).json({ error: e.message }); 
@@ -104,8 +104,8 @@ app.get('/api/top', async (req, res) => {
 });
 
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v3.1.2</b>\nСтатус: Синхронизация стабильна.`,
+    ctx.replyWithHTML(`<b>Neural Pulse v3.1.4</b>\nСтатус: База данных в норме.`,
         Markup.inlineKeyboard([[Markup.button.webApp("OPEN CLUSTER", "https://neural-pulse.bothost.ru")]]));
 });
 
-app.listen(3000, () => { console.log("Pulse Server v3.1.2 Live"); bot.launch(); });
+app.listen(3000, () => { console.log("Pulse Server v3.1.4 Live"); bot.launch(); });
