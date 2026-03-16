@@ -3,111 +3,155 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse</title>
+    <title>Neural Pulse v2.1.16</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
-        body { background: var(--bg); color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; }
+        body { background: var(--bg); color: #fff; font-family: 'Segoe UI', sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; }
         
-        .balance { font-size: 52px; margin-top: 40px; font-weight: 900; text-shadow: 0 0 15px var(--cyan); }
-        
-        .click-area { height: 55vh; display: flex; align-items: center; justify-content: center; width: 100%; position: relative; }
-        .main-img { width: 230px; cursor: pointer; transition: transform 0.05s; filter: drop-shadow(0 0 30px var(--purple)); z-index: 10; }
-        .main-img:active { transform: scale(0.95); }
+        /* Правило: Экран загрузки Access Granted */
+        #loader { position: fixed; inset: 0; background: #000; z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .l-img { width: 140px; filter: drop-shadow(0 0 20px var(--cyan)); margin-bottom: 25px; }
+        .l-txt { font-weight: 900; letter-spacing: 4px; font-size: 16px; margin-bottom: 10px; }
+        .l-pct { font-size: 36px; font-weight: 900; color: var(--cyan); }
+        .l-bar-bg { width: 200px; height: 4px; background: #111; margin-top: 25px; border-radius: 10px; overflow: hidden; }
+        .l-bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: width 0.1s; }
 
-        /* Энергия в стиле v2.1.5 */
-        .eng-cont { width: 80%; margin: 20px auto; }
-        .eng-bar { width: 100%; height: 6px; background: #111; border-radius: 5px; overflow: hidden; border: 1px solid #222; }
-        .eng-fill { height: 100%; background: var(--cyan); width: 100%; transition: width 0.3s; }
-        .eng-txt { font-size: 12px; font-weight: bold; color: #888; margin-bottom: 5px; }
+        /* Основной интерфейс */
+        #app { display: none; height: 100vh; flex-direction: column; align-items: center; padding-top: 30px; }
+        .balance { font-size: 54px; font-weight: 900; text-shadow: 0 0 20px var(--cyan); margin-bottom: 5px; }
         
-        .footer { position: fixed; bottom: 30px; width: 100%; display: flex; justify-content: space-around; padding: 0 10px; box-sizing: border-box; }
-        .btn { background: #111; padding: 15px 5px; border-radius: 12px; font-size: 10px; width: 22%; font-weight: bold; border: 1px solid #222; color: #fff; }
+        /* Контейнер для боковых кнопок */
+        .game-zone { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
+        .logo-btn { width: 240px; z-index: 5; filter: drop-shadow(0 0 40px var(--purple)); cursor: pointer; transition: transform 0.05s; }
+        .logo-btn:active { transform: scale(0.96); }
 
-        /* Модалка Boost */
-        .modal { position: fixed; inset: 0; background: #000; z-index: 1000; display: none; flex-direction: column; padding: 40px 20px; }
-        .item { background: #111; padding: 20px; border-radius: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #222; }
-        .buy { background: var(--cyan); color: #000; border: none; padding: 10px 15px; border-radius: 10px; font-weight: 900; }
+        /* Боковое меню по твоим правилам */
+        .side-menu { position: absolute; right: 15px; display: flex; flex-direction: column; gap: 12px; }
+        .menu-item { background: rgba(15,15,15,0.9); border: 1px solid #222; color: #fff; padding: 12px 0; border-radius: 12px; font-size: 10px; font-weight: 900; width: 85px; text-align: center; backdrop-filter: blur(4px); }
+
+        /* Энергия */
+        .energy-section { width: 85%; margin-bottom: 35px; }
+        .energy-info { display: flex; justify-content: space-between; font-size: 11px; color: #666; margin-bottom: 6px; font-weight: 900; letter-spacing: 1px; }
+        .energy-bg { width: 100%; height: 6px; background: #111; border-radius: 10px; border: 1px solid #1a1a1a; overflow: hidden; }
+        .energy-fill { height: 100%; background: var(--cyan); width: 100%; transition: width 0.2s; }
+
+        /* Нижняя навигация */
+        .nav-grid { width: 92%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 30px; }
+        .nav-card { background: #080808; border: 1px solid #1a1a1a; padding: 16px 0; border-radius: 14px; font-size: 10px; font-weight: 900; color: #fff; }
     </style>
 </head>
 <body>
-    <div class="balance" id="bal">0</div>
+
+<div id="loader">
+    <img src="logo.png" class="l-img">
+    <div class="l-txt">ACCESS GRANTED</div>
+    <div class="l-pct" id="l-pct">0%</div>
+    <div class="l-bar-bg"><div class="l-bar-fill" id="l-fill"></div></div>
+</div>
+
+<div id="app">
+    <div class="balance" id="balance">0</div>
     
-    <div class="click-area">
-        <img src="logo.png" class="main-img" onclick="tap(event)">
-    </div>
-
-    <div class="eng-cont">
-        <div class="eng-txt" id="etxt">1000 / 1000</div>
-        <div class="eng-bar"><div class="eng-fill" id="efill"></div></div>
-    </div>
-
-    <div class="footer">
-        <div class="btn" onclick="openB()">BOOST</div>
-        <div class="btn">MINE</div>
-        <div class="btn">TASKS</div>
-        <div class="btn">STATS</div>
-    </div>
-
-    <div id="boost" class="modal">
-        <h1 style="color:var(--cyan)">BOOSTS</h1>
-        <div id="blist"></div>
-        <button onclick="closeB()" style="margin-top:auto; background:#fff; padding:15px; border-radius:10px; font-weight:900;">CLOSE</button>
-    </div>
-
-    <script>
-        const tg = window.Telegram.WebApp;
-        let s = { uid: tg.initDataUnsafe?.user?.id || "0", bal: 0, lvl: 1, eLvl: 1, sLvl: 1, eng: 1000, maxE: 1000 };
-
-        async function load() {
-            const r = await fetch(`/api/user/${s.uid}?name=${tg.initDataUnsafe?.user?.first_name || 'User'}`);
-            const d = await r.json();
-            s = { ...s, bal: Number(d.balance), lvl: Number(d.click_lvl), eLvl: Number(d.energy_lvl), sLvl: Number(d.speed_lvl), maxE: Number(d.max_energy), eng: Number(d.energy) };
-            upd();
-        }
-
-        function tap(e) {
-            if(s.eng >= s.lvl) {
-                s.bal += s.lvl; s.eng -= s.lvl;
-                tg.HapticFeedback.impactOccurred('medium');
-                upd();
-                save();
-            }
-        }
-
-        function upd() {
-            document.getElementById('bal').innerText = Math.floor(s.bal).toLocaleString();
-            document.getElementById('etxt').innerText = `${s.eng} / ${s.maxE}`;
-            document.getElementById('efill').style.width = `${(s.eng / s.maxE) * 100}%`;
-        }
-
-        function save() {
-            fetch('/api/save', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ userId: s.uid, balance: s.bal, click_lvl: s.lvl, energy_lvl: s.eLvl, speed_lvl: s.sLvl, max_energy: s.maxE, energy: s.eng })
-            });
-        }
-
-        function openB() {
-            const list = document.getElementById('blist');
-            const cost = s.lvl * 1000;
-            list.innerHTML = `<div class="item"><div><b>Multitap</b><br>Lvl ${s.lvl}</div><button class="buy" onclick="buy(${cost})">${cost}</button></div>`;
-            document.getElementById('boost').style.display = 'flex';
-        }
-
-        function buy(c) {
-            if(s.bal >= c) {
-                s.bal -= c; s.lvl++;
-                closeB(); upd(); save();
-            }
-        }
-
-        function closeB() { document.getElementById('boost').style.display = 'none'; }
-
-        setInterval(() => { if(s.eng < s.maxE) { s.eng = Math.min(s.maxE, s.eng + (1 + s.sLvl)); upd(); } }, 1000);
+    <div class="game-zone">
+        <img src="logo.png" class="logo-btn" onclick="handleTap(event)">
         
-        load();
-    </script>
+        <div class="side-menu">
+            <div class="menu-item">WALLET</div>
+            <div class="menu-item">FRIENDS</div>
+            <div class="menu-item">BONUS</div>
+        </div>
+    </div>
+
+    <div class="energy-section">
+        <div class="energy-info"><span>ENERGY</span><span id="energy-text">1000/1000</span></div>
+        <div class="energy-bg"><div class="energy-fill" id="energy-fill"></div></div>
+    </div>
+    
+    <div class="nav-grid">
+        <div class="nav-card">BOOST</div>
+        <div class="nav-card">MINE</div>
+        <div class="nav-card">TASKS</div>
+        <div class="nav-card">STATS</div>
+    </div>
+</div>
+
+<script>
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+
+    let user = { id: tg.initDataUnsafe?.user?.id || "0", bal: 0, lvl: 1, eng: 1000, maxE: 1000 };
+
+    async function startApp() {
+        // Симуляция загрузки согласно дизайну
+        let progress = 0;
+        const interval = setInterval(() => {
+            progress += Math.floor(Math.random() * 4) + 2;
+            if(progress >= 100) {
+                progress = 100;
+                clearInterval(interval);
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('app').style.display = 'flex';
+            }
+            document.getElementById('l-pct').innerText = progress + '%';
+            document.getElementById('l-fill').style.width = progress + '%';
+        }, 40);
+
+        await fetchData();
+    }
+
+    async function fetchData() {
+        try {
+            const res = await fetch(`/api/user/${user.id}?name=${encodeURIComponent(tg.initDataUnsafe?.user?.first_name || 'User')}`);
+            const data = await res.json();
+            user.bal = Number(data.balance);
+            user.lvl = Number(data.click_lvl || 1);
+            user.maxE = Number(data.max_energy || 1000);
+            user.eng = Number(data.energy || 1000);
+            updateView();
+        } catch(e) {}
+    }
+
+    function handleTap(e) {
+        if(user.eng >= user.lvl) {
+            user.bal += user.lvl;
+            user.eng -= user.lvl;
+            tg.HapticFeedback.impactOccurred('medium');
+            updateView();
+            syncData();
+        }
+    }
+
+    function updateView() {
+        document.getElementById('balance').innerText = Math.floor(user.bal).toLocaleString();
+        document.getElementById('energy-text').innerText = `${user.eng}/${user.maxE}`;
+        document.getElementById('energy-fill').style.width = `${(user.eng / user.maxE) * 100}%`;
+    }
+
+    function syncData() {
+        fetch('/api/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                userId: user.id, 
+                balance: user.bal, 
+                click_lvl: user.lvl, 
+                energy: user.eng, 
+                max_energy: user.maxE 
+            })
+        });
+    }
+
+    // Регенерация системы
+    setInterval(() => {
+        if(user.eng < user.maxE) {
+            user.eng = Math.min(user.maxE, user.eng + 1);
+            updateView();
+        }
+    }, 1000);
+
+    startApp();
+</script>
+
 </body>
 </html>
