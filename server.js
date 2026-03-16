@@ -11,7 +11,6 @@ const app = express();
 const pool = new Pool({ connectionString: PG_URI });
 
 app.use(express.json());
-// Статические файлы берутся из папки static
 app.use(express.static(path.join(__dirname, 'static')));
 
 const initDB = async () => {
@@ -25,7 +24,7 @@ const initDB = async () => {
             click_lvl INTEGER DEFAULT 1,
             wallet_addr TEXT
         )`);
-        console.log("v2.5.4 - Fix Images Path Active");
+        console.log("v2.5.6 - Final Design Polish Active");
     } catch (e) { console.error("DB Error:", e); }
 };
 initDB();
@@ -53,12 +52,12 @@ app.post('/api/save', async (req, res) => {
 });
 
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v2.5.4</b>`, Markup.inlineKeyboard([
+    ctx.replyWithHTML(`<b>Neural Pulse v2.5.6</b>`, Markup.inlineKeyboard([
         [Markup.button.webApp("OPEN TERMINAL", "https://neural-pulse.bothost.ru")]
     ]));
 });
 
 app.listen(3000, () => { 
-    console.log("v2.5.4 | Server Ready");
+    console.log("v2.5.6 | Server Ready");
     bot.launch(); 
 });
