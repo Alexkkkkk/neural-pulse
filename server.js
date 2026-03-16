@@ -11,7 +11,6 @@ const app = express();
 const pool = new Pool({ connectionString: PG_URI });
 
 app.use(express.json());
-// Интеграция статики согласно твоей структуре
 app.use(express.static(path.join(__dirname, 'static')));
 
 const initDB = async () => {
@@ -30,7 +29,7 @@ const initDB = async () => {
 initDB();
 
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v2.2.5</b>`, Markup.inlineKeyboard([
+    ctx.replyWithHTML(`<b>Neural Pulse Node</b>`, Markup.inlineKeyboard([
         [Markup.button.webApp("OPEN TERMINAL", "https://neural-pulse.bothost.ru")]
     ]));
 });
@@ -46,13 +45,6 @@ app.get('/api/user/:id', async (req, res) => {
     } catch (e) { res.status(500).send(e.message); }
 });
 
-app.get('/api/stats', async (req, res) => {
-    try {
-        const r = await pool.query('SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10');
-        res.json(r.rows);
-    } catch (e) { res.status(500).send(e.message); }
-});
-
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, click_lvl, wallet } = req.body;
     try {
@@ -61,6 +53,13 @@ app.post('/api/save', async (req, res) => {
             [userId, balance, energy, click_lvl, wallet]
         );
         res.json({ok: true});
+    } catch (e) { res.status(500).send(e.message); }
+});
+
+app.get('/api/stats', async (req, res) => {
+    try {
+        const r = await pool.query('SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10');
+        res.json(r.rows);
     } catch (e) { res.status(500).send(e.message); }
 });
 
