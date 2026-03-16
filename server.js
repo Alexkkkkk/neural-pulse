@@ -11,6 +11,7 @@ const app = express();
 const pool = new Pool({ connectionString: PG_URI });
 
 app.use(express.json());
+// Интеграция статики согласно твоей структуре
 app.use(express.static(path.join(__dirname, 'static')));
 
 const initDB = async () => {
@@ -29,7 +30,7 @@ const initDB = async () => {
 initDB();
 
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v2.2.2</b>`, Markup.inlineKeyboard([
+    ctx.replyWithHTML(`<b>Neural Pulse v2.2.5</b>`, Markup.inlineKeyboard([
         [Markup.button.webApp("OPEN TERMINAL", "https://neural-pulse.bothost.ru")]
     ]));
 });
