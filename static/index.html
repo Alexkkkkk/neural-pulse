@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v3.9.0</title>
+    <title>Neural Pulse v4.0.0</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
@@ -22,15 +22,16 @@
         .avatar { width: 44px; height: 44px; border: 1px solid var(--cyan); border-radius: 12px; overflow: hidden; }
         .avatar img { width: 100%; height: 100%; object-fit: cover; }
         
-        .balance { font-size: 54px; font-weight: 900; margin: 10px 0; letter-spacing: -2px; }
+        .balance { font-size: 50px; font-weight: 900; margin: 10px 0; letter-spacing: -2px; }
         .play-area { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
         .main-logo { width: 230px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; }
         
-        .mine-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+        /* MINE GRID */
+        .mine-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; margin-top: 10px; }
         .mine-card { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 15px; border-radius: 20px; text-align: left; }
-        .m-buy { background: #111; padding: 10px; border-radius: 12px; text-align: center; margin-top: 10px; font-weight: 900; }
+        .m-buy { background: #111; padding: 10px; border-radius: 12px; text-align: center; margin-top: 10px; font-weight: 900; color: var(--cyan); }
 
-        .footer { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding-bottom: 15px; }
+        .footer { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding-bottom: 20px; }
         .f-btn { background: #080808; border: 1px solid #1a1a1a; padding: 15px 0; border-radius: 15px; font-size: 10px; font-weight: 900; }
 
         .modal { position: fixed; inset: 0; background: #000; z-index: 50000; display: none; flex-direction: column; padding: 30px 20px; overflow-y: auto; }
@@ -72,34 +73,48 @@
 </div>
 
 <div id="m-mine" class="modal">
-    <h2 style="text-align:left;">MINE</h2>
+    <h2 style="text-align:left;">MINING RIGS</h2>
     <div class="mine-grid" id="mine-list"></div>
-    <button style="margin-top:20px; padding:15px; border-radius:10px;" onclick="closeM()">BACK</button>
+    <button style="margin-top:auto; padding:20px; border-radius:15px; background:#fff; color:#000; font-weight:900; border:none;" onclick="closeM()">CLOSE</button>
 </div>
 
 <div id="m-wallet" class="modal">
-    <h2>WALLET</h2>
-    <p style="font-size:10px; word-break:break-all;">Admin: UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI</p>
-    <button id="w-btn" style="background:var(--cyan); color:#000; padding:15px; border-radius:10px; border:none; font-weight:900;" onclick="connect()">CONNECT</button>
-    <button style="margin-top:20px; padding:15px; border-radius:10px;" onclick="closeM()">BACK</button>
+    <h2>CRYPTO WALLET</h2>
+    <div style="background:#0a0a0a; padding:20px; border-radius:20px; border:1px solid #1a1a1a; margin-bottom:20px;">
+        <p style="font-size:12px; color:#555;">YOUR CONNECTED ADDR:</p>
+        <b id="wallet-addr" style="font-size:10px; word-break:break-all;">Not Connected</b>
+    </div>
+    <button id="w-btn" style="background:var(--cyan); color:#000; padding:20px; border-radius:15px; border:none; font-weight:900; width:100%;" onclick="handleWallet()">CONNECT TON</button>
+    
+    <div style="margin-top:20px; text-align:left; border-top:1px solid #1a1a1a; padding-top:20px;">
+        <h3>Premium Store</h3>
+        <div class="mine-card" onclick="payTon('0.5')">
+            <b>⚡ Instant 1M Balance</b><br>
+            <small>Price: 0.5 TON</small>
+            <div class="m-buy">BUY NOW</div>
+        </div>
+    </div>
+    
+    <button style="margin-top:20px; padding:20px; border-radius:15px;" onclick="closeM()">BACK</button>
 </div>
 
 <script>
     const tg = window.Telegram.WebApp;
     const tonUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json' });
-    const ADMIN_WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI";
+    const MY_WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI";
 
     let s = { id: tg.initDataUnsafe?.user?.id || "0", bal: 0, lvl: 1, pph: 0, mine_lvls: {cpu:0, gpu:0, asic:0} };
-    const mineData = { cpu: {n:"CPU", p:250, r:30}, gpu: {n:"GPU", p:2000, r:250}, asic: {n:"ASIC", p:15000, r:1800} };
+    const rigs = { cpu: {n:"CPU Array", p:500, r:50}, gpu: {n:"GPU Farm", p:5000, r:600}, asic: {n:"ASIC Miner", p:50000, r:8000} };
 
     async function init() {
         let p = 0;
         const i = setInterval(() => {
-            p += 5; if(p>100) { p=100; clearInterval(i); document.getElementById('loader').style.display='none'; document.getElementById('app').style.display='flex'; }
+            p += 4; if(p>100) { p=100; clearInterval(i); document.getElementById('loader').style.display='none'; document.getElementById('app').style.display='flex'; }
             document.getElementById('l-pct').innerText = p + '%';
             document.getElementById('l-circle-bar').style.strokeDashoffset = 565 - (565 * p / 100);
         }, 30);
         await load();
+        tonUI.onStatusChange(w => { s.wallet = w ? w.account.address : null; upd(); save(); });
         renderMine();
     }
 
@@ -111,21 +126,19 @@
     }
 
     function renderMine() {
-        const cont = document.getElementById('mine-list');
-        cont.innerHTML = '';
-        Object.keys(mineData).forEach(k => {
-            const m = mineData[k];
-            const lvl = s.mine_lvls[k] || 0;
-            const price = Math.floor(m.p * Math.pow(1.5, lvl));
-            cont.innerHTML += `<div class="mine-card"><b>${m.n}</b><br><small>Lvl ${lvl}</small><br><small>+${m.r}/h</small><div class="m-buy" onclick="buyM('${k}',${price})">💰 ${price}</div></div>`;
+        const c = document.getElementById('mine-list'); c.innerHTML = '';
+        Object.keys(rigs).forEach(k => {
+            const r = rigs[k]; const l = s.mine_lvls[k] || 0;
+            const price = Math.floor(r.p * Math.pow(1.6, l));
+            c.innerHTML += `<div class="mine-card"><b>${r.n}</b><br><small>Lvl ${l} (+${r.r}/h)</small><div class="m-buy" onclick="buyRig('${k}',${price})">🪙 ${price.toLocaleString()}</div></div>`;
         });
     }
 
-    function buyM(k, p) {
+    function buyRig(k, p) {
         if(s.bal >= p) {
-            s.bal -= p; s.mine_lvls[k]++; s.pph += mineData[k].r;
+            s.bal -= p; s.mine_lvls[k]++; s.pph += rigs[k].r;
             upd(); renderMine(); save();
-        }
+        } else { tg.showAlert("Need more units!"); }
     }
 
     function tap(e) {
@@ -136,14 +149,32 @@
         upd(); save();
     }
 
+    async function payTon(amount) {
+        if(!tonUI.connected) { return tg.showAlert("Connect wallet first!"); }
+        const tx = {
+            validUntil: Math.floor(Date.now() / 1000) + 600,
+            messages: [{ address: MY_WALLET, amount: (amount * 1000000000).toString() }]
+        };
+        try {
+            await tonUI.sendTransaction(tx);
+            s.bal += 1000000; tg.showAlert("Payment Success! +1M Balance");
+            upd(); save();
+        } catch (e) { console.error(e); }
+    }
+
+    function handleWallet() { if(tonUI.connected) tonUI.disconnect(); else tonUI.openModal(); }
+
     function upd() {
         document.getElementById('balance').innerText = Math.floor(s.bal).toLocaleString();
         document.getElementById('stat-pph').innerText = `PPH: ${Math.floor(s.pph)}`;
         document.getElementById('u-lvl').innerText = `LVL ${s.lvl}`;
+        const w = document.getElementById('wallet-addr');
+        w.innerText = s.wallet ? s.wallet.slice(0,8)+"..."+s.wallet.slice(-8) : "Not Connected";
+        document.getElementById('w-btn').innerText = s.wallet ? "DISCONNECT" : "CONNECT TON";
     }
 
     function save() { 
-        fetch('/api/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:s.id, balance:s.bal, click_lvl:s.lvl, pph:s.pph, mine_lvls:s.mine_lvls}) }); 
+        fetch('/api/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:s.id, balance:s.bal, click_lvl:s.lvl, pph:s.pph, mine_lvls:s.mine_lvls, wallet:s.wallet}) }); 
     }
 
     function openM(id) { document.getElementById('m-'+id).style.display='flex'; }
