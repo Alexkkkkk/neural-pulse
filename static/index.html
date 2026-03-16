@@ -1,187 +1,64 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v4.0.0</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
-    <style>
-        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
-        body { background: var(--bg); color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; user-select: none; }
-        
-        /* LOADER */
-        #loader { position: fixed; inset: 0; background: #000; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .l-circle-wrap { position: relative; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; }
-        .l-circle-progress { fill: none; stroke: var(--cyan); stroke-width: 2; stroke-dasharray: 565; stroke-dashoffset: 565; transition: stroke-dashoffset 0.1s; }
-        .l-logo-mid { width: 70px; filter: drop-shadow(0 0 15px var(--purple)); }
+const express = require('express');
+const { Telegraf, Markup } = require('telegraf');
+const { Pool } = require('pg');
+const path = require('path');
 
-        /* UI */
-        #app { display: none; height: 100vh; flex-direction: column; align-items: center; padding: 20px; box-sizing: border-box; }
-        .header { width: 100%; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-        .avatar { width: 44px; height: 44px; border: 1px solid var(--cyan); border-radius: 12px; overflow: hidden; }
-        .avatar img { width: 100%; height: 100%; object-fit: cover; }
-        
-        .balance { font-size: 50px; font-weight: 900; margin: 10px 0; letter-spacing: -2px; }
-        .play-area { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
-        .main-logo { width: 230px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; }
-        
-        /* MINE GRID */
-        .mine-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; margin-top: 10px; }
-        .mine-card { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 15px; border-radius: 20px; text-align: left; }
-        .m-buy { background: #111; padding: 10px; border-radius: 12px; text-align: center; margin-top: 10px; font-weight: 900; color: var(--cyan); }
+const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
+const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
-        .footer { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding-bottom: 20px; }
-        .f-btn { background: #080808; border: 1px solid #1a1a1a; padding: 15px 0; border-radius: 15px; font-size: 10px; font-weight: 900; }
+const bot = new Telegraf(BOT_TOKEN);
+const app = express();
+const pool = new Pool({ connectionString: PG_URI });
 
-        .modal { position: fixed; inset: 0; background: #000; z-index: 50000; display: none; flex-direction: column; padding: 30px 20px; overflow-y: auto; }
-        .float-text { position: fixed; pointer-events: none; z-index: 10000; font-weight: 900; animation: floatUp 0.7s forwards; }
-        @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-100px); opacity: 0; } }
-    </style>
-</head>
-<body>
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'static')));
 
-<div id="loader">
-    <div class="l-circle-wrap">
-        <svg style="position:absolute; width:100%; height:100%; transform:rotate(-90deg);"><circle id="l-circle-bar" class="l-circle-progress" cx="100" cy="100" r="90"></circle></svg>
-        <img src="./logo.png" class="l-logo-mid" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'">
-    </div>
-    <div id="l-pct" style="margin-top:20px; font-size:24px; color:var(--cyan);">0%</div>
-</div>
+const initDB = async () => {
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                user_id TEXT PRIMARY KEY, 
+                username TEXT, 
+                avatar_url TEXT DEFAULT '', 
+                balance NUMERIC DEFAULT 0, 
+                energy INTEGER DEFAULT 1000, 
+                max_energy INTEGER DEFAULT 1000, 
+                click_lvl INTEGER DEFAULT 1, 
+                profit_hr NUMERIC DEFAULT 0,
+                wallet_addr TEXT, 
+                has_bot BOOLEAN DEFAULT FALSE, 
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`);
+        console.log("v3.8.0 Neural Mining System: Online");
+    } catch (e) { console.error(e); }
+};
+initDB();
 
-<div id="app">
-    <div class="header">
-        <div style="display:flex; align-items:center; gap:10px;">
-            <div class="avatar" id="u-avatar-box"><img src="./logo.png"></div>
-            <div style="text-align:left;"><b id="u-name">Agent</b><br><small id="stat-pph" style="color:var(--cyan)">PPH: 0</small></div>
-        </div>
-        <div style="background:var(--cyan); color:#000; padding:5px 10px; border-radius:10px; font-weight:900;" id="u-lvl">LVL 1</div>
-    </div>
+app.get('/api/user/:id', async (req, res) => {
+    const { name, photo } = req.query;
+    try {
+        let r = await pool.query('SELECT * FROM users WHERE user_id = $1', [req.params.id]);
+        if (!r.rows.length) {
+            await pool.query('INSERT INTO users (user_id, username, avatar_url) VALUES ($1, $2, $3)', [req.params.id, name, photo]);
+            r = await pool.query('SELECT * FROM users WHERE user_id = $1', [req.params.id]);
+        }
+        res.json(r.rows[0]);
+    } catch (e) { res.status(500).send(e.message); }
+});
 
-    <div class="balance" id="balance">0</div>
+app.post('/api/save', async (req, res) => {
+    const { userId, balance, energy, max_energy, click_lvl, profit_hr, wallet } = req.body;
+    try {
+        await pool.query(`
+            UPDATE users SET balance=$2, energy=$3, max_energy=$4, click_lvl=$5, profit_hr=$6, wallet_addr=$7, last_seen=CURRENT_TIMESTAMP 
+            WHERE user_id=$1`, [userId, balance, energy, max_energy, click_lvl, profit_hr, wallet]);
+        res.json({ok: true});
+    } catch (e) { res.status(500).send(e.message); }
+});
 
-    <div class="play-area">
-        <img src="./logo.png" id="tap-img" class="main-logo" onpointerdown="tap(event)">
-    </div>
+bot.start((ctx) => {
+    ctx.replyWithHTML(`<b>Neural Pulse v3.8.0</b>\n<i>Engine: Neural Mining Active</i>`, 
+    Markup.inlineKeyboard([[Markup.button.webApp("OPEN APP", "https://neural-pulse.bothost.ru")]]));
+});
 
-    <div class="footer">
-        <div class="f-btn" onclick="openM('boost')">BOOST</div>
-        <div class="f-btn" onclick="openM('mine')">MINE</div>
-        <div class="f-btn" onclick="openM('wallet')">WALLET</div>
-        <div class="f-btn" onclick="loadTop()">TOP</div>
-    </div>
-</div>
-
-<div id="m-mine" class="modal">
-    <h2 style="text-align:left;">MINING RIGS</h2>
-    <div class="mine-grid" id="mine-list"></div>
-    <button style="margin-top:auto; padding:20px; border-radius:15px; background:#fff; color:#000; font-weight:900; border:none;" onclick="closeM()">CLOSE</button>
-</div>
-
-<div id="m-wallet" class="modal">
-    <h2>CRYPTO WALLET</h2>
-    <div style="background:#0a0a0a; padding:20px; border-radius:20px; border:1px solid #1a1a1a; margin-bottom:20px;">
-        <p style="font-size:12px; color:#555;">YOUR CONNECTED ADDR:</p>
-        <b id="wallet-addr" style="font-size:10px; word-break:break-all;">Not Connected</b>
-    </div>
-    <button id="w-btn" style="background:var(--cyan); color:#000; padding:20px; border-radius:15px; border:none; font-weight:900; width:100%;" onclick="handleWallet()">CONNECT TON</button>
-    
-    <div style="margin-top:20px; text-align:left; border-top:1px solid #1a1a1a; padding-top:20px;">
-        <h3>Premium Store</h3>
-        <div class="mine-card" onclick="payTon('0.5')">
-            <b>⚡ Instant 1M Balance</b><br>
-            <small>Price: 0.5 TON</small>
-            <div class="m-buy">BUY NOW</div>
-        </div>
-    </div>
-    
-    <button style="margin-top:20px; padding:20px; border-radius:15px;" onclick="closeM()">BACK</button>
-</div>
-
-<script>
-    const tg = window.Telegram.WebApp;
-    const tonUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json' });
-    const MY_WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI";
-
-    let s = { id: tg.initDataUnsafe?.user?.id || "0", bal: 0, lvl: 1, pph: 0, mine_lvls: {cpu:0, gpu:0, asic:0} };
-    const rigs = { cpu: {n:"CPU Array", p:500, r:50}, gpu: {n:"GPU Farm", p:5000, r:600}, asic: {n:"ASIC Miner", p:50000, r:8000} };
-
-    async function init() {
-        let p = 0;
-        const i = setInterval(() => {
-            p += 4; if(p>100) { p=100; clearInterval(i); document.getElementById('loader').style.display='none'; document.getElementById('app').style.display='flex'; }
-            document.getElementById('l-pct').innerText = p + '%';
-            document.getElementById('l-circle-bar').style.strokeDashoffset = 565 - (565 * p / 100);
-        }, 30);
-        await load();
-        tonUI.onStatusChange(w => { s.wallet = w ? w.account.address : null; upd(); save(); });
-        renderMine();
-    }
-
-    async function load() {
-        const r = await fetch(`/api/user/${s.id}?name=${s.id}`);
-        const d = await r.json();
-        s.bal = Number(d.balance); s.lvl = d.click_lvl; s.pph = Number(d.pph); s.mine_lvls = d.mine_lvls;
-        upd();
-    }
-
-    function renderMine() {
-        const c = document.getElementById('mine-list'); c.innerHTML = '';
-        Object.keys(rigs).forEach(k => {
-            const r = rigs[k]; const l = s.mine_lvls[k] || 0;
-            const price = Math.floor(r.p * Math.pow(1.6, l));
-            c.innerHTML += `<div class="mine-card"><b>${r.n}</b><br><small>Lvl ${l} (+${r.r}/h)</small><div class="m-buy" onclick="buyRig('${k}',${price})">🪙 ${price.toLocaleString()}</div></div>`;
-        });
-    }
-
-    function buyRig(k, p) {
-        if(s.bal >= p) {
-            s.bal -= p; s.mine_lvls[k]++; s.pph += rigs[k].r;
-            upd(); renderMine(); save();
-        } else { tg.showAlert("Need more units!"); }
-    }
-
-    function tap(e) {
-        s.bal += s.lvl;
-        const f = document.createElement('div'); f.className='float-text'; f.innerText=`+${s.lvl}`;
-        f.style.left=`${e.clientX}px`; f.style.top=`${e.clientY}px`;
-        document.body.appendChild(f); setTimeout(()=>f.remove(), 700);
-        upd(); save();
-    }
-
-    async function payTon(amount) {
-        if(!tonUI.connected) { return tg.showAlert("Connect wallet first!"); }
-        const tx = {
-            validUntil: Math.floor(Date.now() / 1000) + 600,
-            messages: [{ address: MY_WALLET, amount: (amount * 1000000000).toString() }]
-        };
-        try {
-            await tonUI.sendTransaction(tx);
-            s.bal += 1000000; tg.showAlert("Payment Success! +1M Balance");
-            upd(); save();
-        } catch (e) { console.error(e); }
-    }
-
-    function handleWallet() { if(tonUI.connected) tonUI.disconnect(); else tonUI.openModal(); }
-
-    function upd() {
-        document.getElementById('balance').innerText = Math.floor(s.bal).toLocaleString();
-        document.getElementById('stat-pph').innerText = `PPH: ${Math.floor(s.pph)}`;
-        document.getElementById('u-lvl').innerText = `LVL ${s.lvl}`;
-        const w = document.getElementById('wallet-addr');
-        w.innerText = s.wallet ? s.wallet.slice(0,8)+"..."+s.wallet.slice(-8) : "Not Connected";
-        document.getElementById('w-btn').innerText = s.wallet ? "DISCONNECT" : "CONNECT TON";
-    }
-
-    function save() { 
-        fetch('/api/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:s.id, balance:s.bal, click_lvl:s.lvl, pph:s.pph, mine_lvls:s.mine_lvls, wallet:s.wallet}) }); 
-    }
-
-    function openM(id) { document.getElementById('m-'+id).style.display='flex'; }
-    function closeM() { document.querySelectorAll('.modal').forEach(m=>m.style.display='none'); }
-    
-    setInterval(() => { if(s.pph > 0) { s.bal += (s.pph/3600); upd(); } }, 1000);
-    init();
-</script>
-</body>
-</html>
+app.listen(3000, () => { console.log("Server Live v3.8.0"); bot.launch(); });
