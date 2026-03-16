@@ -17,7 +17,7 @@ const initDB = async () => {
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, username TEXT, balance NUMERIC DEFAULT 0, energy INTEGER DEFAULT 1000, max_energy INTEGER DEFAULT 1000, click_lvl INTEGER DEFAULT 1, wallet_addr TEXT, has_bot BOOLEAN DEFAULT FALSE, last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
         await pool.query(`CREATE TABLE IF NOT EXISTS referrals (id SERIAL PRIMARY KEY, referrer_id TEXT REFERENCES users(user_id), referred_id TEXT UNIQUE REFERENCES users(user_id))`);
-        console.log("v2.9.6 Quantum Ready");
+        console.log("v2.9.7 Build Active");
     } catch (e) { console.error(e); }
 };
 initDB();
@@ -65,7 +65,7 @@ bot.start(async (ctx) => {
             await pool.query('UPDATE users SET balance = balance + 5000 WHERE user_id = $1', [refId]);
         }
     }
-    ctx.replyWithHTML(`<b>Neural Pulse v2.9.6</b>`, Markup.inlineKeyboard([[Markup.button.webApp("OPEN TERMINAL", "https://neural-pulse.bothost.ru")]]));
+    ctx.replyWithHTML(`<b>Neural Pulse v2.9.7</b>`, Markup.inlineKeyboard([[Markup.button.webApp("OPEN APP", "https://neural-pulse.bothost.ru")]]));
 });
 
-app.listen(3000, () => { console.log("v2.9.6 Active"); bot.launch(); });
+app.listen(3000, () => { console.log("v2.9.7 Live"); bot.launch(); });
