@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v2.5.6</title>
+    <title>Neural Pulse v2.5.7</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
@@ -12,47 +12,45 @@
         
         tc-root, #ton-connect-ui-wrapper, .tc-modal-overlay { z-index: 1000000 !important; position: relative; }
 
-        /* LOADER (По вашему образцу IMG_20260312_221427) */
+        /* ВОССТАНОВЛЕННЫЙ LOADER */
         #loader { position: fixed; inset: 0; background: #000; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .l-circle-wrap { position: relative; width: 220px; height: 220px; display: flex; align-items: center; justify-content: center; }
+        .l-circle-wrap { position: relative; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; }
         .l-circle-svg { position: absolute; width: 100%; height: 100%; transform: rotate(-90deg); }
         .l-circle-bg { fill: none; stroke: #111; stroke-width: 2; }
-        .l-circle-progress { fill: none; stroke: var(--cyan); stroke-width: 3; stroke-dasharray: 628; stroke-dashoffset: 628; transition: stroke-dashoffset 0.1s; stroke-linecap: round; filter: drop-shadow(0 0 8px var(--cyan)); }
-        .l-logo-mid { width: 80px; filter: drop-shadow(0 0 20px var(--purple)); }
-        .l-status { margin-top: 50px; font-size: 14px; letter-spacing: 4px; color: #fff; text-transform: uppercase; opacity: 0.8; }
-        .l-pct { margin-top: 15px; font-size: 48px; font-weight: 900; color: var(--cyan); }
-        .l-line-bg { width: 220px; height: 3px; background: #111; margin-top: 25px; position: relative; border-radius: 2px; }
-        .l-line-fill { position: absolute; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 0%; box-shadow: 0 0 15px var(--cyan); border-radius: 2px; }
+        .l-circle-progress { fill: none; stroke: var(--cyan); stroke-width: 2; stroke-dasharray: 565; stroke-dashoffset: 565; transition: stroke-dashoffset 0.1s; stroke-linecap: round; filter: drop-shadow(0 0 5px var(--cyan)); }
+        .l-logo-mid { width: 70px; filter: drop-shadow(0 0 15px var(--purple)); }
+        .l-status { margin-top: 40px; font-size: 14px; letter-spacing: 3px; font-weight: 300; color: #fff; text-transform: uppercase; }
+        .l-pct { margin-top: 15px; font-size: 42px; font-weight: 900; color: var(--cyan); }
+        .l-line-bg { width: 200px; height: 2px; background: #111; margin-top: 20px; position: relative; }
+        .l-line-fill { position: absolute; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 0%; box-shadow: 0 0 10px var(--cyan); }
 
-        /* MAIN APP */
         #app { display: none; height: 100vh; flex-direction: column; align-items: center; padding: 20px; box-sizing: border-box; }
+
         .header { width: 100%; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; box-sizing: border-box; }
         .u-info { display: flex; align-items: center; gap: 12px; }
         .avatar { width: 44px; height: 44px; border: 1px solid var(--cyan); border-radius: 12px; display: flex; align-items: center; justify-content: center; background: #111; overflow: hidden; }
         .lvl-pill { background: var(--cyan); color: #000; padding: 6px 14px; border-radius: 10px; font-weight: 900; font-size: 14px; }
+
+        .balance { font-size: 70px; font-weight: 900; margin: 20px 0; }
         
-        .balance { font-size: 80px; font-weight: 900; margin: 20px 0; letter-spacing: -2px; }
-
-        /* AREA FIX: логотип строго по центру, кнопки справа */
+        /* Исправлено наложение кнопок на логотип */
         .play-area { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
-        .main-logo { width: 220px; filter: drop-shadow(0 0 45px var(--purple)); transition: transform 0.05s; cursor: pointer; z-index: 5; }
-        .main-logo:active { transform: scale(0.95); }
+        .main-logo { width: 210px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; cursor: pointer; z-index: 5; }
+        
+        .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
+        .side-btn { background: #0d0d0d; border: 1px solid #222; color: #fff; padding: 14px 0; border-radius: 15px; font-size: 11px; font-weight: 900; width: 105px; text-transform: uppercase; }
 
-        .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 12px; z-index: 10; }
-        .side-btn { background: rgba(20, 20, 20, 0.8); border: 1px solid #222; color: #fff; padding: 15px 0; border-radius: 18px; font-size: 11px; font-weight: 900; width: 110px; text-transform: uppercase; backdrop-filter: blur(5px); }
+        .eng-wrap { width: 100%; margin-bottom: 30px; }
+        .eng-meta { display: flex; justify-content: space-between; font-size: 11px; font-weight: 900; color: #555; margin-bottom: 8px; }
+        .bar-bg { width: 100%; height: 8px; background: #111; border-radius: 10px; border: 1px solid #1a1a1a; overflow: hidden; }
+        .bar-f { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; }
 
-        .eng-wrap { width: 100%; margin-bottom: 35px; }
-        .eng-meta { display: flex; justify-content: space-between; font-size: 12px; font-weight: 900; color: #666; margin-bottom: 10px; text-transform: uppercase; }
-        .bar-bg { width: 100%; height: 10px; background: #111; border-radius: 10px; border: 1px solid #1a1a1a; overflow: hidden; }
-        .bar-f { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; box-shadow: 0 0 10px var(--cyan); }
-
-        .footer { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 15px; }
-        .f-btn { background: #080808; border: 1px solid #1a1a1a; padding: 20px 0; border-radius: 18px; font-size: 11px; font-weight: 900; text-transform: uppercase; cursor: pointer; transition: 0.2s; }
-        .f-btn:active { background: #111; }
+        .footer { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
+        .f-btn { background: #080808; border: 1px solid #1a1a1a; padding: 18px 0; border-radius: 15px; font-size: 10px; font-weight: 900; text-transform: uppercase; cursor: pointer; }
 
         .modal { position: fixed; inset: 0; background: #000; z-index: 50000; display: none; flex-direction: column; padding: 40px 20px; }
-        .m-title { font-size: 36px; font-weight: 900; margin-bottom: 30px; text-align: left; }
-        .btn-cls { background: #fff; color: #000; padding: 22px; border-radius: 18px; font-weight: 900; width: 100%; border: none; margin-top: auto; font-size: 16px; }
+        .m-title { font-size: 34px; font-weight: 900; margin-bottom: 30px; text-align: left; }
+        .btn-cls { background: #fff; color: #000; padding: 20px; border-radius: 15px; font-weight: 900; width: 100%; border: none; margin-top: auto; }
     </style>
 </head>
 <body>
@@ -60,8 +58,8 @@
 <div id="loader">
     <div class="l-circle-wrap">
         <svg class="l-circle-svg" viewBox="0 0 200 200">
-            <circle class="l-circle-bg" cx="100" cy="100" r="95"></circle>
-            <circle id="l-circle-bar" class="l-circle-progress" cx="100" cy="100" r="95"></circle>
+            <circle class="l-circle-bg" cx="100" cy="100" r="90"></circle>
+            <circle id="l-circle-bar" class="l-circle-progress" cx="100" cy="100" r="90"></circle>
         </svg>
         <img src="/images/logo.png" class="l-logo-mid" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'">
     </div>
@@ -73,17 +71,17 @@
 <div id="app">
     <div class="header">
         <div class="u-info">
-            <div class="avatar"><img src="/images/logo.png" width="30" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'"></div>
+            <div class="avatar"><img src="/images/logo.png" width="28" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'"></div>
             <div style="text-align:left;">
-                <span id="u-name" style="font-weight:900; font-size: 16px;">Agent</span><br>
-                <small style="color:var(--cyan); font-size:10px; letter-spacing: 1px;">v2.5.6 ACTIVE NODE</small>
+                <span id="u-name" style="font-weight:900;">Agent</span><br>
+                <small style="color:var(--cyan); font-size:9px;">v2.5.7 Active Node</small>
             </div>
         </div>
         <div class="lvl-pill" id="u-lvl">LVL 1</div>
     </div>
 
     <div class="balance" id="balance">0</div>
-
+    
     <div class="play-area">
         <img src="/images/logo.png" class="main-logo" onclick="tap(event)" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'">
         <div class="side-menu">
@@ -97,7 +95,7 @@
         <div class="eng-meta"><span>ENERGY</span><span id="eng-val">1000 / 1000</span></div>
         <div class="bar-bg"><div class="bar-f" id="eng-fill"></div></div>
     </div>
-
+    
     <div class="footer">
         <div class="f-btn" onclick="openM('boost')">BOOST</div>
         <div class="f-btn" onclick="openM('mine')">MINE</div>
@@ -106,7 +104,10 @@
     </div>
 </div>
 
-<div id="m-wallet" class="modal"><div class="m-title">Wallet</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-wallet" class="modal">
+    <div class="m-title">Wallet</div>
+    <button class="btn-cls" onclick="closeM()">BACK</button>
+</div>
 <div id="m-friends" class="modal"><div class="m-title">Friends</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
 <div id="m-bonus" class="modal"><div class="m-title">Bonus</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
 <div id="m-boost" class="modal"><div class="m-title">Boost</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
@@ -122,32 +123,33 @@
 
     async function init() {
         let p = 0;
+        const circ = document.getElementById('l-circle-bar');
         const i = setInterval(() => {
             p += 2;
             if(p >= 100) { p = 100; clearInterval(i); document.getElementById('loader').style.display = 'none'; document.getElementById('app').style.display = 'flex'; }
             document.getElementById('l-pct').innerText = p + '%';
             document.getElementById('l-line-fill').style.width = p + '%';
-            document.getElementById('l-circle-bar').style.strokeDashoffset = 628 - (628 * p / 100);
+            circ.style.strokeDashoffset = 565 - (565 * p / 100);
         }, 30);
         await load();
         tonUI.onStatusChange(w => { s.wallet = w ? w.account.address : null; upd(); save(); });
     }
 
     async function load() {
-        try {
-            const r = await fetch(`/api/user/${s.id}?name=${encodeURIComponent(s.name)}`);
-            const d = await r.json();
-            s.bal = Number(d.balance); s.lvl = d.click_lvl; s.eng = d.energy; s.wallet = d.wallet_addr;
-            upd();
-        } catch(e) { console.error("Data error"); }
+        const r = await fetch(`/api/user/${s.id}?name=${encodeURIComponent(s.name)}`);
+        const d = await r.json();
+        s.bal = Number(d.balance); s.lvl = d.click_lvl; s.eng = d.energy; s.wallet = d.wallet_addr;
+        upd();
     }
+
     function tap(e) {
         if(s.eng >= s.lvl) {
             s.bal += s.lvl; s.eng -= s.lvl;
-            tg.HapticFeedback.impactOccurred('light');
+            tg.HapticFeedback.impactOccurred('medium');
             upd(); save();
         }
     }
+
     function upd() {
         document.getElementById('balance').innerText = Math.floor(s.bal).toLocaleString();
         document.getElementById('u-name').innerText = s.name;
@@ -155,6 +157,7 @@
         document.getElementById('eng-val').innerText = `${s.eng} / ${s.max}`;
         document.getElementById('eng-fill').style.width = `${(s.eng / s.max) * 100}%`;
     }
+
     function save() { fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ userId: s.id, balance: s.bal, click_lvl: s.lvl, energy: s.eng, wallet: s.wallet }) }); }
     function openM(id) { document.getElementById('m-' + id).style.display = 'flex'; }
     function closeM() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
