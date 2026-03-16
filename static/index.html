@@ -1,223 +1,111 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v3.1.2</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
-    <style>
-        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
-        body { background: var(--bg); color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; user-select: none; }
+const express = require('express');
+const { Telegraf, Markup } = require('telegraf');
+const { Pool } = require('pg');
+const path = require('path');
+
+const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
+const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
+
+const bot = new Telegraf(BOT_TOKEN);
+const app = express();
+
+// ПРАВИЛО: No-SSL для корректной работы на Bothost
+const pool = new Pool({ 
+    connectionString: PG_URI,
+    ssl: false 
+});
+
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'static')));
+
+// Инициализация базы данных
+const initDB = async () => {
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                user_id TEXT PRIMARY KEY,
+                username TEXT DEFAULT 'Agent',
+                avatar_url TEXT DEFAULT '',
+                balance NUMERIC DEFAULT 0,
+                energy INTEGER DEFAULT 1000,
+                max_energy INTEGER DEFAULT 1000,
+                click_lvl INTEGER DEFAULT 1,
+                wallet_addr TEXT,
+                has_bot BOOLEAN DEFAULT FALSE,
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log("Database Engine: CONNECTED (v3.1.4)");
+    } catch (e) { console.error("FATAL DB ERROR:", e); }
+};
+initDB();
+
+// API: Загрузка или создание пользователя
+app.get('/api/user/:id', async (req, res) => {
+    const uid = req.params.id;
+    const { name, photo } = req.query;
+    try {
+        const query = `
+            INSERT INTO users (user_id, username, avatar_url)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (user_id) DO UPDATE 
+            SET username = EXCLUDED.username, avatar_url = EXCLUDED.avatar_url
+            RETURNING *;
+        `;
+        const vName = (name && name !== 'null') ? name : 'Agent';
+        const vPhoto = (photo && photo !== 'null') ? photo : '';
         
-        #loader { position: fixed; inset: 0; background: #000; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .l-circle-wrap { position: relative; width: 160px; height: 160px; }
-        .l-circle-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-        .l-circle-bg { fill: none; stroke: #111; stroke-width: 4; }
-        .l-circle-progress { fill: none; stroke: var(--cyan); stroke-width: 4; stroke-dasharray: 440; stroke-dashoffset: 440; transition: stroke-dashoffset 0.1s; stroke-linecap: round; }
-        .l-logo-mid { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 60px; filter: drop-shadow(0 0 15px var(--purple)); }
+        const r = await pool.query(query, [uid, vName, vPhoto]);
+        res.json(r.rows[0]);
+    } catch (e) { 
+        console.error("Fetch Error:", e);
+        res.status(500).json({ error: "Sync Failed" }); 
+    }
+});
 
-        #app { display: none; height: 100vh; flex-direction: column; align-items: center; padding: 20px; box-sizing: border-box; }
-        .header { width: 100%; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-        .u-info { display: flex; align-items: center; gap: 12px; }
-        .avatar { width: 45px; height: 45px; border-radius: 12px; border: 1px solid var(--cyan); overflow: hidden; }
-        .avatar img { width: 100%; height: 100%; object-fit: cover; }
-        .lvl-pill { background: var(--cyan); color: #000; padding: 6px 12px; border-radius: 10px; font-weight: 900; font-size: 12px; }
+// API: Сохранение данных (Типы данных принудительно очищаются)
+app.post('/api/save', async (req, res) => {
+    const { userId, balance, energy, max_energy, click_lvl, wallet, has_bot } = req.body;
+    if (!userId || userId === "0") return res.status(400).json({ error: "Invalid ID" });
 
-        .balance { font-size: 58px; font-weight: 900; margin: 15px 0; letter-spacing: -2px; }
-        .play-area { flex: 1; display: flex; align-items: center; justify-content: center; width: 100%; position: relative; }
-        .main-logo { width: 240px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; }
+    try {
+        const cleanBalance = isNaN(parseFloat(balance)) ? 0 : parseFloat(balance);
+        const cleanEnergy = isNaN(parseInt(energy)) ? 0 : parseInt(energy);
+        const cleanMax = isNaN(parseInt(max_energy)) ? 1000 : parseInt(max_energy);
+        const cleanLvl = isNaN(parseInt(click_lvl)) ? 1 : parseInt(click_lvl);
+
+        const saveQuery = `
+            UPDATE users SET 
+                balance = GREATEST(balance, $2), 
+                energy = $3, 
+                max_energy = $4, 
+                click_lvl = $5, 
+                wallet_addr = $6, 
+                has_bot = $7, 
+                last_seen = CURRENT_TIMESTAMP 
+            WHERE user_id = $1
+        `;
         
-        .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px; }
-        .side-btn { background: #0d0d0d; border: 1px solid #222; color: #fff; padding: 15px 10px; border-radius: 16px; font-size: 10px; font-weight: 900; min-width: 95px; }
-
-        .eng-wrap { width: 100%; margin-bottom: 30px; }
-        .eng-meta { display: flex; justify-content: space-between; font-size: 11px; font-weight: 900; color: #666; margin-bottom: 8px; }
-        .bar-bg { width: 100%; height: 10px; background: #111; border-radius: 20px; overflow: hidden; }
-        .bar-f { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: width 0.3s; }
-
-        .footer { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
-        .f-btn { background: #080808; border: 1px solid #1a1a1a; padding: 18px 0; border-radius: 16px; font-size: 10px; font-weight: 900; text-transform: uppercase; color: #888; }
-
-        .modal { position: fixed; inset: 0; background: #000; z-index: 50000; display: none; flex-direction: column; padding: 40px 20px; }
-        .m-title { font-size: 32px; font-weight: 900; margin-bottom: 25px; text-align: left; }
-        .card { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 18px; border-radius: 20px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
-        .btn-cls { background: #fff; color: #000; padding: 18px; border-radius: 15px; font-weight: 900; width: 100%; border: none; margin-top: auto; }
-        .b-btn { background: var(--cyan); color: #000; padding: 12px 18px; border-radius: 12px; font-weight: 900; border: none; }
-
-        @keyframes floatUp { 0% { transform: translateY(0) opacity: 1; } 100% { transform: translateY(-100px) opacity: 0; } }
-        .float-text { position: fixed; pointer-events: none; z-index: 10000; font-weight: 900; animation: floatUp 0.8s forwards; color: var(--cyan); }
-    </style>
-</head>
-<body>
-
-<div id="loader">
-    <div class="l-circle-wrap">
-        <svg class="l-circle-svg" viewBox="0 0 160 160"><circle class="l-circle-bg" cx="80" cy="80" r="70"></circle><circle id="l-circle-bar" class="l-circle-progress" cx="80" cy="80" r="70"></circle></svg>
-        <img src="./logo.png" class="l-logo-mid" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'">
-    </div>
-    <div id="l-pct" style="margin-top:10px; font-weight:900; color:var(--cyan);">0%</div>
-</div>
-
-<div id="app">
-    <div class="header">
-        <div class="u-info">
-            <div class="avatar" id="u-avatar-box"><img src="./logo.png" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'"></div>
-            <div style="text-align:left;"><span id="u-name" style="font-weight:900;">...</span><br><small style="color:var(--cyan); font-size:9px;">v3.1.2 Persistent</small></div>
-        </div>
-        <div class="lvl-pill" id="u-lvl">LVL 1</div>
-    </div>
-    <div class="balance" id="balance">0</div>
-    <div class="play-area">
-        <img src="./logo.png" class="main-logo" id="tap-img" onpointerdown="tap(event)" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'">
-        <div class="side-menu">
-            <div class="side-btn" onclick="openM('wallet')">👛 WALLET</div>
-            <div class="side-btn" onclick="openFriends()">🤝 FRIENDS</div>
-            <div class="side-btn" onclick="openM('bonus')">🎁 BONUS</div>
-        </div>
-    </div>
-    <div class="eng-wrap">
-        <div class="eng-meta"><span>ENERGY</span><span id="eng-val">...</span></div>
-        <div class="bar-bg"><div class="bar-f" id="eng-fill"></div></div>
-    </div>
-    <div class="footer">
-        <div class="f-btn" onclick="openM('boost')">🚀 BOOST</div>
-        <div class="f-btn" onclick="openM('mine')">⛏️ MINE</div>
-        <div class="f-btn" onclick="openM('tasks')">📋 TASKS</div>
-        <div class="f-btn" onclick="loadTop()">🏆 TOP</div>
-    </div>
-</div>
-
-<div id="m-boost" class="modal">
-    <div class="m-title">UPGRADES</div>
-    <div class="card"><div><b>⚡ Multitap</b><br><small id="mt-lvl">Lvl 1</small></div><button id="btn-mt" class="b-btn" onclick="buyB('mt')">0</button></div>
-    <div class="card"><div><b>🔋 Limit</b><br><small>+500 Eng</small></div><button id="btn-el" class="b-btn" onclick="buyB('el')">0</button></div>
-    <button class="btn-cls" onclick="closeM()">BACK</button>
-</div>
-<div id="m-top" class="modal"><div class="m-title">TOP NODES</div><div id="top-container" style="flex:1; overflow-y:auto;"></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-wallet" class="modal"><div class="m-title">WALLET</div><div class="card"><span id="wallet-addr" style="font-size:11px;">Not Connected</span></div><button style="background:var(--cyan); padding:18px; border-radius:15px; border:none; width:100%; font-weight:900;" onclick="handleWallet()">CONNECT</button><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-friends" class="modal"><div class="m-title">FRIENDS</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-bonus" class="modal"><div class="m-title">BONUS</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-mine" class="modal"><div class="m-title">MINE</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-tasks" class="modal"><div class="m-title">TASKS</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-
-<script>
-    const tg = window.Telegram.WebApp;
-    tg.expand();
-    const tonUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json' });
-
-    let s = { 
-        id: tg.initDataUnsafe?.user?.id?.toString() || "0",
-        name: tg.initDataUnsafe?.user?.first_name || "Agent",
-        photo: tg.initDataUnsafe?.user?.photo_url || "",
-        bal: 0, lvl: 1, eng: 1000, max: 1000, wallet: null, bot: false 
-    };
-
-    async function init() {
-        let p = 0; const bar = document.getElementById('l-circle-bar');
-        const interval = setInterval(() => {
-            p += 4; if(p > 100) p = 100;
-            document.getElementById('l-pct').innerText = p + '%';
-            bar.style.strokeDashoffset = 440 - (440 * p / 100);
-            if(p >= 100) { clearInterval(interval); document.getElementById('loader').style.display='none'; document.getElementById('app').style.display='flex'; }
-        }, 30);
-
-        await sync();
-        tonUI.onStatusChange(w => { s.wallet = w ? w.account.address : null; save(); });
-        setInterval(save, 5000);
-        setInterval(() => { if(s.eng < s.max) { s.eng = Math.min(s.max, s.eng + 2); upd(); }}, 1000);
+        await pool.query(saveQuery, [
+            userId, cleanBalance, cleanEnergy, cleanMax, cleanLvl, wallet || null, has_bot || false
+        ]);
+        res.json({ success: true });
+    } catch (e) { 
+        console.error("SAVE ERROR:", e);
+        res.status(500).json({ error: e.message }); 
     }
+});
 
-    async function sync() {
-        try {
-            const r = await fetch(`/api/user/${s.id}?name=${encodeURIComponent(s.name)}&photo=${encodeURIComponent(s.photo)}`);
-            const d = await r.json();
-            s.bal = Number(d.balance) || 0;
-            s.lvl = Number(d.click_lvl) || 1;
-            s.eng = Number(d.energy) || 1000;
-            s.max = Number(d.max_energy) || 1000;
-            s.wallet = d.wallet_addr;
-            s.bot = d.has_bot;
-            upd();
-        } catch(e) { console.error("Sync error", e); }
-    }
+app.get('/api/top', async (req, res) => {
+    try {
+        const r = await pool.query('SELECT user_id, username, avatar_url, balance FROM users ORDER BY balance DESC LIMIT 50');
+        res.json(r.rows);
+    } catch (e) { res.json([]); }
+});
 
-    function upd() {
-        document.getElementById('balance').innerText = Math.floor(s.bal).toLocaleString();
-        document.getElementById('u-lvl').innerText = `LVL ${s.lvl}`;
-        document.getElementById('u-name').innerText = s.name;
-        document.getElementById('eng-val').innerText = `${s.eng} / ${s.max}`;
-        document.getElementById('eng-fill').style.width = `${(s.eng / s.max) * 100}%`;
-        if(s.photo && s.photo !== "null") document.getElementById('u-avatar-box').innerHTML = `<img src="${s.photo}">`;
-        
-        const mtCost = Math.floor(250 * Math.pow(1.618, s.lvl - 1));
-        const elCost = Math.floor(400 * Math.pow(1.5, (s.max / 500) - 1));
-        document.getElementById('btn-mt').innerText = mtCost.toLocaleString();
-        document.getElementById('btn-el').innerText = elCost.toLocaleString();
-        document.getElementById('mt-lvl').innerText = `Lvl ${s.lvl}`;
-        if(s.wallet) document.getElementById('wallet-addr').innerText = s.wallet.slice(0,8)+"..."+s.wallet.slice(-8);
-    }
+bot.start((ctx) => {
+    ctx.replyWithHTML(`<b>Neural Pulse v3.1.4</b>\nСтатус: База данных в норме.`,
+        Markup.inlineKeyboard([[Markup.button.webApp("OPEN CLUSTER", "https://neural-pulse.bothost.ru")]]));
+});
 
-    function tap(e) {
-        if(s.eng >= s.lvl) {
-            s.bal += s.lvl; s.eng -= s.lvl;
-            showFloat(e, `+${s.lvl}`);
-            tg.HapticFeedback.impactOccurred('light');
-            document.getElementById('tap-img').style.transform = 'scale(0.95)';
-            setTimeout(() => document.getElementById('tap-img').style.transform='scale(1)', 50);
-            upd();
-        }
-    }
-
-    function showFloat(e, t) {
-        const f = document.createElement('div');
-        f.className = 'float-text'; f.innerText = t;
-        f.style.left = `${(e.clientX || e.touches[0].clientX)}px`;
-        f.style.top = `${(e.clientY || e.touches[0].clientY)}px`;
-        document.body.appendChild(f);
-        setTimeout(() => f.remove(), 800);
-    }
-
-    function buyB(type) {
-        let cost = 0;
-        if(type === 'mt') { cost = Math.floor(250 * Math.pow(1.618, s.lvl - 1)); if(s.bal >= cost) { s.bal -= cost; s.lvl++; }}
-        else if(type === 'el') { cost = Math.floor(400 * Math.pow(1.5, (s.max / 500) - 1)); if(s.bal >= cost) { s.bal -= cost; s.max += 500; s.eng += 500; }}
-        upd(); save();
-    }
-
-    function save() {
-        if(s.id === "0") return;
-        // КРИТИЧЕСКОЕ: Принудительное преобразование всех полей в числа перед отправкой
-        const payload = {
-            userId: String(s.id),
-            balance: Number(s.bal),
-            energy: Math.floor(s.eng),
-            max_energy: Math.floor(s.max),
-            click_lvl: Math.floor(s.lvl),
-            wallet: s.wallet,
-            has_bot: Boolean(s.bot)
-        };
-        fetch('/api/save', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
-        }).then(r => r.json()).then(res => console.log("Saved:", res.timestamp));
-    }
-
-    async function loadTop() {
-        openM('top');
-        const cont = document.getElementById('top-container');
-        cont.innerHTML = 'SYNCING...';
-        const r = await fetch('/api/top');
-        const d = await r.json();
-        cont.innerHTML = d.map((u, i) => `<div class="card"><span>${i+1}. ${u.username}</span><b>${Math.floor(u.balance)}</b></div>`).join('');
-    }
-
-    function openM(id) { document.getElementById('m-'+id).style.display = 'flex'; }
-    function closeM() { document.querySelectorAll('.modal').forEach(m => m.style.display='none'); }
-    function handleWallet() { if(tonUI.connected) tonUI.disconnect(); else tonUI.openModal(); }
-
-    init();
-</script>
-</body>
-</html>
+app.listen(3000, () => { console.log("Pulse Server v3.1.4 Live"); bot.launch(); });
