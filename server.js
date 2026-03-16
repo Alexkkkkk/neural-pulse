@@ -13,6 +13,7 @@ const pool = new Pool({ connectionString: PG_URI });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
+// Инициализация БД
 const initDB = async () => {
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS users (
@@ -24,24 +25,25 @@ const initDB = async () => {
             click_lvl INTEGER DEFAULT 1,
             wallet_addr TEXT
         )`);
-        console.log("Build 2.5.2 - Node.js Backend & DB Synced");
+        console.log("Build 2.5.3 - Node.js Backend & Design Locked");
     } catch (e) { console.error("DB Error:", e); }
 };
 initDB();
 
+// API: Загрузка пользователя
 app.get('/api/user/:id', async (req, res) => {
     try {
         const userId = req.params.id;
-        const name = req.query.name || 'Agent';
         let r = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
         if (r.rows.length === 0) {
-            await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2)', [userId, name]);
+            await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2)', [userId, req.query.name || 'Agent']);
             r = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
         }
         res.json(r.rows[0]);
     } catch (e) { res.status(500).send(e.message); }
 });
 
+// API: Сохранение прогресса
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, click_lvl, wallet } = req.body;
     try {
@@ -53,14 +55,15 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).send(e.message); }
 });
 
+// Telegram Bot
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v2.5.2</b>\nFull Synchronization Active.`, Markup.inlineKeyboard([
+    ctx.replyWithHTML(`<b>Neural Pulse v2.5.3</b>\nNode.js Active Engine.`, Markup.inlineKeyboard([
         [Markup.button.webApp("OPEN TERMINAL", "https://neural-pulse.bothost.ru")]
     ]));
 });
 
 const PORT = 3000;
 app.listen(PORT, () => { 
-    console.log(`v2.5.2 running on port ${PORT}`);
-    bot.launch().catch(err => console.error("Bot launch failed:", err)); 
+    console.log(`v2.5.3 | Port ${PORT} | Design & Sync Active`);
+    bot.launch().catch(err => console.error("Telegram Bot Error:", err)); 
 });
