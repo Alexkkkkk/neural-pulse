@@ -8,12 +8,12 @@ const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
-const pool = new Pool({ connectionString: PG_URI });
+const pool = new Pool({ connectionString: PG_URI, ssl: { rejectUnauthorized: false } });
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Крутая инициализация базы: магия "безболезненного" добавления колонок через ALTER
+// Глубокая проверка и инициализация таблиц
 const initDB = async () => {
     try {
         await pool.query(`
@@ -30,78 +30,82 @@ const initDB = async () => {
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
-        // Магия: автоматическая проверка наличия новых колонок (пример для будущего)
-        // await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS referrals INTEGER DEFAULT 0`);
-        console.log("Database v3.1.0 Ready");
-    } catch (e) { console.error("DB Init Error:", e); }
+        console.log("Database Engine: FULL SYNC ACTIVE");
+    } catch (e) { console.error("FATAL DB ERROR:", e); }
 };
 initDB();
 
-// Обработка пользователя с жесткой валидацией данных (решает проблему NaN)
+// API получения данных
 app.get('/api/user/:id', async (req, res) => {
-    const { name, photo } = req.query;
     const uid = req.params.id;
+    const { name, photo } = req.query;
     try {
-        let r = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
-        const vName = (name && name !== 'null' && name !== 'undefined') ? name : 'Agent';
-        const vPhoto = (photo && photo !== 'null' && photo !== 'undefined') ? photo : '';
-
-        if (!r.rows.length) {
-            const newUser = await pool.query(
-                'INSERT INTO users (user_id, username, avatar_url, balance, energy, max_energy, click_lvl) VALUES ($1, $2, $3, 0, 1000, 1000, 1) RETURNING *',
-                [uid, vName, vPhoto]
-            );
-            return res.json(newUser.rows[0]);
-        } else {
-            // Обновляем метаданные, сохраняя прогресс
-            const updated = await pool.query(
-                'UPDATE users SET username=$1, avatar_url=$2 WHERE user_id=$3 RETURNING *',
-                [vName, vPhoto, uid]
-            );
-            return res.json(updated.rows[0]);
-        }
-    } catch (e) { res.status(500).json({error: "Node Sync Error"}); }
+        // Используем UPSERT (INSERT OR UPDATE) сразу при входе, чтобы гарантировать наличие записи
+        const query = `
+            INSERT INTO users (user_id, username, avatar_url)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (user_id) DO UPDATE 
+            SET username = EXCLUDED.username, avatar_url = EXCLUDED.avatar_url
+            RETURNING *;
+        `;
+        const vName = (name && name !== 'null') ? name : 'Agent';
+        const vPhoto = (photo && photo !== 'null') ? photo : '';
+        
+        const r = await pool.query(query, [uid, vName, vPhoto]);
+        res.json(r.rows[0]);
+    } catch (e) { 
+        console.error("Fetch Error:", e);
+        res.status(500).json({ error: "DB Fetch Failed" }); 
+    }
 });
 
-// Безопасное сохранение с защитой от перезаписи меньшим значением
+// API сохранения — КРИТИЧЕСКИЙ УЗЕЛ
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, max_energy, click_lvl, wallet, has_bot } = req.body;
-    if(!userId || userId === "0") return res.status(400).send("Invalid ID");
     
+    if (!userId || userId === "0") return res.status(400).json({ error: "Invalid ID" });
+
     try {
-        await pool.query(
-            `UPDATE users SET 
-                balance = GREATEST(balance, $2), 
-                energy = $3, 
-                max_energy = $4, 
-                click_lvl = $5, 
+        // Принудительное приведение к типам данных базы (NUMERIC и INT)
+        const saveQuery = `
+            UPDATE users SET 
+                balance = GREATEST(balance, $2::NUMERIC), 
+                energy = $3::INTEGER, 
+                max_energy = $4::INTEGER, 
+                click_lvl = $5::INTEGER, 
                 wallet_addr = $6, 
                 has_bot = $7, 
                 last_seen = CURRENT_TIMESTAMP 
-             WHERE user_id = $1`,
-            [userId, balance || 0, energy || 0, max_energy || 1000, click_lvl || 1, wallet, has_bot || false]
-        );
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({error: e.message}); }
+            WHERE user_id = $1
+        `;
+        
+        await pool.query(saveQuery, [
+            userId, 
+            balance || 0, 
+            energy || 0, 
+            max_energy || 1000, 
+            click_lvl || 1, 
+            wallet || null, 
+            has_bot || false
+        ]);
+        
+        res.json({ success: true, timestamp: Date.now() });
+    } catch (e) { 
+        console.error("SAVE ERROR:", e);
+        res.status(500).json({ error: e.message }); 
+    }
 });
 
 app.get('/api/top', async (req, res) => {
     try {
-        const r = await pool.query(
-            'SELECT user_id, username, avatar_url, balance FROM users WHERE username IS NOT NULL ORDER BY balance DESC LIMIT 50'
-        );
+        const r = await pool.query('SELECT user_id, username, avatar_url, balance FROM users ORDER BY balance DESC LIMIT 50');
         res.json(r.rows);
-    } catch (e) { res.status(500).json([]); }
+    } catch (e) { res.json([]); }
 });
 
 bot.start((ctx) => {
-    ctx.replyWithHTML(
-        `<b>Neural Pulse v3.1.0</b>\nКвантовый движок запущен. Все данные синхронизированы.`,
-        Markup.inlineKeyboard([[Markup.button.webApp("ENTER NODE", "https://neural-pulse.bothost.ru")]])
-    );
+    ctx.replyWithHTML(`<b>Neural Pulse v3.1.2</b>\nСтатус: Синхронизация стабильна.`,
+        Markup.inlineKeyboard([[Markup.button.webApp("OPEN CLUSTER", "https://neural-pulse.bothost.ru")]]));
 });
 
-app.listen(3000, () => {
-    console.log("Server Live: Port 3000");
-    bot.launch();
-});
+app.listen(3000, () => { console.log("Pulse Server v3.1.2 Live"); bot.launch(); });
