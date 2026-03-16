@@ -13,7 +13,6 @@ const pool = new Pool({ connectionString: PG_URI });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Инициализация БД
 const initDB = async () => {
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS users (
@@ -25,12 +24,11 @@ const initDB = async () => {
             click_lvl INTEGER DEFAULT 1,
             wallet_addr TEXT
         )`);
-        console.log("Build 2.5.3 - Node.js Backend & Design Locked");
+        console.log("Build 2.5.3 - Node.js Backend & Design Restored");
     } catch (e) { console.error("DB Error:", e); }
 };
 initDB();
 
-// API: Загрузка пользователя
 app.get('/api/user/:id', async (req, res) => {
     try {
         const userId = req.params.id;
@@ -43,7 +41,6 @@ app.get('/api/user/:id', async (req, res) => {
     } catch (e) { res.status(500).send(e.message); }
 });
 
-// API: Сохранение прогресса
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, click_lvl, wallet } = req.body;
     try {
@@ -55,15 +52,14 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).send(e.message); }
 });
 
-// Telegram Bot
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v2.5.3</b>\nNode.js Active Engine.`, Markup.inlineKeyboard([
+    ctx.replyWithHTML(`<b>Neural Pulse v2.5.3</b>`, Markup.inlineKeyboard([
         [Markup.button.webApp("OPEN TERMINAL", "https://neural-pulse.bothost.ru")]
     ]));
 });
 
 const PORT = 3000;
 app.listen(PORT, () => { 
-    console.log(`v2.5.3 | Port ${PORT} | Design & Sync Active`);
-    bot.launch().catch(err => console.error("Telegram Bot Error:", err)); 
+    console.log(`v2.5.3 running on port ${PORT}`);
+    bot.launch().catch(err => console.error("Bot launch failed:", err)); 
 });
