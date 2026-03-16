@@ -24,16 +24,10 @@ const initDB = async () => {
             click_lvl INTEGER DEFAULT 1,
             wallet_addr TEXT
         )`);
-        console.log("Build 2.6.2 - Back to Basics & Fixed Paths");
+        console.log("Build 2.6.8 - TOP 100 Active");
     } catch (e) { console.error("DB Error:", e); }
 };
 initDB();
-
-bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v2.6.2</b>`, Markup.inlineKeyboard([
-        [Markup.button.webApp("OPEN TERMINAL", "https://neural-pulse.bothost.ru")]
-    ]));
-});
 
 app.get('/api/user/:id', async (req, res) => {
     try {
@@ -46,18 +40,28 @@ app.get('/api/user/:id', async (req, res) => {
     } catch (e) { res.status(500).send(e.message); }
 });
 
+app.get('/api/top', async (req, res) => {
+    try {
+        const r = await pool.query('SELECT user_id, username, balance FROM users ORDER BY balance DESC LIMIT 100');
+        res.json(r.rows);
+    } catch (e) { res.status(500).send(e.message); }
+});
+
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, click_lvl, wallet } = req.body;
     try {
-        await pool.query(
-            'UPDATE users SET balance=$2, energy=$3, click_lvl=$4, wallet_addr=$5 WHERE user_id=$1', 
-            [userId, balance, energy, click_lvl, wallet]
-        );
+        await pool.query('UPDATE users SET balance=$2, energy=$3, click_lvl=$4, wallet_addr=$5 WHERE user_id=$1', [userId, balance, energy, click_lvl, wallet]);
         res.json({ok: true});
     } catch (e) { res.status(500).send(e.message); }
 });
 
+bot.start((ctx) => {
+    ctx.replyWithHTML(`<b>Neural Pulse v2.6.8</b>`, Markup.inlineKeyboard([
+        [Markup.button.webApp("OPEN TERMINAL", "https://neural-pulse.bothost.ru")]
+    ]));
+});
+
 app.listen(3000, () => { 
-    console.log("v2.6.2 | Stable Build Running");
+    console.log("v2.6.8 | Server running");
     bot.launch(); 
 });
