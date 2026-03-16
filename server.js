@@ -11,6 +11,7 @@ const app = express();
 const pool = new Pool({ connectionString: PG_URI });
 
 app.use(express.json());
+// Статические файлы берутся из папки static
 app.use(express.static(path.join(__dirname, 'static')));
 
 const initDB = async () => {
@@ -24,18 +25,17 @@ const initDB = async () => {
             click_lvl INTEGER DEFAULT 1,
             wallet_addr TEXT
         )`);
-        console.log("Build 2.5.3 - Node.js Backend & Design Restored");
+        console.log("v2.5.4 - Fix Images Path Active");
     } catch (e) { console.error("DB Error:", e); }
 };
 initDB();
 
 app.get('/api/user/:id', async (req, res) => {
     try {
-        const userId = req.params.id;
-        let r = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
+        let r = await pool.query('SELECT * FROM users WHERE user_id = $1', [req.params.id]);
         if (r.rows.length === 0) {
-            await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2)', [userId, req.query.name || 'Agent']);
-            r = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
+            await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2)', [req.params.id, req.query.name || 'Agent']);
+            r = await pool.query('SELECT * FROM users WHERE user_id = $1', [req.params.id]);
         }
         res.json(r.rows[0]);
     } catch (e) { res.status(500).send(e.message); }
@@ -53,13 +53,12 @@ app.post('/api/save', async (req, res) => {
 });
 
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v2.5.3</b>`, Markup.inlineKeyboard([
+    ctx.replyWithHTML(`<b>Neural Pulse v2.5.4</b>`, Markup.inlineKeyboard([
         [Markup.button.webApp("OPEN TERMINAL", "https://neural-pulse.bothost.ru")]
     ]));
 });
 
-const PORT = 3000;
-app.listen(PORT, () => { 
-    console.log(`v2.5.3 running on port ${PORT}`);
-    bot.launch().catch(err => console.error("Bot launch failed:", err)); 
+app.listen(3000, () => { 
+    console.log("v2.5.4 | Server Ready");
+    bot.launch(); 
 });
