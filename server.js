@@ -1,21 +1,24 @@
-const express = require('express');
-const { Telegraf, Markup } = require('telegraf');
-const { Pool } = require('pg');
-const path = require('path');
+from flask import Flask, request, jsonify, send_from_directory
+from telebot import TeleBot, types
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import os
 
-const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
-const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
+# Конфигурация
+BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw"
+PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f"
 
-const bot = new Telegraf(BOT_TOKEN);
-const app = express();
-const pool = new Pool({ connectionString: PG_URI });
+app = Flask(__name__, static_folder='static')
+bot = TeleBot(BOT_TOKEN)
 
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'static')));
+def get_db_connection():
+    return psycopg2.connect(PG_URI, cursor_factory=RealDictCursor)
 
-const initDB = async () => {
-    try {
-        await pool.query(`CREATE TABLE IF NOT EXISTS users (
+def init_db():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
             user_id TEXT PRIMARY KEY, 
             username TEXT,
             balance NUMERIC DEFAULT 0,
@@ -23,41 +26,66 @@ const initDB = async () => {
             max_energy INTEGER DEFAULT 1000,
             click_lvl INTEGER DEFAULT 1,
             wallet_addr TEXT
-        )`);
-        console.log("Build 2.3.1 - Design Restored");
-    } catch (e) { console.error("DB Error:", e); }
-};
-initDB();
+        )
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("Build 2.4.0 - Database Synced & Ready")
 
-bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v2.3.1</b>`, Markup.inlineKeyboard([
-        [Markup.button.webApp("OPEN TERMINAL", "https://neural-pulse.bothost.ru")]
-    ]));
-});
+init_db()
 
-app.get('/api/user/:id', async (req, res) => {
-    try {
-        let r = await pool.query('SELECT * FROM users WHERE user_id = $1', [req.params.id]);
-        if (r.rows.length === 0) {
-            await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2)', [req.params.id, req.query.name || 'Agent']);
-            r = await pool.query('SELECT * FROM users WHERE user_id = $1', [req.params.id]);
-        }
-        res.json(r.rows[0]);
-    } catch (e) { res.status(500).send(e.message); }
-});
+@app.route('/')
+def serve_index():
+    return send_from_directory('static', 'index.html')
 
-app.post('/api/save', async (req, res) => {
-    const { userId, balance, energy, click_lvl, wallet } = req.body;
-    try {
-        await pool.query(
-            'UPDATE users SET balance=$2, energy=$3, click_lvl=$4, wallet_addr=$5 WHERE user_id=$1', 
-            [userId, balance, energy, click_lvl, wallet]
-        );
-        res.json({ok: true});
-    } catch (e) { res.status(500).send(e.message); }
-});
+@app.route('/api/user/<user_id>')
+def get_user(user_id):
+    name = request.args.get('name', 'Agent')
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
+    user = cur.fetchone()
+    
+    if not user:
+        cur.execute(
+            "INSERT INTO users (user_id, username) VALUES (%s, %s) RETURNING *",
+            (user_id, name)
+        )
+        user = cur.fetchone()
+        conn.commit()
+    
+    cur.close()
+    conn.close()
+    return jsonify(user)
 
-app.listen(3000, () => { 
-    console.log("v2.3.1 | Design & Wallet Fix Active");
-    bot.launch(); 
-});
+@app.route('/api/save', list=['POST']) # В Flask используется methods=['POST']
+@app.route('/api/save', methods=['POST'])
+def save_user():
+    data = request.json
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        UPDATE users 
+        SET balance=%s, energy=%s, click_lvl=%s, wallet_addr=%s 
+        WHERE user_id=%s
+    """, (data['balance'], data['energy'], data['click_lvl'], data['wallet'], data['userId']))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"ok": True})
+
+@bot.message_handler(commands=['start'])
+def start(message):
+    markup = types.InlineKeyboardMarkup()
+    web_app = types.WebAppInfo("https://neural-pulse.bothost.ru")
+    btn = types.InlineKeyboardButton("OPEN TERMINAL", web_app=web_app)
+    markup.add(btn)
+    bot.reply_to(message, "<b>Neural Pulse v2.4.0</b>\nNode synchronized with Database.", parse_mode="HTML", reply_markup=markup)
+
+if __name__ == '__main__':
+    # Запуск бота в неблокирующем режиме для работы Flask
+    bot.remove_webhook()
+    from threading import Thread
+    Thread(target=lambda: bot.infinity_polling()).start()
+    app.run(host='0.0.0.0', port=3000)
