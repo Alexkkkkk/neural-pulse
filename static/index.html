@@ -2,177 +2,166 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Neural Pulse</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Neural Pulse v3.8.0</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
-        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; --card: #0a0a0a; --border: #1a1a1a; }
-        body { background: var(--bg); color: #fff; font-family: sans-serif; margin: 0; overflow: hidden; height: 100vh; text-align: center; }
+        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
+        body { background: var(--bg); color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; user-select: none; }
+        #app { display: none; height: 100vh; flex-direction: column; align-items: center; padding: 20px; box-sizing: border-box; }
         
-        #app { display: flex; flex-direction: column; height: 100vh; padding: 20px; box-sizing: border-box; }
+        /* Сохраняем ваш дизайн из скриншотов */
+        .header { width: 100%; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; box-sizing: border-box; }
+        .lvl-pill { background: var(--cyan); color: #000; padding: 6px 14px; border-radius: 10px; font-weight: 900; }
+        .balance { font-size: 64px; font-weight: 900; margin: 30px 0; }
+        .main-logo { width: 240px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; }
         
-        /* Стили из вашего дизайна */
-        .u-card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-        .lvl-tag { background: var(--cyan); color: #000; padding: 6px 12px; border-radius: 10px; font-weight: 900; }
-        
-        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 25px; }
-        .stat-item { background: var(--card); border: 1px solid var(--border); border-radius: 15px; padding: 10px; }
-        .stat-label { font-size: 10px; color: #555; text-transform: uppercase; }
-        .stat-val { font-size: 16px; font-weight: 900; color: var(--cyan); }
+        .eng-wrap { width: 100%; margin-top: auto; padding-bottom: 20px; }
+        .bar-bg { width: 100%; height: 10px; background: #111; border-radius: 10px; overflow: hidden; border: 1px solid #222; }
+        .bar-f { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; }
 
-        .balance { font-size: 64px; font-weight: 900; margin: 20px 0; }
+        .footer { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 20px; }
+        .f-btn { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 15px 0; border-radius: 15px; font-size: 10px; font-weight: 900; }
 
-        .play-area { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; }
-        .main-ai { width: 220px; filter: drop-shadow(0 0 30px var(--purple)); cursor: pointer; }
-        
-        .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px; }
-        .side-btn { background: var(--card); border: 1px solid var(--border); padding: 12px; border-radius: 15px; font-size: 11px; font-weight: 900; width: 100px; text-align: left; }
-
-        .eng-box { width: 100%; margin-bottom: 20px; }
-        .bar-bg { width: 100%; height: 8px; background: #111; border-radius: 10px; border: 1px solid #1a1a1a; margin-top: 8px; }
-        .bar-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: width 0.3s; }
-
-        .footer { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-        .f-btn { background: var(--card); border: 1px solid var(--border); padding: 15px 0; border-radius: 12px; font-size: 10px; font-weight: 900; }
-
-        /* Окна */
-        .modal { position: fixed; inset: 0; background: var(--bg); display: none; flex-direction: column; padding: 25px; z-index: 1000; }
-        .m-header { font-size: 32px; font-weight: 900; margin-bottom: 20px; text-align: left; display: flex; align-items: center; gap: 10px; }
-        .m-content { flex: 1; overflow-y: auto; }
-        .card { background: var(--card); border: 1px solid var(--border); padding: 15px; border-radius: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        .buy-btn { background: var(--cyan); color: #000; border: none; padding: 10px 15px; border-radius: 10px; font-weight: 900; }
-        .back-btn { background: #fff; color: #000; border: none; padding: 20px; border-radius: 15px; font-weight: 900; width: 100%; margin-top: 20px; }
+        .modal { position: fixed; inset: 0; background: #000; z-index: 5000; display: none; flex-direction: column; padding: 30px; }
+        .card { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 20px; border-radius: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .b-btn { background: var(--cyan); color: #000; padding: 12px 20px; border-radius: 12px; font-weight: 900; border: none; }
+        .btn-cls { background: #fff; color: #000; padding: 20px; border-radius: 15px; font-weight: 900; width: 100%; margin-top: auto; }
     </style>
 </head>
 <body>
 
 <div id="app">
-    <div class="u-card">
-        <div style="text-align:left;">
-            <b id="u-name">Agent</b><br>
-            <small style="color:var(--cyan); font-size:9px;">v3.8.1 Neural Mining</small>
+    <div class="header">
+        <div style="display:flex; align-items:center; gap:10px;">
+            <div id="u-avatar" style="width:40px; height:40px; border-radius:10px; overflow:hidden; border:1px solid #222;"></div>
+            <div style="text-align:left;"><b id="u-name">Agent</b><br><small style="color:var(--cyan)">v3.8.0 Neural Mining</small></div>
         </div>
-        <div class="lvl-tag" id="u-lvl">LVL 1</div>
+        <div class="lvl-pill" id="u-lvl">LVL 1</div>
     </div>
 
-    <div class="stat-grid">
-        <div class="stat-item">
-            <div class="stat-label">Earn per tap</div>
-            <div class="stat-val" id="stat-tap">+1</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-label">Profit per hour</div>
-            <div class="stat-val" id="stat-profit">0</div>
-        </div>
-    </div>
+    <div class="balance" id="bal">0</div>
 
-    <div class="balance" id="balance">0</div>
-
-    <div class="play-area">
-        <img src="images/logo.png" class="main-ai" onclick="tap(event)">
-        <div class="side-menu">
-            <div class="side-btn" onclick="openM('wallet')">👛 WALLET</div>
-            <div class="side-btn" onclick="openM('friends')">🤝 FRIENDS</div>
-            <div class="side-btn" onclick="openM('bonus')">🎁 BONUS</div>
+    <div style="flex:1; display:flex; align-items:center; justify-content:center; position:relative;">
+        <img src="./logo.png" class="main-logo" id="tap-target" onpointerdown="doTap(event)">
+        <div style="position:absolute; right:0; display:flex; flex-direction:column; gap:10px;">
+            <button class="f-btn" style="width:80px;" onclick="openM('wallet')">👛 WALLET</button>
+            <button class="f-btn" style="width:80px;" onclick="openM('friends')">🤝 FRIENDS</button>
+            <button class="f-btn" style="width:80px;" onclick="openM('bonus')">🎁 BONUS</button>
         </div>
     </div>
 
-    <div class="eng-box">
-        <div style="display:flex; justify-content:space-between; font-size:10px;">
+    <div class="eng-wrap">
+        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:5px;">
             <span>ENERGY</span><span id="eng-txt">1000/1000</span>
         </div>
-        <div class="bar-bg"><div class="bar-fill" id="eng-bar" style="width: 100%;"></div></div>
+        <div class="bar-bg"><div class="bar-f" id="eng-bar"></div></div>
     </div>
 
     <div class="footer">
-        <div class="f-btn" onclick="openM('boost')">🚀 BOOST</div>
-        <div class="f-btn" onclick="openM('mine')">⛏️ MINE</div>
-        <div class="f-btn" onclick="openM('tasks')">📋 TASKS</div>
-        <div class="f-btn" onclick="openM('top')">🏆 TOP</div>
+        <button class="f-btn" onclick="openM('boost')">🚀 BOOST</button>
+        <button class="f-btn" onclick="openM('mine')">⛏️ MINE</button>
+        <button class="f-btn" onclick="openM('tasks')">📋 TASKS</button>
+        <button class="f-btn" onclick="loadTop()">🏆 TOP</button>
     </div>
 </div>
 
-<div id="m-mine" class="modal">
-    <div class="m-header">⛏️ MINE</div>
-    <div class="m-content">
-        <div class="card">
-            <div style="text-align:left;"><b>Neural Node</b><br><small>Profit: +50/hr</small></div>
-            <button class="buy-btn" onclick="buy('node', 0.1)">0.1 TON</button>
-        </div>
+<div id="m-boost" class="modal">
+    <h2>🚀 UPGRADES</h2>
+    <div class="card">
+        <div style="text-align:left;"><b>Multitap</b><br><small>+1 per tap</small></div>
+        <button class="b-btn" onclick="payAndBuy('mt', '0.1')">0.1 TON</button>
     </div>
-    <button class="back-btn" onclick="closeM()">BACK</button>
+    <div class="card">
+        <div style="text-align:left;"><b>Energy Pool</b><br><small>+500 Limit</small></div>
+        <button class="b-btn" onclick="payAndBuy('ep', '0.2')">0.2 TON</button>
+    </div>
+    <button class="btn-cls" onclick="closeM()">BACK</button>
 </div>
 
-<div id="m-boost" class="modal"><div class="m-header">🚀 BOOST</div><button class="back-btn" onclick="closeM()">BACK</button></div>
-<div id="m-wallet" class="modal"><div class="m-header">👛 WALLET</div><button class="back-btn" onclick="closeM()">BACK</button></div>
-<div id="m-friends" class="modal"><div class="m-header">🤝 FRIENDS</div><button class="back-btn" onclick="closeM()">BACK</button></div>
-<div id="m-bonus" class="modal"><div class="m-header">🎁 BONUS</div><button class="back-btn" onclick="closeM()">BACK</button></div>
-<div id="m-tasks" class="modal"><div class="m-header">📋 TASKS</div><button class="back-btn" onclick="closeM()">BACK</button></div>
-<div id="m-top" class="modal"><div class="m-header">🏆 TOP</div><button class="back-btn" onclick="closeM()">BACK</button></div>
+<div id="m-wallet" class="modal">
+    <h2>👛 WALLET</h2>
+    <div id="ton-connect" style="margin-top:20px;"></div>
+    <button class="btn-cls" onclick="closeM()">BACK</button>
+</div>
 
 <script>
     const tg = window.Telegram.WebApp;
-    let s = { 
-        id: tg.initDataUnsafe?.user?.id || "test_user", 
-        bal: 0, lvl: 1, eng: 1000, max: 1000, profit: 0 
-    };
+    tg.expand();
+    
+    const MY_WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI";
+    const tonUI = new TON_CONNECT_UI.TonConnectUI({ 
+        manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
+        buttonRootId: 'ton-connect'
+    });
 
-    async function load() {
+    let s = { id: tg.initDataUnsafe?.user?.id || "test", bal: 0, lvl: 1, eng: 1000, max: 1000, wallet: null };
+
+    async function payAndBuy(type, amount) {
+        if (!tonUI.connected) {
+            tg.showAlert("Please connect your wallet first!");
+            return;
+        }
+
+        const transaction = {
+            validUntil: Math.floor(Date.now() / 1000) + 600,
+            messages: [{
+                address: MY_WALLET,
+                amount: (parseFloat(amount) * 1000000000).toString() // НаноТОНы
+            }]
+        };
+
         try {
-            const r = await fetch(`/api/user/${s.id}`);
-            const d = await r.json();
-            // Защита от NaN: используем || 0 для всех числовых полей
-            s.bal = Number(d.balance) || 0;
-            s.lvl = Number(d.click_lvl) || 1;
-            s.profit = Number(d.profit_hr) || 0;
-            s.eng = Number(d.energy) || 1000;
-            s.max = Number(d.max_energy) || 1000;
-            upd();
-        } catch(e) { console.error("Load error", e); }
+            await tonUI.sendTransaction(transaction);
+            // Если транзакция прошла успешно:
+            if(type === 'mt') s.lvl++;
+            if(type === 'ep') { s.max += 500; s.eng = s.max; }
+            tg.showAlert("Purchase Successful!");
+            upd(); save();
+        } catch (e) {
+            console.error(e);
+            tg.showAlert("Payment failed or cancelled.");
+        }
     }
 
-    function upd() {
-        document.getElementById('balance').innerText = Math.floor(s.bal).toLocaleString();
-        document.getElementById('stat-tap').innerText = `+${s.lvl}`;
-        document.getElementById('stat-profit').innerText = Math.floor(s.profit);
-        document.getElementById('eng-txt').innerText = `${Math.floor(s.eng)}/${s.max}`;
-        document.getElementById('eng-bar').style.width = `${(s.eng / s.max) * 100}%`;
-        document.getElementById('u-lvl').innerText = `LVL ${Math.floor(s.bal / 5000) + 1}`;
-    }
-
-    function tap(e) {
-        if (s.eng >= s.lvl) {
-            s.bal += s.lvl;
-            s.eng -= s.lvl;
+    function doTap(e) {
+        if(s.eng >= s.lvl) {
+            s.bal += s.lvl; s.eng -= s.lvl;
             tg.HapticFeedback.impactOccurred('light');
             upd();
         }
     }
 
-    function openM(id) { 
-        const m = document.getElementById('m-' + id);
-        if(m) m.style.display = 'flex'; 
-    }
-    
-    function closeM() { 
-        document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); 
+    function upd() {
+        document.getElementById('bal').innerText = Math.floor(s.bal).toLocaleString();
+        document.getElementById('u-lvl').innerText = `LVL ${s.lvl}`;
+        document.getElementById('eng-txt').innerText = `${s.eng}/${s.max}`;
+        document.getElementById('eng-bar').style.width = `${(s.eng/s.max)*100}%`;
     }
 
-    setInterval(() => {
-        s.bal += (s.profit / 3600);
-        if (s.eng < s.max) s.eng = Math.min(s.max, s.eng + 1);
+    async function load() {
+        const r = await fetch(`/api/user/${s.id}`);
+        const d = await r.json();
+        s.bal = Number(d.balance); s.lvl = d.click_lvl; 
+        s.eng = d.energy; s.max = d.max_energy;
         upd();
-    }, 1000);
+        document.getElementById('app').style.display = 'flex';
+    }
 
-    // Сохранение каждые 10 сек
-    setInterval(async () => {
-        await fetch('/api/save', {
+    function save() {
+        fetch('/api/save', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ userId: s.id, balance: s.bal, energy: s.eng, max_energy: s.max, click_lvl: s.lvl, profit_hr: s.profit })
+            body: JSON.stringify({ userId: s.id, balance: s.bal, click_lvl: s.lvl, energy: s.eng, max_energy: s.max, wallet: s.wallet })
         });
-    }, 10000);
+    }
 
+    function openM(id) { document.getElementById('m-'+id).style.display = 'flex'; }
+    function closeM() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
+
+    setInterval(() => { if(s.eng < s.max) { s.eng = Math.min(s.max, s.eng + 1); upd(); } }, 1500);
+    setInterval(save, 5000);
     load();
 </script>
 </body>
