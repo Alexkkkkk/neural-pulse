@@ -11,7 +11,6 @@ const app = express();
 const pool = new Pool({ connectionString: PG_URI });
 
 app.use(express.json());
-// Статика раздается из корня папки static
 app.use(express.static(path.join(__dirname, 'static')));
 
 const initDB = async () => {
@@ -25,12 +24,16 @@ const initDB = async () => {
             click_lvl INTEGER DEFAULT 1,
             wallet_addr TEXT
         )`);
-        console.log("------------------------------------");
-        console.log("Neural Pulse v2.6.0 | DB Connected");
-        console.log("------------------------------------");
+        console.log("Build 2.6.2 - Back to Basics & Fixed Paths");
     } catch (e) { console.error("DB Error:", e); }
 };
 initDB();
+
+bot.start((ctx) => {
+    ctx.replyWithHTML(`<b>Neural Pulse v2.6.2</b>`, Markup.inlineKeyboard([
+        [Markup.button.webApp("OPEN TERMINAL", "https://neural-pulse.bothost.ru")]
+    ]));
+});
 
 app.get('/api/user/:id', async (req, res) => {
     try {
@@ -54,13 +57,7 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).send(e.message); }
 });
 
-bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v2.6.0</b>\nTerminal access ready.`, Markup.inlineKeyboard([
-        [Markup.button.webApp("OPEN TERMINAL", "https://neural-pulse.bothost.ru")]
-    ]));
-});
-
 app.listen(3000, () => { 
-    console.log("v2.6.0 | Active at port 3000");
+    console.log("v2.6.2 | Stable Build Running");
     bot.launch(); 
 });
