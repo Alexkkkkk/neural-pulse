@@ -32,7 +32,7 @@ const initDB = async () => {
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
         await pool.query(`CREATE TABLE IF NOT EXISTS referrals (id SERIAL PRIMARY KEY, referrer_id TEXT REFERENCES users(user_id), referred_id TEXT UNIQUE REFERENCES users(user_id))`);
-        console.log("v3.9.0 Neural Mining & Payments Synced");
+        console.log("v4.0.0 Payment & Mining Core Synced");
     } catch (e) { console.error(e); }
 };
 initDB();
@@ -56,7 +56,7 @@ app.get('/api/user/:id', async (req, res) => {
         
         let offlineProfit = 0;
         if (user.pph > 0 && secondsOffline > 60) {
-            const cappedSeconds = Math.min(secondsOffline, 10800); 
+            const cappedSeconds = Math.min(secondsOffline, 10800); // макс 3 часа
             offlineProfit = (user.pph / 3600) * cappedSeconds;
             await pool.query('UPDATE users SET balance = balance + $1, last_seen = CURRENT_TIMESTAMP WHERE user_id = $2', [offlineProfit, user.user_id]);
         }
@@ -80,8 +80,8 @@ app.get('/api/top', async (req, res) => {
 });
 
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v3.9.0</b>`, 
-    Markup.inlineKeyboard([[Markup.button.webApp("ЗАПУСТИТЬ", "https://neural-pulse.bothost.ru")]]));
+    ctx.replyWithHTML(`<b>Neural Pulse v4.0.0</b>\n<i>Payment System: Online</i>`, 
+    Markup.inlineKeyboard([[Markup.button.webApp("OPEN APP", "https://neural-pulse.bothost.ru")]]));
 });
 
-app.listen(3000, () => { console.log("v3.9.0 Active"); bot.launch(); });
+app.listen(3000, () => { console.log("v4.0.0 Active"); bot.launch(); });
