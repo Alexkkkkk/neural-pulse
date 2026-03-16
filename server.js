@@ -22,15 +22,14 @@ const initDB = async () => {
             energy INTEGER DEFAULT 1000,
             max_energy INTEGER DEFAULT 1000,
             click_lvl INTEGER DEFAULT 1,
-            pnl NUMERIC DEFAULT 0
+            wallet_addr TEXT
         )`);
-        console.log("Neural Pulse DB: Connected");
     } catch (e) { console.error("DB Error:", e); }
 };
 initDB();
 
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v2.2.0</b>`, Markup.inlineKeyboard([
+    ctx.replyWithHTML(`<b>Neural Pulse v2.2.1</b>`, Markup.inlineKeyboard([
         [Markup.button.webApp("OPEN TERMINAL", "https://neural-pulse.bothost.ru")]
     ]));
 });
@@ -54,9 +53,12 @@ app.get('/api/stats', async (req, res) => {
 });
 
 app.post('/api/save', async (req, res) => {
-    const { userId, balance, energy, click_lvl } = req.body;
+    const { userId, balance, energy, click_lvl, wallet } = req.body;
     try {
-        await pool.query('UPDATE users SET balance=$2, energy=$3, click_lvl=$4 WHERE user_id=$1', [userId, balance, energy, click_lvl]);
+        await pool.query(
+            'UPDATE users SET balance=$2, energy=$3, click_lvl=$4, wallet_addr=$5 WHERE user_id=$1', 
+            [userId, balance, energy, click_lvl, wallet]
+        );
         res.json({ok: true});
     } catch (e) { res.status(500).send(e.message); }
 });
