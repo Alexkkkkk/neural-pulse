@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v3.3.5</title>
+    <title>Neural Pulse v3.3.9</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
@@ -11,63 +11,76 @@
         body { background: var(--bg); color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; user-select: none; }
         
         #loader { position: fixed; inset: 0; background: #000; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .l-circle-wrap { position: relative; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; }
+        .l-circle-svg { position: absolute; width: 100%; height: 100%; transform: rotate(-90deg); }
+        .l-circle-bg { fill: none; stroke: #111; stroke-width: 2; }
+        .l-circle-progress { fill: none; stroke: var(--cyan); stroke-width: 2; stroke-dasharray: 565; stroke-dashoffset: 565; transition: stroke-dashoffset 0.1s; stroke-linecap: round; filter: drop-shadow(0 0 5px var(--cyan)); }
+        .l-logo-mid { width: 70px; filter: drop-shadow(0 0 15px var(--purple)); }
         .l-pct { margin-top: 15px; font-size: 42px; font-weight: 900; color: var(--cyan); }
 
-        #app { display: none; height: 100vh; flex-direction: column; padding: 20px; box-sizing: border-box; }
-        .header { width: 100%; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; box-sizing: border-box; }
+        #app { display: none; height: 100vh; flex-direction: column; align-items: center; padding: 20px; box-sizing: border-box; }
+        .header { width: 100%; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; box-sizing: border-box; }
         .avatar { width: 44px; height: 44px; border: 1px solid var(--cyan); border-radius: 12px; overflow: hidden; background: #111; }
         .avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .lvl-pill { background: var(--cyan); color: #000; padding: 6px 14px; border-radius: 10px; font-weight: 900; }
         
         .balance { font-size: 60px; font-weight: 900; margin: 20px 0; letter-spacing: -2px; }
-        .play-area { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; }
-        .main-logo { width: 230px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; }
-        
+        .play-area { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
+        .main-logo { width: 230px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; cursor: pointer; }
+
         .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px; }
         .side-btn { background: #0d0d0d; border: 1px solid #222; color: #fff; padding: 14px 0; border-radius: 15px; font-size: 11px; font-weight: 900; width: 100px; }
 
-        .eng-wrap { width: 100%; margin-bottom: 20px; }
-        .bar-bg { width: 100%; height: 8px; background: #111; border-radius: 10px; overflow: hidden; }
-        .bar-f { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: width 0.2s; }
+        .bar-bg { width: 100%; height: 8px; background: #111; border-radius: 10px; border: 1px solid #1a1a1a; overflow: hidden; margin-top: 10px; }
+        .bar-f { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; transition: width 0.2s; }
 
-        .footer { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .footer { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 20px; }
         .f-btn { background: #080808; border: 1px solid #1a1a1a; padding: 18px 0; border-radius: 15px; font-size: 10px; font-weight: 900; }
 
         .modal { position: fixed; inset: 0; background: #000; z-index: 50000; display: none; flex-direction: column; padding: 40px 20px; }
-        .card { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 20px; border-radius: 20px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+        .card { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 20px; border-radius: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
         .b-btn { background: var(--cyan); color: #000; padding: 12px; border-radius: 12px; font-weight: 900; border: none; }
+        .b-btn:disabled { background: #222; color: #444; }
+        
+        @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-100px); opacity: 0; } }
+        .float-text { position: fixed; pointer-events: none; z-index: 10000; font-weight: 900; animation: floatUp 0.6s forwards; }
     </style>
 </head>
 <body>
 
 <div id="loader">
+    <div class="l-circle-wrap">
+        <svg class="l-circle-svg" viewBox="0 0 200 200">
+            <circle class="l-circle-bg" cx="100" cy="100" r="90"></circle>
+            <circle id="l-circle-bar" class="l-circle-progress" cx="100" cy="100" r="90"></circle>
+        </svg>
+        <img src="images/logo.png" class="l-logo-mid" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'">
+    </div>
     <div class="l-pct" id="l-pct">0%</div>
-    <div style="color:var(--cyan); letter-spacing: 2px; font-size: 10px; margin-top: 10px;">SYNCING WITH CLUSTER...</div>
 </div>
 
 <div id="app">
     <div class="header">
         <div style="display:flex; align-items:center; gap:12px;">
-            <div class="avatar" id="u-avatar"></div>
-            <div style="text-align:left;"><b id="u-name">...</b><br><small style="color:var(--cyan)">v3.3.5 Node</small></div>
+            <div class="avatar" id="u-avatar-box"></div>
+            <div style="text-align:left;"><span id="u-name" style="font-weight:900;">Agent</span><br><small style="color:var(--cyan); font-size:9px;">QUANTUM NODE v3.3.9</small></div>
         </div>
-        <div style="background:var(--cyan); color:#000; padding:6px 14px; border-radius:10px; font-weight:900;" id="u-lvl">LVL 1</div>
+        <div class="lvl-pill" id="u-lvl">LVL 1</div>
     </div>
-    
     <div class="balance" id="balance">0</div>
-
     <div class="play-area">
-        <img src="./logo.png" class="main-logo" id="tap-img" onpointerdown="tap(event)" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'">
+        <img src="images/logo.png" class="main-logo" id="tap-img" onpointerdown="tap(event)" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'">
         <div class="side-menu">
             <div class="side-btn" onclick="openM('wallet')">WALLET</div>
-            <div class="side-btn" onclick="openM('friends')">FRIENDS</div>
+            <div class="side-btn" onclick="openFriends()">FRIENDS</div>
         </div>
     </div>
-
-    <div class="eng-wrap">
-        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:5px;"><span id="eng-val">...</span></div>
+    <div style="width:100%; text-align:left;">
+        <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:900;">
+            <span>ENERGY</span><span id="eng-val">1000 / 1000</span>
+        </div>
         <div class="bar-bg"><div class="bar-f" id="eng-fill"></div></div>
     </div>
-
     <div class="footer">
         <div class="f-btn" onclick="openM('boost')">BOOST</div>
         <div class="f-btn" onclick="openM('mine')">MINE</div>
@@ -77,20 +90,32 @@
 </div>
 
 <div id="m-boost" class="modal">
-    <h2>UPGRADES</h2>
-    <div class="card"><div><b>Multitap</b><br><small id="mt-lvl">Lvl 1</small></div><button class="b-btn" onclick="buy('mt')" id="mt-cost">0</button></div>
-    <div class="card"><div><b>Energy Pool</b><br><small>+500 Limit</small></div><button class="b-btn" onclick="buy('el')" id="el-cost">0</button></div>
-    <button onclick="closeM()" style="margin-top:auto; padding:20px; border-radius:15px; font-weight:900;">BACK</button>
+    <h1 style="text-align:left;">BOOSTERS</h1>
+    <div class="card"><div><b>Multitap</b><br><small id="mt-lvl">Lvl 1</small></div><button id="btn-mt" class="b-btn" onclick="buyB('mt')">0</button></div>
+    <div class="card"><div><b>Energy</b><br><small>+500 Limit</small></div><button id="btn-el" class="b-btn" onclick="buyB('el')">0</button></div>
+    <div class="card"><div><b>Tap Bot</b><br><small>Auto 24h</small></div><button id="btn-bot" class="b-btn" onclick="buyB('bot')">5000</button></div>
+    <button class="f-btn" onclick="closeM()" style="margin-top:auto; padding:20px;">BACK</button>
 </div>
 
 <div id="m-wallet" class="modal">
-    <h2>TON WALLET</h2>
-    <div class="card"><small id="wallet-addr" style="color:var(--cyan)">Disconnected</small></div>
-    <button class="b-btn" onclick="handleWallet()" style="width:100%; padding:20px;">CONNECT / DISCONNECT</button>
-    <button onclick="closeM()" style="margin-top:auto; padding:20px; border-radius:15px; font-weight:900;">BACK</button>
+    <h1 style="text-align:left;">WALLET</h1>
+    <div class="card"><small id="wallet-addr">Disconnected</small></div>
+    <button class="b-btn" style="width:100%; padding:15px;" onclick="handleWallet()">CONNECT TON</button>
+    <button class="f-btn" onclick="closeM()" style="margin-top:auto; padding:20px;">BACK</button>
 </div>
 
-<div id="m-top" class="modal"><h2>LEADERBOARD</h2><div id="top-list" style="overflow-y:auto; flex:1;"></div><button onclick="closeM()" style="padding:20px; border-radius:15px; font-weight:900;">BACK</button></div>
+<div id="m-friends" class="modal">
+    <h1 style="text-align:left;">FRIENDS</h1>
+    <div class="card" style="font-size: 10px; word-break: break-all;" id="ref-link-box">Loading link...</div>
+    <div id="friends-list" style="flex:1; overflow-y:auto; margin-top:10px;"></div>
+    <button class="f-btn" onclick="closeM()" style="margin-top:20px; padding:20px;">BACK</button>
+</div>
+
+<div id="m-top" class="modal">
+    <h1 style="text-align:left;">LEADERBOARD</h1>
+    <div id="top-container" style="flex:1; overflow-y:auto;"></div>
+    <button class="f-btn" onclick="closeM()" style="margin-top:20px; padding:20px;">BACK</button>
+</div>
 
 <script>
     const tg = window.Telegram.WebApp;
@@ -98,90 +123,103 @@
     const tonUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json' });
 
     let s = { 
-        id: tg.initDataUnsafe?.user?.id?.toString() || "0",
+        id: tg.initDataUnsafe?.user?.id || "0", 
+        bal: 0, lvl: 1, eng: 1000, max: 1000, 
         name: tg.initDataUnsafe?.user?.first_name || "Agent",
-        photo: tg.initDataUnsafe?.user?.photo_url || "",
-        bal: 0, lvl: 1, eng: 1000, max: 1000, wallet: null, bot: false 
+        avatar: tg.initDataUnsafe?.user?.photo_url || "",
+        wallet: null, bot: false 
     };
 
     async function init() {
-        let p = 0;
-        const interval = setInterval(() => {
-            p += 5;
+        // Лоадер
+        let p = 0; const circ = document.getElementById('l-circle-bar');
+        const i = setInterval(() => {
+            p += 2; if(p >= 100) { p = 100; clearInterval(i); document.getElementById('loader').style.display='none'; document.getElementById('app').style.display='flex'; }
             document.getElementById('l-pct').innerText = p + '%';
-            if(p >= 100) {
-                clearInterval(interval);
-                document.getElementById('loader').style.display='none';
-                document.getElementById('app').style.display='flex';
-            }
-        }, 50);
+            circ.style.strokeDashoffset = 565 - (565 * p / 100);
+        }, 30);
 
-        await sync();
-        tonUI.onStatusChange(w => { s.wallet = w ? w.account.address : null; upd(); save(); });
+        // Загрузка данных с сервера
+        const r = await fetch(`/api/user/${s.id}?name=${encodeURIComponent(s.name)}&photo=${encodeURIComponent(s.avatar)}`);
+        const d = await r.json();
+        s.bal = parseFloat(d.balance); s.lvl = d.click_lvl; s.eng = d.energy; s.max = d.max_energy; s.wallet = d.wallet_addr; s.bot = d.has_bot;
+        
+        document.getElementById('ref-link-box').innerText = `https://t.me/NeuralPulseBot?start=${s.id}`;
+        
+        upd();
         setInterval(save, 5000);
-        setInterval(() => { if(s.eng < s.max) { s.eng = Math.min(s.max, s.eng + 2); upd(); }}, 1000);
-    }
+        setInterval(() => { if(s.eng < s.max) { s.eng = Math.min(s.max, s.eng + 1); upd(); } }, 1000);
 
-    async function sync() {
-        try {
-            const r = await fetch(`/api/user/${s.id}?name=${encodeURIComponent(s.name)}&photo=${encodeURIComponent(s.photo)}`);
-            const d = await r.json();
-            // ГАРАНТИЯ ЧИСЕЛ (Защита от NaN)
-            s.bal = parseFloat(d.balance) || 0;
-            s.lvl = parseInt(d.click_lvl) || 1;
-            s.eng = parseInt(d.energy) || 1000;
-            s.max = parseInt(d.max_energy) || 1000;
-            s.wallet = d.wallet_addr;
-            s.bot = d.has_bot;
-            upd();
-        } catch(e) { console.error("Sync Error"); }
-    }
-
-    function upd() {
-        document.getElementById('balance').innerText = Math.floor(s.bal).toLocaleString();
-        document.getElementById('u-lvl').innerText = `LVL ${s.lvl}`;
-        document.getElementById('u-name').innerText = s.name;
-        document.getElementById('eng-val').innerText = `${s.eng} / ${s.max}`;
-        document.getElementById('eng-fill').style.width = `${(s.eng/s.max)*100}%`;
-        
-        const mtCost = Math.floor(250 * Math.pow(1.618, s.lvl - 1));
-        const elCost = Math.floor(400 * Math.pow(1.5, (s.max/500) - 1));
-        document.getElementById('mt-cost').innerText = mtCost.toLocaleString();
-        document.getElementById('el-cost').innerText = elCost.toLocaleString();
-        document.getElementById('mt-lvl').innerText = `Lvl ${s.lvl}`;
-        
-        if(s.photo && s.photo !== 'undefined') document.getElementById('u-avatar').innerHTML = `<img src="${s.photo}">`;
-        document.getElementById('wallet-addr').innerText = s.wallet ? s.wallet.slice(0,8)+"..."+s.wallet.slice(-8) : "Disconnected";
+        tonUI.onStatusChange(w => { s.wallet = w ? w.account.address : null; save(); upd(); });
     }
 
     function tap(e) {
         if(s.eng >= s.lvl) {
-            s.bal += s.lvl; s.eng -= s.lvl;
-            tg.HapticFeedback.impactOccurred('light');
+            let crit = Math.random() < 0.05 ? 2 : 1;
+            let val = s.lvl * crit;
+            s.bal += val; s.eng -= s.lvl;
+            tg.HapticFeedback.impactOccurred(crit > 1 ? 'heavy' : 'light');
+            createFloat(e, crit > 1 ? `CRIT +${val}` : `+${val}`);
             document.getElementById('tap-img').style.transform = 'scale(0.95)';
             setTimeout(() => document.getElementById('tap-img').style.transform='scale(1)', 50);
             upd();
         }
     }
 
-    function buy(type) {
-        let cost = (type === 'mt') ? Math.floor(250 * Math.pow(1.618, s.lvl - 1)) : Math.floor(400 * Math.pow(1.5, (s.max/500) - 1));
-        if(s.bal >= cost) {
-            s.bal -= cost;
-            if(type === 'mt') s.lvl++; else { s.max += 500; s.eng += 500; }
-            upd(); save();
+    function createFloat(e, txt) {
+        const f = document.createElement('div');
+        f.className = 'float-text'; f.innerText = txt;
+        f.style.left = `${(e.clientX || e.touches[0].clientX)}px`;
+        f.style.top = `${(e.clientY || e.touches[0].clientY)}px`;
+        document.body.appendChild(f);
+        setTimeout(() => f.remove(), 600);
+    }
+
+    function upd() {
+        document.getElementById('balance').innerText = Math.floor(s.bal).toLocaleString();
+        document.getElementById('u-lvl').innerText = 'LVL ' + s.lvl;
+        document.getElementById('u-name').innerText = s.name;
+        document.getElementById('eng-val').innerText = s.eng + ' / ' + s.max;
+        document.getElementById('eng-fill').style.width = (s.eng / s.max * 100) + '%';
+        if(s.avatar) document.getElementById('u-avatar-box').innerHTML = `<img src="${s.avatar}">`;
+        
+        const mtCost = Math.floor(250 * Math.pow(1.618, s.lvl - 1));
+        const elCost = Math.floor(400 * (s.max / 500));
+        document.getElementById('btn-mt').innerText = mtCost.toLocaleString();
+        document.getElementById('btn-mt').disabled = s.bal < mtCost;
+        document.getElementById('btn-el').innerText = elCost.toLocaleString();
+        document.getElementById('btn-el').disabled = s.bal < elCost;
+        document.getElementById('mt-lvl').innerText = 'Lvl ' + s.lvl;
+        if(s.bot) { document.getElementById('btn-bot').innerText = "ACTIVE"; document.getElementById('btn-bot').disabled = true; }
+        if(s.wallet) document.getElementById('wallet-addr').innerText = s.wallet.slice(0,6)+"..."+s.wallet.slice(-4);
+    }
+
+    function buyB(t) {
+        if(t === 'mt') { 
+            const c = Math.floor(250 * Math.pow(1.618, s.lvl - 1)); 
+            if(s.bal >= c) { s.bal -= c; s.lvl++; } 
         }
+        if(t === 'el') { 
+            const c = Math.floor(400 * (s.max / 500)); 
+            if(s.bal >= c) { s.bal -= c; s.max += 500; s.eng = s.max; } 
+        }
+        if(t === 'bot' && s.bal >= 5000) { s.bal -= 5000; s.bot = true; }
+        upd(); save();
+    }
+
+    async function openFriends() {
+        openM('friends');
+        const r = await fetch(`/api/friends/${s.id}`);
+        const d = await r.json();
+        document.getElementById('friends-list').innerHTML = d.map(f => `<div class="card"><b>${f.username}</b><span>+5,000</span></div>`).join('') || "No friends yet";
     }
 
     async function loadTop() {
         openM('top');
         const r = await fetch('/api/top');
         const data = await r.json();
-        document.getElementById('top-list').innerHTML = data.map((u, i) => `
-            <div class="card">
-                <span>#${i+1} ${u.username}</span>
-                <b style="color:var(--cyan)">${Math.floor(u.balance).toLocaleString()}</b>
-            </div>
+        document.getElementById('top-container').innerHTML = data.map((u, i) => `
+            <div class="card"><span>#${i+1} ${u.username}</span><b>${Math.floor(u.balance).toLocaleString()}</b></div>
         `).join('');
     }
 
