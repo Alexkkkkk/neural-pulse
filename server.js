@@ -17,10 +17,10 @@ const pool = new Pool({
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// ПРАВИЛО: Принудительное исправление типов данных без удаления таблицы
+// ПРАВИЛО: Глубокая очистка и оптимизация типов данных
 const initDB = async () => {
     try {
-        // 1. Создаем базу, если пусто
+        // 1. Создаем таблицу в правильном формате, если её нет
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
@@ -36,12 +36,13 @@ const initDB = async () => {
             )
         `);
 
-        // 2. Исправляем существующие колонки (если типы не те)
+        // 2. Добавляем недостающие колонки
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT ''`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_addr TEXT`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS has_bot BOOLEAN DEFAULT FALSE`);
         
-        // ПРАВИЛО: Исправление ошибки "last_seen is bigint but expression is timestamp"
+        // 3. ПРАВИЛО: Радикальное исправление last_seen (BigInt -> Timestamp)
+        // Сначала убираем DEFAULT, меняем тип через DROP/ALTER и возвращаем DEFAULT
         await pool.query(`
             DO $$ 
             BEGIN 
@@ -49,13 +50,15 @@ const initDB = async () => {
                     SELECT 1 FROM information_schema.columns 
                     WHERE table_name='users' AND column_name='last_seen' AND data_type='bigint'
                 ) THEN 
+                    ALTER TABLE users ALTER COLUMN last_seen DROP DEFAULT;
                     ALTER TABLE users ALTER COLUMN last_seen TYPE TIMESTAMP WITHOUT TIME ZONE 
                     USING (to_timestamp(last_seen / 1000));
+                    ALTER TABLE users ALTER COLUMN last_seen SET DEFAULT CURRENT_TIMESTAMP;
                 END IF;
             END $$;
         `);
 
-        console.log("Database Engine: REPAIRED & SYNCED (v3.1.7)");
+        console.log("Database Engine: OPTIMIZED (v3.1.8)");
     } catch (e) { console.error("FATAL DB ERROR:", e); }
 };
 initDB();
@@ -122,8 +125,8 @@ app.get('/api/top', async (req, res) => {
 });
 
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v3.1.7</b>\nБаза данных принудительно синхронизирована.`,
+    ctx.replyWithHTML(`<b>Neural Pulse v3.1.8</b>\nОптимизация базы завершена успешно.`,
         Markup.inlineKeyboard([[Markup.button.webApp("OPEN CLUSTER", "https://neural-pulse.bothost.ru")]]));
 });
 
-app.listen(3000, () => { console.log("Pulse Server v3.1.7 Live"); bot.launch(); });
+app.listen(3000, () => { console.log("Pulse Server v3.1.8 Live"); bot.launch(); });
