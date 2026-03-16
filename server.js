@@ -6,7 +6,7 @@ const path = require('path');
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
-const ADMIN_ID = 476014374; // Твой ID
+const ADMIN_ID = 476014374; 
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
@@ -31,7 +31,7 @@ const initDB = async () => {
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
         await pool.query(`CREATE TABLE IF NOT EXISTS referrals (id SERIAL PRIMARY KEY, referrer_id TEXT REFERENCES users(user_id), referred_id TEXT UNIQUE REFERENCES users(user_id))`);
-        console.log("v3.5.2 Active & Synced");
+        console.log("v3.6.0 Quantum Math Synced");
     } catch (e) { console.error(e); }
 };
 initDB();
@@ -40,7 +40,7 @@ app.get('/api/user/:id', async (req, res) => {
     const { name, photo } = req.query;
     try {
         let r = await pool.query('SELECT * FROM users WHERE user_id = $1', [req.params.id]);
-        const validName = (!name || name === 'null') ? 'Agent' : name;
+        const validName = (!name || name === 'null' || name === 'undefined') ? 'Agent' : name;
         const validPhoto = (!photo || photo === 'null' || photo === 'undefined') ? '' : photo;
 
         if (!r.rows.length) {
@@ -83,22 +83,33 @@ bot.start(async (ctx) => {
         const exists = await pool.query('SELECT * FROM referrals WHERE referred_id = $1', [uid]);
         if (!exists.rows.length) {
             await pool.query('INSERT INTO referrals (referrer_id, referred_id) VALUES ($1, $2)', [refId, uid]);
-            await pool.query('UPDATE users SET balance = balance + 5000 WHERE user_id = $1', [refId]);
+            // Повышенная реферальная награда в Quantum Math
+            await pool.query('UPDATE users SET balance = balance + 10000 WHERE user_id = $1', [refId]);
         }
     }
     
     const kb = [[Markup.button.webApp("OPEN APP", "https://neural-pulse.bothost.ru")]];
     if (ctx.from.id === ADMIN_ID) kb.push([Markup.button.callback("🛠 ADMIN PANEL", "adm")]);
     
-    ctx.replyWithHTML(`<b>Neural Pulse v3.5.2</b>`, Markup.inlineKeyboard(kb));
+    ctx.replyWithHTML(`<b>Neural Pulse v3.6.0</b>\n<i>Quantum Math Engine: Active</i>`, Markup.inlineKeyboard(kb));
 });
 
 bot.action("adm", (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return;
     ctx.editMessageText("<b>Админ-панель:</b>", {
         parse_mode: 'HTML',
-        ...Markup.inlineKeyboard([[Markup.button.callback("🧨 СБРОС БАЗЫ", "wipe")], [Markup.button.callback("❌ Закрыть", "cls")]])
+        ...Markup.inlineKeyboard([
+            [Markup.button.callback("🧨 СБРОС БАЗЫ", "wipe")],
+            [Markup.button.callback("💰 GIVE 1M", "give_money")],
+            [Markup.button.callback("❌ Закрыть", "cls")]
+        ])
     });
+});
+
+bot.action("give_money", async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return;
+    await pool.query('UPDATE users SET balance = balance + 1000000 WHERE user_id = $1', [ADMIN_ID.toString()]);
+    ctx.answerCbQuery("Начислено 1,000,000!");
 });
 
 bot.action("wipe", async (ctx) => {
@@ -109,4 +120,4 @@ bot.action("wipe", async (ctx) => {
 
 bot.action("cls", (ctx) => ctx.deleteMessage());
 
-app.listen(3000, () => { console.log("v3.5.2 Live"); bot.launch(); });
+app.listen(3000, () => { console.log("v3.6.0 Live"); bot.launch(); });
