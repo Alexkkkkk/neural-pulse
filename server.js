@@ -13,9 +13,10 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// ГЛУБОКАЯ СИНХРОНИЗАЦИЯ БАЗЫ
+// ГЛУБОКАЯ ИНИЦИАЛИЗАЦИЯ И СИНХРОНИЗАЦИЯ БАЗЫ
 const initDB = async () => {
     try {
+        // Базовая таблица
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
@@ -30,27 +31,29 @@ const initDB = async () => {
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
-        await pool.query(`CREATE TABLE IF NOT EXISTS referrals (id SERIAL PRIMARY KEY, referrer_id TEXT, referred_id TEXT UNIQUE)`);
         
-        // Миграция: проверка наличия всех колонок для новых функций
+        await pool.query(`CREATE TABLE IF NOT EXISTS referrals (id SERIAL PRIMARY KEY, referrer_id TEXT, referred_id TEXT UNIQUE)`);
+
+        // АВТО-МИГРАЦИЯ: Добавляем колонки, если их нет
         const columns = [
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_addr TEXT",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS has_bot BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
         ];
         for (let sql of columns) { await pool.query(sql).catch(() => {}); }
-        console.log("Database Engine: v3.3.1 Fully Synchronized");
-    } catch (e) { console.error("DB SYNC ERROR:", e); }
+        
+        console.log("System v3.3.1: Database Engine Synchronized");
+    } catch (e) { console.error("DB INIT ERROR:", e); }
 };
 initDB();
 
 app.get('/api/user/:id', async (req, res) => {
-    const { name, photo } = req.query;
     const uid = req.params.id;
+    const { name, photo } = req.query;
     try {
         let r = await pool.query('SELECT * FROM users WHERE user_id = $1', [uid]);
-        const vName = (!name || name === 'null' || name === 'undefined') ? 'Agent' : name;
-        const vPhoto = (!photo || photo === 'null' || photo === 'undefined') ? '' : photo;
+        const vName = (name === 'null' || !name || name === 'undefined') ? 'Agent' : name;
+        const vPhoto = (photo === 'null' || !photo || photo === 'undefined') ? '' : photo;
 
         if (!r.rows.length) {
             await pool.query('INSERT INTO users (user_id, username, avatar_url) VALUES ($1, $2, $3)', [uid, vName, vPhoto]);
@@ -96,4 +99,4 @@ bot.start(async (ctx) => {
         Markup.inlineKeyboard([[Markup.button.webApp("OPEN CLUSTER", "https://neural-pulse.bothost.ru")]]));
 });
 
-app.listen(3000, () => { console.log("v3.3.1 Live"); bot.launch(); });
+app.listen(3000, () => { console.log("v3.3.1 Live on Port 3000"); bot.launch(); });
