@@ -3,139 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v3.1.0</title>
+    <title>Neural Pulse v3.1.2</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
-        body { background: var(--bg); color: #fff; font-family: 'Segoe UI', Roboto, sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; user-select: none; }
+        body { background: var(--bg); color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; user-select: none; }
         
-        /* Исправленный лоадер */
         #loader { position: fixed; inset: 0; background: #000; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .l-circle-wrap { position: relative; width: 160px; height: 160px; margin-bottom: 20px; }
+        .l-circle-wrap { position: relative; width: 160px; height: 160px; }
         .l-circle-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
         .l-circle-bg { fill: none; stroke: #111; stroke-width: 4; }
-        .l-circle-progress { fill: none; stroke: var(--cyan); stroke-width: 4; stroke-dasharray: 440; stroke-dashoffset: 440; transition: stroke-dashoffset 0.1s; stroke-linecap: round; filter: drop-shadow(0 0 8px var(--cyan)); }
+        .l-circle-progress { fill: none; stroke: var(--cyan); stroke-width: 4; stroke-dasharray: 440; stroke-dashoffset: 440; transition: stroke-dashoffset 0.1s; stroke-linecap: round; }
         .l-logo-mid { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 60px; filter: drop-shadow(0 0 15px var(--purple)); }
 
-        /* UI */
         #app { display: none; height: 100vh; flex-direction: column; align-items: center; padding: 20px; box-sizing: border-box; }
-        .header { width: 100%; background: rgba(10,10,10,0.8); border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; backdrop-filter: blur(10px); }
+        .header { width: 100%; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
         .u-info { display: flex; align-items: center; gap: 12px; }
-        .avatar { width: 45px; height: 45px; border-radius: 12px; border: 1px solid var(--cyan); overflow: hidden; background: #111; }
+        .avatar { width: 45px; height: 45px; border-radius: 12px; border: 1px solid var(--cyan); overflow: hidden; }
         .avatar img { width: 100%; height: 100%; object-fit: cover; }
-        .lvl-pill { background: var(--cyan); color: #000; padding: 6px 12px; border-radius: 10px; font-weight: 900; font-size: 12px; box-shadow: 0 0 10px rgba(0,242,255,0.3); }
+        .lvl-pill { background: var(--cyan); color: #000; padding: 6px 12px; border-radius: 10px; font-weight: 900; font-size: 12px; }
 
-        .balance { font-size: 56px; font-weight: 900; margin: 15px 0; letter-spacing: -2px; text-shadow: 0 0 20px rgba(188,19,254,0.3); }
-        
+        .balance { font-size: 58px; font-weight: 900; margin: 15px 0; letter-spacing: -2px; }
         .play-area { flex: 1; display: flex; align-items: center; justify-content: center; width: 100%; position: relative; }
-        .main-logo { width: 240px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s cubic-bezier(0.1, 0.7, 1.0, 0.1); cursor: pointer; }
+        .main-logo { width: 240px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; }
         
-        .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 12px; }
-        .side-btn { background: rgba(13,13,13,0.9); border: 1px solid #222; color: #fff; padding: 15px 10px; border-radius: 16px; font-size: 10px; font-weight: 900; min-width: 95px; text-transform: uppercase; letter-spacing: 1px; }
+        .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px; }
+        .side-btn { background: #0d0d0d; border: 1px solid #222; color: #fff; padding: 15px 10px; border-radius: 16px; font-size: 10px; font-weight: 900; min-width: 95px; }
 
-        .eng-wrap { width: 100%; margin: 20px 0 30px; }
+        .eng-wrap { width: 100%; margin-bottom: 30px; }
         .eng-meta { display: flex; justify-content: space-between; font-size: 11px; font-weight: 900; color: #666; margin-bottom: 8px; }
-        .bar-bg { width: 100%; height: 10px; background: #111; border-radius: 20px; border: 1px solid #1a1a1a; overflow: hidden; }
-        .bar-f { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: width 0.3s ease-out; box-shadow: 0 0 10px var(--cyan); }
+        .bar-bg { width: 100%; height: 10px; background: #111; border-radius: 20px; overflow: hidden; }
+        .bar-f { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: width 0.3s; }
 
         .footer { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
-        .f-btn { background: #080808; border: 1px solid #1a1a1a; padding: 18px 0; border-radius: 16px; font-size: 10px; font-weight: 900; text-transform: uppercase; color: #888; transition: 0.2s; }
-        .f-btn:active { transform: scale(0.95); background: #111; color: var(--cyan); }
+        .f-btn { background: #080808; border: 1px solid #1a1a1a; padding: 18px 0; border-radius: 16px; font-size: 10px; font-weight: 900; text-transform: uppercase; color: #888; }
 
-        /* Modals */
         .modal { position: fixed; inset: 0; background: #000; z-index: 50000; display: none; flex-direction: column; padding: 40px 20px; }
-        .m-title { font-size: 32px; font-weight: 900; margin-bottom: 25px; text-align: left; background: linear-gradient(var(--cyan), #fff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .m-title { font-size: 32px; font-weight: 900; margin-bottom: 25px; text-align: left; }
         .card { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 18px; border-radius: 20px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
         .btn-cls { background: #fff; color: #000; padding: 18px; border-radius: 15px; font-weight: 900; width: 100%; border: none; margin-top: auto; }
         .b-btn { background: var(--cyan); color: #000; padding: 12px 18px; border-radius: 12px; font-weight: 900; border: none; }
-        .b-btn:disabled { background: #222; color: #555; }
 
-        @keyframes floatUp { 0% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: translateY(-100px) scale(1.5); opacity: 0; } }
-        .float-text { position: fixed; pointer-events: none; z-index: 10000; font-weight: 900; animation: floatUp 0.8s ease-out forwards; }
+        @keyframes floatUp { 0% { transform: translateY(0) opacity: 1; } 100% { transform: translateY(-100px) opacity: 0; } }
+        .float-text { position: fixed; pointer-events: none; z-index: 10000; font-weight: 900; animation: floatUp 0.8s forwards; color: var(--cyan); }
     </style>
 </head>
 <body>
 
 <div id="loader">
     <div class="l-circle-wrap">
-        <svg class="l-circle-svg" viewBox="0 0 160 160">
-            <circle class="l-circle-bg" cx="80" cy="80" r="70"></circle>
-            <circle id="l-circle-bar" class="l-circle-progress" cx="80" cy="80" r="70"></circle>
-        </svg>
+        <svg class="l-circle-svg" viewBox="0 0 160 160"><circle class="l-circle-bg" cx="80" cy="80" r="70"></circle><circle id="l-circle-bar" class="l-circle-progress" cx="80" cy="80" r="70"></circle></svg>
         <img src="./logo.png" class="l-logo-mid" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'">
     </div>
-    <div style="font-size:12px; letter-spacing:4px; color:#555;">INITIALIZING QUANTUM...</div>
-    <div class="l-pct" id="l-pct">0%</div>
+    <div id="l-pct" style="margin-top:10px; font-weight:900; color:var(--cyan);">0%</div>
 </div>
 
 <div id="app">
     <div class="header">
         <div class="u-info">
             <div class="avatar" id="u-avatar-box"><img src="./logo.png" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'"></div>
-            <div style="text-align:left;"><span id="u-name" style="font-weight:900;">...</span><br><small style="color:var(--cyan); font-size:9px;">v3.1.0 Node</small></div>
+            <div style="text-align:left;"><span id="u-name" style="font-weight:900;">...</span><br><small style="color:var(--cyan); font-size:9px;">v3.1.2 Persistent</small></div>
         </div>
-        <div class="lvl-pill" id="u-lvl">LVL 0</div>
+        <div class="lvl-pill" id="u-lvl">LVL 1</div>
     </div>
-    
     <div class="balance" id="balance">0</div>
-    
     <div class="play-area">
         <img src="./logo.png" class="main-logo" id="tap-img" onpointerdown="tap(event)" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'">
         <div class="side-menu">
-            <div class="side-btn" onclick="openM('wallet')">👛 Wallet</div>
-            <div class="side-btn" onclick="openFriends()">🤝 Friends</div>
-            <div class="side-btn" onclick="openM('bonus')">🎁 Bonus</div>
+            <div class="side-btn" onclick="openM('wallet')">👛 WALLET</div>
+            <div class="side-btn" onclick="openFriends()">🤝 FRIENDS</div>
+            <div class="side-btn" onclick="openM('bonus')">🎁 BONUS</div>
         </div>
     </div>
-
     <div class="eng-wrap">
-        <div class="eng-meta"><span>ENERGY CAPACITY</span><span id="eng-val">0 / 0</span></div>
+        <div class="eng-meta"><span>ENERGY</span><span id="eng-val">...</span></div>
         <div class="bar-bg"><div class="bar-f" id="eng-fill"></div></div>
     </div>
-
     <div class="footer">
-        <div class="f-btn" onclick="openM('boost')">🚀 Boost</div>
-        <div class="f-btn" onclick="openM('mine')">⛏️ Mine</div>
-        <div class="f-btn" onclick="openM('tasks')">📋 Tasks</div>
-        <div class="f-btn" onclick="loadTop()">🏆 Top</div>
+        <div class="f-btn" onclick="openM('boost')">🚀 BOOST</div>
+        <div class="f-btn" onclick="openM('mine')">⛏️ MINE</div>
+        <div class="f-btn" onclick="openM('tasks')">📋 TASKS</div>
+        <div class="f-btn" onclick="loadTop()">🏆 TOP</div>
     </div>
 </div>
 
 <div id="m-boost" class="modal">
-    <div class="m-title">Quantum Upgrades</div>
-    <div class="card"><div><b>⚡ Multitap</b><br><small id="mt-lvl-txt">Lvl 1</small></div><button id="btn-mt" class="b-btn" onclick="buyB('mt')">0</button></div>
-    <div class="card"><div><b>🔋 Limit</b><br><small id="el-lvl-txt">+500 Eng</small></div><button id="btn-el" class="b-btn" onclick="buyB('el')">0</button></div>
-    <div class="card"><div><b>🤖 Auto-Bot</b><br><small>24/7 Mining</small></div><button id="btn-bot" class="b-btn" onclick="buyB('bot')">5000</button></div>
-    <button class="btn-cls" onclick="closeM()">RETURN TO NODE</button>
-</div>
-
-<div id="m-top" class="modal">
-    <div class="m-title">Global Nodes</div>
-    <div id="top-container" style="flex:1; overflow-y:auto;"></div>
+    <div class="m-title">UPGRADES</div>
+    <div class="card"><div><b>⚡ Multitap</b><br><small id="mt-lvl">Lvl 1</small></div><button id="btn-mt" class="b-btn" onclick="buyB('mt')">0</button></div>
+    <div class="card"><div><b>🔋 Limit</b><br><small>+500 Eng</small></div><button id="btn-el" class="b-btn" onclick="buyB('el')">0</button></div>
     <button class="btn-cls" onclick="closeM()">BACK</button>
 </div>
-
-<div id="m-wallet" class="modal">
-    <div class="m-title">Wallet Hub</div>
-    <div class="card" style="flex-direction:column; gap:10px;">
-        <span id="wallet-addr" style="font-size:12px; word-break:break-all; color:var(--cyan); font-family:monospace;">Not Connected</span>
-    </div>
-    <button id="ton-btn" style="background:var(--cyan); padding:20px; border-radius:18px; font-weight:900; border:none; width:100%;" onclick="handleWallet()">CONNECT TON WALLET</button>
-    <button class="btn-cls" onclick="closeM()">BACK</button>
-</div>
-
-<div id="m-friends" class="modal"><div class="m-title">Friends</div><div id="friends-list" style="flex:1;"></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-bonus" class="modal"><div class="m-title">Bonus</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-mine" class="modal"><div class="m-title">Mine</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-tasks" class="modal"><div class="m-title">Tasks</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-top" class="modal"><div class="m-title">TOP NODES</div><div id="top-container" style="flex:1; overflow-y:auto;"></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-wallet" class="modal"><div class="m-title">WALLET</div><div class="card"><span id="wallet-addr" style="font-size:11px;">Not Connected</span></div><button style="background:var(--cyan); padding:18px; border-radius:15px; border:none; width:100%; font-weight:900;" onclick="handleWallet()">CONNECT</button><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-friends" class="modal"><div class="m-title">FRIENDS</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-bonus" class="modal"><div class="m-title">BONUS</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-mine" class="modal"><div class="m-title">MINE</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-tasks" class="modal"><div class="m-title">TASKS</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
 
 <script>
     const tg = window.Telegram.WebApp;
     tg.expand();
     const tonUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json' });
 
-    // Инициализация объекта состояния с защитой от NaN
     let s = { 
         id: tg.initDataUnsafe?.user?.id?.toString() || "0",
         name: tg.initDataUnsafe?.user?.first_name || "Agent",
@@ -146,19 +116,15 @@
     async function init() {
         let p = 0; const bar = document.getElementById('l-circle-bar');
         const interval = setInterval(() => {
-            p += 2; if(p > 100) p = 100;
+            p += 4; if(p > 100) p = 100;
             document.getElementById('l-pct').innerText = p + '%';
             bar.style.strokeDashoffset = 440 - (440 * p / 100);
-            if(p >= 100) { 
-                clearInterval(interval); 
-                document.getElementById('loader').style.display='none'; 
-                document.getElementById('app').style.display='flex'; 
-            }
-        }, 25);
+            if(p >= 100) { clearInterval(interval); document.getElementById('loader').style.display='none'; document.getElementById('app').style.display='flex'; }
+        }, 30);
 
         await sync();
         tonUI.onStatusChange(w => { s.wallet = w ? w.account.address : null; save(); });
-        setInterval(save, 7000); // Реже сохранение для стабильности
+        setInterval(save, 5000);
         setInterval(() => { if(s.eng < s.max) { s.eng = Math.min(s.max, s.eng + 2); upd(); }}, 1000);
     }
 
@@ -166,15 +132,14 @@
         try {
             const r = await fetch(`/api/user/${s.id}?name=${encodeURIComponent(s.name)}&photo=${encodeURIComponent(s.photo)}`);
             const d = await r.json();
-            // КРИТИЧЕСКОЕ: Преобразование всех полей в числа для исключения NaN
             s.bal = Number(d.balance) || 0;
             s.lvl = Number(d.click_lvl) || 1;
             s.eng = Number(d.energy) || 1000;
             s.max = Number(d.max_energy) || 1000;
-            s.wallet = d.wallet_addr || null;
-            s.bot = d.has_bot || false;
+            s.wallet = d.wallet_addr;
+            s.bot = d.has_bot;
             upd();
-        } catch(e) { console.error("Sync error:", e); }
+        } catch(e) { console.error("Sync error", e); }
     }
 
     function upd() {
@@ -183,30 +148,23 @@
         document.getElementById('u-name').innerText = s.name;
         document.getElementById('eng-val').innerText = `${s.eng} / ${s.max}`;
         document.getElementById('eng-fill').style.width = `${(s.eng / s.max) * 100}%`;
-        
         if(s.photo && s.photo !== "null") document.getElementById('u-avatar-box').innerHTML = `<img src="${s.photo}">`;
         
         const mtCost = Math.floor(250 * Math.pow(1.618, s.lvl - 1));
         const elCost = Math.floor(400 * Math.pow(1.5, (s.max / 500) - 1));
-        
         document.getElementById('btn-mt').innerText = mtCost.toLocaleString();
-        document.getElementById('mt-lvl-txt').innerText = `Lvl ${s.lvl}`;
         document.getElementById('btn-el').innerText = elCost.toLocaleString();
-        document.getElementById('btn-bot').innerText = s.bot ? "ACTIVE" : "5000";
-        if(s.bot) document.getElementById('btn-bot').disabled = true;
-
+        document.getElementById('mt-lvl').innerText = `Lvl ${s.lvl}`;
         if(s.wallet) document.getElementById('wallet-addr').innerText = s.wallet.slice(0,8)+"..."+s.wallet.slice(-8);
     }
 
     function tap(e) {
         if(s.eng >= s.lvl) {
-            let pwr = s.lvl;
-            s.bal += pwr; s.eng -= s.lvl;
-            showFloat(e, `+${pwr}`);
+            s.bal += s.lvl; s.eng -= s.lvl;
+            showFloat(e, `+${s.lvl}`);
             tg.HapticFeedback.impactOccurred('light');
-            const img = document.getElementById('tap-img');
-            img.style.transform = 'scale(0.92)';
-            setTimeout(() => img.style.transform='scale(1)', 50);
+            document.getElementById('tap-img').style.transform = 'scale(0.95)';
+            setTimeout(() => document.getElementById('tap-img').style.transform='scale(1)', 50);
             upd();
         }
     }
@@ -214,9 +172,8 @@
     function showFloat(e, t) {
         const f = document.createElement('div');
         f.className = 'float-text'; f.innerText = t;
-        const x = e.clientX || (e.touches ? e.touches[0].clientX : 0);
-        const y = e.clientY || (e.touches ? e.touches[0].clientY : 0);
-        f.style.left = `${x}px`; f.style.top = `${y}px`;
+        f.style.left = `${(e.clientX || e.touches[0].clientX)}px`;
+        f.style.top = `${(e.clientY || e.touches[0].clientY)}px`;
         document.body.appendChild(f);
         setTimeout(() => f.remove(), 800);
     }
@@ -225,39 +182,35 @@
         let cost = 0;
         if(type === 'mt') { cost = Math.floor(250 * Math.pow(1.618, s.lvl - 1)); if(s.bal >= cost) { s.bal -= cost; s.lvl++; }}
         else if(type === 'el') { cost = Math.floor(400 * Math.pow(1.5, (s.max / 500) - 1)); if(s.bal >= cost) { s.bal -= cost; s.max += 500; s.eng += 500; }}
-        else if(type === 'bot') { if(s.bal >= 5000 && !s.bot) { s.bal -= 5000; s.bot = true; }}
         upd(); save();
+    }
+
+    function save() {
+        if(s.id === "0") return;
+        // КРИТИЧЕСКОЕ: Принудительное преобразование всех полей в числа перед отправкой
+        const payload = {
+            userId: String(s.id),
+            balance: Number(s.bal),
+            energy: Math.floor(s.eng),
+            max_energy: Math.floor(s.max),
+            click_lvl: Math.floor(s.lvl),
+            wallet: s.wallet,
+            has_bot: Boolean(s.bot)
+        };
+        fetch('/api/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        }).then(r => r.json()).then(res => console.log("Saved:", res.timestamp));
     }
 
     async function loadTop() {
         openM('top');
         const cont = document.getElementById('top-container');
-        cont.innerHTML = '<div style="margin-top:20px; opacity:0.5;">REACHING CLUSTER...</div>';
-        try {
-            const r = await fetch('/api/top');
-            const data = await r.json();
-            cont.innerHTML = data.map((u, i) => `
-                <div class="card" style="${u.user_id == s.id ? 'border:1px solid var(--cyan); background:#0f1515;' : ''}">
-                    <div style="display:flex; align-items:center; gap:12px;">
-                        <span style="width:20px; font-weight:900; color:#555;">${i+1}</span>
-                        <div style="width:36px; height:36px; border-radius:8px; overflow:hidden; background:#111;">
-                            <img src="${u.avatar_url || './logo.png'}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='./logo.png'">
-                        </div>
-                        <span style="font-weight:900;">${u.username || 'Agent'}</span>
-                    </div>
-                    <span style="color:var(--cyan); font-weight:900;">${Math.floor(u.balance).toLocaleString()}</span>
-                </div>
-            `).join('');
-        } catch(e) { cont.innerHTML = 'Cluster offline.'; }
-    }
-
-    function save() {
-        if(s.id === "0") return;
-        fetch('/api/save', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ userId: s.id, balance: s.bal, energy: s.eng, max_energy: s.max, click_lvl: s.lvl, wallet: s.wallet, has_bot: s.bot })
-        });
+        cont.innerHTML = 'SYNCING...';
+        const r = await fetch('/api/top');
+        const d = await r.json();
+        cont.innerHTML = d.map((u, i) => `<div class="card"><span>${i+1}. ${u.username}</span><b>${Math.floor(u.balance)}</b></div>`).join('');
     }
 
     function openM(id) { document.getElementById('m-'+id).style.display = 'flex'; }
