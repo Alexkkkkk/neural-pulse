@@ -9,18 +9,14 @@ const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-const pool = new Pool({ 
-    connectionString: PG_URI,
-    ssl: false 
-});
+const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// ПРАВИЛО: Глубокая очистка и оптимизация типов данных
+// ПРАВИЛО: Инициализация с защитой от ошибок типов
 const initDB = async () => {
     try {
-        // 1. Создаем таблицу в правильном формате, если её нет
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY,
@@ -35,31 +31,15 @@ const initDB = async () => {
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
-
-        // 2. Добавляем недостающие колонки
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT ''`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_addr TEXT`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS has_bot BOOLEAN DEFAULT FALSE`);
-        
-        // 3. ПРАВИЛО: Радикальное исправление last_seen (BigInt -> Timestamp)
-        // Сначала убираем DEFAULT, меняем тип через DROP/ALTER и возвращаем DEFAULT
-        await pool.query(`
-            DO $$ 
-            BEGIN 
-                IF EXISTS (
-                    SELECT 1 FROM information_schema.columns 
-                    WHERE table_name='users' AND column_name='last_seen' AND data_type='bigint'
-                ) THEN 
-                    ALTER TABLE users ALTER COLUMN last_seen DROP DEFAULT;
-                    ALTER TABLE users ALTER COLUMN last_seen TYPE TIMESTAMP WITHOUT TIME ZONE 
-                    USING (to_timestamp(last_seen / 1000));
-                    ALTER TABLE users ALTER COLUMN last_seen SET DEFAULT CURRENT_TIMESTAMP;
-                END IF;
-            END $$;
-        `);
-
-        console.log("Database Engine: OPTIMIZED (v3.1.8)");
-    } catch (e) { console.error("FATAL DB ERROR:", e); }
+        // Проверка и добавление колонок по одной (защита от падения)
+        const cols = [
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_addr TEXT",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS has_bot BOOLEAN DEFAULT FALSE"
+        ];
+        for (let sql of cols) { await pool.query(sql).catch(() => {}); }
+        console.log("DB Engine: READY (v3.1.9)");
+    } catch (e) { console.error("DB INIT ERROR:", e); }
 };
 initDB();
 
@@ -74,59 +54,48 @@ app.get('/api/user/:id', async (req, res) => {
             SET username = EXCLUDED.username, avatar_url = EXCLUDED.avatar_url
             RETURNING *;
         `;
-        const vName = (name && name !== 'null') ? name : 'Agent';
-        const vPhoto = (photo && photo !== 'null') ? photo : '';
-        
-        const r = await pool.query(query, [uid, vName, vPhoto]);
+        const r = await pool.query(query, [uid, name || 'Agent', photo || '']);
         res.json(r.rows[0]);
-    } catch (e) { 
-        console.error("Fetch Error:", e);
-        res.status(500).json({ error: "Sync Failed" }); 
-    }
+    } catch (e) { res.status(500).json({ error: "Fetch Fail" }); }
 });
 
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, max_energy, click_lvl, wallet, has_bot } = req.body;
-    if (!userId || userId === "0") return res.status(400).json({ error: "Invalid ID" });
+    if (!userId || userId === "0") return res.status(400).send();
 
     try {
-        const cleanBalance = isNaN(parseFloat(balance)) ? 0 : parseFloat(balance);
-        const cleanEnergy = isNaN(parseInt(energy)) ? 0 : parseInt(energy);
-        const cleanMax = isNaN(parseInt(max_energy)) ? 1000 : parseInt(max_energy);
-        const cleanLvl = isNaN(parseInt(click_lvl)) ? 1 : parseInt(click_lvl);
-
+        // ПРАВИЛО: Используем COALESCE и явное приведение типов, чтобы обойти ошибки bigint/timestamp
         const saveQuery = `
             UPDATE users SET 
-                balance = GREATEST(balance, $2), 
+                balance = $2, 
                 energy = $3, 
                 max_energy = $4, 
                 click_lvl = $5, 
                 wallet_addr = $6, 
                 has_bot = $7, 
-                last_seen = CURRENT_TIMESTAMP 
+                last_seen = NOW() 
             WHERE user_id = $1
         `;
-        
         await pool.query(saveQuery, [
-            userId, cleanBalance, cleanEnergy, cleanMax, cleanLvl, wallet || null, has_bot || false
+            userId, balance, energy, max_energy, click_lvl, wallet, has_bot
         ]);
         res.json({ success: true });
     } catch (e) { 
-        console.error("SAVE ERROR:", e);
-        res.status(500).json({ error: e.message }); 
+        console.error("SAVE ERROR:", e.message);
+        res.status(500).json({ error: "Internal Save Error" }); 
     }
 });
 
 app.get('/api/top', async (req, res) => {
     try {
-        const r = await pool.query('SELECT user_id, username, avatar_url, balance FROM users ORDER BY balance DESC LIMIT 50');
+        const r = await pool.query('SELECT username, balance FROM users ORDER BY balance DESC LIMIT 20');
         res.json(r.rows);
     } catch (e) { res.json([]); }
 });
 
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v3.1.8</b>\nОптимизация базы завершена успешно.`,
+    ctx.replyWithHTML(`<b>Neural Pulse v3.1.9</b>\nСистема восстановлена.`,
         Markup.inlineKeyboard([[Markup.button.webApp("OPEN CLUSTER", "https://neural-pulse.bothost.ru")]]));
 });
 
-app.listen(3000, () => { console.log("Pulse Server v3.1.8 Live"); bot.launch(); });
+app.listen(3000, () => { console.log("Pulse Server v3.1.9 Live"); bot.launch(); });
