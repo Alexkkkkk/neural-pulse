@@ -6,51 +6,41 @@
     <title>Neural Pulse v3.8.8</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
 </head>
 <body>
     <div id="loading-screen">
-        <div id="l-circle" class="loader-circle"><img src="logo.png" alt="AI"></div>
+        <div id="l-circle" class="loader-circle"><img src="images/logo.png"></div>
         <div style="font-weight:900; letter-spacing:5px; margin-bottom:20px;">ACCESS GRANTED</div>
         <div class="percent" id="load-pct">0%</div>
         <div class="load-bar-bg"><div class="load-bar-f" id="load-bar"></div></div>
     </div>
 
-    <div id="app">
+    <div id="app" style="display:none;">
         <div class="header">
             <div style="display:flex; align-items:center; gap:10px;">
                 <div class="avatar" id="u-ava"></div>
-                <div style="text-align:left;">
-                    <b id="u-name">...</b><br>
-                    <small style="color:var(--cyan); font-size:9px;">v3.8.8 Quantum Full</small>
-                </div>
+                <div style="text-align:left;"><b id="u-name">...</b><br><small>v3.8.8 Quantum</small></div>
             </div>
-            <div style="background:var(--cyan); color:#000; padding:6px 12px; border-radius:10px; font-weight:900;" id="u-lvl">LVL 1</div>
+            <div id="u-lvl" class="lvl-badge">LVL 1</div>
         </div>
 
         <div class="balance" id="balance">0</div>
 
         <div class="play-area">
-            <img src="logo.png" class="main-logo" id="tap-img" onpointerdown="logic.tap(event)">
-            
-            <div style="position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px;">
+            <img src="images/logo.png" class="main-logo" onpointerdown="ui.handleTap(event)">
+            <div class="side-menu">
                 <button class="btn-ui" onclick="ui.openM('wallet')">👛 WALLET</button>
                 <button class="btn-ui" onclick="ui.openM('friends')">🤝 FRIENDS</button>
                 <button class="btn-ui" onclick="ui.openM('bonus')">🎁 BONUS</button>
             </div>
         </div>
 
-        <div style="margin-top: auto; padding: 0 10px;">
-            <div style="display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 5px; color: #555;">
-                <span>ENERGY</span>
-                <span id="eng-val">1000 / 1000</span>
-            </div>
-            <div class="load-bar-bg" style="width: 100%; height: 6px;">
-                <div class="load-bar-f" id="eng-fill" style="width: 100%;"></div>
-            </div>
+        <div class="energy-box">
+            <div class="energy-info"><span>ENERGY</span><span id="eng-val">...</span></div>
+            <div class="load-bar-bg"><div id="eng-fill" class="load-bar-f"></div></div>
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 20px; margin-bottom: 10px;">
+        <div class="bottom-nav">
             <button class="btn-ui" onclick="ui.openM('boost')">🚀 BOOST</button>
             <button class="btn-ui" onclick="ui.openM('mine')">⛏️ MINE</button>
             <button class="btn-ui" onclick="ui.openM('tasks')">📋 TASKS</button>
@@ -58,31 +48,11 @@
         </div>
     </div>
 
-    <div id="m-wallet" class="modal">
-        <h1>WALLET</h1>
-        <div id="ton-connect-btn" style="margin: 20px auto;"></div>
-        <button class="btn-cls" onclick="ui.closeM()">BACK</button>
-    </div>
+    <div id="m-wallet" class="modal"><h2>WALLET</h2><button onclick="ui.closeM()">BACK</button></div>
+    <div id="m-top" class="modal"><h2>TOP</h2><div id="t-list"></div><button onclick="ui.closeM()">BACK</button></div>
 
-    <div id="m-top" class="modal">
-        <h2>🏆 TOP NODES</h2>
-        <div id="t-list" style="overflow-y: auto; flex: 1;"></div>
-        <button class="btn-cls" onclick="ui.closeM()">BACK</button>
-    </div>
-
-    <div id="m-friends" class="modal">
-        <h2>🤝 SQUAD</h2>
-        <p style="color: #666; margin-top: 50px;">No friends yet</p>
-        <button class="btn-cls" onclick="ui.closeM()">BACK</button>
-    </div>
-
-    <div id="m-mine" class="modal"><h2>⛏️ MINE</h2><button class="btn-cls" onclick="ui.closeM()">BACK</button></div>
-    <div id="m-tasks" class="modal"><h2>📋 TASKS</h2><button class="btn-cls" onclick="ui.closeM()">BACK</button></div>
-    <div id="m-boost" class="modal"><h2>🚀 BOOST</h2><button class="btn-cls" onclick="ui.closeM()">BACK</button></div>
-    <div id="m-bonus" class="modal"><h2>🎁 BONUS</h2><button class="btn-cls" onclick="ui.closeM()">BACK</button></div>
-
-    <script src="loading.js"></script>
-    <script src="ui.js"></script>
     <script src="logic.js"></script>
+    <script src="ui.js"></script>
+    <script src="loading.js"></script>
 </body>
 </html>
