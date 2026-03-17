@@ -1,58 +1,66 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v3.8.8</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-    <div id="loading-screen">
-        <div id="l-circle" class="loader-circle"><img src="images/logo.png"></div>
-        <div style="font-weight:900; letter-spacing:5px; margin-bottom:20px;">ACCESS GRANTED</div>
-        <div class="percent" id="load-pct">0%</div>
-        <div class="load-bar-bg"><div class="load-bar-f" id="load-bar"></div></div>
-    </div>
-
-    <div id="app" style="display:none;">
+    <div id="app">
         <div class="header">
-            <div style="display:flex; align-items:center; gap:10px;">
-                <div class="avatar" id="u-ava"></div>
-                <div style="text-align:left;"><b id="u-name">...</b><br><small>v3.8.8 Quantum</small></div>
+            <div class="avatar"><img src="images/logo.png"></div>
+            <div>
+                <b id="u-name">...</b><br>
+                <small style="color:var(--accent); font-size:9px;">v3.8.8 Quantum Full</small>
             </div>
             <div id="u-lvl" class="lvl-badge">LVL 1</div>
+        </div>
+
+        <div class="stats-row">
+            <div class="stat-card"><small>EARN PER TAP</small><b id="tap-val">+2</b></div>
+            <div class="stat-card"><small>PROFIT PER HOUR</small><b id="profit-val">0</b></div>
         </div>
 
         <div class="balance" id="balance">0</div>
 
         <div class="play-area">
             <img src="images/logo.png" class="main-logo" onpointerdown="ui.handleTap(event)">
+            
             <div class="side-menu">
-                <button class="btn-ui" onclick="ui.openM('wallet')">👛 WALLET</button>
-                <button class="btn-ui" onclick="ui.openM('friends')">🤝 FRIENDS</button>
-                <button class="btn-ui" onclick="ui.openM('bonus')">🎁 BONUS</button>
+                <button onclick="ui.openM('wallet')">👛 WALLET</button>
+                <button onclick="ui.openM('friends')">🤝 FRIENDS</button>
+                <button onclick="ui.openM('bonus')">🎁 BONUS</button>
             </div>
         </div>
 
         <div class="energy-box">
-            <div class="energy-info"><span>ENERGY</span><span id="eng-val">...</span></div>
+            <div class="en-txt"><span>ENERGY</span><span id="eng-val">...</span></div>
             <div class="load-bar-bg"><div id="eng-fill" class="load-bar-f"></div></div>
         </div>
 
         <div class="bottom-nav">
-            <button class="btn-ui" onclick="ui.openM('boost')">🚀 BOOST</button>
-            <button class="btn-ui" onclick="ui.openM('mine')">⛏️ MINE</button>
-            <button class="btn-ui" onclick="ui.openM('tasks')">📋 TASKS</button>
-            <button class="btn-ui" onclick="ui.openM('top')">🏆 TOP</button>
+            <button onclick="ui.openM('boost')">🚀 BOOST</button>
+            <button onclick="ui.openM('mine')">⛏️ MINE</button>
+            <button onclick="ui.openM('tasks')">📋 TASKS</button>
+            <button onclick="ui.openM('top')">🏆 TOP</button>
         </div>
     </div>
 
-    <div id="m-wallet" class="modal"><h2>WALLET</h2><button onclick="ui.closeM()">BACK</button></div>
-    <div id="m-top" class="modal"><h2>TOP</h2><div id="t-list"></div><button onclick="ui.closeM()">BACK</button></div>
+    <div id="m-mine" class="modal">
+        <h1 style="display:flex; align-items:center; gap:15px;">⛏️ MINE</h1>
+        <div class="stat-card" style="margin-bottom:10px; text-align:left;">
+            <b>Neural Node</b><br><small>+50/hr | Цена: 5,000</small>
+        </div>
+        <button class="lvl-badge" style="border:none; width:100%; margin-top:auto;" onclick="ui.closeM()">BACK</button>
+    </div>
 
     <script src="logic.js"></script>
     <script src="ui.js"></script>
-    <script src="loading.js"></script>
+    <script>
+        // Простая инициализация без loading.js для теста
+        ui.render();
+        window.Telegram.WebApp.expand();
+    </script>
 </body>
 </html>
