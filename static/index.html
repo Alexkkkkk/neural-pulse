@@ -10,27 +10,29 @@
 <body>
     <div id="loading-screen">
         <div class="loader-ring">
-            <img src="logo.png" alt="AI">
+            <img src="images/logo.png" alt="AI">
         </div>
         <div class="loading-text">ACCESS GRANTED</div>
         <div class="percent" id="load-pct">0%</div>
-        <div class="load-bar-bg" style="width: 200px;"><div class="load-bar-f" id="load-bar" style="width:0%"></div></div>
+        <div class="load-bar-bg" style="width: 200px;">
+            <div class="load-bar-f" id="load-bar" style="width:0%"></div>
+        </div>
     </div>
 
     <div id="app">
         <div class="header">
-            <div class="avatar"><img src="logo.png" id="main-avatar"></div>
+            <div class="avatar"><img src="images/logo.png" id="main-avatar"></div>
             <div class="u-info">
                 <b id="u-name">Agent</b>
                 <small>v3.8.8 Quantum Full</small>
             </div>
-            <div class="lvl-badge" id="u-lvl">LVL 2</div>
+            <div class="lvl-badge" id="u-lvl">LVL 1</div>
         </div>
 
         <div class="stats-row">
             <div class="stat-card">
                 <small>EARN PER TAP</small>
-                <b id="tap-val">+2</b>
+                <b id="tap-val">+1</b>
             </div>
             <div class="stat-card">
                 <small>PROFIT PER HOUR</small>
@@ -38,10 +40,10 @@
             </div>
         </div>
 
-        <div class="balance" id="balance">696</div>
+        <div class="balance" id="balance">0</div>
 
         <div class="play-area">
-            <img src="logo.png" class="main-logo" id="tap-target">
+            <img src="images/logo.png" class="main-logo" id="tap-target">
             
             <div class="side-menu">
                 <button class="side-btn" onclick="ui.openM('wallet')">
@@ -59,10 +61,10 @@
         <div class="energy-box">
             <div class="en-txt">
                 <span>ENERGY</span>
-                <span id="eng-val">543/1000</span>
+                <span id="eng-val">1000/1000</span>
             </div>
             <div class="load-bar-bg">
-                <div id="eng-fill" class="load-bar-f" style="width: 54.3%"></div>
+                <div id="eng-fill" class="load-bar-f" style="width: 100%"></div>
             </div>
         </div>
 
@@ -82,13 +84,13 @@
         </div>
     </div>
 
-    <div id="m-wallet" class="modal"><div class="modal-content"><h1>👛 WALLET</h1><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
-    <div id="m-squad" class="modal"><div class="modal-content"><h1>🤝 FRIENDS</h1><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
-    <div id="m-bonus" class="modal"><div class="modal-content"><h1>🎁 BONUS</h1><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
-    <div id="m-boost" class="modal"><div class="modal-content"><h1>🚀 BOOST</h1><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
-    <div id="m-mine" class="modal"><div class="modal-content"><h1>⛏️ MINE</h1><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
-    <div id="m-tasks" class="modal"><div class="modal-content"><h1>📋 TASKS</h1><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
-    <div id="m-top" class="modal"><div class="modal-content"><h1>🏆 TOP</h1><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
+    <div id="m-wallet" class="modal"><div class="modal-content"><h1>👛 WALLET</h1><p>Connect your TON wallet soon.</p><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
+    <div id="m-squad" class="modal"><div class="modal-content"><h1>🤝 FRIENDS</h1><p>Invite your squad to earn more.</p><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
+    <div id="m-bonus" class="modal"><div class="modal-content"><h1>🎁 BONUS</h1><p>Daily rewards available.</p><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
+    <div id="m-boost" class="modal"><div class="modal-content"><h1>🚀 BOOST</h1><p>Upgrade your tap power.</p><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
+    <div id="m-mine" class="modal"><div class="modal-content"><h1>⛏️ MINE</h1><p>Buy upgrades for passive income.</p><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
+    <div id="m-tasks" class="modal"><div class="modal-content"><h1>📋 TASKS</h1><p>Complete quests for rewards.</p><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
+    <div id="m-top" class="modal"><div class="modal-content"><h1>🏆 TOP</h1><p>Leaderboard of the best agents.</p><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
 
     <script src="logic.js"></script>
     <script src="ui.js"></script>
