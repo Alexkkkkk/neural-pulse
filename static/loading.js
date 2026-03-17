@@ -3,27 +3,29 @@ const loading = {
         let p = 0;
         const bar = document.getElementById('load-bar');
         const pct = document.getElementById('load-pct');
-        const appVer = document.getElementById('app-ver');
         
         try {
-            // Ждем синхронизацию (как в 3.6.0)
+            // Ждем синхронизацию из logic (макс 2 сек)
             await Promise.race([
                 logic.syncWithDB(),
                 new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 2000))
             ]);
             
+            // Пытаемся получить версию
             const vRes = await fetch('/api/version');
             if (vRes.ok) {
                 const vData = await vRes.json();
-                if (appVer) appVer.innerText = vData.version;
+                // Обновляем версию в UI, если элемент существует
+                const verTag = document.querySelector('.u-info small');
+                if (verTag) verTag.innerText = vData.version;
             }
         } catch (e) {
-            console.log("Offline mode active");
+            console.log("Proceeding in offline mode");
         }
 
-        // Плавная анимация загрузки
+        // Анимация полоски загрузки
         const itv = setInterval(() => {
-            p += Math.floor(Math.random() * 10) + 5;
+            p += Math.floor(Math.random() * 12) + 8;
             if (p >= 100) {
                 p = 100;
                 clearInterval(itv);
@@ -31,12 +33,12 @@ const loading = {
             }
             if (bar) bar.style.width = p + '%';
             if (pct) pct.innerText = p + '%';
-        }, 80);
+        }, 100);
     },
 
     startApp() {
         ui.init();
-        logic.startLoop(); // Запускаем тики дохода и регена
+        logic.startLoop(); // Запускаем пассивный доход и реген
         
         setTimeout(() => {
             const ls = document.getElementById('loading-screen');
