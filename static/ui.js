@@ -3,41 +3,30 @@ const ui = {
 
     init() {
         this.update();
-        
-        // Назначаем клик на логотип
         const target = document.getElementById('tap-target');
         if (target) {
             target.onpointerdown = (e) => logic.tap(e);
         }
-
-        // Кнопка "Назад" в самом Telegram
         if (window.Telegram?.WebApp) {
             Telegram.WebApp.BackButton.onClick(() => this.closeM());
         }
     },
 
     update() {
-        if (!logic.user) return;
+        const bal = document.getElementById('balance');
+        const enV = document.getElementById('eng-val');
+        const enF = document.getElementById('eng-fill');
+        const tV = document.getElementById('tap-val');
+        const pV = document.getElementById('profit-val');
+        const lvl = document.getElementById('u-lvl');
 
-        // Элементы из твоего HTML
-        const bEl = document.getElementById('balance');
-        const eVEl = document.getElementById('eng-val');
-        const eFEl = document.getElementById('eng-fill');
-        const tVEl = document.getElementById('tap-val');
-        const pVEl = document.getElementById('profit-val');
-        const lVEl = document.getElementById('u-lvl');
-
-        // Используем Math.floor, чтобы не было дробей (баг 3.8.8)
-        if (bEl) bEl.innerText = Math.floor(logic.user.balance).toLocaleString();
-        if (tVEl) tVEl.innerText = `+${logic.user.click_lvl}`;
-        if (pVEl) pVEl.innerText = Math.floor(logic.user.profit_hr);
-        if (lVEl) lVEl.innerText = `LVL ${logic.user.lvl}`;
+        if (bal) bal.innerText = Math.floor(logic.user.balance).toLocaleString('ru-RU');
+        if (tV) tV.innerText = `+${logic.user.click_lvl}`;
+        if (pV) pV.innerText = Math.floor(logic.user.profit_hr).toLocaleString('ru-RU');
+        if (lvl) lvl.innerText = `LVL ${logic.user.lvl}`;
         
-        if (eVEl) eVEl.innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
-        if (eFEl) {
-            const pct = (logic.user.energy / logic.user.max_energy * 100);
-            eFEl.style.width = pct + '%';
-        }
+        if (enV) enV.innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
+        if (enF) enF.style.width = (logic.user.energy / logic.user.max_energy * 100) + '%';
     },
 
     openM(id) {
@@ -57,9 +46,7 @@ const ui = {
         if (this.currentModal) {
             this.currentModal.style.display = 'none';
             this.currentModal = null;
-            if (window.Telegram?.WebApp) {
-                Telegram.WebApp.BackButton.hide();
-            }
+            if (window.Telegram?.WebApp) Telegram.WebApp.BackButton.hide();
         }
     }
 };
