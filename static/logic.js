@@ -4,90 +4,92 @@ const logic = {
         balance: 696,
         energy: 543,
         max_energy: 1000,
-        click_lvl: 1,
+        click_lvl: 2,
         profit_hr: 0,
         lvl: 2
     },
 
-    // Синхронизация с БД (из версии 3.6.0)
+    // Синхронизация: берем ID из Telegram и тянем данные из БД
     async syncWithDB() {
-        if (!window.Telegram?.WebApp?.initDataUnsafe?.user) return;
-        const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
-        this.user.userId = tgUser.id;
+        if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
+            const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
+            this.user.userId = tgUser.id;
+            document.getElementById('u-name').innerText = tgUser.first_name || "Agent";
+        }
 
         try {
-            const res = await fetch(`/api/user/${tgUser.id}?name=${encodeURIComponent(tgUser.first_name)}`);
+            // Запрос к твоему main.py
+            const res = await fetch(`/api/user/${this.user.userId || 0}`);
             if (res.ok) {
                 const data = await res.json();
                 this.user = { ...this.user, ...data };
             }
-        } catch (e) { 
-            console.error("Sync Error - Offline mode active", e); 
+        } catch (e) {
+            console.log("Offline mode: using local/default data");
         }
     },
 
-    // Сохранение данных на сервер
+    // Сохранение прогресса
     async save() {
         try {
             await fetch('/api/save', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ userId: this.user.userId, ...this.user })
+                body: JSON.stringify(this.user)
             });
         } catch (e) {
-            // В оффлайне сохраняем в localStorage
-            localStorage.setItem('pulse_backup', JSON.stringify(this.user));
+            localStorage.setItem('pulse_save', JSON.stringify(this.user));
         }
     },
 
-    // Функция тапа с анимацией (из версии 3.8.0)
+    // Логика тапа (из идеальной версии 3.8.0)
     tap(e) {
         if (this.user.energy >= this.user.click_lvl) {
             this.user.balance += this.user.click_lvl;
             this.user.energy -= this.user.click_lvl;
             
-            // Создаем вылетающий текст +1
-            this.createTapAnim(e);
+            // Визуальный эффект +число
+            this.createTapText(e);
             
             ui.update();
             
             if (window.Telegram?.WebApp?.HapticFeedback) {
-                window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
+                Telegram.WebApp.HapticFeedback.impactOccurred('medium');
             }
         }
     },
 
-    createTapAnim(e) {
-        const el = document.createElement('div');
-        el.innerText = `+${this.user.click_lvl}`;
-        el.className = 'tap-pop'; // Добавь анимацию в CSS
-        el.style.left = `${e.clientX}px`;
-        el.style.top = `${e.clientY}px`;
-        document.body.appendChild(el);
-        setTimeout(() => el.remove(), 800);
+    createTapText(e) {
+        const t = document.createElement('div');
+        t.innerText = `+${this.user.click_lvl}`;
+        t.className = 'tap-pop'; // Добавь анимацию в style.css
+        t.style.left = `${e.clientX}px`;
+        t.style.top = `${e.clientY}px`;
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 700);
     },
 
-    // Игровой цикл: доход и энергия (из стабильных версий)
+    // Постоянный цикл обновления (доход и энергия)
     startLoop() {
         setInterval(() => {
-            let changed = false;
+            let needsUpdate = false;
 
-            // Регенерация энергии (+1 в секунду)
+            // Реген энергии +1 в сек
             if (this.user.energy < this.user.max_energy) {
                 this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
-                changed = true;
+                needsUpdate = true;
             }
 
-            // Пассивный доход в час
+            // Пассивный доход (делим профит в час на 3600 сек)
             if (this.user.profit_hr > 0) {
                 this.user.balance += (this.user.profit_hr / 3600);
-                changed = true;
+                needsUpdate = true;
             }
 
-            if (changed) ui.update();
+            if (needsUpdate) ui.update();
         }, 1000);
 
-        // Авто-сохранение каждые 15 секунд
-        setInterval(() => this.save(), 15000);
+        // Авто-сейв каждые 20 секунд
+        setInterval(() => this.save(), 20000);
     }
 };
