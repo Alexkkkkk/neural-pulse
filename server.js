@@ -3,6 +3,7 @@ const { Telegraf, Markup } = require('telegraf');
 const { Pool } = require('pg');
 const path = require('path');
 
+// Конфигурация
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 const ADMIN_ID = 476014374; 
@@ -14,6 +15,7 @@ const pool = new Pool({ connectionString: PG_URI });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
+// Инициализация и миграция БД
 const initDB = async () => {
     try {
         await pool.query(`
@@ -26,21 +28,29 @@ const initDB = async () => {
                 max_energy INTEGER DEFAULT 1000, 
                 click_lvl INTEGER DEFAULT 1, 
                 profit_hr NUMERIC DEFAULT 0,
-                recovery_speed INTEGER DEFAULT 1,
                 wallet_addr TEXT, 
                 has_bot BOOLEAN DEFAULT FALSE, 
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
         
-        // Добавляем только недостающий функциональный столбец
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS recovery_speed INTEGER DEFAULT 1`);
+        // Гарантия наличия колонок (Миграции)
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT ''`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profit_hr NUMERIC DEFAULT 0`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_addr TEXT`);
 
-        await pool.query(`CREATE TABLE IF NOT EXISTS referrals (id SERIAL PRIMARY KEY, referrer_id TEXT REFERENCES users(user_id), referred_id TEXT UNIQUE REFERENCES users(user_id))`);
-        console.log("v3.8.9 Database Synced with Recovery Speed");
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS referrals (
+                id SERIAL PRIMARY KEY, 
+                referrer_id TEXT REFERENCES users(user_id), 
+                referred_id TEXT UNIQUE REFERENCES users(user_id)
+            )`);
+        
+        console.log("v3.8.8 Database Synced & Ready");
     } catch (e) { console.error("DB Sync Error:", e); }
 };
 initDB();
 
+// API Эндпоинты
 app.get('/api/user/:id', async (req, res) => {
     const { name, photo } = req.query;
     try {
@@ -57,11 +67,11 @@ app.get('/api/user/:id', async (req, res) => {
 });
 
 app.post('/api/save', async (req, res) => {
-    const { userId, balance, energy, max_energy, click_lvl, profit_hr, recovery_speed } = req.body;
+    const { userId, balance, energy, max_energy, click_lvl, profit_hr } = req.body;
     try {
         await pool.query(`
-            UPDATE users SET balance=$2, energy=$3, max_energy=$4, click_lvl=$5, profit_hr=$6, recovery_speed=$7, last_seen=CURRENT_TIMESTAMP 
-            WHERE user_id=$1`, [userId, balance, energy, max_energy, click_lvl, profit_hr, recovery_speed || 1]);
+            UPDATE users SET balance=$2, energy=$3, max_energy=$4, click_lvl=$5, profit_hr=$6, last_seen=CURRENT_TIMESTAMP 
+            WHERE user_id=$1`, [userId, balance, energy, max_energy, click_lvl, profit_hr]);
         res.json({ok: true});
     } catch (e) { res.status(500).send(e.message); }
 });
@@ -74,7 +84,6 @@ app.post('/api/save-wallet', async (req, res) => {
     } catch (e) { res.status(500).send(e.message); }
 });
 
-// Рефералы и ТОП остаются без изменений...
 app.get('/api/friends/:id', async (req, res) => {
     try {
         const r = await pool.query('SELECT u.username FROM users u JOIN referrals r ON u.user_id = r.referred_id WHERE r.referrer_id = $1', [req.params.id]);
@@ -89,6 +98,7 @@ app.get('/api/top', async (req, res) => {
     } catch (e) { res.json([]); }
 });
 
+// Логика Telegram Бота
 bot.start(async (ctx) => {
     const refId = ctx.startPayload;
     const uid = ctx.from.id.toString();
@@ -101,7 +111,7 @@ bot.start(async (ctx) => {
     }
     const kb = [[Markup.button.webApp("OPEN APP", "https://neural-pulse.bothost.ru")]];
     if (ctx.from.id === ADMIN_ID) kb.push([Markup.button.callback("🛠 ADMIN PANEL", "adm")]);
-    ctx.replyWithHTML(`<b>Neural Pulse v3.8.9</b>\n<i>Status: Stable / Recovery Added</i>`, Markup.inlineKeyboard(kb));
+    ctx.replyWithHTML(`<b>Neural Pulse v3.8.8</b>\n<i>Status: Stable / Database: Synced</i>`, Markup.inlineKeyboard(kb));
 });
 
 bot.action("adm", (ctx) => {
@@ -131,6 +141,6 @@ bot.action("wipe", async (ctx) => {
 bot.action("cls", (ctx) => ctx.deleteMessage());
 
 app.listen(3000, () => { 
-    console.log("v3.8.9 Live on 3000"); 
+    console.log("v3.8.8 Live on 3000"); 
     bot.launch().catch(e => console.error("Bot Error:", e));
 });
