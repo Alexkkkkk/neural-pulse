@@ -9,91 +9,60 @@
 </head>
 <body>
     <div id="loading-screen">
-        <div class="loader-circle"><img src="logo.png"></div>
+        <div class="loader-ring">
+            <img src="logo.png" alt="AI">
+        </div>
+        <div class="loading-text">ACCESS GRANTED</div>
         <div class="percent" id="load-pct">0%</div>
-        <div class="load-bar-bg"><div class="load-bar-f" id="load-bar" style="width:0%"></div></div>
+        <div class="load-bar-bg" style="width: 200px;"><div class="load-bar-f" id="load-bar" style="width:0%"></div></div>
     </div>
 
     <div id="app" style="display:none;">
         <div class="header">
             <div class="avatar"><img src="logo.png" id="main-avatar"></div>
             <div class="u-info">
-                <b id="u-name">Загрузка...</b><br>
-                <small style="color:#00ffff; font-size:10px;">v3.8.8 Quantum Full</small>
+                <b id="u-name">Agent</b>
+                <small>v3.8.0 Neural Mining</small>
             </div>
-            <div class="lvl-badge" id="u-lvl">LVL 1</div>
+            <div class="lvl-badge" id="u-lvl">LVL 2</div>
         </div>
 
         <div class="stats-row">
-            <div class="stat-card"><small>EARN PER TAP</small><b id="tap-val">+1</b></div>
+            <div class="stat-card"><small>EARN PER TAP</small><b id="tap-val">+2</b></div>
             <div class="stat-card"><small>PROFIT PER HOUR</small><b id="profit-val">0</b></div>
         </div>
 
-        <div class="balance" id="balance">0</div>
+        <div class="balance" id="balance">696</div>
 
         <div class="play-area">
-            <div class="logo-container">
-                <img src="logo.png" class="main-logo" id="tap-target">
-            </div>
+            <img src="logo.png" class="main-logo" id="tap-target">
             <div class="side-menu">
-                <button onclick="ui.openM('wallet')">👛 WALLET</button>
-                <button onclick="ui.openM('squad')">🤝 FRIENDS</button>
-                <button onclick="ui.openM('bonus')">🎁 BONUS</button>
+                <button class="side-btn" onclick="ui.openM('wallet')">👛 WALLET</button>
+                <button class="side-btn" onclick="ui.openM('squad')">🤝 FRIENDS</button>
+                <button class="side-btn" onclick="ui.openM('bonus')">🎁 BONUS</button>
             </div>
         </div>
 
         <div class="energy-box">
-            <div class="en-txt"><span>ENERGY</span><span id="eng-val">...</span></div>
-            <div class="load-bar-bg"><div id="eng-fill" class="load-bar-f"></div></div>
+            <div class="en-txt"><span>ENERGY</span><span id="eng-val">543/1000</span></div>
+            <div class="load-bar-bg"><div id="eng-fill" class="load-bar-f" style="width: 54%"></div></div>
         </div>
 
         <div class="bottom-nav">
-            <button onclick="ui.openM('boost')">🚀 BOOST</button>
-            <button onclick="ui.openM('mine')">⛏️ MINE</button>
-            <button onclick="ui.openM('tasks')">📋 TASKS</button>
-            <button onclick="ui.openM('top')">🏆 TOP</button>
+            <button class="nav-btn" onclick="ui.openM('boost')">🚀 BOOST</button>
+            <button class="nav-btn" onclick="ui.openM('mine')">⛏️ MINE</button>
+            <button class="nav-btn" onclick="ui.openM('tasks')">📋 TASKS</button>
+            <button class="nav-btn" onclick="ui.openM('top')">🏆 TOP</button>
         </div>
     </div>
 
-    <div id="m-mine" class="modal">
-        <div class="modal-content">
-            <h1>⛏️ MINE</h1>
-            <div class="mine-cards">
-                <div class="mine-item"><span>Neural Node<br><small>+50/hr</small></span><button>5,000</button></div>
-                <div class="mine-item"><span>Quantum GPU<br><small>+250/hr</small></span><button>25,000</button></div>
-                <div class="mine-item"><span>AI Cluster<br><small>+1k/hr</small></span><button>100,000</button></div>
-            </div>
-            <button class="back-btn" onclick="ui.closeM()">BACK</button>
-        </div>
-    </div>
-
-    <div id="m-top" class="modal">
-        <div class="modal-content">
-            <h1>🏆 TOP NODES</h1>
-            <div id="top-list">Загрузка...</div>
-            <button class="back-btn" onclick="ui.closeM()">BACK</button>
-        </div>
-    </div>
-
-    <div id="m-squad" class="modal">
-        <div class="modal-content">
-            <h1>🤝 SQUAD</h1>
-            <p style="color:#555; margin-top:50px; text-align:center;">No friends yet</p>
-            <button class="back-btn" onclick="ui.closeM()">BACK</button>
-        </div>
-    </div>
-
-    <div id="m-wallet" class="modal">
-        <div class="modal-content">
-            <h1>👛 WALLET</h1>
-            <p style="color:#00ffff; text-align:center; word-break:break-all; margin-top:20px;">0:68d22a2ed...cf4e15</p>
-            <button class="back-btn" onclick="ui.closeM()">BACK</button>
-        </div>
-    </div>
-    
-    <div id="m-boost" class="modal"><div class="modal-content"><h1>🚀 BOOST</h1><p>В разработке...</p><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
-    <div id="m-tasks" class="modal"><div class="modal-content"><h1>📋 TASKS</h1><p>В разработке...</p><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
-    <div id="m-bonus" class="modal"><div class="modal-content"><h1>🎁 BONUS</h1><p>В разработке...</p><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
+    <div id="m-wallet" class="modal"><div class="modal-content"><h1>👛 WALLET</h1><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
+    <div id="m-squad" class="modal"><div class="modal-content"><h1>🤝 FRIENDS</h1><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
+    <div id="m-bonus" class="modal"><div class="modal-content"><h1>🎁 BONUS</h1><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
+    <div id="m-boost" class="modal"><div class="modal-content"><h1>🚀 BOOST</h1><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
+    <div id="m-mine" class="modal"><div class="modal-content"><h1>⛏️ MINE</h1><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
+    <div id="m-tasks" class="modal"><div class="modal-content"><h1>📋 TASKS</h1><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
+    <div id="m-top" class="modal"><div class="modal-content"><h1>🏆 TOP</h1><button class="back-btn" onclick="ui.closeM()">BACK</button></div></div>
 
     <script src="logic.js"></script>
     <script src="ui.js"></script>
