@@ -11,6 +11,7 @@ const app = express();
 const pool = new Pool({ connectionString: PG_URI });
 
 app.use(express.json());
+// Раздаем все файлы из папки static (index.html, css, js, png)
 app.use(express.static(path.join(__dirname, 'static')));
 
 const initDB = async () => {
