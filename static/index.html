@@ -9,10 +9,9 @@
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
 </head>
 <body>
-
     <div id="loading-screen">
-        <div class="loader-circle"><img src="images/logo.png"></div>
-        <div class="access-granted">ACCESS GRANTED</div>
+        <div id="l-circle" class="loader-circle"><img src="logo.png"></div>
+        <div style="font-weight:900; letter-spacing:5px; margin-bottom:20px;">ACCESS GRANTED</div>
         <div class="percent" id="load-pct">0%</div>
         <div class="load-bar-bg"><div class="load-bar-f" id="load-bar"></div></div>
     </div>
@@ -23,46 +22,26 @@
                 <div class="avatar" id="u-ava"></div>
                 <div style="text-align:left;"><b id="u-name">...</b><br><small style="color:var(--cyan); font-size:9px;">v3.8.8 Quantum Full</small></div>
             </div>
-            <div id="u-lvl" class="lvl-badge">LVL 1</div>
+            <div style="background:var(--cyan); color:#000; padding:6px 12px; border-radius:10px; font-weight:900;" id="u-lvl">LVL 1</div>
         </div>
-
         <div class="balance" id="balance">0</div>
-
         <div class="play-area">
-            <img src="images/logo.png" class="main-logo" id="tap-img" onpointerdown="logic.tap(event)">
-            <div class="side-menu">
-                <button class="btn-ui" onclick="ui.openM('wallet')">👛 WALLET</button>
-                <button class="btn-ui" onclick="ui.openM('friends')">🤝 FRIENDS</button>
-                <button class="btn-ui" onclick="ui.openM('bonus')">🎁 BONUS</button>
-            </div>
+            <img src="logo.png" class="main-logo" id="tap-img" onpointerdown="logic.tap(event)">
         </div>
-
-        <div class="energy-box">
-            <small>ENERGY <span id="eng-val">1000/1000</span></small>
-            <div class="bar-bg"><div id="eng-fill" class="bar-f"></div></div>
-        </div>
-
-        <div class="footer-grid">
-            <button class="btn-ui" onclick="ui.openM('boost')">🚀 BOOST</button>
-            <button class="btn-ui" onclick="ui.openM('mine')">⛏️ MINE</button>
-            <button class="btn-ui" onclick="ui.openM('tasks')">📋 TASKS</button>
-            <button class="btn-ui" onclick="logic.loadTop()">🏆 TOP</button>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 20px;">
+            <button class="btn-ui" onclick="ui.openM('wallet')">WALLET</button>
+            <button class="btn-ui" onclick="ui.openM('mine')">MINE</button>
+            <button class="btn-ui" onclick="ui.openM('top')">TOP</button>
+            <button class="btn-ui" onclick="ui.openM('tasks')">TASKS</button>
         </div>
     </div>
 
     <div id="m-wallet" class="modal">
-        <h1>👛 WALLET</h1>
+        <h1>WALLET</h1>
         <div id="ton-connect-btn"></div>
-        <div id="wallet-addr" class="wallet-info">Не подключено</div>
         <button class="btn-cls" onclick="ui.closeM()">BACK</button>
     </div>
-
-    <div id="m-top" class="modal"><h2>🏆 TOP</h2><div id="t-list"></div><button class="btn-cls" onclick="ui.closeM()">BACK</button></div>
-    <div id="m-mine" class="modal"><h2>⛏️ MINE</h2><button class="btn-cls" onclick="ui.closeM()">BACK</button></div>
-    <div id="m-boost" class="modal"><h2>🚀 BOOST</h2><button class="btn-cls" onclick="ui.closeM()">BACK</button></div>
-    <div id="m-friends" class="modal"><h2>🤝 FRIENDS</h2><button class="btn-cls" onclick="ui.closeM()">BACK</button></div>
-    <div id="m-tasks" class="modal"><h2>📋 TASKS</h2><button class="btn-cls" onclick="ui.closeM()">BACK</button></div>
-    <div id="m-bonus" class="modal"><h2>🎁 BONUS</h2><button class="btn-cls" onclick="ui.closeM()">BACK</button></div>
+    <div id="m-top" class="modal"><h2>TOP NODES</h2><div id="t-list"></div><button class="btn-cls" onclick="ui.closeM()">BACK</button></div>
 
     <script src="loading.js"></script>
     <script src="ui.js"></script>
