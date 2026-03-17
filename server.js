@@ -3,7 +3,6 @@ const { Telegraf, Markup } = require('telegraf');
 const { Pool } = require('pg');
 const path = require('path');
 
-// Конфигурация из твоих настроек
 const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 
@@ -12,10 +11,8 @@ const app = express();
 const pool = new Pool({ connectionString: PG_URI });
 
 app.use(express.json());
-// index.html всегда берется из папки static
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Инициализация БД (все поля сохранены)
 const initDB = async () => {
     try {
         await pool.query(`
@@ -28,15 +25,14 @@ const initDB = async () => {
                 max_energy INTEGER DEFAULT 1000, 
                 click_lvl INTEGER DEFAULT 1, 
                 profit_hr NUMERIC DEFAULT 0,
-                wallet_addr TEXT, 
+                wallet_addr TEXT,
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
-        console.log("Database Synced v3.8.8");
-    } catch (e) { console.error("DB Sync Error:", e); }
+        console.log("v3.8.8 Database Ready");
+    } catch (e) { console.error("DB Error:", e); }
 };
 initDB();
 
-// API Эндпоинты
 app.get('/api/user/:id', async (req, res) => {
     const { name, photo } = req.query;
     try {
@@ -69,19 +65,16 @@ app.post('/api/save-wallet', async (req, res) => {
 });
 
 app.get('/api/top', async (req, res) => {
-    try {
-        const r = await pool.query("SELECT username, balance, avatar_url FROM users ORDER BY balance DESC LIMIT 50");
-        res.json(r.rows);
-    } catch (e) { res.json([]); }
+    const r = await pool.query("SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10");
+    res.json(r.rows);
 });
 
-// Логика бота
 bot.start((ctx) => {
     ctx.replyWithHTML(`<b>Neural Pulse v3.8.8</b>`, 
     Markup.inlineKeyboard([[Markup.button.webApp("OPEN APP", "https://neural-pulse.bothost.ru")]]));
 });
 
 app.listen(3000, () => { 
-    console.log("v3.8.8 Live on 3000"); 
+    console.log("Server v3.8.8 started"); 
     bot.launch();
 });
