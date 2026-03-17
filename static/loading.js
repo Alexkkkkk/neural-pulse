@@ -1,35 +1,51 @@
+/**
+ * loading.js — Логика прелоадера
+ */
 const loading = {
     init() {
-        let p = 0;
+        let progress = 0;
         const pctEl = document.getElementById('load-pct');
         const barEl = document.getElementById('load-bar');
         const circEl = document.getElementById('l-circle');
 
         const interval = setInterval(() => {
-            p += Math.floor(Math.random() * 5) + 2;
-            if (p >= 100) {
-                p = 100;
+            // Имитация загрузки случайными шагами
+            progress += Math.floor(Math.random() * 6) + 2;
+
+            if (progress >= 100) {
+                progress = 100;
                 clearInterval(interval);
                 
-                // Визуальное завершение
+                // Эффекты при достижении 100%
                 pctEl.innerText = "100%";
-                pctEl.classList.add('complete');
-                circEl.classList.add('complete');
+                pctEl.classList.add('complete'); // Меняет цвет текста в CSS
+                circEl.classList.add('complete'); // Меняет цвет круга в CSS
                 barEl.style.width = "100%";
 
+                // Плавный переход в игру
                 setTimeout(() => {
-                    document.getElementById('loading-screen').style.opacity = '0';
+                    const screen = document.getElementById('loading-screen');
+                    screen.style.opacity = '0';
+                    
                     setTimeout(() => {
-                        document.getElementById('loading-screen').style.display = 'none';
+                        screen.style.display = 'none';
                         document.getElementById('app').style.display = 'flex';
-                        logic.start(); 
+                        
+                        // Запускаем основную логику игры
+                        if (typeof logic !== 'undefined') {
+                            logic.start();
+                        }
                     }, 500);
-                }, 1000);
+                }, 1100); // Даем время насладиться соткой
             } else {
-                pctEl.innerText = p + "%";
-                barEl.style.width = p + "%";
+                pctEl.innerText = progress + "%";
+                barEl.style.width = progress + "%";
             }
-        }, 50);
+        }, 60);
     }
 };
-loading.init();
+
+// Запуск при загрузке страницы
+window.addEventListener('DOMContentLoaded', () => {
+    loading.init();
+});
