@@ -10,30 +10,23 @@
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
         body { background: var(--bg); color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; user-select: none; }
         
-        /* Loader */
-        #loader { position: fixed; inset: 0; background: #000; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .l-circle-wrap { position: relative; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; }
-        .l-circle-svg { position: absolute; width: 100%; height: 100%; transform: rotate(-90deg); }
-        .l-circle-bg { fill: none; stroke: #111; stroke-width: 2; }
-        .l-circle-progress { fill: none; stroke: var(--cyan); stroke-width: 2; stroke-dasharray: 565; stroke-dashoffset: 565; transition: stroke-dashoffset 0.1s; stroke-linecap: round; filter: drop-shadow(0 0 5px var(--cyan)); }
-        .l-logo-mid { width: 70px; filter: drop-shadow(0 0 15px var(--purple)); }
-        .l-pct { margin-top: 15px; font-size: 42px; font-weight: 900; color: var(--cyan); }
+        #app { display: flex; height: 100vh; flex-direction: column; padding: 20px; box-sizing: border-box; }
         
-        #app { display: none; height: 100vh; flex-direction: column; padding: 20px; box-sizing: border-box; }
-        
-        /* Header & UI Elements */
-        .header { background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; }
+        /* Header */
+        .header { background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; }
         .avatar { width: 44px; height: 44px; border: 1px solid var(--cyan); border-radius: 12px; overflow: hidden; background: #111; }
         .lvl-pill { background: var(--cyan); color: #000; padding: 6px 14px; border-radius: 10px; font-weight: 900; }
+        
         .balance { font-size: 60px; font-weight: 900; margin: 20px 0; letter-spacing: -2px; }
         
+        /* Play Area */
         .play-area { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
         .main-logo { width: 230px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; cursor: pointer; }
         
         .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px; }
-        .side-btn { background: #0d0d0d; border: 1px solid #222; padding: 14px 0; border-radius: 15px; font-size: 11px; font-weight: 900; width: 105px; transition: 0.2s; }
-        .side-btn:active { transform: scale(0.95); background: #1a1a1a; }
-        
+        .side-btn { background: #0d0d0d; border: 1px solid #222; padding: 14px 0; border-radius: 15px; font-size: 11px; font-weight: 900; width: 105px; }
+
+        /* Energy Bar */
         .eng-wrap { width: 100%; margin-bottom: 30px; }
         .bar-bg { width: 100%; height: 8px; background: #111; border-radius: 10px; border: 1px solid #1a1a1a; overflow: hidden; }
         .bar-f { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; transition: width 0.2s; }
@@ -41,25 +34,17 @@
         .footer { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
         .f-btn { background: #080808; border: 1px solid #1a1a1a; padding: 18px 0; border-radius: 15px; font-size: 10px; font-weight: 900; }
         
-        @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-120px); opacity: 0; } }
-        .float-text { position: fixed; pointer-events: none; z-index: 10000; font-weight: 900; animation: floatUp 0.7s ease-out forwards; }
-        
+        /* Modals */
         .modal { position: fixed; inset: 0; background: #000; z-index: 50000; display: none; flex-direction: column; padding: 40px 20px; }
         .card { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 20px; border-radius: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
         .btn-cls { background: #fff; color: #000; padding: 20px; border-radius: 15px; font-weight: 900; width: 100%; border: none; margin-top: auto; }
         .b-btn { background: var(--cyan); color: #000; padding: 12px; border-radius: 12px; font-weight: 900; border: none; }
-        .top-list { flex: 1; overflow-y: auto; text-align: left; }
+        
+        @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-100px); opacity: 0; } }
+        .float-text { position: fixed; pointer-events: none; font-weight: 900; animation: floatUp 0.6s ease-out forwards; color: var(--cyan); }
     </style>
 </head>
 <body>
-
-<div id="loader">
-    <div class="l-circle-wrap">
-        <svg class="l-circle-svg" viewBox="0 0 200 200"><circle class="l-circle-bg" cx="100" cy="100" r="90"></circle><circle id="l-circle-bar" class="l-circle-progress" cx="100" cy="100" r="90"></circle></svg>
-        <img src="images/logo.png" class="l-logo-mid">
-    </div>
-    <div class="l-pct" id="l-pct">0%</div>
-</div>
 
 <div id="app">
     <div class="header">
@@ -69,21 +54,25 @@
         </div>
         <div class="lvl-pill" id="u-lvl">LVL 1</div>
     </div>
+
     <div class="balance" id="balance">0</div>
+
     <div class="play-area">
-        <img src="images/logo.png" class="main-logo" id="tap-img" onpointerdown="tap(event)">
+        <img src="logo.png" class="main-logo" id="tap-img" onpointerdown="tap(event)">
         <div class="side-menu">
             <div class="side-btn" onclick="openM('wallet')">👛 WALLET</div>
-            <div class="side-btn" onclick="openFr()">🤝 FRIENDS</div>
+            <div class="side-btn" onclick="openM('friends')">🤝 FRIENDS</div>
             <div class="side-btn" onclick="openM('bonus')">🎁 BONUS</div>
         </div>
     </div>
+
     <div class="eng-wrap">
-        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:8px; color:#555;">
+        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:8px;">
             <span>ENERGY</span><span id="eng-val">1000 / 1000</span>
         </div>
         <div class="bar-bg"><div class="bar-f" id="eng-fill"></div></div>
     </div>
+
     <div class="footer">
         <div class="f-btn" onclick="openM('boost')">🚀 BOOST</div>
         <div class="f-btn" onclick="openM('mine')">⛏️ MINE</div>
@@ -93,7 +82,7 @@
 </div>
 
 <div id="m-mine" class="modal">
-    <div style="font-size:34px; font-weight:900; margin-bottom:30px; text-align:left;">⛏️ MINE</div>
+    <h2 style="text-align:left;">⛏️ MINE</h2>
     <div class="card"><div><b>Neural Node</b><br><small>+50/hr</small></div><button class="b-btn" onclick="buyMine(50, 5000)">5,000</button></div>
     <div class="card"><div><b>Quantum GPU</b><br><small>+250/hr</small></div><button class="b-btn" onclick="buyMine(250, 25000)">25,000</button></div>
     <div class="card"><div><b>AI Cluster</b><br><small>+1k/hr</small></div><button class="b-btn" onclick="buyMine(1000, 100000)">100,000</button></div>
@@ -101,30 +90,27 @@
 </div>
 
 <div id="m-boost" class="modal">
-    <div style="font-size:34px; font-weight:900; margin-bottom:30px; text-align:left;">🚀 BOOSTERS</div>
-    <div class="card"><div><b>⚡ Multitap</b><br><small id="mt-desc">Fibonacci Scale</small></div><button id="btn-mt" class="b-btn" onclick="buyB('mt')">0</button></div>
-    <div class="card"><div><b>🔋 Energy</b><br><small id="el-desc">Logarithmic</small></div><button id="btn-el" class="b-btn" onclick="buyB('el')">0</button></div>
+    <h2 style="text-align:left;">🚀 BOOSTERS</h2>
+    <div class="card"><div><b>⚡ Multitap</b><br><small>+1 per level</small></div><button id="btn-mt" class="b-btn" onclick="buyB('mt')">500</button></div>
+    <div class="card"><div><b>🔋 Energy</b><br><small>+500 max</small></div><button id="btn-el" class="b-btn" onclick="buyB('el')">1000</button></div>
     <button class="btn-cls" onclick="closeM()">BACK</button>
 </div>
 
 <div id="m-wallet" class="modal">
-    <div style="font-size:34px; font-weight:900; margin-bottom:30px; text-align:left;">👛 WALLET</div>
-    <div class="card" style="justify-content:center; padding:30px;"><div id="ton-connect-btn"></div></div>
-    <div id="wallet-addr" style="font-size:10px; color:var(--cyan); margin-top:10px; word-break:break-all;"></div>
+    <h2 style="text-align:left;">👛 WALLET</h2>
+    <div id="ton-connect-btn" style="margin: 20px auto;"></div>
+    <div id="wallet-addr" style="font-size:10px; color:var(--cyan); margin-top:20px; word-break:break-all;"></div>
     <button class="btn-cls" onclick="closeM()">BACK</button>
 </div>
 
-<div id="m-friends" class="modal"><div style="font-size:34px; font-weight:900; margin-bottom:30px; text-align:left;">🤝 SQUAD</div><div id="f-list" class="top-list"></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-top" class="modal"><div style="font-size:34px; font-weight:900; margin-bottom:30px; text-align:left;">🏆 TOP NODES</div><div id="t-list" class="top-list"></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-tasks" class="modal"><div style="font-size:34px; font-weight:900; margin-bottom:30px; text-align:left;">📋 TASKS</div><div class="card"><div><b>Daily Bonus</b><br><small>Every 24h</small></div><button class="b-btn" onclick="claimTask('daily', 1000)">CLAIM</button></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-bonus" class="modal"><div style="font-size:34px; font-weight:900; margin-bottom:30px; text-align:left;">🎁 PROMO</div><div class="card" style="flex-direction:column; gap:15px;"><input type="text" id="p-input" placeholder="ENTER CODE" style="width:100%; background:#000; border:1px solid #333; color:#fff; padding:15px; border-radius:10px; text-align:center;"><button class="b-btn" style="width:100%" onclick="applyPromo()">ACTIVATE</button></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-top" class="modal"><h2 style="text-align:left;">🏆 TOP</h2><div id="t-list" style="flex:1; overflow-y:auto;"></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-friends" class="modal"><h2 style="text-align:left;">🤝 SQUAD</h2><div id="f-list">No friends yet</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-tasks" class="modal"><h2 style="text-align:left;">📋 TASKS</h2><div class="card"><div><b>Daily Bonus</b></div><button class="b-btn">CLAIM</button></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-bonus" class="modal"><h2 style="text-align:left;">🎁 BONUS</h2><input type="text" id="p-input" placeholder="CODE" style="width:100%; padding:15px; background:#111; border:1px solid #333; color:#fff; border-radius:10px;"><button class="btn-cls" onclick="closeM()">BACK</button></div>
 
 <script>
     const tg = window.Telegram.WebApp;
-    const tonUI = new TON_CONNECT_UI.TonConnectUI({ 
-        manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
-        buttonRootId: 'ton-connect-btn'
-    });
+    const tonUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json', buttonRootId: 'ton-connect-btn' });
 
     let s = { 
         id: tg.initDataUnsafe?.user?.id || "0", 
@@ -133,125 +119,59 @@
         ava: tg.initDataUnsafe?.user?.photo_url || ""
     };
 
-    const calcMT = (l) => Math.floor(500 * Math.pow(1.618, l - 1));
-    const calcEL = (m) => Math.floor(1000 * Math.pow(1.5, (m / 500) - 2));
-
     async function init() {
-        let p = 0; const circ = document.getElementById('l-circle-bar');
-        const i = setInterval(() => {
-            p += 2; if(p >= 100) { p = 100; clearInterval(i); document.getElementById('loader').style.display='none'; document.getElementById('app').style.display='flex'; }
-            document.getElementById('l-pct').innerText = p + '%';
-            circ.style.strokeDashoffset = 565 - (565 * p / 100);
-        }, 30);
-
-        tonUI.onStatusChange(w => {
-            if(w) {
-                const a = w.account.address;
-                document.getElementById('wallet-addr').innerText = a.substring(0,10) + "..." + a.substring(a.length-10);
-                saveWallet(a);
-                if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-            }
-        });
-        await load();
-    }
-
-    async function load() {
-        try {
-            const r = await fetch(`/api/user/${s.id}?name=${encodeURIComponent(s.name)}&photo=${encodeURIComponent(s.ava)}`);
-            const d = await r.json();
-            s.bal = parseFloat(d.balance) || 0;
-            s.lvl = parseInt(d.click_lvl) || 1;
-            s.eng = parseInt(d.energy) || 1000;
-            s.max = parseInt(d.max_energy) || 1000;
-            s.profit = parseFloat(d.profit_hr) || 0;
-            upd();
-        } catch(e) { console.error(e); }
+        const r = await fetch(`/api/user/${s.id}?name=${encodeURIComponent(s.name)}&photo=${encodeURIComponent(s.ava)}`);
+        const d = await r.json();
+        s.bal = parseFloat(d.balance); s.lvl = d.click_lvl; s.eng = d.energy; s.max = d.max_energy; s.profit = parseFloat(d.profit_hr);
+        
+        tonUI.onStatusChange(w => { if(w) saveWallet(w.account.address); });
+        upd();
     }
 
     function tap(e) {
         if(s.eng >= s.lvl) {
-            let crit = Math.random() < (0.05 + Math.log10(s.lvl)*0.02);
-            let pwr = crit ? Math.floor(s.lvl * 2.5) : s.lvl;
-            s.bal += pwr; s.eng -= s.lvl;
-            createFloat(e, crit ? `💥 +${pwr}` : `+${pwr}`, crit);
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred(crit ? 'heavy' : 'light');
-            document.getElementById('tap-img').style.transform = 'scale(0.92)';
+            s.bal += s.lvl; s.eng -= s.lvl;
+            createFloat(e, `+${s.lvl}`);
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            document.getElementById('tap-img').style.transform = 'scale(0.95)';
             setTimeout(() => document.getElementById('tap-img').style.transform='scale(1)', 50);
             upd(); save();
         }
     }
 
-    function createFloat(e, txt, crit) {
-        const f = document.createElement('div');
-        f.className = 'float-text'; f.innerText = txt;
-        f.style.left = `${(e.clientX || window.innerWidth/2)}px`;
-        f.style.top = `${(e.clientY || window.innerHeight/2)}px`;
-        f.style.color = crit ? 'var(--purple)' : 'var(--cyan)';
-        document.body.appendChild(f);
-        setTimeout(() => f.remove(), 700);
+    function createFloat(e, txt) {
+        const f = document.createElement('div'); f.className = 'float-text'; f.innerText = txt;
+        f.style.left = `${e.clientX}px`; f.style.top = `${e.clientY}px`;
+        document.body.appendChild(f); setTimeout(() => f.remove(), 600);
     }
 
     function upd() {
         document.getElementById('balance').innerText = Math.floor(s.bal).toLocaleString();
-        document.getElementById('u-lvl').innerText = `LVL ${s.lvl}`;
         document.getElementById('u-name').innerText = s.name;
+        document.getElementById('u-lvl').innerText = `LVL ${s.lvl}`;
         document.getElementById('eng-val').innerText = `${s.eng} / ${s.max}`;
         document.getElementById('eng-fill').style.width = `${(s.eng/s.max)*100}%`;
-        document.getElementById('btn-mt').innerText = calcMT(s.lvl).toLocaleString();
-        document.getElementById('btn-el').innerText = calcEL(s.max).toLocaleString();
-        if(s.ava && s.ava !== "null" && s.ava !== "") {
-            document.getElementById('u-ava').innerHTML = `<img src="${s.ava}" style="width:100%">`;
-        }
+        if(s.ava) document.getElementById('u-ava').innerHTML = `<img src="${s.ava}" width="100%">`;
+    }
+
+    function buyMine(p, cost) {
+        if(s.bal >= cost) { s.bal -= cost; s.profit += p; upd(); save(); }
     }
 
     function buyB(t) {
-        let cost = (t==='mt') ? calcMT(s.lvl) : calcEL(s.max);
+        let cost = t === 'mt' ? s.lvl * 500 : s.max * 2;
         if(s.bal >= cost) {
             s.bal -= cost;
-            if(t==='mt') s.lvl++; else { s.max += 500; s.eng = s.max; }
-            if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+            if(t === 'mt') s.lvl++; else { s.max += 500; s.eng = s.max; }
             upd(); save();
         }
     }
 
-    function buyMine(p, cost) {
-        if(s.bal >= cost) { 
-            s.bal -= cost; s.profit += p; 
-            if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-            upd(); save(); 
-        }
-    }
-
-    function applyPromo() {
-        const code = document.getElementById('p-input').value.toUpperCase();
-        if(code === "NEURAL") {
-            s.bal += 10000; upd(); save();
-            alert("PROMO ACTIVATED: +10,000");
-            document.getElementById('p-input').value = "";
-        }
-    }
-
-    function claimTask(id, reward) {
-        s.bal += reward; upd(); save();
-        alert(`CLAIMED: ${reward}`);
-    }
-
-    async function openFr() {
-        openM('friends');
-        try {
-            const r = await fetch(`/api/friends/${s.id}`);
-            const d = await r.json();
-            document.getElementById('f-list').innerHTML = d.length ? d.map(f => `<div class="card"><b>${f.username}</b><span style="color:var(--cyan)">+10% Profit</span></div>`).join('') : "<center>No friends yet</center>";
-        } catch(e) { document.getElementById('f-list').innerHTML = "<center>Error loading</center>"; }
-    }
-
     async function loadTop() {
         openM('top');
-        try {
-            const r = await fetch('/api/top');
-            const d = await r.json();
-            document.getElementById('t-list').innerHTML = d.map((u, i) => `<div class="card"><b>#${i+1} ${u.username}</b><span>${Math.floor(u.balance).toLocaleString()}</span></div>`).join('');
-        } catch(e) { console.error(e); }
+        const r = await fetch('/api/top');
+        const d = await r.json();
+        document.getElementById('t-list').innerHTML = d.map((u, i) => `<div class="card"><b>#${i+1} ${u.username}</b><span>${Math.floor(u.balance)}</span></div>`).join('');
     }
 
     function save() {
@@ -262,24 +182,18 @@
         });
     }
 
-    function saveWallet(addr) {
-        fetch('/api/save-wallet', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ userId: s.id, wallet: addr })
-        });
+    function saveWallet(a) {
+        document.getElementById('wallet-addr').innerText = a;
+        fetch('/api/save-wallet', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ userId: s.id, wallet: a }) });
     }
 
-    function openM(id) { 
-        if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-        document.getElementById('m-'+id).style.display = 'flex'; 
-    }
+    function openM(id) { document.getElementById('m-'+id).style.display = 'flex'; }
     function closeM() { document.querySelectorAll('.modal').forEach(m => m.style.display='none'); }
 
-    // Основной цикл игры
+    // Майнинг и восстановление энергии
     setInterval(() => {
         if(s.profit > 0) s.bal += (s.profit / 3600);
-        if(s.eng < s.max) s.eng = Math.min(s.max, s.eng + (1 + Math.floor(s.lvl/10)));
+        if(s.eng < s.max) s.eng = Math.min(s.max, s.eng + 1);
         upd();
     }, 1000);
 
