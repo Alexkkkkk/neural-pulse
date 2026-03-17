@@ -12,9 +12,9 @@ const app = express();
 const pool = new Pool({ connectionString: PG_URI });
 
 app.use(express.json());
+// Обслуживание статики из папки static
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Инициализация базы данных v3.8.5
 const initDB = async () => {
     try {
         await pool.query(`
@@ -32,12 +32,12 @@ const initDB = async () => {
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
         await pool.query(`CREATE TABLE IF NOT EXISTS referrals (id SERIAL PRIMARY KEY, referrer_id TEXT REFERENCES users(user_id), referred_id TEXT UNIQUE REFERENCES users(user_id))`);
-        console.log("v3.8.5 Quantum & Mining Engine Synced");
+        console.log("v3.8.6 Database Ready");
     } catch (e) { console.error(e); }
 };
 initDB();
 
-// API: Получение/Создание пользователя
+// API получения пользователя с защитой от пустых данных
 app.get('/api/user/:id', async (req, res) => {
     const { name, photo } = req.query;
     try {
@@ -48,38 +48,32 @@ app.get('/api/user/:id', async (req, res) => {
         if (!r.rows.length) {
             await pool.query('INSERT INTO users (user_id, username, avatar_url) VALUES ($1, $2, $3)', [req.params.id, validName, validPhoto]);
             r = await pool.query('SELECT * FROM users WHERE user_id = $1', [req.params.id]);
-        } else if(r.rows[0].username !== validName || r.rows[0].avatar_url !== validPhoto) {
-            await pool.query('UPDATE users SET username=$1, avatar_url=$2 WHERE user_id=$3', [validName, validPhoto, req.params.id]);
-            r = await pool.query('SELECT * FROM users WHERE user_id = $1', [req.params.id]);
         }
         res.json(r.rows[0]);
     } catch (e) { res.status(500).send(e.message); }
 });
 
-// API: Сохранение прогресса
 app.post('/api/save', async (req, res) => {
-    const { userId, balance, energy, max_energy, click_lvl, profit_hr, wallet, has_bot } = req.body;
+    const { userId, balance, energy, max_energy, click_lvl, profit_hr } = req.body;
     try {
         await pool.query(`
-            UPDATE users SET balance=$2, energy=$3, max_energy=$4, click_lvl=$5, profit_hr=$6, wallet_addr=$7, has_bot=$8, last_seen=CURRENT_TIMESTAMP 
-            WHERE user_id=$1`, [userId, balance, energy, max_energy, click_lvl, profit_hr, wallet, has_bot]);
+            UPDATE users SET balance=$2, energy=$3, max_energy=$4, click_lvl=$5, profit_hr=$6, last_seen=CURRENT_TIMESTAMP 
+            WHERE user_id=$1`, [userId, balance, energy, max_energy, click_lvl, profit_hr]);
         res.json({ok: true});
     } catch (e) { res.status(500).send(e.message); }
 });
 
-// API: Друзья
+// Роуты для друзей и топа (без изменений)
 app.get('/api/friends/:id', async (req, res) => {
     const r = await pool.query('SELECT u.username FROM users u JOIN referrals r ON u.user_id = r.referred_id WHERE r.referrer_id = $1', [req.params.id]);
     res.json(r.rows);
 });
 
-// API: Топ игроков
 app.get('/api/top', async (req, res) => {
     const r = await pool.query("SELECT user_id, username, avatar_url, balance FROM users WHERE username IS NOT NULL AND username != 'null' ORDER BY balance DESC LIMIT 100");
     res.json(r.rows);
 });
 
-// Бот старт
 bot.start(async (ctx) => {
     const refId = ctx.startPayload;
     const uid = ctx.from.id.toString();
@@ -92,10 +86,10 @@ bot.start(async (ctx) => {
     }
     const kb = [[Markup.button.webApp("OPEN APP", "https://neural-pulse.bothost.ru")]];
     if (ctx.from.id === ADMIN_ID) kb.push([Markup.button.callback("🛠 ADMIN PANEL", "adm")]);
-    ctx.replyWithHTML(`<b>Neural Pulse v3.8.5</b>\n<i>Quantum Math & Mining Active</i>`, Markup.inlineKeyboard(kb));
+    ctx.replyWithHTML(`<b>Neural Pulse v3.8.6</b>\n<i>Database & Quantum Sync Active</i>`, Markup.inlineKeyboard(kb));
 });
 
-// Админ-логика
+// Админ-панель (без изменений)
 bot.action("adm", (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return;
     ctx.editMessageText("<b>Админ-панель:</b>", {
@@ -122,4 +116,4 @@ bot.action("wipe", async (ctx) => {
 
 bot.action("cls", (ctx) => ctx.deleteMessage());
 
-app.listen(3000, () => { console.log("v3.8.5 Live"); bot.launch(); });
+app.listen(3000, () => { console.log("v3.8.6 Live on 3000"); bot.launch(); });
