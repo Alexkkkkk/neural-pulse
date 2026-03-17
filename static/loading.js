@@ -1,51 +1,51 @@
-/**
- * loading.js — Логика прелоадера
- */
-const loading = {
-    init() {
-        let progress = 0;
-        const pctEl = document.getElementById('load-pct');
-        const barEl = document.getElementById('load-bar');
-        const circEl = document.getElementById('l-circle');
+const logic = {
+    state: {
+        id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || "0",
+        balance: 0,
+        clickPower: 2,
+        profitPerHour: 0,
+        energy: 1000,
+        maxEnergy: 1000,
+        level: 1,
+        name: window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name || "Agent"
+    },
 
-        const interval = setInterval(() => {
-            // Имитация загрузки случайными шагами
-            progress += Math.floor(Math.random() * 6) + 2;
+    // Расчет клика
+    tap() {
+        if (this.state.energy >= this.state.clickPower) {
+            this.state.balance += this.state.clickPower;
+            this.state.energy -= this.state.clickPower;
+            return true;
+        }
+        return false;
+    },
 
-            if (progress >= 100) {
-                progress = 100;
-                clearInterval(interval);
-                
-                // Эффекты при достижении 100%
-                pctEl.innerText = "100%";
-                pctEl.classList.add('complete'); // Меняет цвет текста в CSS
-                circEl.classList.add('complete'); // Меняет цвет круга в CSS
-                barEl.style.width = "100%";
+    // Фоновая регенерация энергии
+    regen() {
+        if (this.state.energy < this.state.maxEnergy) {
+            this.state.energy = Math.min(this.state.maxEnergy, this.state.energy + 1);
+        }
+    },
 
-                // Плавный переход в игру
-                setTimeout(() => {
-                    const screen = document.getElementById('loading-screen');
-                    screen.style.opacity = '0';
-                    
-                    setTimeout(() => {
-                        screen.style.display = 'none';
-                        document.getElementById('app').style.display = 'flex';
-                        
-                        // Запускаем основную логику игры
-                        if (typeof logic !== 'undefined') {
-                            logic.start();
-                        }
-                    }, 500);
-                }, 1100); // Даем время насладиться соткой
-            } else {
-                pctEl.innerText = progress + "%";
-                barEl.style.width = progress + "%";
-            }
-        }, 60);
+    async loadData() {
+        try {
+            const r = await fetch(`/api/user/${this.state.id}`);
+            const d = await r.json();
+            this.state.balance = parseFloat(d.balance) || 0;
+            this.state.clickPower = d.click_lvl || 2;
+            this.state.energy = d.energy || 1000;
+        } catch (e) { console.error("Data sync error"); }
+    },
+
+    save() {
+        fetch('/api/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                userId: this.state.id,
+                balance: this.state.balance,
+                energy: this.state.energy
+            })
+        });
     }
 };
-
-// Запуск при загрузке страницы
-window.addEventListener('DOMContentLoaded', () => {
-    loading.init();
-});
