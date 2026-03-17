@@ -1,39 +1,42 @@
-const loading = {
-    async init() {
-        let p = 0;
-        const bar = document.getElementById('load-bar');
-        const pct = document.getElementById('load-pct');
-        
-        try {
-            // Ждем ответ от БД максимум 2 секунды, чтобы не зависнуть
-            await Promise.race([
-                logic.syncWithDB(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error("Таймаут БД")), 2000))
-            ]);
-        } catch (e) {
-            console.log("БД не ответила вовремя, загружаемся в оффлайн-режиме");
-        }
-
-        const itv = setInterval(() => {
-            p += Math.floor(Math.random() * 15) + 10;
-            if (p >= 100) {
-                p = 100;
-                clearInterval(itv);
-                this.startApp();
-            }
-            if(bar) bar.style.width = p + '%';
-            if(pct) pct.innerText = p + '%';
-        }, 150);
+const logic = {
+    user: {
+        userId: 0,
+        balance: 696,
+        energy: 543,
+        max_energy: 1000,
+        click_lvl: 1,
+        profit_hr: 0
     },
 
-    startApp() {
-        ui.init();
-        setTimeout(() => {
-            document.getElementById('loading-screen').style.display = 'none';
-            document.getElementById('app').style.display = 'flex';
-            if (window.Telegram?.WebApp) window.Telegram.WebApp.expand();
-        }, 300);
+    async syncWithDB() {
+        if (!window.Telegram?.WebApp?.initDataUnsafe?.user) return;
+        const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
+        this.user.userId = tgUser.id;
+
+        try {
+            const res = await fetch(`/api/user/${tgUser.id}?name=${tgUser.first_name}`);
+            const data = await res.json();
+            this.user = { ...this.user, ...data };
+        } catch (e) { console.error("Sync Error", e); }
+    },
+
+    async save() {
+        await fetch('/api/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ userId: this.user.user_id, ...this.user })
+        });
+    },
+
+    tap() {
+        if (this.user.energy >= this.user.click_lvl) {
+            this.user.balance += this.user.click_lvl;
+            this.user.energy -= this.user.click_lvl;
+            ui.update();
+            this.save(); // Сохраняем при каждом клике или добавь таймер
+            if (window.Telegram?.WebApp?.HapticFeedback) {
+                window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
+            }
+        }
     }
 };
-
-window.onload = () => loading.init();
