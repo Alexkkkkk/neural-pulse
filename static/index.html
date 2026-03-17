@@ -3,195 +3,229 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Mining v3.8.2</title>
+    <title>Neural Pulse v3.8.5</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
-        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; --card: #0a0a0a; }
-        body { background: var(--bg); color: #fff; font-family: 'Inter', sans-serif; margin: 0; padding: 0; overflow: hidden; height: 100vh; user-select: none; }
+        :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
+        body { background: var(--bg); color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; user-select: none; }
         
-        /* Loader */
+        /* Круговой лоадер */
         #loader { position: fixed; inset: 0; background: #000; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .l-pct { font-size: 48px; font-weight: 900; color: var(--cyan); margin-top: 20px; }
+        .l-circle-wrap { position: relative; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; }
+        .l-circle-svg { position: absolute; width: 100%; height: 100%; transform: rotate(-90deg); }
+        .l-circle-bg { fill: none; stroke: #111; stroke-width: 2; }
+        .l-circle-progress { fill: none; stroke: var(--cyan); stroke-width: 2; stroke-dasharray: 565; stroke-dashoffset: 565; transition: stroke-dashoffset 0.1s; stroke-linecap: round; filter: drop-shadow(0 0 5px var(--cyan)); }
+        .l-logo-mid { width: 70px; filter: drop-shadow(0 0 15px var(--purple)); }
+        .l-pct { margin-top: 15px; font-size: 42px; font-weight: 900; color: var(--cyan); }
 
-        /* App Layout */
-        #app { display: none; flex-direction: column; height: 100vh; padding: 20px; box-sizing: border-box; }
+        /* Основное приложение */
+        #app { display: none; height: 100vh; flex-direction: column; padding: 20px; box-sizing: border-box; }
+        .header { background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; }
+        .avatar { width: 44px; height: 44px; border: 1px solid var(--cyan); border-radius: 12px; overflow: hidden; }
+        .lvl-pill { background: var(--cyan); color: #000; padding: 6px 14px; border-radius: 10px; font-weight: 900; }
         
-        .header { background: var(--card); border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; gap: 15px; }
-        .avatar { width: 45px; height: 45px; border-radius: 12px; background: linear-gradient(135deg, var(--purple), var(--cyan)); overflow: hidden; }
-        .avatar img { width: 100%; height: 100%; object-fit: cover; }
-        .lvl-badge { margin-left: auto; background: var(--cyan); color: #000; padding: 5px 15px; border-radius: 10px; font-weight: 900; }
-
-        .balance { font-size: 64px; font-weight: 900; text-align: center; margin: 30px 0; letter-spacing: -2px; }
-
-        .tap-area { flex: 1; display: flex; justify-content: center; align-items: center; position: relative; }
-        .main-logo { width: 220px; filter: drop-shadow(0 0 30px var(--purple)); transition: transform 0.05s; }
+        .balance { font-size: 60px; font-weight: 900; margin: 20px 0; letter-spacing: -2px; }
+        .play-area { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
+        .main-logo { width: 230px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; cursor: pointer; }
         
         .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px; }
-        .side-btn { background: rgba(255,255,255,0.05); border: 1px solid #222; color: #fff; padding: 12px; border-radius: 15px; font-size: 10px; font-weight: 900; width: 100px; }
+        .side-btn { background: #0d0d0d; border: 1px solid #222; padding: 14px 0; border-radius: 15px; font-size: 11px; font-weight: 900; width: 105px; }
 
-        .energy-bar { width: 100%; margin: 20px 0; }
-        .bar-bg { height: 10px; background: #111; border-radius: 10px; overflow: hidden; border: 1px solid #222; }
-        .bar-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; transition: width 0.2s; }
+        .eng-wrap { width: 100%; margin-bottom: 30px; }
+        .bar-bg { width: 100%; height: 8px; background: #111; border-radius: 10px; border: 1px solid #1a1a1a; overflow: hidden; }
+        .bar-f { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; transition: width 0.2s; }
 
-        .footer { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding-bottom: 20px; }
-        .f-btn { background: var(--card); border: 1px solid #1a1a1a; padding: 15px 0; border-radius: 15px; font-size: 10px; font-weight: 900; text-align: center; }
+        .footer { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .f-btn { background: #080808; border: 1px solid #1a1a1a; padding: 18px 0; border-radius: 15px; font-size: 10px; font-weight: 900; }
 
-        /* Modals */
-        .modal { position: fixed; inset: 0; background: #000; z-index: 1000; display: none; flex-direction: column; padding: 30px; }
-        .modal-active { display: flex; }
-        .back-btn { margin-top: auto; background: #fff; color: #000; padding: 20px; border-radius: 15px; font-weight: 900; text-align: center; }
-        
-        .float-num { position: fixed; color: var(--cyan); font-weight: 900; font-size: 24px; animation: floatUp 0.8s ease-out forwards; pointer-events: none; }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-100px); } }
+        @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-120px); opacity: 0; } }
+        .float-text { position: fixed; pointer-events: none; z-index: 10000; font-weight: 900; animation: floatUp 0.7s ease-out forwards; }
+
+        .modal { position: fixed; inset: 0; background: #000; z-index: 50000; display: none; flex-direction: column; padding: 40px 20px; }
+        .m-title { font-size: 34px; font-weight: 900; margin-bottom: 30px; text-align: left; }
+        .card { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 20px; border-radius: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .btn-cls { background: #fff; color: #000; padding: 20px; border-radius: 15px; font-weight: 900; width: 100%; border: none; margin-top: auto; }
+        .b-btn { background: var(--cyan); color: #000; padding: 12px; border-radius: 12px; font-weight: 900; border: none; }
+        .top-list { flex: 1; overflow-y: auto; }
     </style>
 </head>
 <body>
 
 <div id="loader">
-    <div class="l-pct" id="load-pct">0%</div>
-    <div style="color: var(--cyan); letter-spacing: 5px; font-size: 10px;">NEURAL SYNCING</div>
+    <div class="l-circle-wrap">
+        <svg class="l-circle-svg" viewBox="0 0 200 200"><circle class="l-circle-bg" cx="100" cy="100" r="90"></circle><circle id="l-circle-bar" class="l-circle-progress" cx="100" cy="100" r="90"></circle></svg>
+        <img src="./images/logo.png" class="l-logo-mid" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'">
+    </div>
+    <div class="l-pct" id="l-pct">0%</div>
 </div>
 
 <div id="app">
     <div class="header">
-        <div class="avatar"><img id="u-img" src="images/logo.png"></div>
-        <div>
-            <div id="u-name" style="font-weight: 900;">Agent</div>
-            <div style="font-size: 9px; color: var(--cyan);">v3.8.2 Quantum Engine</div>
+        <div style="display:flex; align-items:center; gap:12px;">
+            <div class="avatar" id="u-ava"></div>
+            <div style="text-align:left;"><b id="u-name">Agent</b><br><small style="color:var(--cyan); font-size:9px;">v3.8.5 Quantum Math</small></div>
         </div>
-        <div class="lvl-badge" id="u-lvl">LVL 1</div>
+        <div class="lvl-pill" id="u-lvl">LVL 1</div>
     </div>
-
-    <div class="balance" id="u-bal">0</div>
-
-    <div class="tap-area">
-        <img src="images/logo.png" class="main-logo" id="tap-target" onpointerdown="handleTap(event)">
+    <div class="balance" id="balance">0</div>
+    <div class="play-area">
+        <img src="./images/logo.png" class="main-logo" id="tap-img" onpointerdown="tap(event)" onerror="this.src='https://i.ibb.co/LzY7X6p/ai-logo.png'">
         <div class="side-menu">
             <div class="side-btn" onclick="openM('wallet')">👛 WALLET</div>
-            <div class="side-btn" onclick="openM('friends')">🤝 FRIENDS</div>
-            <div class="side-btn">🎁 BONUS</div>
+            <div class="side-btn" onclick="openFr()">🤝 FRIENDS</div>
+            <div class="side-btn" onclick="openM('bonus')">🎁 BONUS</div>
         </div>
     </div>
-
-    <div class="energy-bar">
-        <div style="display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 5px; font-weight: 900;">
-            <span>ENERGY</span><span id="u-eng-text">1000/1000</span>
+    <div class="eng-wrap">
+        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:8px; color:#555;">
+            <span>ENERGY</span><span id="eng-val">1000 / 1000</span>
         </div>
-        <div class="bar-bg"><div class="bar-fill" id="u-eng-fill"></div></div>
+        <div class="bar-bg"><div class="bar-f" id="eng-fill"></div></div>
     </div>
-
     <div class="footer">
-        <div class="f-btn">🚀 BOOST</div>
+        <div class="f-btn" onclick="openM('boost')">🚀 BOOST</div>
         <div class="f-btn" onclick="openM('mine')">⛏️ MINE</div>
-        <div class="f-btn">📋 TASKS</div>
-        <div class="f-btn" onclick="openM('top')">🏆 TOP</div>
+        <div class="f-btn" onclick="openM('tasks')">📋 TASKS</div>
+        <div class="f-btn" onclick="loadTop()">🏆 TOP</div>
     </div>
-</div>
-
-<div id="m-wallet" class="modal">
-    <h1 style="font-size: 42px;">WALLET</h1>
-    <div id="ton-btn"></div>
-    <div class="back-btn" onclick="closeM()">BACK</div>
 </div>
 
 <div id="m-mine" class="modal">
-    <h1 style="font-size: 42px;">MINE</h1>
-    <div style="background: var(--card); padding: 20px; border-radius: 20px; border: 1px solid #222;">
-        <b>Neural Node</b><br><small>Profit: +50/hr</small>
-    </div>
-    <div class="back-btn" onclick="closeM()">BACK</div>
+    <div class="m-title">⛏️ MINE</div>
+    <div class="card"><div><b>Neural Node</b><br><small>+50/hr</small></div><button class="b-btn" onclick="buyMine(50, 5000)">5,000</button></div>
+    <button class="btn-cls" onclick="closeM()">BACK</button>
 </div>
+
+<div id="m-boost" class="modal">
+    <div class="m-title">🚀 BOOSTERS</div>
+    <div class="card"><div><b>⚡ Multitap</b><br><small>Fibonacci</small></div><button id="btn-mt" class="b-btn" onclick="buyB('mt')">0</button></div>
+    <div class="card"><div><b>🔋 Energy</b><br><small>Log Scale</small></div><button id="btn-el" class="b-btn" onclick="buyB('el')">0</button></div>
+    <button class="btn-cls" onclick="closeM()">BACK</button>
+</div>
+
+<div id="m-top" class="modal"><div class="m-title">🏆 TOP NODES</div><div id="t-list" class="top-list"></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-friends" class="modal"><div class="m-title">🤝 SQUAD</div><div id="f-list" class="top-list"></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-wallet" class="modal"><div class="m-title">👛 WALLET</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-tasks" class="modal"><div class="m-title">📋 TASKS</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-bonus" class="modal"><div class="m-title">🎁 BONUS</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
 
 <script>
     const tg = window.Telegram.WebApp;
-    tg.expand();
+    const tonUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json' });
 
-    let state = {
-        id: tg.initDataUnsafe?.user?.id || "696",
+    let s = { 
+        id: tg.initDataUnsafe?.user?.id || "0", 
+        bal: 0, lvl: 1, eng: 1000, max: 1000, profit: 0,
         name: tg.initDataUnsafe?.user?.first_name || "Agent",
-        bal: 0, eng: 1000, max: 1000, lvl: 1, wallet: null
+        ava: tg.initDataUnsafe?.user?.photo_url || ""
     };
 
-    // Загрузка
+    const calcMT = (l) => Math.floor(500 * Math.pow(1.618, l - 1));
+    const calcEL = (m) => Math.floor(1000 * Math.pow(1.5, (m / 500) - 2));
+
     async function init() {
-        let p = 0;
-        const iv = setInterval(async () => {
-            p += 5;
-            document.getElementById('load-pct').innerText = p + '%';
-            if(p >= 100) {
-                clearInterval(iv);
-                await loadUser();
-                document.getElementById('loader').style.display = 'none';
-                document.getElementById('app').style.display = 'flex';
-            }
-        }, 50);
+        let p = 0; const circ = document.getElementById('l-circle-bar');
+        const i = setInterval(() => {
+            p += 2; if(p >= 100) { p = 100; clearInterval(i); startApp(); }
+            document.getElementById('l-pct').innerText = p + '%';
+            circ.style.strokeDashoffset = 565 - (565 * p / 100);
+        }, 30);
     }
 
-    async function loadUser() {
-        const r = await fetch(`/api/user/${state.id}?name=${state.name}`);
+    async function startApp() {
+        await load();
+        document.getElementById('loader').style.display='none'; 
+        document.getElementById('app').style.display='flex';
+    }
+
+    async function load() {
+        const r = await fetch(`/api/user/${s.id}?name=${encodeURIComponent(s.name)}&photo=${encodeURIComponent(s.ava)}`);
         const d = await r.json();
-        state.bal = Number(d.balance);
-        state.lvl = d.click_lvl;
-        state.eng = d.energy;
-        state.max = d.max_energy;
-        updateUI();
+        s.bal = Number(d.balance) || 0;
+        s.lvl = d.click_lvl || 1;
+        s.eng = d.energy || 1000;
+        s.max = d.max_energy || 1000;
+        s.profit = Number(d.profit_hr) || 0;
+        upd();
     }
 
-    function updateUI() {
-        document.getElementById('u-bal').innerText = Math.floor(state.bal).toLocaleString();
-        document.getElementById('u-lvl').innerText = `LVL ${state.lvl}`;
-        document.getElementById('u-eng-text').innerText = `${state.eng}/${state.max}`;
-        document.getElementById('u-eng-fill').style.width = `${(state.eng / state.max) * 100}%`;
-    }
-
-    function handleTap(e) {
-        if(state.eng >= state.lvl) {
-            state.bal += state.lvl;
-            state.eng -= state.lvl;
-            
-            // Анимация
-            const f = document.createElement('div');
-            f.className = 'float-num';
-            f.innerText = `+${state.lvl}`;
-            f.style.left = `${e.clientX}px`;
-            f.style.top = `${e.clientY}px`;
-            document.body.appendChild(f);
-            setTimeout(() => f.remove(), 800);
-
-            const img = document.getElementById('tap-target');
-            img.style.transform = 'scale(0.95)';
-            setTimeout(() => img.style.transform = 'scale(1)', 50);
-            
-            updateUI();
-            save();
+    function tap(e) {
+        if(s.eng >= s.lvl) {
+            let crit = Math.random() < (0.05 + Math.log10(s.lvl)*0.02);
+            let pwr = crit ? Math.floor(s.lvl * 2.5) : s.lvl;
+            s.bal += pwr; s.eng -= s.lvl;
+            createFloat(e, crit ? `💥 +${pwr}` : `+${pwr}`, crit);
+            tg.HapticFeedback.impactOccurred(crit ? 'heavy' : 'light');
+            document.getElementById('tap-img').style.transform = 'scale(0.92)';
+            setTimeout(() => document.getElementById('tap-img').style.transform='scale(1)', 50);
+            upd(); save();
         }
+    }
+
+    function createFloat(e, txt, crit) {
+        const f = document.createElement('div');
+        f.className = 'float-text'; f.innerText = txt;
+        f.style.left = `${e.clientX || window.innerWidth/2}px`;
+        f.style.top = `${e.clientY || window.innerHeight/2}px`;
+        f.style.color = crit ? 'var(--purple)' : 'var(--cyan)';
+        document.body.appendChild(f);
+        setTimeout(() => f.remove(), 700);
+    }
+
+    function upd() {
+        document.getElementById('balance').innerText = Math.floor(s.bal).toLocaleString();
+        document.getElementById('u-name').innerText = s.name;
+        document.getElementById('u-lvl').innerText = `LVL ${s.lvl}`;
+        document.getElementById('eng-val').innerText = `${s.eng} / ${s.max}`;
+        document.getElementById('eng-fill').style.width = `${(s.eng/s.max)*100}%`;
+        document.getElementById('btn-mt').innerText = calcMT(s.lvl).toLocaleString();
+        document.getElementById('btn-el').innerText = calcEL(s.max).toLocaleString();
+        if(s.ava) document.getElementById('u-ava').innerHTML = `<img src="${s.ava}" style="width:100%; height:100%; object-fit:cover;">`;
+    }
+
+    function buyB(t) {
+        let cost = (t==='mt') ? calcMT(s.lvl) : calcEL(s.max);
+        if(s.bal >= cost) {
+            s.bal -= cost;
+            if(t==='mt') s.lvl++; else { s.max += 500; s.eng = s.max; }
+            upd(); save();
+        }
+    }
+
+    function buyMine(p, cost) {
+        if(s.bal >= cost) { s.bal -= cost; s.profit += p; upd(); save(); }
+    }
+
+    async function openFr() {
+        openM('friends');
+        const r = await fetch(`/api/friends/${s.id}`);
+        const d = await r.json();
+        document.getElementById('f-list').innerHTML = d.map(f => `<div class="card"><b>${f.username}</b></div>`).join('');
+    }
+
+    async function loadTop() {
+        openM('top');
+        const r = await fetch('/api/top');
+        const d = await r.json();
+        document.getElementById('t-list').innerHTML = d.map(u => `<div class="card"><b>${u.username}</b><span>${Math.floor(u.balance).toLocaleString()}</span></div>`).join('');
     }
 
     function save() {
         fetch('/api/save', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                userId: state.id, balance: state.bal, energy: state.eng, 
-                max_energy: state.max, click_lvl: state.lvl, wallet: state.wallet
-            })
+            body: JSON.stringify({ userId: s.id, balance: s.bal, energy: s.eng, max_energy: s.max, click_lvl: s.lvl, profit_hr: s.profit })
         });
     }
 
-    function openM(id) { document.getElementById('m-'+id).classList.add('modal-active'); }
-    function closeM() { document.querySelectorAll('.modal').forEach(m => m.classList.remove('modal-active')); }
-
-    const tonUI = new TON_CONNECT_UI.TonConnectUI({
-        manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
-        buttonRootId: 'ton-btn'
-    });
+    function openM(id) { document.getElementById('m-'+id).style.display = 'flex'; }
+    function closeM() { document.querySelectorAll('.modal').forEach(m => m.style.display='none'); }
 
     setInterval(() => {
-        if(state.eng < state.max) {
-            state.eng = Math.min(state.max, state.eng + 1);
-            updateUI();
-        }
+        s.bal += (s.profit / 3600);
+        if(s.eng < s.max) s.eng = Math.min(s.max, s.eng + (1 + Math.floor(s.lvl/10)));
+        upd();
     }, 1000);
 
     init();
