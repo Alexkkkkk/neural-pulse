@@ -8,49 +8,55 @@
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
-        body { background: var(--bg); color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; user-select: none; }
+        body { background: var(--bg); color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; }
         
-        #app { display: flex; height: 100vh; flex-direction: column; padding: 20px; box-sizing: border-box; }
-        
-        /* Header */
-        .header { background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; }
-        .avatar { width: 44px; height: 44px; border: 1px solid var(--cyan); border-radius: 12px; overflow: hidden; background: #111; }
-        .lvl-pill { background: var(--cyan); color: #000; padding: 6px 14px; border-radius: 10px; font-weight: 900; }
-        
-        .balance { font-size: 60px; font-weight: 900; margin: 20px 0; letter-spacing: -2px; }
-        
-        /* Play Area */
-        .play-area { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
-        .main-logo { width: 230px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; cursor: pointer; }
-        
-        .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px; }
-        .side-btn { background: #0d0d0d; border: 1px solid #222; padding: 14px 0; border-radius: 15px; font-size: 11px; font-weight: 900; width: 105px; }
+        /* ТВОЯ ЗАГРУЗКА */
+        #loading-screen { position: fixed; inset: 0; background: #000; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .loader-circle { width: 200px; height: 200px; border: 2px solid #111; border-top: 2px solid var(--cyan); border-radius: 50%; position: relative; display: flex; align-items: center; justify-content: center; margin-bottom: 40px; }
+        .loader-circle img { width: 80px; filter: drop-shadow(0 0 20px var(--purple)); }
+        .access-granted { font-weight: 900; letter-spacing: 5px; margin-bottom: 20px; font-size: 14px; }
+        .percent { font-size: 48px; font-weight: 900; color: var(--cyan); }
+        .load-bar-bg { width: 250px; height: 4px; background: #111; margin-top: 20px; border-radius: 2px; }
+        .load-bar-f { height: 100%; width: 0%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: width 0.1s; }
 
-        /* Energy Bar */
-        .eng-wrap { width: 100%; margin-bottom: 30px; }
-        .bar-bg { width: 100%; height: 8px; background: #111; border-radius: 10px; border: 1px solid #1a1a1a; overflow: hidden; }
-        .bar-f { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; transition: width 0.2s; }
-        
-        .footer { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-        .f-btn { background: #080808; border: 1px solid #1a1a1a; padding: 18px 0; border-radius: 15px; font-size: 10px; font-weight: 900; }
-        
-        /* Modals */
-        .modal { position: fixed; inset: 0; background: #000; z-index: 50000; display: none; flex-direction: column; padding: 40px 20px; }
-        .card { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 20px; border-radius: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
-        .btn-cls { background: #fff; color: #000; padding: 20px; border-radius: 15px; font-weight: 900; width: 100%; border: none; margin-top: auto; }
-        .b-btn { background: var(--cyan); color: #000; padding: 12px; border-radius: 12px; font-weight: 900; border: none; }
-        
-        @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-100px); opacity: 0; } }
-        .float-text { position: fixed; pointer-events: none; font-weight: 900; animation: floatUp 0.6s ease-out forwards; color: var(--cyan); }
+        /* ИНТЕРФЕЙС */
+        #app { display: none; height: 100vh; flex-direction: column; padding: 20px; box-sizing: border-box; }
+        .header { background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; }
+        .avatar { width: 44px; height: 44px; border: 1px solid var(--cyan); border-radius: 12px; overflow: hidden; }
+        .lvl-pill { background: var(--cyan); color: #000; padding: 6px 14px; border-radius: 10px; font-weight: 900; }
+        .balance { font-size: 60px; font-weight: 900; margin: 25px 0; }
+        .play-area { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; }
+        .main-logo { width: 220px; filter: drop-shadow(0 0 30px var(--purple)); transition: transform 0.05s; }
+        .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px; }
+        .side-btn { background: #0d0d0d; border: 1px solid #222; padding: 12px; border-radius: 15px; font-size: 10px; width: 95px; font-weight: 900; }
+        .bar-bg { width: 100%; height: 8px; background: #111; border-radius: 10px; margin-top: 10px; }
+        .bar-f { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; }
+        .footer { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 20px; }
+        .f-btn { background: #080808; border: 1px solid #1a1a1a; padding: 15px 0; border-radius: 15px; font-size: 10px; font-weight: 900; }
+
+        /* МОДАЛКИ */
+        .modal { position: fixed; inset: 0; background: #000; z-index: 100; display: none; flex-direction: column; padding: 40px 20px; }
+        .card { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 20px; border-radius: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .btn-cls { background: #fff; color: #000; padding: 20px; border-radius: 15px; font-weight: 900; border: none; margin-top: auto; }
+        .b-btn { background: var(--cyan); color: #000; padding: 10px 15px; border-radius: 10px; font-weight: 900; border: none; }
     </style>
 </head>
 <body>
 
+<div id="loading-screen">
+    <div class="loader-circle">
+        <img src="logo.png">
+    </div>
+    <div class="access-granted">ACCESS GRANTED</div>
+    <div class="percent" id="load-pct">0%</div>
+    <div class="load-bar-bg"><div class="load-bar-f" id="load-bar"></div></div>
+</div>
+
 <div id="app">
     <div class="header">
-        <div style="display:flex; align-items:center; gap:12px;">
+        <div style="display:flex; align-items:center; gap:10px;">
             <div class="avatar" id="u-ava"></div>
-            <div style="text-align:left;"><b id="u-name">Agent</b><br><small style="color:var(--cyan); font-size:9px;">v3.8.8 Quantum Full</small></div>
+            <div style="text-align:left;"><b id="u-name">Loading...</b><br><small style="color:var(--cyan); font-size:9px;">v3.8.8 Quantum Full</small></div>
         </div>
         <div class="lvl-pill" id="u-lvl">LVL 1</div>
     </div>
@@ -66,10 +72,8 @@
         </div>
     </div>
 
-    <div class="eng-wrap">
-        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:8px;">
-            <span>ENERGY</span><span id="eng-val">1000 / 1000</span>
-        </div>
+    <div style="text-align:left;">
+        <small style="color:#555;">ENERGY <span id="eng-val">1000/1000</span></small>
         <div class="bar-bg"><div class="bar-f" id="eng-fill"></div></div>
     </div>
 
@@ -81,32 +85,25 @@
     </div>
 </div>
 
+<div id="m-wallet" class="modal">
+    <h2 style="text-align:left;">👛 WALLET</h2>
+    <div id="ton-connect-btn" style="margin: 30px auto;"></div>
+    <div id="wallet-addr" style="color:var(--cyan); font-size:11px; word-break:break-all; margin-top:20px;"></div>
+    <button class="btn-cls" onclick="closeM()">BACK</button>
+</div>
+
 <div id="m-mine" class="modal">
     <h2 style="text-align:left;">⛏️ MINE</h2>
     <div class="card"><div><b>Neural Node</b><br><small>+50/hr</small></div><button class="b-btn" onclick="buyMine(50, 5000)">5,000</button></div>
     <div class="card"><div><b>Quantum GPU</b><br><small>+250/hr</small></div><button class="b-btn" onclick="buyMine(250, 25000)">25,000</button></div>
-    <div class="card"><div><b>AI Cluster</b><br><small>+1k/hr</small></div><button class="b-btn" onclick="buyMine(1000, 100000)">100,000</button></div>
     <button class="btn-cls" onclick="closeM()">BACK</button>
 </div>
 
-<div id="m-boost" class="modal">
-    <h2 style="text-align:left;">🚀 BOOSTERS</h2>
-    <div class="card"><div><b>⚡ Multitap</b><br><small>+1 per level</small></div><button id="btn-mt" class="b-btn" onclick="buyB('mt')">500</button></div>
-    <div class="card"><div><b>🔋 Energy</b><br><small>+500 max</small></div><button id="btn-el" class="b-btn" onclick="buyB('el')">1000</button></div>
-    <button class="btn-cls" onclick="closeM()">BACK</button>
-</div>
-
-<div id="m-wallet" class="modal">
-    <h2 style="text-align:left;">👛 WALLET</h2>
-    <div id="ton-connect-btn" style="margin: 20px auto;"></div>
-    <div id="wallet-addr" style="font-size:10px; color:var(--cyan); margin-top:20px; word-break:break-all;"></div>
-    <button class="btn-cls" onclick="closeM()">BACK</button>
-</div>
-
-<div id="m-top" class="modal"><h2 style="text-align:left;">🏆 TOP</h2><div id="t-list" style="flex:1; overflow-y:auto;"></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-friends" class="modal"><h2 style="text-align:left;">🤝 SQUAD</h2><div id="f-list">No friends yet</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-tasks" class="modal"><h2 style="text-align:left;">📋 TASKS</h2><div class="card"><div><b>Daily Bonus</b></div><button class="b-btn">CLAIM</button></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-bonus" class="modal"><h2 style="text-align:left;">🎁 BONUS</h2><input type="text" id="p-input" placeholder="CODE" style="width:100%; padding:15px; background:#111; border:1px solid #333; color:#fff; border-radius:10px;"><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-top" class="modal"><h2 style="text-align:left;">🏆 TOP NODES</h2><div id="t-list" style="flex:1; overflow-y:auto;"></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-friends" class="modal"><h2 style="text-align:left;">🤝 SQUAD</h2><div style="color:#555; margin-top:40px;">No friends yet</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-boost" class="modal"><h2 style="text-align:left;">🚀 BOOST</h2><div class="card"><div><b>Multitap</b></div><button class="b-btn">LVL UP</button></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-tasks" class="modal"><h2 style="text-align:left;">📋 TASKS</h2><div class="card"><div><b>Daily</b></div><button class="b-btn">CLAIM</button></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-bonus" class="modal"><h2 style="text-align:left;">🎁 BONUS</h2><input type="text" placeholder="CODE" style="width:100%; padding:20px; background:#111; border:1px solid #222; color:#fff; border-radius:15px;"><button class="btn-cls" onclick="closeM()">BACK</button></div>
 
 <script>
     const tg = window.Telegram.WebApp;
@@ -118,6 +115,21 @@
         name: tg.initDataUnsafe?.user?.first_name || "Agent",
         ava: tg.initDataUnsafe?.user?.photo_url || ""
     };
+
+    // ЛОГИКА ЗАГРУЗКИ
+    let p = 0;
+    const lInt = setInterval(() => {
+        p += Math.floor(Math.random() * 5) + 2;
+        if(p > 99) {
+            p = 99; clearInterval(lInt);
+            setTimeout(() => {
+                document.getElementById('loading-screen').style.display = 'none';
+                document.getElementById('app').style.display = 'flex';
+            }, 800);
+        }
+        document.getElementById('load-pct').innerText = p + '%';
+        document.getElementById('load-bar').style.width = p + '%';
+    }, 50);
 
     async function init() {
         const r = await fetch(`/api/user/${s.id}?name=${encodeURIComponent(s.name)}&photo=${encodeURIComponent(s.ava)}`);
@@ -131,47 +143,20 @@
     function tap(e) {
         if(s.eng >= s.lvl) {
             s.bal += s.lvl; s.eng -= s.lvl;
-            createFloat(e, `+${s.lvl}`);
             if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
             document.getElementById('tap-img').style.transform = 'scale(0.95)';
-            setTimeout(() => document.getElementById('tap-img').style.transform='scale(1)', 50);
+            setTimeout(() => document.getElementById('tap-img').style.transform = 'scale(1)', 50);
             upd(); save();
         }
-    }
-
-    function createFloat(e, txt) {
-        const f = document.createElement('div'); f.className = 'float-text'; f.innerText = txt;
-        f.style.left = `${e.clientX}px`; f.style.top = `${e.clientY}px`;
-        document.body.appendChild(f); setTimeout(() => f.remove(), 600);
     }
 
     function upd() {
         document.getElementById('balance').innerText = Math.floor(s.bal).toLocaleString();
         document.getElementById('u-name').innerText = s.name;
         document.getElementById('u-lvl').innerText = `LVL ${s.lvl}`;
-        document.getElementById('eng-val').innerText = `${s.eng} / ${s.max}`;
+        document.getElementById('eng-val').innerText = `${s.eng}/${s.max}`;
         document.getElementById('eng-fill').style.width = `${(s.eng/s.max)*100}%`;
         if(s.ava) document.getElementById('u-ava').innerHTML = `<img src="${s.ava}" width="100%">`;
-    }
-
-    function buyMine(p, cost) {
-        if(s.bal >= cost) { s.bal -= cost; s.profit += p; upd(); save(); }
-    }
-
-    function buyB(t) {
-        let cost = t === 'mt' ? s.lvl * 500 : s.max * 2;
-        if(s.bal >= cost) {
-            s.bal -= cost;
-            if(t === 'mt') s.lvl++; else { s.max += 500; s.eng = s.max; }
-            upd(); save();
-        }
-    }
-
-    async function loadTop() {
-        openM('top');
-        const r = await fetch('/api/top');
-        const d = await r.json();
-        document.getElementById('t-list').innerHTML = d.map((u, i) => `<div class="card"><b>#${i+1} ${u.username}</b><span>${Math.floor(u.balance)}</span></div>`).join('');
     }
 
     function save() {
@@ -187,15 +172,19 @@
         fetch('/api/save-wallet', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ userId: s.id, wallet: a }) });
     }
 
+    async function loadTop() {
+        openM('top');
+        const r = await fetch('/api/top');
+        const d = await r.json();
+        document.getElementById('t-list').innerHTML = d.map((u, i) => `<div class="card"><b>#${i+1} ${u.username}</b><span>${Math.floor(u.balance)}</span></div>`).join('');
+    }
+
     function openM(id) { document.getElementById('m-'+id).style.display = 'flex'; }
     function closeM() { document.querySelectorAll('.modal').forEach(m => m.style.display='none'); }
 
-    // Майнинг и восстановление энергии
     setInterval(() => {
-        if(s.profit > 0) s.bal += (s.profit / 3600);
-        if(s.eng < s.max) s.eng = Math.min(s.max, s.eng + 1);
-        upd();
-    }, 1000);
+        if(s.eng < s.max) { s.eng = Math.min(s.max, s.eng + 1); upd(); }
+    }, 1500);
 
     init();
 </script>
