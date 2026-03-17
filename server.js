@@ -14,6 +14,7 @@ const pool = new Pool({ connectionString: PG_URI });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
+// Инициализация базы данных v3.8.2
 const initDB = async () => {
     try {
         await pool.query(`
@@ -30,12 +31,12 @@ const initDB = async () => {
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
         await pool.query(`CREATE TABLE IF NOT EXISTS referrals (id SERIAL PRIMARY KEY, referrer_id TEXT REFERENCES users(user_id), referred_id TEXT UNIQUE REFERENCES users(user_id))`);
-        console.log("v3.8.0 Neural Mining Synced");
+        console.log("v3.8.2 Neural Database Synced");
     } catch (e) { console.error(e); }
 };
 initDB();
 
-// API Endpoints
+// API: Получение/Создание пользователя
 app.get('/api/user/:id', async (req, res) => {
     const { name, photo } = req.query;
     try {
@@ -51,6 +52,7 @@ app.get('/api/user/:id', async (req, res) => {
     } catch (e) { res.status(500).send(e.message); }
 });
 
+// API: Сохранение прогресса
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, max_energy, click_lvl, wallet, has_bot } = req.body;
     try {
@@ -61,14 +63,24 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).send(e.message); }
 });
 
-app.get('/api/top', async (req, res) => {
-    const r = await pool.query("SELECT user_id, username, avatar_url, balance FROM users ORDER BY balance DESC LIMIT 100");
+// API: Друзья и Топ
+app.get('/api/friends/:id', async (req, res) => {
+    const r = await pool.query('SELECT u.username FROM users u JOIN referrals r ON u.user_id = r.referred_id WHERE r.referrer_id = $1', [req.params.id]);
     res.json(r.rows);
 });
 
-bot.start((ctx) => {
-    const kb = [[Markup.button.webApp("OPEN APP", "https://neural-pulse.bothost.ru")]];
-    ctx.replyWithHTML(`<b>Neural Pulse v3.8.0</b>\n<i>Neural Mining Engine: Online</i>`, Markup.inlineKeyboard(kb));
+app.get('/api/top', async (req, res) => {
+    const r = await pool.query("SELECT user_id, username, avatar_url, balance FROM users WHERE username IS NOT NULL ORDER BY balance DESC LIMIT 100");
+    res.json(r.rows);
 });
 
-app.listen(3000, () => { console.log("v3.8.0 Live"); bot.launch(); });
+// Бот старт
+bot.start(async (ctx) => {
+    const refId = ctx.startPayload;
+    const uid = ctx.from.id.toString();
+    const kb = [[Markup.button.webApp("OPEN AGENT", "https://neural-pulse.bothost.ru")]];
+    if (ctx.from.id === ADMIN_ID) kb.push([Markup.button.callback("🛠 ADMIN", "adm")]);
+    ctx.replyWithHTML(`<b>Neural Mining v3.8.2</b>\n<i>Quantum Math Engine: Active</i>`, Markup.inlineKeyboard(kb));
+});
+
+app.listen(3000, () => { console.log("v3.8.2 Online"); bot.launch(); });
