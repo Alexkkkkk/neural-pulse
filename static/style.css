@@ -1,34 +1,51 @@
-:root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
-body { background: var(--bg); color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; user-select: none; }
-
-/* Экран загрузки */
-#loading-screen { position: fixed; inset: 0; background: #000; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.5s; }
-.loader-circle { 
-    width: 220px; height: 220px; border: 2px solid #111; 
-    border-top: 2px solid var(--cyan); border-radius: 50%; 
-    display: flex; align-items: center; justify-content: center; 
-    margin-bottom: 40px; animation: spin 2s linear infinite; 
-    transition: all 0.5s ease; 
+:root {
+    --bg: #000000;
+    --card: #0a0a0a;
+    --accent: #00ffff;
+    --text: #ffffff;
+    --grad: linear-gradient(90deg, #00f2ff, #ae00ff);
 }
-/* Эффект при 100% */
-.loader-circle.complete { border-color: var(--purple); box-shadow: 0 0 20px var(--cyan), inset 0 0 20px var(--purple); }
-.loader-circle img { width: 100px; filter: drop-shadow(0 0 20px var(--purple)); }
 
-@keyframes spin { 100% { transform: rotate(360deg); } }
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    margin: 0;
+    overflow: hidden;
+    touch-action: manipulation;
+}
 
-.percent { font-size: 48px; font-weight: 900; color: var(--cyan); transition: all 0.3s; }
-.percent.complete { color: #fff; text-shadow: 0 0 15px var(--cyan); }
+#app { display: flex; flex-direction: column; height: 100vh; padding: 20px; box-sizing: border-box; }
 
-.load-bar-bg { width: 250px; height: 4px; background: #111; margin-top: 20px; border-radius: 2px; }
-.load-bar-f { height: 100%; width: 0%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: width 0.1s; }
+/* Header & Stats */
+.header { background: var(--card); border-radius: 20px; padding: 15px; display: flex; align-items: center; border: 1px solid #1a1a1a; margin-bottom: 20px; }
+.avatar { width: 50px; height: 50px; border-radius: 12px; background: #111; margin-right: 15px; overflow: hidden; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+.lvl-badge { margin-left: auto; background: var(--accent); color: #000; padding: 8px 15px; border-radius: 10px; font-weight: 900; }
 
-/* Интерфейс приложения */
-#app { display: none; height: 100vh; flex-direction: column; padding: 20px; box-sizing: border-box; }
-.header { background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; }
-.avatar { width: 44px; height: 44px; border: 1px solid var(--cyan); border-radius: 12px; overflow: hidden; }
-.balance { font-size: 64px; font-weight: 900; margin: 30px 0; letter-spacing: -2px; }
-.play-area { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; }
-.main-logo { width: 240px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; }
-.btn-ui { background: #0d0d0d; border: 1px solid #222; padding: 14px; border-radius: 18px; font-size: 11px; font-weight: 900; color: #fff; border: none; }
-.modal { position: fixed; inset: 0; background: #000; z-index: 10000; display: none; flex-direction: column; padding: 40px 20px; }
-.btn-cls { background: #fff; color: #000; padding: 20px; border-radius: 15px; font-weight: 900; border: none; margin-top: auto; }
+.stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+.stat-card { background: var(--card); padding: 12px; border-radius: 15px; text-align: center; border: 1px solid #1a1a1a; }
+.stat-card small { color: #555; display: block; font-size: 10px; margin-bottom: 4px; }
+.stat-card b { color: var(--accent); font-size: 18px; }
+
+/* Balance & Logo */
+.balance { font-size: 80px; font-weight: 900; text-align: center; margin: 40px 0; letter-spacing: -2px; }
+
+.play-area { flex-grow: 1; display: flex; justify-content: center; align-items: center; position: relative; }
+.main-logo { width: 250px; cursor: pointer; filter: drop-shadow(0 0 30px rgba(174, 0, 255, 0.3)); transition: transform 0.1s; }
+
+.side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px; }
+.side-menu button { background: var(--card); border: 1px solid #1a1a1a; color: white; padding: 12px 20px; border-radius: 15px; font-size: 12px; text-align: left; min-width: 120px; }
+
+/* Energy */
+.energy-box { margin-bottom: 30px; }
+.en-txt { display: flex; justify-content: space-between; font-size: 12px; color: #555; margin-bottom: 8px; font-weight: bold; }
+.load-bar-bg { background: #111; height: 12px; border-radius: 10px; overflow: hidden; }
+.load-bar-f { height: 100%; background: var(--grad); transition: width 0.3s; box-shadow: 0 0 15px rgba(174, 0, 255, 0.5); }
+
+/* Navigation */
+.bottom-nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.bottom-nav button { background: var(--card); border: 1px solid #1a1a1a; color: white; padding: 15px 5px; border-radius: 15px; font-size: 10px; font-weight: bold; }
+
+/* Modals */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); backdrop-filter: blur(10px); display: none; flex-direction: column; padding: 30px; z-index: 100; }
