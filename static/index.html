@@ -9,6 +9,8 @@
     <style>
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
         body { background: var(--bg); color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; user-select: none; }
+        
+        /* Loader */
         #loader { position: fixed; inset: 0; background: #000; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .l-circle-wrap { position: relative; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; }
         .l-circle-svg { position: absolute; width: 100%; height: 100%; transform: rotate(-90deg); }
@@ -27,7 +29,7 @@
         .main-logo { width: 230px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; cursor: pointer; }
         
         .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px; }
-        .side-btn { background: #0d0d0d; border: 1px solid #222; padding: 14px 0; border-radius: 15px; font-size: 11px; font-weight: 900; width: 105px; transition: 0.2s; }
+        .side-btn { background: #0d0d0d; border: 1px solid #222; padding: 14px 0; border-radius: 15px; font-size: 11px; font-weight: 900; width: 105px; transition: 0.2s; color: white; border: none; }
         .side-btn:active { transform: scale(0.95); background: #1a1a1a; }
         
         .eng-wrap { width: 100%; margin-bottom: 30px; }
@@ -35,18 +37,19 @@
         .bar-f { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; transition: width 0.2s; }
         
         .footer { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-        .f-btn { background: #080808; border: 1px solid #1a1a1a; padding: 18px 0; border-radius: 15px; font-size: 10px; font-weight: 900; }
-        .f-btn:active { background: #111; }
-        
-        @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-120px); opacity: 0; } }
-        .float-text { position: fixed; pointer-events: none; z-index: 10000; font-weight: 900; animation: floatUp 0.7s ease-out forwards; }
+        .f-btn { background: #080808; border: 1px solid #1a1a1a; padding: 18px 0; border-radius: 15px; font-size: 10px; font-weight: 900; color: white; }
         
         .modal { position: fixed; inset: 0; background: #000; z-index: 50000; display: none; flex-direction: column; padding: 40px 20px; }
         .m-title { font-size: 34px; font-weight: 900; margin-bottom: 30px; text-align: left; }
         .card { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 20px; border-radius: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
         .btn-cls { background: #fff; color: #000; padding: 20px; border-radius: 15px; font-weight: 900; width: 100%; border: none; margin-top: auto; }
         .b-btn { background: var(--cyan); color: #000; padding: 12px; border-radius: 12px; font-weight: 900; border: none; }
-        .top-list { flex: 1; overflow-y: auto; text-align: left; }
+        
+        .float-text { position: fixed; pointer-events: none; z-index: 10000; font-weight: 900; animation: floatUp 0.7s ease-out forwards; }
+        @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-120px); opacity: 0; } }
+
+        /* Фикс для TonConnect UI чтобы окно было поверх всего */
+        tc-root { z-index: 999999 !important; }
     </style>
 </head>
 <body>
@@ -54,7 +57,7 @@
 <div id="loader">
     <div class="l-circle-wrap">
         <svg class="l-circle-svg" viewBox="0 0 200 200"><circle class="l-circle-bg" cx="100" cy="100" r="90"></circle><circle id="l-circle-bar" class="l-circle-progress" cx="100" cy="100" r="90"></circle></svg>
-        <img src="logo.png" class="l-logo-mid">
+        <img src="./images/logo.png" class="l-logo-mid">
     </div>
     <div class="l-pct" id="l-pct">0%</div>
 </div>
@@ -69,7 +72,7 @@
     </div>
     <div class="balance" id="balance">0</div>
     <div class="play-area">
-        <img src="logo.png" class="main-logo" id="tap-img" onpointerdown="tap(event)">
+        <img src="./images/logo.png" class="main-logo" id="tap-img" onpointerdown="tap(event)">
         <div class="side-menu">
             <div class="side-btn" onclick="openM('wallet')">👛 WALLET</div>
             <div class="side-btn" onclick="openFr()">🤝 FRIENDS</div>
@@ -90,42 +93,47 @@
     </div>
 </div>
 
+<div id="m-wallet" class="modal">
+    <div class="m-title">👛 WALLET</div>
+    <div class="card" style="justify-content:center; padding:30px;">
+        <div id="ton-connect-btn"></div>
+        <button class="b-btn" style="padding: 15px 30px;" onclick="connectViaSDK()">CONNECT TON</button>
+    </div>
+    <div id="wallet-addr" style="font-size:10px; color:var(--cyan); margin-top:10px; word-break:break-all; text-align: center;">Wallet Not Connected</div>
+    <button class="btn-cls" onclick="closeM()">BACK</button>
+</div>
+
 <div id="m-mine" class="modal">
     <div class="m-title">⛏️ MINE</div>
     <div class="card"><div><b>Neural Node</b><br><small>+50/hr</small></div><button class="b-btn" onclick="buyMine(50, 5000)">5,000</button></div>
     <div class="card"><div><b>Quantum GPU</b><br><small>+250/hr</small></div><button class="b-btn" onclick="buyMine(250, 25000)">25,000</button></div>
-    <div class="card"><div><b>AI Cluster</b><br><small>+1k/hr</small></div><button class="b-btn" onclick="buyMine(1000, 100000)">100,000</button></div>
     <button class="btn-cls" onclick="closeM()">BACK</button>
 </div>
 
 <div id="m-boost" class="modal">
     <div class="m-title">🚀 BOOSTERS</div>
-    <div class="card"><div><b>⚡ Multitap</b><br><small id="mt-desc">Fibonacci Scale</small></div><button id="btn-mt" class="b-btn" onclick="buyB('mt')">0</button></div>
-    <div class="card"><div><b>🔋 Energy</b><br><small id="el-desc">Logarithmic</small></div><button id="btn-el" class="b-btn" onclick="buyB('el')">0</button></div>
+    <div class="card"><div><b>⚡ Multitap</b><br><small>Fibonacci Scale</small></div><button id="btn-mt" class="b-btn" onclick="buyB('mt')">0</button></div>
+    <div class="card"><div><b>🔋 Energy</b><br><small>Logarithmic</small></div><button id="btn-el" class="b-btn" onclick="buyB('el')">0</button></div>
     <button class="btn-cls" onclick="closeM()">BACK</button>
 </div>
 
-<div id="m-wallet" class="modal">
-    <div class="m-title">👛 WALLET</div>
-    <div class="card" style="justify-content:center; padding:30px;"><div id="ton-connect-btn"></div></div>
-    <div id="wallet-addr" style="font-size:10px; color:var(--cyan); margin-top:10px; word-break:break-all;"></div>
-    <button class="btn-cls" onclick="closeM()">BACK</button>
-</div>
-
-<div id="m-friends" class="modal"><div class="m-title">🤝 SQUAD</div><div id="f-list" class="top-list"></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-top" class="modal"><div class="m-title">🏆 TOP NODES</div><div id="t-list" class="top-list"></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-friends" class="modal"><div class="m-title">🤝 SQUAD</div><div id="f-list" style="flex:1; overflow-y:auto;"></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-top" class="modal"><div class="m-title">🏆 TOP NODES</div><div id="t-list" style="flex:1; overflow-y:auto;"></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
 <div id="m-tasks" class="modal"><div class="m-title">📋 TASKS</div><div class="card"><div><b>Daily Bonus</b><br><small>Every 24h</small></div><button class="b-btn" onclick="claimTask('daily', 1000)">CLAIM</button></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-bonus" class="modal"><div class="m-title">🎁 PROMO</div><div class="card" style="flex-direction:column; gap:15px;"><input type="text" id="p-input" placeholder="ENTER CODE" style="width:100%; background:#000; border:1px solid #333; color:#fff; padding:15px; border-radius:10px; text-align:center;"><button class="b-btn" style="width:100%" onclick="applyPromo()">ACTIVATE</button></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-bonus" class="modal"><div class="m-title">🎁 PROMO</div><input type="text" id="p-input" placeholder="ENTER CODE" style="width:100%; background:#111; border:1px solid #333; color:#fff; padding:15px; border-radius:10px; text-align:center; margin-bottom:15px;"><button class="b-btn" style="width:100%" onclick="applyPromo()">ACTIVATE</button><button class="btn-cls" onclick="closeM()">BACK</button></div>
 
 <script>
     const tg = window.Telegram.WebApp;
+    tg.expand();
+
+    // TonConnect SDK v3.8.8
     const tonUI = new TON_CONNECT_UI.TonConnectUI({ 
         manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
         buttonRootId: 'ton-connect-btn'
     });
 
     let s = { 
-        id: tg.initDataUnsafe?.user?.id || "0", 
+        id: tg.initDataUnsafe?.user?.id?.toString() || "0", 
         bal: 0, lvl: 1, eng: 1000, max: 1000, profit: 0,
         name: tg.initDataUnsafe?.user?.first_name || "Agent",
         ava: tg.initDataUnsafe?.user?.photo_url || ""
@@ -135,7 +143,8 @@
     const calcEL = (m) => Math.floor(1000 * Math.pow(1.5, (m / 500) - 2));
 
     async function init() {
-        let p = 0; const circ = document.getElementById('l-circle-bar');
+        let p = 0;
+        const circ = document.getElementById('l-circle-bar');
         const i = setInterval(() => {
             p += 2; if(p >= 100) { p = 100; clearInterval(i); document.getElementById('loader').style.display='none'; document.getElementById('app').style.display='flex'; }
             document.getElementById('l-pct').innerText = p + '%';
@@ -145,48 +154,42 @@
         tonUI.onStatusChange(w => {
             if(w) {
                 const a = w.account.address;
-                document.getElementById('wallet-addr').innerText = a.substring(0,10) + "..." + a.substring(a.length-10);
+                document.getElementById('wallet-addr').innerText = a.substring(0,8) + "..." + a.substring(a.length-8);
                 saveWallet(a);
-                if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-            } else {
-                document.getElementById('wallet-addr').innerText = "Wallet Not Connected";
             }
         });
         await load();
+    }
+
+    async function connectViaSDK() {
+        await tonUI.openModal(); // Окно поверх всех элементов
     }
 
     async function load() {
         try {
             const r = await fetch(`/api/user/${s.id}?name=${encodeURIComponent(s.name)}&photo=${encodeURIComponent(s.ava)}`);
             const d = await r.json();
-            s.bal = parseFloat(d.balance) || 0;
-            s.lvl = parseInt(d.click_lvl) || 1;
-            s.eng = parseInt(d.energy) || 1000;
-            s.max = parseInt(d.max_energy) || 1000;
-            s.profit = parseFloat(d.profit_hr) || 0;
+            s.bal = parseFloat(d.balance); s.lvl = d.click_lvl; s.eng = d.energy; s.max = d.max_energy; s.profit = d.profit_hr;
             upd();
-        } catch(e) { console.error(e); }
+        } catch(e) { console.log(e); }
     }
 
     function tap(e) {
         if(s.eng >= s.lvl) {
-            let crit = Math.random() < (0.05 + Math.log10(s.lvl)*0.02);
-            let pwr = crit ? Math.floor(s.lvl * 2.5) : s.lvl;
-            s.bal += pwr; s.eng -= s.lvl;
-            createFloat(e, crit ? `💥 +${pwr}` : `+${pwr}`, crit);
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred(crit ? 'heavy' : 'light');
-            document.getElementById('tap-img').style.transform = 'scale(0.92)';
+            s.bal += s.lvl; s.eng -= s.lvl;
+            createFloat(e, `+${s.lvl}`);
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            document.getElementById('tap-img').style.transform = 'scale(0.95)';
             setTimeout(() => document.getElementById('tap-img').style.transform='scale(1)', 50);
             upd(); save();
         }
     }
 
-    function createFloat(e, txt, crit) {
+    function createFloat(e, txt) {
         const f = document.createElement('div');
         f.className = 'float-text'; f.innerText = txt;
-        f.style.left = `${(e.clientX || window.innerWidth/2)}px`;
-        f.style.top = `${(e.clientY || window.innerHeight/2)}px`;
-        f.style.color = crit ? 'var(--purple)' : 'var(--cyan)';
+        f.style.left = `${e.clientX}px`; f.style.top = `${e.clientY}px`;
+        f.style.color = 'var(--cyan)';
         document.body.appendChild(f);
         setTimeout(() => f.remove(), 700);
     }
@@ -194,64 +197,23 @@
     function upd() {
         document.getElementById('balance').innerText = Math.floor(s.bal).toLocaleString();
         document.getElementById('u-lvl').innerText = `LVL ${s.lvl}`;
-        document.getElementById('u-name').innerText = s.name;
         document.getElementById('eng-val').innerText = `${s.eng} / ${s.max}`;
         document.getElementById('eng-fill').style.width = `${(s.eng/s.max)*100}%`;
         document.getElementById('btn-mt').innerText = calcMT(s.lvl).toLocaleString();
         document.getElementById('btn-el').innerText = calcEL(s.max).toLocaleString();
-        if(s.ava && s.ava !== "null" && s.ava !== "") {
-            document.getElementById('u-ava').innerHTML = `<img src="${s.ava}" style="width:100%">`;
-        }
+        if(s.ava) document.getElementById('u-ava').innerHTML = `<img src="${s.ava}" style="width:100%">`;
     }
 
     function buyB(t) {
         let cost = (t==='mt') ? calcMT(s.lvl) : calcEL(s.max);
         if(s.bal >= cost) {
-            s.bal -= cost;
-            if(t==='mt') s.lvl++; else { s.max += 500; s.eng = s.max; }
-            if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+            s.bal -= cost; if(t==='mt') s.lvl++; else { s.max += 500; s.eng = s.max; }
             upd(); save();
         }
     }
 
-    function buyMine(p, cost) {
-        if(s.bal >= cost) { 
-            s.bal -= cost; s.profit += p; 
-            if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-            upd(); save(); 
-        }
-    }
-
-    function applyPromo() {
-        const code = document.getElementById('p-input').value.toUpperCase();
-        if(code === "NEURAL") {
-            s.bal += 10000; upd(); save();
-            alert("PROMO ACTIVATED: +10,000");
-            document.getElementById('p-input').value = "";
-        }
-    }
-
-    function claimTask(id, reward) {
-        s.bal += reward; upd(); save();
-        alert(`CLAIMED: ${reward}`);
-    }
-
-    async function openFr() {
-        openM('friends');
-        try {
-            const r = await fetch(`/api/friends/${s.id}`);
-            const d = await r.json();
-            document.getElementById('f-list').innerHTML = d.length ? d.map(f => `<div class="card"><b>${f.username}</b><span style="color:var(--cyan)">+10% Profit</span></div>`).join('') : "<center>No friends yet</center>";
-        } catch(e) { document.getElementById('f-list').innerHTML = "<center>Error loading</center>"; }
-    }
-
-    async function loadTop() {
-        openM('top');
-        try {
-            const r = await fetch('/api/top');
-            const d = await r.json();
-            document.getElementById('t-list').innerHTML = d.map((u, i) => `<div class="card"><b>#${i+1} ${u.username}</b><span>${Math.floor(u.balance).toLocaleString()}</span></div>`).join('');
-        } catch(e) { console.error(e); }
+    function buyMine(p, c) {
+        if(s.bal >= c) { s.bal -= c; s.profit += p; upd(); save(); }
     }
 
     function save() {
@@ -262,24 +224,20 @@
         });
     }
 
-    function saveWallet(addr) {
+    function saveWallet(a) {
         fetch('/api/save-wallet', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ userId: s.id, wallet: addr })
+            body: JSON.stringify({ userId: s.id, wallet: a })
         });
     }
 
-    function openM(id) { 
-        if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-        document.getElementById('m-'+id).style.display = 'flex'; 
-    }
+    function openM(id) { document.getElementById('m-'+id).style.display = 'flex'; }
     function closeM() { document.querySelectorAll('.modal').forEach(m => m.style.display='none'); }
 
     setInterval(() => {
-        if(s.profit > 0) s.bal += (s.profit / 3600);
-        if(s.eng < s.max) s.eng = Math.min(s.max, s.eng + (1 + Math.floor(s.lvl/10)));
-        upd();
+        if(s.profit > 0) { s.bal += (s.profit / 3600); upd(); }
+        if(s.eng < s.max) { s.eng = Math.min(s.max, s.eng + 1); upd(); }
     }, 1000);
 
     init();
