@@ -4,36 +4,39 @@ const ui = {
     init() {
         this.update();
         
+        // Назначаем клик на логотип
         const target = document.getElementById('tap-target');
         if (target) {
-            target.onpointerdown = (e) => {
-                if (window.logic) logic.tap(e);
-            };
+            target.onpointerdown = (e) => logic.tap(e);
         }
 
+        // Кнопка "Назад" в самом Telegram
         if (window.Telegram?.WebApp) {
             Telegram.WebApp.BackButton.onClick(() => this.closeM());
         }
     },
 
     update() {
-        if (!window.logic || !logic.user) return;
+        if (!logic.user) return;
 
-        const balanceEl = document.getElementById('balance');
-        const engValEl = document.getElementById('eng-val');
-        const engFillEl = document.getElementById('eng-fill');
-        const profitEl = document.getElementById('profit-val');
-        const lvlEl = document.getElementById('u-lvl');
+        // Элементы из твоего HTML
+        const bEl = document.getElementById('balance');
+        const eVEl = document.getElementById('eng-val');
+        const eFEl = document.getElementById('eng-fill');
+        const tVEl = document.getElementById('tap-val');
+        const pVEl = document.getElementById('profit-val');
+        const lVEl = document.getElementById('u-lvl');
 
-        // Вывод целых чисел с разделением тысяч
-        if (balanceEl) balanceEl.innerText = Math.floor(logic.user.balance).toLocaleString('ru-RU');
-        if (profitEl) profitEl.innerText = `+${Math.floor(logic.user.profit_hr)}`;
-        if (lvlEl) lvlEl.innerText = `LVL ${logic.user.lvl || 1}`;
+        // Используем Math.floor, чтобы не было дробей (баг 3.8.8)
+        if (bEl) bEl.innerText = Math.floor(logic.user.balance).toLocaleString();
+        if (tVEl) tVEl.innerText = `+${logic.user.click_lvl}`;
+        if (pVEl) pVEl.innerText = Math.floor(logic.user.profit_hr);
+        if (lVEl) lVEl.innerText = `LVL ${logic.user.lvl}`;
         
-        if (engValEl) engValEl.innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
-        if (engFillEl) {
+        if (eVEl) eVEl.innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
+        if (eFEl) {
             const pct = (logic.user.energy / logic.user.max_energy * 100);
-            engFillEl.style.width = pct + '%';
+            eFEl.style.width = pct + '%';
         }
     },
 
