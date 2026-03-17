@@ -1,54 +1,39 @@
-/**
- * ui.js — Визуальное обновление интерфейса
- */
 const ui = {
-    // Открытие модальных окон
-    openM: (id) => {
-        const modal = document.getElementById('m-' + id);
-        if (modal) modal.style.display = 'flex';
-        
-        // Если открываем ТОП, вызываем загрузку данных
-        if (id === 'top') logic.loadTop();
+    // Обновление всех элементов экрана
+    render() {
+        const s = logic.state;
+        document.getElementById('balance').innerText = Math.floor(s.balance).toLocaleString();
+        document.getElementById('u-name').innerText = s.name;
+        document.getElementById('u-lvl').innerText = `LVL ${s.level}`;
+        document.getElementById('eng-val').innerText = `${s.energy} / ${s.maxEnergy}`;
+        document.getElementById('eng-fill').style.width = `${(s.energy / s.maxEnergy) * 100}%`;
     },
 
-    // Закрытие всех модальных окон
-    closeM: () => {
+    // Обработка тапа по логотипу
+    handleTap(e) {
+        if (logic.tap()) {
+            this.render();
+            if (window.Telegram?.WebApp?.HapticFeedback) {
+                window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
+            }
+            // Эффект нажатия
+            e.target.style.transform = 'scale(0.95)';
+            setTimeout(() => e.target.style.transform = 'scale(1)', 50);
+            logic.save();
+        }
+    },
+
+    openM(id) {
+        document.getElementById(`m-${id}`).style.display = 'flex';
+    },
+
+    closeM() {
         document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
-    },
-
-    // Главная функция отрисовки данных пользователя
-    render: (s) => {
-        // Баланс и имя
-        if (document.getElementById('balance')) {
-            document.getElementById('balance').innerText = Math.floor(s.bal).toLocaleString();
-        }
-        if (document.getElementById('u-name')) {
-            document.getElementById('u-name').innerText = s.name;
-        }
-
-        // Уровень
-        const lvlEl = document.getElementById('u-lvl');
-        if (lvlEl) lvlEl.innerText = `LVL ${s.lvl}`;
-
-        // Энергия (текст и полоска)
-        const engVal = document.getElementById('eng-val');
-        const engFill = document.getElementById('eng-fill');
-        if (engVal) engVal.innerText = `${s.eng}/${s.maxEng}`;
-        if (engFill) {
-            const pct = (s.eng / s.maxEng) * 100;
-            engFill.style.width = `${pct}%`;
-        }
-
-        // Аватар (загружаем один раз)
-        const avaBox = document.getElementById('u-ava');
-        if (avaBox && s.ava && avaBox.innerHTML === "") {
-            avaBox.innerHTML = `<img src="${s.ava}" style="width:100%; height:100%; object-fit:cover;">`;
-        }
     }
 };
 
-// Инициализация TON Connect (если кнопка есть в HTML)
-const tonConnect = new TON_CONNECT_UI.TonConnectUI({
-    manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
-    buttonRootId: 'ton-connect-btn'
-});
+// Запуск интервала обновления
+setInterval(() => {
+    logic.regen();
+    ui.render();
+}, 1000);
