@@ -1,4 +1,3 @@
-
 const ui = {
     openM: (id) => document.getElementById('m-'+id).style.display = 'flex',
     closeM: () => document.querySelectorAll('.modal').forEach(m => m.style.display='none'),
