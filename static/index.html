@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v3.8.7</title>
+    <title>Neural Pulse v3.8.8</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
@@ -54,7 +54,7 @@
 <div id="loader">
     <div class="l-circle-wrap">
         <svg class="l-circle-svg" viewBox="0 0 200 200"><circle class="l-circle-bg" cx="100" cy="100" r="90"></circle><circle id="l-circle-bar" class="l-circle-progress" cx="100" cy="100" r="90"></circle></svg>
-        <img src="./images/logo.png" class="l-logo-mid">
+        <img src="logo.png" class="l-logo-mid">
     </div>
     <div class="l-pct" id="l-pct">0%</div>
 </div>
@@ -63,13 +63,13 @@
     <div class="header">
         <div style="display:flex; align-items:center; gap:12px;">
             <div class="avatar" id="u-ava"></div>
-            <div style="text-align:left;"><b id="u-name">Agent</b><br><small style="color:var(--cyan); font-size:9px;">v3.8.7 Quantum Full</small></div>
+            <div style="text-align:left;"><b id="u-name">Agent</b><br><small style="color:var(--cyan); font-size:9px;">v3.8.8 Quantum Full</small></div>
         </div>
         <div class="lvl-pill" id="u-lvl">LVL 1</div>
     </div>
     <div class="balance" id="balance">0</div>
     <div class="play-area">
-        <img src="./images/logo.png" class="main-logo" id="tap-img" onpointerdown="tap(event)">
+        <img src="logo.png" class="main-logo" id="tap-img" onpointerdown="tap(event)">
         <div class="side-menu">
             <div class="side-btn" onclick="openM('wallet')">👛 WALLET</div>
             <div class="side-btn" onclick="openFr()">🤝 FRIENDS</div>
@@ -119,7 +119,6 @@
 
 <script>
     const tg = window.Telegram.WebApp;
-    // TON CONNECT v3.8.0 Integration
     const tonUI = new TON_CONNECT_UI.TonConnectUI({ 
         manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
         buttonRootId: 'ton-connect-btn'
@@ -132,7 +131,6 @@
         ava: tg.initDataUnsafe?.user?.photo_url || ""
     };
 
-    // Formulas v3.8.0
     const calcMT = (l) => Math.floor(500 * Math.pow(1.618, l - 1));
     const calcEL = (m) => Math.floor(1000 * Math.pow(1.5, (m / 500) - 2));
 
@@ -144,7 +142,6 @@
             circ.style.strokeDashoffset = 565 - (565 * p / 100);
         }, 30);
 
-        // Wallet Logic from 3.8.0
         tonUI.onStatusChange(w => {
             if(w) {
                 const a = w.account.address;
@@ -155,7 +152,6 @@
                 document.getElementById('wallet-addr').innerText = "Wallet Not Connected";
             }
         });
-
         await load();
     }
 
@@ -169,7 +165,7 @@
             s.max = parseInt(d.max_energy) || 1000;
             s.profit = parseFloat(d.profit_hr) || 0;
             upd();
-        } catch(e) { console.error("Loader Error:", e); }
+        } catch(e) { console.error(e); }
     }
 
     function tap(e) {
@@ -203,7 +199,7 @@
         document.getElementById('eng-fill').style.width = `${(s.eng/s.max)*100}%`;
         document.getElementById('btn-mt').innerText = calcMT(s.lvl).toLocaleString();
         document.getElementById('btn-el').innerText = calcEL(s.max).toLocaleString();
-        if(s.ava && s.ava !== "null") {
+        if(s.ava && s.ava !== "null" && s.ava !== "") {
             document.getElementById('u-ava').innerHTML = `<img src="${s.ava}" style="width:100%">`;
         }
     }
@@ -245,8 +241,8 @@
         try {
             const r = await fetch(`/api/friends/${s.id}`);
             const d = await r.json();
-            document.getElementById('f-list').innerHTML = d.map(f => `<div class="card"><b>${f.username}</b><span style="color:var(--cyan)">+10% Profit</span></div>`).join('');
-        } catch(e) { document.getElementById('f-list').innerHTML = "<center>No friends yet</center>"; }
+            document.getElementById('f-list').innerHTML = d.length ? d.map(f => `<div class="card"><b>${f.username}</b><span style="color:var(--cyan)">+10% Profit</span></div>`).join('') : "<center>No friends yet</center>";
+        } catch(e) { document.getElementById('f-list').innerHTML = "<center>Error loading</center>"; }
     }
 
     async function loadTop() {
@@ -280,7 +276,6 @@
     }
     function closeM() { document.querySelectorAll('.modal').forEach(m => m.style.display='none'); }
 
-    // Passive Income & Regen v3.8.0
     setInterval(() => {
         if(s.profit > 0) s.bal += (s.profit / 3600);
         if(s.eng < s.max) s.eng = Math.min(s.max, s.eng + (1 + Math.floor(s.lvl/10)));
