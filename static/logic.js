@@ -1,38 +1,38 @@
 const loading = {
-    init() {
+    async init() {
         let p = 0;
-        const pct = document.getElementById('load-pct');
         const bar = document.getElementById('load-bar');
-        const circle = document.getElementById('l-circle');
+        const pct = document.getElementById('load-pct');
+        
+        try {
+            // Ждем ответ от БД максимум 2 секунды, чтобы не зависнуть
+            await Promise.race([
+                logic.syncWithDB(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Таймаут БД")), 2000))
+            ]);
+        } catch (e) {
+            console.log("БД не ответила вовремя, загружаемся в оффлайн-режиме");
+        }
 
-        const iv = setInterval(() => {
-            p += Math.floor(Math.random() * 4) + 2;
+        const itv = setInterval(() => {
+            p += Math.floor(Math.random() * 15) + 10;
             if (p >= 100) {
                 p = 100;
-                clearInterval(iv);
-                this.done(pct, bar, circle);
+                clearInterval(itv);
+                this.startApp();
             }
-            pct.innerText = `${p}%`;
-            bar.style.width = `${p}%`;
-        }, 50);
+            if(bar) bar.style.width = p + '%';
+            if(pct) pct.innerText = p + '%';
+        }, 150);
     },
 
-    async done(pct, bar, circle) {
-        pct.classList.add('complete');
-        circle.classList.add('complete');
-        
-        // Пока идет анимация 100%, грузим данные
-        await logic.loadData();
-        ui.render();
-
+    startApp() {
+        ui.init();
         setTimeout(() => {
-            const ls = document.getElementById('loading-screen');
-            ls.style.opacity = '0';
-            setTimeout(() => {
-                ls.style.display = 'none';
-                document.getElementById('app').style.display = 'flex';
-            }, 500);
-        }, 1000);
+            document.getElementById('loading-screen').style.display = 'none';
+            document.getElementById('app').style.display = 'flex';
+            if (window.Telegram?.WebApp) window.Telegram.WebApp.expand();
+        }, 300);
     }
 };
 
