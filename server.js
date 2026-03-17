@@ -13,7 +13,6 @@ const pool = new Pool({ connectionString: PG_URI });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Таблица БД
 const initDB = async () => {
     try {
         await pool.query(`
@@ -34,7 +33,6 @@ const initDB = async () => {
 };
 initDB();
 
-// API Эндпоинты
 app.get('/api/user/:id', async (req, res) => {
     const { name, photo } = req.query;
     try {
@@ -58,14 +56,6 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).send(e.message); }
 });
 
-app.post('/api/save-wallet', async (req, res) => {
-    const { userId, wallet } = req.body;
-    try {
-        await pool.query('UPDATE users SET wallet_addr=$2 WHERE user_id=$1', [userId, wallet]);
-        res.json({ok: true});
-    } catch (e) { res.status(500).send(e.message); }
-});
-
 app.get('/api/top', async (req, res) => {
     const r = await pool.query("SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10");
     res.json(r.rows);
@@ -76,4 +66,4 @@ bot.start((ctx) => {
     Markup.inlineKeyboard([[Markup.button.webApp("OPEN APP", "https://neural-pulse.bothost.ru")]]));
 });
 
-app.listen(3000, () => { console.log("Server v3.8.8 started"); bot.launch(); });
+app.listen(3000, () => { console.log("Server running on port 3000"); bot.launch(); });
