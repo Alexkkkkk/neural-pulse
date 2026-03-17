@@ -13,7 +13,7 @@ const pool = new Pool({ connectionString: PG_URI });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Инициализация БД согласно правилам проекта
+// Таблица БД
 const initDB = async () => {
     try {
         await pool.query(`
@@ -34,6 +34,7 @@ const initDB = async () => {
 };
 initDB();
 
+// API Эндпоинты
 app.get('/api/user/:id', async (req, res) => {
     const { name, photo } = req.query;
     try {
@@ -47,20 +48,20 @@ app.get('/api/user/:id', async (req, res) => {
     } catch (e) { res.status(500).send(e.message); }
 });
 
-app.post('/api/save-wallet', async (req, res) => {
-    const { userId, wallet } = req.body;
-    try {
-        await pool.query('UPDATE users SET wallet_addr=$2 WHERE user_id=$1', [userId, wallet]);
-        res.json({ok: true});
-    } catch (e) { res.status(500).send(e.message); }
-});
-
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, max_energy, click_lvl, profit_hr } = req.body;
     try {
         await pool.query(`
             UPDATE users SET balance=$2, energy=$3, max_energy=$4, click_lvl=$5, profit_hr=$6, last_seen=CURRENT_TIMESTAMP 
             WHERE user_id=$1`, [userId, balance, energy, max_energy, click_lvl, profit_hr]);
+        res.json({ok: true});
+    } catch (e) { res.status(500).send(e.message); }
+});
+
+app.post('/api/save-wallet', async (req, res) => {
+    const { userId, wallet } = req.body;
+    try {
+        await pool.query('UPDATE users SET wallet_addr=$2 WHERE user_id=$1', [userId, wallet]);
         res.json({ok: true});
     } catch (e) { res.status(500).send(e.message); }
 });
@@ -75,7 +76,4 @@ bot.start((ctx) => {
     Markup.inlineKeyboard([[Markup.button.webApp("OPEN APP", "https://neural-pulse.bothost.ru")]]));
 });
 
-app.listen(3000, () => { 
-    console.log("Server v3.8.8 started"); 
-    bot.launch();
-});
+app.listen(3000, () => { console.log("Server v3.8.8 started"); bot.launch(); });
