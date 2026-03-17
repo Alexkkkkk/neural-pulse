@@ -10,43 +10,43 @@
         :root { --cyan: #00f2ff; --purple: #bc13fe; --bg: #000; }
         body { background: var(--bg); color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; height: 100vh; }
         
-        /* ТВОЯ ЗАГРУЗКА */
+        /* ТВОЯ ЗАГРУЗКА 99% */
         #loading-screen { position: fixed; inset: 0; background: #000; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .loader-circle { width: 200px; height: 200px; border: 2px solid #111; border-top: 2px solid var(--cyan); border-radius: 50%; position: relative; display: flex; align-items: center; justify-content: center; margin-bottom: 40px; }
-        .loader-circle img { width: 80px; filter: drop-shadow(0 0 20px var(--purple)); }
+        .loader-circle { width: 220px; height: 220px; border: 2px solid #111; border-top: 2px solid var(--cyan); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 40px; animation: spin 2s linear infinite; }
+        .loader-circle img { width: 100px; filter: drop-shadow(0 0 20px var(--purple)); }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
         .access-granted { font-weight: 900; letter-spacing: 5px; margin-bottom: 20px; font-size: 14px; }
         .percent { font-size: 48px; font-weight: 900; color: var(--cyan); }
         .load-bar-bg { width: 250px; height: 4px; background: #111; margin-top: 20px; border-radius: 2px; }
         .load-bar-f { height: 100%; width: 0%; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: width 0.1s; }
 
-        /* ИНТЕРФЕЙС */
+        /* ИНТЕРФЕЙС ИЗ СКРИНШОТОВ */
         #app { display: none; height: 100vh; flex-direction: column; padding: 20px; box-sizing: border-box; }
         .header { background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 20px; padding: 12px; display: flex; align-items: center; justify-content: space-between; }
         .avatar { width: 44px; height: 44px; border: 1px solid var(--cyan); border-radius: 12px; overflow: hidden; }
-        .lvl-pill { background: var(--cyan); color: #000; padding: 6px 14px; border-radius: 10px; font-weight: 900; }
-        .balance { font-size: 60px; font-weight: 900; margin: 25px 0; }
+        .balance { font-size: 64px; font-weight: 900; margin: 30px 0; }
+        
         .play-area { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; }
-        .main-logo { width: 220px; filter: drop-shadow(0 0 30px var(--purple)); transition: transform 0.05s; }
-        .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px; }
-        .side-btn { background: #0d0d0d; border: 1px solid #222; padding: 12px; border-radius: 15px; font-size: 10px; width: 95px; font-weight: 900; }
-        .bar-bg { width: 100%; height: 8px; background: #111; border-radius: 10px; margin-top: 10px; }
-        .bar-f { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--purple)); width: 100%; }
-        .footer { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 20px; }
-        .f-btn { background: #080808; border: 1px solid #1a1a1a; padding: 15px 0; border-radius: 15px; font-size: 10px; font-weight: 900; }
+        .main-logo { width: 240px; filter: drop-shadow(0 0 40px var(--purple)); transition: transform 0.05s; }
+        
+        .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 12px; }
+        .side-btn { background: #0d0d0d; border: 1px solid #222; padding: 14px; border-radius: 18px; font-size: 11px; width: 100px; font-weight: 900; color: #fff; border: none; }
 
-        /* МОДАЛКИ */
-        .modal { position: fixed; inset: 0; background: #000; z-index: 100; display: none; flex-direction: column; padding: 40px 20px; }
-        .card { background: #0a0a0a; border: 1px solid #1a1a1a; padding: 20px; border-radius: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        /* ОКНО WALLET (ПОВЕРХ ВСЕХ ОКОН) */
+        .modal { position: fixed; inset: 0; background: #000; z-index: 10000; display: none; flex-direction: column; padding: 40px 20px; }
+        #ton-connect-btn { margin: 40px auto; position: relative; z-index: 10001; }
+        .wallet-info { color: var(--cyan); font-size: 11px; word-break: break-all; margin-top: 20px; background: #0a0a0a; padding: 15px; border-radius: 12px; }
         .btn-cls { background: #fff; color: #000; padding: 20px; border-radius: 15px; font-weight: 900; border: none; margin-top: auto; }
-        .b-btn { background: var(--cyan); color: #000; padding: 10px 15px; border-radius: 10px; font-weight: 900; border: none; }
+
+        /* НИЖНЯЯ ПАНЕЛЬ */
+        .footer { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 20px; }
+        .f-btn { background: #0d0d0d; border: 1px solid #222; padding: 15px 5px; border-radius: 15px; font-size: 10px; font-weight: 900; color: #fff; border: none; }
     </style>
 </head>
 <body>
 
 <div id="loading-screen">
-    <div class="loader-circle">
-        <img src="logo.png">
-    </div>
+    <div class="loader-circle"><img src="logo.png"></div>
     <div class="access-granted">ACCESS GRANTED</div>
     <div class="percent" id="load-pct">0%</div>
     <div class="load-bar-bg"><div class="load-bar-f" id="load-bar"></div></div>
@@ -56,9 +56,9 @@
     <div class="header">
         <div style="display:flex; align-items:center; gap:10px;">
             <div class="avatar" id="u-ava"></div>
-            <div style="text-align:left;"><b id="u-name">Loading...</b><br><small style="color:var(--cyan); font-size:9px;">v3.8.8 Quantum Full</small></div>
+            <div style="text-align:left;"><b id="u-name">...</b><br><small style="color:var(--cyan); font-size:9px;">v3.8.8 Quantum Full</small></div>
         </div>
-        <div class="lvl-pill" id="u-lvl">LVL 1</div>
+        <div style="background:var(--cyan); color:#000; padding:6px 12px; border-radius:10px; font-weight:900;" id="u-lvl">LVL 1</div>
     </div>
 
     <div class="balance" id="balance">0</div>
@@ -72,82 +72,67 @@
         </div>
     </div>
 
-    <div style="text-align:left;">
+    <div style="text-align:left; margin-bottom: 10px;">
         <small style="color:#555;">ENERGY <span id="eng-val">1000/1000</span></small>
-        <div class="bar-bg"><div class="bar-f" id="eng-fill"></div></div>
+        <div style="width:100%; height:8px; background:#111; border-radius:10px; margin-top:5px;">
+            <div id="eng-fill" style="height:100%; background:linear-gradient(90deg, var(--cyan), var(--purple)); width:100%; border-radius:10px;"></div>
+        </div>
     </div>
 
     <div class="footer">
-        <div class="f-btn" onclick="openM('boost')">🚀 BOOST</div>
-        <div class="f-btn" onclick="openM('mine')">⛏️ MINE</div>
-        <div class="f-btn" onclick="openM('tasks')">📋 TASKS</div>
-        <div class="f-btn" onclick="loadTop()">🏆 TOP</div>
+        <button class="f-btn" onclick="openM('boost')">🚀 BOOST</button>
+        <button class="f-btn" onclick="openM('mine')">⛏️ MINE</button>
+        <button class="f-btn" onclick="openM('tasks')">📋 TASKS</button>
+        <button class="f-btn" onclick="loadTop()">🏆 TOP</button>
     </div>
 </div>
 
 <div id="m-wallet" class="modal">
-    <h2 style="text-align:left;">👛 WALLET</h2>
-    <div id="ton-connect-btn" style="margin: 30px auto;"></div>
-    <div id="wallet-addr" style="color:var(--cyan); font-size:11px; word-break:break-all; margin-top:20px;"></div>
+    <h1 style="text-align:left;">👛 WALLET</h1>
+    <div id="ton-connect-btn"></div>
+    <div id="wallet-addr" class="wallet-info">Не подключено</div>
     <button class="btn-cls" onclick="closeM()">BACK</button>
 </div>
 
-<div id="m-mine" class="modal">
-    <h2 style="text-align:left;">⛏️ MINE</h2>
-    <div class="card"><div><b>Neural Node</b><br><small>+50/hr</small></div><button class="b-btn" onclick="buyMine(50, 5000)">5,000</button></div>
-    <div class="card"><div><b>Quantum GPU</b><br><small>+250/hr</small></div><button class="b-btn" onclick="buyMine(250, 25000)">25,000</button></div>
-    <button class="btn-cls" onclick="closeM()">BACK</button>
-</div>
-
-<div id="m-top" class="modal"><h2 style="text-align:left;">🏆 TOP NODES</h2><div id="t-list" style="flex:1; overflow-y:auto;"></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-friends" class="modal"><h2 style="text-align:left;">🤝 SQUAD</h2><div style="color:#555; margin-top:40px;">No friends yet</div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-boost" class="modal"><h2 style="text-align:left;">🚀 BOOST</h2><div class="card"><div><b>Multitap</b></div><button class="b-btn">LVL UP</button></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-tasks" class="modal"><h2 style="text-align:left;">📋 TASKS</h2><div class="card"><div><b>Daily</b></div><button class="b-btn">CLAIM</button></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
-<div id="m-bonus" class="modal"><h2 style="text-align:left;">🎁 BONUS</h2><input type="text" placeholder="CODE" style="width:100%; padding:20px; background:#111; border:1px solid #222; color:#fff; border-radius:15px;"><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-mine" class="modal"><h2 style="text-align:left;">⛏️ MINE</h2><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-top" class="modal"><h2 style="text-align:left;">🏆 TOP NODES</h2><div id="t-list" style="margin-top:20px;"></div><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-friends" class="modal"><h2 style="text-align:left;">🤝 SQUAD</h2><p>No friends yet</p><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-boost" class="modal"><h2 style="text-align:left;">🚀 BOOST</h2><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-tasks" class="modal"><h2 style="text-align:left;">📋 TASKS</h2><button class="btn-cls" onclick="closeM()">BACK</button></div>
+<div id="m-bonus" class="modal"><h2 style="text-align:left;">🎁 BONUS</h2><button class="btn-cls" onclick="closeM()">BACK</button></div>
 
 <script>
     const tg = window.Telegram.WebApp;
-    const tonUI = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json', buttonRootId: 'ton-connect-btn' });
+    tg.expand();
 
-    let s = { 
-        id: tg.initDataUnsafe?.user?.id || "0", 
-        bal: 0, lvl: 1, eng: 1000, max: 1000, profit: 0,
-        name: tg.initDataUnsafe?.user?.first_name || "Agent",
-        ava: tg.initDataUnsafe?.user?.photo_url || ""
-    };
+    const tonUI = new TON_CONNECT_UI.TonConnectUI({
+        manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
+        buttonRootId: 'ton-connect-btn'
+    });
 
-    // ЛОГИКА ЗАГРУЗКИ
+    let s = { id: tg.initDataUnsafe?.user?.id || "0", bal: 0, lvl: 1, eng: 1000, max: 1000, name: tg.initDataUnsafe?.user?.first_name || "Agent", ava: tg.initDataUnsafe?.user?.photo_url || "" };
+
+    // Анимация до 99%
     let p = 0;
     const lInt = setInterval(() => {
-        p += Math.floor(Math.random() * 5) + 2;
-        if(p > 99) {
+        p += Math.floor(Math.random() * 3) + 1;
+        if(p >= 99) {
             p = 99; clearInterval(lInt);
             setTimeout(() => {
                 document.getElementById('loading-screen').style.display = 'none';
                 document.getElementById('app').style.display = 'flex';
+                init();
             }, 800);
         }
         document.getElementById('load-pct').innerText = p + '%';
         document.getElementById('load-bar').style.width = p + '%';
-    }, 50);
+    }, 40);
 
     async function init() {
         const r = await fetch(`/api/user/${s.id}?name=${encodeURIComponent(s.name)}&photo=${encodeURIComponent(s.ava)}`);
         const d = await r.json();
-        s.bal = parseFloat(d.balance); s.lvl = d.click_lvl; s.eng = d.energy; s.max = d.max_energy; s.profit = parseFloat(d.profit_hr);
-        
-        tonUI.onStatusChange(w => { if(w) saveWallet(w.account.address); });
+        s.bal = parseFloat(d.balance); s.lvl = d.click_lvl; s.eng = d.energy; s.max = d.max_energy;
         upd();
-    }
-
-    function tap(e) {
-        if(s.eng >= s.lvl) {
-            s.bal += s.lvl; s.eng -= s.lvl;
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-            document.getElementById('tap-img').style.transform = 'scale(0.95)';
-            setTimeout(() => document.getElementById('tap-img').style.transform = 'scale(1)', 50);
-            upd(); save();
-        }
     }
 
     function upd() {
@@ -159,34 +144,37 @@
         if(s.ava) document.getElementById('u-ava').innerHTML = `<img src="${s.ava}" width="100%">`;
     }
 
-    function save() {
-        fetch('/api/save', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ userId: s.id, balance: s.bal, energy: s.eng, max_energy: s.max, click_lvl: s.lvl, profit_hr: s.profit })
-        });
+    function tap(e) {
+        if(s.eng >= s.lvl) {
+            s.bal += s.lvl; s.eng -= s.lvl;
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+            e.target.style.transform = 'scale(0.95)';
+            setTimeout(() => e.target.style.transform = 'scale(1)', 50);
+            upd(); save();
+        }
     }
 
-    function saveWallet(a) {
-        document.getElementById('wallet-addr').innerText = a;
-        fetch('/api/save-wallet', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ userId: s.id, wallet: a }) });
+    function save() {
+        fetch('/api/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ userId: s.id, balance: s.bal, energy: s.eng, max_energy: s.max, click_lvl: s.lvl, profit_hr: 0 }) });
     }
+
+    tonUI.onStatusChange(w => {
+        if(w) {
+            const a = w.account.address;
+            document.getElementById('wallet-addr').innerText = a;
+            fetch('/api/save-wallet', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ userId: s.id, wallet: a }) });
+        }
+    });
 
     async function loadTop() {
         openM('top');
         const r = await fetch('/api/top');
         const d = await r.json();
-        document.getElementById('t-list').innerHTML = d.map((u, i) => `<div class="card"><b>#${i+1} ${u.username}</b><span>${Math.floor(u.balance)}</span></div>`).join('');
+        document.getElementById('t-list').innerHTML = d.map((u, i) => `<div style="background:#0a0a0a; padding:15px; border-radius:12px; margin-bottom:10px; display:flex; justify-content:space-between;"><b>#${i+1} ${u.username}</b><span>${Math.floor(u.balance)}</span></div>`).join('');
     }
 
     function openM(id) { document.getElementById('m-'+id).style.display = 'flex'; }
     function closeM() { document.querySelectorAll('.modal').forEach(m => m.style.display='none'); }
-
-    setInterval(() => {
-        if(s.eng < s.max) { s.eng = Math.min(s.max, s.eng + 1); upd(); }
-    }, 1500);
-
-    init();
 </script>
 </body>
 </html>
