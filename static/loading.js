@@ -1,20 +1,35 @@
-const loader = {
+const loading = {
     init() {
         let p = 0;
+        const pctEl = document.getElementById('load-pct');
+        const barEl = document.getElementById('load-bar');
+        const circEl = document.getElementById('l-circle');
+
         const interval = setInterval(() => {
-            p += Math.floor(Math.random() * 3) + 1;
-            if (p >= 99) {
-                p = 99;
+            p += Math.floor(Math.random() * 5) + 2;
+            if (p >= 100) {
+                p = 100;
                 clearInterval(interval);
+                
+                // Визуальное завершение
+                pctEl.innerText = "100%";
+                pctEl.classList.add('complete');
+                circEl.classList.add('complete');
+                barEl.style.width = "100%";
+
                 setTimeout(() => {
-                    document.getElementById('loading-screen').style.display = 'none';
-                    document.getElementById('app').style.display = 'flex';
-                    logic.init(); 
-                }, 800);
+                    document.getElementById('loading-screen').style.opacity = '0';
+                    setTimeout(() => {
+                        document.getElementById('loading-screen').style.display = 'none';
+                        document.getElementById('app').style.display = 'flex';
+                        logic.start(); 
+                    }, 500);
+                }, 1000);
+            } else {
+                pctEl.innerText = p + "%";
+                barEl.style.width = p + "%";
             }
-            document.getElementById('load-pct').innerText = p + '%';
-            document.getElementById('load-bar').style.width = p + '%';
-        }, 40);
+        }, 50);
     }
 };
-loader.init();
+loading.init();
