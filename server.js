@@ -13,7 +13,7 @@ const pool = new Pool({ connectionString: PG_URI });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Инициализация базы данных
+// Инициализация базы данных (Логика версии 3.8.0)
 const initDB = async () => {
     try {
         await pool.query(`
@@ -21,16 +21,16 @@ const initDB = async () => {
                 user_id TEXT PRIMARY KEY, 
                 username TEXT, 
                 avatar_url TEXT DEFAULT '', 
-                balance NUMERIC DEFAULT 696, 
-                energy INTEGER DEFAULT 1000, 
+                balance NUMERIC(20, 0) DEFAULT 696, 
+                energy INTEGER DEFAULT 543, 
                 max_energy INTEGER DEFAULT 1000, 
                 click_lvl INTEGER DEFAULT 1, 
-                profit_hr NUMERIC DEFAULT 0,
-                lvl INTEGER DEFAULT 1,
+                profit_hr NUMERIC(20, 0) DEFAULT 0,
+                lvl INTEGER DEFAULT 2,
                 wallet_addr TEXT,
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
-        console.log("Database Ready v3.8.8 Quantum Full");
+        console.log("Database Ready v3.8.0 Stable (Ported to v3.8.8)");
     } catch (e) { console.error("DB Error:", e); }
 };
 initDB();
@@ -41,28 +41,53 @@ app.get('/api/user/:id', async (req, res) => {
     try {
         let r = await pool.query('SELECT * FROM users WHERE user_id = $1', [req.params.id]);
         if (!r.rows.length) {
-            await pool.query('INSERT INTO users (user_id, username, avatar_url) VALUES ($1, $2, $3)', 
-                [req.params.id, name || 'Agent', photo || '']);
+            // Создание нового пользователя с параметрами 3.8.0
+            await pool.query(
+                'INSERT INTO users (user_id, username, avatar_url, balance, energy, lvl) VALUES ($1, $2, $3, 696, 543, 2)', 
+                [req.params.id, name || 'Agent', photo || '']
+            );
             r = await pool.query('SELECT * FROM users WHERE user_id = $1', [req.params.id]);
         }
         res.json(r.rows[0]);
     } catch (e) { res.status(500).send(e.message); }
 });
 
-// API: Сохранение прогресса
+// API: Сохранение прогресса (С защитой от дробей)
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, max_energy, click_lvl, profit_hr, lvl } = req.body;
+    
+    // Принудительное округление для защиты от бага "бесконечных чисел"
+    const safeBalance = Math.floor(balance || 0);
+    const safeProfit = Math.floor(profit_hr || 0);
+
     try {
         await pool.query(`
-            UPDATE users SET balance=$2, energy=$3, max_energy=$4, click_lvl=$5, profit_hr=$6, lvl=$7, last_seen=CURRENT_TIMESTAMP 
-            WHERE user_id=$1`, [userId, balance, energy, max_energy, click_lvl, profit_hr, lvl || 1]);
-        res.json({ok: true});
-    } catch (e) { res.status(500).send(e.message); }
+            UPDATE users SET 
+                balance = $2, 
+                energy = $3, 
+                max_energy = $4, 
+                click_lvl = $5, 
+                profit_hr = $6, 
+                lvl = $7, 
+                last_seen = CURRENT_TIMESTAMP 
+            WHERE user_id = $1`, 
+            [userId, safeBalance, energy, max_energy, click_lvl, safeProfit, lvl || 2]
+        );
+        res.json({ ok: true });
+    } catch (e) { 
+        console.error("Save Error:", e.message);
+        res.status(500).send(e.message); 
+    }
 });
 
+// Обработка команды /start
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v3.8.8</b>`, 
-    Markup.inlineKeyboard([[Markup.button.webApp("OPEN APP", "https://neural-pulse.bothost.ru")]]));
+    ctx.replyWithHTML(
+        `<b>Neural Pulse v3.8.0 Stable</b>\nДобро пожаловать, агент!`, 
+        Markup.inlineKeyboard([
+            [Markup.button.webApp("ОТКРЫТЬ ПРИЛОЖЕНИЕ", "https://neural-pulse.bothost.ru")]
+        ])
+    );
 });
 
 const PORT = 3000;
