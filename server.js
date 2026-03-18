@@ -9,10 +9,10 @@ const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// ВАЖНО: Добавлен SSL для стабильного подключения к БД
+// ИСПРАВЛЕНО: Отключаем SSL, так как сервер его не поддерживает
 const pool = new Pool({ 
     connectionString: PG_URI, 
-    ssl: { rejectUnauthorized: false } 
+    ssl: false 
 });
 
 app.use(express.json());
@@ -33,7 +33,7 @@ const initDB = async () => {
                 ref_by TEXT, 
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
-        console.log("✅ Database v3.8.0 Connected");
+        console.log("✅ Database v3.8.0 Verified (SSL Off)");
     } catch (e) { console.error("❌ DB Error:", e); }
 };
 initDB();
