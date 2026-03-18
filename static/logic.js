@@ -30,14 +30,13 @@ const logic = {
             this.user.userId = "test_user";
         }
 
-        // Ждем данные из БД
         await this.syncWithDB();
-        
-        // Включаем кнопку тапа
         this.setupListeners();
 
-        // Обновляем UI после загрузки данных
         if (window.ui) ui.init();
+        
+        // Запускаем таймеры дохода и регена
+        this.startPassiveIncome();
         
         console.log("✅ Логика готова");
     },
@@ -45,14 +44,11 @@ const logic = {
     setupListeners() {
         const target = document.getElementById('tap-target');
         if (target) {
-            // pointerdown срабатывает мгновенно, не дожидаясь отпускания пальца
             target.addEventListener('pointerdown', (e) => {
-                e.preventDefault(); // Защита от системного зума и скролла
+                e.preventDefault(); 
                 this.tap(e);
             });
-            console.log("🎯 Слушатель тапов активен");
-        } else {
-            console.error("❌ Элемент #tap-target не найден!");
+            console.log("🎯 Слушатель тапов установлен");
         }
     },
 
@@ -70,7 +66,7 @@ const logic = {
                 this.user.level = Number(data.lvl) || 1;
             }
         } catch (e) {
-            console.error("❌ Ошибка синхронизации с БД");
+            console.error("❌ Ошибка БД");
         }
     },
 
@@ -81,7 +77,7 @@ const logic = {
             
             if (window.ui) {
                 ui.update();
-                ui.anim(e); // Запуск анимации +1
+                ui.anim(e); 
             }
 
             if (window.Telegram?.WebApp?.HapticFeedback) {
@@ -124,13 +120,10 @@ const logic = {
                     lvl: this.user.level
                 })
             });
-        } catch (e) {
-            console.error("💾 Ошибка сохранения данных");
-        }
+        } catch (e) { console.error("💾 Ошибка сохранения"); }
     },
 
     startPassiveIncome() {
-        // Каждую секунду восстанавливаем энергию и капает прибыль
         setInterval(() => {
             if (this.user.energy < this.user.max_energy) {
                 this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
@@ -140,8 +133,6 @@ const logic = {
             }
             if (window.ui) ui.update();
         }, 1000);
-
-        // Автосохранение в БД раз в 15 секунд
         setInterval(() => this.save(), 15000);
     }
 };
