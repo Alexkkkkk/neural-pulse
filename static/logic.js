@@ -6,6 +6,7 @@ const logic = {
     },
 
     async init() {
+        console.log("🚀 Logic initialization...");
         if (window.Telegram?.WebApp) {
             const tg = window.Telegram.WebApp;
             tg.ready();
@@ -19,7 +20,8 @@ const logic = {
             }
         }
 
-        if (!this.user.userId) this.user.userId = "test_user";
+        // Если userId не получен (тест в браузере), ставим заглушку
+        if (!this.user.userId) this.user.userId = "test_user_476014374";
 
         await this.syncWithDB();
         this.setupListeners();
@@ -29,6 +31,7 @@ const logic = {
     setupListeners() {
         const target = document.getElementById('tap-target');
         if (target) {
+            // Используем pointerdown для мгновенной реакции
             target.addEventListener('pointerdown', (e) => {
                 e.preventDefault();
                 this.tap(e);
@@ -52,7 +55,7 @@ const logic = {
                 
                 if (window.ui) ui.update();
             }
-        } catch (e) { console.error("❌ [DB ERROR]", e); }
+        } catch (e) { console.error("❌ [DB SYNC ERROR]", e); }
     },
 
     tap(e) {
@@ -60,7 +63,6 @@ const logic = {
             this.user.balance += this.user.click_lvl;
             this.user.energy -= this.user.click_lvl;
             
-            // Мгновенное обновление экрана
             if (window.ui) {
                 ui.update();
                 ui.anim(e);
@@ -83,20 +85,13 @@ const logic = {
         }
         if (type === 'profit') this.user.profit += val;
         
-        ui.update();
+        if (window.ui) ui.update();
         await this.save();
         return true;
     },
 
-    toggleLike() {
-        this.user.isLiked = !this.user.isLiked;
-        this.user.likes += this.user.isLiked ? 1 : -1;
-        ui.update();
-        this.save();
-    },
-
     startPassiveIncome() {
-        // Восстановление энергии
+        // Регенерация энергии (1 ед. каждые 1.5 сек)
         setInterval(() => {
             if (this.user.energy < this.user.max_energy) {
                 this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
@@ -104,7 +99,7 @@ const logic = {
             }
         }, 1500);
 
-        // Пассивный доход
+        // Пассивный доход (начисление каждую секунду)
         setInterval(() => {
             if (this.user.profit > 0) {
                 this.user.balance += (this.user.profit / 3600);
@@ -112,7 +107,7 @@ const logic = {
             }
         }, 1000);
 
-        // Автосохранение каждые 10 секунд
+        // Автосохранение в БД каждые 10 секунд
         setInterval(() => this.save(), 10000);
     },
 
@@ -137,4 +132,5 @@ const logic = {
     }
 };
 
+// Запуск при загрузке
 logic.init();
