@@ -1,39 +1,85 @@
-const loading = {
-    async init() {
-        let p = 0;
-        const bar = document.getElementById('load-bar');
-        const pct = document.getElementById('load-pct');
-        
-        // Запускаем логику и ждем ответа от БД
-        if (window.logic) {
-            await logic.init(); 
-        }
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Neural Pulse</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div id="loading-screen">
+        <div class="loader-ring">
+            <img src="images/logo.png" alt="AI">
+        </div>
+        <div class="loading-text">ACCESS GRANTED</div>
+        <div class="percent" id="load-pct">0%</div>
+        <div class="load-bar-bg" style="width: 200px;">
+            <div class="load-bar-f" id="load-bar" style="width:0%"></div>
+        </div>
+    </div>
 
-        const itv = setInterval(() => {
-            p += Math.floor(Math.random() * 10) + 5;
-            if (p >= 100) {
-                p = 100;
-                clearInterval(itv);
-                this.finish();
-            }
-            if(bar) bar.style.width = p + '%';
-            if(pct) pct.innerText = p + '%';
-        }, 50);
-    },
+    <div id="app" style="display: none;">
+        <div class="header">
+            <div class="avatar"><img src="images/logo.png" id="main-avatar"></div>
+            <div class="u-info">
+                <b id="u-name">Agent</b>
+                <small>v4.0.0 Neural Mining</small>
+            </div>
+            <div class="lvl-badge" id="u-lvl">LVL 1</div>
+        </div>
 
-    finish() {
-        ui.init();
-        logic.startPassiveIncome();
-        
-        const ls = document.getElementById('loading-screen');
-        const app = document.getElementById('app');
-        
-        if (ls) ls.style.opacity = '0';
-        setTimeout(() => {
-            if (ls) ls.style.display = 'none';
-            if (app) app.style.display = 'flex';
-        }, 500);
-    }
-};
+        <div class="stats-row">
+            <div class="stat-card">
+                <small>EARN PER TAP</small>
+                <b id="tap-val">+1</b>
+            </div>
+            <div class="stat-card">
+                <small>PROFIT PER HOUR</small>
+                <b id="profit-val">0</b>
+            </div>
+        </div>
 
-window.onload = () => loading.init();
+        <div class="balance" id="balance">0</div>
+
+        <div class="play-area">
+            <img src="images/logo.png" class="main-logo" id="tap-target">
+            
+            <div class="side-menu">
+                <button class="side-btn" onclick="ui.openM('wallet')"><span>👛</span> WALLET</button>
+                <button class="side-btn" onclick="ui.openM('squad')"><span>🤝</span> FRIENDS</button>
+                <button class="side-btn" onclick="ui.openM('bonus')"><span>🎁</span> BONUS</button>
+            </div>
+        </div>
+
+        <div class="energy-box">
+            <div class="en-txt">
+                <span>ENERGY</span>
+                <span id="eng-val">1000/1000</span>
+            </div>
+            <div class="load-bar-bg">
+                <div id="eng-fill" class="load-bar-f" style="width: 100%"></div>
+            </div>
+        </div>
+
+        <div class="bottom-nav">
+            <button class="nav-btn" onclick="ui.openM('boost')"><span>🚀</span> BOOST</button>
+            <button class="nav-btn" onclick="ui.openM('mine')"><span>⛏️</span> MINE</button>
+            <button class="nav-btn" onclick="ui.openM('tasks')"><span>📋</span> TASKS</button>
+            <button class="nav-btn" onclick="ui.openM('top')"><span>🏆</span> TOP</button>
+        </div>
+    </div>
+
+    <div id="m-wallet" class="modal"><div class="modal-content"></div></div>
+    <div id="m-squad" class="modal"><div class="modal-content"></div></div>
+    <div id="m-bonus" class="modal"><div class="modal-content"></div></div>
+    <div id="m-boost" class="modal"><div class="modal-content"></div></div>
+    <div id="m-mine" class="modal"><div class="modal-content"></div></div>
+    <div id="m-tasks" class="modal"><div class="modal-content"></div></div>
+    <div id="m-top" class="modal"><div class="modal-content"></div></div>
+
+    <script src="logic.js"></script>
+    <script src="ui.js"></script>
+    <script src="loading.js"></script>
+</body>
+</html>
