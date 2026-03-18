@@ -22,10 +22,11 @@ const initDB = async () => {
                 username TEXT, 
                 avatar_url TEXT DEFAULT '', 
                 balance NUMERIC DEFAULT 696, 
-                energy INTEGER DEFAULT 543, 
+                energy INTEGER DEFAULT 1000, 
                 max_energy INTEGER DEFAULT 1000, 
                 click_lvl INTEGER DEFAULT 1, 
                 profit_hr NUMERIC DEFAULT 0,
+                lvl INTEGER DEFAULT 1,
                 wallet_addr TEXT,
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
@@ -50,19 +51,13 @@ app.get('/api/user/:id', async (req, res) => {
 
 // API: Сохранение прогресса
 app.post('/api/save', async (req, res) => {
-    const { userId, balance, energy, max_energy, click_lvl, profit_hr } = req.body;
+    const { userId, balance, energy, max_energy, click_lvl, profit_hr, lvl } = req.body;
     try {
         await pool.query(`
-            UPDATE users SET balance=$2, energy=$3, max_energy=$4, click_lvl=$5, profit_hr=$6, last_seen=CURRENT_TIMESTAMP 
-            WHERE user_id=$1`, [userId, balance, energy, max_energy, click_lvl, profit_hr]);
+            UPDATE users SET balance=$2, energy=$3, max_energy=$4, click_lvl=$5, profit_hr=$6, lvl=$7, last_seen=CURRENT_TIMESTAMP 
+            WHERE user_id=$1`, [userId, balance, energy, max_energy, click_lvl, profit_hr, lvl || 1]);
         res.json({ok: true});
     } catch (e) { res.status(500).send(e.message); }
-});
-
-// API: Динамическая версия для Boot Host
-app.get('/api/version', (req, res) => {
-    const build = Math.floor(Date.now() / 100000).toString().slice(-3);
-    res.json({ version: `v3.8.8.${build} Quantum Full` });
 });
 
 bot.start((ctx) => {
