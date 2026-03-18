@@ -92,8 +92,16 @@
     <div id="m-tasks" class="modal"><div class="modal-content"></div></div>
     <div id="m-top" class="modal"><div class="modal-content"></div></div>
 
-    <script src="logic.js"></script>
-    <script src="ui.js"></script>
-    <script src="loading.js"></script>
+    <script src="logic.js?v=4.0"></script>
+    <script src="ui.js?v=4.0"></script>
+    <script src="loading.js?v=4.0"></script>
+
+    <script>
+        window.onload = () => {
+            if (typeof logic !== 'undefined') {
+                logic.init();
+            }
+        };
+    </script>
 </body>
 </html>
