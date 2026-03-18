@@ -1,38 +1,12 @@
 :root {
     --bg: #000000;
-    --card: #0a0a0a;
+    --card: #080808; /* Чуть темнее */
     --accent: #00ffff;
     --text: #ffffff;
     --purple: #ae00ff;
-    --like: #ff0055;
+    --border: #151515; /* Новый цвет границ */
 }
 
-/* ... Твои существующие стили ... */
-
-/* СТИЛИ ДЛЯ КНОПКИ TON CONNECT */
-#ton-connect-btn button {
-    background: var(--accent) !important;
-    color: #000 !important;
-    border-radius: 12px !important;
-    font-weight: 900 !important;
-    font-family: 'Inter', sans-serif !important;
-    box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
-}
-
-#ton-connect-btn * {
-    color: white;
-}
-
-#ton-connect-btn div {
-    font-size: 14px;
-}
-
-/* Переопределение цвета текста внутри виджета, если он становится черным */
-#ton-connect-btn [data-tc-button-text] {
-    color: #000 !important;
-}
-
-/* Остальные стили из твоего кода ниже */
 * { 
     box-sizing: border-box; 
     -webkit-tap-highlight-color: transparent; 
@@ -62,25 +36,125 @@ body {
 .load-bar-f { height: 100%; width: 0%; transition: width 0.3s ease; background: linear-gradient(90deg, var(--accent), var(--purple)); box-shadow: 0 0 10px var(--accent); }
 
 /* --- APP UI --- */
-#app { display: none; flex-direction: column; height: 100vh; padding: 15px; padding-bottom: 90px; }
-.header { background: var(--card); border: 1px solid #1a1a1a; border-radius: 20px; padding: 10px; display: flex; align-items: center; margin-bottom: 15px; }
-.avatar { width: 45px; height: 45px; border-radius: 12px; background: #111; margin-right: 12px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.avatar img { width: 30px; filter: drop-shadow(0 0 5px var(--purple)); }
-.lvl-badge { margin-left: auto; background: var(--accent); color: #000; padding: 6px 14px; border-radius: 12px; font-weight: 900; font-size: 13px; }
+#app { display: none; flex-direction: column; height: 100vh; padding: 15px; padding-bottom: 85px; }
 
+/* HEADER DESIGN */
+.header { 
+    background: var(--card); 
+    border: 1px solid var(--border); 
+    border-radius: 16px; 
+    padding: 8px 12px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between;
+    margin-bottom: 15px; 
+}
+.header-left { display: flex; align-items: center; gap: 10px; }
+.avatar { width: 40px; height: 40px; border-radius: 10px; background: #111; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.avatar img { width: 26px; filter: drop-shadow(0 0 5px var(--purple)); }
+.u-info b { font-size: 15px; }
+.u-info small { color: #666; font-size: 11px; display: block; margin-top: -2px; }
+.lvl-badge { 
+    background: rgba(0, 255, 255, 0.1); /* Прозрачный фон */
+    color: var(--accent); 
+    padding: 6px 14px; 
+    border-radius: 10px; 
+    font-weight: bold; 
+    font-size: 12px; 
+    border: 1px solid rgba(0, 255, 255, 0.2);
+}
+
+/* STATS DESIGN */
 .stats-row { display: flex; gap: 10px; margin-bottom: 10px; }
-.stat-card { background: var(--card); border: 1px solid #1a1a1a; padding: 12px; border-radius: 15px; flex: 1; text-align: center; }
-.balance { font-size: 42px; font-weight: bold; text-align: center; margin: 15px 0; text-shadow: 0 0 20px rgba(0, 255, 255, 0.2); font-variant-numeric: tabular-nums; }
+.stat-card { 
+    background: var(--card); 
+    border: 1px solid var(--border); 
+    padding: 10px; 
+    border-radius: 14px; 
+    flex: 1; 
+    text-align: center; 
+}
+.stat-card small { color: #888; font-size: 10px; letter-spacing: 0.5px; }
+.stat-card b { display: block; font-size: 18px; font-weight: 800; margin-top: 2px; }
+.accent-val { color: var(--accent); } /* Бирюзовые цифры в статах */
 
+/* BALANCE */
+.balance { 
+    font-size: 48px; 
+    font-weight: 800; 
+    text-align: center; 
+    margin: 20px 0; 
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.1); 
+    font-variant-numeric: tabular-nums; 
+}
+
+/* PLAY AREA & LIKE DESIGN */
 .play-area { flex-grow: 1; position: relative; display: flex; justify-content: center; align-items: center; }
-.main-logo { width: 220px; cursor: pointer; transition: transform 0.05s cubic-bezier(0, 0, 0.2, 1); z-index: 5; pointer-events: all; filter: drop-shadow(0 0 10px rgba(0, 255, 255, 0.1)); }
-.main-logo:active { transform: scale(0.95); filter: drop-shadow(0 0 20px var(--accent)); }
 
-.side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
-.side-btn { background: var(--card); border: 1px solid #1a1a1a; color: #fff; padding: 10px 12px; border-radius: 15px; display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: bold; }
+/* Логотип без тени в обычном состоянии */
+.main-logo { 
+    width: 230px; 
+    cursor: pointer; 
+    transition: transform 0.05s, filter 0.1s; 
+    z-index: 5; 
+    filter: drop-shadow(0 0 0px var(--accent)); /* Без тени */
+}
 
-.bottom-nav { position: fixed; bottom: 15px; left: 15px; right: 15px; display: flex; justify-content: space-between; gap: 8px; z-index: 100; }
-.nav-btn { background: var(--card); border: 1px solid #1a1a1a; flex: 1; padding: 12px 0; border-radius: 15px; color: #fff; font-size: 10px; display: flex; flex-direction: column; align-items: center; gap: 5px; font-weight: bold; }
+/* Эффект при нажатии: сжатие + яркая тень */
+.main-logo:active { 
+    transform: scale(0.96); 
+    filter: drop-shadow(0 0 25px var(--accent));
+}
+
+/* SIDE MENU DESIGN */
+.side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 8px; z-index: 10; }
+.side-btn { 
+    background: #0c0c0c; /* Темнее */
+    border: 1px solid var(--border); 
+    color: #fff; /* Белый текст */
+    padding: 10px 14px; 
+    border-radius: 14px; 
+    display: flex; 
+    align-items: center; 
+    gap: 8px; 
+    font-size: 11px; 
+    font-weight: 700; 
+}
+.side-btn span { font-size: 16px; }
+
+/* ENERGY */
+.energy-box { margin-top: auto; margin-bottom: 15px;}
+.en-txt { display: flex; justify-content: space-between; font-size: 12px; color: #888; font-weight: bold; margin-bottom: 5px;}
+.load-bar-wrapper.full-width { width: 100%; height: 6px; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); background: #111; }
+
+/* BOTTOM NAV DESIGN */
+.bottom-nav { 
+    position: fixed; 
+    bottom: 0; 
+    left: 0; 
+    right: 0; 
+    display: flex; 
+    background: var(--card); 
+    border-top: 1px solid var(--border); 
+    z-index: 100; 
+    padding: 5px;
+}
+.nav-btn { 
+    background: transparent; 
+    flex: 1; 
+    padding: 10px 0; 
+    color: #888; /* Серый текст по умолчанию */
+    font-size: 10px; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    gap: 4px; 
+    font-weight: 700; 
+    border: none; 
+}
+/* Активная кнопка в навигации */
+.nav-btn.active { color: var(--accent); }
+.nav-btn span { font-size: 20px; }
 
 /* MODALS */
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: flex-end; z-index: 2000; }
@@ -90,7 +164,7 @@ body {
 .upg-price { font-weight: bold; background: rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 10px; color: var(--accent); }
 .back-btn { width: 100%; padding: 15px; border-radius: 15px; background: #222; color: white; border: none; margin-top: 10px; font-weight: bold;}
 
+/* АНИМАЦИЯ ТАПА */
 .tap-pop { position: fixed; color: var(--accent); font-size: 32px; font-weight: 900; pointer-events: none; z-index: 1000; text-shadow: 0 0 10px var(--accent); animation: floatUp 0.8s ease-out forwards; }
-
 @keyframes floatUp { 0% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: translateY(-120px) scale(1.2); opacity: 0; } }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
