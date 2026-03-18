@@ -8,7 +8,6 @@ const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
-
 const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
 app.use(express.json());
@@ -40,31 +39,20 @@ app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     try {
         let result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
-        
         if (result.rows.length === 0) {
             await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2)', [userId, 'Agent']);
             result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
         }
-        
         let user = result.rows[0];
-
-        // ФИКС БАЛАНСА: Если в базе "бесконечность", сбрасываем до 1000
-        let currentBalance = parseFloat(user.balance);
-        if (isNaN(currentBalance) || currentBalance > 1e15) {
-            console.log(`⚠️ [DB] Сброс баланса для ${userId} (был слишком велик)`);
-            currentBalance = 1000;
-            await pool.query('UPDATE users SET balance = 1000 WHERE user_id = $1', [userId]);
-        }
-
         res.json({
             ...user,
-            balance: currentBalance,
+            balance: parseFloat(user.balance) || 0,
             profit_hr: parseFloat(user.profit_hr) || 0
         });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Сохранение данных
+// Сохранение данных (Исправлено)
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, max_energy, click_lvl, profit_hr, lvl } = req.body;
     try {
@@ -73,10 +61,13 @@ app.post('/api/save', async (req, res) => {
                 balance = $2, energy = $3, max_energy = $4, 
                 click_lvl = $5, profit_hr = $6, lvl = $7, 
                 last_seen = CURRENT_TIMESTAMP WHERE user_id = $1`, 
-            [userId, balance, energy, max_energy, click_lvl, profit_hr, lvl]
+            [userId, balance, energy, max_energy, click_lvl, profit_hr, lvl || 1]
         );
         res.json({ ok: true });
-    } catch (e) { res.status(500).send(e.message); }
+    } catch (e) { 
+        console.error("❌ Save error:", e.message);
+        res.status(500).send(e.message); 
+    }
 });
 
 bot.start((ctx) => {
