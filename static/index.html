@@ -9,12 +9,13 @@
 </head>
 <body>
     <div id="loading-screen">
-        <div class="loader-ring">
-            <img src="images/logo.png" alt="AI">
+        <div class="loader-container">
+            <div class="loader-ring"></div>
+            <img src="images/logo.png" alt="AI" class="loader-logo">
         </div>
         <div class="loading-text">ACCESS GRANTED</div>
         <div class="percent" id="load-pct">0%</div>
-        <div class="load-bar-bg" style="width: 200px;">
+        <div class="load-bar-wrapper">
             <div class="load-bar-f" id="load-bar" style="width:0%"></div>
         </div>
     </div>
@@ -57,7 +58,7 @@
                 <span>ENERGY</span>
                 <span id="eng-val">1000/1000</span>
             </div>
-            <div class="load-bar-bg">
+            <div class="load-bar-wrapper" style="width: 100%; margin-top: 5px;">
                 <div id="eng-fill" class="load-bar-f" style="width: 100%"></div>
             </div>
         </div>
