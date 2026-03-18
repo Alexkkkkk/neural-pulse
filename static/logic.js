@@ -6,8 +6,6 @@ const logic = {
     },
 
     async init() {
-        console.log("🔍 [INIT] Запуск инициализации логики...");
-        
         if (window.Telegram?.WebApp) {
             const tg = window.Telegram.WebApp;
             tg.ready();
@@ -16,13 +14,12 @@ const logic = {
             if (tgUser) {
                 this.user.userId = tgUser.id.toString();
                 this.user.username = tgUser.first_name || "Agent";
+                const uNameEl = document.getElementById('u-name');
+                if (uNameEl) uNameEl.innerText = this.user.username;
             }
         }
 
-        if (!this.user.userId || this.user.userId === 0) {
-            this.user.userId = "test_user_123"; 
-            console.warn("⚠️ [USER] Используем тестовый ID");
-        }
+        if (!this.user.userId) this.user.userId = "test_user";
 
         await this.syncWithDB();
         this.setupListeners();
@@ -32,8 +29,6 @@ const logic = {
     setupListeners() {
         const target = document.getElementById('tap-target');
         if (target) {
-            target.style.pointerEvents = 'auto';
-            // Используем pointerdown для мгновенного отклика
             target.addEventListener('pointerdown', (e) => {
                 e.preventDefault();
                 this.tap(e);
@@ -44,22 +39,20 @@ const logic = {
     async syncWithDB() {
         try {
             const res = await fetch(`/api/user/${this.user.userId}`);
-            if (!res.ok) throw new Error(`Server status: ${res.status}`);
-            const data = await res.json();
-
-            this.user.balance = parseFloat(data.balance) || 0;
-            this.user.energy = parseInt(data.energy) || 1000;
-            this.user.max_energy = parseInt(data.max_energy) || 1000;
-            this.user.click_lvl = parseInt(data.click_lvl) || 1;
-            this.user.profit = parseFloat(data.profit_hr) || 0;
-            this.user.level = parseInt(data.lvl) || 1;
-            this.user.isLiked = data.is_liked || false;
-            this.user.likes = parseInt(data.likes) || 0;
-            
-            if (window.ui) ui.update();
-        } catch (e) { 
-            console.error("❌ [DB ERROR]", e); 
-        }
+            if (res.ok) {
+                const data = await res.json();
+                this.user.balance = parseFloat(data.balance) || 0;
+                this.user.energy = parseInt(data.energy) || 1000;
+                this.user.max_energy = parseInt(data.max_energy) || 1000;
+                this.user.click_lvl = parseInt(data.click_lvl) || 1;
+                this.user.profit = parseFloat(data.profit_hr) || 0;
+                this.user.level = parseInt(data.lvl) || 1;
+                this.user.isLiked = data.is_liked || false;
+                this.user.likes = parseInt(data.likes) || 0;
+                
+                if (window.ui) ui.update();
+            }
+        } catch (e) { console.error("❌ [DB ERROR]", e); }
     },
 
     tap(e) {
@@ -67,6 +60,7 @@ const logic = {
             this.user.balance += this.user.click_lvl;
             this.user.energy -= this.user.click_lvl;
             
+            // Мгновенное обновление экрана
             if (window.ui) {
                 ui.update();
                 ui.anim(e);
@@ -83,7 +77,10 @@ const logic = {
         
         this.user.balance -= cost;
         if (type === 'tap') this.user.click_lvl += val;
-        if (type === 'energy') this.user.max_energy += val;
+        if (type === 'energy') {
+            this.user.max_energy += val;
+            this.user.energy += val;
+        }
         if (type === 'profit') this.user.profit += val;
         
         ui.update();
@@ -95,16 +92,19 @@ const logic = {
         this.user.isLiked = !this.user.isLiked;
         this.user.likes += this.user.isLiked ? 1 : -1;
         ui.update();
+        this.save();
     },
 
     startPassiveIncome() {
+        // Восстановление энергии
         setInterval(() => {
             if (this.user.energy < this.user.max_energy) {
                 this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
                 if (window.ui) ui.update();
             }
-        }, 1000);
+        }, 1500);
 
+        // Пассивный доход
         setInterval(() => {
             if (this.user.profit > 0) {
                 this.user.balance += (this.user.profit / 3600);
@@ -112,6 +112,7 @@ const logic = {
             }
         }, 1000);
 
+        // Автосохранение каждые 10 секунд
         setInterval(() => this.save(), 10000);
     },
 
