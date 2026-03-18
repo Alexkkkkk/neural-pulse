@@ -8,39 +8,32 @@ const ui = {
             tw.expand();
             tw.BackButton.onClick(() => this.closeM());
         }
-        console.log("Neural Pulse UI Manager v3.8.0 stable restored");
+        console.log("Neural Pulse UI Manager v3.8.0 Stable Restored");
     },
 
+    // Обновление главных цифр на главном экране
     update() {
         if (!window.logic || !logic.user) return;
-
-        const ids = {
-            balance: 'balance',
-            energyText: 'eng-val',
-            energyFill: 'eng-fill',
-            level: 'u-lvl',
-            profit: 'profit-val',
-            tap: 'tap-val'
-        };
 
         const setTxt = (id, val) => {
             const el = document.getElementById(id);
             if (el) el.innerText = val;
         };
 
-        setTxt(ids.balance, Math.floor(logic.user.balance || 0).toLocaleString('ru-RU'));
-        setTxt(ids.level, `LVL ${logic.user.lvl || 1}`);
-        setTxt(ids.profit, Math.floor(logic.user.profit_hr || 0).toLocaleString('ru-RU'));
-        setTxt(ids.tap, `+${logic.user.click_lvl || 1}`);
-        setTxt(ids.energyText, `${Math.floor(logic.user.energy || 0)}/${logic.user.max_energy || 1000}`);
+        setTxt('balance', Math.floor(logic.user.balance || 0).toLocaleString('ru-RU'));
+        setTxt('u-lvl', `LVL ${logic.user.lvl || 1}`);
+        setTxt('profit-val', Math.floor(logic.user.profit_hr || 0).toLocaleString('ru-RU'));
+        setTxt('tap-val', `+${logic.user.click_lvl || 1}`);
+        setTxt('eng-val', `${Math.floor(logic.user.energy || 0)}/${logic.user.max_energy || 1000}`);
 
-        const fill = document.getElementById(ids.energyFill);
+        const fill = document.getElementById('eng-fill');
         if (fill) {
             const pct = (logic.user.energy / (logic.user.max_energy || 1000) * 100) || 0;
             fill.style.width = pct + '%';
         }
     },
 
+    // Открытие модальных окон
     openM(id) {
         if (this.currentModal) this.closeM();
         const m = document.getElementById('m-' + id);
@@ -49,15 +42,14 @@ const ui = {
             this.currentModal = m;
             if (window.Telegram?.WebApp) Telegram.WebApp.BackButton.show();
             
-            // Вызов функций отрисовки для каждого окна
-            switch(id) {
-                case 'wallet': this.renderWallet(); break;
-                case 'top': this.renderTop(); break;
-                case 'boost': this.renderBoost(); break;
-                case 'mine': this.renderMine(); break;
-                case 'squad': this.renderFriends(); break;
-                case 'tasks': this.renderTasks(); break;
-            }
+            // Вызываем отрисовку контента в зависимости от ID
+            if (id === 'wallet') this.renderWallet();
+            if (id === 'top') this.renderTop();
+            if (id === 'boost') this.renderBoost();
+            if (id === 'mine') this.renderMine();
+            if (id === 'squad') this.renderFriends();
+            if (id === 'tasks') this.renderTasks();
+            if (id === 'bonus') this.renderBonus();
         }
     },
 
@@ -69,14 +61,14 @@ const ui = {
         }
     },
 
-    // --- ФУНКЦИИ КОНТЕНТА ---
+    // --- РЕНДЕРИНГ КОНТЕНТА (v3.8.0) ---
 
     renderWallet() {
         const cont = document.querySelector('#m-wallet .modal-content');
         if (!cont) return;
         cont.innerHTML = `
             <h1 style="color:#00ffff">👛 WALLET</h1>
-            <p>Connect your TON wallet for future airdrops</p>
+            <p>Connect TON wallet for airdrops</p>
             <div class="stat-card" style="margin:20px 0; border: 1px solid #00ffff55">
                 <small>STATUS</small>
                 <b style="color:#ff4444">NOT CONNECTED</b>
@@ -91,16 +83,12 @@ const ui = {
         if (!cont) return;
         cont.innerHTML = `
             <h1 style="color:#ffcc00">🏆 TOP AGENTS</h1>
-            <div style="width:100%; margin:20px 0; display:flex; flex-direction:column; gap:8px">
-                <div class="stat-card" style="display:flex; justify-content:space-between">
-                    <span>1. Quantum_King</span><b>54.2M</b>
-                </div>
+            <div style="width:100%; margin:20px 0; display:flex; flex-direction:column; gap:10px">
+                <div class="stat-card" style="display:flex; justify-content:space-between"><span>1. Quantum_X</span><b>99.5M</b></div>
                 <div class="stat-card" style="display:flex; justify-content:space-between; border-color:#00ffff">
                     <span>2. ${logic.user.username || 'You'}</span><b>${Math.floor(logic.user.balance).toLocaleString()}</b>
                 </div>
-                <div class="stat-card" style="display:flex; justify-content:space-between">
-                    <span>3. Neural_Bot</span><b>1.5M</b>
-                </div>
+                <div class="stat-card" style="display:flex; justify-content:space-between"><span>3. Cyber_Punk</span><b>1.2M</b></div>
             </div>
             <button class="back-btn" onclick="ui.closeM()">BACK</button>
         `;
@@ -109,20 +97,18 @@ const ui = {
     renderBoost() {
         const cont = document.querySelector('#m-boost .modal-content');
         if (!cont) return;
-        const tapPrice = (logic.user.click_lvl || 1) * 1500;
-        const energyPrice = (logic.user.max_energy / 500) * 2000;
+        const tapPrice = (logic.user.click_lvl || 1) * 1000;
+        const energyPrice = (logic.user.max_energy / 500) * 1500;
 
         cont.innerHTML = `
-            <h1 style="color:#ff4444">🚀 BOOST</h1>
-            <div style="display:grid; gap:10px; width:100%; margin-top:20px">
-                <div class="stat-card" onclick="ui.buy('tap', ${tapPrice})">
-                    <small>MULTITAP (Lvl ${logic.user.click_lvl})</small>
-                    <b style="color:#00ffff">Price: ${tapPrice.toLocaleString()}</b>
-                </div>
-                <div class="stat-card" onclick="ui.buy('energy', ${energyPrice})">
-                    <small>ENERGY LIMIT</small>
-                    <b style="color:#00ffff">Price: ${energyPrice.toLocaleString()}</b>
-                </div>
+            <h1 style="color:#ff4444">🚀 BOOSTERS</h1>
+            <div class="stat-card" onclick="ui.buy('tap', ${tapPrice})" style="margin-bottom:10px">
+                <small>MULTITAP (Lvl ${logic.user.click_lvl})</small>
+                <b style="color:#00ffff">Price: ${tapPrice.toLocaleString()}</b>
+            </div>
+            <div class="stat-card" onclick="ui.buy('energy', ${energyPrice})">
+                <small>ENERGY CAP</small>
+                <b style="color:#00ffff">Price: ${energyPrice.toLocaleString()}</b>
             </div>
             <button class="back-btn" onclick="ui.closeM()" style="margin-top:20px">BACK</button>
         `;
@@ -132,28 +118,37 @@ const ui = {
         const cont = document.querySelector('#m-mine .modal-content');
         if (!cont) return;
         cont.innerHTML = `
-            <h1 style="color:#ae00ff">⛏️ MINE</h1>
-            <p>Upgrade your passive mining hardware</p>
-            <div class="stat-card" style="margin-top:20px" onclick="ui.buy('profit', 5000)">
-                <small>NEURAL CHIP v1</small>
+            <h1 style="color:#ae00ff">⛏️ MINING</h1>
+            <div class="stat-card" onclick="ui.buy('profit', 5000)">
+                <small>NEURAL PROCESSOR</small>
                 <b>Price: 5,000 (+100/hr)</b>
             </div>
-            <button class="back-btn" onclick="ui.closeM()" style="margin-top:auto">BACK</button>
+            <button class="back-btn" onclick="ui.closeM()" style="margin-top:20px">BACK</button>
         `;
     },
 
     renderFriends() {
         const cont = document.querySelector('#m-squad .modal-content');
         if (!cont) return;
-        const link = `https://t.me/neural_pulse_bot?start=${logic.user.userId}`;
+        const link = `https://t.me/neural_pulse_bot?start=${logic.user.userId || '123'}`;
         cont.innerHTML = `
-            <h1>🤝 SQUAD</h1>
-            <p>Your team grows your power</p>
+            <h1>🤝 FRIENDS</h1>
             <div class="stat-card" style="margin:20px 0">
                 <small>YOUR INVITE LINK</small>
-                <code style="font-size:10px; display:block; margin:10px 0; color:#00ffff; word-break: break-all;">${link}</code>
+                <div style="font-size:11px; color:#00ffff; margin:10px 0; word-break:break-all">${link}</div>
             </div>
             <button class="back-btn" style="background:#fff; color:#000" onclick="ui.copy('${link}')">COPY LINK</button>
+            <button class="back-btn" onclick="ui.closeM()" style="margin-top:10px">BACK</button>
+        `;
+    },
+
+    renderBonus() {
+        const cont = document.querySelector('#m-bonus .modal-content');
+        if (!cont) return;
+        cont.innerHTML = `
+            <h1>🎁 DAILY BONUS</h1>
+            <p>Come back every 24h</p>
+            <button class="back-btn" style="background:#ffcc00; color:#000" onclick="ui.alert('Already claimed today!')">CLAIM 5,000</button>
             <button class="back-btn" onclick="ui.closeM()" style="margin-top:10px">BACK</button>
         `;
     },
@@ -163,25 +158,22 @@ const ui = {
         if (!cont) return;
         cont.innerHTML = `
             <h1>📋 TASKS</h1>
-            <p>Complete missions to earn extra</p>
-            <div class="stat-card" onclick="ui.alert('Join our channel first!')">
-                <small>SOCIAL</small>
-                <b>Join Community (+10k)</b>
+            <div class="stat-card" onclick="ui.alert('Task starting...')">
+                <small>SOCIAL</small><b>Subscribe Channel (+10k)</b>
             </div>
-            <button class="back-btn" onclick="ui.closeM()" style="margin-top:auto">BACK</button>
+            <button class="back-btn" onclick="ui.closeM()" style="margin-top:20px">BACK</button>
         `;
     },
 
-    // Вспомогательные методы
+    // --- СИСТЕМНЫЕ ФУНКЦИИ ---
+
     alert(msg) {
         if (window.Telegram?.WebApp) Telegram.WebApp.showAlert(msg);
         else alert(msg);
     },
 
     copy(txt) {
-        navigator.clipboard.writeText(txt).then(() => {
-            this.alert("Link copied!");
-        });
+        navigator.clipboard.writeText(txt).then(() => this.alert("Copied!"));
     },
 
     buy(type, price) {
@@ -194,7 +186,7 @@ const ui = {
             logic.save();
             this.update();
             
-            // Сразу обновляем текущее окно
+            // Перерисовка окна после покупки
             if (type === 'tap' || type === 'energy') this.renderBoost();
             if (type === 'profit') this.renderMine();
             
@@ -202,7 +194,7 @@ const ui = {
                 Telegram.WebApp.HapticFeedback.notificationOccurred('success');
             }
         } else {
-            this.alert("Not enough balance!");
+            this.alert("Insufficient balance!");
         }
     }
 };
