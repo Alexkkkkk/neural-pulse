@@ -1,46 +1,136 @@
 :root {
     --bg: #000000;
     --card: #0a0a0a;
-    --accent: #00ffff;
+    --accent: #00ffff; /* Голубой неон */
+    --purple: #ae00ff; /* Фиолетовый неон */
     --text: #ffffff;
-    --purple: #ae00ff;
+    --font: 'Inter', sans-serif; /* Похож на шрифт на скрине */
+}
+
+* {
+    box-sizing: border-box;
 }
 
 body {
-    background: var(--bg); color: var(--text);
-    font-family: 'Inter', sans-serif;
-    margin: 0; overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    margin: 0;
+    overflow: hidden;
     user-select: none;
+    -webkit-user-select: none;
     touch-action: manipulation;
     height: 100vh;
 }
 
-/* Главный объект для тапа */
-#tap-target {
-    cursor: pointer;
-    user-select: none;
-    -webkit-user-drag: none;
-    touch-action: none;
-}
-
-/* Анимация всплывающих цифр */
-.tap-pop {
+/* --- СТИЛИЗАЦИЯ ЭКРАНА ЗАГРУЗКИ (КАК НА СКРИНЕ) --- */
+#loading-screen {
     position: fixed;
-    color: var(--accent);
-    font-size: 32px;
+    inset: 0;
+    background: #000000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center; /* Центрируем всё */
+    z-index: 9999;
+    opacity: 1;
+    transition: opacity 0.5s ease;
+}
+
+/* 1. Центральное неоновое кольцо */
+.loader-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    width: 250px; /* Размер зоны кольца */
+    height: 250px;
+    margin-bottom: 50px; /* Отступ до текста */
+}
+
+.neon-ring {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    /* Градиентное кольцо с неоновым свечением (drop-shadow) */
+    background: padding-box, linear-gradient(135deg, var(--accent) 0%, var(--purple) 100%) border-box;
+    border: 3px solid transparent;
+    filter: drop-shadow(0 0 15px rgba(0, 255, 255, 0.4)) 
+            drop-shadow(0 0 30px rgba(174, 0, 255, 0.3));
+    
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    
+    /* Анимация вращения (как на скрине) */
+    animation: spin 3s linear infinite;
+}
+
+/* Логотип 'AI' внутри кольца */
+.ai-logo {
+    width: 80px; /* Размер логотипа AI */
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.8))
+            drop-shadow(0 0 20px var(--purple))
+            drop-shadow(0 0 30px var(--accent));
+    /* Вращаем логотип в обратную сторону, чтобы он казался неподвижным */
+    animation: spin-reverse 3s linear infinite;
+    z-index: 2;
+}
+
+@keyframes spin { 100% { transform: rotate(360deg); } }
+@keyframes spin-reverse { 100% { transform: rotate(-360deg); } }
+
+/* 2. Текстовая зона */
+.loading-info {
+    text-align: center;
+    width: 300px; /* Фиксированная ширина для стабильности макета */
+}
+
+/* Текст 'ACCESS GRANTED' */
+.loading-status {
+    font-size: 16px;
+    font-weight: bold;
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 5px; /* Разреженный текст */
+    margin-bottom: 20px;
+}
+
+/* Текст процентов '99%' */
+.percent {
+    font-size: 40px; /* Крупный */
     font-weight: 900;
-    pointer-events: none; /* ЧТОБЫ ЦИФРЫ НЕ МЕШАЛИ КЛИКАТЬ */
-    z-index: 10000;
-    transform: translate(-50%, -50%);
-    text-shadow: 0 0 10px rgba(0,255,255,0.5);
-    animation: floatUp 0.8s ease-out forwards;
+    color: var(--accent); /* Голубой неон */
+    margin-bottom: 20px;
+    text-shadow: 0 0 10px rgba(0, 255, 255, 0.8),
+                 0 0 20px rgba(0, 255, 255, 0.4);
 }
 
-@keyframes floatUp {
-    0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-    100% { transform: translate(-50%, -150px) scale(1.2); opacity: 0; }
+/* 3. Горизонтальный прогресс-бар */
+.load-bar-wrapper {
+    width: 100%; /* Ширина контейнера (300px) */
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1); /* Полупрозрачный фон */
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 0 5px rgba(0,0,0,0.5) inset;
 }
 
-/* Модальные окна */
-.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.98); display: none; flex-direction: column; padding: 20px; z-index: 1000; }
-.modal.active { display: flex; }
+.load-bar-f {
+    height: 100%;
+    /* Неоновый градиент для полоски */
+    background: linear-gradient(90deg, var(--accent) 0%, var(--purple) 100%);
+    width: 0%; /* Начинаем с нуля */
+    border-radius: 10px;
+    transition: width 0.3s ease;
+    
+    /* Свечение полоски */
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.6),
+                0 0 20px rgba(174, 0, 255, 0.4);
+}
+
+/* --- ОСТАЛЬНЫЕ СТИЛИ (ГЛАВНОЕ ПРИЛОЖЕНИЕ, ТАПЫ И Т.Д.) ОСТАВЛЯЙ БЕЗ ИЗМЕНЕНИЙ --- */
+#app { display: none; flex-direction: column; height: 100vh; padding: 20px; overflow: hidden; }
+/* ... (весь твой CSS для тапов, модалок и т.д.) ... */
