@@ -82,5 +82,11 @@
     <script src="logic.js"></script>
     <script src="ui.js"></script>
     <script src="loading.js"></script>
+    <script>
+        // Гарантированный запуск после загрузки всех файлов
+        window.onload = () => {
+            if(typeof logic !== 'undefined') logic.init();
+        };
+    </script>
 </body>
 </html>
