@@ -1,42 +1,71 @@
 const ui = {
     init() {
-        console.log("🖥️ Интерфейс инициализирован");
+        console.log("🖥️ [UI] Интерфейс инициализирован");
         this.update();
     },
 
     update() {
-        if (typeof logic === 'undefined') return;
+        // Если логика еще не загрузилась, выходим, чтобы не было ошибок
+        if (typeof logic === 'undefined' || !logic.user) return;
 
-        // Обновление баланса и основных статов
-        document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString('ru-RU');
-        document.getElementById('tap-val').innerText = "+" + logic.user.click_lvl;
-        document.getElementById('profit-val').innerText = Math.floor(logic.user.profit).toLocaleString('ru-RU');
-        document.getElementById('u-lvl').innerText = `LVL ${logic.user.level}`;
+        try {
+            // Обновление баланса и основных статов
+            const balanceEl = document.getElementById('balance');
+            if (balanceEl) {
+                balanceEl.innerText = Math.floor(logic.user.balance).toLocaleString('ru-RU');
+            }
 
-        // Обновление энергии
-        const currentEng = Math.floor(logic.user.energy);
-        const maxEng = logic.user.max_energy;
-        document.getElementById('eng-val').innerText = `${currentEng}/${maxEng}`;
-        document.getElementById('eng-fill').style.width = (currentEng / maxEng * 100) + "%";
+            const tapValEl = document.getElementById('tap-val');
+            if (tapValEl) {
+                tapValEl.innerText = "+" + logic.user.click_lvl;
+            }
 
-        // Обновление лайка
-        const likeIcon = document.getElementById('like-icon');
-        const likeCnt = document.getElementById('like-count');
-        const likeBox = document.querySelector('.like-container');
-        
-        if (logic.user.isLiked) {
-            likeIcon.innerText = "❤️";
-            likeBox.classList.add('active');
-        } else {
-            likeIcon.innerText = "🤍";
-            likeBox.classList.remove('active');
+            const profitValEl = document.getElementById('profit-val');
+            if (profitValEl) {
+                profitValEl.innerText = Math.floor(logic.user.profit).toLocaleString('ru-RU');
+            }
+
+            const lvlEl = document.getElementById('u-lvl');
+            if (lvlEl) {
+                lvlEl.innerText = `LVL ${logic.user.level}`;
+            }
+
+            // Обновление энергии
+            const currentEng = Math.floor(logic.user.energy);
+            const maxEng = logic.user.max_energy;
+            const engValEl = document.getElementById('eng-val');
+            const engFillEl = document.getElementById('eng-fill');
+
+            if (engValEl) engValEl.innerText = `${currentEng}/${maxEng}`;
+            if (engFillEl) engFillEl.style.width = (currentEng / maxEng * 100) + "%";
+
+            // Обновление лайка
+            const likeIcon = document.getElementById('like-icon');
+            const likeCnt = document.getElementById('like-count');
+            const likeBox = document.querySelector('.like-container');
+            
+            if (likeIcon && likeCnt) {
+                if (logic.user.isLiked) {
+                    likeIcon.innerText = "❤️";
+                    if (likeBox) likeBox.classList.add('active');
+                } else {
+                    likeIcon.innerText = "🤍";
+                    if (likeBox) likeBox.classList.remove('active');
+                }
+                likeCnt.innerText = logic.user.likes || 0;
+            }
+        } catch (err) {
+            console.error("❌ [UI UPDATE ERROR]", err);
         }
-        likeCnt.innerText = logic.user.likes;
     },
 
     toggleLike(e) {
-        e.stopPropagation();
-        logic.toggleLike();
+        if (e) e.stopPropagation();
+        // Вызываем метод из logic.js
+        if (typeof logic.toggleLike === 'function') {
+            logic.toggleLike();
+        }
+        
         if (window.Telegram?.WebApp?.HapticFeedback) {
             window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
         }
@@ -71,8 +100,11 @@ const ui = {
             content = `<div class="modal-header" style="text-align:center; padding:20px;">${id.toUpperCase()}</div><p style="text-align:center;color:#555">Soon...</p><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
         }
 
-        m.querySelector('.modal-content').innerHTML = content;
-        m.classList.add('active');
+        const container = m.querySelector('.modal-content');
+        if (container) {
+            container.innerHTML = content;
+            m.classList.add('active');
+        }
     },
 
     closeM() {
@@ -80,28 +112,52 @@ const ui = {
     },
 
     async handleBuy(type, cost, val) {
+        if (typeof logic.buyUpgrade !== 'function') return;
+
         const success = await logic.buyUpgrade(type, cost, val);
         if (success) {
-            if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+            if (window.Telegram?.WebApp?.HapticFeedback) {
+                window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+            }
+            // Перерисовываем модалку с новыми данными
             this.openM(type === 'profit' ? 'mine' : 'boost'); 
         } else {
-            if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('error');
+            if (window.Telegram?.WebApp?.HapticFeedback) {
+                window.Telegram.WebApp.HapticFeedback.notificationOccurred('error');
+            }
             alert("Недостаточно Neural Pulse!");
         }
     },
 
     anim(e) {
+        if (!e) return;
+        
         const n = document.createElement('div');
         n.className = 'tap-pop';
         n.innerText = `+${logic.user.click_lvl}`;
         
-        const x = e.clientX || (e.touches && e.touches.length > 0 ? e.touches[0].clientX : window.innerWidth / 2);
-        const y = e.clientY || (e.touches && e.touches.length > 0 ? e.touches[0].clientY : window.innerHeight / 2);
+        // Получаем координаты корректно для touch и для мыши
+        let x, y;
+        if (e.clientX) {
+            x = e.clientX;
+            y = e.clientY;
+        } else if (e.touches && e.touches[0]) {
+            x = e.touches[0].clientX;
+            y = e.touches[0].clientY;
+        } else {
+            // Центр экрана если координаты не определены
+            x = window.innerWidth / 2;
+            y = window.innerHeight / 2;
+        }
         
         n.style.left = (x - 15) + "px";
         n.style.top = (y - 20) + "px";
         
         document.body.appendChild(n);
-        setTimeout(() => n.remove(), 800);
+        
+        // Удаляем через 800мс после окончания анимации
+        setTimeout(() => {
+            if (n.parentNode) n.remove();
+        }, 800);
     }
 };
