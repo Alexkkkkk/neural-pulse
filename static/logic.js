@@ -22,8 +22,10 @@ const logic = {
             if (res.ok) {
                 const data = await res.json();
                 this.user = { ...this.user, ...data };
+                this.user.balance = parseFloat(this.user.balance);
+                this.user.profit_hr = parseFloat(this.user.profit_hr);
             }
-        } catch (e) { console.log("Offline mode active."); }
+        } catch (e) { console.log("Offline mode."); }
     },
 
     async save() {
@@ -66,7 +68,6 @@ const logic = {
     },
 
     startIntervals() {
-        // Регенерация и пассивный доход каждую секунду
         setInterval(() => {
             let changed = false;
             if (this.user.energy < this.user.max_energy) {
@@ -80,7 +81,6 @@ const logic = {
             if (changed) ui.update();
         }, 1000);
 
-        // Автосохранение каждые 15 секунд
         setInterval(() => this.save(), 15000);
     }
 };
