@@ -13,41 +13,35 @@ const logic = {
     },
 
     async init() {
-        console.log("🚀 Logic: Инициализация...");
+        console.log("🚀 Logic: Syncing...");
         
         if (window.Telegram?.WebApp) {
             const tg = window.Telegram.WebApp;
             tg.ready();
             tg.expand();
-            tg.disableVerticalSwipes();
             
             const tgUser = tg.initDataUnsafe?.user;
             if (tgUser) {
-                this.user.userId = tgUser.id;
+                this.user.userId = tgUser.id.toString();
                 this.user.username = tgUser.first_name || "Agent";
-                document.getElementById('u-name').innerText = this.user.username;
             }
         }
 
-        if (!this.user.userId) this.user.userId = "test_user"; 
+        if (!this.user.userId || this.user.userId === 0) {
+            this.user.userId = "test_user_123"; 
+        }
 
         await this.syncWithDB();
         this.setupListeners();
-        this.startPassiveIncome();
     },
 
     setupListeners() {
         const target = document.getElementById('tap-target');
         if (target) {
+            // Используем pointerdown для мгновенного отклика
             target.addEventListener('pointerdown', (e) => {
                 e.preventDefault();
-                if (this.user.energy >= this.user.click_lvl) {
-                    this.tap(e);
-                } else {
-                    if (window.Telegram?.WebApp?.HapticFeedback) {
-                        window.Telegram.WebApp.HapticFeedback.notificationOccurred('warning');
-                    }
-                }
+                this.tap(e);
             });
         }
     },
@@ -57,40 +51,44 @@ const logic = {
             const res = await fetch(`/api/user/${this.user.userId}`);
             if (res.ok) {
                 const data = await res.json();
-                this.user.balance = Number(data.balance) || 0;
-                this.user.energy = Number(data.energy) || 1000;
-                this.user.max_energy = Number(data.max_energy) || 1000;
-                this.user.click_lvl = Number(data.click_lvl) || 1;
-                this.user.profit = Number(data.profit_hr) || 0;
-                this.user.level = Number(data.lvl) || 1;
-                this.user.isLiked = data.is_liked || false;
-                this.user.likes = data.likes || 0;
+                this.user.balance = parseFloat(data.balance);
+                this.user.energy = parseInt(data.energy);
+                this.user.max_energy = parseInt(data.max_energy);
+                this.user.click_lvl = parseInt(data.click_lvl);
+                this.user.profit = parseFloat(data.profit_hr);
+                this.user.level = parseInt(data.lvl);
+                this.user.isLiked = data.is_liked;
+                this.user.likes = parseInt(data.likes);
+                
                 if (window.ui) ui.update();
             }
-        } catch (e) { console.error("Sync Error"); }
+        } catch (e) { console.error("❌ DB Sync Error:", e); }
     },
 
     tap(e) {
-        this.user.balance += this.user.click_lvl;
-        this.user.energy -= this.user.click_lvl;
-        
-        if (window.ui) {
-            ui.update();
-            ui.anim(e);
-        }
+        if (this.user.energy >= this.user.click_lvl) {
+            // Локальное обновление для скорости
+            this.user.balance += this.user.click_lvl;
+            this.user.energy -= this.user.click_lvl;
+            
+            if (window.ui) {
+                ui.update();
+                ui.anim(e); // Вылетающие цифры
+            }
 
-        if (window.Telegram?.WebApp?.HapticFeedback) {
-            window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
+            if (window.Telegram?.WebApp?.HapticFeedback) {
+                window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
+            }
+        } else {
+            if (window.Telegram?.WebApp?.HapticFeedback) {
+                window.Telegram.WebApp.HapticFeedback.notificationOccurred('warning');
+            }
         }
     },
 
     toggleLike() {
         this.user.isLiked = !this.user.isLiked;
-        if (this.user.isLiked) {
-            this.user.likes++;
-        } else {
-            this.user.likes--;
-        }
+        this.user.likes += this.user.isLiked ? 1 : -1;
         if (window.ui) ui.update();
         this.save();
     },
@@ -110,31 +108,43 @@ const logic = {
     },
 
     startPassiveIncome() {
+        // Энергия +1 в секунду
         setInterval(() => {
-            if (this.user.energy < this.user.max_energy) this.user.energy++;
-            if (this.user.profit > 0) this.user.balance += (this.user.profit / 3600);
-            if (window.ui) ui.update();
+            if (this.user.energy < this.user.max_energy) {
+                this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
+                if (window.ui) ui.update();
+            }
         }, 1000);
-        setInterval(() => this.save(), 15000);
+
+        // Пассивный доход
+        setInterval(() => {
+            if (this.user.profit > 0) {
+                this.user.balance += (this.user.profit / 3600);
+                if (window.ui) ui.update();
+            }
+        }, 1000);
+
+        // Автосохранение раз в 10 секунд
+        setInterval(() => this.save(), 10000);
     },
 
     async save() {
-        fetch('/api/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: this.user.userId,
-                balance: Math.floor(this.user.balance),
-                energy: Math.floor(this.user.energy),
-                max_energy: this.user.max_energy,
-                click_lvl: this.user.click_lvl,
-                profit_hr: Math.floor(this.user.profit),
-                lvl: this.user.level,
-                is_liked: this.user.isLiked,
-                likes: this.user.likes
-            })
-        });
+        try {
+            await fetch('/api/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: this.user.userId,
+                    balance: this.user.balance,
+                    energy: this.user.energy,
+                    max_energy: this.user.max_energy,
+                    click_lvl: this.user.click_lvl,
+                    profit_hr: this.user.profit,
+                    lvl: this.user.level,
+                    is_liked: this.user.isLiked,
+                    likes: this.user.likes
+                })
+            });
+        } catch (e) { console.error("❌ Save Error:", e); }
     }
 };
-
-logic.init();
