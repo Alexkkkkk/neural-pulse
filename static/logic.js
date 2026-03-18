@@ -31,30 +31,24 @@ const logic = {
 
         await this.syncWithDB();
         this.setupListeners();
+        this.startPassiveIncome();
     },
 
     setupListeners() {
         const target = document.getElementById('tap-target');
         if (target) {
-            // Убираем стандартные жесты браузера на элементе
             target.style.touchAction = 'none';
-
-            // Используем pointerdown для мгновенного срабатывания на всех устройствах
+            // Используем pointerdown для мгновенного отклика
             target.addEventListener('pointerdown', (e) => {
-                e.preventDefault(); // Защита от выделения и зума
-                
-                // Проверка энергии
+                e.preventDefault();
                 if (this.user.energy >= this.user.click_lvl) {
                     this.tap(e);
                 } else {
-                    // Вибрация ошибки, если нет энергии
                     if (window.Telegram?.WebApp?.HapticFeedback) {
                         window.Telegram.WebApp.HapticFeedback.notificationOccurred('warning');
                     }
                 }
             });
-        } else {
-            console.error("❌ Элемент #tap-target не найден!");
         }
     },
 
@@ -69,46 +63,28 @@ const logic = {
                 this.user.click_lvl = Number(data.click_lvl) || 1;
                 this.user.profit = Number(data.profit_hr) || 0;
                 this.user.level = Number(data.lvl) || 1;
-                
                 if (window.ui) ui.update();
             }
         } catch (e) { console.error("Ошибка синхронизации:", e); }
     },
 
     tap(e) {
-        // Логика начисления
         this.user.balance += this.user.click_lvl;
         this.user.energy -= this.user.click_lvl;
         
-        // Визуальное обновление
         if (window.ui) {
             ui.update();
             ui.anim(e);
         }
 
-        // Тактильный отклик
         if (window.Telegram?.WebApp?.HapticFeedback) {
             window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
         }
     },
 
-    async buyUpgrade(type, cost, value) {
-        if (this.user.balance >= cost) {
-            this.user.balance -= cost;
-            if (type === 'tap') this.user.click_lvl += value;
-            if (type === 'energy') this.user.max_energy += value;
-            if (type === 'profit') this.user.profit += value;
-            
-            if (window.ui) ui.update();
-            await this.save();
-            return true;
-        }
-        return false;
-    },
-
     async save() {
         try {
-            const response = await fetch('/api/save', {
+            await fetch('/api/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -121,28 +97,19 @@ const logic = {
                     lvl: this.user.level
                 })
             });
-            const result = await response.json();
-            if (result.ok) console.log("💾 Данные сохранены в БД");
         } catch (e) { console.error("Ошибка сохранения:", e); }
     },
 
     startPassiveIncome() {
-        // Каждую секунду (Доход и Реген энергии)
         setInterval(() => {
-            // Регенерация энергии (+1 в сек)
             if (this.user.energy < this.user.max_energy) {
                 this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
             }
-            
-            // Пассивный доход
             if (this.user.profit > 0) {
                 this.user.balance += (this.user.profit / 3600);
             }
-            
             if (window.ui) ui.update();
         }, 1000);
-
-        // Авто-сохранение каждые 15 секунд
         setInterval(() => this.save(), 15000);
     }
 };
