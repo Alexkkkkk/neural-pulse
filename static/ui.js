@@ -96,11 +96,9 @@ const ui = {
         n.className = 'tap-pop';
         n.innerText = `+${logic.user.click_lvl}`;
         
-        // Читаем координаты из мыши или пальца
         const x = e.clientX || (e.touches && e.touches.length > 0 ? e.touches[0].clientX : window.innerWidth / 2);
         const y = e.clientY || (e.touches && e.touches.length > 0 ? e.touches[0].clientY : window.innerHeight / 2);
         
-        // Корректируем, чтобы цифра вылетала ровно из-под пальца
         n.style.left = (x - 15) + "px";
         n.style.top = y + "px";
         
