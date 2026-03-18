@@ -26,7 +26,8 @@ const initDB = async () => {
                 click_lvl INTEGER DEFAULT 1, 
                 profit_hr NUMERIC DEFAULT 0,  
                 lvl INTEGER DEFAULT 1, 
-                ref_by TEXT, 
+                likes INTEGER DEFAULT 0,
+                is_liked BOOLEAN DEFAULT FALSE,
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
         console.log("✅ [DB] База данных готова.");
@@ -44,24 +45,27 @@ app.get('/api/user/:id', async (req, res) => {
             result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
         }
         let user = result.rows[0];
+        // Превращаем строки из PG в числа для JS
         res.json({
             ...user,
             balance: parseFloat(user.balance) || 0,
-            profit_hr: parseFloat(user.profit_hr) || 0
+            profit_hr: parseFloat(user.profit_hr) || 0,
+            likes: parseInt(user.likes) || 0
         });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Сохранение данных (Исправлено)
+// Сохранение данных
 app.post('/api/save', async (req, res) => {
-    const { userId, balance, energy, max_energy, click_lvl, profit_hr, lvl } = req.body;
+    const { userId, balance, energy, max_energy, click_lvl, profit_hr, lvl, likes, is_liked } = req.body;
     try {
         await pool.query(`
             UPDATE users SET 
                 balance = $2, energy = $3, max_energy = $4, 
                 click_lvl = $5, profit_hr = $6, lvl = $7, 
+                likes = $8, is_liked = $9,
                 last_seen = CURRENT_TIMESTAMP WHERE user_id = $1`, 
-            [userId, balance, energy, max_energy, click_lvl, profit_hr, lvl || 1]
+            [userId, balance, energy, max_energy, click_lvl, profit_hr, lvl || 1, likes || 0, is_liked || false]
         );
         res.json({ ok: true });
     } catch (e) { 
