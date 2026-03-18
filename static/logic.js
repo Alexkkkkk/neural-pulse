@@ -16,7 +16,7 @@ const logic = {
         if (window.Telegram?.WebApp) {
             window.Telegram.WebApp.ready();
             window.Telegram.WebApp.expand();
-            window.Telegram.WebApp.disableVerticalSwipes(); // Блок свайпов вниз
+            window.Telegram.WebApp.disableVerticalSwipes();
             
             const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
             if (tgUser) {
@@ -27,7 +27,6 @@ const logic = {
             }
         }
 
-        // Если запущено не в ТГ (для тестов в браузере), даем фейковый ID
         if (!this.user.userId) this.user.userId = "test_user_1"; 
 
         await this.syncWithDB();
@@ -37,10 +36,25 @@ const logic = {
     setupListeners() {
         const target = document.getElementById('tap-target');
         if (target) {
+            // Убираем стандартные жесты браузера на элементе
+            target.style.touchAction = 'none';
+
+            // Используем pointerdown для мгновенного срабатывания на всех устройствах
             target.addEventListener('pointerdown', (e) => {
-                e.preventDefault();
-                this.tap(e);
+                e.preventDefault(); // Защита от выделения и зума
+                
+                // Проверка энергии
+                if (this.user.energy >= this.user.click_lvl) {
+                    this.tap(e);
+                } else {
+                    // Вибрация ошибки, если нет энергии
+                    if (window.Telegram?.WebApp?.HapticFeedback) {
+                        window.Telegram.WebApp.HapticFeedback.notificationOccurred('warning');
+                    }
+                }
             });
+        } else {
+            console.error("❌ Элемент #tap-target не найден!");
         }
     },
 
@@ -55,27 +69,26 @@ const logic = {
                 this.user.click_lvl = Number(data.click_lvl) || 1;
                 this.user.profit = Number(data.profit_hr) || 0;
                 this.user.level = Number(data.lvl) || 1;
+                
+                if (window.ui) ui.update();
             }
         } catch (e) { console.error("Ошибка синхронизации:", e); }
     },
 
     tap(e) {
-        if (this.user.energy >= this.user.click_lvl) {
-            this.user.balance += this.user.click_lvl;
-            this.user.energy -= this.user.click_lvl;
-            
-            if (window.ui) {
-                ui.update();
-                ui.anim(e);
-            }
+        // Логика начисления
+        this.user.balance += this.user.click_lvl;
+        this.user.energy -= this.user.click_lvl;
+        
+        // Визуальное обновление
+        if (window.ui) {
+            ui.update();
+            ui.anim(e);
+        }
 
-            if (window.Telegram?.WebApp?.HapticFeedback) {
-                window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
-            }
-        } else {
-            if (window.Telegram?.WebApp?.HapticFeedback) {
-                window.Telegram.WebApp.HapticFeedback.notificationOccurred('warning');
-            }
+        // Тактильный отклик
+        if (window.Telegram?.WebApp?.HapticFeedback) {
+            window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
         }
     },
 
@@ -95,7 +108,7 @@ const logic = {
 
     async save() {
         try {
-            await fetch('/api/save', {
+            const response = await fetch('/api/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -108,22 +121,28 @@ const logic = {
                     lvl: this.user.level
                 })
             });
+            const result = await response.json();
+            if (result.ok) console.log("💾 Данные сохранены в БД");
         } catch (e) { console.error("Ошибка сохранения:", e); }
     },
 
     startPassiveIncome() {
-        // Каждую секунду
+        // Каждую секунду (Доход и Реген энергии)
         setInterval(() => {
+            // Регенерация энергии (+1 в сек)
             if (this.user.energy < this.user.max_energy) {
                 this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
             }
+            
+            // Пассивный доход
             if (this.user.profit > 0) {
                 this.user.balance += (this.user.profit / 3600);
             }
+            
             if (window.ui) ui.update();
         }, 1000);
 
-        // Каждые 15 секунд сохраняем в БД
+        // Авто-сохранение каждые 15 секунд
         setInterval(() => this.save(), 15000);
     }
 };
