@@ -1,7 +1,7 @@
 const ui = {
     init() {
         console.log("🖥️ [UI] Интерфейс инициализирован");
-        // При старте делаем кнопку BOOST активной в навигации
+        // При старте делаем первую кнопку активной
         const firstNav = document.querySelector('.bottom-nav .nav-btn');
         if (firstNav) firstNav.classList.add('active');
         this.update();
@@ -42,9 +42,7 @@ const ui = {
     },
 
     openM(id) {
-        // Логика подсветки кнопок навигации
         document.querySelectorAll('.bottom-nav .nav-btn').forEach(btn => btn.classList.remove('active'));
-        // Находим кнопку, которая вызвала модалку
         const clickedBtn = event.currentTarget;
         if (clickedBtn && clickedBtn.classList.contains('nav-btn')) {
             clickedBtn.classList.add('active');
@@ -94,7 +92,6 @@ const ui = {
     },
 
     anim(e) {
-        if (!e) return;
         const target = document.getElementById('tap-target');
         if (!target) return;
         
@@ -103,12 +100,12 @@ const ui = {
         n.className = 'tap-pop';
         n.innerText = `+${logic.user.click_lvl}`;
         
-        // Вычисляем центр логотипа
-        const x = rect.left + rect.width / 2;
-        const y = rect.top + rect.height / 2;
+        // Позиционируем относительно места клика, если событие есть, иначе по центру
+        let x = e ? e.clientX : (rect.left + rect.width / 2);
+        let y = e ? e.clientY : (rect.top + rect.height / 2);
         
         n.style.left = (x - 15) + "px";
-        n.style.top = (y - 30) + "px"; // Чуть выше центра
+        n.style.top = (y - 30) + "px";
         
         document.body.appendChild(n);
         setTimeout(() => { if (n.parentNode) n.remove(); }, 800);
