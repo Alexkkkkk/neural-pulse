@@ -13,10 +13,8 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Инициализация базы данных
 const initDB = async () => {
     try {
-        // Создаем таблицу, если её нет
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY, 
@@ -29,51 +27,55 @@ const initDB = async () => {
                 lvl INTEGER DEFAULT 1
             )`);
         
-        // Добавляем недостающие колонки (Лайки), если их еще нет в БД
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS likes INTEGER DEFAULT 0`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_liked BOOLEAN DEFAULT FALSE`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
         
-        console.log("✅ [DB] База данных готова и обновлена.");
-    } catch (e) { console.error("❌ [DB ERROR]", e.message); }
+        console.log("✅ [DB] База данных проверена и готова.");
+    } catch (e) { console.error("❌ [DB INIT ERROR]", e.message); }
 };
 initDB();
 
-// API: Получение данных
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
+    console.log(`🔍 [GET USER] Запрос для ID: ${userId}`);
     try {
         let result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
         if (result.rows.length === 0) {
+            console.log(`🆕 [NEW USER] Создаем игрока ${userId}`);
             await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2)', [userId, 'Agent']);
             result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
         }
-        let user = result.rows[0];
-        res.json({
-            ...user,
-            balance: parseFloat(user.balance) || 0,
-            profit_hr: parseFloat(user.profit_hr) || 0,
-            likes: parseInt(user.likes) || 0
-        });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+        res.json(result.rows[0]);
+    } catch (e) { 
+        console.error("❌ [GET USER ERROR]", e.message);
+        res.status(500).json({ error: e.message }); 
+    }
 });
 
-// API: Сохранение
 app.post('/api/save', async (req, res) => {
-    const { userId, balance, energy, max_energy, click_lvl, profit_hr, lvl, likes, is_liked } = req.body;
+    const d = req.body;
+    console.log(`📥 [SAVE] Пытаемся сохранить ID: ${d.userId}, Баланс: ${d.balance}`);
     try {
-        await pool.query(`
+        const result = await pool.query(`
             UPDATE users SET 
                 balance = $2, energy = $3, max_energy = $4, 
                 click_lvl = $5, profit_hr = $6, lvl = $7, 
                 likes = $8, is_liked = $9,
                 last_seen = CURRENT_TIMESTAMP WHERE user_id = $1`, 
-            [userId, balance, energy, max_energy, click_lvl, profit_hr, lvl || 1, likes || 0, is_liked || false]
+            [d.userId, d.balance, d.energy, d.max_energy, d.click_lvl, d.profit_hr, d.lvl, d.likes, d.is_liked]
         );
-        res.json({ ok: true });
+        
+        if (result.rowCount > 0) {
+            console.log(`✅ [SAVE] Данные ID: ${d.userId} обновлены.`);
+            res.json({ ok: true });
+        } else {
+            console.warn(`⚠️ [SAVE] Пользователь ${d.userId} не найден для обновления.`);
+            res.json({ ok: false, error: "not_found" });
+        }
     } catch (e) { 
-        console.error("❌ Save error:", e.message);
-        res.status(500).send(e.message); 
+        console.error("❌ [SAVE ERROR]", e.message);
+        res.status(500).json({ error: e.message }); 
     }
 });
 
@@ -83,6 +85,6 @@ bot.start((ctx) => {
 });
 
 app.listen(3000, () => { 
-    console.log(`🚀 [SERVER] На порту 3000`);
+    console.log(`🚀 [SERVER] Запущен на порту 3000`);
     bot.launch();
 });
