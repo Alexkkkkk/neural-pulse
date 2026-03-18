@@ -10,9 +10,11 @@ const logic = {
         username: "Agent"
     },
 
+    // Главная функция старта
     async init() {
         console.log("🚀 Инициализация логики...");
         
+        // 1. Настройка Telegram WebApp
         if (window.Telegram?.WebApp) {
             window.Telegram.WebApp.ready();
             window.Telegram.WebApp.expand();
@@ -21,6 +23,7 @@ const logic = {
             if (tgUser) {
                 this.user.userId = tgUser.id;
                 this.user.username = tgUser.first_name || "Agent";
+                
                 const nameEl = document.getElementById('u-name');
                 if (nameEl) nameEl.innerText = this.user.username;
             } else {
@@ -30,12 +33,14 @@ const logic = {
             this.user.userId = "test_user";
         }
 
+        // 2. Ждем загрузки данных из БД
         await this.syncWithDB();
+        
+        // 3. Настраиваем клики
         this.setupListeners();
 
+        // 4. Инициализируем UI и запускаем таймеры
         if (window.ui) ui.init();
-        
-        // Запускаем таймеры дохода и регена
         this.startPassiveIncome();
         
         console.log("✅ Логика готова");
@@ -45,10 +50,9 @@ const logic = {
         const target = document.getElementById('tap-target');
         if (target) {
             target.addEventListener('pointerdown', (e) => {
-                e.preventDefault(); 
+                e.preventDefault();
                 this.tap(e);
             });
-            console.log("🎯 Слушатель тапов установлен");
         }
     },
 
@@ -66,7 +70,7 @@ const logic = {
                 this.user.level = Number(data.lvl) || 1;
             }
         } catch (e) {
-            console.error("❌ Ошибка БД");
+            console.error("❌ Ошибка синхронизации с БД");
         }
     },
 
@@ -120,7 +124,9 @@ const logic = {
                     lvl: this.user.level
                 })
             });
-        } catch (e) { console.error("💾 Ошибка сохранения"); }
+        } catch (e) {
+            console.error("💾 Ошибка автосохранения");
+        }
     },
 
     startPassiveIncome() {
@@ -133,6 +139,7 @@ const logic = {
             }
             if (window.ui) ui.update();
         }, 1000);
+
         setInterval(() => this.save(), 15000);
     }
 };
