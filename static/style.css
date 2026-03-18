@@ -1,86 +1,30 @@
-const ui = {
-    init() {
-        console.log("🖥️ Интерфейс обновлен");
-        this.update();
-    },
+/* Всплывающие цифры */
+.tap-pop {
+    position: fixed;
+    color: #00ffff; /* Цвет акцента */
+    font-size: 32px;
+    font-weight: 900;
+    pointer-events: none; /* ЧТОБЫ ЦИФРЫ НЕ МЕШАЛИ ТАПАТЬ ДАЛЬШЕ */
+    z-index: 9999;
+    transform: translate(-50%, -50%);
+    text-shadow: 0 0 10px rgba(0,255,255,0.8);
+    animation: floatUp 0.8s ease-out forwards;
+}
 
-    update() {
-        if (typeof logic === 'undefined') return;
+@keyframes floatUp {
+    0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -150px) scale(1.3); opacity: 0; }
+}
 
-        const bld = document.getElementById('balance');
-        if (bld) bld.innerText = Math.floor(logic.user.balance).toLocaleString();
+/* Настройка главной кнопки */
+#tap-target {
+    user-select: none;
+    -webkit-user-drag: none;
+    touch-action: none; /* Отключает зум и скролл при быстром тапе */
+    cursor: pointer;
+}
 
-        const engV = document.getElementById('eng-val');
-        const engF = document.getElementById('eng-fill');
-        if (engV && engF) {
-            engV.innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
-            engF.style.width = (logic.user.energy / logic.user.max_energy * 100) + "%";
-        }
-
-        if (document.getElementById('tap-val')) document.getElementById('tap-val').innerText = "+" + logic.user.click_lvl;
-        if (document.getElementById('profit-val')) document.getElementById('profit-val').innerText = Math.floor(logic.user.profit).toLocaleString();
-        if (document.getElementById('u-lvl')) document.getElementById('u-lvl').innerText = `LVL ${logic.user.level}`;
-    },
-
-    openM(id) {
-        const m = document.getElementById('m-' + id);
-        if (!m) return;
-        
-        let content = "";
-        if (id === 'boost') {
-            content = `
-                <div class="modal-header">BOOSTERS</div>
-                <div class="upgrade-card" onclick="ui.handleBuy('tap', 1000, 1)">
-                    <div class="upg-info">
-                        <small>UPGRADE TAP (LVL ${logic.user.click_lvl})</small>
-                        <p>Доход за клик +1</p>
-                    </div>
-                    <div class="upg-price">💰 1 000</div>
-                </div>
-                <button class="back-btn" onclick="ui.closeM()">BACK</button>`;
-        } else if (id === 'mine') {
-            content = `
-                <div class="modal-header">MINING</div>
-                <div class="upgrade-card" onclick="ui.handleBuy('profit', 5000, 100)">
-                    <div class="upg-info"><small>NEURAL CHIP</small><p>+100/час</p></div>
-                    <div class="upg-price">💰 5 000</div>
-                </div>
-                <button class="back-btn" onclick="ui.closeM()">BACK</button>`;
-        } else {
-            content = `<div class="modal-header">${id.toUpperCase()}</div><div style="padding:40px;">Coming Soon...</div><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
-        }
-
-        const modalContent = m.querySelector('.modal-content');
-        if (modalContent) modalContent.innerHTML = content;
-        m.classList.add('active');
-    },
-
-    closeM() {
-        document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
-    },
-
-    async handleBuy(type, cost, val) {
-        const success = await logic.buyUpgrade(type, cost, val);
-        if (success) {
-            if (window.Telegram?.WebApp?.HapticFeedback) {
-                window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-            }
-            this.openM(type === 'profit' ? 'mine' : 'boost'); 
-        } else {
-            alert("Недостаточно средств!");
-        }
-    },
-
-    anim(e) {
-        const n = document.createElement('div');
-        n.className = 'tap-pop'; // Должно совпадать с CSS
-        n.innerText = `+${logic.user.click_lvl}`;
-        
-        // Позиционирование
-        n.style.left = (e.clientX || e.pageX) + "px";
-        n.style.top = (e.clientY || e.pageY) + "px";
-        
-        document.body.appendChild(n);
-        setTimeout(() => n.remove(), 800);
-    }
-};
+/* Плавный переход для полоски энергии */
+.load-bar-f {
+    transition: width 0.3s linear;
+}
