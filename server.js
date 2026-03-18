@@ -8,7 +8,12 @@ const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
-const pool = new Pool({ connectionString: PG_URI, ssl: false });
+
+// ВАЖНО: Добавлен SSL для стабильного подключения к БД
+const pool = new Pool({ 
+    connectionString: PG_URI, 
+    ssl: { rejectUnauthorized: false } 
+});
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
@@ -17,12 +22,18 @@ const initDB = async () => {
     try {
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
-                user_id TEXT PRIMARY KEY, username TEXT, balance NUMERIC DEFAULT 0, 
-                energy INTEGER DEFAULT 1000, max_energy INTEGER DEFAULT 1000, 
-                click_lvl INTEGER DEFAULT 1, profit_hr NUMERIC DEFAULT 0, 
-                lvl INTEGER DEFAULT 1, ref_by TEXT, last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                user_id TEXT PRIMARY KEY, 
+                username TEXT, 
+                balance NUMERIC DEFAULT 0,  
+                energy INTEGER DEFAULT 1000, 
+                max_energy INTEGER DEFAULT 1000,  
+                click_lvl INTEGER DEFAULT 1, 
+                profit_hr NUMERIC DEFAULT 0,  
+                lvl INTEGER DEFAULT 1, 
+                ref_by TEXT, 
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
-        console.log("✅ Database v3.8.0 Verified");
+        console.log("✅ Database v3.8.0 Connected");
     } catch (e) { console.error("❌ DB Error:", e); }
 };
 initDB();
@@ -68,4 +79,7 @@ bot.start((ctx) => {
         Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", "https://neural-pulse.bothost.ru")]]));
 });
 
-app.listen(3000, () => { console.log(`🚀 Server on port 3000`); bot.launch(); });
+app.listen(3000, () => { 
+    console.log(`🚀 Server running on port 3000`); 
+    bot.launch().catch(err => console.error("Bot fail:", err));
+});
