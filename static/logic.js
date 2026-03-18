@@ -7,19 +7,27 @@ const logic = {
     async init() {
         console.log("🚀 Инициализация логики...");
         
+        // Сообщаем Telegram, что мы загрузились
+        if (window.Telegram?.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
+        }
+
         // 1. Берем ID из Telegram
         if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
             const tg = window.Telegram.WebApp.initDataUnsafe.user;
             this.user.userId = tg.id;
             this.user.username = tg.first_name || "Agent";
             console.log("👤 Пользователь определен:", this.user.userId);
+            
+            // Обновляем имя в UI сразу
+            const nameEl = document.getElementById('u-name');
+            if (nameEl) nameEl.innerText = this.user.username;
         } else {
-            console.warn("⚠️ Запущено вне Telegram WebApp");
-            // Для тестов в браузере можно раскомментировать строку ниже:
-            // this.user.userId = "test_user"; 
+            console.warn("⚠️ Данные Telegram не найдены. Используйте бота для запуска.");
         }
 
-        // 2. Синхронизация
+        // 2. Синхронизация с базой
         await this.syncWithDB();
         
         this.startPassiveIncome();
@@ -31,6 +39,7 @@ const logic = {
     setupListeners() {
         const target = document.getElementById('tap-target');
         if (target) {
+            // Используем pointerdown для поддержки и мыши, и тача
             target.addEventListener('pointerdown', (e) => {
                 e.preventDefault();
                 this.tap(e);
@@ -44,7 +53,6 @@ const logic = {
 
         try {
             const ref = window.Telegram?.WebApp?.initDataUnsafe?.start_param || "";
-            // Добавляем v= время, чтобы обмануть кэш Telegram
             const res = await fetch(`/api/user/${this.user.userId}?ref=${ref}&v=${Date.now()}`);
             if (res.ok) {
                 const data = await res.json();
@@ -54,10 +62,10 @@ const logic = {
                 this.user.click_lvl = parseInt(data.click_lvl) || 1;
                 this.user.profit = parseFloat(data.profit_hr) || 0;
                 this.user.level = parseInt(data.lvl) || 1;
-                console.log("✅ Синхронизация успешна:", data);
+                console.log("✅ Данные загружены:", data);
             }
         } catch (e) { 
-            console.error("❌ Ошибка синхронизации:", e); 
+            console.error("❌ Ошибка сети:", e); 
         }
     },
 
@@ -74,7 +82,7 @@ const logic = {
                 Telegram.WebApp.HapticFeedback.impactOccurred('light');
             }
         } else if (!this.user.userId) {
-            alert("Ошибка: Не удалось получить ваш Telegram ID. Перезапустите бота.");
+            alert("Ошибка: Telegram ID не найден. Запустите через бота.");
         }
     },
 
@@ -94,7 +102,7 @@ const logic = {
                     lvl: this.user.level
                 })
             });
-            console.log("💾 Прогресс сохранен");
+            console.log("💾 Автосохранение...");
         } catch (e) { console.error("Ошибка сохранения"); }
     },
 
