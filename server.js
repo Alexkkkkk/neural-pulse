@@ -13,9 +13,10 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Инициализация базы
+// Инициализация базы данных
 const initDB = async () => {
     try {
+        // Создаем таблицу, если её нет
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY, 
@@ -25,17 +26,20 @@ const initDB = async () => {
                 max_energy INTEGER DEFAULT 1000,  
                 click_lvl INTEGER DEFAULT 1, 
                 profit_hr NUMERIC DEFAULT 0,  
-                lvl INTEGER DEFAULT 1, 
-                likes INTEGER DEFAULT 0,
-                is_liked BOOLEAN DEFAULT FALSE,
-                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                lvl INTEGER DEFAULT 1
             )`);
-        console.log("✅ [DB] База данных готова.");
+        
+        // Добавляем недостающие колонки (Лайки), если их еще нет в БД
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS likes INTEGER DEFAULT 0`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_liked BOOLEAN DEFAULT FALSE`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
+        
+        console.log("✅ [DB] База данных готова и обновлена.");
     } catch (e) { console.error("❌ [DB ERROR]", e.message); }
 };
 initDB();
 
-// Получение данных пользователя
+// API: Получение данных
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     try {
@@ -45,7 +49,6 @@ app.get('/api/user/:id', async (req, res) => {
             result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
         }
         let user = result.rows[0];
-        // Превращаем строки из PG в числа для JS
         res.json({
             ...user,
             balance: parseFloat(user.balance) || 0,
@@ -55,7 +58,7 @@ app.get('/api/user/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Сохранение данных
+// API: Сохранение
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, max_energy, click_lvl, profit_hr, lvl, likes, is_liked } = req.body;
     try {
