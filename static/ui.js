@@ -1,117 +1,79 @@
-// Инициализация TON Connect
-const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-    manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
-});
-
 const ui = {
+    init() {
+        console.log("🖥️ [UI] Интерфейс инициализирован");
+        // При старте делаем кнопку BOOST активной в навигации
+        const firstNav = document.querySelector('.bottom-nav .nav-btn');
+        if (firstNav) firstNav.classList.add('active');
+        this.update();
+    },
+
     update() {
         if (typeof logic === 'undefined' || !logic.user) return;
 
-        const balEl = document.getElementById('balance');
-        if (balEl) balEl.innerText = Math.floor(logic.user.balance).toLocaleString('ru-RU');
+        try {
+            // Обновление баланса
+            const balanceEl = document.getElementById('balance');
+            if (balanceEl) balanceEl.innerText = Math.floor(logic.user.balance).toLocaleString('ru-RU');
 
-        const engVal = document.getElementById('eng-val');
-        const engFill = document.getElementById('eng-fill');
-        if (engVal) engVal.innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
-        if (engFill) engFill.style.width = (logic.user.energy / logic.user.max_energy * 100) + "%";
+            // Сила клика
+            const tapValEl = document.getElementById('tap-val');
+            if (tapValEl) tapValEl.innerText = "+" + logic.user.click_lvl;
 
-        const tapEl = document.getElementById('tap-val');
-        if (tapEl) tapEl.innerText = "+" + logic.user.click_lvl;
+            // Прибыль в час
+            const profitValEl = document.getElementById('profit-val');
+            if (profitValEl) profitValEl.innerText = Math.floor(logic.user.profit_hr).toLocaleString('ru-RU');
 
-        const profitEl = document.getElementById('profit-val');
-        if (profitEl) profitEl.innerText = Math.floor(logic.user.profit_hr || 0).toLocaleString('ru-RU');
-        
-        const lvlEl = document.getElementById('u-lvl');
-        if (lvlEl) lvlEl.innerText = `LVL ${logic.user.lvl || 1}`;
+            // Уровень
+            const lvlEl = document.getElementById('u-lvl');
+            if (lvlEl) lvlEl.innerText = `LVL ${logic.user.lvl}`;
+
+            // Энергия
+            const currentEng = Math.floor(logic.user.energy);
+            const maxEng = logic.user.max_energy;
+            const engValEl = document.getElementById('eng-val');
+            const engFillEl = document.getElementById('eng-fill');
+
+            if (engValEl) engValEl.innerText = `${currentEng}/${maxEng}`;
+            if (engFillEl) engFillEl.style.width = (currentEng / maxEng * 100) + "%";
+
+        } catch (err) {
+            console.error("❌ [UI UPDATE ERROR]", err);
+        }
     },
 
-    async openM(id) {
-        const modal = document.getElementById('m-' + id);
-        if (!modal) return;
-        const inner = modal.querySelector('.modal-content');
-        if (!inner) return;
+    openM(id) {
+        // Логика подсветки кнопок навигации
+        document.querySelectorAll('.bottom-nav .nav-btn').forEach(btn => btn.classList.remove('active'));
+        // Находим кнопку, которая вызвала модалку
+        const clickedBtn = event.currentTarget;
+        if (clickedBtn && clickedBtn.classList.contains('nav-btn')) {
+            clickedBtn.classList.add('active');
+        }
 
-        modal.classList.add('active');
-
-        if (id === 'wallet') {
-            inner.innerHTML = `
-                <div class="modal-header">CRYPTO WALLET</div>
-                <div style="text-align:center; padding: 20px;">
-                    <div id="ton-connect-btn" style="display:flex; justify-content:center; margin-bottom:20px;"></div>
-                    <p id="wallet-addr" style="font-size:12px; color:var(--accent); word-break:break-all; min-height:20px;">
-                        ${logic.user.wallet ? 'Connected: ' + logic.user.wallet : 'Connect your TON wallet'}
-                    </p>
-                </div>
-                <button class="back-btn" onclick="ui.closeM()">BACK</button>
-            `;
-
-            // Указываем TON Connect, куда рисовать кнопку
-            tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
-
-            // Подписка на изменение состояния кошелька
-            tonConnectUI.onStatusChange(async (wallet) => {
-                if (wallet && wallet.account.address !== logic.user.wallet) {
-                    const address = wallet.account.address;
-                    logic.user.wallet = address;
-                    const addrEl = document.getElementById('wallet-addr');
-                    if (addrEl) addrEl.innerText = 'Connected: ' + address;
-
-                    // Сохраняем на сервер
-                    await fetch('/api/wallet', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ userId: logic.user.user_id, address })
-                    });
-                }
-            });
-
-        } else if (id === 'top') {
-            inner.innerHTML = `<div class="modal-header">LEADERBOARD</div><div style="text-align:center;padding:20px;">Loading...</div>`;
-            try {
-                const res = await fetch('/api/top');
-                const players = await res.json();
-                let html = `<div class="modal-header">TOP 100 PLAYERS</div><div class="top-list" style="max-height:60vh; overflow-y:auto; margin: 10px 0;">`;
-                players.forEach((p, i) => {
-                    const isMe = p.username === logic.user.username ? 'style="border: 1px solid var(--accent); background: rgba(0,255,255,0.05);"' : '';
-                    html += `
-                        <div class="upgrade-card" ${isMe} style="margin-bottom:8px; padding:10px 15px;">
-                            <div style="display:flex; align-items:center; gap:12px;">
-                                <span style="color:var(--accent); font-weight:bold; width:25px;">#${i+1}</span>
-                                <div>
-                                    <b style="font-size:14px;">${p.username}</b><br>
-                                    <small style="color:#666;">LVL ${p.lvl}</small>
-                                </div>
-                            </div>
-                            <div style="font-weight:bold; color:#fff;">💰 ${Math.floor(p.balance).toLocaleString()}</div>
-                        </div>`;
-                });
-                html += `</div><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
-                inner.innerHTML = html;
-            } catch (e) {
-                inner.innerHTML = `<div class="modal-header">ERROR</div><p>Failed to load TOP</p><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
-            }
-        } else if (id === 'boost') {
-            inner.innerHTML = `
-                <div class="modal-header">BOOSTERS</div>
+        const m = document.getElementById('m-' + id);
+        if (!m) return;
+        
+        let content = "";
+        if (id === 'boost') {
+            content = `
+                <div class="modal-header" style="text-align:center; font-weight:bold; margin-bottom:15px; color:var(--accent);">BOOSTERS</div>
                 <div class="upgrade-card" onclick="ui.handleBuy('tap', 1000, 1)">
-                    <div class="upg-info"><b>MULTITAP (LVL ${logic.user.click_lvl})</b><small>+1 к силе клика</small></div>
+                    <div class="upg-info"><small>MULTITAP (LVL ${logic.user.click_lvl})</small><p style="font-size:11px; color:#666; margin:5px 0 0 0;">+1 к силе клика</p></div>
                     <div class="upg-price">💰 1 000</div>
                 </div>
                 <div class="upgrade-card" onclick="ui.handleBuy('energy', 5000, 500)">
-                    <div class="upg-info"><b>MAX ENERGY</b><small>+500 к лимиту</small></div>
-                    <div class="upg-price">💰 5 000</div>
-                </div>
-                <button class="back-btn" onclick="ui.closeM()">BACK</button>`;
-        } else if (id === 'mine') {
-            inner.innerHTML = `
-                <div class="modal-header">MINING</div>
-                <div class="upgrade-card" onclick="ui.handleBuy('profit', 5000, 100)">
-                    <div class="upg-info"><b>NEURAL CORE</b><small>+100 прибыли в час</small></div>
+                    <div class="upg-info"><small>MAX ENERGY</small><p style="font-size:11px; color:#666; margin:5px 0 0 0;">+500 к лимиту</p></div>
                     <div class="upg-price">💰 5 000</div>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>`;
         } else {
-            inner.innerHTML = `<div class="modal-header">${id.toUpperCase()}</div><p style="text-align:center; padding:20px; color:#666;">Soon...</p><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
+            content = `<div class="modal-header" style="text-align:center; padding:20px;">${id.toUpperCase()}</div><p style="text-align:center;color:#555">Soon...</p><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
+        }
+
+        const container = m.querySelector('.modal-content');
+        if (container) {
+            container.innerHTML = content;
+            m.classList.add('active');
         }
     },
 
@@ -120,28 +82,35 @@ const ui = {
     },
 
     async handleBuy(type, cost, val) {
-        const ok = await logic.buyUpgrade(type, cost, val);
-        if (ok) this.openM(type === 'profit' ? 'mine' : 'boost');
-        else {
-            if (window.Telegram?.WebApp) window.Telegram.WebApp.showAlert("Недостаточно средств!");
-            else alert("Need more money!");
+        if (typeof logic.buyUpgrade !== 'function') return;
+        const success = await logic.buyUpgrade(type, cost, val);
+        if (success) {
+            if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+            this.openM('boost'); 
+        } else {
+            if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('error');
+            alert("Недостаточно Neural Pulse!");
         }
     },
 
     anim(e) {
+        if (!e) return;
+        const target = document.getElementById('tap-target');
+        if (!target) return;
+        
+        const rect = target.getBoundingClientRect();
         const n = document.createElement('div');
         n.className = 'tap-pop';
         n.innerText = `+${logic.user.click_lvl}`;
-        let x = e.clientX || (e.touches ? e.touches[0].clientX : window.innerWidth / 2);
-        let y = e.clientY || (e.touches ? e.touches[0].clientY : window.innerHeight / 2);
+        
+        // Вычисляем центр логотипа
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        
         n.style.left = (x - 15) + "px";
-        n.style.top = (y - 20) + "px";
+        n.style.top = (y - 30) + "px"; // Чуть выше центра
+        
         document.body.appendChild(n);
-        setTimeout(() => n.remove(), 800);
-    },
-
-    toggleLike(e) {
-        e.stopPropagation();
-        // Логика лайка (если нужна)...
+        setTimeout(() => { if (n.parentNode) n.remove(); }, 800);
     }
 };
