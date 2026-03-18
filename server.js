@@ -9,7 +9,7 @@ const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// ИСПРАВЛЕНО: Отключаем SSL, так как сервер его не поддерживает
+// КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: ssl: false для pghost.ru
 const pool = new Pool({ 
     connectionString: PG_URI, 
     ssl: false 
@@ -33,8 +33,10 @@ const initDB = async () => {
                 ref_by TEXT, 
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
-        console.log("✅ Database v3.8.0 Verified (SSL Off)");
-    } catch (e) { console.error("❌ DB Error:", e); }
+        console.log("✅ Database Verified (SSL Disabled)");
+    } catch (e) { 
+        console.error("❌ DB Error:", e.message); 
+    }
 };
 initDB();
 
@@ -81,5 +83,5 @@ bot.start((ctx) => {
 
 app.listen(3000, () => { 
     console.log(`🚀 Server running on port 3000`); 
-    bot.launch().catch(err => console.error("Bot fail:", err));
+    bot.launch();
 });
