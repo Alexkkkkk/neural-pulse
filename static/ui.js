@@ -1,51 +1,61 @@
 const ui = {
     currentModal: null,
 
+    // 1. Инициализация (добавлена поддержка кнопки "Назад" в Telegram)
     init() {
         this.update();
-        const target = document.getElementById('tap-target');
-        if (target) {
-            target.onpointerdown = (e) => logic.tap(e);
-        }
         if (window.Telegram?.WebApp) {
             Telegram.WebApp.BackButton.onClick(() => this.closeM());
         }
+        console.log("Neural Pulse UI Manager v3.8.0 stable loaded");
     },
 
+    // 2. Обновление всех элементов интерфейса
     update() {
-        const bal = document.getElementById('balance');
-        const enV = document.getElementById('eng-val');
-        const enF = document.getElementById('eng-fill');
-        const tV = document.getElementById('tap-val');
-        const pV = document.getElementById('profit-val');
-        const lvl = document.getElementById('u-lvl');
+        // Защита: если logic еще не загружен, выходим
+        if (!window.logic || !logic.user) return;
 
-        if (bal) bal.innerText = Math.floor(logic.user.balance).toLocaleString('ru-RU');
-        if (tV) tV.innerText = `+${logic.user.click_lvl}`;
-        if (pV) pV.innerText = Math.floor(logic.user.profit_hr).toLocaleString('ru-RU');
-        if (lvl) lvl.innerText = `LVL ${logic.user.lvl}`;
+        const bEl = document.getElementById('balance');
+        const eT = document.getElementById('eng-val');
+        const eF = document.getElementById('eng-fill');
+        const lEl = document.getElementById('u-lvl');
+        const pEl = document.getElementById('profit-val');
+        const tV = document.getElementById('tap-val');
+
+        // ГЛАВНОЕ ИСПРАВЛЕНИЕ: Используем Math.floor + localString
+        // Баланс будет отображаться как "2 471 111 111"
+        if (bEl) bEl.innerText = Math.floor(logic.user.balance).toLocaleString('ru-RU');
         
-        if (enV) enV.innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
-        if (enF) enF.style.width = (logic.user.energy / logic.user.max_energy * 100) + '%';
+        if (eT) eT.innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
+        
+        if (eF) {
+            const pct = (logic.user.energy / logic.user.max_energy * 100);
+            eF.style.width = pct + '%';
+        }
+        
+        if (lEl) lEl.innerText = `LVL ${logic.user.level}`;
+        if (pEl) pEl.innerText = Math.floor(logic.user.profit);
+        if (tV) tV.innerText = `+${logic.user.tap_val}`;
     },
 
+    // 3. Открытие модальных окон
     openM(id) {
         if (this.currentModal) this.closeM();
         const m = document.getElementById('m-' + id);
         if (m) {
             m.style.display = 'flex';
             this.currentModal = m;
-            if (window.Telegram?.WebApp) {
-                Telegram.WebApp.HapticFeedback.impactOccurred('light');
-                Telegram.WebApp.BackButton.show();
-            }
+            // Показываем кнопку "Назад" в Telegram
+            if (window.Telegram?.WebApp) Telegram.WebApp.BackButton.show();
         }
     },
 
+    // 4. Закрытие модальных окон
     closeM() {
         if (this.currentModal) {
             this.currentModal.style.display = 'none';
             this.currentModal = null;
+            // Прячем кнопку "Назад" в Telegram
             if (window.Telegram?.WebApp) Telegram.WebApp.BackButton.hide();
         }
     }
