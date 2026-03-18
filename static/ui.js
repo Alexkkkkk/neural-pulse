@@ -7,11 +7,9 @@ const ui = {
     update() {
         if (typeof logic === 'undefined') return;
 
-        // 1. Баланс
         const bld = document.getElementById('balance');
-        if (bld) bld.innerText = Math.floor(logic.user.balance).toLocaleString();
+        if (bld) bld.innerText = Math.floor(logic.user.balance).toLocaleString('ru-RU');
 
-        // 2. Энергия
         const engV = document.getElementById('eng-val');
         const engF = document.getElementById('eng-fill');
         if (engV && engF) {
@@ -21,12 +19,11 @@ const ui = {
             engF.style.width = (currentEng / maxEng * 100) + "%";
         }
 
-        // 3. Статистика
         const tapV = document.getElementById('tap-val');
         if (tapV) tapV.innerText = "+" + logic.user.click_lvl;
 
         const profV = document.getElementById('profit-val');
-        if (profV) profV.innerText = Math.floor(logic.user.profit).toLocaleString();
+        if (profV) profV.innerText = Math.floor(logic.user.profit).toLocaleString('ru-RU');
         
         const lvlV = document.getElementById('u-lvl');
         if (lvlV) lvlV.innerText = `LVL ${logic.user.level}`;
@@ -67,7 +64,7 @@ const ui = {
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>`;
         } else {
-            content = `<div class="modal-header">${id.toUpperCase()}</div><div style="padding: 40px; color: #888;">В разработке...</div><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
+            content = `<div class="modal-header">${id.toUpperCase()}</div><div style="padding: 40px; text-align:center; color: #888;">В разработке...</div><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
         }
 
         const modalContent = m.querySelector('.modal-content');
@@ -99,11 +96,12 @@ const ui = {
         n.className = 'tap-pop';
         n.innerText = `+${logic.user.click_lvl}`;
         
-        // Координаты (поддержка и мыши и тача)
-        const x = e.clientX || (e.touches ? e.touches[0].clientX : e.pageX);
-        const y = e.clientY || (e.touches ? e.touches[0].clientY : e.pageY);
+        // Читаем координаты из мыши или пальца
+        const x = e.clientX || (e.touches && e.touches.length > 0 ? e.touches[0].clientX : window.innerWidth / 2);
+        const y = e.clientY || (e.touches && e.touches.length > 0 ? e.touches[0].clientY : window.innerHeight / 2);
         
-        n.style.left = x + "px";
+        // Корректируем, чтобы цифра вылетала ровно из-под пальца
+        n.style.left = (x - 15) + "px";
         n.style.top = y + "px";
         
         document.body.appendChild(n);
