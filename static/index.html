@@ -16,7 +16,7 @@
         <div class="loading-text">ACCESS GRANTED</div>
         <div class="percent" id="load-pct">0%</div>
         <div class="load-bar-wrapper">
-            <div class="load-bar-f" id="load-bar" style="width:0%"></div>
+            <div id="load-bar" class="load-bar-f" style="width:0%"></div>
         </div>
     </div>
 
@@ -71,22 +71,16 @@
         </div>
     </div>
 
-    <div id="m-wallet" class="modal"><div class="modal-content"></div></div>
-    <div id="m-squad" class="modal"><div class="modal-content"></div></div>
-    <div id="m-bonus" class="modal"><div class="modal-content"></div></div>
-    <div id="m-boost" class="modal"><div class="modal-content"></div></div>
-    <div id="m-mine" class="modal"><div class="modal-content"></div></div>
-    <div id="m-tasks" class="modal"><div class="modal-content"></div></div>
-    <div id="m-top" class="modal"><div class="modal-content"></div></div>
+    <div id="m-wallet" class="modal"><div class="modal-content" id="c-wallet"></div></div>
+    <div id="m-squad" class="modal"><div class="modal-content" id="c-squad"></div></div>
+    <div id="m-bonus" class="modal"><div class="modal-content" id="c-bonus"></div></div>
+    <div id="m-boost" class="modal"><div class="modal-content" id="c-boost"></div></div>
+    <div id="m-mine" class="modal"><div class="modal-content" id="c-mine"></div></div>
+    <div id="m-tasks" class="modal"><div class="modal-content" id="c-tasks"></div></div>
+    <div id="m-top" class="modal"><div class="modal-content" id="c-top"></div></div>
 
-    <script src="logic.js"></script>
     <script src="ui.js"></script>
+    <script src="logic.js"></script>
     <script src="loading.js"></script>
-    <script>
-        // Гарантированный запуск после загрузки всех файлов
-        window.onload = () => {
-            if(typeof logic !== 'undefined') logic.init();
-        };
-    </script>
 </body>
 </html>
