@@ -7,38 +7,38 @@ const logic = {
         click_lvl: 1,
         profit: 0,
         level: 1,
-        username: "Agent"
+        username: "Agent",
+        isLiked: false,
+        likes: 0
     },
 
     async init() {
         console.log("🚀 Logic: Инициализация...");
         
-        // Интеграция с Telegram WebApp
         if (window.Telegram?.WebApp) {
             const tg = window.Telegram.WebApp;
             tg.ready();
             tg.expand();
+            tg.disableVerticalSwipes();
             
             const tgUser = tg.initDataUnsafe?.user;
             if (tgUser) {
-                this.user.userId = tgUser.id.toString();
+                this.user.userId = tgUser.id;
                 this.user.username = tgUser.first_name || "Agent";
-                const nameElem = document.getElementById('u-name');
-                if (nameElem) nameElem.innerText = this.user.username;
+                document.getElementById('u-name').innerText = this.user.username;
             }
         }
 
         if (!this.user.userId) this.user.userId = "test_user"; 
 
-        // Сначала загружаем данные, потом вешаем слушатели
         await this.syncWithDB();
         this.setupListeners();
+        this.startPassiveIncome();
     },
 
     setupListeners() {
         const target = document.getElementById('tap-target');
         if (target) {
-            // Используем pointerdown для мгновенной реакции без задержек
             target.addEventListener('pointerdown', (e) => {
                 e.preventDefault();
                 if (this.user.energy >= this.user.click_lvl) {
@@ -63,10 +63,11 @@ const logic = {
                 this.user.click_lvl = Number(data.click_lvl) || 1;
                 this.user.profit = Number(data.profit_hr) || 0;
                 this.user.level = Number(data.lvl) || 1;
-                
+                this.user.isLiked = data.is_liked || false;
+                this.user.likes = data.likes || 0;
                 if (window.ui) ui.update();
             }
-        } catch (e) { console.error("❌ Sync Error:", e); }
+        } catch (e) { console.error("Sync Error"); }
     },
 
     tap(e) {
@@ -75,48 +76,65 @@ const logic = {
         
         if (window.ui) {
             ui.update();
-            ui.anim(e); // Анимация вылетающих цифр
+            ui.anim(e);
         }
-        
+
         if (window.Telegram?.WebApp?.HapticFeedback) {
             window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
         }
     },
 
+    toggleLike() {
+        this.user.isLiked = !this.user.isLiked;
+        if (this.user.isLiked) {
+            this.user.likes++;
+        } else {
+            this.user.likes--;
+        }
+        if (window.ui) ui.update();
+        this.save();
+    },
+
+    async buyUpgrade(type, cost, val) {
+        if (this.user.balance >= cost) {
+            this.user.balance -= cost;
+            if (type === 'tap') this.user.click_lvl += val;
+            if (type === 'energy') this.user.max_energy += val;
+            if (type === 'profit') this.user.profit += val;
+            
+            if (window.ui) ui.update();
+            await this.save();
+            return true;
+        }
+        return false;
+    },
+
     startPassiveIncome() {
-        // Доход и регенерация энергии раз в секунду
         setInterval(() => {
-            if (this.user.energy < this.user.max_energy) {
-                this.user.energy = Math.min(this.user.energy + 1, this.user.max_energy);
-            }
-            if (this.user.profit > 0) {
-                this.user.balance += (this.user.profit / 3600);
-            }
+            if (this.user.energy < this.user.max_energy) this.user.energy++;
+            if (this.user.profit > 0) this.user.balance += (this.user.profit / 3600);
             if (window.ui) ui.update();
         }, 1000);
-
-        // Автосохранение каждые 10 секунд
-        setInterval(() => this.save(), 10000);
+        setInterval(() => this.save(), 15000);
     },
 
     async save() {
-        try {
-            await fetch('/api/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userId: this.user.userId,
-                    balance: Math.floor(this.user.balance),
-                    energy: Math.floor(this.user.energy),
-                    max_energy: this.user.max_energy,
-                    click_lvl: this.user.click_lvl,
-                    profit_hr: this.user.profit,
-                    lvl: this.user.level
-                })
-            });
-        } catch (e) { console.error("❌ Save error"); }
+        fetch('/api/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: this.user.userId,
+                balance: Math.floor(this.user.balance),
+                energy: Math.floor(this.user.energy),
+                max_energy: this.user.max_energy,
+                click_lvl: this.user.click_lvl,
+                profit_hr: Math.floor(this.user.profit),
+                lvl: this.user.level,
+                is_liked: this.user.isLiked,
+                likes: this.user.likes
+            })
+        });
     }
 };
 
-// Важно: Инициализацию вызывает loading.js, здесь просто объявляем
-window.logic = logic;
+logic.init();
