@@ -7,11 +7,36 @@
     --like: #ff0055;
 }
 
-/* Базовые сбросы */
+/* ... Твои существующие стили ... */
+
+/* СТИЛИ ДЛЯ КНОПКИ TON CONNECT */
+#ton-connect-btn button {
+    background: var(--accent) !important;
+    color: #000 !important;
+    border-radius: 12px !important;
+    font-weight: 900 !important;
+    font-family: 'Inter', sans-serif !important;
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+}
+
+#ton-connect-btn * {
+    color: white;
+}
+
+#ton-connect-btn div {
+    font-size: 14px;
+}
+
+/* Переопределение цвета текста внутри виджета, если он становится черным */
+#ton-connect-btn [data-tc-button-text] {
+    color: #000 !important;
+}
+
+/* Остальные стили из твоего кода ниже */
 * { 
     box-sizing: border-box; 
     -webkit-tap-highlight-color: transparent; 
-    user-select: none; /* Запрещаем выделение текста везде */
+    user-select: none;
     -webkit-user-select: none;
 }
 
@@ -21,7 +46,6 @@ body {
     font-family: 'Inter', sans-serif;
     margin: 0; 
     overflow: hidden; 
-    /* touch-action: manipulation; — разрешает только клики и зум, не блокируя события */
     touch-action: manipulation; 
     height: 100vh;
 }
@@ -48,46 +72,15 @@ body {
 .stat-card { background: var(--card); border: 1px solid #1a1a1a; padding: 12px; border-radius: 15px; flex: 1; text-align: center; }
 .balance { font-size: 42px; font-weight: bold; text-align: center; margin: 15px 0; text-shadow: 0 0 20px rgba(0, 255, 255, 0.2); font-variant-numeric: tabular-nums; }
 
-/* PLAY AREA & LIKE */
 .play-area { flex-grow: 1; position: relative; display: flex; justify-content: center; align-items: center; }
-
-.main-logo { 
-    width: 220px; 
-    cursor: pointer; 
-    transition: transform 0.05s cubic-bezier(0, 0, 0.2, 1); 
-    z-index: 5; 
-    pointer-events: all; /* Гарантируем кликабельность */
-    filter: drop-shadow(0 0 10px rgba(0, 255, 255, 0.1));
-}
-
-/* Эффект при нажатии */
-.main-logo:active { 
-    transform: scale(0.95); 
-    filter: drop-shadow(0 0 20px var(--accent));
-}
-
-.like-container {
-    position: absolute; top: 10px; left: 10px;
-    background: rgba(255, 255, 255, 0.03); border: 1px solid #1a1a1a;
-    padding: 8px 12px; border-radius: 12px; display: flex; flex-direction: column;
-    align-items: center; cursor: pointer; z-index: 30; transition: all 0.2s ease;
-}
-.like-container.active { border-color: var(--like); box-shadow: 0 0 10px rgba(255, 0, 85, 0.2); }
-#like-icon { transition: transform 0.2s; }
-.like-container.active #like-icon { color: var(--like); transform: scale(1.2); filter: drop-shadow(0 0 5px var(--like)); }
-#like-count { font-size: 10px; color: #444; margin-top: 2px; }
-.active #like-count { color: var(--like); }
+.main-logo { width: 220px; cursor: pointer; transition: transform 0.05s cubic-bezier(0, 0, 0.2, 1); z-index: 5; pointer-events: all; filter: drop-shadow(0 0 10px rgba(0, 255, 255, 0.1)); }
+.main-logo:active { transform: scale(0.95); filter: drop-shadow(0 0 20px var(--accent)); }
 
 .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
-.side-btn { background: var(--card); border: 1px solid #1a1a1a; color: #fff; padding: 10px 12px; border-radius: 15px; display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: bold; border: none;}
-.side-btn span { font-size: 16px; }
-
-.energy-box { margin-top: auto; margin-bottom: 10px;}
-.en-txt { display: flex; justify-content: space-between; font-size: 12px; color: #888; font-weight: bold;}
+.side-btn { background: var(--card); border: 1px solid #1a1a1a; color: #fff; padding: 10px 12px; border-radius: 15px; display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: bold; }
 
 .bottom-nav { position: fixed; bottom: 15px; left: 15px; right: 15px; display: flex; justify-content: space-between; gap: 8px; z-index: 100; }
-.nav-btn { background: var(--card); border: 1px solid #1a1a1a; flex: 1; padding: 12px 0; border-radius: 15px; color: #fff; font-size: 10px; display: flex; flex-direction: column; align-items: center; gap: 5px; font-weight: bold; border: none;}
-.nav-btn span { font-size: 20px; }
+.nav-btn { background: var(--card); border: 1px solid #1a1a1a; flex: 1; padding: 12px 0; border-radius: 15px; color: #fff; font-size: 10px; display: flex; flex-direction: column; align-items: center; gap: 5px; font-weight: bold; }
 
 /* MODALS */
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: flex-end; z-index: 2000; }
@@ -97,20 +90,7 @@ body {
 .upg-price { font-weight: bold; background: rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 10px; color: var(--accent); }
 .back-btn { width: 100%; padding: 15px; border-radius: 15px; background: #222; color: white; border: none; margin-top: 10px; font-weight: bold;}
 
-/* АНИМАЦИЯ ТАПА */
-.tap-pop { 
-    position: fixed; 
-    color: var(--accent); 
-    font-size: 32px; 
-    font-weight: 900; 
-    pointer-events: none; /* КРИТИЧНО: цифры не должны блокировать клики */
-    z-index: 1000; 
-    text-shadow: 0 0 10px var(--accent); 
-    animation: floatUp 0.8s ease-out forwards; 
-}
+.tap-pop { position: fixed; color: var(--accent); font-size: 32px; font-weight: 900; pointer-events: none; z-index: 1000; text-shadow: 0 0 10px var(--accent); animation: floatUp 0.8s ease-out forwards; }
 
-@keyframes floatUp { 
-    0% { transform: translateY(0) scale(1); opacity: 1; } 
-    100% { transform: translateY(-120px) scale(1.2); opacity: 0; } 
-}
+@keyframes floatUp { 0% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: translateY(-120px) scale(1.2); opacity: 0; } }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
