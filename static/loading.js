@@ -20,10 +20,8 @@ const loading = {
                 this.progress += 10;
             }
 
-            // Ограничение
             if (this.progress > 100) this.progress = 100;
 
-            // Обновление UI
             if (bar) bar.style.width = this.progress + '%';
             if (pct) pct.innerText = Math.floor(this.progress) + '%';
 
@@ -38,14 +36,12 @@ const loading = {
     async startLogic() {
         try {
             if (window.logic) {
-                // Ждем, пока logic получит ID и загрузит данные из БД
                 await logic.init();
             }
             this.isLogicReady = true;
             console.log("✅ Logic is ready");
         } catch (err) {
             console.error("❌ Logic init failed:", err);
-            // Даже если ошибка, разрешаем войти, чтобы не вешать приложение
             this.isLogicReady = true; 
         }
     },
@@ -53,10 +49,7 @@ const loading = {
     finish() {
         console.log("🚀 Finishing loading...");
         
-        // Сначала инициализируем UI с уже загруженными данными
         if (window.ui) ui.init();
-        
-        // Запускаем таймеры дохода
         if (window.logic) logic.startPassiveIncome();
         
         const ls = document.getElementById('loading-screen');
@@ -71,12 +64,10 @@ const loading = {
             if (ls) ls.style.display = 'none';
             if (app) {
                 app.style.display = 'flex';
-                // Небольшой эффект появления для красоты
                 app.style.animation = 'fadeIn 0.5s ease';
             }
         }, 500);
     }
 };
 
-// Используем addEventListener вместо window.onload, чтобы не затирать другие скрипты
 window.addEventListener('load', () => loading.init());
