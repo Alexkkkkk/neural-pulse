@@ -3,7 +3,6 @@ const ui = {
 
     init() {
         this.update();
-        if (window.Telegram?.WebApp) window.Telegram.WebApp.expand();
     },
 
     update() {
@@ -46,7 +45,7 @@ const ui = {
             const p1 = u.click_lvl * 1000;
             const p2 = (u.max_energy / 500) * 1500;
             html += `<div class="stat-card" onclick="ui.buy('tap', ${p1})">
-                        <small>TAP LVL ${u.click_lvl}</small><b>${p1.toLocaleString()}</b>
+                        <small>UPGRADE TAP (LVL ${u.click_lvl})</small><b>${p1.toLocaleString()}</b>
                      </div>
                      <div class="stat-card" onclick="ui.buy('energy', ${p2})">
                         <small>MAX ENERGY</small><b>${p2.toLocaleString()}</b>
@@ -63,18 +62,17 @@ const ui = {
     },
 
     buy(type, price) {
-        const u = logic.user;
-        if (u.balance >= price) {
-            u.balance -= price;
-            if (type === 'tap') u.click_lvl++;
-            if (type === 'energy') u.max_energy += 500;
-            if (type === 'profit') u.profit += 100;
+        if (logic.user.balance >= price) {
+            logic.user.balance -= price;
+            if (type === 'tap') logic.user.click_lvl++;
+            if (type === 'energy') logic.user.max_energy += 500;
+            if (type === 'profit') logic.user.profit += 100;
             
             logic.save();
             this.update();
             this.render(this.currentModal.id.replace('m-', ''));
         } else {
-            this.alert("No funds!");
+            this.alert("Insufficient Pulse!");
         }
     },
 
