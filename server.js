@@ -80,7 +80,7 @@ app.post('/api/save', async (req, res) => {
 });
 
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v3.8.1</b>`, 
+    ctx.replyWithHTML(`<b>Neural Pulse v4.0.0</b>`, 
         Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", "https://neural-pulse.bothost.ru")]]));
 });
 
