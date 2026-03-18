@@ -7,29 +7,29 @@
 }
 
 body {
-    background: var(--bg);
-    color: var(--text);
+    background: var(--bg); color: var(--text);
     font-family: 'Inter', sans-serif;
-    margin: 0;
-    overflow: hidden;
+    margin: 0; overflow: hidden;
     user-select: none;
-    -webkit-user-select: none;
-    touch-action: manipulation; /* Отключает двойной тап для зума */
+    touch-action: manipulation;
     height: 100vh;
 }
 
+/* Главный объект для тапа */
 #tap-target {
+    cursor: pointer;
     user-select: none;
     -webkit-user-drag: none;
     touch-action: none;
 }
 
+/* Анимация всплывающих цифр */
 .tap-pop {
     position: fixed;
     color: var(--accent);
     font-size: 32px;
     font-weight: 900;
-    pointer-events: none; /* Клики проходят сквозь текст */
+    pointer-events: none; /* ЧТОБЫ ЦИФРЫ НЕ МЕШАЛИ КЛИКАТЬ */
     z-index: 10000;
     transform: translate(-50%, -50%);
     text-shadow: 0 0 10px rgba(0,255,255,0.5);
@@ -41,4 +41,6 @@ body {
     100% { transform: translate(-50%, -150px) scale(1.2); opacity: 0; }
 }
 
-/* Остальные стили (header, stats, modal и т.д.) оставляй как были */
+/* Модальные окна */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.98); display: none; flex-direction: column; padding: 20px; z-index: 1000; }
+.modal.active { display: flex; }
