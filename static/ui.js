@@ -7,18 +7,21 @@ const ui = {
     update() {
         if (typeof logic === 'undefined') return;
 
+        // 1. Баланс
         const bld = document.getElementById('balance');
         if (bld) bld.innerText = Math.floor(logic.user.balance).toLocaleString();
 
+        // 2. Энергия
         const engV = document.getElementById('eng-val');
         const engF = document.getElementById('eng-fill');
         if (engV && engF) {
-            const cur = Math.floor(logic.user.energy);
-            const max = logic.user.max_energy;
-            engV.innerText = `${cur}/${max}`;
-            engF.style.width = (cur / max * 100) + "%";
+            const currentEng = Math.floor(logic.user.energy);
+            const maxEng = logic.user.max_energy;
+            engV.innerText = `${currentEng}/${maxEng}`;
+            engF.style.width = (currentEng / maxEng * 100) + "%";
         }
 
+        // 3. Статистика
         const tapV = document.getElementById('tap-val');
         if (tapV) tapV.innerText = "+" + logic.user.click_lvl;
 
@@ -40,31 +43,31 @@ const ui = {
                 <div class="upgrade-card" onclick="ui.handleBuy('tap', 1000, 1)">
                     <div class="upg-info">
                         <small>MULTITAP (LVL ${logic.user.click_lvl})</small>
-                        <p>Увеличивает доход за клик на +1</p>
+                        <p>+1 к силе клика</p>
                     </div>
                     <div class="upg-price">💰 1 000</div>
                 </div>
                 <div class="upgrade-card" onclick="ui.handleBuy('energy', 5000, 500)">
                     <div class="upg-info">
                         <small>MAX ENERGY</small>
-                        <p>Лимит энергии +500</p>
+                        <p>+500 к лимиту энергии</p>
                     </div>
                     <div class="upg-price">💰 5 000</div>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>`;
         } else if (id === 'mine') {
             content = `
-                <div class="modal-header">MINING</div>
+                <div class="modal-header">MINING RIGS</div>
                 <div class="upgrade-card" onclick="ui.handleBuy('profit', 5000, 100)">
                     <div class="upg-info">
                         <small>NEURAL CHIP v1</small>
-                        <p>Доход в час +100</p>
+                        <p>Пассивный доход +100/час</p>
                     </div>
-                    <div class="upg-price" style="color:#00ffff;">💰 5 000</div>
+                    <div class="upg-price" style="color: #00f2ff;">💰 5 000</div>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>`;
         } else {
-            content = `<div class="modal-header">${id.toUpperCase()}</div><div style="padding:40px; color:#555;">Модуль в разработке...</div><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
+            content = `<div class="modal-header">${id.toUpperCase()}</div><div style="padding: 40px; color: #888;">В разработке...</div><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
         }
 
         const modalContent = m.querySelector('.modal-content');
@@ -87,16 +90,16 @@ const ui = {
             if (window.Telegram?.WebApp?.HapticFeedback) {
                 window.Telegram.WebApp.HapticFeedback.notificationOccurred('error');
             }
-            alert("Недостаточно средств!");
+            alert("Недостаточно Neural Pulse!");
         }
     },
 
     anim(e) {
         const n = document.createElement('div');
-        n.className = 'tap-pop'; // Соответствует твоему CSS
+        n.className = 'tap-pop';
         n.innerText = `+${logic.user.click_lvl}`;
         
-        // Используем clientX/Y для точного попадания по координатам окна
+        // Координаты (поддержка и мыши и тача)
         const x = e.clientX || (e.touches ? e.touches[0].clientX : e.pageX);
         const y = e.clientY || (e.touches ? e.touches[0].clientY : e.pageY);
         
