@@ -1,136 +1,117 @@
+/* --- БАЗОВЫЕ НАСТРОЙКИ --- */
 :root {
     --bg: #000000;
     --card: #0a0a0a;
-    --accent: #00ffff; /* Голубой неон */
-    --purple: #ae00ff; /* Фиолетовый неон */
+    --accent: #00ffff;
+    --purple: #ae00ff;
     --text: #ffffff;
-    --font: 'Inter', sans-serif; /* Похож на шрифт на скрине */
-}
-
-* {
-    box-sizing: border-box;
 }
 
 body {
     background: var(--bg);
     color: var(--text);
-    font-family: var(--font);
+    font-family: 'Inter', sans-serif;
     margin: 0;
     overflow: hidden;
-    user-select: none;
-    -webkit-user-select: none;
-    touch-action: manipulation;
     height: 100vh;
 }
 
-/* --- СТИЛИЗАЦИЯ ЭКРАНА ЗАГРУЗКИ (КАК НА СКРИНЕ) --- */
+/* --- ЭКРАН ЗАГРУЗКИ (ИСПРАВЛЕННЫЙ) --- */
 #loading-screen {
     position: fixed;
     inset: 0;
-    background: #000000;
+    background: #000;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center; /* Центрируем всё */
-    z-index: 9999;
-    opacity: 1;
-    transition: opacity 0.5s ease;
+    justify-content: center;
+    z-index: 10000; /* Самый высокий приоритет */
 }
 
-/* 1. Центральное неоновое кольцо */
+/* Контейнер для кольца и логотипа */
 .loader-container {
+    position: relative;
+    width: 220px; 
+    height: 220px;
     display: flex;
     justify-content: center;
     align-items: center;
-    position: relative;
-    width: 250px; /* Размер зоны кольца */
-    height: 250px;
-    margin-bottom: 50px; /* Отступ до текста */
+    margin-bottom: 30px;
 }
 
-.neon-ring {
-    position: relative;
-    width: 200px;
-    height: 200px;
+/* Само светящееся кольцо */
+.loader-ring {
+    position: absolute;
+    width: 100%;
+    height: 100%;
     border-radius: 50%;
-    /* Градиентное кольцо с неоновым свечением (drop-shadow) */
-    background: padding-box, linear-gradient(135deg, var(--accent) 0%, var(--purple) 100%) border-box;
+    /* Создаем эффект дуги через border */
     border: 3px solid transparent;
-    filter: drop-shadow(0 0 15px rgba(0, 255, 255, 0.4)) 
-            drop-shadow(0 0 30px rgba(174, 0, 255, 0.3));
+    border-top: 3px solid var(--accent);
+    border-right: 3px solid var(--purple);
     
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    /* Свечение */
+    filter: drop-shadow(0 0 10px var(--accent));
     
-    /* Анимация вращения (как на скрине) */
-    animation: spin 3s linear infinite;
+    /* Анимация вращения только для кольца */
+    animation: spin-loader 1.5s linear infinite;
 }
 
-/* Логотип 'AI' внутри кольца */
-.ai-logo {
-    width: 80px; /* Размер логотипа AI */
-    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.8))
-            drop-shadow(0 0 20px var(--purple))
-            drop-shadow(0 0 30px var(--accent));
-    /* Вращаем логотип в обратную сторону, чтобы он казался неподвижным */
-    animation: spin-reverse 3s linear infinite;
-    z-index: 2;
+/* Логотип внутри (НЕ вращается, стоит ровно) */
+.loader-ring img, .ai-logo {
+    width: 80px;
+    height: auto;
+    position: relative;
+    z-index: 10;
+    filter: drop-shadow(0 0 15px var(--purple));
 }
 
-@keyframes spin { 100% { transform: rotate(360deg); } }
-@keyframes spin-reverse { 100% { transform: rotate(-360deg); } }
-
-/* 2. Текстовая зона */
-.loading-info {
-    text-align: center;
-    width: 300px; /* Фиксированная ширина для стабильности макета */
+@keyframes spin-loader {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
-/* Текст 'ACCESS GRANTED' */
-.loading-status {
-    font-size: 16px;
+/* Текстовая зона загрузки */
+.loading-text {
+    font-size: 12px;
     font-weight: bold;
-    color: var(--text);
+    letter-spacing: 4px;
+    color: #444; /* Серый текст как на макете */
     text-transform: uppercase;
-    letter-spacing: 5px; /* Разреженный текст */
-    margin-bottom: 20px;
+    margin-top: 10px;
 }
 
-/* Текст процентов '99%' */
 .percent {
-    font-size: 40px; /* Крупный */
+    font-size: 36px;
     font-weight: 900;
-    color: var(--accent); /* Голубой неон */
-    margin-bottom: 20px;
-    text-shadow: 0 0 10px rgba(0, 255, 255, 0.8),
-                 0 0 20px rgba(0, 255, 255, 0.4);
+    color: var(--accent);
+    margin: 10px 0;
+    text-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
 }
 
-/* 3. Горизонтальный прогресс-бар */
+/* Горизонтальный прогресс-бар */
 .load-bar-wrapper {
-    width: 100%; /* Ширина контейнера (300px) */
-    height: 6px;
-    background: rgba(255, 255, 255, 0.1); /* Полупрозрачный фон */
+    width: 200px;
+    height: 4px;
+    background: #111;
     border-radius: 10px;
     overflow: hidden;
-    position: relative;
-    box-shadow: 0 0 5px rgba(0,0,0,0.5) inset;
+    margin-top: 10px;
+    border: 1px solid #1a1a1a;
 }
 
 .load-bar-f {
     height: 100%;
-    /* Неоновый градиент для полоски */
-    background: linear-gradient(90deg, var(--accent) 0%, var(--purple) 100%);
-    width: 0%; /* Начинаем с нуля */
-    border-radius: 10px;
+    width: 0%; /* Управляется через JS */
+    background: linear-gradient(90deg, var(--accent), var(--purple));
+    box-shadow: 0 0 10px var(--accent);
     transition: width 0.3s ease;
-    
-    /* Свечение полоски */
-    box-shadow: 0 0 10px rgba(0, 255, 255, 0.6),
-                0 0 20px rgba(174, 0, 255, 0.4);
 }
 
-/* --- ОСТАЛЬНЫЕ СТИЛИ (ГЛАВНОЕ ПРИЛОЖЕНИЕ, ТАПЫ И Т.Д.) ОСТАВЛЯЙ БЕЗ ИЗМЕНЕНИЙ --- */
-#app { display: none; flex-direction: column; height: 100vh; padding: 20px; overflow: hidden; }
-/* ... (весь твой CSS для тапов, модалок и т.д.) ... */
+/* --- СКРЫТИЕ ПРИЛОЖЕНИЯ ДО ЗАГРУЗКИ --- */
+#app { 
+    display: none; 
+    flex-direction: column; 
+    height: 100vh; 
+    padding: 20px; 
+}
