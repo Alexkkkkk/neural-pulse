@@ -16,7 +16,6 @@ const logic = {
             if (tgUser) {
                 this.user.userId = tgUser.id.toString();
                 this.user.username = tgUser.first_name || "Agent";
-                console.log("👤 [USER] Telegram ID:", this.user.userId);
             }
         }
 
@@ -32,29 +31,21 @@ const logic = {
 
     setupListeners() {
         const target = document.getElementById('tap-target');
-        console.log("🎯 [UI] Поиск tap-target:", target ? "✅ Найдено" : "❌ НЕ НАЙДЕНО");
-
         if (target) {
-            // Принудительно разрешаем события
             target.style.pointerEvents = 'auto';
-            
-            // pointerdown срабатывает быстрее чем click
+            // Используем pointerdown для мгновенного отклика
             target.addEventListener('pointerdown', (e) => {
                 e.preventDefault();
-                console.log("⚡ [EVENT] Нажатие зафиксировано");
                 this.tap(e);
             });
         }
     },
 
     async syncWithDB() {
-        console.log("📡 [DB] Синхронизация с базой...");
         try {
             const res = await fetch(`/api/user/${this.user.userId}`);
             if (!res.ok) throw new Error(`Server status: ${res.status}`);
             const data = await res.json();
-            
-            console.log("📥 [DB] Данные загружены:", data);
 
             this.user.balance = parseFloat(data.balance) || 0;
             this.user.energy = parseInt(data.energy) || 1000;
@@ -65,41 +56,48 @@ const logic = {
             this.user.isLiked = data.is_liked || false;
             this.user.likes = parseInt(data.likes) || 0;
             
-            if (window.ui && typeof ui.update === 'function') {
-                ui.update();
-            }
+            if (window.ui) ui.update();
         } catch (e) { 
-            console.error("❌ [DB ERROR] Ошибка загрузки:", e); 
+            console.error("❌ [DB ERROR]", e); 
         }
     },
 
     tap(e) {
-        console.log(`🖱️ [TAP] Попытка тапа. Энергия: ${this.user.energy}`);
         if (this.user.energy >= this.user.click_lvl) {
             this.user.balance += this.user.click_lvl;
             this.user.energy -= this.user.click_lvl;
             
-            console.log(`✅ [TAP SUCCESS] Баланс: ${this.user.balance}`);
-
             if (window.ui) {
-                try {
-                    ui.update();
-                    if (ui.anim) ui.anim(e);
-                } catch (err) {
-                    console.error("❌ [UI UPDATE ERROR] Ошибка в ui.js:", err);
-                }
+                ui.update();
+                ui.anim(e);
             }
 
             if (window.Telegram?.WebApp?.HapticFeedback) {
                 window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
             }
-        } else {
-            console.warn("🚫 [TAP] Недостаточно энергии");
         }
     },
 
+    async buyUpgrade(type, cost, val) {
+        if (this.user.balance < cost) return false;
+        
+        this.user.balance -= cost;
+        if (type === 'tap') this.user.click_lvl += val;
+        if (type === 'energy') this.user.max_energy += val;
+        if (type === 'profit') this.user.profit += val;
+        
+        ui.update();
+        await this.save();
+        return true;
+    },
+
+    toggleLike() {
+        this.user.isLiked = !this.user.isLiked;
+        this.user.likes += this.user.isLiked ? 1 : -1;
+        ui.update();
+    },
+
     startPassiveIncome() {
-        console.log("⚙️ [SYSTEM] Таймеры запущены");
         setInterval(() => {
             if (this.user.energy < this.user.max_energy) {
                 this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
@@ -118,9 +116,8 @@ const logic = {
     },
 
     async save() {
-        console.log("📤 [SAVE] Отправка данных...");
         try {
-            const response = await fetch('/api/save', {
+            await fetch('/api/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -135,13 +132,8 @@ const logic = {
                     likes: this.user.likes
                 })
             });
-            const resData = await response.json();
-            console.log("💾 [SAVE] Успешно сохранено:", resData);
-        } catch (e) { 
-            console.error("❌ [SAVE ERROR] Ошибка:", e); 
-        }
+        } catch (e) { console.error("❌ [SAVE ERROR]", e); }
     }
 };
 
-// Запуск
 logic.init();
