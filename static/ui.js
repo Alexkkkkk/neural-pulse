@@ -5,32 +5,23 @@ const ui = {
     },
 
     update() {
-        // Если логика еще не загрузилась, выходим, чтобы не было ошибок
         if (typeof logic === 'undefined' || !logic.user) return;
 
         try {
-            // Обновление баланса и основных статов
+            // Баланс и статы
             const balanceEl = document.getElementById('balance');
-            if (balanceEl) {
-                balanceEl.innerText = Math.floor(logic.user.balance).toLocaleString('ru-RU');
-            }
+            if (balanceEl) balanceEl.innerText = Math.floor(logic.user.balance).toLocaleString('ru-RU');
 
             const tapValEl = document.getElementById('tap-val');
-            if (tapValEl) {
-                tapValEl.innerText = "+" + logic.user.click_lvl;
-            }
+            if (tapValEl) tapValEl.innerText = "+" + logic.user.click_lvl;
 
             const profitValEl = document.getElementById('profit-val');
-            if (profitValEl) {
-                profitValEl.innerText = Math.floor(logic.user.profit).toLocaleString('ru-RU');
-            }
+            if (profitValEl) profitValEl.innerText = Math.floor(logic.user.profit).toLocaleString('ru-RU');
 
             const lvlEl = document.getElementById('u-lvl');
-            if (lvlEl) {
-                lvlEl.innerText = `LVL ${logic.user.level}`;
-            }
+            if (lvlEl) lvlEl.innerText = `LVL ${logic.user.level}`;
 
-            // Обновление энергии
+            // Энергия
             const currentEng = Math.floor(logic.user.energy);
             const maxEng = logic.user.max_energy;
             const engValEl = document.getElementById('eng-val');
@@ -39,18 +30,15 @@ const ui = {
             if (engValEl) engValEl.innerText = `${currentEng}/${maxEng}`;
             if (engFillEl) engFillEl.style.width = (currentEng / maxEng * 100) + "%";
 
-            // Обновление лайка
+            // Лайк
             const likeIcon = document.getElementById('like-icon');
             const likeCnt = document.getElementById('like-count');
             const likeBox = document.querySelector('.like-container');
             
             if (likeIcon && likeCnt) {
-                if (logic.user.isLiked) {
-                    likeIcon.innerText = "❤️";
-                    if (likeBox) likeBox.classList.add('active');
-                } else {
-                    likeIcon.innerText = "🤍";
-                    if (likeBox) likeBox.classList.remove('active');
+                likeIcon.innerText = logic.user.isLiked ? "❤️" : "🤍";
+                if (likeBox) {
+                    logic.user.isLiked ? likeBox.classList.add('active') : likeBox.classList.remove('active');
                 }
                 likeCnt.innerText = logic.user.likes || 0;
             }
@@ -61,11 +49,7 @@ const ui = {
 
     toggleLike(e) {
         if (e) e.stopPropagation();
-        // Вызываем метод из logic.js
-        if (typeof logic.toggleLike === 'function') {
-            logic.toggleLike();
-        }
-        
+        if (typeof logic.toggleLike === 'function') logic.toggleLike();
         if (window.Telegram?.WebApp?.HapticFeedback) {
             window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
         }
@@ -113,51 +97,28 @@ const ui = {
 
     async handleBuy(type, cost, val) {
         if (typeof logic.buyUpgrade !== 'function') return;
-
         const success = await logic.buyUpgrade(type, cost, val);
         if (success) {
-            if (window.Telegram?.WebApp?.HapticFeedback) {
-                window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-            }
-            // Перерисовываем модалку с новыми данными
+            if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
             this.openM(type === 'profit' ? 'mine' : 'boost'); 
         } else {
-            if (window.Telegram?.WebApp?.HapticFeedback) {
-                window.Telegram.WebApp.HapticFeedback.notificationOccurred('error');
-            }
+            if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('error');
             alert("Недостаточно Neural Pulse!");
         }
     },
 
     anim(e) {
         if (!e) return;
-        
         const n = document.createElement('div');
         n.className = 'tap-pop';
         n.innerText = `+${logic.user.click_lvl}`;
         
-        // Получаем координаты корректно для touch и для мыши
-        let x, y;
-        if (e.clientX) {
-            x = e.clientX;
-            y = e.clientY;
-        } else if (e.touches && e.touches[0]) {
-            x = e.touches[0].clientX;
-            y = e.touches[0].clientY;
-        } else {
-            // Центр экрана если координаты не определены
-            x = window.innerWidth / 2;
-            y = window.innerHeight / 2;
-        }
+        let x = e.clientX || (e.touches ? e.touches[0].clientX : window.innerWidth / 2);
+        let y = e.clientY || (e.touches ? e.touches[0].clientY : window.innerHeight / 2);
         
         n.style.left = (x - 15) + "px";
         n.style.top = (y - 20) + "px";
-        
         document.body.appendChild(n);
-        
-        // Удаляем через 800мс после окончания анимации
-        setTimeout(() => {
-            if (n.parentNode) n.remove();
-        }, 800);
+        setTimeout(() => { if (n.parentNode) n.remove(); }, 800);
     }
 };
