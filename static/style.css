@@ -1,142 +1,86 @@
-:root {
-    --bg: #000000;
-    --card: #0a0a0a;
-    --accent: #00ffff;
-    --text: #ffffff;
-    --purple: #ae00ff;
-}
+const ui = {
+    init() {
+        console.log("🖥️ Интерфейс обновлен");
+        this.update();
+    },
 
-* {
-    box-sizing: border-box; /* Чтобы размеры считались правильно */
-}
+    update() {
+        if (typeof logic === 'undefined') return;
 
-body {
-    background: var(--bg); 
-    color: var(--text);
-    font-family: 'Inter', sans-serif;
-    margin: 0; 
-    overflow: hidden; 
-    user-select: none;
-    touch-action: manipulation;
-    height: 100vh;
-}
+        const bld = document.getElementById('balance');
+        if (bld) bld.innerText = Math.floor(logic.user.balance).toLocaleString();
 
-/* Header */
-.header { 
-    background: var(--card); 
-    border: 1px solid #1a1a1a; 
-    border-radius: 20px; 
-    padding: 12px; 
-    display: flex; 
-    align-items: center; 
-    margin-bottom: 20px; 
-}
-.avatar { width: 45px; height: 45px; border-radius: 12px; background: #111; margin-right: 12px; overflow: hidden; }
-.avatar img { width: 100%; height: 100%; object-fit: cover; }
-.u-info b { display: block; font-size: 14px; }
-.u-info small { color: #555; font-size: 10px; }
-.lvl-badge { margin-left: auto; background: var(--accent); color: #000; padding: 8px 15px; border-radius: 12px; font-weight: 900; font-size: 14px; }
+        const engV = document.getElementById('eng-val');
+        const engF = document.getElementById('eng-fill');
+        if (engV && engF) {
+            engV.innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
+            engF.style.width = (logic.user.energy / logic.user.max_energy * 100) + "%";
+        }
 
-/* Stats */
-.stats-row { display: flex; gap: 10px; margin-bottom: 20px; }
-.stat-card { background: var(--card); border: 1px solid #1a1a1a; padding: 12px; border-radius: 15px; flex: 1; text-align: center; cursor: pointer; transition: 0.2s; }
-.stat-card:active { transform: scale(0.98); border-color: var(--accent); }
-.stat-card small { color: #555; display: block; font-size: 10px; font-weight: bold; margin-bottom: 5px; text-transform: uppercase; }
-.stat-card b { color: var(--accent); font-size: 18px; }
+        if (document.getElementById('tap-val')) document.getElementById('tap-val').innerText = "+" + logic.user.click_lvl;
+        if (document.getElementById('profit-val')) document.getElementById('profit-val').innerText = Math.floor(logic.user.profit).toLocaleString();
+        if (document.getElementById('u-lvl')) document.getElementById('u-lvl').innerText = `LVL ${logic.user.level}`;
+    },
 
-/* Balance */
-.balance { font-size: 50px; font-weight: bold; text-align: center; margin: 10px 0 20px 0; letter-spacing: -1px; }
+    openM(id) {
+        const m = document.getElementById('m-' + id);
+        if (!m) return;
+        
+        let content = "";
+        if (id === 'boost') {
+            content = `
+                <div class="modal-header">BOOSTERS</div>
+                <div class="upgrade-card" onclick="ui.handleBuy('tap', 1000, 1)">
+                    <div class="upg-info">
+                        <small>UPGRADE TAP (LVL ${logic.user.click_lvl})</small>
+                        <p>Доход за клик +1</p>
+                    </div>
+                    <div class="upg-price">💰 1 000</div>
+                </div>
+                <button class="back-btn" onclick="ui.closeM()">BACK</button>`;
+        } else if (id === 'mine') {
+            content = `
+                <div class="modal-header">MINING</div>
+                <div class="upgrade-card" onclick="ui.handleBuy('profit', 5000, 100)">
+                    <div class="upg-info"><small>NEURAL CHIP</small><p>+100/час</p></div>
+                    <div class="upg-price">💰 5 000</div>
+                </div>
+                <button class="back-btn" onclick="ui.closeM()">BACK</button>`;
+        } else {
+            content = `<div class="modal-header">${id.toUpperCase()}</div><div style="padding:40px;">Coming Soon...</div><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
+        }
 
-/* Play Area */
-.play-area { flex-grow: 1; display: flex; justify-content: center; align-items: center; position: relative; width: 100%; }
-.main-logo { width: 220px; cursor: pointer; filter: drop-shadow(0 0 30px rgba(0, 255, 255, 0.2)); transition: transform 0.05s; z-index: 1; }
-.main-logo:active { transform: scale(0.92); }
+        const modalContent = m.querySelector('.modal-content');
+        if (modalContent) modalContent.innerHTML = content;
+        m.classList.add('active');
+    },
 
-/* Side Menu */
-.side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 12px; z-index: 2; }
-.side-btn { 
-    background: var(--card); border: 1px solid #1a1a1a; color: white; padding: 12px 18px; 
-    border-radius: 18px; font-size: 11px; font-weight: bold; min-width: 110px; cursor: pointer;
-    display: flex; align-items: center; justify-content: flex-start; gap: 8px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-}
+    closeM() {
+        document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+    },
 
-/* Energy */
-.energy-box { margin-bottom: 20px; }
-.en-txt { display: flex; justify-content: space-between; font-size: 12px; color: #555; margin-bottom: 8px; font-weight: bold; }
-.load-bar-bg { background: #111; height: 12px; border-radius: 10px; overflow: hidden; width: 100%; border: 1px solid #1a1a1a; }
-.load-bar-f { height: 100%; background: linear-gradient(90deg, var(--accent), var(--purple)); transition: width 0.3s ease; border-radius: 10px; }
+    async handleBuy(type, cost, val) {
+        const success = await logic.buyUpgrade(type, cost, val);
+        if (success) {
+            if (window.Telegram?.WebApp?.HapticFeedback) {
+                window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+            }
+            this.openM(type === 'profit' ? 'mine' : 'boost'); 
+        } else {
+            alert("Недостаточно средств!");
+        }
+    },
 
-/* Bottom Navigation */
-.bottom-nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding-bottom: 10px; }
-.nav-btn { 
-    background: var(--card); border: 1px solid #1a1a1a; color: white; padding: 12px 5px; 
-    border-radius: 15px; font-size: 9px; font-weight: 800; cursor: pointer;
-    display: flex; flex-direction: column; align-items: center; gap: 5px;
-    text-transform: uppercase; transition: 0.2s;
-}
-.nav-btn:active { background: #111; border-color: var(--accent); }
-.nav-btn span { font-size: 18px; }
-
-/* Loader */
-#loading-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #000; position: fixed; inset: 0; z-index: 9999; }
-.loader-ring { 
-    width: 120px; height: 120px; border-radius: 50%; 
-    border-top: 3px solid var(--accent); border-right: 3px solid var(--purple); 
-    border-bottom: 3px solid transparent; border-left: 3px solid transparent; 
-    display: flex; align-items: center; justify-content: center; 
-    animation: spin 1s linear infinite; 
-}
-.loader-ring img { width: 60px; animation: spin-reverse 1s linear infinite; }
-@keyframes spin { 100% { transform: rotate(360deg); } }
-@keyframes spin-reverse { 100% { transform: rotate(-360deg); } }
-
-.loading-text { margin-top: 20px; font-size: 12px; font-weight: bold; letter-spacing: 3px; color: #333; }
-.percent { font-size: 28px; font-weight: bold; color: var(--accent); margin: 10px 0; }
-
-/* Анимация всплывающих цифр при тапе */
-.tap-pop {
-    position: fixed;
-    color: var(--accent);
-    font-size: 32px;
-    font-weight: 900;
-    pointer-events: none;
-    z-index: 10000;
-    transform: translate(-50%, -50%); /* Центрируем относительно точки клика */
-    text-shadow: 0 0 10px rgba(0,255,255,0.5);
-    animation: floatUp 0.8s ease-out forwards;
-}
-
-@keyframes floatUp {
-    0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-    100% { transform: translate(-50%, -150px) scale(1.2); opacity: 0; }
-}
-
-#app { display: none; flex-direction: column; height: 100vh; padding: 20px; overflow: hidden; }
-
-/* Modals */
-.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.98); display: none; flex-direction: column; padding: 20px; z-index: 1000; }
-.modal-content { 
-    display: flex; 
-    flex-direction: column; 
-    height: 100%; 
-    text-align: center; 
-    overflow-y: auto; /* Добавляем прокрутку, если товаров много */
-    padding-bottom: 80px; 
-}
-.modal h1 { font-size: 24px; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 2px; }
-
-.back-btn { 
-    background: var(--text); 
-    color: #000; 
-    border: none; 
-    width: calc(100% - 40px); 
-    padding: 18px; 
-    border-radius: 20px; 
-    font-weight: bold; 
-    font-size: 16px; 
-    cursor: pointer;
-    position: absolute;
-    bottom: 20px;
-    left: 20px;
-}
+    anim(e) {
+        const n = document.createElement('div');
+        n.className = 'tap-pop'; // Должно совпадать с CSS
+        n.innerText = `+${logic.user.click_lvl}`;
+        
+        // Позиционирование
+        n.style.left = (e.clientX || e.pageX) + "px";
+        n.style.top = (e.clientY || e.pageY) + "px";
+        
+        document.body.appendChild(n);
+        setTimeout(() => n.remove(), 800);
+    }
+};
