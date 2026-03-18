@@ -6,7 +6,6 @@
     <title>Neural Pulse</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
 </head>
 <body>
     <div id="loading-screen">
@@ -23,10 +22,12 @@
 
     <div id="app" style="display: none;">
         <div class="header">
-            <div class="avatar"><img src="images/logo.png" id="main-avatar"></div>
-            <div class="u-info">
-                <b id="u-name">Agent</b>
-                <small>v4.0.0 Neural Mining</small>
+            <div class="header-left">
+                <div class="avatar"><img src="images/logo.png" id="main-avatar"></div>
+                <div class="u-info">
+                    <b id="u-name">Agent</b>
+                    <small>v4.0.0 Neural Mining</small>
+                </div>
             </div>
             <div class="lvl-badge" id="u-lvl">LVL 1</div>
         </div>
@@ -34,23 +35,18 @@
         <div class="stats-row">
             <div class="stat-card">
                 <small>EARN PER TAP</small>
-                <b id="tap-val">+1</b>
+                <b id="tap-val" class="accent-val">+1</b>
             </div>
             <div class="stat-card">
                 <small>PROFIT PER HOUR</small>
-                <b id="profit-val">0</b>
+                <b id="profit-val" class="accent-val">0</b>
             </div>
         </div>
 
         <div class="balance" id="balance">0</div>
 
         <div class="play-area">
-            <div class="like-container" onclick="ui.toggleLike(event)">
-                <span id="like-icon">🤍</span>
-                <small id="like-count">0</small>
-            </div>
-
-            <img src="images/logo.png" class="main-logo" id="tap-target" style="pointer-events: all; cursor: pointer;">
+            <img src="images/logo.png" class="main-logo" id="tap-target">
             
             <div class="side-menu">
                 <button class="side-btn" onclick="ui.openM('wallet')"><span>👛</span> WALLET</button>
@@ -64,7 +60,7 @@
                 <span>ENERGY</span>
                 <span id="eng-val">1000/1000</span>
             </div>
-            <div class="load-bar-wrapper" style="width: 100%; margin-top: 5px;">
+            <div class="load-bar-wrapper full-width">
                 <div id="eng-fill" class="load-bar-f" style="width: 100%"></div>
             </div>
         </div>
