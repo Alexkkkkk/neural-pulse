@@ -7,7 +7,6 @@ const ui = {
     },
 
     update() {
-        if (!window.logic?.user) return;
         const u = logic.user;
         const set = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
 
@@ -38,23 +37,29 @@ const ui = {
     },
 
     render(id) {
-        const cont = document.querySelector(`#m-${id} .modal-content`);
-        if (!cont) return;
+        const mBody = document.querySelector(`#m-${id} .modal-content`);
+        if (!mBody) return;
         const u = logic.user;
         let html = `<h1>${id.toUpperCase()}</h1>`;
 
         if (id === 'boost') {
             const p1 = u.click_lvl * 1000;
             const p2 = (u.max_energy / 500) * 1500;
-            html += `<div class="stat-card" onclick="ui.buy('tap', ${p1})"><small>TAP LVL ${u.click_lvl}</small><b>${p1}</b></div>
-                     <div class="stat-card" onclick="ui.buy('energy', ${p2})"><small>ENERGY CAP</small><b>${p2}</b></div>`;
+            html += `<div class="stat-card" onclick="ui.buy('tap', ${p1})">
+                        <small>TAP LVL ${u.click_lvl}</small><b>${p1.toLocaleString()}</b>
+                     </div>
+                     <div class="stat-card" onclick="ui.buy('energy', ${p2})">
+                        <small>MAX ENERGY</small><b>${p2.toLocaleString()}</b>
+                     </div>`;
         } else if (id === 'mine') {
-            html += `<div class="stat-card" onclick="ui.buy('profit', 5000)"><small>NEURAL CHIP</small><b>5,000 (+100/hr)</b></div>`;
+            html += `<div class="stat-card" onclick="ui.buy('profit', 5000)">
+                        <small>NEURAL CHIP</small><b>5,000 (+100/hr)</b>
+                     </div>`;
         } else if (id === 'top') {
-            html += `<div class="stat-card"><span>1. ${u.username}</span><b>${Math.floor(u.balance)}</b></div>`;
+            html += `<div class="stat-card"><span>1. ${u.username}</span><b>${Math.floor(u.balance).toLocaleString()}</b></div>`;
         }
 
-        cont.innerHTML = html + `<button class="back-btn" onclick="ui.closeM()">BACK</button>`;
+        mBody.innerHTML = html + `<button class="back-btn" onclick="ui.closeM()">BACK</button>`;
     },
 
     buy(type, price) {
@@ -64,12 +69,24 @@ const ui = {
             if (type === 'tap') u.click_lvl++;
             if (type === 'energy') u.max_energy += 500;
             if (type === 'profit') u.profit += 100;
+            
             logic.save();
             this.update();
             this.render(this.currentModal.id.replace('m-', ''));
         } else {
             this.alert("No funds!");
         }
+    },
+
+    anim(e) {
+        const x = e.clientX || (e.touches ? e.touches[0].clientX : window.innerWidth / 2);
+        const y = e.clientY || (e.touches ? e.touches[0].clientY : window.innerHeight / 2);
+        const el = document.createElement('div');
+        el.className = 'tap-pop';
+        el.innerText = `+${logic.user.click_lvl}`;
+        el.style.cssText = `left:${x}px; top:${y}px; position:absolute; color:#00ffff; pointer-events:none; z-index:9999; font-weight:bold; animation: fadeUp 0.8s ease-out;`;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 800);
     },
 
     alert(m) { window.Telegram?.WebApp ? Telegram.WebApp.showAlert(m) : alert(m); }
