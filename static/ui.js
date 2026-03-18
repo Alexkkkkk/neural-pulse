@@ -2,17 +2,14 @@ const ui = {
     update() {
         if (typeof logic === 'undefined' || !logic.user) return;
 
-        // Обновляем баланс (с округлением вниз)
         const balEl = document.getElementById('balance');
         if (balEl) balEl.innerText = Math.floor(logic.user.balance).toLocaleString('ru-RU');
 
-        // Энергия
         const engVal = document.getElementById('eng-val');
         const engFill = document.getElementById('eng-fill');
         if (engVal) engVal.innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
         if (engFill) engFill.style.width = (logic.user.energy / logic.user.max_energy * 100) + "%";
 
-        // Статы
         const tapEl = document.getElementById('tap-val');
         if (tapEl) tapEl.innerText = "+" + logic.user.click_lvl;
 
@@ -23,50 +20,63 @@ const ui = {
         if (lvlEl) lvlEl.innerText = `LVL ${logic.user.level}`;
     },
 
-    openM(id) {
+    async openM(id) {
         const modal = document.getElementById('m-' + id);
         if (!modal) return;
+        const inner = modal.querySelector('.modal-content');
+        if (!inner) return;
 
-        let content = "";
-        if (id === 'boost') {
-            content = `
+        modal.classList.add('active');
+
+        if (id === 'top') {
+            inner.innerHTML = `<div class="modal-header">LEADERBOARD</div><div style="text-align:center;padding:20px;">Loading...</div>`;
+            try {
+                const res = await fetch('/api/top');
+                const players = await res.json();
+                let html = `<div class="modal-header">TOP 100 PLAYERS</div><div class="top-list" style="max-height:60vh; overflow-y:auto; margin: 10px 0;">`;
+                
+                players.forEach((p, i) => {
+                    const isMe = p.username === logic.user.username ? 'style="border: 1px solid var(--accent); background: rgba(0,255,255,0.05);"' : '';
+                    html += `
+                        <div class="upgrade-card" ${isMe} style="margin-bottom:8px; padding:10px 15px;">
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <span style="color:var(--accent); font-weight:bold; width:25px;">#${i+1}</span>
+                                <div>
+                                    <b style="font-size:14px;">${p.username}</b><br>
+                                    <small style="color:#666;">LVL ${p.lvl}</small>
+                                </div>
+                            </div>
+                            <div style="font-weight:bold; color:#fff;">💰 ${Math.floor(p.balance).toLocaleString()}</div>
+                        </div>`;
+                });
+                
+                html += `</div><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
+                inner.innerHTML = html;
+            } catch (e) {
+                inner.innerHTML = `<div class="modal-header">ERROR</div><p>Failed to load TOP</p><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
+            }
+        } else if (id === 'boost') {
+            inner.innerHTML = `
                 <div class="modal-header">BOOSTERS</div>
                 <div class="upgrade-card" onclick="ui.handleBuy('tap', 1000, 1)">
-                    <div class="upg-info">
-                        <b>MULTITAP (LVL ${logic.user.click_lvl})</b>
-                        <small>+1 к силе клика</small>
-                    </div>
+                    <div class="upg-info"><b>MULTITAP (LVL ${logic.user.click_lvl})</b><small>+1 к силе клика</small></div>
                     <div class="upg-price">💰 1 000</div>
                 </div>
                 <div class="upgrade-card" onclick="ui.handleBuy('energy', 5000, 500)">
-                    <div class="upg-info">
-                        <b>MAX ENERGY</b>
-                        <small>+500 к лимиту</small>
-                    </div>
+                    <div class="upg-info"><b>MAX ENERGY</b><small>+500 к лимиту</small></div>
                     <div class="upg-price">💰 5 000</div>
                 </div>
-                <button class="back-btn" onclick="ui.closeM()">BACK</button>
-            `;
+                <button class="back-btn" onclick="ui.closeM()">BACK</button>`;
         } else if (id === 'mine') {
-            content = `
+            inner.innerHTML = `
                 <div class="modal-header">MINING</div>
                 <div class="upgrade-card" onclick="ui.handleBuy('profit', 5000, 100)">
-                    <div class="upg-info">
-                        <b>NEURAL CORE</b>
-                        <small>+100 прибыли в час</small>
-                    </div>
+                    <div class="upg-info"><b>NEURAL CORE</b><small>+100 прибыли в час</small></div>
                     <div class="upg-price">💰 5 000</div>
                 </div>
-                <button class="back-btn" onclick="ui.closeM()">BACK</button>
-            `;
+                <button class="back-btn" onclick="ui.closeM()">BACK</button>`;
         } else {
-            content = `<div class="modal-header">${id.toUpperCase()}</div><p style="text-align:center; padding:20px; color:#666;">Soon...</p><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
-        }
-
-        const inner = modal.querySelector('.modal-content');
-        if (inner) {
-            inner.innerHTML = content;
-            modal.classList.add('active');
+            inner.innerHTML = `<div class="modal-header">${id.toUpperCase()}</div><p style="text-align:center; padding:20px; color:#666;">Soon...</p><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
         }
     },
 
@@ -76,9 +86,8 @@ const ui = {
 
     async handleBuy(type, cost, val) {
         const ok = await logic.buyUpgrade(type, cost, val);
-        if (ok) {
-            this.openM(type === 'profit' ? 'mine' : 'boost'); // Обновляем текущее окно
-        } else {
+        if (ok) this.openM(type === 'profit' ? 'mine' : 'boost');
+        else {
             if (window.Telegram?.WebApp) window.Telegram.WebApp.showAlert("Недостаточно средств!");
             else alert("Need more money!");
         }
