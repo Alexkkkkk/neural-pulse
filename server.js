@@ -13,9 +13,10 @@ const pool = new Pool({ connectionString: PG_URI });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Инициализация базы данных (Логика версии 3.8.0)
+// Инициализация базы данных (v3.8.0 Stable с авто-исправлением)
 const initDB = async () => {
     try {
+        // 1. Создаем таблицу, если её нет вообще
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY, 
@@ -30,8 +31,17 @@ const initDB = async () => {
                 wallet_addr TEXT,
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
-        console.log("Database Ready v3.8.0 Stable (Ported to v3.8.8)");
-    } catch (e) { console.error("DB Error:", e); }
+
+        // 2. ФИКС ОШИБКИ: Насильно добавляем колонки в уже существующую таблицу
+        // Это уберет ошибку "column lvl does not exist" из логов Bothost
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lvl INTEGER DEFAULT 2`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profit_hr NUMERIC(20, 0) DEFAULT 0`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS click_lvl INTEGER DEFAULT 1`);
+        
+        console.log("Database Ready v3.8.0 Stable (Structure verified)");
+    } catch (e) { 
+        console.error("Critical DB Error:", e); 
+    }
 };
 initDB();
 
@@ -41,7 +51,7 @@ app.get('/api/user/:id', async (req, res) => {
     try {
         let r = await pool.query('SELECT * FROM users WHERE user_id = $1', [req.params.id]);
         if (!r.rows.length) {
-            // Создание нового пользователя с параметрами 3.8.0
+            // Создание нового пользователя с параметрами стабильной версии 3.8.0
             await pool.query(
                 'INSERT INTO users (user_id, username, avatar_url, balance, energy, lvl) VALUES ($1, $2, $3, 696, 543, 2)', 
                 [req.params.id, name || 'Agent', photo || '']
@@ -52,11 +62,11 @@ app.get('/api/user/:id', async (req, res) => {
     } catch (e) { res.status(500).send(e.message); }
 });
 
-// API: Сохранение прогресса (С защитой от дробей)
+// API: Сохранение прогресса
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, max_energy, click_lvl, profit_hr, lvl } = req.body;
     
-    // Принудительное округление для защиты от бага "бесконечных чисел"
+    // Защита от бесконечных дробей и пустых значений
     const safeBalance = Math.floor(balance || 0);
     const safeProfit = Math.floor(profit_hr || 0);
 
@@ -71,7 +81,7 @@ app.post('/api/save', async (req, res) => {
                 lvl = $7, 
                 last_seen = CURRENT_TIMESTAMP 
             WHERE user_id = $1`, 
-            [userId, safeBalance, energy, max_energy, click_lvl, safeProfit, lvl || 2]
+            [userId, safeBalance, energy, max_energy, click_lvl || 1, safeProfit, lvl || 2]
         );
         res.json({ ok: true });
     } catch (e) { 
@@ -80,7 +90,6 @@ app.post('/api/save', async (req, res) => {
     }
 });
 
-// Обработка команды /start
 bot.start((ctx) => {
     ctx.replyWithHTML(
         `<b>Neural Pulse v3.8.0 Stable</b>\nДобро пожаловать, агент!`, 
