@@ -4,13 +4,6 @@ const logic = {
         click_lvl: 1, profit: 0, level: 1, username: "Agent"
     },
 
-    async init() {
-        await this.syncWithDB();
-        this.startPassiveIncome();
-        this.setupListeners();
-        if (window.ui) ui.init(); 
-    },
-
     setupListeners() {
         const target = document.getElementById('tap-target');
         if (target) {
@@ -22,41 +15,46 @@ const logic = {
     },
 
     async syncWithDB() {
+        // Получаем ID пользователя из Telegram
         if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
             const tg = window.Telegram.WebApp.initDataUnsafe.user;
             this.user.userId = tg.id;
             this.user.username = tg.first_name || "Agent";
         }
+
         try {
             const ref = window.Telegram?.WebApp?.initDataUnsafe?.start_param || "";
             const res = await fetch(`/api/user/${this.user.userId}?ref=${ref}`);
             if (res.ok) {
                 const data = await res.json();
-                this.user.balance = data.balance;
-                this.user.energy = data.energy;
-                this.user.max_energy = data.max_energy;
-                this.user.click_lvl = data.click_lvl;
-                this.user.profit = data.profit_hr;
-                this.user.level = data.lvl;
+                // Синхронизируем объект user с данными из БД
+                this.user.balance = parseFloat(data.balance) || 0;
+                this.user.energy = parseInt(data.energy) || 1000;
+                this.user.max_energy = parseInt(data.max_energy) || 1000;
+                this.user.click_lvl = parseInt(data.click_lvl) || 1;
+                this.user.profit = parseFloat(data.profit_hr) || 0;
+                this.user.level = parseInt(data.lvl) || 1;
             }
-        } catch (e) { console.warn("Sync Error"); }
+        } catch (e) { console.error("Database Sync Error:", e); }
     },
 
     async save() {
         if (!this.user.userId) return;
-        await fetch('/api/save', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                userId: this.user.userId,
-                balance: this.user.balance,
-                energy: this.user.energy,
-                max_energy: this.user.max_energy,
-                click_lvl: this.user.click_lvl,
-                profit_hr: this.user.profit,
-                lvl: this.user.level
-            })
-        });
+        try {
+            await fetch('/api/save', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    userId: this.user.userId,
+                    balance: Math.floor(this.user.balance),
+                    energy: Math.floor(this.user.energy),
+                    max_energy: this.user.max_energy,
+                    click_lvl: this.user.click_lvl,
+                    profit_hr: Math.floor(this.user.profit),
+                    lvl: this.user.level
+                })
+            });
+        } catch (e) { console.warn("Auto-save failed"); }
     },
 
     tap(e) {
@@ -74,26 +72,29 @@ const logic = {
     },
 
     checkLevel() {
-        const nextLvl = this.user.level * 100000;
-        if (this.user.balance >= nextLvl) {
+        const nextLvlThreshold = this.user.level * 100000;
+        if (this.user.balance >= nextLvlThreshold) {
             this.user.level++;
-            if (window.Telegram?.WebApp) Telegram.WebApp.showAlert(`Level Up! Текущий уровень: ${this.user.level}`);
+            if (window.Telegram?.WebApp) Telegram.WebApp.showAlert(`SYSTEM UPGRADE: Level ${this.user.level}`);
         }
     },
 
     startPassiveIncome() {
+        // Энергия и прибыль в секунду
         setInterval(() => {
-            let update = false;
+            let needsUpdate = false;
             if (this.user.energy < this.user.max_energy) {
                 this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
-                update = true;
+                needsUpdate = true;
             }
             if (this.user.profit > 0) {
                 this.user.balance += (this.user.profit / 3600);
-                update = true;
+                needsUpdate = true;
             }
-            if (update && window.ui) ui.update();
+            if (needsUpdate && window.ui) ui.update();
         }, 1000);
+
+        // Интервал сохранения в БД
         setInterval(() => this.save(), 15000);
     }
 };
