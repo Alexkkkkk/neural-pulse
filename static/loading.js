@@ -4,14 +4,14 @@ const loading = {
         const bar = document.getElementById('load-bar');
         const pct = document.getElementById('load-pct');
         
-        // 1. Сначала синхронизируемся с БД (из main.py)
+        // 1. Сначала один раз загружаем данные из БД
         if (window.logic) {
             await logic.syncWithDB(); 
         }
 
-        // 2. Запускаем имитацию полоски загрузки
+        // 2. Имитация полоски загрузки
         const itv = setInterval(() => {
-            p += Math.floor(Math.random() * 15) + 10;
+            p += Math.floor(Math.random() * 15) + 5;
             if (p >= 100) {
                 p = 100;
                 clearInterval(itv);
@@ -19,24 +19,24 @@ const loading = {
             }
             if(bar) bar.style.width = p + '%';
             if(pct) pct.innerText = p + '%';
-        }, 120);
+        }, 80);
     },
 
-    // 3. Запуск основного приложения
     finish() {
+        // Инициализируем только интерфейс и слушатели, данные уже есть
         ui.init();
-        logic.init();
+        logic.startPassiveIncome();
+        logic.setupListeners();
         
         setTimeout(() => {
-            // Переключаем экраны
             document.getElementById('loading-screen').style.display = 'none';
             document.getElementById('app').style.display = 'flex';
-            
-            // Разворачиваем Telegram на весь экран
-            if (window.Telegram?.WebApp) window.Telegram.WebApp.expand();
+            if (window.Telegram?.WebApp) {
+                window.Telegram.WebApp.expand();
+                window.Telegram.WebApp.ready();
+            }
         }, 300);
     }
 };
 
-// Запуск при загрузке страницы
 window.onload = () => loading.init();
