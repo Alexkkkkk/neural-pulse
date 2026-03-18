@@ -1,14 +1,22 @@
 const logic = {
     user: {
-        userId: 0, balance: 0, energy: 1000, max_energy: 1000,
-        click_lvl: 1, profit: 0, level: 1, username: "Agent"
+        userId: 0,
+        balance: 0,
+        energy: 1000,
+        max_energy: 1000,
+        click_lvl: 1,
+        profit: 0,
+        level: 1,
+        username: "Agent"
     },
 
     async init() {
         console.log("🚀 Инициализация логики...");
+        
         if (window.Telegram?.WebApp) {
             window.Telegram.WebApp.ready();
             window.Telegram.WebApp.expand();
+            
             const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
             if (tgUser) {
                 this.user.userId = tgUser.id;
@@ -22,24 +30,29 @@ const logic = {
             this.user.userId = "test_user";
         }
 
+        // Ждем данные из БД
         await this.syncWithDB();
+        
+        // Включаем кнопку тапа
         this.setupListeners();
 
+        // Обновляем UI после загрузки данных
         if (window.ui) ui.init();
+        
         console.log("✅ Логика готова");
     },
 
     setupListeners() {
         const target = document.getElementById('tap-target');
         if (target) {
-            // Используем pointerdown для мгновенного отклика
+            // pointerdown срабатывает мгновенно, не дожидаясь отпускания пальца
             target.addEventListener('pointerdown', (e) => {
-                e.preventDefault();
+                e.preventDefault(); // Защита от системного зума и скролла
                 this.tap(e);
             });
-            console.log("🎯 Слушатель кликов установлен");
+            console.log("🎯 Слушатель тапов активен");
         } else {
-            console.error("❌ Кнопка тапа не найдена!");
+            console.error("❌ Элемент #tap-target не найден!");
         }
     },
 
@@ -56,7 +69,9 @@ const logic = {
                 this.user.profit = Number(data.profit_hr) || 0;
                 this.user.level = Number(data.lvl) || 1;
             }
-        } catch (e) { console.error("❌ Ошибка БД"); }
+        } catch (e) {
+            console.error("❌ Ошибка синхронизации с БД");
+        }
     },
 
     tap(e) {
@@ -66,11 +81,15 @@ const logic = {
             
             if (window.ui) {
                 ui.update();
-                ui.anim(e); 
+                ui.anim(e); // Запуск анимации +1
             }
 
             if (window.Telegram?.WebApp?.HapticFeedback) {
                 window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
+            }
+        } else {
+            if (window.Telegram?.WebApp?.HapticFeedback) {
+                window.Telegram.WebApp.HapticFeedback.notificationOccurred('warning');
             }
         }
     },
@@ -81,6 +100,7 @@ const logic = {
             if (type === 'tap') this.user.click_lvl += value;
             if (type === 'energy') this.user.max_energy += value;
             if (type === 'profit') this.user.profit += value;
+            
             if (window.ui) ui.update();
             await this.save();
             return true;
@@ -104,10 +124,13 @@ const logic = {
                     lvl: this.user.level
                 })
             });
-        } catch (e) { console.error("💾 Ошибка сохранения"); }
+        } catch (e) {
+            console.error("💾 Ошибка сохранения данных");
+        }
     },
 
     startPassiveIncome() {
+        // Каждую секунду восстанавливаем энергию и капает прибыль
         setInterval(() => {
             if (this.user.energy < this.user.max_energy) {
                 this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
@@ -117,6 +140,8 @@ const logic = {
             }
             if (window.ui) ui.update();
         }, 1000);
+
+        // Автосохранение в БД раз в 15 секунд
         setInterval(() => this.save(), 15000);
     }
 };
