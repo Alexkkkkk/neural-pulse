@@ -10,10 +10,10 @@ const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// Настройка пула БД (добавлена обработка SSL для облачных хостингов)
+// Исправлено: Убрали SSL, так как сервер Bothost его не поддерживает
 const pool = new Pool({ 
-    connectionString: PG_URI, 
-    ssl: { rejectUnauthorized: false } // Позволяет подключаться к большинству облачных БД
+    connectionString: PG_URI,
+    ssl: false 
 });
 
 app.use(express.json());
@@ -37,9 +37,6 @@ const initDB = async () => {
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
         
-        // Проверка наличия колонок (на случай обновления старой таблицы)
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
-        
         console.log("✅ [DB] База данных проверена и готова.");
     } catch (e) { 
         console.error("❌ [DB INIT ERROR]", e.message); 
@@ -47,7 +44,7 @@ const initDB = async () => {
 };
 initDB();
 
-// API: Получение данных пользователя + Расчет офлайн дохода
+// API: Получение данных пользователя + Офлайн доход
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     console.log(`🔍 [GET USER] Запрос для ID: ${userId}`);
@@ -63,18 +60,17 @@ app.get('/api/user/:id', async (req, res) => {
 
         let user = result.rows[0];
         
-        // --- ЛОГИКА ОФЛАЙН ДОХОДА ---
+        // Расчет офлайн дохода
         if (user.profit_hr > 0) {
             const now = new Date();
             const lastSeen = new Date(user.last_seen);
             const secondsOffline = Math.floor((now - lastSeen) / 1000);
             
-            if (secondsOffline > 60) { // Начисляем, если не было хотя бы минуту
+            if (secondsOffline > 60) {
                 const offlineProfit = (user.profit_hr / 3600) * secondsOffline;
                 user.balance = parseFloat(user.balance) + offlineProfit;
-                console.log(`💰 [OFFLINE] Игрок ${userId} отсутствовал ${secondsOffline} сек. Начислено: ${offlineProfit.toFixed(2)}`);
+                console.log(`💰 [OFFLINE] Начислено: ${offlineProfit.toFixed(2)} за ${secondsOffline} сек.`);
                 
-                // Сразу обновляем в базе
                 await pool.query('UPDATE users SET balance = $1, last_seen = CURRENT_TIMESTAMP WHERE user_id = $2', [user.balance, userId]);
             }
         }
@@ -89,7 +85,6 @@ app.get('/api/user/:id', async (req, res) => {
 // API: Сохранение данных
 app.post('/api/save', async (req, res) => {
     const d = req.body;
-    // Логируем как в твоем скриншоте
     console.log(`📥 [SAVE] Пытаемся сохранить ID: ${d.userId}, Баланс: ${d.balance}`);
     
     try {
@@ -115,21 +110,15 @@ app.post('/api/save', async (req, res) => {
     }
 });
 
-// Телеграм бот
+// Бот
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v4.0.0</b>\nДобро пожаловать, ${ctx.from.first_name}!`, 
-        Markup.inlineKeyboard([
-            [Markup.button.webApp("⚡ ЗАПУСТИТЬ", "https://neural-pulse.bothost.ru")]
-        ]));
+    ctx.replyWithHTML(`<b>Neural Pulse v4.0.0</b>`, 
+        Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", "https://neural-pulse.bothost.ru")]]));
 });
 
-// Запуск
-const PORT = process.env.PORT || 3000;
+// Запуск сервера
+const PORT = 3000;
 app.listen(PORT, () => { 
     console.log(`🚀 [SERVER] Запущен на порту ${PORT}`);
-    bot.launch().then(() => console.log("🤖 [BOT] Телеграм бот запущен."));
+    bot.launch().catch(err => console.error("Бот не запустился:", err));
 });
-
-// Мягкая остановка
-process.once('SIGINT', () => { bot.stop('SIGINT'); pool.end(); });
-process.once('SIGTERM', () => { bot.stop('SIGTERM'); pool.end(); });
