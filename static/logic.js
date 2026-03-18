@@ -1,8 +1,15 @@
 const logic = {
     user: {
-        userId: 0, balance: 0, energy: 1000, max_energy: 1000,
-        click_lvl: 1, profit: 0, level: 1, username: "Agent",
-        isLiked: false, likes: 0
+        userId: 0, 
+        balance: 0, 
+        energy: 1000, 
+        max_energy: 1000,
+        click_lvl: 1, 
+        profit_hr: 0, // Переименовано для соответствия ui.js
+        lvl: 1,       // Переименовано для соответствия ui.js
+        username: "Agent",
+        isLiked: false, 
+        likes: 0
     },
 
     async init() {
@@ -20,18 +27,20 @@ const logic = {
             }
         }
 
-        // Если userId не получен (тест в браузере), ставим заглушку
-        if (!this.user.userId) this.user.userId = "test_user_476014374";
+        if (!this.user.userId) this.user.userId = "test_user_local";
 
         await this.syncWithDB();
         this.setupListeners();
         this.startPassiveIncome();
+        
+        // Запускаем интерфейс после загрузки логики
+        if (window.ui) ui.init();
     },
 
     setupListeners() {
         const target = document.getElementById('tap-target');
         if (target) {
-            // Используем pointerdown для мгновенной реакции
+            // pointerdown работает быстрее click на мобильных
             target.addEventListener('pointerdown', (e) => {
                 e.preventDefault();
                 this.tap(e);
@@ -48,8 +57,8 @@ const logic = {
                 this.user.energy = parseInt(data.energy) || 1000;
                 this.user.max_energy = parseInt(data.max_energy) || 1000;
                 this.user.click_lvl = parseInt(data.click_lvl) || 1;
-                this.user.profit = parseFloat(data.profit_hr) || 0;
-                this.user.level = parseInt(data.lvl) || 1;
+                this.user.profit_hr = parseFloat(data.profit_hr) || 0;
+                this.user.lvl = parseInt(data.lvl) || 1;
                 this.user.isLiked = data.is_liked || false;
                 this.user.likes = parseInt(data.likes) || 0;
                 
@@ -83,7 +92,7 @@ const logic = {
             this.user.max_energy += val;
             this.user.energy += val;
         }
-        if (type === 'profit') this.user.profit += val;
+        if (type === 'profit') this.user.profit_hr += val;
         
         if (window.ui) ui.update();
         await this.save();
@@ -91,7 +100,7 @@ const logic = {
     },
 
     startPassiveIncome() {
-        // Регенерация энергии (1 ед. каждые 1.5 сек)
+        // Регенерация энергии
         setInterval(() => {
             if (this.user.energy < this.user.max_energy) {
                 this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
@@ -99,15 +108,14 @@ const logic = {
             }
         }, 1500);
 
-        // Пассивный доход (начисление каждую секунду)
+        // Пассивный доход
         setInterval(() => {
-            if (this.user.profit > 0) {
-                this.user.balance += (this.user.profit / 3600);
+            if (this.user.profit_hr > 0) {
+                this.user.balance += (this.user.profit_hr / 3600);
                 if (window.ui) ui.update();
             }
         }, 1000);
 
-        // Автосохранение в БД каждые 10 секунд
         setInterval(() => this.save(), 10000);
     },
 
@@ -122,8 +130,8 @@ const logic = {
                     energy: Math.floor(this.user.energy),
                     max_energy: this.user.max_energy,
                     click_lvl: this.user.click_lvl,
-                    profit_hr: Math.floor(this.user.profit),
-                    lvl: this.user.level,
+                    profit_hr: Math.floor(this.user.profit_hr),
+                    lvl: this.user.lvl,
                     is_liked: this.user.isLiked,
                     likes: this.user.likes
                 })
@@ -132,5 +140,5 @@ const logic = {
     }
 };
 
-// Запуск при загрузке
+// Запуск
 logic.init();
