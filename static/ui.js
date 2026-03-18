@@ -1,7 +1,6 @@
 const ui = {
     currentModal: null,
 
-    // 1. Инициализация (добавлена поддержка кнопки "Назад" в Telegram)
     init() {
         this.update();
         if (window.Telegram?.WebApp) {
@@ -10,9 +9,7 @@ const ui = {
         console.log("Neural Pulse UI Manager v3.8.0 stable loaded");
     },
 
-    // 2. Обновление всех элементов интерфейса
     update() {
-        // Защита: если logic еще не загружен, выходим
         if (!window.logic || !logic.user) return;
 
         const bEl = document.getElementById('balance');
@@ -22,40 +19,36 @@ const ui = {
         const pEl = document.getElementById('profit-val');
         const tV = document.getElementById('tap-val');
 
-        // ГЛАВНОЕ ИСПРАВЛЕНИЕ: Используем Math.floor + localString
-        // Баланс будет отображаться как "2 471 111 111"
-        if (bEl) bEl.innerText = Math.floor(logic.user.balance).toLocaleString('ru-RU');
+        // Вывод баланса с красивыми пробелами
+        if (bEl) bEl.innerText = Math.floor(logic.user.balance || 0).toLocaleString('ru-RU');
         
-        if (eT) eT.innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
-        
+        // Энергия
+        if (eT) eT.innerText = `${Math.floor(logic.user.energy || 0)}/${logic.user.max_energy || 1000}`;
         if (eF) {
-            const pct = (logic.user.energy / logic.user.max_energy * 100);
+            const pct = (logic.user.energy / logic.user.max_energy * 100) || 0;
             eF.style.width = pct + '%';
         }
         
-        if (lEl) lEl.innerText = `LVL ${logic.user.level}`;
-        if (pEl) pEl.innerText = Math.floor(logic.user.profit);
-        if (tV) tV.innerText = `+${logic.user.tap_val}`;
+        // Уровень и доход (исправлены ключи под структуру БД)
+        if (lEl) lEl.innerText = `LVL ${logic.user.lvl || 2}`;
+        if (pEl) pEl.innerText = Math.floor(logic.user.profit_hr || 0).toLocaleString('ru-RU');
+        if (tV) tV.innerText = `+${logic.user.click_lvl || 1}`;
     },
 
-    // 3. Открытие модальных окон
     openM(id) {
         if (this.currentModal) this.closeM();
         const m = document.getElementById('m-' + id);
         if (m) {
             m.style.display = 'flex';
             this.currentModal = m;
-            // Показываем кнопку "Назад" в Telegram
             if (window.Telegram?.WebApp) Telegram.WebApp.BackButton.show();
         }
     },
 
-    // 4. Закрытие модальных окон
     closeM() {
         if (this.currentModal) {
             this.currentModal.style.display = 'none';
             this.currentModal = null;
-            // Прячем кнопку "Назад" в Telegram
             if (window.Telegram?.WebApp) Telegram.WebApp.BackButton.hide();
         }
     }
