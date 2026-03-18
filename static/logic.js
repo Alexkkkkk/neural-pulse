@@ -7,6 +7,7 @@ const logic = {
 
     async init() {
         console.log("🔍 [INIT] Запуск инициализации логики...");
+        
         if (window.Telegram?.WebApp) {
             const tg = window.Telegram.WebApp;
             tg.ready();
@@ -21,7 +22,7 @@ const logic = {
 
         if (!this.user.userId || this.user.userId === 0) {
             this.user.userId = "test_user_123"; 
-            console.warn("⚠️ [USER] ID не найден, использую тестовый ID");
+            console.warn("⚠️ [USER] Используем тестовый ID");
         }
 
         await this.syncWithDB();
@@ -34,6 +35,10 @@ const logic = {
         console.log("🎯 [UI] Поиск tap-target:", target ? "✅ Найдено" : "❌ НЕ НАЙДЕНО");
 
         if (target) {
+            // Принудительно разрешаем события
+            target.style.pointerEvents = 'auto';
+            
+            // pointerdown срабатывает быстрее чем click
             target.addEventListener('pointerdown', (e) => {
                 e.preventDefault();
                 console.log("⚡ [EVENT] Нажатие зафиксировано");
@@ -60,21 +65,29 @@ const logic = {
             this.user.isLiked = data.is_liked || false;
             this.user.likes = parseInt(data.likes) || 0;
             
-            if (window.ui) ui.update();
+            if (window.ui && typeof ui.update === 'function') {
+                ui.update();
+            }
         } catch (e) { 
             console.error("❌ [DB ERROR] Ошибка загрузки:", e); 
         }
     },
 
     tap(e) {
-        console.log(`🖱️ [TAP] Энергия: ${this.user.energy}, Урон: ${this.user.click_lvl}`);
+        console.log(`🖱️ [TAP] Попытка тапа. Энергия: ${this.user.energy}`);
         if (this.user.energy >= this.user.click_lvl) {
             this.user.balance += this.user.click_lvl;
             this.user.energy -= this.user.click_lvl;
             
+            console.log(`✅ [TAP SUCCESS] Баланс: ${this.user.balance}`);
+
             if (window.ui) {
-                ui.update();
-                ui.anim(e);
+                try {
+                    ui.update();
+                    if (ui.anim) ui.anim(e);
+                } catch (err) {
+                    console.error("❌ [UI UPDATE ERROR] Ошибка в ui.js:", err);
+                }
             }
 
             if (window.Telegram?.WebApp?.HapticFeedback) {
@@ -123,11 +136,12 @@ const logic = {
                 })
             });
             const resData = await response.json();
-            console.log("💾 [SAVE] Ответ сервера:", resData);
+            console.log("💾 [SAVE] Успешно сохранено:", resData);
         } catch (e) { 
             console.error("❌ [SAVE ERROR] Ошибка:", e); 
         }
     }
 };
 
+// Запуск
 logic.init();
