@@ -17,25 +17,12 @@ const initDB = async () => {
     try {
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
-                user_id TEXT PRIMARY KEY, 
-                username TEXT, 
-                balance NUMERIC DEFAULT 0, 
-                energy INTEGER DEFAULT 1000, 
-                max_energy INTEGER DEFAULT 1000, 
-                click_lvl INTEGER DEFAULT 1, 
-                profit_hr NUMERIC DEFAULT 0,
-                lvl INTEGER DEFAULT 1,
-                ref_by TEXT,
-                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                user_id TEXT PRIMARY KEY, username TEXT, balance NUMERIC DEFAULT 0, 
+                energy INTEGER DEFAULT 1000, max_energy INTEGER DEFAULT 1000, 
+                click_lvl INTEGER DEFAULT 1, profit_hr NUMERIC DEFAULT 0, 
+                lvl INTEGER DEFAULT 1, ref_by TEXT, last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
-        const columns = [
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS lvl INTEGER DEFAULT 1",
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS profit_hr NUMERIC DEFAULT 0",
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS click_lvl INTEGER DEFAULT 1",
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS ref_by TEXT"
-        ];
-        for (let sql of columns) { await pool.query(sql); }
-        console.log("✅ Database System v3.8.0 Verified");
+        console.log("✅ Database v3.8.0 Verified");
     } catch (e) { console.error("❌ DB Error:", e); }
 };
 initDB();
@@ -47,7 +34,7 @@ app.get('/api/user/:id', async (req, res) => {
         let result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
         if (result.rows.length === 0) {
             await pool.query(
-                `INSERT INTO users (user_id, username, ref_by, balance, energy, lvl) VALUES ($1, $2, $3, 0, 1000, 1)`, 
+                `INSERT INTO users (user_id, username, ref_by) VALUES ($1, $2, $3)`, 
                 [userId, 'Agent', refBy]
             );
             result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
@@ -55,8 +42,8 @@ app.get('/api/user/:id', async (req, res) => {
         const user = result.rows[0];
         res.json({
             ...user,
-            balance: parseFloat(user.balance),
-            profit_hr: parseFloat(user.profit_hr)
+            balance: parseFloat(user.balance) || 0,
+            profit_hr: parseFloat(user.profit_hr) || 0
         });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -77,7 +64,7 @@ app.post('/api/save', async (req, res) => {
 });
 
 bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v3.8.0</b>\nДобро пожаловать, агент!`, 
+    ctx.replyWithHTML(`<b>Neural Pulse v3.8.0</b>`, 
         Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", "https://neural-pulse.bothost.ru")]]));
 });
 
