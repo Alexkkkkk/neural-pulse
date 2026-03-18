@@ -4,12 +4,11 @@ const logic = {
         click_lvl: 1, profit: 0, level: 1, username: "Agent"
     },
 
-    init() {
-        this.syncWithDB().then(() => {
-            this.startPassiveIncome();
-            this.setupListeners();
-            if (window.ui) ui.init(); 
-        });
+    async init() {
+        await this.syncWithDB();
+        this.startPassiveIncome();
+        this.setupListeners();
+        if (window.ui) ui.init(); 
     },
 
     setupListeners() {
@@ -33,12 +32,12 @@ const logic = {
             const res = await fetch(`/api/user/${this.user.userId}?ref=${ref}`);
             if (res.ok) {
                 const data = await res.json();
-                this.user.balance = parseFloat(data.balance) || 0;
-                this.user.energy = parseFloat(data.energy) || 1000;
-                this.user.max_energy = parseInt(data.max_energy) || 1000;
-                this.user.click_lvl = parseInt(data.click_lvl) || 1;
-                this.user.profit = parseFloat(data.profit_hr) || 0;
-                this.user.level = parseInt(data.lvl) || 1;
+                this.user.balance = data.balance;
+                this.user.energy = data.energy;
+                this.user.max_energy = data.max_energy;
+                this.user.click_lvl = data.click_lvl;
+                this.user.profit = data.profit_hr;
+                this.user.level = data.lvl;
             }
         } catch (e) { console.warn("Sync Error"); }
     },
@@ -64,9 +63,21 @@ const logic = {
         if (this.user.energy >= this.user.click_lvl) {
             this.user.balance += this.user.click_lvl;
             this.user.energy -= this.user.click_lvl;
-            this.showClickAnim(e);
-            if (window.ui) ui.update();
-            if (window.Telegram?.WebApp?.HapticFeedback) Telegram.WebApp.HapticFeedback.impactOccurred('light');
+            this.checkLevel();
+            if (window.ui) {
+                ui.update();
+                ui.anim(e);
+            }
+            if (window.Telegram?.WebApp?.HapticFeedback) 
+                Telegram.WebApp.HapticFeedback.impactOccurred('light');
+        }
+    },
+
+    checkLevel() {
+        const nextLvl = this.user.level * 100000;
+        if (this.user.balance >= nextLvl) {
+            this.user.level++;
+            if (window.Telegram?.WebApp) Telegram.WebApp.showAlert(`Level Up! Текущий уровень: ${this.user.level}`);
         }
     },
 
@@ -84,17 +95,5 @@ const logic = {
             if (update && window.ui) ui.update();
         }, 1000);
         setInterval(() => this.save(), 15000);
-    },
-
-    showClickAnim(e) {
-        const x = e.clientX || (e.touches ? e.touches[0].clientX : window.innerWidth / 2);
-        const y = e.clientY || (e.touches ? e.touches[0].clientY : window.innerHeight / 2);
-        const el = document.createElement('div');
-        el.className = 'tap-pop';
-        el.innerText = `+${this.user.click_lvl}`;
-        el.style.cssText = `left:${x}px; top:${y}px; position:absolute; color:#00ffff; pointer-events:none; z-index:9999; font-weight:bold;`;
-        document.body.appendChild(el);
-        setTimeout(() => el.remove(), 800);
     }
 };
-window.onload = () => logic.init();
