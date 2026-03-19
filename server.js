@@ -28,28 +28,32 @@ const initDB = async () => {
                 wallet TEXT,
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
-        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet TEXT");
         console.log("✅ [DB] System Ready");
     } catch (e) { console.error("❌ [DB ERROR]", e.message); }
 };
 initDB();
 
+// API: Сохранение кошелька
 app.post('/api/wallet', async (req, res) => {
     const { userId, address } = req.body;
     try {
         await pool.query('UPDATE users SET wallet = $2 WHERE user_id = $1', [String(userId), address]);
-        console.log(`👛 User ${userId} linked wallet`);
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// API: Получение/Создание пользователя с обновлением ника
 app.get('/api/user/:id', async (req, res) => {
     const userId = String(req.params.id);
+    const username = req.query.username || 'Agent';
     try {
         let result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
         if (result.rows.length === 0) {
-            await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2)', [userId, 'Agent']);
+            await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2)', [userId, username]);
             result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
+        } else {
+            // Обновляем ник, если он изменился в Telegram
+            await pool.query('UPDATE users SET username = $2, last_seen = NOW() WHERE user_id = $1', [userId, username]);
         }
         res.json(result.rows[0]);
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -64,9 +68,10 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// API: Топ игроков с реальными никами
 app.get('/api/top', async (req, res) => {
     try {
-        const result = await pool.query('SELECT username as name, balance FROM users ORDER BY balance DESC LIMIT 100');
+        const result = await pool.query('SELECT username, balance FROM users ORDER BY balance DESC LIMIT 100');
         res.json(result.rows);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
