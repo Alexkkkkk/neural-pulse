@@ -11,72 +11,77 @@
 <body>
 
     <div id="loading-screen">
-        <div class="loader-circle-container">
-            <svg class="progress-ring" width="180" height="180">
-                <circle id="ring-circle" stroke="url(#ringGrad)" stroke-width="4" fill="transparent" r="80" cx="90" cy="90" 
-                    stroke-dasharray="502.6" stroke-dashoffset="502.6" stroke-linecap="round"/>
-                <defs>
-                    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stop-color="#00ffff" /><stop offset="100%" stop-color="#ae00ff" />
-                    </linearGradient>
-                </defs>
-            </svg>
+        <div class="loader-container">
+            <div class="loader-ring"></div>
             <img src="images/logo.png" class="loader-logo">
         </div>
         <div class="loading-text">ACCESS GRANTED</div>
         <div class="percent" id="load-pct">0%</div>
-        <div class="load-bar-wrapper"><div id="load-bar" class="load-bar-f"></div></div>
+        <div class="load-bar-wrapper">
+            <div id="load-bar" class="load-bar-f"></div>
+        </div>
     </div>
 
     <div id="app">
-        <div class="header-container">
-            <div class="header-user">
-                <div class="avatar-neomorph"><img src="images/logo.png"></div>
+        <div class="header">
+            <div class="header-left">
+                <div class="avatar"><img src="images/logo.png"></div>
                 <div class="u-info">
                     <b id="u-name">Agent</b>
                     <small>v4.0.0 Neural Mining</small>
                 </div>
             </div>
-            <div class="lvl-badge-neon" id="u-lvl">LVL 1</div>
+            <div class="lvl-badge" id="u-lvl">LVL 1</div>
         </div>
 
-        <div class="stats-row-neon">
-            <div class="stat-card-neon"><small>EARN PER TAP</small><b id="tap-val">+1</b></div>
-            <div class="stat-card-neon"><small>PROFIT PER HOUR</small><b id="profit-val">0</b></div>
-        </div>
-
-        <div class="balance-nebula" id="balance">0</div>
-
-        <div class="play-area">
-            <div class="logo-glow"></div>
-            <img src="images/logo.png" class="main-logo-pulse" id="tap-target" 
-                 ontouchstart="logic.tap(event)" onmousedown="logic.tap(event)">
-            
-            <div class="side-menu-cyber">
-                <div class="side-btn-cyber" onclick="ui.openM('wallet')">👛 WALLET</div>
-                <div class="side-btn-cyber" onclick="ui.openM('squad')">🤝 FRIENDS</div>
-                <div class="side-btn-cyber" onclick="ui.openM('bonus')">🎁 BONUS</div>
+        <div class="stats-row">
+            <div class="stat-card">
+                <small>EARN PER TAP</small>
+                <b id="tap-val" class="accent-val">+1</b>
+            </div>
+            <div class="stat-card">
+                <small>PROFIT PER HOUR</small>
+                <b id="profit-val">0</b>
             </div>
         </div>
 
-        <div class="energy-container-cyber">
-            <div class="en-txt-cyber"><span>ENERGY</span><span id="eng-val">0/0</span></div>
-            <div class="progress-bar-wrap"><div id="eng-fill" class="progress-bar-fill"></div></div>
+        <div class="balance" id="balance">0</div>
+
+        <div class="play-area">
+            <img src="images/logo.png" class="main-logo" id="tap-target" 
+                 ontouchstart="logic.tap(event)" onmousedown="logic.tap(event)">
+            
+            <div class="side-menu">
+                <div class="side-btn" onclick="ui.openM('wallet')">👛 WALLET</div>
+                <div class="side-btn" onclick="ui.openM('squad')">🤝 FRIENDS</div>
+                <div class="side-btn" onclick="ui.openM('bonus')">🎁 BONUS</div>
+            </div>
         </div>
 
-        <div class="bottom-nav-cyber">
-            <div class="nav-btn-capsule" onclick="ui.openM('boost')">🚀 BOOST</div>
-            <div class="nav-btn-capsule" onclick="ui.openM('mine')">⛏️ MINE</div>
-            <div class="nav-btn-capsule" onclick="ui.openM('tasks')">📋 TASKS</div>
-            <div class="nav-btn-capsule" onclick="ui.openM('top')">🏆 TOP</div>
+        <div class="energy-box">
+            <div class="en-txt">
+                <span>ENERGY</span>
+                <span id="eng-val">0/0</span>
+            </div>
+            <div class="progress-bar-wrap">
+                <div id="eng-fill" class="progress-bar-fill"></div>
+            </div>
+        </div>
+
+        <div class="bottom-nav">
+            <button class="nav-btn" onclick="ui.openM('boost')"><span>🚀</span>BOOST</button>
+            <button class="nav-btn" onclick="ui.openM('mine')"><span>⛏️</span>MINE</button>
+            <button class="nav-btn" onclick="ui.openM('tasks')"><span>📋</span>TASKS</button>
+            <button class="nav-btn" onclick="ui.openM('top')"><span>🏆</span>TOP</button>
         </div>
     </div>
 
     <div id="modal-container" class="modal" onclick="if(event.target === this) ui.closeM()">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-drag-line"></div>
+            <div id="modal-header" class="modal-header"></div>
             <div id="modal-body"></div>
-            <button class="nav-btn-capsule close-btn" onclick="ui.closeM()">CLOSE TERMINAL</button>
+            <button class="back-btn" onclick="ui.closeM()">CLOSE TERMINAL</button>
         </div>
     </div>
 
@@ -87,7 +92,10 @@
         });
 
         const ui = {
-            init() { this.update(); this.finishLoading(); },
+            init() { 
+                this.update(); 
+                this.finishLoading(); 
+            },
             update() {
                 if (!logic.user) return;
                 document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
@@ -99,39 +107,64 @@
             },
             openM(type) {
                 const body = document.getElementById('modal-body');
+                const header = document.getElementById('modal-header');
                 const container = document.getElementById('modal-container');
-                let h = `<h2 class="m-title">${type.toUpperCase()}</h2>`;
-                
+                let h = '';
+
                 if (type === 'wallet') {
-                    h += `<div class="wallet-section"><div id="ton-btn"></div><p>Connect your TON wallet</p></div>`;
+                    header.innerText = 'WALLET';
+                    h = `<div class="wallet-box">
+                            <img src="images/logo.png" class="mini-icon-main">
+                            <div id="ton-btn"></div>
+                            <p style="font-size:12px; color:#666; margin-top:10px;">Connect TON for future drops</p>
+                         </div>`;
                     setTimeout(() => tonConnectUI.uiOptions = { buttonRootId: 'ton-btn' }, 100);
                 } 
                 else if (type === 'boost') {
-                    h += `<div class="up-card" onclick="logic.buyUpgrade('tap')"><b>🚀 Multitap</b><br><small>Lvl ${logic.user.click_lvl} | Cost: 5,000</small></div>
-                          <div class="up-card" onclick="logic.buyUpgrade('energy')"><b>🔋 Energy Limit</b><br><small>Max ${logic.user.max_energy} | Cost: 10,000</small></div>`;
+                    header.innerText = 'UPGRADES';
+                    h = `
+                        <div class="up-card" onclick="logic.buyUpgrade('tap')">
+                            <div class="up-info"><b>🚀 Multitap</b><small>Level ${logic.user.click_lvl}</small></div>
+                            <div class="up-price">5,000</div>
+                        </div>
+                        <div class="up-card" onclick="logic.buyUpgrade('energy')">
+                            <div class="up-info"><b>🔋 Capacity</b><small>${logic.user.max_energy} Energy</small></div>
+                            <div class="up-price">10,000</div>
+                        </div>`;
                 }
                 else if (type === 'mine') {
-                    h += `<div class="up-card" onclick="logic.buyUpgrade('profit')"><b>🖥️ Neural Node</b><br><small>+500 Pulse/hr | Cost: 25,000</small></div>`;
+                    header.innerText = 'NEURAL MINING';
+                    h = `
+                        <div class="up-card" onclick="logic.buyUpgrade('profit')">
+                            <div class="up-info"><b>🖥️ Neural Node</b><small>+500 Pulse/hr</small></div>
+                            <div class="up-price">25,000</div>
+                        </div>`;
                 }
                 else if (type === 'top') {
-                    h += `<div class="leaderboard">
-                            <div class="rank"><span>1. Matrix_Runner</span><b>85.4M</b></div>
-                            <div class="rank active"><span>You (${logic.user.username})</span><b>${(logic.user.balance/1000).toFixed(1)}K</b></div>
-                          </div>`;
+                    header.innerText = 'TOP 100 AGENTS';
+                    h = `
+                        <div class="rank-item"><span>1. Matrix_Runner</span><b>85.4M</b></div>
+                        <div class="rank-item"><span>2. Cyber_Punk</span><b>72.1M</b></div>
+                        <div class="rank-item active"><span>3. You (${logic.user.username})</span><b>${(logic.user.balance/1000).toFixed(1)}K</b></div>
+                    `;
                 }
-                else { h += `<p class="muted">Accessing data protocols...</p>`; }
+                else { 
+                    header.innerText = type.toUpperCase();
+                    h = `<p style="text-align:center; color:#444;">Encrypted protocols active...</p>`; 
+                }
 
                 body.innerHTML = h;
                 container.classList.add('active');
             },
-            closeM() { document.getElementById('modal-container').classList.remove('active'); },
+            closeM() { 
+                document.getElementById('modal-container').classList.remove('active'); 
+            },
             finishLoading() {
                 let p = 0;
                 const iv = setInterval(() => {
-                    p += 10;
+                    p += 5;
                     document.getElementById('load-pct').innerText = `${p}%`;
                     document.getElementById('load-bar').style.width = `${p}%`;
-                    document.getElementById('ring-circle').style.strokeDashoffset = 502.6 - (p / 100) * 502.6;
                     if (p >= 100) {
                         clearInterval(iv);
                         setTimeout(() => {
@@ -140,7 +173,7 @@
                             setTimeout(() => document.getElementById('loading-screen').remove(), 500);
                         }, 400);
                     }
-                }, 50);
+                }, 40);
             }
         };
         window.onload = () => logic.init();
