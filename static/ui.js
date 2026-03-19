@@ -1,9 +1,11 @@
 const ui = {
+    // Инициализация событий тапа и сброс старых слушателей
     init() {
         console.log("🎨 UI: Ready");
         const target = document.getElementById('tap-target');
         
         if (target) {
+            // Очистка событий через клон, чтобы избежать дублирования кликов
             const newTarget = target.cloneNode(true);
             target.replaceWith(newTarget);
 
@@ -19,6 +21,7 @@ const ui = {
         this.update();
     },
 
+    // Обновление статов на главном экране (баланс, энергия и т.д.)
     update() {
         if (!logic.user) return;
         const u = logic.user;
@@ -36,10 +39,12 @@ const ui = {
 
         const fill = document.getElementById('eng-fill');
         if (fill) {
-            fill.style.width = `${(u.energy / u.max_energy) * 100}%`;
+            const pct = (u.energy / u.max_energy) * 100;
+            fill.style.width = `${pct}%`;
         }
     },
 
+    // Открытие модальных окон
     openM(id) {
         const m = document.getElementById('m-' + id);
         if (!m) return;
@@ -48,6 +53,7 @@ const ui = {
         const container = m.querySelector('.modal-content');
         const u = logic.user;
 
+        // Отрисовка базового контента
         if (id === 'wallet') {
             const isConnected = logic.tonConnectUI?.connected;
             container.innerHTML = `
@@ -66,31 +72,15 @@ const ui = {
             }
         } 
         else if (id === 'top') {
-            // Генерация ТОП-100
-            let listHtml = '';
-            for (let i = 1; i <= 100; i++) {
-                let color = i === 1 ? '#ffd700' : (i === 2 ? '#c0c0c0' : (i === 3 ? '#cd7f32' : '#fff'));
-                let shadow = i <= 3 ? `text-shadow: 0 0 10px ${color};` : '';
-                
-                // Для примера генерируем случайные балансы, кроме игрока
-                let score = i === 42 ? Math.floor(u.balance) : Math.floor(10000000 / i);
-                let name = i === 42 ? "YOU" : `Agent_${i}${i*7}`;
-
-                listHtml += `
-                    <div style="display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid #222; font-size:14px; ${i === 42 ? 'background:rgba(0,255,255,0.1); border-radius:8px;' : ''}">
-                        <span style="color:${color}; font-weight:bold; ${shadow}">${i}. ${name}</span>
-                        <span style="font-family:monospace;">${score.toLocaleString()}</span>
-                    </div>
-                `;
-            }
-
             container.innerHTML = `
                 <div class="modal-header">LEADERBOARD (100)</div>
-                <div style="height: 350px; overflow-y: auto; padding: 5px; scrollbar-width: thin;">
-                    ${listHtml}
+                <div id="top-list-container" style="height: 350px; overflow-y: auto; padding: 5px; scrollbar-width: thin; opacity:0.5; text-align:center;">
+                   <p>Loading leaderboard...</p>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
+            // Сразу запускаем загрузку реальных данных
+            this.loadTop();
         }
         else if (id === 'mine') {
             container.innerHTML = `
@@ -134,6 +124,52 @@ const ui = {
         }
     },
 
+    // Функция загрузки РЕАЛЬНОГО ТОП-100 с аватарами
+    async loadTop() {
+        const topContainer = document.getElementById('top-list-container');
+        if (!topContainer) return;
+
+        try {
+            // Запрашиваем данные у твоего бэкенда
+            const res = await fetch('/api/top');
+            if (!res.ok) throw new Error("Load Top failed");
+            const topData = await res.json(); // Ожидаем массив [{name, balance, photo_url}, ...]
+
+            topContainer.innerHTML = ''; // Очищаем "Loading..."
+            topContainer.style.opacity = '1';
+            topContainer.style.textAlign = 'left';
+
+            let listHtml = '';
+            
+            topData.forEach((player, index) => {
+                const rank = index + 1;
+                // Стили для первых 3-х мест
+                let color = rank === 1 ? '#ffd700' : (rank === 2 ? '#c0c0c0' : (rank === 3 ? '#cd7f32' : '#fff'));
+                let shadow = rank <= 3 ? `text-shadow: 0 0 10px ${color};` : '';
+                
+                // Проверка: это текущий игрок?
+                const isYou = player.user_id === logic.user.user_id;
+
+                listHtml += `
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 8px; border-bottom:1px solid #222; ${isYou ? 'background:rgba(0,255,255,0.08); border-radius:8px;' : ''}">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <img src="${player.photo_url || 'logo.png'}" style="width:28px; height:28px; border-radius:50%; border:1px solid ${color};">
+                            <span style="color:${color}; font-weight:bold; ${shadow} font-size:14px;">${rank}. ${player.name}</span>
+                        </div>
+                        <span style="font-family:monospace; font-size:13px;">${Math.floor(player.balance).toLocaleString()}</span>
+                    </div>
+                `;
+            });
+
+            topContainer.innerHTML = listHtml;
+
+        } catch (e) {
+            console.error(e);
+            topContainer.innerHTML = '<p style="color:red; text-align:center;">Failed to load leaderboard</p>';
+        }
+    },
+
+    // Логика покупки улучшений
     buyUpg(id, price, val, type) {
         if (logic.user.balance >= price) {
             logic.user.balance -= price;
