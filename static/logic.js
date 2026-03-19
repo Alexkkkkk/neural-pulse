@@ -8,7 +8,6 @@ const logic = {
             tg.expand();
         }
 
-        // Берем ID из Телеграм или ставим тестовый
         const userId = tg?.initDataUnsafe?.user?.id || "12345";
         const firstName = tg?.initDataUnsafe?.user?.first_name || "Agent";
 
@@ -30,7 +29,6 @@ const logic = {
             const nameEl = document.getElementById('u-name');
             if (nameEl) nameEl.innerText = this.user.username;
 
-            // Инициализируем интерфейс ПОСЛЕ загрузки данных
             if (typeof ui !== 'undefined') ui.init();
             
             this.startLoops();
@@ -42,7 +40,6 @@ const logic = {
     },
 
     tap(e) {
-        // Предотвращаем стандартное поведение (зум и т.д.)
         if (e.type === 'touchstart') e.preventDefault();
         
         if (!this.user || this.user.energy < this.user.click_lvl) return;
@@ -59,7 +56,6 @@ const logic = {
     },
 
     anim(e) {
-        // Поддержка и мыши, и тача
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
@@ -71,6 +67,32 @@ const logic = {
 
         document.body.appendChild(p);
         setTimeout(() => p.remove(), 800);
+    },
+
+    // НОВАЯ ФУНКЦИЯ: Покупка улучшений
+    buyUpgrade(type) {
+        if (!this.user) return;
+        
+        if (type === 'tap' && this.user.balance >= 5000) {
+            this.user.balance -= 5000;
+            this.user.click_lvl += 1;
+        } else if (type === 'energy' && this.user.balance >= 10000) {
+            this.user.balance -= 10000;
+            this.user.max_energy += 500;
+            this.user.energy += 500;
+        } else if (type === 'profit' && this.user.balance >= 25000) {
+            this.user.balance -= 25000;
+            this.user.profit_hr += 500;
+        } else {
+            alert("Недостаточно средств!");
+            return;
+        }
+        
+        if (typeof ui !== 'undefined') {
+            ui.update();
+            ui.openM(type === 'profit' ? 'mine' : 'boost'); // Обновляем текст в модалке
+        }
+        this.save();
     },
 
     async save() {
@@ -95,11 +117,10 @@ const logic = {
     },
 
     startLoops() {
-        // Ежесекундное обновление: реген энергии + доход в час
         setInterval(() => {
             if (!this.user) return;
             
-            // Реген энергии (1.5 в сек)
+            // Реген энергии
             if (this.user.energy < this.user.max_energy) {
                 this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
             }
@@ -112,7 +133,6 @@ const logic = {
             if (typeof ui !== 'undefined') ui.update();
         }, 1000);
 
-        // Автосохранение каждые 10 сек
         setInterval(() => this.save(), 10000);
     }
 };
