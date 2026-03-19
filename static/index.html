@@ -82,6 +82,13 @@
     <div id="m-tasks" class="modal"><div class="modal-content"></div></div>
     <div id="m-top" class="modal"><div class="modal-content"></div></div>
 
+    <script>
+        // Инициализируем TON Connect UI сразу
+        window.tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
+            buttonRootId: 'ton-connect-btn' // Это будет переопределено в ui.js
+        });
+    </script>
     <script src="ui.js"></script>
     <script src="logic.js"></script>
     <script src="loading.js"></script>
