@@ -9,6 +9,7 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
+
     <div id="loading-screen">
         <div class="loader-container">
             <div class="loader-ring"></div>
@@ -22,6 +23,7 @@
     </div>
 
     <div id="app" style="display: none;">
+        
         <div class="header">
             <div class="header-left">
                 <div class="avatar"><img src="logo.png" alt="Avatar"></div>
@@ -69,7 +71,7 @@
         <div class="bottom-nav">
             <button class="nav-btn" onclick="ui.openM('boost')"><span>🚀</span> BOOST</button>
             <button class="nav-btn" onclick="ui.openM('mine')"><span>⛏️</span> MINE</button>
-            <button class="nav-btn" onclick="class="nav-btn" onclick="ui.openM('tasks')"><span>📋</span> TASKS</button>
+            <button class="nav-btn" onclick="ui.openM('tasks')"><span>📋</span> TASKS</button>
             <button class="nav-btn" onclick="ui.openM('top')"><span>🏆</span> TOP</button>
         </div>
     </div>
@@ -83,9 +85,10 @@
     <div id="m-top" class="modal"><div class="modal-content"></div></div>
 
     <script>
+        // Инициализация TON Connect сразу при загрузке
         window.tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
             manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
-            buttonRootId: 'ton-connect-btn'
+            buttonRootId: 'ton-connect-btn' 
         });
     </script>
     <script src="ui.js"></script>
