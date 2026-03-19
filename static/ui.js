@@ -58,7 +58,7 @@ const ui = {
             container.innerHTML = `
                 <div class="modal-header">TON WALLET</div>
                 <div style="padding:20px; text-align:center;">
-                    <img src="logo.png" style="width:60px; margin-bottom:15px; filter: hue-rotate(150deg);">
+                    <img src="logo.png" style="width:60px; margin-bottom:15px; filter: drop-shadow(0 0 10px rgba(0,255,255,0.5));">
                     <p style="color:#aaa; font-size:14px; margin-bottom:20px;">
                         ${isConnected ? "Кошелек подключен. Ожидайте листинга!" : "Подключите ваш TON кошелек для вывода средств."}
                     </p>
@@ -66,10 +66,13 @@ const ui = {
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
-            // Переинициализируем кнопку, если модалка открылась
-            if (logic.tonConnectUI) {
-                logic.tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
-            }
+            
+            // КРИТИЧНО: Инициализация кнопки ПОСЛЕ того, как HTML вставлен в DOM
+            setTimeout(() => {
+                if (logic.tonConnectUI) {
+                    logic.tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
+                }
+            }, 50);
         } 
         else if (id === 'top') {
             container.innerHTML = `
@@ -112,7 +115,7 @@ const ui = {
                 <div class="modal-header">FRIENDS</div>
                 <div style="padding:20px; text-align:center;">
                     <p>Invite friends and get 10% bonus!</p>
-                    <div style="background:#111; padding:10px; border-radius:8px; margin:15px 0; font-size:12px; word-break:break-all; border:1px solid #333;">${refLink}</div>
+                    <div style="background:#111; padding:10px; border-radius:8px; margin:15px 0; font-size:11px; word-break:break-all; border:1px solid #333; color:#0ff;">${refLink}</div>
                     <button class="nav-btn" style="width:100%" onclick="navigator.clipboard.writeText('${refLink}'); alert('Copied!')">COPY LINK</button>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
@@ -136,8 +139,12 @@ const ui = {
             topContainer.style.opacity = '1';
             topContainer.style.textAlign = 'left';
 
+            if (!topData || topData.length === 0) {
+                topContainer.innerHTML = '<p style="text-align:center; padding:20px;">No data available</p>';
+                return;
+            }
+
             let listHtml = '';
-            
             topData.forEach((player, index) => {
                 const rank = index + 1;
                 let color = rank === 1 ? '#ffd700' : (rank === 2 ? '#c0c0c0' : (rank === 3 ? '#cd7f32' : '#fff'));
@@ -147,7 +154,9 @@ const ui = {
                 listHtml += `
                     <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 8px; border-bottom:1px solid #222; ${isYou ? 'background:rgba(0,255,255,0.08); border-radius:8px;' : ''}">
                         <div style="display:flex; align-items:center; gap:10px;">
-                            <img src="${player.photo_url || 'logo.png'}" style="width:28px; height:28px; border-radius:50%; border:1px solid ${color};">
+                            <img src="${player.photo_url || 'logo.png'}" 
+                                 style="width:28px; height:28px; border-radius:50%; border:1px solid ${color};" 
+                                 onerror="this.src='logo.png'">
                             <span style="color:${color}; font-weight:bold; ${shadow} font-size:14px;">${rank}. ${player.name || 'Agent'}</span>
                         </div>
                         <span style="font-family:monospace; font-size:13px;">${Math.floor(player.balance).toLocaleString()}</span>
@@ -155,11 +164,11 @@ const ui = {
                 `;
             });
 
-            topContainer.innerHTML = listHtml || '<p style="text-align:center;">No data available</p>';
+            topContainer.innerHTML = listHtml;
 
         } catch (e) {
             console.error(e);
-            topContainer.innerHTML = '<p style="color:red; text-align:center;">Failed to load leaderboard</p>';
+            topContainer.innerHTML = '<p style="color:#ff4444; text-align:center; padding:20px;">Failed to load leaderboard</p>';
         }
     },
 
