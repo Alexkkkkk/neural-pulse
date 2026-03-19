@@ -2,7 +2,11 @@ const ui = {
     init() {
         const target = document.getElementById('tap-target');
         if (target) {
-            target.addEventListener('pointerdown', (e) => logic.tap());
+            // Используем onclick для стабильности на всех устройствах
+            target.onclick = (e) => {
+                e.preventDefault();
+                logic.tap();
+            };
         }
         this.update();
     },
@@ -28,22 +32,26 @@ const ui = {
         let content = "";
         if (id === 'wallet') {
             content = `
-                <div class="modal-header">CRYPTO WALLET</div>
+                <div class="modal-header">TON WALLET</div>
                 <div style="display:flex; flex-direction:column; align-items:center; padding:20px; gap:15px;">
                     <div style="font-size:40px;">💎</div>
-                    <p style="text-align:center; font-size:14px; opacity:0.8;">Connect your wallet for drops.</p>
+                    <p style="text-align:center; font-size:14px; opacity:0.8;">Подключите кошелек для выплат.</p>
                     <div id="ton-connect-btn"></div>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
         } else {
-            content = `<div class="modal-header">${id.toUpperCase()}</div><p style="text-align:center; padding:20px;">Soon...</p><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
+            content = `
+                <div class="modal-header">${id.toUpperCase()}</div>
+                <p style="text-align:center; padding:40px; opacity:0.5;">Coming Soon...</p>
+                <button class="back-btn" onclick="ui.closeM()">BACK</button>
+            `;
         }
 
         m.querySelector('.modal-content').innerHTML = content;
         m.classList.add('active');
 
-        // Важно: переподключаем кнопку TON Connect к новому созданному элементу
+        // Переподключаем кнопку, если открыли Wallet
         if (id === 'wallet' && logic.tonConnectUI) {
             logic.tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
         }
@@ -57,11 +65,15 @@ const ui = {
         const n = document.createElement('div');
         n.className = 'tap-pop';
         n.innerText = `+${logic.user.click_lvl}`;
+        
+        // Позиционирование всплывающего числа
         const x = e?.clientX || window.innerWidth / 2;
         const y = e?.clientY || window.innerHeight / 2;
+        
         n.style.left = `${x}px`;
         n.style.top = `${y}px`;
         document.body.appendChild(n);
+        
         setTimeout(() => n.remove(), 800);
     }
 };
