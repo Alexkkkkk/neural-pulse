@@ -4,17 +4,18 @@ const logic = {
 
     async init() {
         // Инициализация TON Connect
-        this.tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
-            buttonRootId: 'ton-connect-btn'
-        });
+        if (typeof TON_CONNECT_UI !== 'undefined') {
+            this.tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+                manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
+                buttonRootId: 'ton-connect-btn'
+            });
 
-        // Слушаем изменения статуса кошелька
-        this.tonConnectUI.onStatusChange(wallet => {
-            if (wallet) {
-                this.saveWallet(wallet.account.address);
-            }
-        });
+            this.tonConnectUI.onStatusChange(wallet => {
+                if (wallet) {
+                    this.saveWallet(wallet.account.address);
+                }
+            });
+        }
 
         const tg = window.Telegram?.WebApp;
         const userId = tg?.initDataUnsafe?.user?.id || "12345";
@@ -23,7 +24,6 @@ const logic = {
             const res = await fetch(`/api/user/${userId}`);
             const rawData = await res.json();
             
-            // Преобразуем всё в числа при загрузке
             this.user = {
                 ...rawData,
                 balance: Number(rawData.balance || 0),
@@ -36,7 +36,12 @@ const logic = {
             
             if (typeof ui !== 'undefined') ui.init();
             this.startLoops();
-        } catch (e) { console.error("Load Error:", e); }
+        } catch (e) { 
+            console.error("Load Error:", e);
+            // Фоллбек для теста, если сервер недоступен
+            this.user = { balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0, lvl: 1 };
+            if (typeof ui !== 'undefined') ui.init();
+        }
     },
 
     async saveWallet(address) {
@@ -54,7 +59,6 @@ const logic = {
 
     tap() {
         if (this.user && this.user.energy >= 1) {
-            // Математическое сложение (без ошибок "111")
             this.user.balance = Number(this.user.balance) + Number(this.user.click_lvl);
             this.user.energy -= 1;
             ui.update();
@@ -75,7 +79,7 @@ const logic = {
     },
 
     async save() {
-        if (!this.user) return;
+        if (!this.user || !this.user.user_id) return;
         try {
             await fetch('/api/save', {
                 method: 'POST',
