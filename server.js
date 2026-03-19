@@ -29,8 +29,8 @@ const initDB = async () => {
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
         await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet TEXT");
-        console.log("✅ Database Ready");
-    } catch (e) { console.error("❌ DB Error", e.message); }
+        console.log("✅ [DB] System Ready");
+    } catch (e) { console.error("❌ [DB ERROR]", e.message); }
 };
 initDB();
 
@@ -38,7 +38,7 @@ app.post('/api/wallet', async (req, res) => {
     const { userId, address } = req.body;
     try {
         await pool.query('UPDATE users SET wallet = $2 WHERE user_id = $1', [String(userId), address]);
-        console.log(`👛 Wallet linked: ${userId} -> ${address}`);
+        console.log(`👛 User ${userId} linked wallet`);
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -59,7 +59,7 @@ app.post('/api/save', async (req, res) => {
     const d = req.body;
     try {
         await pool.query(`UPDATE users SET balance=$2, energy=$3, max_energy=$4, click_lvl=$5, profit_hr=$6, lvl=$7 WHERE user_id=$1`, 
-        [String(d.userId), d.balance, d.energy, d.max_energy, d.click_lvl, d.profit_hr, d.lvl]);
+            [String(d.userId), d.balance, d.energy, d.max_energy, d.click_lvl, d.profit_hr, d.lvl]);
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -71,10 +71,8 @@ app.get('/api/top', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse</b>`, 
-        Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", "https://neural-pulse.bothost.ru")]]));
-});
+bot.start(ctx => ctx.replyWithHTML(`<b>Neural Pulse</b>`, 
+    Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", "https://neural-pulse.bothost.ru")]])));
 
-app.listen(3000, () => console.log(`🚀 Server on port 3000`));
+app.listen(3000, () => console.log(`🚀 Server on 3000`));
 bot.launch();
