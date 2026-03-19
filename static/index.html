@@ -17,8 +17,7 @@
                     stroke-dasharray="502.6" stroke-dashoffset="502.6" stroke-linecap="round"/>
                 <defs>
                     <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stop-color="#00ffff" />
-                        <stop offset="100%" stop-color="#ae00ff" />
+                        <stop offset="0%" stop-color="#00ffff" /><stop offset="100%" stop-color="#ae00ff" />
                     </linearGradient>
                 </defs>
             </svg>
@@ -34,7 +33,7 @@
             <div class="header-user">
                 <div class="avatar-neomorph"><img src="images/logo.png"></div>
                 <div class="u-info">
-                    <b id="u-name">Agent</b>
+                    <b id="u-name">Loading...</b>
                     <small>v4.0.0 Neural Mining</small>
                 </div>
             </div>
@@ -50,7 +49,8 @@
 
         <div class="play-area">
             <div class="logo-glow"></div>
-            <img src="images/logo.png" class="main-logo-pulse" id="tap-target">
+            <img src="images/logo.png" class="main-logo-pulse" id="tap-target" 
+                 ontouchstart="logic.tap(event)" onmousedown="logic.tap(event)">
             
             <div class="side-menu-cyber">
                 <div class="side-btn-cyber" onclick="ui.openM('wallet')">👛 WALLET</div>
@@ -60,7 +60,7 @@
         </div>
 
         <div class="energy-container-cyber">
-            <div class="en-txt-cyber"><span>ENERGY</span><span id="eng-val">1000/1000</span></div>
+            <div class="en-txt-cyber"><span>ENERGY</span><span id="eng-val">0/0</span></div>
             <div class="progress-bar-wrap"><div id="eng-fill" class="progress-bar-fill"></div></div>
         </div>
 
@@ -79,58 +79,25 @@
         </div>
     </div>
 
+    <script src="logic.js"></script>
     <script>
-        // --- ПАРАМЕТРЫ ИГРЫ ---
-        let state = {
-            balance: 0,
-            energy: 1000,
-            maxEnergy: 1000,
-            tapValue: 7,
-            lvl: 659
-        };
-
-        // --- TON CONNECT ИНИЦИАЛИЗАЦИЯ ---
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
-            buttonRootId: null // Мы создадим свою кнопку в модалке
+            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json'
         });
 
-        // --- UI КОНТРОЛЛЕР ---
         const ui = {
             init() {
                 this.update();
-                document.getElementById('tap-target').addEventListener('touchstart', (e) => this.handleTap(e));
-                this.startLoading();
+                this.finishLoading();
             },
             update() {
-                document.getElementById('balance').innerText = Math.floor(state.balance).toLocaleString();
-                document.getElementById('eng-val').innerText = `${Math.floor(state.energy)}/${state.maxEnergy}`;
-                document.getElementById('eng-fill').style.width = `${(state.energy / state.maxEnergy) * 100}%`;
-                document.getElementById('u-lvl').innerText = `LVL ${state.lvl}`;
-                document.getElementById('tap-val').innerText = `+${state.tapValue}`;
-            },
-            handleTap(e) {
-                e.preventDefault();
-                if (state.energy < state.tapValue) return;
-                
-                state.balance += state.tapValue;
-                state.energy -= state.tapValue;
-                this.update();
-                this.createTapAnim(e);
-                
-                if (window.Telegram?.WebApp?.HapticFeedback) {
-                    window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
-                }
-            },
-            createTapAnim(e) {
-                const touch = e.touches[0];
-                const el = document.createElement('div');
-                el.className = 'tap-pop';
-                el.innerText = `+${state.tapValue}`;
-                el.style.left = `${touch.clientX}px`;
-                el.style.top = `${touch.clientY}px`;
-                document.body.appendChild(el);
-                setTimeout(() => el.remove(), 800);
+                if (!logic.user) return;
+                document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
+                document.getElementById('eng-val').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
+                document.getElementById('eng-fill').style.width = `${(logic.user.energy / logic.user.max_energy) * 100}%`;
+                document.getElementById('u-lvl').innerText = `LVL ${logic.user.lvl}`;
+                document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
+                document.getElementById('profit-val').innerText = logic.user.profit_hr.toLocaleString();
             },
             openM(type) {
                 const body = document.getElementById('modal-body');
@@ -138,52 +105,40 @@
                 let html = `<h2>${type.toUpperCase()}</h2>`;
                 
                 if (type === 'wallet') {
-                    html += `
-                        <div id="ton-button-container" style="margin: 20px 0;"></div>
-                        <p style="font-size:12px; opacity:0.6;">Connect your TON wallet to withdraw rewards.</p>
-                    `;
-                    setTimeout(() => {
-                        // Рендерим кнопку TON прямо в модалку
-                        tonConnectUI.uiOptions = { buttonRootId: 'ton-button-container' };
-                    }, 100);
+                    html += `<div id="ton-btn" style="margin:20px 0;"></div>`;
+                    setTimeout(() => tonConnectUI.uiOptions = { buttonRootId: 'ton-btn' }, 50);
+                } else if (type === 'boost') {
+                    html += `<div class="stat-card-neon" onclick="alert('Upgrade logic here')"><b>🚀 Multitap</b><br><small>Level up your tap power</small></div>`;
                 } else {
-                    html += `<p style="opacity:0.5;">Section ${type} is under maintenance. Access granted soon.</p>`;
+                    html += `<p style="opacity:0.5;">Coming soon...</p>`;
                 }
                 
                 body.innerHTML = html;
                 container.classList.add('active');
             },
             closeM() { document.getElementById('modal-container').classList.remove('active'); },
-            startLoading() {
+            finishLoading() {
                 let p = 0;
                 const ring = document.getElementById('ring-circle');
-                const interval = setInterval(() => {
-                    p += Math.random() * 10;
+                const iv = setInterval(() => {
+                    p += 10;
+                    document.getElementById('load-pct').innerText = `${p}%`;
+                    document.getElementById('load-bar').style.width = `${p}%`;
+                    ring.style.strokeDashoffset = 502.6 - (p / 100) * 502.6;
                     if (p >= 100) {
-                        p = 100;
-                        clearInterval(interval);
+                        clearInterval(iv);
                         setTimeout(() => {
                             document.getElementById('loading-screen').style.opacity = '0';
                             document.getElementById('app').style.display = 'flex';
                             setTimeout(() => document.getElementById('loading-screen').remove(), 500);
-                        }, 500);
+                        }, 400);
                     }
-                    document.getElementById('load-pct').innerText = `${Math.floor(p)}%`;
-                    document.getElementById('load-bar').style.width = `${p}%`;
-                    ring.style.strokeDashoffset = 502.6 - (p / 100) * 502.6;
-                }, 100);
+                }, 50);
             }
         };
 
-        // Регенерация энергии
-        setInterval(() => {
-            if (state.energy < state.maxEnergy) {
-                state.energy = Math.min(state.maxEnergy, state.energy + 1);
-                ui.update();
-            }
-        }, 1000);
-
-        window.onload = () => ui.init();
+        // Запуск системы
+        window.onload = () => logic.init();
     </script>
 </body>
 </html>
