@@ -3,7 +3,6 @@ const logic = {
     tonConnectUI: null,
 
     async init() {
-        // Инициализация TON Connect
         if (typeof TON_CONNECT_UI !== 'undefined') {
             this.tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
                 manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
@@ -11,13 +10,12 @@ const logic = {
             });
 
             this.tonConnectUI.onStatusChange(wallet => {
-                if (wallet) {
-                    this.saveWallet(wallet.account.address);
-                }
+                if (wallet) this.saveWallet(wallet.account.address);
             });
         }
 
         const tg = window.Telegram?.WebApp;
+        tg?.expand(); // Развернуть на весь экран
         const userId = tg?.initDataUnsafe?.user?.id || "12345";
         
         try {
@@ -36,12 +34,7 @@ const logic = {
             
             if (typeof ui !== 'undefined') ui.init();
             this.startLoops();
-        } catch (e) { 
-            console.error("Load Error:", e);
-            // Фоллбек для теста, если сервер недоступен
-            this.user = { balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0, lvl: 1 };
-            if (typeof ui !== 'undefined') ui.init();
-        }
+        } catch (e) { console.error("Load Error:", e); }
     },
 
     async saveWallet(address) {
@@ -53,7 +46,6 @@ const logic = {
                 body: JSON.stringify({ userId: this.user.user_id, address: address })
             });
             this.user.wallet = address;
-            console.log("✅ Wallet saved:", address);
         } catch (e) { console.error("Wallet Save Error:", e); }
     },
 
@@ -79,22 +71,24 @@ const logic = {
     },
 
     async save() {
-        if (!this.user || !this.user.user_id) return;
+        if (!this.user) return;
         try {
             await fetch('/api/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    userId: this.user.user_id,
+                    userId: this.user.user_id, // Используем ID из базы
                     balance: this.user.balance,
                     energy: this.user.energy,
                     max_energy: this.user.max_energy,
                     click_lvl: this.user.click_lvl,
                     profit_hr: this.user.profit_hr,
-                    lvl: this.user.lvl
+                    lvl: this.user.lvl,
+                    likes: this.user.likes,
+                    is_liked: this.user.is_liked
                 })
             });
-        } catch(e) { console.log("Save Error"); }
+        } catch(e) { console.log("Save fail"); }
     }
 };
 
