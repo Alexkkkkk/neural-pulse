@@ -22,21 +22,17 @@
                     </linearGradient>
                 </defs>
             </svg>
-            <img src="images/logo.png" alt="Neural AI" class="loader-logo">
+            <img src="images/logo.png" class="loader-logo">
         </div>
         <div class="loading-text">ACCESS GRANTED</div>
         <div class="percent" id="load-pct">0%</div>
-        <div class="load-bar-wrapper">
-            <div id="load-bar" class="load-bar-f"></div>
-        </div>
+        <div class="load-bar-wrapper"><div id="load-bar" class="load-bar-f"></div></div>
     </div>
 
     <div id="app">
         <div class="header-container">
             <div class="header-user">
-                <div class="avatar-neomorph">
-                    <img src="images/logo.png" alt="Avatar">
-                </div>
+                <div class="avatar-neomorph"><img src="images/logo.png"></div>
                 <div class="u-info">
                     <b id="u-name">Agent</b>
                     <small>v4.0.0 Neural Mining</small>
@@ -46,21 +42,15 @@
         </div>
 
         <div class="stats-row-neon">
-            <div class="stat-card-neon">
-                <small>EARN PER TAP</small>
-                <b id="tap-val">+1</b>
-            </div>
-            <div class="stat-card-neon">
-                <small>PROFIT PER HOUR</small>
-                <b id="profit-val">0</b>
-            </div>
+            <div class="stat-card-neon"><small>EARN PER TAP</small><b id="tap-val">+1</b></div>
+            <div class="stat-card-neon"><small>PROFIT PER HOUR</small><b id="profit-val">0</b></div>
         </div>
 
         <div class="balance-nebula" id="balance">0</div>
 
         <div class="play-area">
             <div class="logo-glow"></div>
-            <img src="images/logo.png" class="main-logo-pulse" id="tap-target" alt="Tap Me">
+            <img src="images/logo.png" class="main-logo-pulse" id="tap-target">
             
             <div class="side-menu-cyber">
                 <div class="side-btn-cyber" onclick="ui.openM('wallet')">👛 WALLET</div>
@@ -70,13 +60,8 @@
         </div>
 
         <div class="energy-container-cyber">
-            <div class="en-txt-cyber">
-                <span>ENERGY</span>
-                <span id="eng-val">1000/1000</span>
-            </div>
-            <div class="progress-bar-wrap">
-                <div id="eng-fill" class="progress-bar-fill" style="width: 100%"></div>
-            </div>
+            <div class="en-txt-cyber"><span>ENERGY</span><span id="eng-val">1000/1000</span></div>
+            <div class="progress-bar-wrap"><div id="eng-fill" class="progress-bar-fill"></div></div>
         </div>
 
         <div class="bottom-nav-cyber">
@@ -87,47 +72,118 @@
         </div>
     </div>
 
-    <div id="m-wallet" class="modal"><div class="modal-content"></div></div>
-    <div id="m-squad" class="modal"><div class="modal-content"></div></div>
-    <div id="m-bonus" class="modal"><div class="modal-content"></div></div>
-    <div id="m-boost" class="modal"><div class="modal-content"></div></div>
-    <div id="m-mine" class="modal"><div class="modal-content"></div></div>
-    <div id="m-tasks" class="modal"><div class="modal-content"></div></div>
-    <div id="m-top" class="modal"><div class="modal-content"></div></div>
+    <div id="modal-container" class="modal" onclick="if(event.target === this) ui.closeM()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div id="modal-body"></div>
+            <button class="nav-btn-capsule" style="width:100%; margin-top:20px; color:#fff;" onclick="ui.closeM()">CLOSE</button>
+        </div>
+    </div>
 
-    <script src="ui.js"></script>
-    <script src="logic.js"></script>
     <script>
-        // ЛОГИКА ЗАГРУЗКИ
-        document.addEventListener('DOMContentLoaded', () => {
-            let progress = 0;
-            const pct = document.getElementById('load-pct');
-            const bar = document.getElementById('load-bar');
-            const ring = document.getElementById('ring-circle');
-            const circumference = 2 * Math.PI * 80;
+        // --- ПАРАМЕТРЫ ИГРЫ ---
+        let state = {
+            balance: 0,
+            energy: 1000,
+            maxEnergy: 1000,
+            tapValue: 7,
+            lvl: 659
+        };
 
-            const interval = setInterval(() => {
-                progress += Math.random() * 5;
-                if (progress > 100) progress = 100;
-
-                pct.innerText = `${Math.floor(progress)}%`;
-                bar.style.width = `${progress}%`;
-                
-                const offset = circumference - (progress / 100) * circumference;
-                ring.style.strokeDashoffset = offset;
-
-                if (progress === 100) {
-                    clearInterval(interval);
-                    setTimeout(() => {
-                        document.getElementById('loading-screen').style.opacity = '0';
-                        document.getElementById('app').style.display = 'flex';
-                        setTimeout(() => {
-                            document.getElementById('loading-screen').remove();
-                        }, 500);
-                    }, 500);
-                }
-            }, 100);
+        // --- TON CONNECT ИНИЦИАЛИЗАЦИЯ ---
+        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
+            buttonRootId: null // Мы создадим свою кнопку в модалке
         });
+
+        // --- UI КОНТРОЛЛЕР ---
+        const ui = {
+            init() {
+                this.update();
+                document.getElementById('tap-target').addEventListener('touchstart', (e) => this.handleTap(e));
+                this.startLoading();
+            },
+            update() {
+                document.getElementById('balance').innerText = Math.floor(state.balance).toLocaleString();
+                document.getElementById('eng-val').innerText = `${Math.floor(state.energy)}/${state.maxEnergy}`;
+                document.getElementById('eng-fill').style.width = `${(state.energy / state.maxEnergy) * 100}%`;
+                document.getElementById('u-lvl').innerText = `LVL ${state.lvl}`;
+                document.getElementById('tap-val').innerText = `+${state.tapValue}`;
+            },
+            handleTap(e) {
+                e.preventDefault();
+                if (state.energy < state.tapValue) return;
+                
+                state.balance += state.tapValue;
+                state.energy -= state.tapValue;
+                this.update();
+                this.createTapAnim(e);
+                
+                if (window.Telegram?.WebApp?.HapticFeedback) {
+                    window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
+                }
+            },
+            createTapAnim(e) {
+                const touch = e.touches[0];
+                const el = document.createElement('div');
+                el.className = 'tap-pop';
+                el.innerText = `+${state.tapValue}`;
+                el.style.left = `${touch.clientX}px`;
+                el.style.top = `${touch.clientY}px`;
+                document.body.appendChild(el);
+                setTimeout(() => el.remove(), 800);
+            },
+            openM(type) {
+                const body = document.getElementById('modal-body');
+                const container = document.getElementById('modal-container');
+                let html = `<h2>${type.toUpperCase()}</h2>`;
+                
+                if (type === 'wallet') {
+                    html += `
+                        <div id="ton-button-container" style="margin: 20px 0;"></div>
+                        <p style="font-size:12px; opacity:0.6;">Connect your TON wallet to withdraw rewards.</p>
+                    `;
+                    setTimeout(() => {
+                        // Рендерим кнопку TON прямо в модалку
+                        tonConnectUI.uiOptions = { buttonRootId: 'ton-button-container' };
+                    }, 100);
+                } else {
+                    html += `<p style="opacity:0.5;">Section ${type} is under maintenance. Access granted soon.</p>`;
+                }
+                
+                body.innerHTML = html;
+                container.classList.add('active');
+            },
+            closeM() { document.getElementById('modal-container').classList.remove('active'); },
+            startLoading() {
+                let p = 0;
+                const ring = document.getElementById('ring-circle');
+                const interval = setInterval(() => {
+                    p += Math.random() * 10;
+                    if (p >= 100) {
+                        p = 100;
+                        clearInterval(interval);
+                        setTimeout(() => {
+                            document.getElementById('loading-screen').style.opacity = '0';
+                            document.getElementById('app').style.display = 'flex';
+                            setTimeout(() => document.getElementById('loading-screen').remove(), 500);
+                        }, 500);
+                    }
+                    document.getElementById('load-pct').innerText = `${Math.floor(p)}%`;
+                    document.getElementById('load-bar').style.width = `${p}%`;
+                    ring.style.strokeDashoffset = 502.6 - (p / 100) * 502.6;
+                }, 100);
+            }
+        };
+
+        // Регенерация энергии
+        setInterval(() => {
+            if (state.energy < state.maxEnergy) {
+                state.energy = Math.min(state.maxEnergy, state.energy + 1);
+                ui.update();
+            }
+        }, 1000);
+
+        window.onload = () => ui.init();
     </script>
 </body>
 </html>
