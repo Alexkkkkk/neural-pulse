@@ -86,7 +86,7 @@ const logic = {
                 ui.update();
                 ui.openM(type === 'profit' ? 'mine' : 'boost');
             }
-            await this.save(); // Мгновенная синхронизация с базой
+            await this.save();
         } else {
             window.Telegram?.WebApp?.showAlert("Insufficient balance!");
         }
