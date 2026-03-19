@@ -12,15 +12,12 @@ const ui = {
     update() {
         if (!logic.user) return;
         const u = logic.user;
-        
-        // Обновляем основные показатели
         document.getElementById('balance').innerText = Math.floor(u.balance).toLocaleString('ru-RU');
         document.getElementById('tap-val').innerText = `+${u.click_lvl}`;
         document.getElementById('profit-val').innerText = Math.floor(u.profit_hr).toLocaleString('ru-RU');
         document.getElementById('u-lvl').innerText = `LVL ${u.lvl}`;
         document.getElementById('u-name').innerText = u.username;
         
-        // Энергия
         const engPct = (u.energy / u.max_energy) * 100;
         document.getElementById('eng-val').innerText = `${Math.floor(u.energy)}/${u.max_energy}`;
         document.getElementById('eng-fill').style.width = `${engPct}%`;
@@ -33,39 +30,32 @@ const ui = {
         let content = "";
         const u = logic.user;
 
-        if (id === 'top') {
+        if (id === 'wallet') {
+            const isConnected = u.wallet && u.wallet !== "";
             content = `
-                <div class="modal-header" style="color:var(--accent); font-weight:bold;">GLOBAL TOP</div>
-                <div class="upgrade-card" style="border: 1px solid var(--accent); background: rgba(0, 255, 242, 0.05);">
-                    <div class="upg-info"><b>1. ${u.username} (You)</b></div>
-                    <div class="upg-price">${Math.floor(u.balance).toLocaleString()} 💰</div>
-                </div>
-                <div class="upgrade-card" style="opacity:0.6;">
-                    <div class="upg-info">2. Neural_Master</div>
-                    <div class="upg-price">50 000 💰</div>
-                </div>
-                <button class="back-btn" onclick="ui.closeM()">BACK</button>
-            `;
-        } else if (id === 'wallet') {
-            content = `
-                <div class="modal-header">WALLET</div>
+                <div class="modal-header">CRYPTO WALLET</div>
                 <div style="text-align:center; padding: 20px;">
-                    <p style="font-size:12px; color:#888;">Адрес: ${u.wallet || 'Не подключен'}</p>
-                    <button class="back-btn" style="background:var(--accent); color:#000; width:100%; margin-top:10px;">CONNECT TON</button>
+                    <div style="font-size: 50px; margin-bottom: 10px;">💎</div>
+                    ${isConnected ? 
+                        `<p style="color:var(--accent)">Status: Connected</p>
+                         <p style="font-size:10px; opacity:0.6;">${u.wallet}</p>` : 
+                        `<p>Connect your TON wallet to receive rewards.</p>
+                         <button class="back-btn" onclick="logic.connectWallet()" style="background:var(--accent); color:#000; width:100%; margin-top:15px; font-weight:bold;">CONNECT TON</button>`
+                    }
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
-        } else if (id === 'boost') {
+        } else if (id === 'top') {
             content = `
-                <div class="modal-header">BOOSTERS</div>
-                <div class="upgrade-card" onclick="ui.handleBuy('tap', 1000, 1)">
-                    <div class="upg-info"><b>Multitap</b><br><small>Level ${u.click_lvl}</small></div>
-                    <div class="upg-price">1 000 💰</div>
+                <div class="modal-header">GLOBAL TOP</div>
+                <div class="upgrade-card" style="border: 1px solid var(--accent)">
+                    <b>1. ${u.username} (You)</b>
+                    <span>${Math.floor(u.balance).toLocaleString()} 💰</span>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
         } else {
-            content = `<div class="modal-header">${id.toUpperCase()}</div><p style="text-align:center; padding:20px;">Soon...</p><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
+            content = `<div class="modal-header">${id.toUpperCase()}</div><p style="text-align:center; padding:20px;">System expansion in progress...</p><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
         }
 
         m.querySelector('.modal-content').innerHTML = content;
@@ -74,15 +64,6 @@ const ui = {
 
     closeM() {
         document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
-    },
-
-    async handleBuy(t, c, v) {
-        if (await logic.buyUpgrade(t, c, v)) {
-            if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-            this.openM('boost');
-        } else {
-            alert("Недостаточно средств!");
-        }
     },
 
     anim(e) {
