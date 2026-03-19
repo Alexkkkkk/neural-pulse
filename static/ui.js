@@ -1,10 +1,7 @@
 const ui = {
     init() {
-        console.log("🎨 UI: Ready");
         const target = document.getElementById('tap-target');
-        
         if (target) {
-            // Очистка старых слушателей через клон
             const newTarget = target.cloneNode(true);
             target.replaceWith(newTarget);
 
@@ -23,11 +20,7 @@ const ui = {
     update() {
         if (!logic.user) return;
         const u = logic.user;
-        
-        const set = (id, val) => {
-            const el = document.getElementById(id);
-            if (el) el.innerText = val;
-        };
+        const set = (id, val) => { if(document.getElementById(id)) document.getElementById(id).innerText = val; };
 
         set('balance', Math.floor(u.balance).toLocaleString('ru-RU'));
         set('tap-val', `+${u.click_lvl}`);
@@ -42,53 +35,19 @@ const ui = {
     openM(id) {
         const m = document.getElementById('m-' + id);
         if (!m) return;
-        
         m.classList.add('active');
         const container = m.querySelector('.modal-content');
 
         if (id === 'wallet') {
-            container.innerHTML = `
-                <div class="modal-header">TON WALLET</div>
-                <div style="padding:20px; text-align:center;">
-                    <div style="font-size:40px; margin-bottom:10px;">💎</div>
-                    <div id="ton-connect-btn" style="display:inline-block;"></div>
+            container.innerHTML = `<div class="modal-header">TON WALLET</div><div style="padding:20px; text-align:center;"><div id="ton-connect-btn"></div></div><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
+        } else if (id === 'mine') {
+            container.innerHTML = `<div class="modal-header">MINING</div>
+                <div class="upgrade-card" onclick="ui.buyUpg('cpu', 500, 100, 'mine')">
+                    <b>Neural CPU</b><br><small>+100/hr</small><div class="price-tag">💰 500</div>
                 </div>
-                <button class="back-btn" onclick="ui.closeM()">BACK</button>
-            `;
-        } 
-        else if (id === 'mine') {
-            const upgrades = [
-                { id: 'cpu', name: 'Neural CPU', price: 500, profit: 100, icon: '🧠' },
-                { id: 'gpu', name: 'GPU Cluster', price: 2500, profit: 550, icon: '⚡' },
-                { id: 'node', name: 'Validator Node', price: 10000, profit: 2400, icon: '🌐' }
-            ];
-
-            let listHtml = upgrades.map(upg => `
-                <div class="upgrade-card" onclick="ui.buyUpg('${upg.id}', ${upg.price}, ${upg.profit}, 'mine')">
-                    <div style="font-size:24px;">${upg.icon}</div>
-                    <div style="flex-grow:1; margin-left:15px;">
-                        <div style="font-weight:bold;">${upg.name}</div>
-                        <small style="color:#00ff88;">+${upg.profit}/hr</small>
-                    </div>
-                    <div class="price-tag">💰 ${upg.price}</div>
-                </div>
-            `).join('');
-
-            container.innerHTML = `<div class="modal-header">MINING</div>${listHtml}<button class="back-btn" onclick="ui.closeM()">BACK</button>`;
-        }
-        else if (id === 'boost') {
-            const nextPrice = logic.user.click_lvl * 1000;
-            container.innerHTML = `
-                <div class="modal-header">BOOSTERS</div>
-                <div class="upgrade-card" onclick="ui.buyUpg('tap', ${nextPrice}, 1, 'boost')">
-                    <div style="font-size:24px;">🚀</div>
-                    <div style="flex-grow:1; margin-left:15px;"><b>Multitap</b><br><small>Level Up Click</small></div>
-                    <div class="price-tag">💰 ${nextPrice}</div>
-                </div>
-                <button class="back-btn" onclick="ui.closeM()">BACK</button>
-            `;
+                <button class="back-btn" onclick="ui.closeM()">BACK</button>`;
         } else {
-            container.innerHTML = `<div class="modal-header">${id.toUpperCase()}</div><p style="text-align:center; opacity:0.5;">COMING SOON</p><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
+            container.innerHTML = `<div class="modal-header">${id.toUpperCase()}</div><p style="text-align:center;">COMING SOON</p><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
         }
     },
 
@@ -98,19 +57,11 @@ const ui = {
             if (type === 'mine') logic.user.profit_hr += val;
             if (type === 'boost') logic.user.click_lvl += val;
             this.update();
-            logic.save();
             this.openM(type);
-        } else {
-            // Визуальный эффект нехватки денег
-            const card = event.currentTarget;
-            card.style.borderColor = "red";
-            setTimeout(() => card.style.borderColor = "", 300);
         }
     },
 
-    closeM() {
-        document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
-    },
+    closeM() { document.querySelectorAll('.modal').forEach(m => m.classList.remove('active')); },
 
     anim(e) {
         const n = document.createElement('div');
