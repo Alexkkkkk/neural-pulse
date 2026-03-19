@@ -1,17 +1,14 @@
 const ui = {
-    // Инициализация кликера и событий
     init() {
         console.log("🎨 UI: Ready");
         const target = document.getElementById('tap-target');
         
         if (target) {
-            // Очистка событий через клонирование, чтобы избежать дублирования кликов
             const newTarget = target.cloneNode(true);
             target.replaceWith(newTarget);
 
             const handleTap = (e) => {
                 e.preventDefault();
-                // Поддержка и тачскрина, и мышки
                 const pos = e.touches ? e.touches[0] : e;
                 logic.tap({ clientX: pos.clientX, clientY: pos.clientY });
             };
@@ -22,7 +19,6 @@ const ui = {
         this.update();
     },
 
-    // Главная функция обновления всех цифр на экране
     update() {
         if (!logic.user) return;
         const u = logic.user;
@@ -32,22 +28,18 @@ const ui = {
             if (el) el.innerText = val;
         };
 
-        // Форматируем числа (например, 1 000 000)
         set('balance', Math.floor(u.balance).toLocaleString('ru-RU'));
         set('tap-val', `+${u.click_lvl}`);
         set('profit-val', Math.floor(u.profit_hr).toLocaleString('ru-RU'));
         set('u-lvl', `LVL ${u.lvl}`);
         set('eng-val', `${Math.floor(u.energy)}/${u.max_energy}`);
 
-        // Полоска энергии
         const fill = document.getElementById('eng-fill');
         if (fill) {
-            const pct = (u.energy / u.max_energy) * 100;
-            fill.style.width = `${pct}%`;
+            fill.style.width = `${(u.energy / u.max_energy) * 100}%`;
         }
     },
 
-    // Управление модальными окнами
     openM(id) {
         const m = document.getElementById('m-' + id);
         if (!m) return;
@@ -56,13 +48,16 @@ const ui = {
         const container = m.querySelector('.modal-content');
         const u = logic.user;
 
-        // --- КОШЕЛЕК ---
         if (id === 'wallet') {
+            const isConnected = logic.tonConnectUI?.connected;
             container.innerHTML = `
                 <div class="modal-header">TON WALLET</div>
-                <div style="padding:30px; text-align:center;">
-                    <p style="margin-bottom:20px; color:#aaa;">Connect your wallet for future airdrops</p>
-                    <div id="ton-connect-btn"></div>
+                <div style="padding:20px; text-align:center;">
+                    <img src="logo.png" style="width:60px; margin-bottom:15px; filter: hue-rotate(150deg);">
+                    <p style="color:#aaa; font-size:14px; margin-bottom:20px;">
+                        ${isConnected ? "Кошелек подключен. Ожидайте листинга!" : "Подключите ваш TON кошелек для вывода средств."}
+                    </p>
+                    <div id="ton-connect-btn" style="display:flex; justify-content:center;"></div>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
@@ -70,7 +65,33 @@ const ui = {
                 logic.tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
             }
         } 
-        // --- МАЙНИНГ (Пассивный доход) ---
+        else if (id === 'top') {
+            // Генерация ТОП-100
+            let listHtml = '';
+            for (let i = 1; i <= 100; i++) {
+                let color = i === 1 ? '#ffd700' : (i === 2 ? '#c0c0c0' : (i === 3 ? '#cd7f32' : '#fff'));
+                let shadow = i <= 3 ? `text-shadow: 0 0 10px ${color};` : '';
+                
+                // Для примера генерируем случайные балансы, кроме игрока
+                let score = i === 42 ? Math.floor(u.balance) : Math.floor(10000000 / i);
+                let name = i === 42 ? "YOU" : `Agent_${i}${i*7}`;
+
+                listHtml += `
+                    <div style="display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid #222; font-size:14px; ${i === 42 ? 'background:rgba(0,255,255,0.1); border-radius:8px;' : ''}">
+                        <span style="color:${color}; font-weight:bold; ${shadow}">${i}. ${name}</span>
+                        <span style="font-family:monospace;">${score.toLocaleString()}</span>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = `
+                <div class="modal-header">LEADERBOARD (100)</div>
+                <div style="height: 350px; overflow-y: auto; padding: 5px; scrollbar-width: thin;">
+                    ${listHtml}
+                </div>
+                <button class="back-btn" onclick="ui.closeM()">BACK</button>
+            `;
+        }
         else if (id === 'mine') {
             container.innerHTML = `
                 <div class="modal-header">MINING CENTER</div>
@@ -85,7 +106,6 @@ const ui = {
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
         } 
-        // --- БУСТЫ (Клик) ---
         else if (id === 'boost') {
             const nextTapPrice = (u.click_lvl * 1500);
             container.innerHTML = `
@@ -94,89 +114,50 @@ const ui = {
                     <b>Multitap</b><br><small>+1 PER CLICK</small>
                     <div class="price-tag">💰 ${nextTapPrice}</div>
                 </div>
-                <div class="upgrade-card" onclick="ui.buyUpg('energy', 1000, 500, 'energy')">
-                    <b>Energy Cap</b><br><small>+500 MAX ENERGY</small>
-                    <div class="price-tag">💰 1000</div>
-                </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
         }
-        // --- ЗАДАНИЯ ---
-        else if (id === 'tasks') {
-            container.innerHTML = `
-                <div class="modal-header">TASKS</div>
-                <div class="upgrade-card" onclick="window.open('https://t.me/your_channel')">
-                    <b>Join Channel</b><br><small>+5,000 BP</small>
-                    <div class="price-tag">🔗 JOIN</div>
-                </div>
-                <button class="back-btn" onclick="ui.closeM()">BACK</button>
-            `;
-        }
-        // --- ДРУЗЬЯ ---
         else if (id === 'squad') {
             const refLink = `https://t.me/n_pulse_bot?start=${u.user_id}`;
             container.innerHTML = `
                 <div class="modal-header">FRIENDS</div>
                 <div style="padding:20px; text-align:center;">
-                    <p>Invite friends and get 10% of their earnings!</p>
-                    <input type="text" value="${refLink}" readonly style="width:100%; background:#222; color:#fff; border:1px solid #444; padding:10px; margin:15px 0; border-radius:8px;">
+                    <p>Invite friends and get 10% bonus!</p>
+                    <div style="background:#111; padding:10px; border-radius:8px; margin:15px 0; font-size:12px; word-break:break-all; border:1px solid #333;">${refLink}</div>
                     <button class="nav-btn" style="width:100%" onclick="navigator.clipboard.writeText('${refLink}'); alert('Copied!')">COPY LINK</button>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
         }
-        // --- ТОП ---
-        else if (id === 'top') {
-            container.innerHTML = `
-                <div class="modal-header">TOP PLAYERS</div>
-                <div style="padding:10px;">
-                    <div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #333;">
-                        <span>1. Satoshi</span><span>999,999,999</span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #333; color: cyan;">
-                        <span>Ваше место:</span><span>${Math.floor(u.balance).toLocaleString()}</span>
-                    </div>
-                </div>
-                <button class="back-btn" onclick="ui.closeM()">BACK</button>
-            `;
+        else {
+            container.innerHTML = `<div class="modal-header">${id.toUpperCase()}</div><p style="text-align:center; padding:20px;">COMING SOON</p><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
         }
     },
 
-    // Логика покупки улучшений
     buyUpg(id, price, val, type) {
         if (logic.user.balance >= price) {
             logic.user.balance -= price;
-            
             if (type === 'mine') logic.user.profit_hr += val;
             if (type === 'boost') logic.user.click_lvl += val;
-            if (type === 'energy') logic.user.max_energy += val;
-            
             this.update();
-            logic.save(); // Отправляем данные на сервер
-            this.openM(type); // Перерисовываем модалку, чтобы обновить цену
+            logic.save();
+            this.openM(type);
         } else {
             alert("Not enough balance!");
         }
     },
 
-    // Закрыть все окна
     closeM() { 
         document.querySelectorAll('.modal').forEach(m => m.classList.remove('active')); 
     },
 
-    // Анимация вылетающих цифр при клике
     anim(e) {
         const n = document.createElement('div');
         n.className = 'tap-pop';
         n.innerText = `+${logic.user.click_lvl}`;
-        
-        // Позиционируем в месте клика
         n.style.left = `${e.clientX}px`;
         n.style.top = `${e.clientY}px`;
-        
         document.body.appendChild(n);
-        
-        // Удаляем элемент после завершения анимации
         setTimeout(() => n.remove(), 800);
     }
 };
