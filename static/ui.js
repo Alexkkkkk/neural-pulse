@@ -36,10 +36,9 @@ const ui = {
     },
 
     openM(id) {
-        // Убираем активный класс у всех кнопок
         document.querySelectorAll('.bottom-nav .nav-btn').forEach(btn => btn.classList.remove('active'));
         
-        // Подсвечиваем кнопку, если вызов был из навигации
+        // Используем window.event для совместимости в onclick
         if (window.event && window.event.currentTarget) {
             const clickedBtn = window.event.currentTarget;
             if (clickedBtn.classList.contains('nav-btn')) {
@@ -55,11 +54,11 @@ const ui = {
             content = `
                 <div class="modal-header" style="text-align:center; font-weight:bold; margin-bottom:15px; color:var(--accent);">BOOSTERS</div>
                 <div class="upgrade-card" onclick="ui.handleBuy('tap', 1000, 1)">
-                    <div class="upg-info"><small>MULTITAP (LVL ${logic.user.click_lvl})</small><p style="font-size:11px; color:#666; margin:5px 0 0 0;">+1 к силе клика</p></div>
+                    <div class="upg-info"><small>MULTITAP (LVL ${logic.user.click_lvl})</small><p style="font-size:11px; color:#666; margin:5px 0 0 0;">+1 к клику</p></div>
                     <div class="upg-price">💰 1 000</div>
                 </div>
                 <div class="upgrade-card" onclick="ui.handleBuy('energy', 5000, 500)">
-                    <div class="upg-info"><small>MAX ENERGY</small><p style="font-size:11px; color:#666; margin:5px 0 0 0;">+500 к лимиту</p></div>
+                    <div class="upg-info"><small>MAX ENERGY</small><p style="font-size:11px; color:#666; margin:5px 0 0 0;">+500 лимит</p></div>
                     <div class="upg-price">💰 5 000</div>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>`;
@@ -99,7 +98,6 @@ const ui = {
         n.className = 'tap-pop';
         n.innerText = `+${logic.user.click_lvl}`;
         
-        // Координаты: если есть событие e (клики/тапы), берем их, иначе центр
         let x, y;
         if (e && (e.clientX || (e.touches && e.touches[0]))) {
             x = e.clientX || e.touches[0].clientX;
