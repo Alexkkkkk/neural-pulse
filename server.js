@@ -13,7 +13,6 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Инициализация БД
 const initDB = async () => {
     try {
         await pool.query(`
@@ -26,23 +25,24 @@ const initDB = async () => {
                 click_lvl INTEGER DEFAULT 1, 
                 profit_hr NUMERIC DEFAULT 0,  
                 lvl INTEGER DEFAULT 1,
-                photo_url TEXT DEFAULT 'logo.png',
                 wallet TEXT,
-                referrer_id TEXT,
-                ref_count INTEGER DEFAULT 0,
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
-        
-        // Гарантируем наличие колонок для обновлений
         await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet TEXT");
-        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT DEFAULT 'logo.png'");
-        
-        console.log("✅ [DB] Full System Ready");
-    } catch (e) { console.error("❌ [DB ERROR]", e.message); }
+        console.log("✅ Database Ready");
+    } catch (e) { console.error("❌ DB Error", e.message); }
 };
 initDB();
 
-// API: Данные пользователя
+app.post('/api/wallet', async (req, res) => {
+    const { userId, address } = req.body;
+    try {
+        await pool.query('UPDATE users SET wallet = $2 WHERE user_id = $1', [String(userId), address]);
+        console.log(`👛 Wallet linked: ${userId} -> ${address}`);
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/user/:id', async (req, res) => {
     const userId = String(req.params.id);
     try {
@@ -55,50 +55,23 @@ app.get('/api/user/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// API: Сохранение кошелька
-app.post('/api/wallet', async (req, res) => {
-    const { userId, address } = req.body;
-    try {
-        await pool.query('UPDATE users SET wallet = $2 WHERE user_id = $1', [String(userId), address]);
-        res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// API: Топ игроков
-app.get('/api/top', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT user_id, username as name, photo_url, balance FROM users ORDER BY balance DESC LIMIT 100');
-        res.json(result.rows || []);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// API: Сохранение прогресса
 app.post('/api/save', async (req, res) => {
     const d = req.body;
     try {
-        await pool.query(`
-            UPDATE users SET balance = $2, energy = $3, max_energy = $4, 
-            click_lvl = $5, profit_hr = $6, lvl = $7, username = $8, photo_url = $9 
-            WHERE user_id = $1`, 
-            [String(d.userId), d.balance, d.energy, d.max_energy, d.click_lvl, d.profit_hr, d.lvl, d.username, d.photo_url]
-        );
+        await pool.query(`UPDATE users SET balance=$2, energy=$3, max_energy=$4, click_lvl=$5, profit_hr=$6, lvl=$7 WHERE user_id=$1`, 
+        [String(d.userId), d.balance, d.energy, d.max_energy, d.click_lvl, d.profit_hr, d.lvl]);
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Bot logic
-bot.start(async (ctx) => {
-    const userId = String(ctx.from.id);
-    const startPayload = ctx.startPayload;
+app.get('/api/top', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT username as name, balance FROM users ORDER BY balance DESC LIMIT 100');
+        res.json(result.rows);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
-    if (startPayload && startPayload !== userId) {
-        const check = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
-        if (check.rows.length === 0) {
-            await pool.query('INSERT INTO users (user_id, username, referrer_id, balance) VALUES ($1, $2, $3, 5000)', 
-                [userId, ctx.from.first_name, startPayload]);
-            await pool.query('UPDATE users SET balance = balance + 10000, ref_count = ref_count + 1 WHERE user_id = $1', [startPayload]);
-        }
-    }
+bot.start((ctx) => {
     ctx.replyWithHTML(`<b>Neural Pulse</b>`, 
         Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", "https://neural-pulse.bothost.ru")]]));
 });
