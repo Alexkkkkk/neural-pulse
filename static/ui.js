@@ -1,6 +1,6 @@
 const ui = {
     init() {
-        console.log("🖥️ [UI] Инициализация");
+        console.log("🖥️ [UI] Система готова");
         const firstNav = document.querySelector('.bottom-nav .nav-btn');
         if (firstNav) firstNav.classList.add('active');
         this.update();
@@ -9,21 +9,24 @@ const ui = {
     update() {
         if (typeof logic === 'undefined' || !logic.user) return;
         try {
-            document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString('ru-RU');
-            document.getElementById('tap-val').innerText = "+" + logic.user.click_lvl;
-            document.getElementById('profit-val').innerText = Math.floor(logic.user.profit_hr).toLocaleString('ru-RU');
-            document.getElementById('u-lvl').innerText = `LVL ${logic.user.lvl}`;
+            const user = logic.user;
+            document.getElementById('balance').innerText = Math.floor(user.balance).toLocaleString('ru-RU');
+            document.getElementById('tap-val').innerText = "+" + user.click_lvl;
+            document.getElementById('profit-val').innerText = Math.floor(user.profit_hr).toLocaleString('ru-RU');
+            document.getElementById('u-lvl').innerText = `LVL ${user.lvl}`;
+            document.getElementById('u-name').innerText = user.username || "Agent";
             
-            const currentEng = Math.floor(logic.user.energy);
-            const maxEng = logic.user.max_energy;
+            const currentEng = Math.floor(user.energy);
+            const maxEng = user.max_energy;
             document.getElementById('eng-val').innerText = `${currentEng}/${maxEng}`;
             document.getElementById('eng-fill').style.width = (currentEng / maxEng * 100) + "%";
-        } catch (e) { console.error("UI Update error", e); }
+        } catch (e) { console.error("Update Error:", e); }
     },
 
     openM(id) {
-        document.querySelectorAll('.bottom-nav .nav-btn').forEach(btn => btn.classList.remove('active'));
-        if (window.event && window.event.currentTarget?.classList.contains('nav-btn')) {
+        // Подсветка кнопок
+        document.querySelectorAll('.bottom-nav .nav-btn, .side-btn').forEach(btn => btn.classList.remove('active'));
+        if (window.event && window.event.currentTarget) {
             window.event.currentTarget.classList.add('active');
         }
 
@@ -31,47 +34,46 @@ const ui = {
         if (!m) return;
         
         let content = "";
-        
-        switch(id) {
-            case 'top':
-                content = `
-                    <div class="modal-header">GLOBAL LEADERS</div>
-                    <div class="upgrade-card" style="border: 1px solid var(--accent)">
-                        <b>1. ${logic.user.username} (You)</b>
-                        <span>${Math.floor(logic.user.balance).toLocaleString()} 💰</span>
-                    </div>
-                    <div class="upgrade-card"><span>2. Neural_Bot</span> <span>500,000 💰</span></div>
-                    <div class="upgrade-card"><span>3. Satoshi_N</span> <span>250,000 💰</span></div>
-                `;
-                break;
-            case 'wallet':
-                content = `
-                    <div class="modal-header">CRYPTO WALLET</div>
-                    <div style="text-align:center; padding: 20px;">
-                        <div style="font-size: 48px; margin-bottom: 10px;">💎</div>
-                        <p>Connect your TON wallet to withdraw rewards.</p>
-                        <button class="back-btn" style="background:var(--accent); color:#000; width:100%; margin-top:15px;">CONNECT TON</button>
-                    </div>
-                `;
-                break;
-            case 'boost':
-                content = `
-                    <div class="modal-header">UPGRADES</div>
-                    <div class="upgrade-card" onclick="ui.handleBuy('tap', 1000, 1)">
-                        <div><b>Multi-Tap</b><br><small>+1 per tap</small></div>
-                        <div class="upg-price">💰 1,000</div>
-                    </div>
-                    <div class="upgrade-card" onclick="ui.handleBuy('energy', 5000, 500)">
-                        <div><b>Energy Limit</b><br><small>+500 capacity</small></div>
-                        <div class="upg-price">💰 5,000</div>
-                    </div>
-                `;
-                break;
-            default:
-                content = `<div class="modal-header">${id.toUpperCase()}</div><p style="text-align:center; opacity:0.5;">System expansion in progress...</p>`;
+        const user = logic.user;
+
+        if (id === 'top') {
+            content = `
+                <div class="modal-header" style="color:var(--accent); font-size:18px; margin-bottom:20px;">GLOBAL TOP</div>
+                <div class="upgrade-card" style="border: 1px solid var(--accent); background: rgba(0, 255, 242, 0.05);">
+                    <div class="upg-info"><b>1. ${user.username} (You)</b></div>
+                    <div class="upg-price">${Math.floor(user.balance).toLocaleString()} 💰</div>
+                </div>
+                <div class="upgrade-card" style="opacity:0.7;">
+                    <div class="upg-info">2. Neural_Master</div>
+                    <div class="upg-price">50 000 💰</div>
+                </div>
+                <div class="upgrade-card" style="opacity:0.5;">
+                    <div class="upg-info">3. Crypto_King</div>
+                    <div class="upg-price">12 500 💰</div>
+                </div>
+            `;
+        } else if (id === 'wallet') {
+            content = `
+                <div class="modal-header">WALLET</div>
+                <div style="text-align:center; padding:20px;">
+                    <div style="font-size:50px; margin-bottom:15px;">👛</div>
+                    <p style="font-size:14px; color:#aaa;">Подключите TON кошелек для вывода Neural Pulse</p>
+                    <button class="back-btn" style="background:var(--accent); color:#000; width:100%; margin-top:20px; font-weight:bold;">CONNECT TON</button>
+                </div>
+            `;
+        } else if (id === 'boost') {
+            content = `
+                <div class="modal-header">BOOSTERS</div>
+                <div class="upgrade-card" onclick="ui.handleBuy('tap', 1000, 1)">
+                    <div class="upg-info"><b>Multitap</b><br><small>Level ${user.click_lvl}</small></div>
+                    <div class="upg-price">1 000 💰</div>
+                </div>
+            `;
+        } else {
+            content = `<div class="modal-header">${id.toUpperCase()}</div><p style="text-align:center; padding:20px; color:#666;">Coming Soon...</p>`;
         }
 
-        content += `<button class="back-btn" onclick="ui.closeM()">CLOSE</button>`;
+        content += `<button class="back-btn" onclick="ui.closeM()">BACK</button>`;
         m.querySelector('.modal-content').innerHTML = content;
         m.classList.add('active');
     },
@@ -81,24 +83,11 @@ const ui = {
     },
 
     async handleBuy(type, cost, val) {
-        const success = await logic.buyUpgrade(type, cost, val);
-        if (success) {
+        if (await logic.buyUpgrade(type, cost, val)) {
             if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
             this.openM('boost');
         } else {
-            alert("Insufficient Pulse!");
+            alert("Недостаточно Neural Pulse!");
         }
-    },
-
-    anim(e) {
-        const n = document.createElement('div');
-        n.className = 'tap-pop';
-        n.innerText = `+${logic.user.click_lvl}`;
-        const x = e.clientX || (e.touches ? e.touches[0].clientX : window.innerWidth/2);
-        const y = e.clientY || (e.touches ? e.touches[0].clientY : window.innerHeight/2);
-        n.style.left = `${x}px`;
-        n.style.top = `${y}px`;
-        document.body.appendChild(n);
-        setTimeout(() => n.remove(), 800);
     }
 };
