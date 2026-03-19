@@ -20,7 +20,7 @@ body {
     height: 100vh;
 }
 
-/* LOADER */
+/* --- LOADER --- */
 #loading-screen {
     position: fixed; inset: 0; background: #000;
     display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000;
@@ -34,7 +34,7 @@ body {
 .load-bar-wrapper { width: 200px; height: 4px; background: #111; border-radius: 4px; overflow: hidden; margin-top: 20px; }
 .load-bar-f { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple)); transition: 0.2s; }
 
-/* APP LAYOUT */
+/* --- APP LAYOUT --- */
 #app { display: none; flex-direction: column; height: 100vh; }
 .header-container { display: flex; justify-content: space-between; align-items: center; padding: 24px 16px; }
 .header-user { display: flex; align-items: center; gap: 10px; }
@@ -49,8 +49,9 @@ body {
 
 .balance-nebula { font-size: 56px; font-weight: 800; text-align: center; margin: 40px 0; background: linear-gradient(180deg, #fff, #888); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
+/* --- PLAY AREA --- */
 .play-area { flex-grow: 1; position: relative; display: flex; justify-content: center; align-items: center; }
-.main-logo-pulse { width: 250px; z-index: 5; animation: pulse 2s infinite ease-in-out; }
+.main-logo-pulse { width: 250px; z-index: 5; animation: pulse 2s infinite ease-in-out; -webkit-tap-highlight-color: transparent; }
 .logo-glow { position: absolute; width: 300px; height: 300px; background: radial-gradient(circle, rgba(174, 0, 255, 0.2), transparent 70%); }
 
 @keyframes pulse { 0%, 100% { transform: scale(1); filter: brightness(1); } 50% { transform: scale(1.05); filter: brightness(1.2); } }
@@ -66,21 +67,23 @@ body {
     pointer-events: auto;
 }
 .side-btn-cyber { 
-    background: var(--card-bg); 
+    background: rgba(20, 20, 22, 0.8); 
     border: 1px solid var(--border-color); 
     border-radius: 14px; 
     padding: 12px; 
-    width: 100px; 
+    width: 105px; 
     text-align: center; 
-    font-size: 10px; 
+    font-size: 11px; 
     font-weight: 700; 
     cursor: pointer;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    backdrop-filter: blur(5px);
     transition: 0.1s;
     user-select: none;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
 }
-.side-btn-cyber:active { transform: scale(0.92); background: #151518; border-color: var(--accent-cyan); }
+.side-btn-cyber:active { transform: scale(0.9); border-color: var(--accent-cyan); }
 
+/* --- ENERGY & NAVIGATION --- */
 .energy-container-cyber { padding: 0 16px; margin-bottom: 120px; }
 .en-txt-cyber { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; margin-bottom: 8px; }
 .progress-bar-wrap { height: 8px; background: #1a1a1d; border-radius: 10px; overflow: hidden; }
@@ -89,17 +92,64 @@ body {
 .bottom-nav-cyber { position: fixed; bottom: 0; width: 100%; background: #060607; border-top: 1px solid var(--border-color); display: flex; gap: 8px; padding: 15px 10px 35px; z-index: 1000; }
 .nav-btn-capsule { flex: 1; background: #0d0d0f; border: 1px solid #1a1a1d; border-radius: 20px; padding: 12px 0; font-size: 10px; font-weight: 700; text-align: center; color: var(--text-muted); cursor: pointer; }
 
-/* MODAL */
+/* --- MODAL & IMPROVED CARDS --- */
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(15px); display: none; align-items: flex-end; z-index: 2000; transition: 0.3s; }
 .modal.active { display: flex; }
-.modal-content { background: #08080a; width: 100%; border-radius: 30px 30px 0 0; padding: 25px 20px 40px; border-top: 1px solid #222; position: relative; }
+.modal-content { background: #08080a; width: 100%; border-radius: 30px 30px 0 0; padding: 25px 20px 40px; border-top: 1px solid #222; max-height: 80vh; overflow-y: auto; }
 .modal-drag-line { width: 40px; height: 4px; background: #333; border-radius: 10px; margin: 0 auto 20px; }
 
-.m-title { font-size: 24px; color: var(--accent-cyan); margin-bottom: 20px; text-shadow: 0 0 10px var(--glow-cyan); }
-.up-card { background: #111; border: 1px solid #222; border-radius: 16px; padding: 15px; margin-bottom: 12px; text-align: left; transition: 0.2s; }
-.up-card:active { transform: scale(0.98); background: #151515; }
-.up-card b { color: #fff; font-size: 16px; }
-.up-card small { color: var(--accent-cyan); font-weight: 700; }
+.m-title { font-size: 24px; color: var(--accent-cyan); margin-bottom: 20px; text-shadow: 0 0 10px var(--glow-cyan); text-align: center; }
 
+/* УЛУЧШЕННЫЙ ДИЗАЙН КАРТОЧЕК (ТОП-100 И МАГАЗИН) */
+.up-card { 
+    background: linear-gradient(145deg, #111, #0a0a0c); 
+    border: 1px solid #222; 
+    border-radius: 18px; 
+    padding: 16px; 
+    margin-bottom: 12px; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    transition: 0.2s;
+    cursor: pointer;
+}
+.up-card:active { transform: scale(0.97); border-color: var(--accent-purple); background: #151518; }
+
+.up-info { display: flex; flex-direction: column; gap: 4px; }
+.up-info b { color: #fff; font-size: 16px; font-weight: 700; }
+.up-info small { color: var(--accent-cyan); font-weight: 700; font-size: 12px; }
+
+.up-price { 
+    background: #1a1a1d; 
+    padding: 8px 14px; 
+    border-radius: 12px; 
+    font-weight: 800; 
+    font-size: 13px; 
+    color: #fff; 
+    border: 1px solid #333;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+}
+
+/* СТИЛИ ДЛЯ СПИСКА ЛИДЕРОВ (ТОП-100) */
+.leaderboard { margin-top: 10px; }
+.rank { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    padding: 14px 16px; 
+    background: #0d0d0f;
+    border: 1px solid #161618;
+    border-radius: 14px;
+    margin-bottom: 8px;
+}
+.rank span { font-weight: 600; color: #eee; font-size: 14px; }
+.rank b { color: var(--accent-cyan); font-size: 14px; }
+.rank.active { 
+    background: rgba(0, 255, 255, 0.05); 
+    border-color: var(--accent-cyan); 
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.1);
+}
+
+/* --- EFFECTS --- */
 .tap-pop { position: fixed; color: var(--accent-cyan); font-size: 38px; font-weight: 900; pointer-events: none; animation: floatUp 0.8s forwards; text-shadow: 0 0 10px var(--accent-cyan); z-index: 100; }
 @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-150px); opacity: 0; } }
