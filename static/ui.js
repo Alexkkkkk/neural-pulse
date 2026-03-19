@@ -36,35 +36,55 @@ const ui = {
     },
 
     openM(id) {
-        document.querySelectorAll('.bottom-nav .nav-btn').forEach(btn => btn.classList.remove('active'));
-        
-        // Используем window.event для совместимости в onclick
+        // Управление активными кнопками навигации
+        document.querySelectorAll('.bottom-nav .nav-btn, .side-btn').forEach(btn => btn.classList.remove('active'));
         if (window.event && window.event.currentTarget) {
-            const clickedBtn = window.event.currentTarget;
-            if (clickedBtn.classList.contains('nav-btn')) {
-                clickedBtn.classList.add('active');
-            }
+            window.event.currentTarget.classList.add('active');
         }
 
         const m = document.getElementById('m-' + id);
         if (!m) return;
         
         let content = "";
-        if (id === 'boost') {
-            content = `
-                <div class="modal-header" style="text-align:center; font-weight:bold; margin-bottom:15px; color:var(--accent);">BOOSTERS</div>
-                <div class="upgrade-card" onclick="ui.handleBuy('tap', 1000, 1)">
-                    <div class="upg-info"><small>MULTITAP (LVL ${logic.user.click_lvl})</small><p style="font-size:11px; color:#666; margin:5px 0 0 0;">+1 к клику</p></div>
-                    <div class="upg-price">💰 1 000</div>
-                </div>
-                <div class="upgrade-card" onclick="ui.handleBuy('energy', 5000, 500)">
-                    <div class="upg-info"><small>MAX ENERGY</small><p style="font-size:11px; color:#666; margin:5px 0 0 0;">+500 лимит</p></div>
-                    <div class="upg-price">💰 5 000</div>
-                </div>
-                <button class="back-btn" onclick="ui.closeM()">BACK</button>`;
-        } else {
-            content = `<div class="modal-header" style="text-align:center; padding:20px;">${id.toUpperCase()}</div><p style="text-align:center;color:#555">Soon...</p><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
+        
+        // Генерация контента в зависимости от ID
+        switch(id) {
+            case 'boost':
+                content = `
+                    <div class="modal-header" style="text-align:center; font-weight:bold; margin-bottom:15px; color:var(--accent);">BOOSTERS</div>
+                    <div class="upgrade-card" onclick="ui.handleBuy('tap', 1000, 1)">
+                        <div class="upg-info"><small>MULTITAP (LVL ${logic.user.click_lvl})</small><p style="font-size:11px; color:#666; margin:5px 0 0 0;">+1 к клику</p></div>
+                        <div class="upg-price">💰 1 000</div>
+                    </div>
+                    <div class="upgrade-card" onclick="ui.handleBuy('energy', 5000, 500)">
+                        <div class="upg-info"><small>MAX ENERGY</small><p style="font-size:11px; color:#666; margin:5px 0 0 0;">+500 лимит</p></div>
+                        <div class="upg-price">💰 5 000</div>
+                    </div>`;
+                break;
+            case 'top':
+                content = `
+                    <div class="modal-header" style="text-align:center; font-weight:bold; margin-bottom:15px; color:var(--accent);">GLOBAL TOP</div>
+                    <div class="upgrade-card" style="border-color: var(--accent);">
+                        <div class="upg-info"><b>1. ${logic.user.username} (You)</b></div>
+                        <div class="upg-price">${Math.floor(logic.user.balance)} 💰</div>
+                    </div>
+                    <div class="upgrade-card"><div class="upg-info">2. Neural_Master</div><div class="upg-price">50 000 💰</div></div>
+                    <div class="upgrade-card"><div class="upg-info">3. Crypto_King</div><div class="upg-price">12 500 💰</div></div>`;
+                break;
+            case 'wallet':
+                content = `
+                    <div class="modal-header" style="text-align:center; font-weight:bold; margin-bottom:15px; color:var(--accent);">WALLET</div>
+                    <div style="text-align:center; padding: 20px 0;">
+                        <div style="font-size: 40px; margin-bottom: 10px;">🔌</div>
+                        <p>Подключите TON кошелек для вывода Neural Pulse</p>
+                        <button class="back-btn" style="background:var(--accent); color:#000;">CONNECT WALLET</button>
+                    </div>`;
+                break;
+            default:
+                content = `<div class="modal-header" style="text-align:center; padding:20px;">${id.toUpperCase()}</div><p style="text-align:center;color:#555">Раздел в разработке...</p>`;
         }
+
+        content += `<button class="back-btn" onclick="ui.closeM()">BACK</button>`;
 
         const container = m.querySelector('.modal-content');
         if (container) {
@@ -85,7 +105,7 @@ const ui = {
             this.openM('boost'); 
         } else {
             if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('error');
-            alert("Недостаточно Neural Pulse!");
+            alert("Недостаточно баланса!");
         }
     },
 
