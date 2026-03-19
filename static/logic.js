@@ -9,7 +9,7 @@ const logic = {
             buttonRootId: 'ton-connect-btn'
         });
 
-        // Следим за изменением статуса кошелька
+        // Слушаем изменения статуса кошелька
         this.tonConnectUI.onStatusChange(wallet => {
             if (wallet) {
                 this.saveWallet(wallet.account.address);
@@ -23,6 +23,7 @@ const logic = {
             const res = await fetch(`/api/user/${userId}`);
             const rawData = await res.json();
             
+            // Преобразуем всё в числа при загрузке
             this.user = {
                 ...rawData,
                 balance: Number(rawData.balance || 0),
@@ -53,6 +54,7 @@ const logic = {
 
     tap() {
         if (this.user && this.user.energy >= 1) {
+            // Математическое сложение (без ошибок "111")
             this.user.balance = Number(this.user.balance) + Number(this.user.click_lvl);
             this.user.energy -= 1;
             ui.update();
@@ -74,19 +76,21 @@ const logic = {
 
     async save() {
         if (!this.user) return;
-        await fetch('/api/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: this.user.user_id,
-                balance: this.user.balance,
-                energy: this.user.energy,
-                max_energy: this.user.max_energy,
-                click_lvl: this.user.click_lvl,
-                profit_hr: this.user.profit_hr,
-                lvl: this.user.lvl
-            })
-        });
+        try {
+            await fetch('/api/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: this.user.user_id,
+                    balance: this.user.balance,
+                    energy: this.user.energy,
+                    max_energy: this.user.max_energy,
+                    click_lvl: this.user.click_lvl,
+                    profit_hr: this.user.profit_hr,
+                    lvl: this.user.lvl
+                })
+            });
+        } catch(e) { console.log("Save Error"); }
     }
 };
 
