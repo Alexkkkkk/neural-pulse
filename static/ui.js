@@ -53,7 +53,6 @@ const ui = {
         const container = m.querySelector('.modal-content');
         const u = logic.user;
 
-        // Отрисовка базового контента
         if (id === 'wallet') {
             const isConnected = logic.tonConnectUI?.connected;
             container.innerHTML = `
@@ -67,6 +66,7 @@ const ui = {
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
+            // Переинициализируем кнопку, если модалка открылась
             if (logic.tonConnectUI) {
                 logic.tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
             }
@@ -79,7 +79,6 @@ const ui = {
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
-            // Сразу запускаем загрузку реальных данных
             this.loadTop();
         }
         else if (id === 'mine') {
@@ -124,18 +123,16 @@ const ui = {
         }
     },
 
-    // Функция загрузки РЕАЛЬНОГО ТОП-100 с аватарами
     async loadTop() {
         const topContainer = document.getElementById('top-list-container');
         if (!topContainer) return;
 
         try {
-            // Запрашиваем данные у твоего бэкенда
             const res = await fetch('/api/top');
             if (!res.ok) throw new Error("Load Top failed");
-            const topData = await res.json(); // Ожидаем массив [{name, balance, photo_url}, ...]
+            const topData = await res.json();
 
-            topContainer.innerHTML = ''; // Очищаем "Loading..."
+            topContainer.innerHTML = '';
             topContainer.style.opacity = '1';
             topContainer.style.textAlign = 'left';
 
@@ -143,25 +140,22 @@ const ui = {
             
             topData.forEach((player, index) => {
                 const rank = index + 1;
-                // Стили для первых 3-х мест
                 let color = rank === 1 ? '#ffd700' : (rank === 2 ? '#c0c0c0' : (rank === 3 ? '#cd7f32' : '#fff'));
                 let shadow = rank <= 3 ? `text-shadow: 0 0 10px ${color};` : '';
-                
-                // Проверка: это текущий игрок?
-                const isYou = player.user_id === logic.user.user_id;
+                const isYou = String(player.user_id) === String(logic.user.user_id);
 
                 listHtml += `
                     <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 8px; border-bottom:1px solid #222; ${isYou ? 'background:rgba(0,255,255,0.08); border-radius:8px;' : ''}">
                         <div style="display:flex; align-items:center; gap:10px;">
                             <img src="${player.photo_url || 'logo.png'}" style="width:28px; height:28px; border-radius:50%; border:1px solid ${color};">
-                            <span style="color:${color}; font-weight:bold; ${shadow} font-size:14px;">${rank}. ${player.name}</span>
+                            <span style="color:${color}; font-weight:bold; ${shadow} font-size:14px;">${rank}. ${player.name || 'Agent'}</span>
                         </div>
                         <span style="font-family:monospace; font-size:13px;">${Math.floor(player.balance).toLocaleString()}</span>
                     </div>
                 `;
             });
 
-            topContainer.innerHTML = listHtml;
+            topContainer.innerHTML = listHtml || '<p style="text-align:center;">No data available</p>';
 
         } catch (e) {
             console.error(e);
@@ -169,7 +163,6 @@ const ui = {
         }
     },
 
-    // Логика покупки улучшений
     buyUpg(id, price, val, type) {
         if (logic.user.balance >= price) {
             logic.user.balance -= price;
