@@ -1,65 +1,103 @@
-/**
- * Neural Pulse - Система управления загрузкой
- */
-window.onload = async () => {
-    const bar = document.getElementById('load-bar');
-    const pct = document.getElementById('load-pct');
-    const loadingScreen = document.getElementById('loading-screen');
-    const app = document.getElementById('app');
-    const loadingText = document.querySelector('.loading-text');
-    
-    let progress = 0;
+const logic = {
+    user: null,
 
-    // Интервал обновления прогресс-бара
-    const interval = setInterval(async () => {
-        // Случайный прирост для эффекта живой загрузки
-        progress += Math.random() * 15;
-        
-        if (progress >= 100) {
-            progress = 100;
-            clearInterval(interval);
-            
-            // Финальное обновление UI перед инициализацией
-            if (bar) bar.style.width = '100%';
-            if (pct) pct.innerText = '100%';
-
-            try {
-                // Пытаемся загрузить данные пользователя из logic.js
-                // Ожидаем завершения logic.init()
-                const success = await logic.init();
-                
-                if (success) {
-                    // Инициализируем обработчики интерфейса
-                    ui.init();
-                    
-                    // Плавный переход (Fade-out эффект)
-                    loadingScreen.style.opacity = '0';
-                    loadingScreen.style.transition = 'opacity 0.5s ease';
-                    
-                    setTimeout(() => {
-                        loadingScreen.style.display = 'none';
-                        app.style.display = 'flex';
-                        console.log("🚀 Neural Pulse: Access Granted");
-                    }, 500);
-                    
-                } else {
-                    // Обработка ошибки сервера
-                    throw new Error("API_ERROR");
-                }
-            } catch (error) {
-                console.error("Initialization failed:", error);
-                if (loadingText) {
-                    loadingText.innerText = "SERVER ERROR. TRY LATER";
-                    loadingText.style.color = "#ff4444";
-                    loadingText.style.textShadow = "0 0 10px #ff0000";
-                }
-                if (bar) bar.style.background = "#ff4444";
-            }
-            return;
+    async init() {
+        const tg = window.Telegram?.WebApp;
+        if (tg) {
+            tg.ready();
+            tg.expand();
         }
-        
-        // Обновление прогресс-бара во время движения
-        if (bar) bar.style.width = progress + '%';
-        if (pct) pct.innerText = Math.floor(progress) + '%';
-    }, 100);
+
+        const userId = tg?.initDataUnsafe?.user?.id || "12345";
+        const firstName = tg?.initDataUnsafe?.user?.first_name || "Agent";
+
+        try {
+            // Передаем username в query params для синхронизации с БД
+            const res = await fetch(`/api/user/${userId}?username=${encodeURIComponent(firstName)}`);
+            const data = await res.json();
+            
+            this.user = {
+                user_id: String(userId),
+                username: data.username || firstName,
+                balance: Number(data.balance || 0),
+                energy: Number(data.energy !== undefined ? data.energy : 1000),
+                max_energy: Number(data.max_energy || 1000),
+                click_lvl: Number(data.click_lvl || 1),
+                profit_hr: Number(data.profit_hr || 0),
+                lvl: Number(data.lvl || 1),
+                wallet: data.wallet || null
+            };
+
+            // Обновляем имя в UI сразу
+            const nameEl = document.getElementById('u-name');
+            if (nameEl) nameEl.innerText = this.user.username;
+
+            this.startLoops();
+            ui.init(); 
+            return true;
+        } catch (e) {
+            console.error("Init Error", e);
+            return false;
+        }
+    },
+
+    tap(e) {
+        if (!this.user || this.user.energy < 1) return;
+        this.user.balance += this.user.click_lvl;
+        this.user.energy -= 1;
+        ui.update();
+        this.anim(e);
+    },
+
+    anim(e) {
+        const x = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+        const y = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+        const p = document.createElement('div');
+        p.className = 'tap-pop';
+        p.innerText = `+${this.user.click_lvl}`;
+        p.style.left = `${x - 20}px`;
+        p.style.top = `${y - 40}px`;
+        document.body.appendChild(p);
+        setTimeout(() => p.remove(), 800);
+    },
+
+    async save() {
+        if (!this.user) return;
+        fetch('/api/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: this.user.user_id,
+                balance: this.user.balance,
+                energy: Math.floor(this.user.energy),
+                max_energy: this.user.max_energy,
+                click_lvl: this.user.click_lvl,
+                profit_hr: this.user.profit_hr,
+                lvl: this.user.lvl
+            })
+        });
+    },
+
+    upgrade(type) {
+        if (!this.user) return;
+        let cost = type === 'tap' ? this.user.click_lvl * 1000 : (this.user.max_energy / 100) * 500;
+        if (this.user.balance >= cost) {
+            this.user.balance -= cost;
+            if (type === 'tap') this.user.click_lvl++;
+            else { this.user.max_energy += 500; this.user.lvl++; }
+            ui.update();
+            ui.openM('boost');
+            this.save();
+        } else { alert("Not enough balance!"); }
+    },
+
+    startLoops() {
+        setInterval(() => {
+            if (!this.user) return;
+            if (this.user.energy < this.user.max_energy) this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
+            if (this.user.profit_hr > 0) this.user.balance += (this.user.profit_hr / 3600);
+            ui.update();
+        }, 1000);
+        setInterval(() => this.save(), 10000);
+    }
 };
