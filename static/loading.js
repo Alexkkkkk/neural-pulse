@@ -1,52 +1,85 @@
-const loading = {
-    progress: 0,
-    isLogicReady: false,
+const logic = {
+    user: null,
+    tonConnectUI: null,
 
     async init() {
-        const bar = document.getElementById('load-bar');
-        const pct = document.getElementById('load-pct');
+        console.log("🚀 Logic Init...");
+        const tg = window.Telegram?.WebApp;
+        if (tg) {
+            tg.ready();
+            tg.expand();
+        }
+
+        const userId = tg?.initDataUnsafe?.user?.id || "12345";
         
-        // Запуск инициализации логики
-        this.startLogic();
+        try {
+            const res = await fetch(`/api/user/${userId}`);
+            const rawData = await res.json();
+            
+            this.user = {
+                ...rawData,
+                user_id: String(userId),
+                balance: Number(rawData.balance || 0),
+                energy: Number(rawData.energy || 0),
+                max_energy: Number(rawData.max_energy || 1000),
+                click_lvl: Number(rawData.click_lvl || 1),
+                profit_hr: Number(rawData.profit_hr || 0),
+                lvl: Number(rawData.lvl || 1)
+            };
 
-        const interval = setInterval(() => {
-            if (this.progress < 90) {
-                this.progress += Math.random() * 5;
-            } else if (this.isLogicReady) {
-                this.progress += 5;
+            // Инициализация TON Connect
+            if (typeof TonConnectUI !== 'undefined') {
+                this.tonConnectUI = new TonConnectUI.TonConnectUI({
+                    manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
+                    buttonRootId: 'ton-connect-btn'
+                });
             }
 
-            if (this.progress > 100) this.progress = 100;
-            if (bar) bar.style.width = this.progress + '%';
-            if (pct) pct.innerText = Math.floor(this.progress) + '%';
-
-            if (this.progress >= 100 && this.isLogicReady) {
-                clearInterval(interval);
-                this.finish();
-            }
-        }, 100);
-    },
-
-    async startLogic() {
-        if (window.logic) {
-            const ready = await logic.init();
-            this.isLogicReady = ready;
-        } else {
-            this.isLogicReady = true; // Чтобы не висело, если логика не найдена
+            this.startLoops();
+            return true; 
+        } catch (e) {
+            console.error("❌ DB Load Error:", e);
+            return false;
         }
     },
 
-    finish() {
-        if (window.ui) ui.init();
-        const ls = document.getElementById('loading-screen');
-        const app = document.getElementById('app');
+    tap(e) {
+        if (!this.user || this.user.energy < 1) return;
+
+        this.user.balance += this.user.click_lvl;
+        this.user.energy -= 1;
         
-        if (ls) ls.style.opacity = '0';
-        setTimeout(() => {
-            if (ls) ls.style.display = 'none';
-            if (app) app.style.display = 'flex';
-        }, 500);
+        // Авто-уровень (каждые 10к баланса +1 уровень)
+        this.user.lvl = Math.floor(this.user.balance / 10000) + 1;
+        
+        ui.update();
+        ui.anim(e);
+    },
+
+    startLoops() {
+        setInterval(() => {
+            if (!this.user) return;
+            // Реген энергии (1 в сек)
+            if (this.user.energy < this.user.max_energy) this.user.energy += 1;
+            // Пассивный доход
+            if (this.user.profit_hr > 0) {
+                this.user.balance += (this.user.profit_hr / 3600);
+            }
+            ui.update();
+        }, 1000);
+
+        setInterval(() => this.save(), 10000); // Автосохранение раз в 10 сек
+    },
+
+    async save() {
+        if (!this.user) return;
+        try {
+            await fetch('/api/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.user)
+            });
+            console.log("💾 Progress saved");
+        } catch (e) { console.log("Save failed"); }
     }
 };
-
-window.addEventListener('load', () => loading.init());
