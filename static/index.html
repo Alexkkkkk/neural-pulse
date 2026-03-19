@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -13,93 +13,76 @@
     <div id="loading-screen">
         <div class="loader-container">
             <div class="loader-ring"></div>
-            <img src="images/logo.png" alt="Neural AI" class="loader-logo">
+            <img src="images/logo.png" alt="AI" class="loader-logo">
         </div>
-        <div class="loading-text">ACCESS GRANTED</div>
+        <div class="loading-text">ACCESSING NEURAL NET</div>
         <div class="percent" id="load-pct">0%</div>
         <div class="load-bar-wrapper">
             <div id="load-bar" class="load-bar-f"></div>
         </div>
     </div>
 
-    <div id="app" style="display: none;">
-        <div class="header-container">
-            <div class="header-user">
-                <div class="avatar-neomorph">
-                    <img src="images/logo.png" alt="Avatar">
-                </div>
-                <div class="u-info">
-                    <b id="u-name">Agent</b>
-                    <small>v4.0.0 Neural Mining</small>
-                </div>
+    <div id="app">
+        <div class="header">
+            <div class="header-left">
+                <div class="avatar"><img src="images/logo.png" alt="Avatar"></div>
+                <div class="u-info"><b id="u-name">Agent</b><small>v4.0.0 Neural Mining</small></div>
             </div>
-            <div class="lvl-badge-neon" id="u-lvl">LVL 1</div>
+            <div class="lvl-badge" id="u-lvl">LVL 1</div>
         </div>
 
-        <div class="stats-row-neon">
-            <div class="stat-card-neon">
-                <small>EARN PER TAP</small>
-                <div class="val-group">
-                    <b id="tap-val">+1</b>
-                </div>
-            </div>
-            <div class="stat-card-neon">
-                <small>PROFIT PER HOUR</small>
-                <div class="val-group">
-                    <b id="profit-val">0</b>
-                </div>
-            </div>
+        <div class="stats-row">
+            <div class="stat-card"><small>EARN PER TAP</small><b class="accent-val" id="tap-val">+1</b></div>
+            <div class="stat-card"><small>PROFIT PER HOUR</small><b class="accent-val" id="profit-val">0</b></div>
         </div>
 
-        <div class="balance-nebula" id="balance">0</div>
+        <div class="balance" id="balance">0</div>
 
         <div class="play-area">
-            <div class="logo-container">
-                <div class="logo-glow"></div>
-                <img src="images/logo.png" class="main-logo-pulse" id="tap-target" alt="AI" onclick="logic.tap(event)">
-            </div>
+            <img src="images/logo.png" class="main-logo" id="tap-target" onclick="logic.tap(event)">
             
-            <div class="side-menu-cyber">
-                <button class="side-btn-cyber" onclick="ui.openM('wallet')">
-                    <span class="icon">👛</span> WALLET
-                </button>
-                <button class="side-btn-cyber" onclick="ui.openM('squad')">
-                    <span class="icon">🤝</span> FRIENDS
-                </button>
-                <button class="side-btn-cyber" onclick="ui.openM('bonus')">
-                    <span class="icon">🎁</span> BONUS
-                </button>
+            <div class="side-menu">
+                <div class="side-btn" onclick="ui.openM('wallet')">👛 WALLET</div>
+                <div class="side-btn" onclick="ui.openM('squad')">🤝 SQUAD</div>
+                <div class="side-btn" onclick="ui.openM('bonus')">🎁 BONUS</div>
             </div>
         </div>
 
-        <div class="energy-container-cyber">
-            <div class="en-txt-cyber">
-                <span>ENERGY</span>
-                <span id="eng-val">1000/1000</span>
-            </div>
-            <div class="progress-bar-wrap">
-                <div id="eng-fill" class="progress-bar-fill"></div>
+        <div class="energy-box">
+            <div class="en-txt"><span>ENERGY</span><span id="eng-val">1000/1000</span></div>
+            <div class="load-bar-wrapper" style="width: 100%; height: 8px; border: none;">
+                <div id="eng-fill" class="load-bar-f" style="width: 100%;"></div>
             </div>
         </div>
 
-        <div class="bottom-nav-cyber">
-            <button class="nav-btn-capsule" onclick="ui.openM('boost')">🚀 BOOST</button>
-            <button class="nav-btn-capsule" onclick="ui.openM('mine')">⛏️ MINE</button>
-            <button class="nav-btn-capsule" onclick="ui.openM('tasks')">📋 TASKS</button>
-            <button class="nav-btn-capsule" onclick="ui.openM('top')">🏆 TOP</button>
+        <div class="bottom-nav">
+            <button class="nav-btn" onclick="ui.openM('boost')"><span>🚀</span>BOOST</button>
+            <button class="nav-btn" onclick="ui.openM('mine')"><span>⛏️</span>MINE</button>
+            <button class="nav-btn" onclick="ui.openM('tasks')"><span>📋</span>TASKS</button>
+            <button class="nav-btn" onclick="ui.openM('top')"><span>🏆</span>TOP</button>
         </div>
     </div>
 
-    <div id="m-wallet" class="modal"><div class="modal-content"><div class="modal-header">Wallet</div></div></div>
-    <div id="m-squad" class="modal"><div class="modal-content"><div class="modal-header">Friends</div></div></div>
-    <div id="m-bonus" class="modal"><div class="modal-content"><div class="modal-header">Bonus</div></div></div>
-    <div id="m-boost" class="modal"><div class="modal-content"><div class="modal-header">Boost</div></div></div>
-    <div id="m-mine" class="modal"><div class="modal-content"><div class="modal-header">Mine</div></div></div>
-    <div id="m-tasks" class="modal"><div class="modal-content"><div class="modal-header">Tasks</div></div></div>
-    <div id="m-top" class="modal"><div class="modal-content"><div class="modal-header">Top</div></div></div>
+    <div id="m-boost" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">UPGRADES</div>
+            <div class="upgrade-list" id="boost-list">
+                </div>
+            <button class="back-btn" onclick="ui.closeM()">CLOSE</button>
+        </div>
+    </div>
 
-    <script src="ui.js"></script>
+    <div id="m-top" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">LEADERBOARD</div>
+            <div id="top-list">
+                </div>
+            <button class="back-btn" onclick="ui.closeM()">CLOSE</button>
+        </div>
+    </div>
+
     <script src="logic.js"></script>
+    <script src="ui.js"></script>
     <script src="loading.js"></script>
 </body>
 </html>
