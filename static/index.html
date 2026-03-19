@@ -74,8 +74,9 @@
 
     <div id="modal-container" class="modal" onclick="if(event.target === this) ui.closeM()">
         <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-drag-line"></div>
             <div id="modal-body"></div>
-            <button class="nav-btn-capsule" style="width:100%; margin-top:20px; color:#fff;" onclick="ui.closeM()">BACK</button>
+            <button class="nav-btn-capsule close-btn" onclick="ui.closeM()">CLOSE TERMINAL</button>
         </div>
     </div>
 
@@ -86,10 +87,7 @@
         });
 
         const ui = {
-            init() {
-                this.update();
-                this.finishLoading();
-            },
+            init() { this.update(); this.finishLoading(); },
             update() {
                 if (!logic.user) return;
                 document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
@@ -102,36 +100,37 @@
             openM(type) {
                 const body = document.getElementById('modal-body');
                 const container = document.getElementById('modal-container');
-                let h = `<h2>${type.toUpperCase()}</h2>`;
+                let h = `<h2 class="m-title">${type.toUpperCase()}</h2>`;
                 
                 if (type === 'wallet') {
-                    h += `<div id="ton-btn" style="margin:20px 0;"></div><p>Connect your TON wallet for withdrawals</p>`;
-                    setTimeout(() => tonConnectUI.uiOptions = { buttonRootId: 'ton-btn' }, 50);
+                    h += `<div class="wallet-section">
+                            <div id="ton-btn"></div>
+                            <p>Connect your TON wallet for secure transactions</p>
+                          </div>`;
+                    setTimeout(() => tonConnectUI.uiOptions = { buttonRootId: 'ton-btn' }, 100);
                 } 
                 else if (type === 'boost') {
                     h += `
-                        <div class="stat-card-neon" onclick="logic.buyUpgrade('tap')" style="margin-bottom:10px;">
-                            <b>🚀 Multitap</b><br><small>Level: ${logic.user.click_lvl} | Cost: 5,000</small>
+                        <div class="up-card" onclick="logic.buyUpgrade('tap')">
+                            <b>🚀 Multitap</b><br><small>Lvl ${logic.user.click_lvl} | Cost: 5,000</small>
                         </div>
-                        <div class="stat-card-neon" onclick="logic.buyUpgrade('energy')">
-                            <b>🔋 Limit</b><br><small>Max: ${logic.user.max_energy} | Cost: 10,000</small>
+                        <div class="up-card" onclick="logic.buyUpgrade('energy')">
+                            <b>🔋 Energy Limit</b><br><small>Max ${logic.user.max_energy} | Cost: 10,000</small>
                         </div>`;
                 }
                 else if (type === 'mine') {
-                    h += `<div class="stat-card-neon" onclick="logic.buyUpgrade('profit')">
-                            <b>🖥️ GPU Node</b><br><small>+500/hr | Cost: 25,000</small>
+                    h += `<div class="up-card" onclick="logic.buyUpgrade('profit')">
+                            <b>🖥️ Neural Node</b><br><small>+500 Pulse/hr | Cost: 25,000</small>
                           </div>`;
                 }
                 else if (type === 'top') {
-                    h += `<div style="text-align:left; padding:10px;">
-                            <p>1. User_992 - 50.2M</p>
-                            <p>2. Crypto_King - 44.1M</p>
-                            <p>3. You - ${(logic.user.balance/1000000).toFixed(1)}M</p>
+                    h += `<div class="leaderboard">
+                            <div class="rank"><span>1. Matrix_Runner</span><b>85.4M</b></div>
+                            <div class="rank"><span>2. Cyber_Punk</span><b>72.1M</b></div>
+                            <div class="rank active"><span>3. You (${logic.user.username})</span><b>${(logic.user.balance/1000).toFixed(1)}K</b></div>
                           </div>`;
                 }
-                else {
-                    h += `<p style="opacity:0.5;">Section ${type} is coming soon...</p>`;
-                }
+                else { h += `<p class="muted">Accessing data protocols...</p>`; }
 
                 body.innerHTML = h;
                 container.classList.add('active');
@@ -139,12 +138,11 @@
             closeM() { document.getElementById('modal-container').classList.remove('active'); },
             finishLoading() {
                 let p = 0;
-                const ring = document.getElementById('ring-circle');
                 const iv = setInterval(() => {
                     p += 10;
                     document.getElementById('load-pct').innerText = `${p}%`;
                     document.getElementById('load-bar').style.width = `${p}%`;
-                    ring.style.strokeDashoffset = 502.6 - (p / 100) * 502.6;
+                    document.getElementById('ring-circle').style.strokeDashoffset = 502.6 - (p / 100) * 502.6;
                     if (p >= 100) {
                         clearInterval(iv);
                         setTimeout(() => {
@@ -156,7 +154,6 @@
                 }, 50);
             }
         };
-
         window.onload = () => logic.init();
     </script>
 </body>
