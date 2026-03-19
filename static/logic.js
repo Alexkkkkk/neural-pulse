@@ -8,6 +8,7 @@ const logic = {
             tg.expand();
         }
 
+        // Берем ID из Телеграм или ставим тестовый
         const userId = tg?.initDataUnsafe?.user?.id || "12345";
         const firstName = tg?.initDataUnsafe?.user?.first_name || "Agent";
 
@@ -26,8 +27,12 @@ const logic = {
                 lvl: Number(data.lvl || 1)
             };
 
-            document.getElementById('u-name').innerText = this.user.username;
-            ui.init();
+            const nameEl = document.getElementById('u-name');
+            if (nameEl) nameEl.innerText = this.user.username;
+
+            // Инициализируем интерфейс ПОСЛЕ загрузки данных
+            if (typeof ui !== 'undefined') ui.init();
+            
             this.startLoops();
             return true;
         } catch (e) {
@@ -37,11 +42,15 @@ const logic = {
     },
 
     tap(e) {
-        if (!this.user || this.user.energy < 1) return;
-        this.user.balance += this.user.click_lvl;
-        this.user.energy -= 1;
+        // Предотвращаем стандартное поведение (зум и т.д.)
+        if (e.type === 'touchstart') e.preventDefault();
         
-        ui.update();
+        if (!this.user || this.user.energy < this.user.click_lvl) return;
+        
+        this.user.balance += this.user.click_lvl;
+        this.user.energy -= this.user.click_lvl;
+        
+        if (typeof ui !== 'undefined') ui.update();
         this.anim(e);
 
         if (window.Telegram?.WebApp?.HapticFeedback) {
@@ -50,16 +59,15 @@ const logic = {
     },
 
     anim(e) {
-        const x = e.touches ? e.touches[0].clientX : e.clientX;
-        const y = e.touches ? e.touches[0].clientY : e.clientY;
+        // Поддержка и мыши, и тача
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
         const p = document.createElement('div');
         p.className = 'tap-pop';
         p.innerText = `+${this.user.click_lvl}`;
-        p.style.left = `${x}px`;
-        p.style.top = `${y}px`;
-        p.style.position = 'fixed';
-        p.style.transform = 'translate(-50%, -50%)';
+        p.style.left = `${clientX}px`;
+        p.style.top = `${clientY}px`;
 
         document.body.appendChild(p);
         setTimeout(() => p.remove(), 800);
@@ -67,28 +75,44 @@ const logic = {
 
     async save() {
         if (!this.user) return;
-        await fetch('/api/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: this.user.user_id,
-                balance: this.user.balance,
-                energy: Math.floor(this.user.energy),
-                max_energy: this.user.max_energy,
-                click_lvl: this.user.click_lvl,
-                profit_hr: this.user.profit_hr,
-                lvl: this.user.lvl
-            })
-        });
+        try {
+            await fetch('/api/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: this.user.user_id,
+                    balance: this.user.balance,
+                    energy: Math.floor(this.user.energy),
+                    max_energy: this.user.max_energy,
+                    click_lvl: this.user.click_lvl,
+                    profit_hr: this.user.profit_hr,
+                    lvl: this.user.lvl
+                })
+            });
+        } catch (err) {
+            console.warn("Save failed", err);
+        }
     },
 
     startLoops() {
+        // Ежесекундное обновление: реген энергии + доход в час
         setInterval(() => {
             if (!this.user) return;
-            if (this.user.energy < this.user.max_energy) this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
-            if (this.user.profit_hr > 0) this.user.balance += (this.user.profit_hr / 3600);
-            ui.update();
+            
+            // Реген энергии (1.5 в сек)
+            if (this.user.energy < this.user.max_energy) {
+                this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
+            }
+            
+            // Пассивный доход
+            if (this.user.profit_hr > 0) {
+                this.user.balance += (this.user.profit_hr / 3600);
+            }
+            
+            if (typeof ui !== 'undefined') ui.update();
         }, 1000);
+
+        // Автосохранение каждые 10 сек
         setInterval(() => this.save(), 10000);
     }
 };
