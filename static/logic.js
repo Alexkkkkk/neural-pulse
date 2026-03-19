@@ -5,8 +5,8 @@ const logic = {
         energy: 1000, 
         max_energy: 1000,
         click_lvl: 1, 
-        profit_hr: 0, // Переименовано для соответствия ui.js
-        lvl: 1,       // Переименовано для соответствия ui.js
+        profit_hr: 0, 
+        lvl: 1, 
         username: "Agent",
         isLiked: false, 
         likes: 0
@@ -33,18 +33,19 @@ const logic = {
         this.setupListeners();
         this.startPassiveIncome();
         
-        // Запускаем интерфейс после загрузки логики
-        if (window.ui) ui.init();
+        // Гарантируем запуск интерфейса после загрузки данных
+        if (window.ui && typeof ui.init === 'function') {
+            ui.init();
+        }
     },
 
     setupListeners() {
         const target = document.getElementById('tap-target');
         if (target) {
-            // pointerdown работает быстрее click на мобильных
+            // Исправлено: добавляем пассивный слушатель для лучшей производительности
             target.addEventListener('pointerdown', (e) => {
-                e.preventDefault();
                 this.tap(e);
-            });
+            }, { passive: false });
         }
     },
 
@@ -100,7 +101,6 @@ const logic = {
     },
 
     startPassiveIncome() {
-        // Регенерация энергии
         setInterval(() => {
             if (this.user.energy < this.user.max_energy) {
                 this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
@@ -108,7 +108,6 @@ const logic = {
             }
         }, 1500);
 
-        // Пассивный доход
         setInterval(() => {
             if (this.user.profit_hr > 0) {
                 this.user.balance += (this.user.profit_hr / 3600);
@@ -140,5 +139,7 @@ const logic = {
     }
 };
 
-// Запуск
-logic.init();
+// Запуск только после того, как все скрипты загружены
+window.addEventListener('load', () => {
+    logic.init();
+});
