@@ -9,6 +9,8 @@ const logic = {
         if (tg) {
             tg.ready();
             tg.expand();
+            // Включаем подтверждение закрытия, чтобы игрок случайно не вышел
+            tg.enableClosingConfirmation();
         }
 
         // Получаем данные пользователя из Telegram
@@ -25,12 +27,11 @@ const logic = {
             if (!res.ok) throw new Error("API Connection Failed");
             const rawData = await res.json();
             
-            // Маппинг данных из БД с защитой
-            // ВАЖНО: используем те же имена полей, что и в таблице PostgreSQL
+            // Маппинг данных из БД с защитой от пустых значений
             this.user = {
                 user_id: String(userId),
-                username: firstName, // Имя из TG
-                photo_url: photoUrl, // Фото из TG
+                username: firstName, 
+                photo_url: photoUrl, 
                 balance: Number(rawData.balance || 0),
                 energy: Number(rawData.energy !== undefined ? rawData.energy : 1000),
                 max_energy: Number(rawData.max_energy || 1000),
@@ -48,6 +49,7 @@ const logic = {
             }
 
             this.startLoops();
+            ui.init(); // Инициализируем UI только после загрузки данных
             return true; 
         } catch (e) {
             console.error("❌ Logic Error:", e);
@@ -69,14 +71,16 @@ const logic = {
     },
 
     startLoops() {
-        // Регенерация энергии и пассивный доход
+        // Регенерация энергии и пассивный доход каждые 1 сек
         setInterval(() => {
             if (!this.user) return;
             
+            // Реген
             if (this.user.energy < this.user.max_energy) {
                 this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
             }
             
+            // Доход
             if (this.user.profit_hr > 0) {
                 this.user.balance += (this.user.profit_hr / 3600);
             }
@@ -91,7 +95,6 @@ const logic = {
     async save() {
         if (!this.user) return;
         try {
-            // Подготавливаем данные для Node.js сервера (api/save)
             const payload = {
                 userId: this.user.user_id,
                 username: this.user.username,
@@ -104,12 +107,13 @@ const logic = {
                 lvl: this.user.lvl
             };
 
-            await fetch('/api/save', {
+            const res = await fetch('/api/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            console.log("💾 Progress synced");
+            
+            if (res.ok) console.log("💾 Progress synced");
         } catch (e) { 
             console.warn("📡 Sync lost: progress not saved"); 
         }
