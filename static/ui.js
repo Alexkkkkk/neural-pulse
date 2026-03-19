@@ -1,11 +1,32 @@
 const ui = {
     init() {
-        console.log("🎨 UI: System Online");
+        console.log("🎨 UI: Online");
         const target = document.getElementById('tap-target');
         if (target) {
             target.onclick = (e) => logic.tap(e);
         }
+
+        // Авто-сохранение кошелька при подключении
+        if (logic.tonConnectUI) {
+            logic.tonConnectUI.onStatusChange(async (wallet) => {
+                if (wallet && wallet.account.address) {
+                    await this.saveWallet(wallet.account.address);
+                }
+            });
+        }
         this.update();
+    },
+
+    async saveWallet(addr) {
+        try {
+            await fetch('/api/wallet', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: logic.user.user_id, address: addr })
+            });
+            logic.user.wallet = addr; // Обновляем локально
+            console.log("👛 Wallet linked successfully");
+        } catch (e) { console.error("Wallet save error", e); }
     },
 
     update() {
@@ -29,11 +50,14 @@ const ui = {
         const container = m.querySelector('.modal-content');
 
         if (id === 'wallet') {
+            const hasWallet = logic.user.wallet;
             container.innerHTML = `
                 <div class="modal-header">TON WALLET</div>
                 <div style="padding:20px; text-align:center;">
                     <div id="ton-connect-btn" style="display:flex; justify-content:center;"></div>
-                    <p style="color:#888; margin-top:15px; font-size:12px;">Подключите кошелек для вывода</p>
+                    <p style="color:#888; margin-top:15px; font-size:12px;">
+                        ${hasWallet ? `Linked: ${hasWallet.slice(0,4)}...${hasWallet.slice(-4)}` : 'Connect for Airdrop'}
+                    </p>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
@@ -50,7 +74,7 @@ const ui = {
             container.innerHTML = `
                 <div class="modal-header">SQUAD</div>
                 <div style="padding:20px; text-align:center;">
-                    <p>Приглашай друзей и получай 10,000!</p>
+                    <p>Get 10,000 for each friend!</p>
                     <input type="text" value="${link}" readonly style="width:100%; background:#111; color:#fff; padding:10px; margin:10px 0; border:1px solid #333; border-radius:5px;">
                     <button class="back-btn" style="background:#00f2ff; color:#000; width:100%" onclick="navigator.clipboard.writeText('${link}')">COPY LINK</button>
                 </div>
@@ -65,23 +89,6 @@ const ui = {
                         <span>Multitap (Lvl ${logic.user.click_lvl})</span>
                         <b style="color:#00f2ff;">${(logic.user.click_lvl * 1000).toLocaleString()}</b>
                     </div>
-                    <div class="boost-item" onclick="logic.upgrade('energy')" style="display:flex; justify-content:space-between; padding:15px; background:#111; border-radius:10px;">
-                        <span>Energy Limit</span>
-                        <b style="color:#00f2ff;">${(logic.user.max_energy / 2).toLocaleString()}</b>
-                    </div>
-                </div>
-                <button class="back-btn" onclick="ui.closeM()">BACK</button>
-            `;
-        }
-        else if (id === 'mine') {
-            container.innerHTML = `
-                <div class="modal-header">MINING RIGS</div>
-                <div style="padding:20px;">
-                    <div class="boost-item" onclick="logic.upgrade('profit')" style="display:flex; justify-content:space-between; padding:15px; background:#111; border-radius:10px;">
-                        <span>Graphics Card</span>
-                        <b style="color:#00f2ff;">+500/hr</b>
-                    </div>
-                    <p style="font-size:12px; color:#555; margin-top:10px; text-align:center;">Доход начисляется автоматически каждый час</p>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
