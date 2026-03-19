@@ -6,7 +6,6 @@ const ui = {
         console.log("🎨 UI System Booted");
         const target = document.getElementById('tap-target');
         
-        // Поддержка и тапа, и клика
         if (target) {
             target.onclick = (e) => logic.tap(e);
         }
@@ -16,6 +15,9 @@ const ui = {
             window.tonConnectUI.onStatusChange(async (wallet) => {
                 if (wallet && wallet.account.address) {
                     await this.saveWallet(wallet.account.address);
+                } else {
+                    // Если кошелек отвязан в самом приложении Tonkeeper
+                    await this.saveWallet(null);
                 }
             });
         }
@@ -23,7 +25,7 @@ const ui = {
     },
 
     /**
-     * Сохранение адреса кошелька в БД
+     * Сохранение или удаление адреса кошелька в БД
      */
     async saveWallet(addr) {
         if (!logic.user) return;
@@ -34,18 +36,37 @@ const ui = {
                 body: JSON.stringify({ userId: logic.user.user_id, address: addr })
             });
             logic.user.wallet = addr;
-            console.log("👛 Wallet Saved to DB");
-            // Обновляем текст в модалке, если она открыта
+            console.log(addr ? "👛 Wallet Saved" : "Empty Wallet Saved");
+            
+            // Если мы в окне кошелька, перерисовываем его статус
             const info = document.getElementById('wallet-info');
-            if (info) info.innerHTML = `<p style="color:#00f2ff; font-size:11px;">CONNECTED: ${addr.slice(0,6)}...${addr.slice(-6)}</p>`;
+            if (info) {
+                if (addr) {
+                    info.innerHTML = `<p style="color:#00f2ff; font-size:11px;">CONNECTED: ${addr.slice(0,6)}...${addr.slice(-6)}</p>
+                    <button onclick="ui.disconnectWallet()" style="background:none; border:none; color:#ff4444; cursor:pointer; font-size:10px; text-decoration:underline; margin-top:5px;">DISCONNECT</button>`;
+                } else {
+                    info.innerHTML = `<p style="color:#666; font-size:12px;">Link your TON wallet for future rewards</p>`;
+                }
+            }
         } catch (e) { 
             console.error("Wallet save error", e); 
         }
     },
 
     /**
-     * Глобальное обновление всех счетчиков на главном экране
+     * Принудительное отключение кошелька
      */
+    async disconnectWallet() {
+        try {
+            if (window.tonConnectUI.connected) {
+                await window.tonConnectUI.disconnect();
+            }
+            await this.saveWallet(null);
+        } catch (e) {
+            console.error("Disconnect error", e);
+        }
+    },
+
     update() {
         if (!logic.user) return;
         const u = logic.user;
@@ -68,9 +89,6 @@ const ui = {
         }
     },
 
-    /**
-     * Открытие модальных окон с динамическим контентом
-     */
     openM(id) {
         const m = document.getElementById('m-' + id);
         if (!m) return;
@@ -86,14 +104,14 @@ const ui = {
                     <div id="ton-connect-btn" style="display:flex; justify-content:center; margin-bottom:15px;"></div>
                     <div id="wallet-info">
                         ${addr ? 
-                            `<p style="color:#00f2ff; font-size:11px;">CONNECTED: ${addr.slice(0,6)}...${addr.slice(-6)}</p>` : 
+                            `<p style="color:#00f2ff; font-size:11px;">CONNECTED: ${addr.slice(0,6)}...${addr.slice(-6)}</p>
+                             <button onclick="ui.disconnectWallet()" style="background:none; border:none; color:#ff4444; cursor:pointer; font-size:10px; text-decoration:underline; margin-top:5px;">DISCONNECT</button>` : 
                             `<p style="color:#666; font-size:12px;">Link your TON wallet for future rewards</p>`
                         }
                     </div>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
-            // Инициализация кнопки TON внутри модалки
             setTimeout(() => {
                 if (window.tonConnectUI) {
                     window.tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
@@ -121,32 +139,6 @@ const ui = {
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
-
-        } else if (id === 'mine') {
-            container.innerHTML = `
-                <div class="modal-header">NEURAL MINING</div>
-                <div style="padding:40px 20px; text-align:center; opacity:0.5;">
-                    <p>Mining rigs are coming soon...</p>
-                    <small>Increase your Profit Per Hour</small>
-                </div>
-                <button class="back-btn" onclick="ui.closeM()">BACK</button>
-            `;
-
-        } else if (id === 'tasks') {
-            container.innerHTML = `
-                <div class="modal-header">TASKS</div>
-                <div style="padding:10px;">
-                    <div style="background:#111; padding:15px; border-radius:12px; display:flex; justify-content:space-between; align-items:center; border:1px solid #222;">
-                        <div>
-                            <b>Join Channel</b><br>
-                            <small style="color:#00f2ff;">+5,000 Pulse</small>
-                        </div>
-                        <button class="side-btn" style="margin:0; padding:8px 20px; background:#00f2ff; color:#000;" onclick="ui.doTask('channel')">GO</button>
-                    </div>
-                </div>
-                <button class="back-btn" onclick="ui.closeM()">BACK</button>
-            `;
-
         } else if (id === 'top') {
             container.innerHTML = `
                 <div class="modal-header">TOP AGENTS</div>
@@ -154,7 +146,6 @@ const ui = {
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
             this.loadTop();
-
         } else if (id === 'squad') {
             const link = `https://t.me/n_pulse_bot?start=${logic.user.user_id}`;
             container.innerHTML = `
@@ -166,41 +157,15 @@ const ui = {
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
+        } else {
+            container.innerHTML = `<div class="modal-header">${id.toUpperCase()}</div><p style="padding:40px; text-align:center; opacity:0.5;">Coming soon...</p><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
         }
     },
 
-    /**
-     * Логика выполнения задач
-     */
-    doTask(type) {
-        if (type === 'channel') {
-            window.open('https://t.me/your_channel_name', '_blank'); // ЗАМЕНИ НА СВОЙ КАНАЛ
-            // Можно добавить проверку через сервер, но для начала просто даем бонус
-            setTimeout(() => {
-                logic.user.balance += 5000;
-                this.update();
-                alert("Bonus +5,000 Pulse added!");
-            }, 2000);
-        }
-    },
-
-    /**
-     * Копирование ссылки
-     */
-    copyLink(text) {
-        navigator.clipboard.writeText(text);
-        alert('Copied to clipboard!');
-    },
-
-    /**
-     * Загрузка списка топ-игроков
-     */
-    async loadTop() {
+    loadTop() {
         const list = document.getElementById('top-list');
         if (!list) return;
-        try {
-            const res = await fetch('/api/top');
-            const data = await res.json();
+        fetch('/api/top').then(res => res.json()).then(data => {
             list.innerHTML = data.map((p, i) => `
                 <div style="display:flex; justify-content:space-between; align-items:center; padding:15px; border-bottom:1px solid #151515;">
                     <div style="display:flex; align-items:center; gap:10px;">
@@ -210,14 +175,14 @@ const ui = {
                     <b style="color:#00f2ff;">${Math.floor(p.balance).toLocaleString()}</b>
                 </div>
             `).join('');
-        } catch (e) { 
-            list.innerHTML = "<p style='text-align:center; padding:20px; opacity:0.5;'>Leaderboard unavailable</p>"; 
-        }
+        }).catch(() => { list.innerHTML = "Error loading top"; });
     },
 
-    /**
-     * Закрыть все модалки
-     */
+    copyLink(text) {
+        navigator.clipboard.writeText(text);
+        alert('Copied!');
+    },
+
     closeM() { 
         document.querySelectorAll('.modal').forEach(m => m.classList.remove('active')); 
     }
