@@ -3,10 +3,7 @@ const logic = {
 
     async init() {
         const tg = window.Telegram?.WebApp;
-        if (tg) {
-            tg.ready();
-            tg.expand();
-        }
+        if (tg) { tg.ready(); tg.expand(); }
 
         const userId = tg?.initDataUnsafe?.user?.id || "12345";
         const firstName = tg?.initDataUnsafe?.user?.first_name || "Agent";
@@ -30,7 +27,6 @@ const logic = {
             if (nameEl) nameEl.innerText = this.user.username;
 
             if (typeof ui !== 'undefined') ui.init();
-            
             this.startLoops();
             return true;
         } catch (e) {
@@ -41,7 +37,6 @@ const logic = {
 
     tap(e) {
         if (e.type === 'touchstart') e.preventDefault();
-        
         if (!this.user || this.user.energy < this.user.click_lvl) return;
         
         this.user.balance += this.user.click_lvl;
@@ -58,41 +53,43 @@ const logic = {
     anim(e) {
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
         const p = document.createElement('div');
         p.className = 'tap-pop';
         p.innerText = `+${this.user.click_lvl}`;
         p.style.left = `${clientX}px`;
         p.style.top = `${clientY}px`;
-
         document.body.appendChild(p);
         setTimeout(() => p.remove(), 800);
     },
 
-    // НОВАЯ ФУНКЦИЯ: Покупка улучшений
-    buyUpgrade(type) {
+    async buyUpgrade(type) {
         if (!this.user) return;
         
+        let success = false;
         if (type === 'tap' && this.user.balance >= 5000) {
             this.user.balance -= 5000;
             this.user.click_lvl += 1;
+            success = true;
         } else if (type === 'energy' && this.user.balance >= 10000) {
             this.user.balance -= 10000;
             this.user.max_energy += 500;
             this.user.energy += 500;
+            success = true;
         } else if (type === 'profit' && this.user.balance >= 25000) {
             this.user.balance -= 25000;
             this.user.profit_hr += 500;
+            success = true;
+        }
+
+        if (success) {
+            if (typeof ui !== 'undefined') {
+                ui.update();
+                ui.openM(type === 'profit' ? 'mine' : 'boost');
+            }
+            await this.save(); // Мгновенная синхронизация с базой
         } else {
-            alert("Недостаточно средств!");
-            return;
+            window.Telegram?.WebApp?.showAlert("Insufficient balance!");
         }
-        
-        if (typeof ui !== 'undefined') {
-            ui.update();
-            ui.openM(type === 'profit' ? 'mine' : 'boost'); // Обновляем текст в модалке
-        }
-        this.save();
     },
 
     async save() {
@@ -103,7 +100,7 @@ const logic = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     userId: this.user.user_id,
-                    balance: this.user.balance,
+                    balance: Math.floor(this.user.balance),
                     energy: Math.floor(this.user.energy),
                     max_energy: this.user.max_energy,
                     click_lvl: this.user.click_lvl,
@@ -111,25 +108,18 @@ const logic = {
                     lvl: this.user.lvl
                 })
             });
-        } catch (err) {
-            console.warn("Save failed", err);
-        }
+        } catch (err) { console.warn("Sync failed", err); }
     },
 
     startLoops() {
         setInterval(() => {
             if (!this.user) return;
-            
-            // Реген энергии
             if (this.user.energy < this.user.max_energy) {
                 this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
             }
-            
-            // Пассивный доход
             if (this.user.profit_hr > 0) {
                 this.user.balance += (this.user.profit_hr / 3600);
             }
-            
             if (typeof ui !== 'undefined') ui.update();
         }, 1000);
 
