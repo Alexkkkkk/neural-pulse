@@ -13,11 +13,10 @@
     <div id="loading-screen">
         <div class="loader-container">
             <div class="loader-ring"></div>
-            <img src="static/images/logo.png" alt="Neural AI" class="loader-logo">
+            <img src="static/images/logo.png" alt="Neural AI" style="position: absolute; width: 60px;">
         </div>
-        <div class="loading-text">ACCESS GRANTED</div>
         <div class="percent" id="load-pct">0%</div>
-        <div class="load-bar-wrapper" style="width: 200px;">
+        <div class="load-bar-wrapper">
             <div id="load-bar" class="load-bar-f" style="width:0%"></div>
         </div>
     </div>
@@ -27,7 +26,7 @@
         <div class="header-container">
             <div class="header-user">
                 <div class="avatar-neomorph">
-                    <img src="static/images/logo.png" alt="AI">
+                    <img src="static/images/logo.png" alt="Avatar">
                 </div>
                 <div class="u-info">
                     <b id="u-name">Agent</b>
@@ -40,15 +39,11 @@
         <div class="stats-row-neon">
             <div class="stat-card-neon">
                 <small>EARN PER TAP</small>
-                <div class="val-group">
-                    <b id="tap-val">+5</b>
-                </div>
+                <b id="tap-val">+5</b>
             </div>
             <div class="stat-card-neon">
                 <small>PROFIT PER HOUR</small>
-                <div class="val-group">
-                    <b id="profit-val">0</b>
-                </div>
+                <b id="profit-val">0</b>
             </div>
         </div>
 
@@ -56,18 +51,12 @@
 
         <div class="play-area">
             <div class="logo-glow"></div>
-            <img src="static/images/logo.png" class="main-logo-pulse" id="tap-target" alt="Pulse">
+            <img src="static/images/logo.png" class="main-logo-pulse" id="tap-target">
             
             <div class="side-menu-cyber">
-                <button class="side-btn-cyber" onclick="ui.openM('wallet')">
-                    WALLET
-                </button>
-                <button class="side-btn-cyber" onclick="ui.openM('squad')">
-                    FRIENDS
-                </button>
-                <button class="side-btn-cyber" onclick="ui.openM('bonus')">
-                    BONUS
-                </button>
+                <button class="side-btn-cyber" onclick="ui.openM('wallet')">👛 WALLET</button>
+                <button class="side-btn-cyber" onclick="ui.openM('squad')">🤝 FRIENDS</button>
+                <button class="side-btn-cyber" onclick="ui.openM('bonus')">🎁 BONUS</button>
             </div>
         </div>
 
@@ -77,15 +66,15 @@
                 <span id="eng-val">1000/1000</span>
             </div>
             <div class="progress-bar-wrap">
-                <div id="eng-fill" class="progress-bar-fill" style="width: 100%"></div>
+                <div id="eng-fill" class="progress-bar-fill"></div>
             </div>
         </div>
 
         <div class="bottom-nav-cyber">
-            <button class="nav-btn-capsule" onclick="ui.openM('boost')">BOOST</button>
-            <button class="nav-btn-capsule" onclick="ui.openM('mine')">MINE</button>
-            <button class="nav-btn-capsule" onclick="ui.openM('tasks')">TASKS</button>
-            <button class="nav-btn-capsule" onclick="ui.openM('top')">TOP</button>
+            <button class="nav-btn-capsule" onclick="ui.openM('boost')">🚀 BOOST</button>
+            <button class="nav-btn-capsule" onclick="ui.openM('mine')">⛏️ MINE</button>
+            <button class="nav-btn-capsule" onclick="ui.openM('tasks')">📋 TASKS</button>
+            <button class="nav-btn-capsule" onclick="ui.openM('top')">🏆 TOP</button>
         </div>
     </div>
 
