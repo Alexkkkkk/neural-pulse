@@ -9,22 +9,28 @@ const logic = {
         if (tg) {
             tg.ready();
             tg.expand();
-            // Установка имени пользователя из TG
-            const name = tg.initDataUnsafe?.user?.first_name || "Agent";
-            const nameEl = document.getElementById('u-name');
-            if (nameEl) nameEl.innerText = name;
         }
 
+        // Получаем данные пользователя из Telegram
         const userId = tg?.initDataUnsafe?.user?.id || "12345";
+        const firstName = tg?.initDataUnsafe?.user?.first_name || "Agent";
+        const photoUrl = tg?.initDataUnsafe?.user?.photo_url || "logo.png";
         
+        // Установка имени в интерфейсе
+        const nameEl = document.getElementById('u-name');
+        if (nameEl) nameEl.innerText = firstName;
+
         try {
             const res = await fetch(`/api/user/${userId}`);
             if (!res.ok) throw new Error("API Connection Failed");
             const rawData = await res.json();
             
-            // Маппинг данных с защитой от пустых значений
+            // Маппинг данных из БД с защитой
+            // ВАЖНО: используем те же имена полей, что и в таблице PostgreSQL
             this.user = {
                 user_id: String(userId),
+                username: firstName, // Имя из TG
+                photo_url: photoUrl, // Фото из TG
                 balance: Number(rawData.balance || 0),
                 energy: Number(rawData.energy !== undefined ? rawData.energy : 1000),
                 max_energy: Number(rawData.max_energy || 1000),
@@ -63,7 +69,7 @@ const logic = {
     },
 
     startLoops() {
-        // Ежесекундное обновление: реген и пассивный доход
+        // Регенерация энергии и пассивный доход
         setInterval(() => {
             if (!this.user) return;
             
@@ -85,11 +91,25 @@ const logic = {
     async save() {
         if (!this.user) return;
         try {
+            // Подготавливаем данные для Node.js сервера (api/save)
+            const payload = {
+                userId: this.user.user_id,
+                username: this.user.username,
+                photo_url: this.user.photo_url,
+                balance: this.user.balance,
+                energy: Math.floor(this.user.energy),
+                max_energy: this.user.max_energy,
+                click_lvl: this.user.click_lvl,
+                profit_hr: this.user.profit_hr,
+                lvl: this.user.lvl
+            };
+
             await fetch('/api/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(this.user)
+                body: JSON.stringify(payload)
             });
+            console.log("💾 Progress synced");
         } catch (e) { 
             console.warn("📡 Sync lost: progress not saved"); 
         }
