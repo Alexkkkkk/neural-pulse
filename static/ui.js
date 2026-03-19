@@ -1,9 +1,17 @@
 const ui = {
+    /**
+     * Инициализация UI: слушатели событий и TON Connect
+     */
     init() {
         console.log("🎨 UI System Booted");
         const target = document.getElementById('tap-target');
-        if (target) target.onclick = (e) => logic.tap(e);
+        
+        // Поддержка и тапа, и клика
+        if (target) {
+            target.onclick = (e) => logic.tap(e);
+        }
 
+        // Слушатель изменения статуса кошелька
         if (window.tonConnectUI) {
             window.tonConnectUI.onStatusChange(async (wallet) => {
                 if (wallet && wallet.account.address) {
@@ -14,7 +22,11 @@ const ui = {
         this.update();
     },
 
+    /**
+     * Сохранение адреса кошелька в БД
+     */
     async saveWallet(addr) {
+        if (!logic.user) return;
         try {
             await fetch('/api/wallet', {
                 method: 'POST',
@@ -23,29 +35,46 @@ const ui = {
             });
             logic.user.wallet = addr;
             console.log("👛 Wallet Saved to DB");
-        } catch (e) { console.error("Wallet save error", e); }
+            // Обновляем текст в модалке, если она открыта
+            const info = document.getElementById('wallet-info');
+            if (info) info.innerHTML = `<p style="color:#00f2ff; font-size:11px;">CONNECTED: ${addr.slice(0,6)}...${addr.slice(-6)}</p>`;
+        } catch (e) { 
+            console.error("Wallet save error", e); 
+        }
     },
 
+    /**
+     * Глобальное обновление всех счетчиков на главном экране
+     */
     update() {
         if (!logic.user) return;
         const u = logic.user;
+        
         const set = (id, val) => {
             const el = document.getElementById(id);
             if (el) el.innerText = val;
         };
+
         set('balance', Math.floor(u.balance).toLocaleString('ru-RU'));
         set('u-lvl', `LVL ${u.lvl}`);
         set('eng-val', `${Math.floor(u.energy)}/${u.max_energy}`);
-        set('profit-val', u.profit_hr || 0);
+        set('profit-val', Math.floor(u.profit_hr || 0).toLocaleString());
         set('tap-val', `+${u.click_lvl}`);
         
         const fill = document.getElementById('eng-fill');
-        if (fill) fill.style.width = `${(u.energy / u.max_energy) * 100}%`;
+        if (fill) {
+            const perc = (u.energy / u.max_energy) * 100;
+            fill.style.width = `${perc}%`;
+        }
     },
 
+    /**
+     * Открытие модальных окон с динамическим контентом
+     */
     openM(id) {
         const m = document.getElementById('m-' + id);
         if (!m) return;
+        
         m.classList.add('active');
         const container = m.querySelector('.modal-content');
 
@@ -64,6 +93,7 @@ const ui = {
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
+            // Инициализация кнопки TON внутри модалки
             setTimeout(() => {
                 if (window.tonConnectUI) {
                     window.tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
@@ -74,15 +104,19 @@ const ui = {
             container.innerHTML = `
                 <div class="modal-header">BOOST</div>
                 <div style="padding:15px;">
-                    <div class="stat-card" style="margin-bottom:10px; border:1px solid #333;" onclick="logic.upgrade('tap')">
-                        <small>MULTITAP</small>
+                    <div class="upgrade-card" style="margin-bottom:10px; border:1px solid #333; background:#111; padding:15px; border-radius:12px; display:flex; justify-content:space-between; align-items:center;" onclick="logic.upgrade('tap')">
+                        <div>
+                            <b>MULTITAP</b><br>
+                            <small id="b-tap-cost">Cost: ${logic.user.click_lvl * 1000}</small>
+                        </div>
                         <b style="color:#00f2ff;">LVL ${logic.user.click_lvl}</b>
-                        <p style="font-size:10px; opacity:0.6;">Cost: ${logic.user.click_lvl * 1000}</p>
                     </div>
-                    <div class="stat-card" style="border:1px solid #333;" onclick="logic.upgrade('energy')">
-                        <small>ENERGY LIMIT</small>
+                    <div class="upgrade-card" style="border:1px solid #333; background:#111; padding:15px; border-radius:12px; display:flex; justify-content:space-between; align-items:center;" onclick="logic.upgrade('energy')">
+                        <div>
+                            <b>ENERGY LIMIT</b><br>
+                            <small id="b-eng-cost">Cost: ${logic.user.lvl * 500}</small>
+                        </div>
                         <b style="color:#00f2ff;">LVL ${logic.user.lvl}</b>
-                        <p style="font-size:10px; opacity:0.6;">Cost: ${logic.user.lvl * 500}</p>
                     </div>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
@@ -91,7 +125,7 @@ const ui = {
         } else if (id === 'mine') {
             container.innerHTML = `
                 <div class="modal-header">NEURAL MINING</div>
-                <div style="padding:20px; text-align:center; opacity:0.5;">
+                <div style="padding:40px 20px; text-align:center; opacity:0.5;">
                     <p>Mining rigs are coming soon...</p>
                     <small>Increase your Profit Per Hour</small>
                 </div>
@@ -102,19 +136,23 @@ const ui = {
             container.innerHTML = `
                 <div class="modal-header">TASKS</div>
                 <div style="padding:10px;">
-                    <div style="background:#111; padding:15px; border-radius:10px; display:flex; justify-content:space-between; align-items:center;">
+                    <div style="background:#111; padding:15px; border-radius:12px; display:flex; justify-content:space-between; align-items:center; border:1px solid #222;">
                         <div>
                             <b>Join Channel</b><br>
-                            <small style="color:#00f2ff;">+5,000</small>
+                            <small style="color:#00f2ff;">+5,000 Pulse</small>
                         </div>
-                        <button class="side-btn" style="margin:0; padding:5px 15px;">GO</button>
+                        <button class="side-btn" style="margin:0; padding:8px 20px; background:#00f2ff; color:#000;" onclick="ui.doTask('channel')">GO</button>
                     </div>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
 
         } else if (id === 'top') {
-            container.innerHTML = `<div class="modal-header">TOP AGENTS</div><div id="top-list" style="max-height:300px; overflow-y:auto;">Loading...</div><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
+            container.innerHTML = `
+                <div class="modal-header">TOP AGENTS</div>
+                <div id="top-list" style="max-height:400px; overflow-y:auto; padding:0 10px;">Loading leaderboard...</div>
+                <button class="back-btn" onclick="ui.closeM()">BACK</button>
+            `;
             this.loadTop();
 
         } else if (id === 'squad') {
@@ -122,28 +160,65 @@ const ui = {
             container.innerHTML = `
                 <div class="modal-header">SQUAD</div>
                 <div style="padding:20px; text-align:center;">
-                    <p style="font-size:14px;">Invite friends and get 10,000</p>
-                    <div style="background:#111; padding:10px; border-radius:5px; margin:15px 0; font-size:10px; color:#00f2ff; word-break: break-all;">${link}</div>
-                    <button class="back-btn" style="background:#00f2ff; color:#000; width:100%" onclick="navigator.clipboard.writeText('${link}'); alert('Copied!')">COPY LINK</button>
+                    <p style="font-size:14px; margin-bottom:20px;">Invite friends and get <span style="color:#00f2ff;">10,000 Pulse</span></p>
+                    <div style="background:#000; border:1px dashed #333; padding:15px; border-radius:10px; margin-bottom:20px; font-size:11px; color:#00f2ff; word-break: break-all;">${link}</div>
+                    <button class="back-btn" style="background: linear-gradient(90deg, #00f2ff, #ae00ff); color:#000; border:none; width:100%" onclick="ui.copyLink('${link}')">COPY INVITE LINK</button>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
         }
     },
 
+    /**
+     * Логика выполнения задач
+     */
+    doTask(type) {
+        if (type === 'channel') {
+            window.open('https://t.me/your_channel_name', '_blank'); // ЗАМЕНИ НА СВОЙ КАНАЛ
+            // Можно добавить проверку через сервер, но для начала просто даем бонус
+            setTimeout(() => {
+                logic.user.balance += 5000;
+                this.update();
+                alert("Bonus +5,000 Pulse added!");
+            }, 2000);
+        }
+    },
+
+    /**
+     * Копирование ссылки
+     */
+    copyLink(text) {
+        navigator.clipboard.writeText(text);
+        alert('Copied to clipboard!');
+    },
+
+    /**
+     * Загрузка списка топ-игроков
+     */
     async loadTop() {
         const list = document.getElementById('top-list');
+        if (!list) return;
         try {
             const res = await fetch('/api/top');
             const data = await res.json();
             list.innerHTML = data.map((p, i) => `
-                <div style="display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid #222;">
-                    <span>${i+1}. ${p.name || 'Agent'}</span>
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:15px; border-bottom:1px solid #151515;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="color:#666; width:20px;">${i+1}</span>
+                        <span>${p.username || 'Agent'}</span>
+                    </div>
                     <b style="color:#00f2ff;">${Math.floor(p.balance).toLocaleString()}</b>
                 </div>
             `).join('');
-        } catch (e) { list.innerHTML = "<p style='text-align:center; padding:20px;'>Error loading leaderboard</p>"; }
+        } catch (e) { 
+            list.innerHTML = "<p style='text-align:center; padding:20px; opacity:0.5;'>Leaderboard unavailable</p>"; 
+        }
     },
 
-    closeM() { document.querySelectorAll('.modal').forEach(m => m.classList.remove('active')); }
+    /**
+     * Закрыть все модалки
+     */
+    closeM() { 
+        document.querySelectorAll('.modal').forEach(m => m.classList.remove('active')); 
+    }
 };
