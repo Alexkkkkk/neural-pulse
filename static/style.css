@@ -1,10 +1,10 @@
 :root {
     --bg: #000000;
-    --card: #080808; /* Чуть темнее */
+    --card: #080808;
     --accent: #00ffff;
     --text: #ffffff;
     --purple: #ae00ff;
-    --border: #151515; /* Новый цвет границ */
+    --border: #151515;
 }
 
 * { 
@@ -20,7 +20,7 @@ body {
     font-family: 'Inter', sans-serif;
     margin: 0; 
     overflow: hidden; 
-    touch-action: manipulation; 
+    touch-action: none; 
     height: 100vh;
 }
 
@@ -38,7 +38,6 @@ body {
 /* --- APP UI --- */
 #app { display: none; flex-direction: column; height: 100vh; padding: 15px; padding-bottom: 85px; }
 
-/* HEADER DESIGN */
 .header { 
     background: var(--card); 
     border: 1px solid var(--border); 
@@ -55,7 +54,7 @@ body {
 .u-info b { font-size: 15px; }
 .u-info small { color: #666; font-size: 11px; display: block; margin-top: -2px; }
 .lvl-badge { 
-    background: rgba(0, 255, 255, 0.1); /* Прозрачный фон */
+    background: rgba(0, 255, 255, 0.1);
     color: var(--accent); 
     padding: 6px 14px; 
     border-radius: 10px; 
@@ -64,7 +63,6 @@ body {
     border: 1px solid rgba(0, 255, 255, 0.2);
 }
 
-/* STATS DESIGN */
 .stats-row { display: flex; gap: 10px; margin-bottom: 10px; }
 .stat-card { 
     background: var(--card); 
@@ -76,9 +74,8 @@ body {
 }
 .stat-card small { color: #888; font-size: 10px; letter-spacing: 0.5px; }
 .stat-card b { display: block; font-size: 18px; font-weight: 800; margin-top: 2px; }
-.accent-val { color: var(--accent); } /* Бирюзовые цифры в статах */
+.accent-val { color: var(--accent); }
 
-/* BALANCE */
 .balance { 
     font-size: 48px; 
     font-weight: 800; 
@@ -88,30 +85,37 @@ body {
     font-variant-numeric: tabular-nums; 
 }
 
-/* PLAY AREA & LIKE DESIGN */
+/* PLAY AREA */
 .play-area { flex-grow: 1; position: relative; display: flex; justify-content: center; align-items: center; }
 
-/* Логотип без тени в обычном состоянии */
 .main-logo { 
     width: 230px; 
     cursor: pointer; 
     transition: transform 0.05s, filter 0.1s; 
-    z-index: 5; 
-    filter: drop-shadow(0 0 0px var(--accent)); /* Без тени */
+    z-index: 20; /* Поверх бокового меню */
+    position: relative;
+    filter: drop-shadow(0 0 0px var(--accent));
 }
 
-/* Эффект при нажатии: сжатие + яркая тень */
 .main-logo:active { 
     transform: scale(0.96); 
     filter: drop-shadow(0 0 25px var(--accent));
 }
 
-/* SIDE MENU DESIGN */
-.side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 8px; z-index: 10; }
+.side-menu { 
+    position: absolute; 
+    right: 0; 
+    display: flex; 
+    flex-direction: column; 
+    gap: 8px; 
+    z-index: 10; 
+    pointer-events: none; /* Пропускает клики к логотипу */
+}
+
 .side-btn { 
-    background: #0c0c0c; /* Темнее */
+    background: #0c0c0c; 
     border: 1px solid var(--border); 
-    color: #fff; /* Белый текст */
+    color: #fff; 
     padding: 10px 14px; 
     border-radius: 14px; 
     display: flex; 
@@ -119,20 +123,16 @@ body {
     gap: 8px; 
     font-size: 11px; 
     font-weight: 700; 
+    pointer-events: auto; /* А сами кнопки кликабельны */
 }
-.side-btn span { font-size: 16px; }
 
-/* ENERGY */
 .energy-box { margin-top: auto; margin-bottom: 15px;}
 .en-txt { display: flex; justify-content: space-between; font-size: 12px; color: #888; font-weight: bold; margin-bottom: 5px;}
 .load-bar-wrapper.full-width { width: 100%; height: 6px; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); background: #111; }
 
-/* BOTTOM NAV DESIGN */
 .bottom-nav { 
     position: fixed; 
-    bottom: 0; 
-    left: 0; 
-    right: 0; 
+    bottom: 0; left: 0; right: 0; 
     display: flex; 
     background: var(--card); 
     border-top: 1px solid var(--border); 
@@ -143,7 +143,7 @@ body {
     background: transparent; 
     flex: 1; 
     padding: 10px 0; 
-    color: #888; /* Серый текст по умолчанию */
+    color: #888; 
     font-size: 10px; 
     display: flex; 
     flex-direction: column; 
@@ -152,7 +152,6 @@ body {
     font-weight: 700; 
     border: none; 
 }
-/* Активная кнопка в навигации */
 .nav-btn.active { color: var(--accent); }
 .nav-btn span { font-size: 20px; }
 
