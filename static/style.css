@@ -24,7 +24,7 @@ body {
     height: 100vh;
 }
 
-/* --- LOADER (ЭКРАН ЗАГРУЗКИ) --- */
+/* --- LOADER --- */
 #loading-screen { 
     position: fixed; 
     inset: 0; 
@@ -61,9 +61,7 @@ body {
     filter: drop-shadow(0 0 15px var(--purple)); 
 }
 
-@keyframes spin { 
-    100% { transform: rotate(360deg); } 
-}
+@keyframes spin { 100% { transform: rotate(360deg); } }
 
 .loading-text { 
     margin-top: 20px; 
@@ -99,7 +97,7 @@ body {
     box-shadow: 0 0 10px var(--accent); 
 }
 
-/* --- ОСНОВНОЙ ИНТЕРФЕЙС ПРИЛОЖЕНИЯ --- */
+/* --- APP INTERFACE --- */
 #app { 
     display: none; 
     flex-direction: column; 
@@ -150,7 +148,6 @@ body {
     border: 1px solid rgba(0, 255, 255, 0.2);
 }
 
-/* СТАТИСТИКА */
 .stats-row { display: flex; gap: 10px; margin-bottom: 10px; }
 
 .stat-card { 
@@ -160,6 +157,7 @@ body {
     border-radius: 14px; 
     flex: 1; 
     text-align: center; 
+    cursor: pointer;
 }
 
 .stat-card small { color: #888; font-size: 10px; letter-spacing: 0.5px; }
@@ -175,7 +173,6 @@ body {
     font-variant-numeric: tabular-nums; 
 }
 
-/* ИГРОВАЯ ЗОНА */
 .play-area { 
     flex-grow: 1; 
     position: relative; 
@@ -190,7 +187,6 @@ body {
     transition: transform 0.05s, filter 0.1s; 
     z-index: 20; 
     position: relative;
-    filter: drop-shadow(0 0 0px var(--accent));
 }
 
 .main-logo:active { 
@@ -205,7 +201,6 @@ body {
     flex-direction: column; 
     gap: 8px; 
     z-index: 10; 
-    pointer-events: none; 
 }
 
 .side-btn { 
@@ -219,22 +214,12 @@ body {
     gap: 8px; 
     font-size: 11px; 
     font-weight: 700; 
-    pointer-events: auto; 
+    cursor: pointer;
 }
 
-/* ЭНЕРГИЯ */
 .energy-box { margin-top: auto; margin-bottom: 15px;}
 .en-txt { display: flex; justify-content: space-between; font-size: 12px; color: #888; font-weight: bold; margin-bottom: 5px;}
-.load-bar-wrapper.full-width { 
-    width: 100%; 
-    height: 6px; 
-    border-radius: 10px; 
-    overflow: hidden; 
-    border: 1px solid var(--border); 
-    background: #111; 
-}
 
-/* НИЖНЯЯ НАВИГАЦИЯ */
 .bottom-nav { 
     position: fixed; 
     bottom: 0; left: 0; right: 0; 
@@ -243,7 +228,7 @@ body {
     border-top: 1px solid var(--border); 
     z-index: 100; 
     padding: 5px;
-    padding-bottom: calc(5px + env(safe-area-inset-bottom)); /* Поддержка iPhone */
+    padding-bottom: calc(5px + env(safe-area-inset-bottom));
 }
 
 .nav-btn { 
@@ -263,7 +248,7 @@ body {
 .nav-btn.active { color: var(--accent); }
 .nav-btn span { font-size: 20px; }
 
-/* --- МОДАЛЬНЫЕ ОКНА И МАГАЗИН --- */
+/* --- MODALS --- */
 .modal { 
     position: fixed; 
     inset: 0; 
@@ -294,59 +279,18 @@ body {
     color: var(--accent);
 }
 
-/* КАРТОЧКИ УЛУЧШЕНИЙ */
-.upgrade-card { 
-    background: #111; 
-    border: 1px solid #222; 
-    border-radius: 15px; 
-    padding: 15px; 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
-    margin-bottom: 10px; 
-    transition: transform 0.1s, border-color 0.2s;
-}
-
-.upgrade-card:active {
-    transform: scale(0.98);
-    background: #151515;
-}
-
-.price-tag { 
-    font-weight: bold; 
-    background: rgba(255,255,255,0.05); 
-    padding: 8px 12px; 
-    border-radius: 10px; 
-    color: var(--accent); 
-    font-size: 13px;
-    border: 1px solid rgba(0, 255, 255, 0.1);
-}
-
-.back-btn { 
-    width: 100%; 
-    padding: 15px; 
-    border-radius: 15px; 
-    background: #222; 
-    color: white; 
-    border: none; 
-    margin-top: 10px; 
-    font-weight: bold;
-    cursor: pointer;
-}
-
-/* АНИМАЦИЯ ВЫЛЕТАЮЩИХ ЦИФР (+1) */
+/* TAP ANIMATION */
 .tap-pop { 
     position: fixed; 
     color: var(--accent); 
     font-size: 32px; 
     font-weight: 900; 
     pointer-events: none; 
-    z-index: 1000; 
+    z-index: 3000; 
     text-shadow: 0 0 10px var(--accent); 
     animation: floatUp 0.8s ease-out forwards; 
 }
 
-/* КЛЮЧЕВЫЕ КАДРЫ АНИМАЦИЙ */
 @keyframes floatUp { 
     0% { transform: translateY(0) scale(1); opacity: 1; } 
     100% { transform: translateY(-120px) scale(1.2); opacity: 0; } 
@@ -355,13 +299,4 @@ body {
 @keyframes slideUp { 
     from { transform: translateY(100%); } 
     to { transform: translateY(0); } 
-}
-
-/* СКРОЛЛБАР ДЛЯ МОДАЛОК */
-.modal-content::-webkit-scrollbar {
-    width: 4px;
-}
-.modal-content::-webkit-scrollbar-thumb {
-    background: var(--border);
-    border-radius: 10px;
 }
