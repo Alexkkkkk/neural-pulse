@@ -11,8 +11,17 @@
 <body>
 
     <div id="loading-screen">
-        <div class="loader-container">
-            <div class="loader-ring"></div>
+        <div class="loader-circle-container">
+            <svg class="progress-ring" width="180" height="180">
+                <circle id="ring-circle" stroke="url(#ringGrad)" stroke-width="4" fill="transparent" r="80" cx="90" cy="90" 
+                    stroke-dasharray="502.6" stroke-dashoffset="502.6" stroke-linecap="round"/>
+                <defs>
+                    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#00ffff" />
+                        <stop offset="100%" stop-color="#ae00ff" />
+                    </linearGradient>
+                </defs>
+            </svg>
             <img src="images/logo.png" alt="Neural AI" class="loader-logo">
         </div>
         <div class="loading-text">ACCESS GRANTED</div>
@@ -23,7 +32,6 @@
     </div>
 
     <div id="app">
-        
         <div class="header-container">
             <div class="header-user">
                 <div class="avatar-neomorph">
@@ -77,7 +85,6 @@
             <div class="nav-btn-capsule" onclick="ui.openM('tasks')">📋 TASKS</div>
             <div class="nav-btn-capsule" onclick="ui.openM('top')">🏆 TOP</div>
         </div>
-
     </div>
 
     <div id="m-wallet" class="modal"><div class="modal-content"></div></div>
@@ -88,11 +95,39 @@
     <div id="m-tasks" class="modal"><div class="modal-content"></div></div>
     <div id="m-top" class="modal"><div class="modal-content"></div></div>
 
-    <script>
-        // Твои функции ui, logic и загрузчик (вставь свой код сюда или подключи как файлы)
-    </script>
     <script src="ui.js"></script>
     <script src="logic.js"></script>
-    <script src="loading.js"></script>
+    <script>
+        // ЛОГИКА ЗАГРУЗКИ
+        document.addEventListener('DOMContentLoaded', () => {
+            let progress = 0;
+            const pct = document.getElementById('load-pct');
+            const bar = document.getElementById('load-bar');
+            const ring = document.getElementById('ring-circle');
+            const circumference = 2 * Math.PI * 80;
+
+            const interval = setInterval(() => {
+                progress += Math.random() * 5;
+                if (progress > 100) progress = 100;
+
+                pct.innerText = `${Math.floor(progress)}%`;
+                bar.style.width = `${progress}%`;
+                
+                const offset = circumference - (progress / 100) * circumference;
+                ring.style.strokeDashoffset = offset;
+
+                if (progress === 100) {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        document.getElementById('loading-screen').style.opacity = '0';
+                        document.getElementById('app').style.display = 'flex';
+                        setTimeout(() => {
+                            document.getElementById('loading-screen').remove();
+                        }, 500);
+                    }, 500);
+                }
+            }, 100);
+        });
+    </script>
 </body>
 </html>
