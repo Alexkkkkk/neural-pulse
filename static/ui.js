@@ -2,11 +2,7 @@ const ui = {
     init() {
         const target = document.getElementById('tap-target');
         if (target) {
-            // Используем onclick для стабильности на всех устройствах
-            target.onclick = (e) => {
-                e.preventDefault();
-                logic.tap();
-            };
+            target.onclick = (e) => logic.tap();
         }
         this.update();
     },
@@ -35,23 +31,18 @@ const ui = {
                 <div class="modal-header">TON WALLET</div>
                 <div style="display:flex; flex-direction:column; align-items:center; padding:20px; gap:15px;">
                     <div style="font-size:40px;">💎</div>
-                    <p style="text-align:center; font-size:14px; opacity:0.8;">Подключите кошелек для выплат.</p>
+                    <p style="text-align:center; font-size:14px; opacity:0.8;">Подключите кошелек для получения бонусов.</p>
                     <div id="ton-connect-btn"></div>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
         } else {
-            content = `
-                <div class="modal-header">${id.toUpperCase()}</div>
-                <p style="text-align:center; padding:40px; opacity:0.5;">Coming Soon...</p>
-                <button class="back-btn" onclick="ui.closeM()">BACK</button>
-            `;
+            content = `<div class="modal-header">${id.toUpperCase()}</div><p style="text-align:center; padding:30px; opacity:0.5;">Coming Soon...</p><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
         }
 
         m.querySelector('.modal-content').innerHTML = content;
         m.classList.add('active');
 
-        // Переподключаем кнопку, если открыли Wallet
         if (id === 'wallet' && logic.tonConnectUI) {
             logic.tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
         }
@@ -65,15 +56,9 @@ const ui = {
         const n = document.createElement('div');
         n.className = 'tap-pop';
         n.innerText = `+${logic.user.click_lvl}`;
-        
-        // Позиционирование всплывающего числа
-        const x = e?.clientX || window.innerWidth / 2;
-        const y = e?.clientY || window.innerHeight / 2;
-        
-        n.style.left = `${x}px`;
-        n.style.top = `${y}px`;
+        n.style.left = `${e.clientX || window.innerWidth/2}px`;
+        n.style.top = `${e.clientY || window.innerHeight/2}px`;
         document.body.appendChild(n);
-        
         setTimeout(() => n.remove(), 800);
     }
 };
