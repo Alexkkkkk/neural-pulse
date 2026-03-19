@@ -33,7 +33,7 @@
             <div class="header-user">
                 <div class="avatar-neomorph"><img src="images/logo.png"></div>
                 <div class="u-info">
-                    <b id="u-name">Loading...</b>
+                    <b id="u-name">Agent</b>
                     <small>v4.0.0 Neural Mining</small>
                 </div>
             </div>
@@ -41,7 +41,7 @@
         </div>
 
         <div class="stats-row-neon">
-            <div class="stat-card-neon"><small>EARN PER TAP</small><b id="tap-val">+1</b></div>
+            <div class="stat-card-neon"><small>EARN PER TAP</small><b id="tap-val">+7</b></div>
             <div class="stat-card-neon"><small>PROFIT PER HOUR</small><b id="profit-val">0</b></div>
         </div>
 
@@ -60,7 +60,7 @@
         </div>
 
         <div class="energy-container-cyber">
-            <div class="en-txt-cyber"><span>ENERGY</span><span id="eng-val">0/0</span></div>
+            <div class="en-txt-cyber"><span>ENERGY</span><span id="eng-val">1000/1000</span></div>
             <div class="progress-bar-wrap"><div id="eng-fill" class="progress-bar-fill"></div></div>
         </div>
 
@@ -75,7 +75,7 @@
     <div id="modal-container" class="modal" onclick="if(event.target === this) ui.closeM()">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div id="modal-body"></div>
-            <button class="nav-btn-capsule" style="width:100%; margin-top:20px; color:#fff;" onclick="ui.closeM()">CLOSE</button>
+            <button class="nav-btn-capsule" style="width:100%; margin-top:20px; color:#fff;" onclick="ui.closeM()">BACK</button>
         </div>
     </div>
 
@@ -86,10 +86,7 @@
         });
 
         const ui = {
-            init() {
-                this.update();
-                this.finishLoading();
-            },
+            init() { this.update(); this.finishLoading(); },
             update() {
                 if (!logic.user) return;
                 document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
@@ -97,23 +94,47 @@
                 document.getElementById('eng-fill').style.width = `${(logic.user.energy / logic.user.max_energy) * 100}%`;
                 document.getElementById('u-lvl').innerText = `LVL ${logic.user.lvl}`;
                 document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
-                document.getElementById('profit-val').innerText = logic.user.profit_hr.toLocaleString();
+                document.getElementById('profit-val').innerText = Math.floor(logic.user.profit_hr).toLocaleString();
             },
             openM(type) {
                 const body = document.getElementById('modal-body');
                 const container = document.getElementById('modal-container');
-                let html = `<h2>${type.toUpperCase()}</h2>`;
+                let h = `<h2>${type.toUpperCase()}</h2>`;
                 
-                if (type === 'wallet') {
-                    html += `<div id="ton-btn" style="margin:20px 0;"></div>`;
-                    setTimeout(() => tonConnectUI.uiOptions = { buttonRootId: 'ton-btn' }, 50);
-                } else if (type === 'boost') {
-                    html += `<div class="stat-card-neon" onclick="alert('Upgrade logic here')"><b>🚀 Multitap</b><br><small>Level up your tap power</small></div>`;
-                } else {
-                    html += `<p style="opacity:0.5;">Coming soon...</p>`;
+                switch(type) {
+                    case 'wallet':
+                        h += `<div id="ton-btn" style="margin:20px 0;"></div><p>Connect your TON wallet</p>`;
+                        setTimeout(() => tonConnectUI.uiOptions = { buttonRootId: 'ton-btn' }, 50);
+                        break;
+                    case 'boost':
+                        h += `
+                            <div class="stat-card-neon" style="margin-bottom:10px;"><b>👆 MULTITAP</b><br><small>Cost: 7 000 | LVL 7</small></div>
+                            <div class="stat-card-neon"><b>🔋 ENERGY LIMIT</b><br><small>Cost: 329 500 | LVL 659</small></div>`;
+                        break;
+                    case 'mine':
+                        h += `<p>Passive income streams</p>
+                            <div class="stat-card-neon" style="margin-bottom:10px;"><b>🖥️ GPU FARM</b><br><small>+500/hr | Cost: 50k</small></div>`;
+                        break;
+                    case 'tasks':
+                        h += `<div class="stat-card-neon" style="margin-bottom:10px;"><b>📱 Subscribe Channel</b><br><small>+50 000 🪙</small></div>
+                              <div class="stat-card-neon"><b>🐦 Follow X</b><br><small>+20 000 🪙</small></div>`;
+                        break;
+                    case 'top':
+                        h += `<div style="text-align:left;">
+                            <p>1. 👑 Whale_One - 1.2B</p>
+                            <p>2. 🤖 Cyber_User - 890M</p>
+                            <p>3. ⚡ Pulse_King - 500M</p>
+                        </div>`;
+                        break;
+                    case 'squad':
+                        h += `<p>Invite friends and get 10% of their earnings!</p><button class="side-btn-cyber" style="width:100%">INVITE</button>`;
+                        break;
+                    case 'bonus':
+                        h += `<p>Daily reward available!</p><button class="side-btn-cyber" style="width:100%">CLAIM 5000</button>`;
+                        break;
                 }
                 
-                body.innerHTML = html;
+                body.innerHTML = h;
                 container.classList.add('active');
             },
             closeM() { document.getElementById('modal-container').classList.remove('active'); },
@@ -121,7 +142,7 @@
                 let p = 0;
                 const ring = document.getElementById('ring-circle');
                 const iv = setInterval(() => {
-                    p += 10;
+                    p += 5;
                     document.getElementById('load-pct').innerText = `${p}%`;
                     document.getElementById('load-bar').style.width = `${p}%`;
                     ring.style.strokeDashoffset = 502.6 - (p / 100) * 502.6;
@@ -133,11 +154,10 @@
                             setTimeout(() => document.getElementById('loading-screen').remove(), 500);
                         }, 400);
                     }
-                }, 50);
+                }, 40);
             }
         };
 
-        // Запуск системы
         window.onload = () => logic.init();
     </script>
 </body>
