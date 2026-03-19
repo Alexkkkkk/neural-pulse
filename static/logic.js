@@ -33,7 +33,6 @@ const logic = {
         this.setupListeners();
         this.startPassiveIncome();
         
-        // Гарантируем запуск интерфейса после загрузки данных
         if (window.ui && typeof ui.init === 'function') {
             ui.init();
         }
@@ -42,8 +41,10 @@ const logic = {
     setupListeners() {
         const target = document.getElementById('tap-target');
         if (target) {
-            // Исправлено: добавляем пассивный слушатель для лучшей производительности
+            // touch-action: none предотвращает зум и скролл при тапе
+            target.style.touchAction = 'none';
             target.addEventListener('pointerdown', (e) => {
+                e.preventDefault(); 
                 this.tap(e);
             }, { passive: false });
         }
@@ -139,7 +140,6 @@ const logic = {
     }
 };
 
-// Запуск только после того, как все скрипты загружены
 window.addEventListener('load', () => {
     logic.init();
 });
