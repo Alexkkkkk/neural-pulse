@@ -36,30 +36,28 @@ const initDB = async () => {
 initDB();
 
 app.get('/api/user/:id', async (req, res) => {
-    const userId = req.params.id;
+    const userId = String(req.params.id);
     try {
         let result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
         if (result.rows.length === 0) {
             await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2)', [userId, 'Agent']);
             result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
         }
-        let user = result.rows[0];
-        // Логика офлайн дохода остается прежней...
-        res.json(user);
+        res.json(result.rows[0]);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// НОВЫЙ ЭНДПОИНТ ДЛЯ КОШЕЛЬКА
 app.post('/api/wallet', async (req, res) => {
     const { userId, address } = req.body;
     try {
-        await pool.query('UPDATE users SET wallet = $2 WHERE user_id = $1', [userId, address]);
+        await pool.query('UPDATE users SET wallet = $2 WHERE user_id = $1', [String(userId), address]);
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/save', async (req, res) => {
     const d = req.body;
+    if (!d.userId) return res.status(400).json({ error: "No userId" });
     try {
         await pool.query(`
             UPDATE users SET 
@@ -67,7 +65,7 @@ app.post('/api/save', async (req, res) => {
                 click_lvl = $5, profit_hr = $6, lvl = $7, 
                 likes = $8, is_liked = $9, last_seen = CURRENT_TIMESTAMP 
             WHERE user_id = $1`, 
-            [d.userId, d.balance, d.energy, d.max_energy, d.click_lvl, d.profit_hr, d.lvl, d.likes || 0, d.is_liked || false]
+            [String(d.userId), d.balance, d.energy, d.max_energy, d.click_lvl, d.profit_hr, d.lvl, d.likes || 0, d.is_liked || false]
         );
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
