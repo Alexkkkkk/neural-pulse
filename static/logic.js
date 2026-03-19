@@ -1,3 +1,4 @@
+
 const logic = {
     user: null,
 
@@ -10,25 +11,19 @@ const logic = {
             tg.enableClosingConfirmation();
         }
 
+        // Берем ID и Имя из Телеграма
         const userId = tg?.initDataUnsafe?.user?.id || "12345";
         const firstName = tg?.initDataUnsafe?.user?.first_name || "Agent";
 
         try {
-            // Передаем username в query params
+            // Исправлено: передаем username для базы данных
             const res = await fetch(`/api/user/${userId}?username=${encodeURIComponent(firstName)}`);
             
-            // Если сервер вернул ошибку 500 или 404
-            if (!res.ok) {
-                throw new Error(`Server returned ${res.status}`);
-            }
-
+            if (!res.ok) throw new Error(`Server status: ${res.status}`);
+            
             const data = await res.json();
-            
-            // Если БД вернула ошибку, а не данные
-            if (data.error) {
-                throw new Error(`DB Error: ${data.error}`);
-            }
-            
+            if (data.error) throw new Error(`DB Error: ${data.error}`);
+
             this.user = {
                 user_id: String(userId),
                 username: data.username || firstName,
@@ -46,15 +41,14 @@ const logic = {
 
             this.startLoops();
             ui.init(); 
-            return true;
+            return true; // Разрешаем убрать экран загрузки
         } catch (e) {
             console.error("Init Error", e);
-            
-            // ВЫВОДИМ ОШИБКУ НА ЭКРАН (чтобы понять проблему с телефона)
-            const errorText = document.querySelector('.loading-text');
-            if (errorText) {
-                errorText.innerText = `CRASH: ${e.message}`;
-                errorText.style.color = "#ff4444";
+            // Если ошибка — пишем её на экране загрузки красным
+            const loadTxt = document.querySelector('.loading-text');
+            if (loadTxt) {
+                loadTxt.innerText = `ERROR: ${e.message}`;
+                loadTxt.style.color = "#ff4444";
             }
             return false;
         }
@@ -80,34 +74,6 @@ const logic = {
         setTimeout(() => p.remove(), 800);
     },
 
-    upgrade(type) {
-        if (!this.user) return;
-        let cost = type === 'tap' ? this.user.click_lvl * 1000 : (this.user.max_energy / 100) * 500;
-        if (this.user.balance >= cost) {
-            this.user.balance -= cost;
-            if (type === 'tap') this.user.click_lvl++;
-            else { this.user.max_energy += 500; this.user.lvl++; }
-            ui.update();
-            ui.openM('boost'); 
-            this.save();
-        } else { alert("Not enough balance!"); }
-    },
-
-    startLoops() {
-        setInterval(() => {
-            if (!this.user) return;
-            if (this.user.energy < this.user.max_energy) {
-                this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
-            }
-            if (this.user.profit_hr > 0) {
-                this.user.balance += (this.user.profit_hr / 3600);
-            }
-            ui.update();
-        }, 1000);
-
-        setInterval(() => this.save(), 10000);
-    },
-
     async save() {
         if (!this.user) return;
         fetch('/api/save', {
@@ -123,5 +89,31 @@ const logic = {
                 lvl: this.user.lvl
             })
         });
+    },
+
+    upgrade(type) {
+        if (!this.user) return;
+        let cost = type === 'tap' ? this.user.click_lvl * 1000 : (this.user.max_energy / 100) * 500;
+        if (this.user.balance >= cost) {
+            this.user.balance -= cost;
+            if (type === 'tap') this.user.click_lvl++;
+            else { this.user.max_energy += 500; this.user.lvl++; }
+            ui.update();
+            ui.openM('boost');
+            this.save();
+        } else { alert("Not enough balance!"); }
+    },
+
+    startLoops() {
+        setInterval(() => {
+            if (!this.user) return;
+            if (this.user.energy < this.user.max_energy) this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
+            if (this.user.profit_hr > 0) this.user.balance += (this.user.profit_hr / 3600);
+            ui.update();
+        }, 1000);
+        setInterval(() => this.save(), 10000);
     }
 };
+
+// Запуск инициализации при загрузке окна
+window.onload = () => logic.init();
