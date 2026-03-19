@@ -1,6 +1,6 @@
 const ui = {
     init() {
-        console.log("🎨 UI: Ready");
+        console.log("🎨 UI: Initializing...");
         const target = document.getElementById('tap-target');
         
         if (target) {
@@ -47,41 +47,36 @@ const ui = {
         
         m.classList.add('active');
         const container = m.querySelector('.modal-content');
-        const u = logic.user;
 
         if (id === 'wallet') {
-            const isConnected = logic.tonConnectUI?.connected;
             container.innerHTML = `
                 <div class="modal-header">TON WALLET</div>
                 <div style="padding:20px; text-align:center;">
-                    <div id="ton-connect-btn" style="margin-bottom:15px; display:flex; justify-content:center;"></div>
-                    <p style="color:#aaa; font-size:13px;">
-                        ${isConnected ? "Status: Connected" : "Connect your wallet for future airdrops"}
+                    <div id="ton-connect-btn" style="display:flex; justify-content:center; min-height:40px;"></div>
+                    <p style="color:#aaa; font-size:13px; margin-top:15px;">
+                        Подключите ваш TON кошелек для будущих аирдропов.
                     </p>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
             
-            // Важно: небольшая задержка, чтобы DOM успел обновиться
+            // Задержка важна для корректной инициализации кнопки кошелька
             setTimeout(() => {
                 if (logic.tonConnectUI) {
                     logic.tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
-                } else {
-                    console.error("TON Connect UI not initialized");
                 }
             }, 100);
         } 
         else if (id === 'top') {
             container.innerHTML = `
                 <div class="modal-header">LEADERBOARD (100)</div>
-                <div id="top-list-container" style="height: 300px; overflow-y: auto; padding: 10px;">
-                    <p style="text-align:center; opacity:0.5;">Loading...</p>
+                <div id="top-list-container" style="height: 350px; overflow-y: auto; padding: 10px;">
+                    <p style="text-align:center; opacity:0.5;">Loading records...</p>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
             this.loadTop();
         }
-        // ... остальные модалки (boost, mine, squad) остаются прежними
     },
 
     async loadTop() {
@@ -90,25 +85,28 @@ const ui = {
 
         try {
             const res = await fetch('/api/top');
-            if (!res.ok) throw new Error(`Server error: ${res.status}`);
+            if (!res.ok) throw new Error(`Status: ${res.status}`);
             const topData = await res.json();
 
             if (!topData || topData.length === 0) {
-                topContainer.innerHTML = '<p style="text-align:center; padding:20px;">No data yet</p>';
+                topContainer.innerHTML = '<p style="text-align:center; padding:20px;">No players found</p>';
                 return;
             }
 
             topContainer.innerHTML = topData.map((player, index) => `
-                <div class="top-item ${String(player.user_id) === String(logic.user.user_id) ? 'is-me' : ''}" 
-                     style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #222;">
-                    <span>${index + 1}. ${player.name || 'Anonymous'}</span>
-                    <span style="font-weight:bold;">${Math.floor(player.balance).toLocaleString()}</span>
+                <div class="top-item ${String(player.user_id) === String(logic.user?.user_id) ? 'is-me' : ''}" 
+                     style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid #222;">
+                    <div style="display:flex; align-items:center;">
+                        <span style="width:25px; opacity:0.6;">${index + 1}</span>
+                        <img src="${player.photo_url || 'logo.png'}" style="width:30px; height:30px; border-radius:50%; margin: 0 10px;">
+                        <span>${player.name || 'Agent'}</span>
+                    </div>
+                    <span style="font-weight:bold; color:#00f2ff;">${Math.floor(player.balance).toLocaleString()}</span>
                 </div>
             `).join('');
 
         } catch (e) {
-            console.error("Leaderboard Error:", e);
-            topContainer.innerHTML = `<p style="color:#ff4444; text-align:center; padding:20px;">Failed to load leaderboard<br><small>${e.message}</small></p>`;
+            topContainer.innerHTML = `<p style="color:#ff4444; text-align:center; padding:20px;">Error: ${e.message}</p>`;
         }
     },
 
