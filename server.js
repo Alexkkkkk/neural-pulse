@@ -13,12 +13,9 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-/**
- * Инициализация БД: Создание таблицы и добавление недостающих колонок
- */
+// Инициализация БД с поддержкой рефералов
 const initDB = async () => {
     try {
-        // 1. Создаем таблицу, если ее вообще нет
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY, 
@@ -32,91 +29,77 @@ const initDB = async () => {
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
 
-        // 2. Добавляем колонки, которых может не быть в старой структуре
-        // Это исправит ошибку "column photo_url does not exist"
         await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT DEFAULT 'logo.png'");
         await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet TEXT");
-        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS likes INTEGER DEFAULT 0");
-        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_liked BOOLEAN DEFAULT FALSE");
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS referrer_id TEXT");
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS ref_count INTEGER DEFAULT 0");
 
-        console.log("✅ [DB] Database initialized and structure updated");
-    } catch (e) { 
-        console.error("❌ [DB ERROR]", e.message); 
-    }
+        console.log("✅ [DB] Structure updated with Referral system");
+    } catch (e) { console.error("❌ [DB ERROR]", e.message); }
 };
 initDB();
 
-// --- API: Получение данных пользователя ---
+// API: Получение данных игрока
 app.get('/api/user/:id', async (req, res) => {
     const userId = String(req.params.id);
     try {
         let result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
-        
         if (result.rows.length === 0) {
-            // При создании нового юзера сразу указываем photo_url
-            await pool.query(
-                'INSERT INTO users (user_id, username, balance, energy, max_energy, photo_url) VALUES ($1, $2, $3, $4, $5, $6)', 
-                [userId, 'Agent', 0, 1000, 1000, 'logo.png']
-            );
+            await pool.query('INSERT INTO users (user_id, username) VALUES ($1, $2)', [userId, 'Agent']);
             result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
         }
         res.json(result.rows[0]);
-    } catch (e) { 
-        console.error("API User Error:", e.message);
-        res.status(500).json({ error: "Database error" }); 
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// --- API: ТОП 100 Игроков ---
+// API: Сохранение кошелька
+app.post('/api/wallet', async (req, res) => {
+    const { userId, address } = req.body;
+    try {
+        await pool.query('UPDATE users SET wallet = $2 WHERE user_id = $1', [String(userId), address]);
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// API: Лидерборд
 app.get('/api/top', async (req, res) => {
     try {
-        // Теперь photo_url точно существует в таблице
-        const result = await pool.query(`
-            SELECT user_id, username as name, photo_url, balance 
-            FROM users 
-            ORDER BY balance DESC 
-            LIMIT 100
-        `);
+        const result = await pool.query('SELECT user_id, username as name, photo_url, balance FROM users ORDER BY balance DESC LIMIT 100');
         res.json(result.rows || []);
-    } catch (e) { 
-        console.error("API Top Error:", e.message);
-        res.status(500).json({ error: "Leaderboard failed" }); 
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// --- API: Сохранение прогресса ---
+// API: Сохранение прогресса
 app.post('/api/save', async (req, res) => {
     const d = req.body;
-    if (!d.userId) return res.status(400).json({ error: "No userId" });
     try {
         await pool.query(`
-            UPDATE users SET 
-                balance = $2, energy = $3, max_energy = $4, 
-                click_lvl = $5, profit_hr = $6, lvl = $7, 
-                username = $8, photo_url = $9,
-                last_seen = CURRENT_TIMESTAMP 
+            UPDATE users SET balance = $2, energy = $3, max_energy = $4, 
+            click_lvl = $5, profit_hr = $6, lvl = $7, username = $8, photo_url = $9 
             WHERE user_id = $1`, 
-            [
-                String(d.userId), d.balance, d.energy, d.max_energy, 
-                d.click_lvl, d.profit_hr, d.lvl, 
-                d.username || 'Agent', d.photo_url || 'logo.png'
-            ]
+            [String(d.userId), d.balance, d.energy, d.max_energy, d.click_lvl, d.profit_hr, d.lvl, d.username, d.photo_url]
         );
         res.json({ ok: true });
-    } catch (e) { 
-        console.error("Save Error:", e.message);
-        res.status(500).json({ error: "Save failed" }); 
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// --- Telegram Bot ---
-bot.start((ctx) => {
-    ctx.replyWithHTML(`<b>Neural Pulse v4.0.0</b>\nДобро пожаловать в майнинг будущего!`, 
+// Бот с реферальной ссылкой
+bot.start(async (ctx) => {
+    const startPayload = ctx.startPayload; // ID пригласившего
+    const userId = String(ctx.from.id);
+
+    if (startPayload && startPayload !== userId) {
+        const check = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
+        if (check.rows.length === 0) {
+            await pool.query('INSERT INTO users (user_id, username, referrer_id, balance) VALUES ($1, $2, $3, $4)', 
+                [userId, ctx.from.first_name, startPayload, 5000]); // Даем 5000 за вход по ссылке
+            await pool.query('UPDATE users SET balance = balance + 10000, ref_count = ref_count + 1 WHERE user_id = $1', [startPayload]);
+        }
+    }
+
+    ctx.replyWithHTML(`<b>Neural Pulse</b>\nТвоя ссылка: <code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`, 
         Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", "https://neural-pulse.bothost.ru")]]));
 });
 
-// Запуск сервера
-app.listen(3000, () => {
-    console.log(`🚀 Server running on port 3000`);
-    bot.launch();
-});
+app.listen(3000, () => console.log(`🚀 Server on port 3000`));
+bot.launch();
