@@ -1,17 +1,17 @@
 const ui = {
     init() {
-        console.log("🎨 UI Init...");
+        console.log("🎨 UI: Ready");
         const target = document.getElementById('tap-target');
         
         if (target) {
-            target.replaceWith(target.cloneNode(true));
-            const newTarget = document.getElementById('tap-target');
+            // Очистка старых слушателей через клон
+            const newTarget = target.cloneNode(true);
+            target.replaceWith(newTarget);
 
             const handleTap = (e) => {
                 e.preventDefault();
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                logic.tap({ clientX, clientY });
+                const pos = e.touches ? e.touches[0] : e;
+                logic.tap({ clientX: pos.clientX, clientY: pos.clientY });
             };
 
             newTarget.addEventListener('touchstart', handleTap, { passive: false });
@@ -55,9 +55,6 @@ const ui = {
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
-            if (logic.tonConnectUI) {
-                logic.tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
-            }
         } 
         else if (id === 'mine') {
             const upgrades = [
@@ -77,37 +74,21 @@ const ui = {
                 </div>
             `).join('');
 
-            container.innerHTML = `
-                <div class="modal-header">MINING SHOP</div>
-                <div style="padding:15px; display:flex; flex-direction:column; gap:10px;">
-                    ${listHtml}
-                </div>
-                <button class="back-btn" onclick="ui.closeM()">BACK</button>
-            `;
+            container.innerHTML = `<div class="modal-header">MINING</div>${listHtml}<button class="back-btn" onclick="ui.closeM()">BACK</button>`;
         }
         else if (id === 'boost') {
-            const nextTapPrice = logic.user.click_lvl * 1000;
+            const nextPrice = logic.user.click_lvl * 1000;
             container.innerHTML = `
                 <div class="modal-header">BOOSTERS</div>
-                <div style="padding:15px;">
-                    <div class="upgrade-card" onclick="ui.buyUpg('tap', ${nextTapPrice}, 1, 'boost')">
-                        <div style="font-size:24px;">🚀</div>
-                        <div style="flex-grow:1; margin-left:15px;">
-                            <div style="font-weight:bold;">Multitap</div>
-                            <small>Увеличить доход за клик</small>
-                        </div>
-                        <div class="price-tag">💰 ${nextTapPrice}</div>
-                    </div>
+                <div class="upgrade-card" onclick="ui.buyUpg('tap', ${nextPrice}, 1, 'boost')">
+                    <div style="font-size:24px;">🚀</div>
+                    <div style="flex-grow:1; margin-left:15px;"><b>Multitap</b><br><small>Level Up Click</small></div>
+                    <div class="price-tag">💰 ${nextPrice}</div>
                 </div>
                 <button class="back-btn" onclick="ui.closeM()">BACK</button>
             `;
-        }
-        else {
-            container.innerHTML = `
-                <div class="modal-header">${id.toUpperCase()}</div>
-                <div style="text-align:center; padding:40px; opacity:0.5;">COMING SOON</div>
-                <button class="back-btn" onclick="ui.closeM()">BACK</button>
-            `;
+        } else {
+            container.innerHTML = `<div class="modal-header">${id.toUpperCase()}</div><p style="text-align:center; opacity:0.5;">COMING SOON</p><button class="back-btn" onclick="ui.closeM()">BACK</button>`;
         }
     },
 
@@ -116,14 +97,14 @@ const ui = {
             logic.user.balance -= price;
             if (type === 'mine') logic.user.profit_hr += val;
             if (type === 'boost') logic.user.click_lvl += val;
-            
             this.update();
             logic.save();
-            this.openM(type); // Обновляем окно магазина
+            this.openM(type);
         } else {
-            const btn = event.currentTarget;
-            btn.style.borderColor = "red";
-            setTimeout(() => btn.style.borderColor = "", 300);
+            // Визуальный эффект нехватки денег
+            const card = event.currentTarget;
+            card.style.borderColor = "red";
+            setTimeout(() => card.style.borderColor = "", 300);
         }
     },
 
