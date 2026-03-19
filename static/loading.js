@@ -6,18 +6,17 @@ const loading = {
         const bar = document.getElementById('load-bar');
         const pct = document.getElementById('load-pct');
         
-        // Запускаем загрузку данных
+        // Запуск инициализации логики
         this.startLogic();
 
         const interval = setInterval(() => {
             if (this.progress < 90) {
-                this.progress += Math.random() * 3;
+                this.progress += Math.random() * 5;
             } else if (this.isLogicReady) {
-                this.progress += 2;
+                this.progress += 5;
             }
 
             if (this.progress > 100) this.progress = 100;
-
             if (bar) bar.style.width = this.progress + '%';
             if (pct) pct.innerText = Math.floor(this.progress) + '%';
 
@@ -25,22 +24,20 @@ const loading = {
                 clearInterval(interval);
                 this.finish();
             }
-        }, 50). 
+        }, 100);
     },
 
     async startLogic() {
         if (window.logic) {
-            const success = await logic.init();
-            if (success) {
-                this.isLogicReady = true;
-                console.log("✅ Logic Ready");
-            }
+            const ready = await logic.init();
+            this.isLogicReady = ready;
+        } else {
+            this.isLogicReady = true; // Чтобы не висело, если логика не найдена
         }
     },
 
     finish() {
         if (window.ui) ui.init();
-        
         const ls = document.getElementById('loading-screen');
         const app = document.getElementById('app');
         
