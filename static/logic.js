@@ -1,15 +1,28 @@
 const logic = {
     user: null,
+    tonConnectUI: null,
+
     async init() {
+        // Инициализация TON Connect
+        this.tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
+            buttonRootId: 'ton-connect-btn'
+        });
+
+        // Следим за изменением статуса кошелька
+        this.tonConnectUI.onStatusChange(wallet => {
+            if (wallet) {
+                this.saveWallet(wallet.account.address);
+            }
+        });
+
         const tg = window.Telegram?.WebApp;
         const userId = tg?.initDataUnsafe?.user?.id || "12345";
-        const username = tg?.initDataUnsafe?.user?.username || "Agent";
-
+        
         try {
             const res = await fetch(`/api/user/${userId}`);
             const rawData = await res.json();
             
-            // Превращаем строки из БД в числа, чтобы избежать ошибок сложения
             this.user = {
                 ...rawData,
                 balance: Number(rawData.balance || 0),
@@ -20,64 +33,30 @@ const logic = {
                 lvl: Number(rawData.lvl || 1)
             };
             
-            if (!this.user.username || this.user.username === 'Agent') {
-                this.user.username = username;
-            }
-            
             if (typeof ui !== 'undefined') ui.init();
             this.startLoops();
-        } catch (e) {
-            console.error("❌ Ошибка загрузки:", e);
-        }
+        } catch (e) { console.error("Load Error:", e); }
     },
 
-    async save() {
-        if (!this.user) return;
+    async saveWallet(address) {
+        if (!this.user || this.user.wallet === address) return;
         try {
-            await fetch('/api/save', {
+            await fetch('/api/wallet', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userId: this.user.user_id,
-                    balance: this.user.balance,
-                    energy: this.user.energy,
-                    max_energy: this.user.max_energy,
-                    click_lvl: this.user.click_lvl,
-                    profit_hr: this.user.profit_hr,
-                    lvl: this.user.lvl
-                })
+                body: JSON.stringify({ userId: this.user.user_id, address: address })
             });
-        } catch (e) { console.error("Ошибка сохранения:", e); }
-    },
-
-    // Метод для сохранения адреса кошелька в БД
-    async connectWallet() {
-        const fakeAddress = "EQD4k...zP8n"; // Имитация адреса для примера
-        try {
-            const res = await fetch('/api/wallet', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userId: this.user.user_id,
-                    address: fakeAddress
-                })
-            });
-            const data = await res.json();
-            if (data.ok) {
-                this.user.wallet = fakeAddress;
-                ui.openM('wallet'); // Перерисовать окно
-            }
-        } catch (e) { console.error("Ошибка кошелька:", e); }
+            this.user.wallet = address;
+            console.log("✅ Wallet saved:", address);
+        } catch (e) { console.error("Wallet Save Error:", e); }
     },
 
     tap() {
         if (this.user && this.user.energy >= 1) {
             this.user.balance = Number(this.user.balance) + Number(this.user.click_lvl);
             this.user.energy -= 1;
-            if (typeof ui !== 'undefined') {
-                ui.update();
-                ui.anim(window.event);
-            }
+            ui.update();
+            ui.anim(window.event);
         }
     },
 
@@ -89,8 +68,25 @@ const logic = {
             if (this.user.profit_hr > 0) {
                 this.user.balance = Number(this.user.balance) + (Number(this.user.profit_hr) / 3600);
             }
-            if (typeof ui !== 'undefined') ui.update();
+            ui.update();
         }, 1000);
+    },
+
+    async save() {
+        if (!this.user) return;
+        await fetch('/api/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: this.user.user_id,
+                balance: this.user.balance,
+                energy: this.user.energy,
+                max_energy: this.user.max_energy,
+                click_lvl: this.user.click_lvl,
+                profit_hr: this.user.profit_hr,
+                lvl: this.user.lvl
+            })
+        });
     }
 };
 
