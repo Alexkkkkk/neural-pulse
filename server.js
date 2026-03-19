@@ -13,41 +13,50 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Инициализация БД
+/**
+ * Инициализация БД: Создание таблицы и добавление недостающих колонок
+ */
 const initDB = async () => {
     try {
+        // 1. Создаем таблицу, если ее вообще нет
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY, 
                 username TEXT, 
-                photo_url TEXT DEFAULT 'logo.png',
                 balance NUMERIC DEFAULT 0,  
                 energy INTEGER DEFAULT 1000, 
                 max_energy INTEGER DEFAULT 1000,  
                 click_lvl INTEGER DEFAULT 1, 
                 profit_hr NUMERIC DEFAULT 0,  
                 lvl INTEGER DEFAULT 1,
-                likes INTEGER DEFAULT 0,
-                is_liked BOOLEAN DEFAULT FALSE,
-                wallet TEXT,
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
-        console.log("✅ [DB] Database initialized");
-    } catch (e) { console.error("❌ [DB ERROR]", e.message); }
+
+        // 2. Добавляем колонки, которых может не быть в старой структуре
+        // Это исправит ошибку "column photo_url does not exist"
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT DEFAULT 'logo.png'");
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet TEXT");
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS likes INTEGER DEFAULT 0");
+        await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_liked BOOLEAN DEFAULT FALSE");
+
+        console.log("✅ [DB] Database initialized and structure updated");
+    } catch (e) { 
+        console.error("❌ [DB ERROR]", e.message); 
+    }
 };
 initDB();
 
-// API: Получение данных пользователя
+// --- API: Получение данных пользователя ---
 app.get('/api/user/:id', async (req, res) => {
     const userId = String(req.params.id);
     try {
         let result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
         
         if (result.rows.length === 0) {
-            // Создаем нового пользователя с базовыми параметрами, чтобы избежать ошибок 500
+            // При создании нового юзера сразу указываем photo_url
             await pool.query(
-                'INSERT INTO users (user_id, username, balance, energy, max_energy) VALUES ($1, $2, $3, $4, $5)', 
-                [userId, 'Agent', 0, 1000, 1000]
+                'INSERT INTO users (user_id, username, balance, energy, max_energy, photo_url) VALUES ($1, $2, $3, $4, $5, $6)', 
+                [userId, 'Agent', 0, 1000, 1000, 'logo.png']
             );
             result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
         }
@@ -58,9 +67,10 @@ app.get('/api/user/:id', async (req, res) => {
     }
 });
 
-// API: ТОП 100 Игроков
+// --- API: ТОП 100 Игроков ---
 app.get('/api/top', async (req, res) => {
     try {
+        // Теперь photo_url точно существует в таблице
         const result = await pool.query(`
             SELECT user_id, username as name, photo_url, balance 
             FROM users 
@@ -74,7 +84,7 @@ app.get('/api/top', async (req, res) => {
     }
 });
 
-// API: Сохранение прогресса
+// --- API: Сохранение прогресса ---
 app.post('/api/save', async (req, res) => {
     const d = req.body;
     if (!d.userId) return res.status(400).json({ error: "No userId" });
@@ -99,12 +109,13 @@ app.post('/api/save', async (req, res) => {
     }
 });
 
-// Telegram Bot
+// --- Telegram Bot ---
 bot.start((ctx) => {
     ctx.replyWithHTML(`<b>Neural Pulse v4.0.0</b>\nДобро пожаловать в майнинг будущего!`, 
         Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", "https://neural-pulse.bothost.ru")]]));
 });
 
+// Запуск сервера
 app.listen(3000, () => {
     console.log(`🚀 Server running on port 3000`);
     bot.launch();
