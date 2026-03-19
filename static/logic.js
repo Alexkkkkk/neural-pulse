@@ -1,9 +1,8 @@
 const logic = {
     user: null,
-    tonConnectUI: null,
 
     /**
-     * Инициализация приложения: Telegram WebApp, загрузка данных и TON Connect
+     * Инициализация: Telegram, Загрузка данных, Запуск циклов
      */
     async init() {
         console.log("🚀 Logic: Initializing...");
@@ -12,116 +11,140 @@ const logic = {
         if (tg) {
             tg.ready();
             tg.expand();
-            // Подтверждение закрытия, чтобы не потерять прогресс между сохранениями
             tg.enableClosingConfirmation();
         }
 
-        // 1. Извлекаем данные пользователя из Telegram
         const userId = tg?.initDataUnsafe?.user?.id || "12345";
         const firstName = tg?.initDataUnsafe?.user?.first_name || "Agent";
-        const photoUrl = tg?.initDataUnsafe?.user?.photo_url || "/logo.png";
         
-        // Отображаем имя игрока в главном интерфейсе
         const nameEl = document.getElementById('u-name');
         if (nameEl) nameEl.innerText = firstName;
 
         try {
-            // 2. Загружаем прогресс с сервера
             const res = await fetch(`/api/user/${userId}`);
             if (!res.ok) throw new Error("API Connection Failed");
             const rawData = await res.json();
             
-            // 3. Формируем объект пользователя (маппинг данных из БД)
             this.user = {
                 user_id: String(userId),
                 username: firstName, 
-                photo_url: photoUrl, 
                 balance: Number(rawData.balance || 0),
                 energy: Number(rawData.energy !== undefined ? rawData.energy : 1000),
                 max_energy: Number(rawData.max_energy || 1000),
                 click_lvl: Number(rawData.click_lvl || 1),
                 profit_hr: Number(rawData.profit_hr || 0),
-                lvl: Number(rawData.lvl || 1)
+                lvl: Number(rawData.lvl || 1),
+                wallet: rawData.wallet || null
             };
 
-            // 4. Инициализация TON Connect SDK
-            if (typeof TonConnectUI !== 'undefined') {
-                this.tonConnectUI = new TonConnectUI.TonConnectUI({
-                    manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
-                    buttonRootId: 'ton-connect-btn' // ID контейнера для кнопки в модалке
-                });
-            }
-
-            // 5. Запуск игровых циклов (доход, реген, автосейв)
             this.startLoops();
-            
-            // 6. Инициализация визуальной части (события кликов и т.д.)
             ui.init(); 
             
             return true; 
         } catch (e) {
             console.error("❌ Logic Error:", e);
-            // В случае ошибки сервера всё равно инициализируем UI, чтобы экран не "висел"
             ui.init();
             return false;
         }
     },
 
     /**
-     * Обработка клика (тапа) по центральному объекту
+     * Обработка тапа
      */
     tap(e) {
-        if (!this.user || this.user.energy < 1) return;
+        if (!this.user || this.user.energy < this.user.click_lvl) return;
 
-        // Прибавляем баланс согласно уровню клика
         this.user.balance += this.user.click_lvl;
-        // Тратим 1 единицу энергии
-        this.user.energy -= 1;
+        this.user.energy -= this.user.click_lvl;
         
-        // Динамический расчет уровня (например, +1 за каждые 10к монет)
-        this.user.lvl = Math.floor(this.user.balance / 10000) + 1;
-        
-        // Обновляем цифры на экране и запускаем анимацию "+1"
+        // Обновляем визуальную часть
         ui.update();
-        ui.anim(e);
+        this.anim(e);
     },
 
     /**
-     * Игровые циклы: доход в секунду и регенерация энергии
+     * Анимация вылетающих цифр (+1, +2 и т.д.)
+     */
+    anim(e) {
+        const clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+        const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+
+        const n = document.createElement('div');
+        n.innerText = `+${this.user.click_lvl}`;
+        n.className = 'tap-anim'; // Убедись, что этот класс есть в style.css
+        n.style.left = clientX + 'px';
+        n.style.top = clientY + 'px';
+        document.body.appendChild(n);
+
+        setTimeout(() => n.remove(), 800);
+    },
+
+    /**
+     * Система апгрейдов (вызывается из модалки BOOST)
+     */
+    upgrade(type) {
+        if (!this.user) return;
+
+        if (type === 'tap') {
+            const cost = this.user.click_lvl * 1000;
+            if (this.user.balance >= cost) {
+                this.user.balance -= cost;
+                this.user.click_lvl += 1;
+                ui.update();
+                ui.openM('boost'); // Обновляем окно, чтобы цена изменилась
+                console.log("🔼 Tap Upgraded");
+            } else {
+                alert("Not enough coins!");
+            }
+        } 
+        else if (type === 'energy') {
+            const cost = this.user.lvl * 500;
+            if (this.user.balance >= cost) {
+                this.user.balance -= cost;
+                this.user.max_energy += 500;
+                this.user.lvl += 1; // Повышаем уровень за прокачку энергии
+                ui.update();
+                ui.openM('boost');
+                console.log("🔼 Energy Upgraded");
+            } else {
+                alert("Not enough coins!");
+            }
+        }
+    },
+
+    /**
+     * Игровые циклы
      */
     startLoops() {
-        // Цикл обновления раз в секунду
+        // Доход и реген каждую секунду
         setInterval(() => {
             if (!this.user) return;
             
-            // 1. Регенерация энергии (+1 в сек до максимума)
+            // Реген энергии (+2 в сек)
             if (this.user.energy < this.user.max_energy) {
-                this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
+                this.user.energy = Math.min(this.user.max_energy, this.user.energy + 2);
             }
             
-            // 2. Начисление пассивного дохода (делим часовой профит на 3600 сек)
+            // Пассивный доход
             if (this.user.profit_hr > 0) {
                 this.user.balance += (this.user.profit_hr / 3600);
             }
             
-            // Обновляем интерфейс
             ui.update();
         }, 1000);
 
-        // Автоматическое сохранение в БД каждые 10 секунд
+        // Сохранение раз в 10 секунд
         setInterval(() => this.save(), 10000);
     },
 
     /**
-     * Синхронизация прогресса игрока с сервером
+     * Сохранение на сервер
      */
     async save() {
         if (!this.user) return;
         try {
             const payload = {
                 userId: this.user.user_id,
-                username: this.user.username,
-                photo_url: this.user.photo_url,
                 balance: this.user.balance,
                 energy: Math.floor(this.user.energy),
                 max_energy: this.user.max_energy,
@@ -130,17 +153,17 @@ const logic = {
                 lvl: this.user.lvl
             };
 
-            const res = await fetch('/api/save', {
+            await fetch('/api/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            
-            if (res.ok) {
-                console.log("💾 Progress synced with server");
-            }
+            console.log("💾 Progress saved");
         } catch (e) { 
-            console.warn("📡 Sync lost: data stored locally for now"); 
+            console.warn("📡 Sync failed"); 
         }
     }
 };
+
+// Запуск при загрузке страницы
+window.onload = () => logic.init();
