@@ -8,15 +8,12 @@ const logic = {
             tg.ready();
             tg.expand();
             tg.enableClosingConfirmation();
-            // Устанавливаем цвет темы из ТГ (опционально)
-            document.documentElement.style.setProperty('--tg-theme-bg-color', tg.backgroundColor);
         }
 
         const userId = tg?.initDataUnsafe?.user?.id || "12345";
         const firstName = tg?.initDataUnsafe?.user?.first_name || "Agent";
 
         try {
-            // Загружаем данные игрока
             const res = await fetch(`/api/user/${userId}?username=${encodeURIComponent(firstName)}`);
             if (!res.ok) throw new Error(`Server status: ${res.status}`);
             
@@ -35,16 +32,22 @@ const logic = {
                 wallet: data.wallet || null
             };
 
-            // Обновляем имя в интерфейсе
             const nameEl = document.getElementById('u-name');
             if (nameEl) nameEl.innerText = this.user.username;
 
+            // Инициализируем интерфейс
+            ui.init();
             this.startLoops();
-            ui.init(); 
-            
-            // Сообщаем загрузчику, что всё готово
-            if (window.loadingControl) window.loadingControl.finish();
-            
+
+            // ВАЖНО: Показываем приложение и скрываем загрузку
+            document.getElementById('app').style.display = 'block';
+            if (document.getElementById('loading-screen')) {
+                document.getElementById('loading-screen').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('loading-screen').style.display = 'none';
+                }, 500);
+            }
+
             return true;
         } catch (e) {
             console.error("Init Error", e);
@@ -59,91 +62,68 @@ const logic = {
 
     tap(e) {
         if (!this.user || this.user.energy < 1) return;
-        
         this.user.balance += this.user.click_lvl;
         this.user.energy -= 1;
-        
         ui.update();
         this.anim(e);
-        
-        // Вибрация (Haptic Feedback)
-        window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+        if (window.Telegram?.WebApp?.HapticFeedback) {
+            window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
+        }
     },
 
     anim(e) {
         const x = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
         const y = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
-        
         const p = document.createElement('div');
         p.className = 'tap-pop';
         p.innerText = `+${this.user.click_lvl}`;
         p.style.left = `${x - 20}px`;
         p.style.top = `${y - 40}px`;
-        
         document.body.appendChild(p);
         setTimeout(() => p.remove(), 800);
     },
 
     async save() {
         if (!this.user) return;
-        try {
-            await fetch('/api/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userId: this.user.user_id,
-                    balance: this.user.balance,
-                    energy: Math.floor(this.user.energy),
-                    max_energy: this.user.max_energy,
-                    click_lvl: this.user.click_lvl,
-                    profit_hr: this.user.profit_hr,
-                    lvl: this.user.lvl
-                })
-            });
-        } catch (err) {
-            console.warn("Save failed:", err);
-        }
+        fetch('/api/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: this.user.user_id,
+                balance: this.user.balance,
+                energy: Math.floor(this.user.energy),
+                max_energy: this.user.max_energy,
+                click_lvl: this.user.click_lvl,
+                profit_hr: this.user.profit_hr,
+                lvl: this.user.lvl
+            })
+        });
     },
 
     upgrade(type) {
         if (!this.user) return;
-        let cost = type === 'tap' ? this.user.click_lvl * 1000 : (this.user.max_energy / 100) * 500;
-        
+        let cost = type === 'tap' ? this.user.click_lvl * 1000 : this.user.lvl * 500;
         if (this.user.balance >= cost) {
             this.user.balance -= cost;
-            if (type === 'tap') {
-                this.user.click_lvl++;
-            } else {
-                this.user.max_energy += 500;
-                this.user.lvl++;
-            }
+            if (type === 'tap') this.user.click_lvl++;
+            else { this.user.max_energy += 500; this.user.lvl++; }
             ui.update();
+            ui.openM('boost'); // Обновить текст в модалке
             this.save();
-            window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
         } else {
             alert("Not enough balance!");
         }
     },
 
     startLoops() {
-        // Цикл восстановления энергии и пассивного дохода
         setInterval(() => {
             if (!this.user) return;
-            
-            // Реген энергии (+1 в секунду)
-            if (this.user.energy < this.user.max_energy) {
-                this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
-            }
-            
-            // Пассивный доход
-            if (this.user.profit_hr > 0) {
-                this.user.balance += (this.user.profit_hr / 3600);
-            }
-            
+            if (this.user.energy < this.user.max_energy) this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
+            if (this.user.profit_hr > 0) this.user.balance += (this.user.profit_hr / 3600);
             ui.update();
         }, 1000);
-
-        // Автосохранение каждые 10 секунд
         setInterval(() => this.save(), 10000);
     }
 };
+
+window.onload = () => logic.init();
