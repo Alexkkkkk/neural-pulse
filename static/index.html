@@ -69,7 +69,7 @@
         <div class="bottom-nav">
             <button class="nav-btn" onclick="ui.openM('boost')"><span>🚀</span> BOOST</button>
             <button class="nav-btn" onclick="ui.openM('mine')"><span>⛏️</span> MINE</button>
-            <button class="nav-btn" onclick="ui.openM('tasks')"><span>📋</span> TASKS</button>
+            <button class="nav-btn" onclick="class="nav-btn" onclick="ui.openM('tasks')"><span>📋</span> TASKS</button>
             <button class="nav-btn" onclick="ui.openM('top')"><span>🏆</span> TOP</button>
         </div>
     </div>
@@ -83,10 +83,9 @@
     <div id="m-top" class="modal"><div class="modal-content"></div></div>
 
     <script>
-        // Инициализируем TON Connect UI сразу
         window.tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
             manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
-            buttonRootId: 'ton-connect-btn' // Это будет переопределено в ui.js
+            buttonRootId: 'ton-connect-btn'
         });
     </script>
     <script src="ui.js"></script>
