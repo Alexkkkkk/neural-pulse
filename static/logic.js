@@ -2,22 +2,26 @@ const logic = {
     user: null,
     async init() {
         const tg = window.Telegram?.WebApp;
+        // Получаем ID и имя из Telegram, либо ставим заглушку для тестов
         const userId = tg?.initDataUnsafe?.user?.id || "12345";
         const username = tg?.initDataUnsafe?.user?.username || "Agent";
 
         try {
-            // Загружаем данные из БД
+            // Загружаем данные из твоего API (server.js)
             const res = await fetch(`/api/user/${userId}`);
             this.user = await res.json();
-            this.user.username = username; // Обновляем имя из ТГ
+            
+            // Если в БД еще нет имени, ставим из ТГ
+            if (!this.user.username || this.user.username === 'Agent') {
+                this.user.username = username;
+            }
             
             console.log("✅ [LOGIC] Данные загружены:", this.user);
             if (typeof ui !== 'undefined') ui.init();
             
-            // Запуск циклов
             this.startLoops();
         } catch (e) {
-            console.error("❌ Ошибка загрузки данных", e);
+            console.error("❌ Ошибка инициализации:", e);
         }
     },
 
@@ -39,13 +43,23 @@ const logic = {
                     is_liked: this.user.is_liked
                 })
             });
-        } catch (e) { console.error("Ошибка сохранения", e); }
+        } catch (e) { console.error("Ошибка сохранения:", e); }
     },
 
     tap() {
-        if (this.user.energy >= 1) {
+        if (this.user && this.user.energy >= 1) {
             this.user.balance += this.user.click_lvl;
             this.user.energy -= 1;
+            
+            // Простая логика повышения уровня (каждые 100 000 монет)
+            const newLvl = Math.floor(this.user.balance / 100000) + 1;
+            if (newLvl > this.user.lvl) {
+                this.user.lvl = newLvl;
+                if (window.Telegram?.WebApp?.HapticFeedback) {
+                    window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+                }
+            }
+
             if (typeof ui !== 'undefined') {
                 ui.update();
                 ui.anim(window.event);
@@ -54,10 +68,10 @@ const logic = {
     },
 
     startLoops() {
-        // Сохранение каждые 10 секунд
+        // Авто-сохранение в PostgreSQL
         setInterval(() => this.save(), 10000);
         
-        // Регенерация энергии + пассивный доход
+        // Регенерация энергии и доход в час
         setInterval(() => {
             if (this.user.energy < this.user.max_energy) this.user.energy += 1;
             if (this.user.profit_hr > 0) {
@@ -73,11 +87,6 @@ const logic = {
             if (type === 'tap') this.user.click_lvl += val;
             if (type === 'energy') this.user.max_energy += val;
             
-            // Повышаем уровень каждые 5 покупок (пример логики)
-            if ((this.user.click_lvl + this.user.max_energy / 500) % 5 === 0) {
-                this.user.lvl += 1;
-            }
-            
             await this.save();
             ui.update();
             return true;
@@ -86,5 +95,4 @@ const logic = {
     }
 };
 
-// Запуск при загрузке страницы
 window.onload = () => logic.init();
