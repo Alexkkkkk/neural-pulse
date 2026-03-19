@@ -1,7 +1,6 @@
 const ui = {
     init() {
         console.log("🖥️ [UI] Интерфейс инициализирован");
-        // При старте делаем первую кнопку активной
         const firstNav = document.querySelector('.bottom-nav .nav-btn');
         if (firstNav) firstNav.classList.add('active');
         this.update();
@@ -11,23 +10,18 @@ const ui = {
         if (typeof logic === 'undefined' || !logic.user) return;
 
         try {
-            // Обновление баланса
             const balanceEl = document.getElementById('balance');
             if (balanceEl) balanceEl.innerText = Math.floor(logic.user.balance).toLocaleString('ru-RU');
 
-            // Сила клика
             const tapValEl = document.getElementById('tap-val');
             if (tapValEl) tapValEl.innerText = "+" + logic.user.click_lvl;
 
-            // Прибыль в час
             const profitValEl = document.getElementById('profit-val');
             if (profitValEl) profitValEl.innerText = Math.floor(logic.user.profit_hr).toLocaleString('ru-RU');
 
-            // Уровень
             const lvlEl = document.getElementById('u-lvl');
             if (lvlEl) lvlEl.innerText = `LVL ${logic.user.lvl}`;
 
-            // Энергия
             const currentEng = Math.floor(logic.user.energy);
             const maxEng = logic.user.max_energy;
             const engValEl = document.getElementById('eng-val');
@@ -42,10 +36,15 @@ const ui = {
     },
 
     openM(id) {
+        // Убираем активный класс у всех кнопок
         document.querySelectorAll('.bottom-nav .nav-btn').forEach(btn => btn.classList.remove('active'));
-        const clickedBtn = event.currentTarget;
-        if (clickedBtn && clickedBtn.classList.contains('nav-btn')) {
-            clickedBtn.classList.add('active');
+        
+        // Подсвечиваем кнопку, если вызов был из навигации
+        if (window.event && window.event.currentTarget) {
+            const clickedBtn = window.event.currentTarget;
+            if (clickedBtn.classList.contains('nav-btn')) {
+                clickedBtn.classList.add('active');
+            }
         }
 
         const m = document.getElementById('m-' + id);
@@ -100,9 +99,15 @@ const ui = {
         n.className = 'tap-pop';
         n.innerText = `+${logic.user.click_lvl}`;
         
-        // Позиционируем относительно места клика, если событие есть, иначе по центру
-        let x = e ? e.clientX : (rect.left + rect.width / 2);
-        let y = e ? e.clientY : (rect.top + rect.height / 2);
+        // Координаты: если есть событие e (клики/тапы), берем их, иначе центр
+        let x, y;
+        if (e && (e.clientX || (e.touches && e.touches[0]))) {
+            x = e.clientX || e.touches[0].clientX;
+            y = e.clientY || e.touches[0].clientY;
+        } else {
+            x = rect.left + rect.width / 2;
+            y = rect.top + rect.height / 2;
+        }
         
         n.style.left = (x - 15) + "px";
         n.style.top = (y - 30) + "px";
