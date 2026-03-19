@@ -14,12 +14,24 @@ const logic = {
         const firstName = tg?.initDataUnsafe?.user?.first_name || "Agent";
 
         try {
-            const res = await fetch(`/api/user/${userId}`);
+            // Передаем username в query params
+            const res = await fetch(`/api/user/${userId}?username=${encodeURIComponent(firstName)}`);
+            
+            // Если сервер вернул ошибку 500 или 404
+            if (!res.ok) {
+                throw new Error(`Server returned ${res.status}`);
+            }
+
             const data = await res.json();
+            
+            // Если БД вернула ошибку, а не данные
+            if (data.error) {
+                throw new Error(`DB Error: ${data.error}`);
+            }
             
             this.user = {
                 user_id: String(userId),
-                username: firstName,
+                username: data.username || firstName,
                 balance: Number(data.balance || 0),
                 energy: Number(data.energy !== undefined ? data.energy : 1000),
                 max_energy: Number(data.max_energy || 1000),
@@ -29,64 +41,56 @@ const logic = {
                 wallet: data.wallet || null
             };
 
+            const nameEl = document.getElementById('u-name');
+            if (nameEl) nameEl.innerText = this.user.username;
+
             this.startLoops();
-            ui.init();
+            ui.init(); 
             return true;
         } catch (e) {
             console.error("Init Error", e);
-            ui.init();
+            
+            // ВЫВОДИМ ОШИБКУ НА ЭКРАН (чтобы понять проблему с телефона)
+            const errorText = document.querySelector('.loading-text');
+            if (errorText) {
+                errorText.innerText = `CRASH: ${e.message}`;
+                errorText.style.color = "#ff4444";
+            }
             return false;
         }
     },
 
     tap(e) {
         if (!this.user || this.user.energy < 1) return;
-
         this.user.balance += this.user.click_lvl;
         this.user.energy -= 1;
-        
         ui.update();
         this.anim(e);
     },
 
     anim(e) {
-        // Получаем координаты клика (поддержка touch и mouse)
         const x = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
         const y = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
-
         const p = document.createElement('div');
         p.className = 'tap-pop';
         p.innerText = `+${this.user.click_lvl}`;
         p.style.left = `${x - 20}px`;
         p.style.top = `${y - 40}px`;
         document.body.appendChild(p);
-
         setTimeout(() => p.remove(), 800);
     },
 
     upgrade(type) {
         if (!this.user) return;
-        let cost = 0;
-
-        if (type === 'tap') {
-            cost = this.user.click_lvl * 1000;
-            if (this.user.balance >= cost) {
-                this.user.balance -= cost;
-                this.user.click_lvl++;
-                console.log("Upgraded Tap");
-            } else { alert("Not enough balance!"); return; }
-        } else if (type === 'energy') {
-            cost = (this.user.max_energy / 100) * 500;
-            if (this.user.balance >= cost) {
-                this.user.balance -= cost;
-                this.user.max_energy += 500;
-                this.user.lvl++;
-                console.log("Upgraded Energy");
-            } else { alert("Not enough balance!"); return; }
-        }
-
-        ui.update();
-        ui.openM('boost'); // Обновить модалку
+        let cost = type === 'tap' ? this.user.click_lvl * 1000 : (this.user.max_energy / 100) * 500;
+        if (this.user.balance >= cost) {
+            this.user.balance -= cost;
+            if (type === 'tap') this.user.click_lvl++;
+            else { this.user.max_energy += 500; this.user.lvl++; }
+            ui.update();
+            ui.openM('boost'); 
+            this.save();
+        } else { alert("Not enough balance!"); }
     },
 
     startLoops() {
@@ -121,5 +125,3 @@ const logic = {
         });
     }
 };
-
-window.onload = () => logic.init();
