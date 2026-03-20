@@ -51,7 +51,6 @@ const logic = {
     async saveWallet(address) {
         if (!this.user) return;
         this.user.wallet = address;
-        if (typeof ui !== 'undefined') ui.openM('wallet');
         
         try {
             await fetch('/api/wallet', {
@@ -59,12 +58,16 @@ const logic = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: this.user.user_id, address: address })
             });
+            // Обновляем UI после сохранения
+            if (typeof ui !== 'undefined') ui.openM('wallet');
         } catch (err) { console.warn("Save Wallet Error:", err); }
     },
 
     async disconnectWallet() {
         if (typeof tonConnectUI !== 'undefined') {
             await tonConnectUI.disconnect();
+            this.user.wallet = null;
+            if (typeof ui !== 'undefined') ui.openM('wallet');
         }
     },
 
@@ -99,8 +102,10 @@ const logic = {
             this.user.balance -= 25000; this.user.profit_hr += 500; success = true;
         }
         if (success) {
-            ui.update();
-            ui.openM(type === 'profit' ? 'mine' : 'boost');
+            if (typeof ui !== 'undefined') { 
+                ui.update(); 
+                ui.openM(type === 'profit' ? 'mine' : 'boost'); 
+            }
             await this.save();
         }
     },
