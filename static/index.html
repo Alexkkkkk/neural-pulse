@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse Mini App</title>
+    <title>Neural Pulse V4</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
@@ -11,65 +11,61 @@
 <body>
 
     <div id="loader">
-        <div class="loader-content">
-            <div class="orbit-ring"></div>
-            <img src="images/logo.png" class="loader-logo">
+        <div class="l-content">
+            <div class="ring"></div>
+            <img src="images/logo.png" class="l-logo" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'">
         </div>
-        <div class="loader-text">ACCESS GRANTED</div>
-        <div class="loader-pct" id="pct">0%</div>
-        <div class="loader-bar"><div id="bar"></div></div>
+        <div class="l-status">ACCESS GRANTED</div>
+        <div class="l-pct" id="pct">0%</div>
+        <div class="l-bar"><div id="bar"></div></div>
     </div>
 
-    <div id="game-ui" style="display: none;">
-        <header class="user-header">
-            <div class="avatar-box"><img id="my-avatar" src="images/logo.png"></div>
-            <div class="user-meta">
-                <b id="my-name">...</b>
-                <span>v4.0.0 Neural Mining</span>
+    <div id="app" style="display: none;">
+        <header class="u-card">
+            <div class="u-avatar"><img id="my-avatar" src="images/logo.png"></div>
+            <div class="u-info">
+                <b id="my-name">LOADING...</b>
+                <small>Neural Mining v4.0</small>
             </div>
-            <div class="lvl-tag" id="my-lvl">LVL 1</div>
+            <div class="u-lvl" id="my-lvl">LVL 1</div>
         </header>
 
-        <div class="stats-grid">
-            <div class="s-card"><small>EARN PER TAP</small><b id="ui-tap">+1</b></div>
-            <div class="s-card"><small>PROFIT PER HOUR</small><b id="ui-profit">0</b></div>
+        <div class="stats-row">
+            <div class="s-box"><small>EARN PER TAP</small><b id="ui-tap">+1</b></div>
+            <div class="s-box"><small>PROFIT PER HOUR</small><b id="ui-profit">0</b></div>
         </div>
 
-        <div class="balance-display">
-            <h1 id="ui-balance">0</h1>
-        </div>
+        <div class="balance-area"><h1 id="ui-balance">0</h1></div>
 
-        <main class="click-zone">
-            <div class="neon-glow"></div>
-            <div class="tap-target" ontouchstart="game.handleTap(event)">
+        <main class="game-core">
+            <div class="glow"></div>
+            <div class="brain-target" ontouchstart="game.tap(event)">
                 <img src="images/logo.png">
             </div>
-            
-            <aside class="side-menu">
-                <button onclick="ui.modal('wallet')">👛 WALLET</button>
-                <button onclick="ui.modal('friends')">🤝 FRIENDS</button>
-                <button onclick="ui.modal('bonus')">🎁 BONUS</button>
-            </aside>
+            <div class="side-menu">
+                <button onclick="ui.openM('wallet')">👛 WALLET</button>
+                <button onclick="ui.openM('friends')">🤝 FRIENDS</button>
+                <button onclick="ui.openM('bonus')">🎁 BONUS</button>
+            </div>
         </main>
 
-        <footer class="energy-footer">
-            <div class="e-info"><span>ENERGY</span><span id="ui-energy">1000/1000</span></div>
+        <footer class="energy-section">
+            <div class="e-labels"><span>ENERGY</span><span id="ui-energy">1000/1000</span></div>
             <div class="e-track"><div id="e-fill"></div></div>
-            
-            <nav class="bottom-nav">
-                <button onclick="ui.modal('boost')">🚀 BOOST</button>
-                <button onclick="ui.modal('mine')">⛏️ MINE</button>
-                <button onclick="ui.modal('tasks')">📋 TASKS</button>
-                <button onclick="ui.modal('top')">🏆 TOP</button>
+            <nav class="bottom-tabs">
+                <button onclick="ui.openM('boost')">🚀 BOOST</button>
+                <button onclick="ui.openM('mine')">⛏️ MINE</button>
+                <button onclick="ui.openM('tasks')">📋 TASKS</button>
+                <button onclick="ui.openM('top')">🏆 TOP</button>
             </nav>
         </footer>
     </div>
 
-    <div id="terminal" class="modal-overlay" onclick="if(event.target===this) ui.close()">
-        <div class="modal-content">
-            <div class="drag-line"></div>
-            <div id="modal-body"></div>
-            <button class="close-btn" onclick="ui.close()">CLOSE TERMINAL</button>
+    <div id="modal" class="modal-bg" onclick="if(event.target===this) ui.closeM()">
+        <div class="modal-box">
+            <div class="handle"></div>
+            <div id="m-body"></div>
+            <button class="m-close" onclick="ui.closeM()">CLOSE TERMINAL</button>
         </div>
     </div>
 
@@ -78,43 +74,47 @@
         tg.expand();
 
         const game = {
-            data: { id:0, balance:0, energy:1000, max_energy:1000, tap:1, profit:0 },
-            
+            data: { id: 0, balance: 0, energy: 1000, max_energy: 1000, tap: 1, profit: 0 },
+            isLoaded: false,
+
             async init() {
-                const user = tg.initDataUnsafe.user || { id: 1, username: 'LocalHost', photo_url: '' };
-                document.getElementById('my-name').innerText = (user.username || user.first_name).toUpperCase();
-                if(user.photo_url) document.getElementById('my-avatar').src = user.photo_url;
+                const u = tg.initDataUnsafe.user || { id: 1, username: 'AGENT', photo_url: '' };
+                const name = (u.username || u.first_name).toUpperCase();
+                document.getElementById('my-name').innerText = name;
+                if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
 
                 try {
-                    const r = await fetch(`/api/user/${user.id}?username=${user.username}&photo_url=${user.photo_url}`);
-                    this.data = await r.json();
-                } catch(e) { console.log("Offline mode"); }
+                    const r = await fetch(`/api/user/${u.id}?username=${name}&photo_url=${u.photo_url}`);
+                    const d = await r.json();
+                    this.data = { ...this.data, ...d };
+                    this.isLoaded = true;
+                } catch(e) { console.error("Server Error"); }
 
-                ui.runLoader();
-                this.loop();
+                ui.startLoader();
+                this.mainLoop();
             },
 
-            handleTap(e) {
-                if (this.data.energy < this.data.tap) return;
+            tap(e) {
+                if(!this.isLoaded || this.data.energy < this.data.tap) return;
                 this.data.balance += this.data.tap;
                 this.data.energy -= this.data.tap;
-                ui.refresh();
-                ui.spawnPop(e);
-                if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+                ui.render();
+                ui.pop(e);
+                tg.HapticFeedback.impactOccurred('medium');
             },
 
-            loop() {
+            mainLoop() {
                 setInterval(() => {
-                    // Реген энергии + пассивный доход
-                    if(this.data.energy < this.data.max_energy) this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1.2);
+                    if(!this.isLoaded) return;
+                    if(this.data.energy < this.data.max_energy) this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1.5);
                     if(this.data.profit > 0) this.data.balance += (this.data.profit / 3600);
-                    ui.refresh();
+                    ui.render();
                 }, 1000);
-                
-                setInterval(() => this.save(), 10000); // Синхронизация каждые 10сек
+                setInterval(() => this.save(), 10000);
             },
 
             async save() {
+                if(!this.isLoaded) return;
                 fetch('/api/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -124,72 +124,61 @@
         };
 
         const ui = {
-            runLoader() {
+            startLoader() {
                 let p = 0;
-                const h = setInterval(() => {
+                const i = setInterval(() => {
                     p += 2;
                     document.getElementById('pct').innerText = p + '%';
                     document.getElementById('bar').style.width = p + '%';
                     if(p >= 100) {
-                        clearInterval(h);
+                        clearInterval(i);
                         document.getElementById('loader').style.display = 'none';
-                        document.getElementById('game-ui').style.display = 'flex';
-                        this.refresh();
+                        document.getElementById('app').style.display = 'flex';
+                        this.render();
                     }
                 }, 20);
             },
-            refresh() {
-                document.getElementById('ui-balance').innerText = Math.floor(this.data?.balance || 0).toLocaleString();
-                document.getElementById('ui-energy').innerText = `${Math.floor(game.data.energy)}/${game.data.max_energy}`;
-                document.getElementById('e-fill').style.width = (game.data.energy/game.data.max_energy*100)+'%';
-                document.getElementById('ui-tap').innerText = `+${game.data.tap}`;
-                document.getElementById('ui-profit').innerText = game.data.profit;
-                document.getElementById('my-lvl').innerText = `LVL ${Math.floor(game.data.balance / 10000) + 1}`;
+            render() {
+                const d = game.data;
+                document.getElementById('ui-balance').innerText = Math.floor(d.balance).toLocaleString();
+                document.getElementById('ui-energy').innerText = `${Math.floor(d.energy)}/${d.max_energy}`;
+                document.getElementById('e-fill').style.width = (d.energy/d.max_energy*100)+'%';
+                document.getElementById('ui-tap').innerText = `+${d.tap}`;
+                document.getElementById('ui-profit').innerText = d.profit;
+                document.getElementById('my-lvl').innerText = `LVL ${Math.floor(d.balance/5000)+1}`;
             },
-            spawnPop(e) {
+            pop(e) {
                 const t = e.touches[0];
                 const p = document.createElement('div');
-                p.className = 'pop-num';
-                p.innerText = `+${game.data.tap}`;
-                p.style.left = t.clientX + 'px';
-                p.style.top = t.clientY + 'px';
+                p.className = 'pop'; p.innerText = `+${game.data.tap}`;
+                p.style.left = t.clientX+'px'; p.style.top = t.clientY+'px';
                 document.body.appendChild(p);
-                setTimeout(() => p.remove(), 800);
+                setTimeout(() => p.remove(), 700);
             },
-            async modal(type) {
-                const body = document.getElementById('modal-body');
-                body.innerHTML = `<div class="loader-mini">SYNCING...</div>`;
-                document.getElementById('terminal').classList.add('open');
+            async openM(type) {
+                const b = document.getElementById('m-body');
+                b.innerHTML = `<h2>${type.toUpperCase()}</h2>`;
+                document.getElementById('modal').classList.add('active');
 
                 if(type === 'top') {
-                    const res = await fetch('/api/top');
-                    const top = await res.json();
-                    let html = `<h2>TOP 100 MINERS</h2>`;
+                    const r = await fetch('/api/top');
+                    const top = await r.json();
+                    let h = '';
                     top.forEach((u, i) => {
                         const isMe = u.id === game.data.id ? 'me' : '';
-                        html += `
-                        <div class="top-row ${isMe}">
-                            <div class="top-info">
-                                <b>#${i+1}</b>
-                                <img src="${u.photo_url || 'images/logo.png'}">
-                                <span>${u.username}</span>
-                            </div>
+                        h += `<div class="top-item ${isMe}">
+                            <div class="t-user"><b>#${i+1}</b><img src="${u.photo_url || 'images/logo.png'}"><span>${u.username}</span></div>
                             <b>${Math.floor(u.balance).toLocaleString()}</b>
                         </div>`;
                     });
-                    body.innerHTML = html;
+                    b.innerHTML += h;
                 } else if(type === 'mine') {
-                    body.innerHTML = `<h2>NEURAL UPGRADES</h2>
-                        <div class="shop-item" onclick="game.data.profit+=500; game.data.balance-=5000; ui.close()">
-                            <b>GPU Cluster</b><br><small>+500/hr | Cost: 5,000</small>
-                        </div>`;
-                } else {
-                    body.innerHTML = `<h2>${type.toUpperCase()}</h2><p>Module encryption in progress...</p>`;
+                    b.innerHTML += `<div class="shop-item" onclick="game.data.profit+=500; game.data.balance-=5000; ui.closeM()">
+                        <b>AI CORE</b><br><small>+500/hr | Cost: 5,000</small></div>`;
                 }
             },
-            close() { document.getElementById('terminal').classList.remove('open'); }
+            closeM() { document.getElementById('modal').classList.remove('active'); }
         };
-
         window.onload = () => game.init();
     </script>
 </body>
