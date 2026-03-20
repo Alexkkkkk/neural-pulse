@@ -115,21 +115,33 @@ app.post('/api/wallet', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Wallet error" }); }
 });
 
-// --- БОТ ---
+// --- БОТ (ОБНОВЛЕННЫЙ START) ---
 bot.start((ctx) => {
+    // Путь к вашему логотипу в папке images
     const logoUrl = `${DOMAIN}/images/logo.png`;
+    
     ctx.replyWithPhoto(
         { url: logoUrl },
         {
-            caption: `<b>Neural Pulse | Synchronization Initialized</b>\n\nWelcome, Agent <b>${ctx.from.first_name}</b>.\nВаш терминал готов.\n\nНажмите кнопку ниже для запуска.`,
+            caption: `<b>Neural Pulse | Synchronization Initialized</b>\n\n` +
+                     `Welcome, Agent <b>${ctx.from.first_name}</b>.\n` +
+                     `Ваш терминал готов к работе.\n\n` +
+                     `Нажмите кнопку <b>"ВОЙТИ"</b> ниже для запуска системы.`,
             parse_mode: 'HTML',
             reply_markup: Markup.inlineKeyboard([
-                [Markup.button.webApp("⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", DOMAIN)]
+                // Кнопка запуска Mini App
+                [Markup.button.webApp("⚡ ВОЙТИ", DOMAIN)]
             ])
         }
-    );
+    ).catch(e => {
+        // Если картинка не загрузится, отправляем просто текст с кнопкой
+        ctx.reply(`Welcome, Agent ${ctx.from.first_name}. Терминал готов.`, 
+            Markup.inlineKeyboard([[Markup.button.webApp("⚡ ВОЙТИ", DOMAIN)]])
+        );
+    });
 });
 
+// Запуск сервера
 app.listen(PORT, async () => {
     console.log(`🚀 NEURAL SERVER STARTED ON PORT ${PORT}`);
     try {
