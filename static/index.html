@@ -11,77 +11,85 @@
 <body>
 
     <div id="loading-screen">
-        <div class="loader-ring-container">
-            <div class="loader-ring"></div>
-            <img src="images/logo.png" class="loader-logo" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'">
+        <div class="loader-circle-container">
+            <svg viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="45" class="loader-track"></circle>
+                <circle cx="50" cy="50" r="45" class="loader-fill" id="loader-svg-fill"></circle>
+            </svg>
+            <div class="loader-center-ai">AI</div>
         </div>
-        <div class="access-text">ACCESS GRANTED</div>
+        <div class="access-granted">ACCESS GRANTED</div>
         <div class="load-pct" id="load-pct">0%</div>
         <div class="load-bar-bg"><div class="load-bar-fill" id="load-bar"></div></div>
     </div>
 
     <div id="app">
         <div class="header">
-            <div style="display:flex; align-items:center; gap:12px;">
-                <div class="avatar-box"><img src="images/logo.png" id="u-avatar"></div>
-                <div><b id="u-name">...</b><br><small style="color:#444; font-size:9px;">SYNCED WITH NODE</small></div>
+            <div class="user-info">
+                <div class="avatar-frame"><img src="images/logo.png" id="u-avatar"></div>
+                <div class="user-text">
+                    <b id="u-name">Kanderrr</b><br>
+                    <small>v4.0.0 Neural Mining</small>
+                </div>
             </div>
             <div class="lvl-badge" id="u-lvl">LVL 1</div>
         </div>
 
-        <div class="stats-row">
-            <div class="stat-card"><small>EARN PER TAP</small><b id="tap-val">+1</b></div>
-            <div class="stat-card"><small>PROFIT PER HOUR</small><b id="profit-val">0</b></div>
+        <div class="stats-grid">
+            <div class="stat-item"><small>EARN PER TAP</small><b id="tap-val">+1</b></div>
+            <div class="stat-item"><small>PROFIT PER HOUR</small><b id="profit-val">0</b></div>
         </div>
 
-        <div class="balance" id="balance">0</div>
+        <div class="main-balance" id="balance">0</div>
 
-        <div class="play-area">
-            <img src="images/logo.png" class="main-logo-btn" id="tap-target" ontouchstart="logic.tap(event)">
-            <div class="side-menu">
-                <div class="side-btn" onclick="ui.openM('wallet')">👛 WALLET</div>
-                <div class="side-btn" onclick="ui.openM('friends')">🤝 FRIENDS</div>
-                <div class="side-btn" onclick="ui.openM('top')">🏆 TOP 100</div>
+        <div class="game-core">
+            <div class="ai-btn-container" ontouchstart="logic.tap(event)">
+                <div class="ai-glow"></div>
+                <div class="ai-logo-main">AI</div>
+            </div>
+
+            <div class="side-nav">
+                <button onclick="ui.openM('wallet')">👛 WALLET</button>
+                <button onclick="ui.openM('friends')">🤝 FRIENDS</button>
+                <button onclick="ui.openM('bonus')">🎁 BONUS</button>
             </div>
         </div>
 
-        <div class="energy-box">
-            <div class="energy-info"><span>ENERGY</span><span id="eng-val">0/0</span></div>
-            <div class="eng-progress"><div class="eng-fill" id="eng-fill"></div></div>
+        <div class="energy-section">
+            <div class="energy-labels"><span>ENERGY</span><span id="eng-val">0/0</span></div>
+            <div class="energy-progress"><div class="energy-fill" id="eng-fill"></div></div>
         </div>
 
-        <div class="bottom-nav">
-            <div class="nav-item" onclick="ui.openM('boost')">🚀 BOOST</div>
-            <div class="nav-item" onclick="ui.openM('mine')">⛏️ MINE</div>
-            <div class="nav-item" onclick="ui.openM('tasks')">📋 TASKS</div>
-            <div class="nav-item" onclick="ui.openM('bonus')">🎁 BONUS</div>
+        <div class="bottom-tabs">
+            <div class="tab-btn" onclick="ui.openM('boost')">🚀 BOOST</div>
+            <div class="tab-btn" onclick="ui.openM('mine')">⛏️ MINE</div>
+            <div class="tab-btn" onclick="ui.openM('tasks')">📋 TASKS</div>
+            <div class="tab-btn" onclick="ui.openM('top')">🏆 TOP</div>
         </div>
     </div>
 
     <div id="modal-container" class="modal" onclick="if(event.target===this) ui.closeM()">
         <div class="modal-content">
-            <div class="modal-drag-line"></div>
-            <h2 id="modal-title" class="modal-title"></h2>
+            <div class="drag-handle"></div>
+            <h2 id="modal-title" class="modal-title">TOP</h2>
             <div id="modal-body"></div>
-            <button class="close-btn" onclick="ui.closeM()">RETURN TO TERMINAL</button>
+            <button class="modal-close-btn" onclick="ui.closeM()">CLOSE TERMINAL</button>
         </div>
     </div>
 
     <script>
-        // Инициализация TON Connect
         const connector = new TonConnectSDK.TonConnect({ manifestUrl: window.location.origin + '/static/tonconnect-manifest.json' });
 
         const logic = {
             user: null,
             async init() {
                 const tg = window.Telegram.WebApp;
-                tg.expand();
-                const u = tg.initDataUnsafe?.user || { id: "0", username: "Unknown" };
+                const u = tg.initDataUnsafe?.user || { id: "0", username: "Agent" };
                 
                 try {
                     const res = await fetch(`/api/user/${u.id}?username=${u.username}`);
                     const data = await res.json();
-                    // Исправление NaN через Number()
+                    // Защита от NaN: принудительно Number()
                     this.user = {
                         user_id: u.id,
                         username: data.username || u.username,
@@ -95,7 +103,7 @@
                     this.user = { user_id: u.id, balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0, username: u.username };
                 }
                 ui.startLoading();
-                this.startSync();
+                this.startLoops();
             },
 
             tap(e) {
@@ -103,47 +111,33 @@
                 this.user.balance = Number(this.user.balance) + Number(this.user.click_lvl);
                 this.user.energy = Number(this.user.energy) - Number(this.user.click_lvl);
                 ui.update();
-                this.showAnim(e);
+                ui.spawnPop(e);
                 if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
             },
 
-            showAnim(e) {
-                const x = e.touches[0].clientX;
-                const y = e.touches[0].clientY;
-                const p = document.createElement('div');
-                p.className = 'tap-pop';
-                p.innerText = `+${this.user.click_lvl}`;
-                p.style.left = x + 'px'; p.style.top = y + 'px';
-                document.body.appendChild(p);
-                setTimeout(() => p.remove(), 700);
-            },
+            async buy(type) {
+                let cost = 0;
+                if(type==='tap') cost = this.user.click_lvl * 2000;
+                if(type==='energy') cost = (this.user.max_energy/500) * 3500;
+                if(type==='profit') cost = (this.user.profit_hr/500 + 1) * 12000;
 
-            async buyUpgrade(type) {
-                const prices = {
-                    tap: Number(this.user.click_lvl) * 3000,
-                    energy: (Number(this.user.max_energy) / 500) * 5000,
-                    profit: (Number(this.user.profit_hr) / 500 + 1) * 20000
-                };
-
-                if (Number(this.user.balance) >= prices[type]) {
-                    this.user.balance -= prices[type];
-                    if (type === 'tap') this.user.click_lvl++;
-                    if (type === 'energy') { this.user.max_energy += 500; this.user.energy = this.user.max_energy; }
-                    if (type === 'profit') this.user.profit_hr += 500;
+                if (Number(this.user.balance) >= cost) {
+                    this.user.balance -= cost;
+                    if(type==='tap') this.user.click_lvl++;
+                    if(type==='energy') { this.user.max_energy += 500; this.user.energy = this.user.max_energy; }
+                    if(type==='profit') this.user.profit_hr += 500;
                     ui.update();
-                    ui.openM(type === 'profit' ? 'mine' : 'boost');
-                    this.save(); // Мгновенная синхронизация при покупке
+                    this.save();
+                    ui.openM(type==='profit' ? 'mine' : 'boost');
                 }
             },
 
-            startSync() {
-                // Пассивный доход и энергия (каждую секунду)
+            startLoops() {
                 setInterval(() => {
-                    this.user.energy = Math.min(this.user.max_energy, Number(this.user.energy) + 1.2);
+                    this.user.energy = Math.min(this.user.max_energy, Number(this.user.energy) + 1.5);
                     if(this.user.profit_hr > 0) this.user.balance += (Number(this.user.profit_hr) / 3600);
                     ui.update();
                 }, 1000);
-                // Сохранение в базу (каждые 10 секунд)
                 setInterval(() => this.save(), 10000);
             },
 
@@ -166,12 +160,12 @@
         const ui = {
             update() {
                 if(!logic.user) return;
-                const bal = Math.floor(logic.user.balance);
-                document.getElementById('balance').innerText = bal.toLocaleString();
+                const b = Math.floor(logic.user.balance);
+                document.getElementById('balance').innerText = b.toLocaleString();
                 document.getElementById('eng-val').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
                 document.getElementById('eng-fill').style.width = (logic.user.energy/logic.user.max_energy*100)+'%';
                 document.getElementById('u-name').innerText = logic.user.username;
-                document.getElementById('u-lvl').innerText = `LVL ${Math.floor(bal/150000)+1}`;
+                document.getElementById('u-lvl').innerText = `LVL ${Math.floor(b/200000)+1}`;
                 document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
                 document.getElementById('profit-val').innerText = logic.user.profit_hr;
             },
@@ -182,63 +176,74 @@
                 title.innerText = type.toUpperCase();
                 
                 if(type === 'top') {
-                    body.innerHTML = '<div class="loader-min">LOADING NETWORK...</div>';
+                    body.innerHTML = '<div class="loading-mini">SCANNING...</div>';
                     const r = await fetch('/api/top');
                     const users = await r.json();
-                    // Сортировка и Топ-100
-                    body.innerHTML = users.sort((a,b) => b.balance - a.balance).slice(0, 100).map((u, i) => `
-                        <div class="top-item ${u.username === logic.user.username ? 'me' : ''}">
-                            <div class="top-user">
-                                <span class="rank">${i+1}</span>
-                                <div class="top-avatar">${u.username[0]}</div>
-                                <span class="top-name">${u.username}</span>
+                    // Сортировка по балансу (Screenshot_2026-03-20-07-34-25-209)
+                    body.innerHTML = users.sort((a,b)=>b.balance-a.balance).slice(0, 100).map((u, i) => `
+                        <div class="list-item ${u.username === logic.user.username ? 'is-me' : ''}">
+                            <div class="list-left">
+                                <span class="rank-icon">${i === 0 ? '🏆' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}</span>
+                                <div class="list-avatar">AI</div>
+                                <span class="list-name">${u.username} ${u.username === logic.user.username ? '(YOU)' : ''}</span>
                             </div>
-                            <span class="top-val">${Math.floor(u.balance).toLocaleString()}</span>
+                            <span class="list-val">${Math.floor(u.balance).toLocaleString()}</span>
                         </div>`).join('');
                 } else if(type === 'wallet') {
                     body.innerHTML = `
-                        <div class="wallet-box">
-                            <img src="https://ton.org/download/ton_symbol.png" width="60">
-                            <h3>TON Terminal</h3>
-                            <p>Connect your wallet to synchronize your Neural Credits with the blockchain.</p>
-                            <button class="action-btn" id="connect-btn" onclick="ui.connectWallet()">CONNECT WALLET</button>
+                        <div class="wallet-modal">
+                            <img src="https://ton.org/download/ton_symbol.png" width="80">
+                            <h3>Connect TON</h3>
+                            <p>Link your wallet for withdrawals.</p>
+                            <button class="btn-primary" onclick="ui.connect()">CONNECT WALLET</button>
                         </div>`;
                 } else if(type === 'boost') {
                     body.innerHTML = `
-                        <div class="top-item" onclick="logic.buyUpgrade('tap')">
-                            <div class="top-user"><span>🚀</span><div><b>Multitap</b><br><small>Level ${logic.user.click_lvl}</small></div></div>
-                            <b class="top-val">💰 ${(logic.user.click_lvl * 3000).toLocaleString()}</b>
+                        <div class="list-item" onclick="logic.buy('tap')">
+                            <div class="list-left"><span>🚀</span><div><b>Multitap</b><br><small>Lvl ${logic.user.click_lvl}</small></div></div>
+                            <b class="list-val">${(logic.user.click_lvl*2000).toLocaleString()}</b>
                         </div>
-                        <div class="top-item" onclick="logic.buyUpgrade('energy')">
-                            <div class="top-user"><span>⚡</span><div><b>Energy Cap</b><br><small>+500 Energy</small></div></div>
-                            <b class="top-val">💰 ${((logic.user.max_energy / 500) * 5000).toLocaleString()}</b>
+                        <div class="list-item" onclick="logic.buy('energy')">
+                            <div class="list-left"><span>⚡</span><div><b>Energy</b><br><small>+500 Limit</small></div></div>
+                            <b class="list-val">${((logic.user.max_energy/500)*3500).toLocaleString()}</b>
                         </div>`;
                 } else if(type === 'mine') {
                     body.innerHTML = `
-                        <div class="top-item" onclick="logic.buyUpgrade('profit')">
-                            <div class="top-user"><span>⛏️</span><div><b>Neural Core</b><br><small>+500 profit/hr</small></div></div>
-                            <b class="top-val">💰 ${((logic.user.profit_hr / 500 + 1) * 20000).toLocaleString()}</b>
+                        <div class="list-item" onclick="logic.buy('profit')">
+                            <div class="list-left"><span>⛏️</span><div><b>Neural Core</b><br><small>+500/hr</small></div></div>
+                            <b class="list-val">${((logic.user.profit_hr/500 + 1)*12000).toLocaleString()}</b>
                         </div>`;
                 }
                 document.getElementById('modal-container').classList.add('active');
             },
 
-            async connectWallet() {
-                // Логика вызова кошелька через TON Connect
-                alert("Opening TON Wallet...");
-                // Здесь будет вызов модалки кошелька
+            async connect() {
+                const walletConnectionSource = { universalLink: 'https://tonkeeper.app/ton-connect', bridgeUrl: 'https://bridge.tonapi.io/bridge' };
+                connector.connect(walletConnectionSource);
             },
 
             closeM() { document.getElementById('modal-container').classList.remove('active'); },
 
+            spawnPop(e) {
+                const x = e.touches[0].clientX;
+                const y = e.touches[0].clientY;
+                const el = document.createElement('div');
+                el.className = 'tap-pop';
+                el.innerText = `+${logic.user.click_lvl}`;
+                el.style.left = x + 'px'; el.style.top = y + 'px';
+                document.body.appendChild(el);
+                setTimeout(() => el.remove(), 700);
+            },
+
             startLoading() {
                 let p = 0;
                 const itv = setInterval(() => {
-                    p += 4;
+                    p += 2;
                     document.getElementById('load-pct').innerText = p + '%';
                     document.getElementById('load-bar').style.width = p + '%';
+                    document.getElementById('loader-svg-fill').style.strokeDashoffset = 283 - (283 * p / 100);
                     if(p >= 100) { clearInterval(itv); document.getElementById('loading-screen').style.display = 'none'; document.getElementById('app').style.display = 'flex'; this.update(); }
-                }, 40);
+                }, 30);
             }
         };
 
