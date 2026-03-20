@@ -5,64 +5,63 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
+
     <div id="loading-screen">
-        <div class="loader-container">
+        <div class="loader-ring-container">
             <div class="loader-ring"></div>
-            <img src="images/logo.png" class="loader-logo" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'">
+            <img src="images/logo.png" class="loader-logo">
         </div>
-        <div class="loading-text">NEURAL NET LOADING...</div>
-        <div id="load-pct" style="color: #00ffff; font-weight: bold; margin-top: 10px;">0%</div>
+        <div class="access-text">ACCESS GRANTED</div>
+        <div class="load-pct" id="load-pct">0%</div>
+        <div class="load-bar-bg"><div class="load-bar-fill" id="load-bar"></div></div>
     </div>
 
-    <div id="app" style="display: none;">
+    <div id="app">
         <div class="header">
-            <div style="display:flex; align-items:center; gap:10px;">
-                <div class="avatar"><img src="images/logo.png" id="u-avatar"></div>
-                <div class="u-info"><b id="u-name">Agent</b><br><small>v4.0.0 Neural Mining</small></div>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div class="avatar-box"><img src="images/logo.png" id="u-avatar"></div>
+                <div><b id="u-name">Agent</b><br><small style="color:#444; font-size:9px;">v4.0.0 Neural Mining</small></div>
             </div>
             <div class="lvl-badge" id="u-lvl">LVL 1</div>
         </div>
 
         <div class="stats-row">
-            <div class="stat-card"><small>TAP</small><b id="tap-val" style="color:#00ffff">+1</b></div>
-            <div class="stat-card"><small>PROFIT/HR</small><b id="profit-val">0</b></div>
+            <div class="stat-card"><small>EARN PER TAP</small><b id="tap-val">+1</b></div>
+            <div class="stat-card"><small>PROFIT PER HOUR</small><b id="profit-val">0</b></div>
         </div>
 
         <div class="balance" id="balance">0</div>
 
         <div class="play-area">
-            <img src="images/logo.png" class="main-logo" id="tap-target" ontouchstart="logic.tap(event)" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'">
+            <img src="images/logo.png" class="main-logo-btn" ontouchstart="logic.tap(event)">
             <div class="side-menu">
                 <div class="side-btn" onclick="ui.openM('wallet')">👛 WALLET</div>
-                <div class="side-btn" onclick="ui.openM('squad')">🤝 FRIENDS</div>
+                <div class="side-btn" onclick="ui.openM('friends')">🤝 FRIENDS</div>
+                <div class="side-btn" onclick="ui.openM('bonus')">🎁 BONUS</div>
             </div>
         </div>
 
         <div class="energy-box">
-            <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:5px; font-weight: 800; color: #aaa;">
-                <span>ENERGY</span><span id="eng-val">0/0</span>
-            </div>
-            <div class="progress-bar-wrap"><div id="eng-fill" class="progress-bar-fill"></div></div>
+            <div class="energy-info"><span>ENERGY</span><span id="eng-val">1000/1000</span></div>
+            <div class="eng-progress"><div class="eng-fill" id="eng-fill"></div></div>
         </div>
 
         <div class="bottom-nav">
-            <button class="nav-btn" onclick="ui.openM('boost')"><span>🚀</span>BOOST</button>
-            <button class="nav-btn" onclick="ui.openM('mine')"><span>⛏️</span>MINE</button>
-            <button class="nav-btn" onclick="ui.openM('tasks')"><span>📋</span>TASKS</button>
-            <button class="nav-btn" onclick="ui.openM('top')"><span>🏆</span>TOP</button>
+            <div class="nav-item" onclick="ui.openM('boost')">🚀 BOOST</div>
+            <div class="nav-item" onclick="ui.openM('mine')">⛏️ MINE</div>
+            <div class="nav-item" onclick="ui.openM('tasks')">📋 TASKS</div>
+            <div class="nav-item" onclick="ui.openM('top')">🏆 TOP</div>
         </div>
     </div>
 
-    <div id="modal-container" class="modal" onclick="if(event.target === this) ui.closeM()">
+    <div id="modal-container" class="modal" onclick="if(event.target===this) ui.closeM()">
         <div class="modal-content">
-            <div class="modal-drag-line"></div>
-            <h2 id="modal-header" class="modal-header"></h2>
+            <h2 id="modal-title" class="modal-title">TOP</h2>
             <div id="modal-body"></div>
-            <button class="back-btn" onclick="ui.closeM()">CLOSE TERMINAL</button>
+            <button class="close-btn" onclick="ui.closeM()">Close Terminal</button>
         </div>
     </div>
 
@@ -72,121 +71,81 @@
             async init() {
                 const tg = window.Telegram.WebApp;
                 tg.expand();
-                const u = tg.initDataUnsafe?.user || { id: "12345", username: "Agent" };
+                const u = tg.initDataUnsafe?.user || { id: "0", username: "Agent" };
                 
                 try {
                     const res = await fetch(`/api/user/${u.id}?username=${u.username}&photo_url=${u.photo_url || ''}`);
                     this.user = await res.json();
-                    this.user.balance = Number(this.user.balance);
-                } catch (e) { console.error("Offline Mode"); }
-
-                ui.finishLoading();
-                this.startLoops();
+                } catch(e) { 
+                    this.user = { balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0, username: u.username };
+                }
+                ui.startLoading();
+                this.loop();
             },
             tap(e) {
                 if (this.user.energy < this.user.click_lvl) return;
                 this.user.balance += this.user.click_lvl;
                 this.user.energy -= this.user.click_lvl;
                 ui.update();
-                this.createPop(e);
-                if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
+                if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
             },
-            createPop(e) {
-                const x = e.touches[0].clientX;
-                const y = e.touches[0].clientY;
-                const p = document.createElement('div');
-                p.className = 'tap-pop';
-                p.innerText = `+${this.user.click_lvl}`;
-                p.style.left = x + 'px'; p.style.top = y + 'px';
-                document.body.appendChild(p);
-                setTimeout(() => p.remove(), 800);
-            },
-            async buyUpgrade(type) {
-                const prices = { tap: 5000, energy: 10000, profit: 25000 };
-                if (this.user.balance >= prices[type]) {
-                    this.user.balance -= prices[type];
-                    if (type === 'tap') this.user.click_lvl++;
-                    if (type === 'energy') { this.user.max_energy += 500; this.user.energy += 500; }
-                    if (type === 'profit') this.user.profit_hr += 500;
-                    ui.update();
-                    this.save();
-                    ui.closeM();
-                }
-            },
-            startLoops() {
+            loop() {
                 setInterval(() => {
-                    if (this.user.energy < this.user.max_energy) this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
-                    if (this.user.profit_hr > 0) this.user.balance += (this.user.profit_hr / 3600);
+                    if(this.user.energy < this.user.max_energy) this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
+                    if(this.user.profit_hr > 0) this.user.balance += (this.user.profit_hr / 3600);
                     ui.update();
                 }, 1000);
-                setInterval(() => this.save(), 15000);
-            },
-            async save() {
-                fetch('/api/save', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        userId: this.user.user_id, balance: Math.floor(this.user.balance),
-                        energy: Math.floor(this.user.energy), max_energy: this.user.max_energy,
-                        click_lvl: this.user.click_lvl, profit_hr: this.user.profit_hr, lvl: this.user.lvl
-                    })
-                });
             }
         };
 
         const ui = {
             update() {
-                if (!logic.user) return;
-                document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString('ru-RU');
+                document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
                 document.getElementById('eng-val').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
-                document.getElementById('eng-fill').style.width = `${(logic.user.energy / logic.user.max_energy) * 100}%`;
+                document.getElementById('eng-fill').style.width = (logic.user.energy/logic.user.max_energy*100)+'%';
                 document.getElementById('u-name').innerText = logic.user.username;
-                document.getElementById('u-lvl').innerText = `LVL ${Math.floor(logic.user.balance/100000)+1}`;
                 document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
                 document.getElementById('profit-val').innerText = logic.user.profit_hr;
-                
-                const av = document.getElementById('u-avatar');
-                if(logic.user.photo_url && logic.user.photo_url.length > 5) av.src = logic.user.photo_url;
+                if(logic.user.photo_url) document.getElementById('u-avatar').src = logic.user.photo_url;
+            },
+            startLoading() {
+                let p = 0;
+                const itv = setInterval(() => {
+                    p += 2;
+                    document.getElementById('load-pct').innerText = p + '%';
+                    document.getElementById('load-bar').style.width = p + '%';
+                    if(p >= 100) {
+                        clearInterval(itv);
+                        document.getElementById('loading-screen').style.display = 'none';
+                        document.getElementById('app').style.display = 'flex';
+                        this.update();
+                    }
+                }, 30);
             },
             openM(type) {
                 const body = document.getElementById('modal-body');
-                document.getElementById('modal-header').innerText = type.toUpperCase();
-                let h = '';
-                if (type === 'boost') {
-                    h = `<div class="up-card" onclick="logic.buyUpgrade('tap')"><div><b>Multi-Tap</b><br><small>Level ${logic.user.click_lvl}</small></div><div class="price">💰 5,000</div></div>
-                         <div class="up-card" onclick="logic.buyUpgrade('energy')"><div><b>Energy Cap</b><br><small>+500 Limit</small></div><div class="price">💰 10,000</div></div>`;
-                } else if (type === 'top') {
-                    h = '<div style="text-align:center; padding:20px;">UPDATING NETWORK...</div>';
-                    fetch('/api/top').then(r => r.json()).then(data => {
-                        let list = '';
-                        data.forEach((u, i) => {
-                            list += `<div class="up-card"><span>#${i+1} ${u.username}</span><b class="price">${Math.floor(u.balance)}</b></div>`;
-                        });
-                        body.innerHTML = list;
+                document.getElementById('modal-title').innerText = type.toUpperCase();
+                if(type === 'top') {
+                    body.innerHTML = '<div style="text-align:center; opacity:0.5;">LINKING TO NEURAL NETWORK...</div>';
+                    fetch('/api/top').then(r=>r.json()).then(data => {
+                        body.innerHTML = data.map((u, i) => `
+                            <div class="top-item ${u.username === logic.user.username ? 'me' : ''}">
+                                <div class="top-user">
+                                    <span style="font-weight:900; width:25px; color:${i<3?'#00ffff':'#333'}">#${i+1}</span>
+                                    <div class="top-avatar">AI</div>
+                                    <span class="top-name">${u.username} ${u.username === logic.user.username ? '(YOU)' : ''}</span>
+                                </div>
+                                <span class="top-val">${Math.floor(u.balance).toLocaleString()}</span>
+                            </div>
+                        `).join('');
                     });
-                } else if (type === 'mine') {
-                    h = `<div class="up-card" onclick="logic.buyUpgrade('profit')"><div><b>Neural Core</b><br><small>+500/hr Profit</small></div><div class="price">💰 25,000</div></div>`;
                 }
-                body.innerHTML = h;
                 document.getElementById('modal-container').classList.add('active');
             },
-            closeM() { document.getElementById('modal-container').classList.remove('active'); },
-            finishLoading() {
-                let p = 0;
-                const iv = setInterval(() => {
-                    p += 10;
-                    document.getElementById('load-pct').innerText = p + '%';
-                    if (p >= 100) {
-                        clearInterval(iv);
-                        document.getElementById('loading-screen').style.display = 'none';
-                        document.getElementById('app').style.display = 'flex';
-                        ui.update();
-                    }
-                }, 50);
-            }
+            closeM() { document.getElementById('modal-container').classList.remove('active'); }
         };
 
-        window.onload = () => { logic.init(); };
+        window.onload = () => logic.init();
     </script>
 </body>
 </html>
