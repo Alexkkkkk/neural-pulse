@@ -7,8 +7,16 @@ const logic = {
         const photoUrl = photoUrlFromTg || "";
 
         try {
-            const res = await fetch(`/api/user/${userId}?username=${encodeURIComponent(firstName)}&photo_url=${encodeURIComponent(photoUrl)}`);
+            // Устанавливаем тайм-аут запроса 5 секунд
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+            const res = await fetch(`/api/user/${userId}?username=${encodeURIComponent(firstName)}&photo_url=${encodeURIComponent(photoUrl)}`, {
+                signal: controller.signal
+            });
             
+            clearTimeout(timeoutId);
+
             if (!res.ok) throw new Error("Server response not OK");
             
             const data = await res.json();
@@ -42,8 +50,13 @@ const logic = {
             };
         }
 
-        // Гарантированный запуск интерфейса
-        if (typeof ui !== 'undefined') ui.init();
+        // Гарантированный запуск интерфейса и скрытие экрана загрузки
+        if (typeof ui !== 'undefined') {
+            ui.init(); 
+        } else {
+            console.error("UI object not found! Check index.html order.");
+        }
+        
         this.startLoops();
         return true;
     },
@@ -149,14 +162,18 @@ const logic = {
     startLoops() {
         setInterval(() => {
             if (!this.user) return;
+            // Плавное восстановление энергии
             if (this.user.energy < this.user.max_energy) {
                 this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
             }
+            // Ежесекундное начисление прибыли
             if (this.user.profit_hr > 0) {
                 this.user.balance += (this.user.profit_hr / 3600);
             }
             if (typeof ui !== 'undefined') ui.update();
         }, 1000);
+        
+        // Автосохранение каждые 15 секунд
         setInterval(() => this.save(), 15000);
     }
 };
