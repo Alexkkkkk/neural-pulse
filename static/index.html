@@ -11,62 +11,79 @@
 <body>
 
     <div id="loading-screen">
-        <div class="l-container">
-            <div class="l-circle">
-                <img src="images/logo.png" class="l-logo" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'">
-                <div class="l-scan"></div>
-            </div>
-            <div class="l-pct" id="l-pct">0%</div>
-            <div class="l-bar-bg"><div id="l-bar" class="l-bar-fill"></div></div>
+        <div class="l-circle-wrap">
+            <div class="l-orbit"></div>
+            <img src="images/logo.png" class="l-logo" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'">
+        </div>
+        <div class="l-status">ACCESS GRANTED</div>
+        <div class="l-percent" id="l-pct">0%</div>
+        <div class="l-bar-container">
+            <div id="l-bar" class="l-bar-fill"></div>
         </div>
     </div>
 
-    <div id="app">
-        <div class="header">
+    <div id="app" style="display: none;">
+        <div class="u-card">
+            <div class="u-avatar">
+                <img src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'">
+            </div>
             <div class="u-info">
-                <div class="u-av"><img src="images/logo.png" id="u-img"></div>
-                <div><b id="u-name">...</b><br><small>Neural Agent</small></div>
+                <b id="u-name">AGENT</b>
+                <small>v4.0.0 Neural Mining</small>
             </div>
             <div class="u-lvl" id="u-lvl">LVL 1</div>
         </div>
 
-        <div class="stats">
-            <div class="s-item"><small>PER TAP</small><b id="s-tap">+1</b></div>
-            <div class="s-item"><small>PROFIT/HR</small><b id="s-profit">0</b></div>
+        <div class="stats-row">
+            <div class="s-box">
+                <small>EARN PER TAP</small>
+                <b id="s-tap">+1</b>
+            </div>
+            <div class="s-box">
+                <small>PROFIT PER HOUR</small>
+                <b id="s-profit">0</b>
+            </div>
         </div>
 
-        <h1 class="balance" id="balance">0</h1>
+        <div class="balance-wrap">
+            <h1 id="balance">0</h1>
+        </div>
 
-        <div class="game">
-            <div class="ring-outer"></div>
-            <div class="tap-btn" ontouchstart="logic.tap(event)">
-                <img src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'">
+        <div class="game-container">
+            <div class="glow-effect"></div>
+            <div class="main-clicker" ontouchstart="logic.tap(event)">
+                <img src="images/logo.png" class="ai-brain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'">
             </div>
             
-            <div class="side-menu">
+            <div class="side-nav">
                 <div class="side-btn" onclick="ui.openM('wallet')">👛 WALLET</div>
                 <div class="side-btn" onclick="ui.openM('friends')">🤝 FRIENDS</div>
                 <div class="side-btn" onclick="ui.openM('bonus')">🎁 BONUS</div>
             </div>
         </div>
 
-        <div class="energy">
-            <div class="e-txt"><span>ENERGY</span><span id="e-val">1000/1000</span></div>
-            <div class="e-bg"><div id="e-fill" class="e-fill"></div></div>
+        <div class="energy-box">
+            <div class="e-labels">
+                <span>ENERGY</span>
+                <span id="e-val">1000/1000</span>
+            </div>
+            <div class="e-bar-bg">
+                <div id="e-fill" class="e-bar-fill"></div>
+            </div>
         </div>
 
-        <div class="nav">
-            <button onclick="ui.openM('boost')">🚀 BOOST</button>
-            <button onclick="ui.openM('mine')">⛏️ MINE</button>
-            <button onclick="ui.openM('tasks')">📋 TASKS</button>
-            <button onclick="ui.openM('top')">🏆 TOP</button>
+        <div class="bottom-nav">
+            <div class="n-btn" onclick="ui.openM('boost')">🚀 BOOST</div>
+            <div class="n-btn" onclick="ui.openM('mine')">⛏️ MINE</div>
+            <div class="n-btn" onclick="ui.openM('tasks')">📋 TASKS</div>
+            <div class="n-btn" onclick="ui.openM('top')">🏆 TOP</div>
         </div>
     </div>
 
-    <div id="modal" class="modal" onclick="if(event.target===this) ui.closeM()">
-        <div class="m-content">
+    <div id="modal" class="modal-bg" onclick="if(event.target===this) ui.closeM()">
+        <div class="modal-box">
             <div class="m-handle"></div>
-            <div id="m-body"></div>
+            <div id="m-body" class="m-content"></div>
             <button class="m-close" onclick="ui.closeM()">CLOSE TERMINAL</button>
         </div>
     </div>
@@ -75,27 +92,20 @@
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        // TON Connect
-        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: window.location.origin + '/static/tonconnect-manifest.json'
-        });
-
         const logic = {
-            user: { balance: 0, energy: 1000, max_energy: 1000, tap: 1, profit: 0, username: "Agent" },
+            user: { balance: 0, energy: 1000, max_energy: 1000, tap: 1, profit: 0, username: "Player" },
             async init() {
                 const u = tg.initDataUnsafe?.user || { id: 0, username: "Player" };
-                this.user.username = u.username || u.first_name;
+                document.getElementById('u-name').innerText = u.username.toUpperCase();
                 
                 try {
-                    const r = await fetch(`/api/user/${u.id}?username=${this.user.username}`);
-                    if(r.ok) {
-                        const d = await r.json();
-                        this.user = { ...this.user, ...d };
-                    }
-                } catch(e) { console.log("Offline mode"); }
+                    const r = await fetch(`/api/user/${u.id}?username=${u.username}`);
+                    const d = await r.json();
+                    Object.assign(this.user, d);
+                } catch(e) { console.log("Local mode active"); }
                 
                 ui.startLoad();
-                this.startLoops();
+                this.loops();
             },
             tap(e) {
                 if (this.user.energy < this.user.tap) return;
@@ -103,9 +113,9 @@
                 this.user.energy -= this.user.tap;
                 ui.update();
                 ui.pop(e);
-                if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+                if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
             },
-            startLoops() {
+            loops() {
                 setInterval(() => {
                     if(this.user.energy < this.user.max_energy) this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.2);
                     if(this.user.profit > 0) this.user.balance += (this.user.profit / 3600);
@@ -129,38 +139,29 @@
                     p += 2;
                     document.getElementById('l-pct').innerText = p + '%';
                     document.getElementById('l-bar').style.width = p + '%';
-                    if(p >= 100) { clearInterval(i); document.getElementById('loading-screen').style.display = 'none'; document.getElementById('app').style.display = 'flex'; this.update(); }
-                }, 25);
+                    if(p >= 100) { 
+                        clearInterval(i); 
+                        document.getElementById('loading-screen').style.display = 'none'; 
+                        document.getElementById('app').style.display = 'flex'; 
+                        this.update(); 
+                    }
+                }, 30);
             },
             update() {
                 document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
                 document.getElementById('e-val').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
                 document.getElementById('e-fill').style.width = (logic.user.energy/logic.user.max_energy*100)+'%';
-                document.getElementById('u-name').innerText = logic.user.username;
                 document.getElementById('s-tap').innerText = `+${logic.user.tap}`;
                 document.getElementById('s-profit').innerText = logic.user.profit;
                 document.getElementById('u-lvl').innerText = `LVL ${Math.floor(logic.user.balance/50000)+1}`;
             },
-            async openM(type) {
-                const body = document.getElementById('m-body');
-                body.innerHTML = `<h2>${type.toUpperCase()}</h2>`;
-                
-                if(type === 'wallet') {
-                    body.innerHTML += `
-                        <div class="up-card" onclick="tonConnectUI.openModal()">
-                            <div><b>TON Connect</b><br><small>Connect wallet for rewards</small></div>
-                            <span>></span>
-                        </div>`;
-                } else if(type === 'top') {
-                    body.innerHTML += `<p>Loading leaderboard...</p>`;
-                    const r = await fetch('/api/top');
-                    const users = await r.json();
-                    body.innerHTML = `<h2>LEADERBOARD</h2>`;
-                    users.sort((a,b) => b.balance - a.balance).slice(0,10).forEach((u, i) => {
-                        body.innerHTML += `<div class="up-card"><b>#${i+1} ${u.username}</b> <span>${Math.floor(u.balance)}</span></div>`;
-                    });
+            openM(type) {
+                const b = document.getElementById('m-body');
+                b.innerHTML = `<h2>${type.toUpperCase()}</h2>`;
+                if(type === 'top') {
+                    b.innerHTML += `<div class="top-list">Loading data...</div>`;
                 } else {
-                    body.innerHTML += `<div class="up-card"><b>${type} Module</b> <span>Soon</span></div>`;
+                    b.innerHTML += `<div class="info-card">Module is being synchronized...</div>`;
                 }
                 document.getElementById('modal').classList.add('active');
             },
