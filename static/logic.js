@@ -52,10 +52,16 @@ const logic = {
         if (!this.user) return;
         this.user.wallet = address;
         
-        // Обновляем UI если модалка открыта
+        // Обновляем текст в модалке, если она открыта
         const statusEl = document.getElementById('wallet-status');
         if (statusEl) {
             statusEl.innerText = address ? address.slice(0,6)+'...'+address.slice(-4) : "Not Connected";
+        }
+
+        // Если кошелек подключен, перерисовываем окно через полсекунды, 
+        // чтобы появилась кнопка DISCONNECT
+        if (typeof ui !== 'undefined' && document.getElementById('modal-container').classList.contains('active')) {
+            setTimeout(() => ui.openM('wallet'), 500);
         }
         
         try {
@@ -70,8 +76,7 @@ const logic = {
     async disconnectWallet() {
         if (typeof tonConnectUI !== 'undefined') {
             await tonConnectUI.disconnect();
-            // wallet status обновится через onStatusChange автоматически
-            if (typeof ui !== 'undefined') ui.openM('wallet');
+            // Статус обновится автоматически через onStatusChange в index.html
         }
     },
 
