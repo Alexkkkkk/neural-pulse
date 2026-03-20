@@ -28,8 +28,8 @@
             <div class="u-profile">
                 <div class="u-av"><img src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'"></div>
                 <div class="u-info">
-                    <b id="u-name">Loading...</b><br>
-                    <small>Neural Mining v4.0</small>
+                    <b id="u-name">...</b><br>
+                    <small>Neural Mining v4.0.0</small>
                 </div>
             </div>
             <div class="u-lvl" id="u-lvl">LVL 1</div>
@@ -71,28 +71,28 @@
     <div id="modal" class="modal-bg" onclick="if(event.target===this) ui.closeM()">
         <div class="modal-box">
             <div class="handle"></div>
-            <h2 id="m-title">TOP</h2>
+            <h2 id="m-title">TERMINAL</h2>
             <div id="m-body"></div>
             <button class="m-close" onclick="ui.closeM()">CLOSE TERMINAL</button>
         </div>
     </div>
 
     <script>
-        // Инициализация TON Connect
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: window.location.origin + '/tonconnect-manifest.json',
-            buttonRootId: null // Кнопку вставим сами в модалку
+            manifestUrl: window.location.origin + '/static/tonconnect-manifest.json',
+            buttonRootId: null
         });
 
         const logic = {
             user: null,
             async init() {
                 const tg = window.Telegram.WebApp;
-                const u = tg.initDataUnsafe?.user || { id: 0, username: "Player" };
+                const u = tg.initDataUnsafe?.user || { id: 0, username: "Guest" };
                 
                 try {
                     const r = await fetch(`/api/user/${u.id}?username=${u.username}`);
                     const d = await r.json();
+                    // Защита от NaN: превращаем всё в Числа при загрузке
                     this.user = {
                         id: u.id,
                         username: d.username || u.username,
@@ -110,9 +110,9 @@
             },
 
             tap(e) {
-                if (this.user.energy < this.user.click_lvl) return;
-                this.user.balance += this.user.click_lvl;
-                this.user.energy -= this.user.click_lvl;
+                if (Number(this.user.energy) < Number(this.user.click_lvl)) return;
+                this.user.balance = Number(this.user.balance) + Number(this.user.click_lvl);
+                this.user.energy = Number(this.user.energy) - Number(this.user.click_lvl);
                 ui.update();
                 ui.pop(e);
                 if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
@@ -120,11 +120,11 @@
 
             loop() {
                 setInterval(() => {
-                    this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
-                    if(this.user.profit_hr > 0) this.user.balance += (this.user.profit_hr / 3600);
+                    this.user.energy = Math.min(this.user.max_energy, Number(this.user.energy) + 1.5);
+                    if(this.user.profit_hr > 0) this.user.balance += (Number(this.user.profit_hr) / 3600);
                     ui.update();
                 }, 1000);
-                setInterval(() => this.save(), 8000);
+                setInterval(() => this.save(), 10000); // Синхра каждые 10 сек
             },
 
             async save() {
@@ -146,11 +146,12 @@
         const ui = {
             update() {
                 if(!logic.user) return;
-                document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
+                const b = Math.floor(logic.user.balance);
+                document.getElementById('balance').innerText = b.toLocaleString();
                 document.getElementById('e-num').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
                 document.getElementById('e-fill').style.width = (logic.user.energy/logic.user.max_energy*100)+'%';
                 document.getElementById('u-name').innerText = logic.user.username;
-                document.getElementById('u-lvl').innerText = `LVL ${Math.floor(logic.user.balance/150000)+1}`;
+                document.getElementById('u-lvl').innerText = `LVL ${Math.floor(b/200000)+1}`;
                 document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
                 document.getElementById('profit-val').innerText = logic.user.profit_hr;
             },
@@ -162,10 +163,10 @@
                 body.innerHTML = '';
 
                 if(type === 'top') {
-                    body.innerHTML = '<div class="loader-m">SYNCING...</div>';
+                    body.innerHTML = '<div class="loader-m">SCANNING...</div>';
                     const res = await fetch('/api/top');
                     const users = await res.json();
-                    // Сортировка ТОП-100 по балансу
+                    // Сортировка по балансу + ТОП-100
                     body.innerHTML = users.sort((a,b)=>b.balance-a.balance).slice(0, 100).map((u, i) => `
                         <div class="row ${u.username === logic.user.username ? 'me' : ''}">
                             <div class="row-l">
@@ -178,22 +179,19 @@
                 } else if(type === 'wallet') {
                     body.innerHTML = `
                         <div class="wallet-ui">
-                            <img src="https://ton.org/download/ton_symbol.png" width="80">
-                            <h3>TON Terminal</h3>
-                            <p>Connect your wallet to receive Airdrop and withdrawals.</p>
-                            <div id="ton-connect-btn"></div>
+                            <img src="https://ton.org/download/ton_symbol.png" width="80" style="margin-bottom:15px">
+                            <h3 style="margin-bottom:10px">TON CONNECT</h3>
+                            <p style="color:#555; font-size:13px; margin-bottom:20px">Connect your wallet for Airdrop eligibility.</p>
+                            <div id="ton-btn-container"></div>
                         </div>`;
                     setTimeout(() => {
-                        // Рендерим кнопку TON Connect внутри модалки
-                        const btnContainer = document.getElementById('ton-connect-btn');
-                        if (btnContainer) {
-                             const btn = document.createElement('button');
-                             btn.className = 'w-btn';
-                             btn.innerText = tonConnectUI.connected ? 'DISCONNECT' : 'CONNECT TON';
-                             btn.onclick = () => tonConnectUI.connected ? tonConnectUI.disconnect() : tonConnectUI.openModal();
-                             btnContainer.appendChild(btn);
-                        }
-                    }, 100);
+                        const container = document.getElementById('ton-btn-container');
+                        const btn = document.createElement('button');
+                        btn.className = 'w-btn';
+                        btn.innerText = tonConnectUI.connected ? 'DISCONNECT' : 'CONNECT WALLET';
+                        btn.onclick = () => tonConnectUI.connected ? tonConnectUI.disconnect() : tonConnectUI.openModal();
+                        container.appendChild(btn);
+                    }, 50);
                 }
                 document.getElementById('modal').classList.add('show');
             },
