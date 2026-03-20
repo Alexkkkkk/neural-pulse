@@ -1,26 +1,30 @@
 const logic = {
     user: null,
 
-    async init() {
+    // Добавляем аргументы для инициализации данными из Telegram
+    async init(userIdFromTg = null, userNameFromTg = null, photoUrlFromTg = null) {
         const tg = window.Telegram?.WebApp;
         if (tg) { 
             tg.ready(); 
             tg.expand(); 
-            // Устанавливаем цвет темы (опционально)
+            // Устанавливаем цвет темы (черный для киберпанк стиля)
             tg.setHeaderColor('#000000');
         }
 
-        const userId = tg?.initDataUnsafe?.user?.id || "12345";
-        const firstName = tg?.initDataUnsafe?.user?.first_name || "Agent";
+        // Приоритет данным из аргументов (из SDK), если нет — берем из unsafe или заглушку
+        const userId = userIdFromTg || tg?.initDataUnsafe?.user?.id || "12345";
+        const firstName = userNameFromTg || tg?.initDataUnsafe?.user?.first_name || "Agent";
+        const photoUrl = photoUrlFromTg || tg?.initDataUnsafe?.user?.photo_url || null;
 
         try {
-            // Запрашиваем данные у нашего Node.js сервера
-            const res = await fetch(`/api/user/${userId}?username=${encodeURIComponent(firstName)}`);
+            // Запрашиваем данные у нашего Node.js сервера, передавая username и photo_url
+            const res = await fetch(`/api/user/${userId}?username=${encodeURIComponent(firstName)}&photo_url=${encodeURIComponent(photoUrl || '')}`);
             const data = await res.json();
 
             this.user = {
                 user_id: String(userId),
                 username: data.username || firstName,
+                photo_url: data.photo_url || photoUrl, // Сохраняем URL аватарки в объекте пользователя
                 balance: Number(data.balance || 0),
                 energy: Number(data.energy ?? 1000),
                 max_energy: Number(data.max_energy || 1000),
@@ -29,9 +33,14 @@ const logic = {
                 lvl: Number(data.lvl || 1)
             };
 
-            // Обновляем имя в интерфейсе сразу после загрузки
+            // Обновляем имя и аватар в интерфейсе сразу после загрузки
             const nameEl = document.getElementById('u-name');
             if (nameEl) nameEl.innerText = this.user.username;
+            
+            const avatarEl = document.getElementById('u-avatar');
+            if (avatarEl && this.user.photo_url) {
+                avatarEl.src = this.user.photo_url;
+            }
 
             if (typeof ui !== 'undefined') ui.init();
             
@@ -51,7 +60,7 @@ const logic = {
         this.user.balance += this.user.click_lvl;
         this.user.energy -= this.user.click_lvl;
         
-        // Проверка на повышение уровня (каждые 100к баланса для примера)
+        // Проверка на повышение уровня
         this.checkLvl();
 
         if (typeof ui !== 'undefined') ui.update();
@@ -64,7 +73,7 @@ const logic = {
     },
 
     checkLvl() {
-        // Простая формула: уровень растет от общего баланса
+        // Уровень растет от общего баланса
         const newLvl = Math.floor(this.user.balance / 100000) + 1;
         if (newLvl > this.user.lvl) {
             this.user.lvl = newLvl;
@@ -90,7 +99,6 @@ const logic = {
         if (!this.user) return;
         
         let success = false;
-        // Расчет стоимости можно сделать динамическим, но пока оставим как у тебя
         if (type === 'tap' && this.user.balance >= 5000) {
             this.user.balance -= 5000;
             this.user.click_lvl += 1;
@@ -109,7 +117,7 @@ const logic = {
         if (success) {
             if (typeof ui !== 'undefined') {
                 ui.update();
-                // Перерисовываем модалку, чтобы цена/уровень обновились визуально
+                // Обновляем модалку
                 ui.openM(type === 'profit' ? 'mine' : 'boost'); 
             }
             await this.save();
@@ -125,7 +133,6 @@ const logic = {
             window.Telegram.WebApp.openLink(url);
         }
 
-        // В будущем здесь можно добавить fetch('/api/check-task')
         this.user.balance += reward;
         window.Telegram?.WebApp?.showAlert(`Protocol Verified! +${reward.toLocaleString()} Pulse`);
         
@@ -160,12 +167,12 @@ const logic = {
         setInterval(() => {
             if (!this.user) return;
             
-            // Регенерация энергии (плавная)
+            // Регенерация энергии
             if (this.user.energy < this.user.max_energy) {
                 this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
             }
             
-            // Пассивный доход (начисляем каждую секунду часть от часовой прибыли)
+            // Пассивный доход
             if (this.user.profit_hr > 0) {
                 this.user.balance += (this.user.profit_hr / 3600);
             }
@@ -173,7 +180,7 @@ const logic = {
             if (typeof ui !== 'undefined') ui.update();
         }, 1000);
 
-        // Автосохранение на сервер (раз в 15 секунд, чтобы не спамить базу)
+        // Автосохранение раз в 15 секунд
         setInterval(() => this.save(), 15000);
     }
 };
