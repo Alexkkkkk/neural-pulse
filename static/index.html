@@ -92,8 +92,10 @@
                 try {
                     const r = await fetch(`/api/user/${u.id}?username=${u.username}`);
                     const d = await r.json();
-                    this.user = d; 
-                } catch(e) { this.user = { id: 0, balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0, username: "Player" }; }
+                    this.user = d;
+                } catch(e) { 
+                    this.user = { id: 0, balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0, username: "Player" }; 
+                }
                 ui.startLoad();
                 this.loop();
             },
@@ -150,19 +152,13 @@
                             <b class="t-val">${Math.floor(u.balance).toLocaleString()}</b>
                         </div>`).join('');
                 } else if(type === 'wallet') {
-                    body.innerHTML = `<div class="w-cont">
-                        <h2 class="w-head">WALLET</h2>
-                        <img src="https://ton.org/download/ton_symbol.png" class="w-logo">
-                        <h3 class="w-sub">TON CONNECT</h3>
-                        <p class="w-text">Connect your wallet for Airdrop eligibility.</p>
-                        <button class="w-btn" id="w-conn">CONNECT WALLET</button>
-                    </div>`;
+                    body.innerHTML = `<div class="w-cont"><h2 class="w-head">WALLET</h2><img src="https://ton.org/download/ton_symbol.png" class="w-logo"><h3 class="w-sub">TON CONNECT</h3><p class="w-text">Connect your wallet for Airdrop eligibility.</p><button class="w-btn" id="w-conn">CONNECT WALLET</button></div>`;
                     setTimeout(() => { document.getElementById('w-conn').onclick = () => { tonConnectUI.openModal(); ui.closeM(); } }, 50);
                 }
             },
             closeM() { document.getElementById('modal').classList.remove('show'); },
             pop(e) {
-                const t = e.touches[0];
+                const t = e.touches ? e.touches[0] : e;
                 const d = document.createElement('div'); d.className = 'pop'; d.innerText = `+${logic.user.click_lvl}`;
                 d.style.left = t.clientX+'px'; d.style.top = t.clientY+'px';
                 document.body.appendChild(d); setTimeout(() => d.remove(), 700);
@@ -173,7 +169,7 @@
                     p += 2; document.getElementById('load-num').innerText = p+'%';
                     document.getElementById('bar-fill').style.width = p+'%';
                     document.getElementById('l-svg-bar').style.strokeDashoffset = 283 - (283 * p / 100);
-                    if(p>=100) { clearInterval(i); document.getElementById('loading-screen').style.display='none'; document.getElementById('app').style.display='flex'; this.update(); }
+                    if(p>=100) { clearInterval(i); document.getElementById('loading-screen').style.opacity='0'; setTimeout(()=>{document.getElementById('loading-screen').style.display='none';document.getElementById('app').style.display='flex';this.update();},500); }
                 }, 30);
             }
         };
