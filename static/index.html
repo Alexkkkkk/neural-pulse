@@ -25,7 +25,7 @@
         <div class="header">
             <div class="u-info">
                 <div class="u-av"><img src="images/logo.png" id="u-img"></div>
-                <div><b id="u-name">...</b><br><small>Neural Mining</small></div>
+                <div><b id="u-name">...</b><br><small>Neural Agent</small></div>
             </div>
             <div class="u-lvl" id="u-lvl">LVL 1</div>
         </div>
@@ -38,11 +38,12 @@
         <h1 class="balance" id="balance">0</h1>
 
         <div class="game">
-            <div class="ring"></div>
+            <div class="ring-outer"></div>
             <div class="tap-btn" ontouchstart="logic.tap(event)">
                 <img src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'">
             </div>
-            <div class="side">
+            
+            <div class="side-menu">
                 <div class="side-btn" onclick="ui.openM('wallet')">👛 WALLET</div>
                 <div class="side-btn" onclick="ui.openM('friends')">🤝 FRIENDS</div>
                 <div class="side-btn" onclick="ui.openM('bonus')">🎁 BONUS</div>
@@ -63,30 +64,38 @@
     </div>
 
     <div id="modal" class="modal" onclick="if(event.target===this) ui.closeM()">
-        <div class="m-content" id="m-content"></div>
+        <div class="m-content">
+            <div class="m-handle"></div>
+            <div id="m-body"></div>
+            <button class="m-close" onclick="ui.closeM()">CLOSE TERMINAL</button>
+        </div>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
 
+        // TON Connect
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: window.location.origin + '/static/tonconnect-manifest.json',
-            buttonRootId: 'ton-btn'
+            manifestUrl: window.location.origin + '/static/tonconnect-manifest.json'
         });
 
         const logic = {
-            user: { balance: 0, energy: 1000, max_energy: 1000, tap: 1, profit: 0, username: "Player" },
+            user: { balance: 0, energy: 1000, max_energy: 1000, tap: 1, profit: 0, username: "Agent" },
             async init() {
-                const u = tg.initDataUnsafe?.user || { id: 0, username: "Guest" };
+                const u = tg.initDataUnsafe?.user || { id: 0, username: "Player" };
                 this.user.username = u.username || u.first_name;
+                
                 try {
                     const r = await fetch(`/api/user/${u.id}?username=${this.user.username}`);
-                    const d = await r.json();
-                    Object.assign(this.user, d);
-                } catch(e) {}
+                    if(r.ok) {
+                        const d = await r.json();
+                        this.user = { ...this.user, ...d };
+                    }
+                } catch(e) { console.log("Offline mode"); }
+                
                 ui.startLoad();
-                this.loop();
+                this.startLoops();
             },
             tap(e) {
                 if (this.user.energy < this.user.tap) return;
@@ -96,13 +105,13 @@
                 ui.pop(e);
                 if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
             },
-            loop() {
+            startLoops() {
                 setInterval(() => {
-                    if(this.user.energy < this.user.max_energy) this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
+                    if(this.user.energy < this.user.max_energy) this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.2);
                     if(this.user.profit > 0) this.user.balance += (this.user.profit / 3600);
                     ui.update();
                 }, 1000);
-                setInterval(() => this.save(), 10000);
+                setInterval(() => this.save(), 15000);
             },
             async save() {
                 fetch('/api/save', {
@@ -121,7 +130,7 @@
                     document.getElementById('l-pct').innerText = p + '%';
                     document.getElementById('l-bar').style.width = p + '%';
                     if(p >= 100) { clearInterval(i); document.getElementById('loading-screen').style.display = 'none'; document.getElementById('app').style.display = 'flex'; this.update(); }
-                }, 30);
+                }, 25);
             },
             update() {
                 document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
@@ -130,15 +139,28 @@
                 document.getElementById('u-name').innerText = logic.user.username;
                 document.getElementById('s-tap').innerText = `+${logic.user.tap}`;
                 document.getElementById('s-profit').innerText = logic.user.profit;
-                document.getElementById('u-lvl').innerText = `LVL ${Math.floor(logic.user.balance/100000)+1}`;
+                document.getElementById('u-lvl').innerText = `LVL ${Math.floor(logic.user.balance/50000)+1}`;
             },
-            openM(t) {
-                const c = document.getElementById('m-content');
-                c.innerHTML = `<h2 style="margin-bottom:20px">${t.toUpperCase()}</h2>`;
-                if(t === 'wallet') {
-                    c.innerHTML += `<div id="ton-btn" style="margin-bottom:20px"></div><div class="up-card" onclick="tonConnectUI.openModal()"><b>CONNECT TON</b><span>></span></div>`;
+            async openM(type) {
+                const body = document.getElementById('m-body');
+                body.innerHTML = `<h2>${type.toUpperCase()}</h2>`;
+                
+                if(type === 'wallet') {
+                    body.innerHTML += `
+                        <div class="up-card" onclick="tonConnectUI.openModal()">
+                            <div><b>TON Connect</b><br><small>Connect wallet for rewards</small></div>
+                            <span>></span>
+                        </div>`;
+                } else if(type === 'top') {
+                    body.innerHTML += `<p>Loading leaderboard...</p>`;
+                    const r = await fetch('/api/top');
+                    const users = await r.json();
+                    body.innerHTML = `<h2>LEADERBOARD</h2>`;
+                    users.sort((a,b) => b.balance - a.balance).slice(0,10).forEach((u, i) => {
+                        body.innerHTML += `<div class="up-card"><b>#${i+1} ${u.username}</b> <span>${Math.floor(u.balance)}</span></div>`;
+                    });
                 } else {
-                    c.innerHTML += `<div class="up-card"><b>${t} module</b><span>Coming Soon</span></div>`;
+                    body.innerHTML += `<div class="up-card"><b>${type} Module</b> <span>Soon</span></div>`;
                 }
                 document.getElementById('modal').classList.add('active');
             },
