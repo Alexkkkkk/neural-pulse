@@ -72,13 +72,23 @@
             async init() {
                 const tg = window.Telegram.WebApp;
                 tg.expand();
-                const u = tg.initDataUnsafe?.user || { id: "12345", username: "Agent" };
+                const u = tg.initDataUnsafe?.user || { id: "0", username: "Guest" };
                 
                 try {
-                    const res = await fetch(`/api/user/${u.id}?username=${u.username}&photo_url=${u.photo_url || ''}`);
-                    this.user = await res.json();
+                    const res = await fetch(`/api/user/${u.id}?username=${u.username}`);
+                    const data = await res.json();
+                    // ПРИНУДИТЕЛЬНОЕ ПРЕВРАЩЕНИЕ В ЧИСЛА (ЗАЩИТА ОТ NaN)
+                    this.user = {
+                        ...data,
+                        balance: Number(data.balance) || 0,
+                        energy: Number(data.energy) || 1000,
+                        max_energy: Number(data.max_energy) || 1000,
+                        click_lvl: Number(data.click_lvl) || 1,
+                        profit_hr: Number(data.profit_hr) || 0,
+                        username: data.username || u.username
+                    };
                 } catch(e) { 
-                    this.user = { balance: 1000, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0, username: u.username };
+                    this.user = { balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0, username: u.username };
                 }
                 ui.startLoading();
                 this.loop();
@@ -86,8 +96,8 @@
 
             tap(e) {
                 if (this.user.energy < this.user.click_lvl) return;
-                this.user.balance += this.user.click_lvl;
-                this.user.energy -= this.user.click_lvl;
+                this.user.balance = Number(this.user.balance) + Number(this.user.click_lvl);
+                this.user.energy = Number(this.user.energy) - Number(this.user.click_lvl);
                 ui.update();
                 this.createPop(e);
                 if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
@@ -105,33 +115,29 @@
             },
 
             async buyUpgrade(type) {
-                const prices = { 
-                    tap: Math.floor(this.user.click_lvl * 2500 * 1.5), 
-                    energy: Math.floor((this.user.max_energy / 500) * 4000), 
-                    profit: Math.floor((this.user.profit_hr / 500 + 1) * 12000) 
-                };
+                let price = 0;
+                if(type === 'tap') price = this.user.click_lvl * 2500;
+                if(type === 'energy') price = (this.user.max_energy / 500) * 4000;
+                if(type === 'profit') price = (this.user.profit_hr / 500 + 1) * 15000;
 
-                if (this.user.balance >= prices[type]) {
-                    this.user.balance -= prices[type];
+                if (this.user.balance >= price) {
+                    this.user.balance -= price;
                     if (type === 'tap') this.user.click_lvl++;
                     if (type === 'energy') { this.user.max_energy += 500; this.user.energy = this.user.max_energy; }
                     if (type === 'profit') this.user.profit_hr += 500;
-                    
                     ui.update();
                     this.save();
-                    ui.openM(type === 'profit' ? 'mine' : 'boost'); // Перерисовать окно с новой ценой
-                } else {
-                    if (window.Telegram?.WebApp) window.Telegram.WebApp.showAlert("Недостаточно кредитов!");
+                    ui.openM(type === 'profit' ? 'mine' : 'boost');
                 }
             },
 
             loop() {
                 setInterval(() => {
-                    if(this.user.energy < this.user.max_energy) this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
-                    if(this.user.profit_hr > 0) this.user.balance += (this.user.profit_hr / 3600);
+                    this.user.energy = Math.min(this.user.max_energy, Number(this.user.energy) + 1.5);
+                    if(this.user.profit_hr > 0) this.user.balance += (Number(this.user.profit_hr) / 3600);
                     ui.update();
                 }, 1000);
-                setInterval(() => this.save(), 15000);
+                setInterval(() => this.save(), 10000);
             },
 
             async save() {
@@ -153,29 +159,14 @@
         const ui = {
             update() {
                 if(!logic.user) return;
-                document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
+                const b = Math.floor(logic.user.balance) || 0;
+                document.getElementById('balance').innerText = b.toLocaleString();
                 document.getElementById('eng-val').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
                 document.getElementById('eng-fill').style.width = (logic.user.energy/logic.user.max_energy*100)+'%';
+                document.getElementById('u-lvl').innerText = `LVL ${Math.floor(b/100000)+1}`;
                 document.getElementById('u-name').innerText = logic.user.username;
-                document.getElementById('u-lvl').innerText = `LVL ${Math.floor(logic.user.balance/200000)+1}`;
                 document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
                 document.getElementById('profit-val').innerText = logic.user.profit_hr;
-                if(logic.user.photo_url) document.getElementById('u-avatar').src = logic.user.photo_url;
-            },
-
-            startLoading() {
-                let p = 0;
-                const itv = setInterval(() => {
-                    p += 2;
-                    document.getElementById('load-pct').innerText = p + '%';
-                    document.getElementById('load-bar').style.width = p + '%';
-                    if(p >= 100) {
-                        clearInterval(itv);
-                        document.getElementById('loading-screen').style.display = 'none';
-                        document.getElementById('app').style.display = 'flex';
-                        this.update();
-                    }
-                }, 30);
             },
 
             openM(type) {
@@ -184,65 +175,59 @@
                 title.innerText = type.toUpperCase();
                 let h = '';
 
-                if(type === 'boost') {
-                    h = `
-                        <div class="top-item" onclick="logic.buyUpgrade('tap')">
-                            <div class="top-user"><span>🚀</span><div><b>Multi-Tap</b><br><small>Next Lvl: ${logic.user.click_lvl + 1}</small></div></div>
-                            <b class="top-val">💰 ${Math.floor(logic.user.click_lvl * 2500 * 1.5).toLocaleString()}</b>
-                        </div>
-                        <div class="top-item" onclick="logic.buyUpgrade('energy')">
-                            <div class="top-user"><span>⚡</span><div><b>Energy Cap</b><br><small>+500 Limit</small></div></div>
-                            <b class="top-val">💰 ${Math.floor((logic.user.max_energy / 500) * 4000).toLocaleString()}</b>
-                        </div>`;
-                } else if(type === 'mine') {
-                    h = `<div class="top-item" onclick="logic.buyUpgrade('profit')">
-                            <div class="top-user"><span>⛏️</span><div><b>Neural Core</b><br><small>+500/hr Profit</small></div></div>
-                            <b class="top-val">💰 ${Math.floor((logic.user.profit_hr / 500 + 1) * 12000).toLocaleString()}</b>
-                        </div>`;
-                } else if(type === 'top') {
-                    body.innerHTML = '<div style="text-align:center; padding:20px; opacity:0.3;">CONNECTING TO NETWORK...</div>';
+                if(type === 'top') {
+                    body.innerHTML = '<div style="text-align:center; padding:20px; color:cyan;">SCANNING TOP 100...</div>';
                     fetch('/api/top').then(r=>r.json()).then(data => {
-                        body.innerHTML = data.map((u, i) => `
+                        body.innerHTML = data.slice(0, 100).map((u, i) => `
                             <div class="top-item ${u.username === logic.user.username ? 'me' : ''}">
                                 <div class="top-user">
-                                    <span style="font-weight:900; width:25px; color:${i<3?'#00ffff':'#333'}">#${i+1}</span>
-                                    <div class="top-avatar" style="background:${i<3?'var(--grad)':'#1a1a1a'}">${u.username[0].toUpperCase()}</div>
+                                    <span style="width:25px; font-weight:900; color:${i<3?'cyan':'#333'}">#${i+1}</span>
+                                    <div class="top-avatar">${u.username[0].toUpperCase()}</div>
                                     <span class="top-name">${u.username}</span>
                                 </div>
                                 <span class="top-val">${Math.floor(u.balance).toLocaleString()}</span>
                             </div>`).join('');
                     });
                     return;
-                } else if(type === 'tasks') {
-                    h = `<div class="top-item" onclick="window.open('https://t.me/your_channel')">
-                            <div class="top-user"><span>📢</span><div><b>Join Channel</b><br><small>+10,000 Credits</small></div></div>
-                            <div class="lvl-badge">START</div>
-                        </div>`;
-                } else if(type === 'friends') {
-                    h = `<div style="text-align:center; padding:10px;">
-                            <p style="font-size:13px; color:#666; margin-bottom:15px;">Invite your squad and get 10% of their taps!</p>
-                            <div class="top-item" onclick="window.open('https://t.me/share/url?url=t.me/bot_name?start=${logic.user.user_id}')">
-                                <div class="top-user"><span>🤝</span><b>Invite a Friend</b></div>
-                                <div class="lvl-badge">SEND</div>
-                            </div>
-                        </div>`;
                 } else if(type === 'wallet') {
                     h = `<div style="text-align:center; padding:20px;">
-                            <div style="font-size:40px; margin-bottom:10px;">👛</div>
-                            <p style="margin-bottom:20px;">Connect your TON wallet for future airdrops.</p>
-                            <button class="close-btn" style="background:var(--grad); color:#000; border:none;">Connect TON Wallet</button>
+                            <img src="https://ton.org/download/ton_symbol.png" width="60" style="margin-bottom:15px">
+                            <h3 style="margin-bottom:10px">TON Connect</h3>
+                            <p style="color:#555; font-size:14px; margin-bottom:20px;">Connect your wallet to enable withdrawals and Airdrop participation.</p>
+                            <button class="close-btn" style="background:linear-gradient(90deg, #0088cc, #00ffff); color:#000; border:none;" onclick="alert('TON Connect integration soon!')">Connect TON Wallet</button>
                         </div>`;
-                } else if(type === 'bonus') {
-                    h = `<div class="top-item">
-                            <div class="top-user"><span>🎁</span><b>Daily Reward</b><br><small>Come back tomorrow</small></div>
-                            <div class="lvl-badge" style="opacity:0.5;">CLAIMED</div>
+                } else if(type === 'boost') {
+                    h = `<div class="top-item" onclick="logic.buyUpgrade('tap')">
+                            <div class="top-user"><span>🚀</span><div><b>Multi-Tap</b><br><small>Lvl ${logic.user.click_lvl}</small></div></div>
+                            <b class="top-val">${(logic.user.click_lvl * 2500).toLocaleString()}</b>
+                        </div>
+                        <div class="top-item" onclick="logic.buyUpgrade('energy')">
+                            <div class="top-user"><span>⚡</span><div><b>Energy Cap</b><br><small>+500 Max</small></div></div>
+                            <b class="top-val">${((logic.user.max_energy / 500) * 4000).toLocaleString()}</b>
                         </div>`;
+                } else if(type === 'mine') {
+                    h = `<div class="top-item" onclick="logic.buyUpgrade('profit')">
+                            <div class="top-user"><span>⛏️</span><div><b>Neural Core</b><br><small>+500/hr</small></div></div>
+                            <b class="top-val">${((logic.user.profit_hr / 500 + 1) * 15000).toLocaleString()}</b>
+                        </div>`;
+                } else {
+                    h = `<div style="text-align:center; padding:20px; color:#333;">DATABASE LINK NOT FOUND</div>`;
                 }
                 body.innerHTML = h;
                 document.getElementById('modal-container').classList.add('active');
             },
 
-            closeM() { document.getElementById('modal-container').classList.remove('active'); }
+            closeM() { document.getElementById('modal-container').classList.remove('active'); },
+            
+            startLoading() {
+                let p = 0;
+                const itv = setInterval(() => {
+                    p += 2;
+                    document.getElementById('load-pct').innerText = p + '%';
+                    document.getElementById('load-bar').style.width = p + '%';
+                    if(p >= 100) { clearInterval(itv); document.getElementById('loading-screen').style.display = 'none'; document.getElementById('app').style.display = 'flex'; this.update(); }
+                }, 30);
+            }
         };
 
         window.onload = () => logic.init();
