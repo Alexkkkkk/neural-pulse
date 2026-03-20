@@ -1,15 +1,12 @@
 const logic = {
     user: null,
-
     async init(userIdFromTg = null, userNameFromTg = null, photoUrlFromTg = null) {
         const userId = userIdFromTg || "12345";
         const firstName = userNameFromTg || "Agent";
         const photoUrl = photoUrlFromTg || "";
-
         try {
             const res = await fetch(`/api/user/${userId}?username=${encodeURIComponent(firstName)}&photo_url=${encodeURIComponent(photoUrl)}`);
             const data = await res.json();
-
             this.user = {
                 user_id: String(userId),
                 username: data.username || firstName,
@@ -22,7 +19,6 @@ const logic = {
                 lvl: Number(data.lvl || 1),
                 wallet: data.wallet || null
             };
-
             if (typeof ui !== 'undefined') ui.init();
             this.startLoops();
             return true;
@@ -31,39 +27,28 @@ const logic = {
             return false; 
         }
     },
-
     tap(e) {
         if (e.type === 'touchstart') e.preventDefault();
         if (!this.user || this.user.energy < this.user.click_lvl) return;
-        
         this.user.balance += this.user.click_lvl;
         this.user.energy -= this.user.click_lvl;
-        
         this.checkLvl();
         if (typeof ui !== 'undefined') ui.update();
         this.anim(e);
-        
         if (window.Telegram?.WebApp?.HapticFeedback) {
             window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
         }
     },
-
     async saveWallet(address) {
         if (!this.user) return;
         this.user.wallet = address;
-        
-        // Обновляем текст в модалке, если она открыта
         const statusEl = document.getElementById('wallet-status');
         if (statusEl) {
             statusEl.innerText = address ? address.slice(0,6)+'...'+address.slice(-4) : "Not Connected";
         }
-
-        // Если кошелек подключен, перерисовываем окно через полсекунды, 
-        // чтобы появилась кнопка DISCONNECT
         if (typeof ui !== 'undefined' && document.getElementById('modal-container').classList.contains('active')) {
             setTimeout(() => ui.openM('wallet'), 500);
         }
-        
         try {
             await fetch('/api/wallet', {
                 method: 'POST',
@@ -72,14 +57,11 @@ const logic = {
             });
         } catch (err) { console.warn("Save Wallet Error:", err); }
     },
-
     async disconnectWallet() {
         if (typeof tonConnectUI !== 'undefined') {
             await tonConnectUI.disconnect();
-            // Статус обновится автоматически через onStatusChange в index.html
         }
     },
-
     checkLvl() {
         const newLvl = Math.floor(this.user.balance / 100000) + 1;
         if (newLvl > this.user.lvl) {
@@ -87,7 +69,6 @@ const logic = {
             window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
         }
     },
-
     anim(e) {
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -99,11 +80,9 @@ const logic = {
         document.body.appendChild(p);
         setTimeout(() => p.remove(), 800);
     },
-
     async buyUpgrade(type) {
         if (!this.user) return;
         let success = false;
-        
         if (type === 'tap' && this.user.balance >= 5000) {
             this.user.balance -= 5000; this.user.click_lvl += 1; success = true;
         } else if (type === 'energy' && this.user.balance >= 10000) {
@@ -111,7 +90,6 @@ const logic = {
         } else if (type === 'profit' && this.user.balance >= 25000) {
             this.user.balance -= 25000; this.user.profit_hr += 500; success = true;
         }
-        
         if (success) {
             if (typeof ui !== 'undefined') { 
                 ui.update(); 
@@ -120,7 +98,6 @@ const logic = {
             await this.save();
         }
     },
-
     async save() {
         if (!this.user) return;
         try {
@@ -139,22 +116,17 @@ const logic = {
             });
         } catch (err) { console.warn("Save Error:", err); }
     },
-
     startLoops() {
         setInterval(() => {
             if (!this.user) return;
-            // Регенерация энергии
             if (this.user.energy < this.user.max_energy) {
                 this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
             }
-            // Пассивный доход
             if (this.user.profit_hr > 0) {
                 this.user.balance += (this.user.profit_hr / 3600);
             }
             if (typeof ui !== 'undefined') ui.update();
         }, 1000);
-        
-        // Автосохранение каждые 15 секунд
         setInterval(() => this.save(), 15000);
     }
 };
