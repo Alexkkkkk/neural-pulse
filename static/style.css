@@ -97,7 +97,7 @@ body {
 .modal-drag-line { width: 40px; height: 4px; background: #333; border-radius: 10px; margin: 0 auto 20px; }
 .modal-header { font-size: 20px; font-weight: 900; text-align: center; margin-bottom: 20px; letter-spacing: 2px; color: var(--accent); text-shadow: 0 0 10px var(--glow-cyan); }
 
-/* УЛУЧШЕННЫЕ КАРТОЧКИ (МАГАЗИН И ТОП-100) */
+/* КАРТОЧКИ МАГАЗИНА */
 .up-card { 
     background: linear-gradient(145deg, #111, #0a0a0c); 
     border: 1px solid var(--border); 
@@ -126,19 +126,41 @@ body {
     border: 1px solid #333;
 }
 
-/* ЛИДЕРБОРД (ТОП-100) */
+/* --- LEADERBOARD (TOP) --- */
+.top-container { display: flex; flex-direction: column; gap: 8px; }
+
 .rank-item { 
     display: flex; 
     justify-content: space-between; 
     align-items: center; 
-    padding: 14px 16px; 
+    padding: 12px 16px; 
     background: #0c0c0c;
     border: 1px solid var(--border);
     border-radius: 14px;
-    margin-bottom: 8px;
 }
+
+.rank-left { display: flex; align-items: center; gap: 12px; }
+
+.rank-num { width: 24px; font-weight: 800; color: #555; font-size: 14px; text-align: center; }
+
+.rank-trophy { font-size: 20px; width: 24px; text-align: center; }
+.gold { filter: drop-shadow(0 0 8px #ffd700); }
+.silver { filter: drop-shadow(0 0 8px #c0c0c0); }
+.bronze { filter: drop-shadow(0 0 8px #cd7f32); }
+
+.rank-avatar { 
+    width: 36px; 
+    height: 36px; 
+    border-radius: 50%; 
+    background: #111; 
+    border: 1px solid #222; 
+    overflow: hidden; 
+}
+.rank-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
 .rank-item span { font-weight: 600; color: #eee; font-size: 14px; }
 .rank-item b { color: var(--accent); font-size: 14px; font-family: monospace; }
+
 .rank-item.active { 
     background: rgba(0, 255, 255, 0.05); 
     border-color: var(--accent); 
