@@ -73,7 +73,6 @@
     </div>
 
     <script>
-        // --- LOGIC Прямо здесь, чтобы не было ошибок загрузки ---
         const logic = {
             user: null,
             async init(userIdFromTg, userNameFromTg, photoUrlFromTg) {
@@ -84,9 +83,19 @@
                 try {
                     const res = await fetch(`/api/user/${userId}?username=${encodeURIComponent(firstName)}&photo_url=${encodeURIComponent(photoUrl)}`);
                     if (!res.ok) throw new Error("API Error");
-                    this.user = await res.json();
+                    const data = await res.json();
+                    
+                    // Гарантируем, что числа — это числа, а не строки
+                    this.user = {
+                        ...data,
+                        balance: Number(data.balance),
+                        energy: Number(data.energy),
+                        max_energy: Number(data.max_energy),
+                        click_lvl: Number(data.click_lvl),
+                        profit_hr: Number(data.profit_hr),
+                        lvl: Number(data.lvl)
+                    };
                 } catch (e) {
-                    console.error("Using Fallback User Data");
                     this.user = { user_id: userId, username: firstName, photo_url: photoUrl, balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0, lvl: 1, wallet: null };
                 }
                 ui.init();
@@ -95,8 +104,11 @@
             tap(e) {
                 if (e.type === 'touchstart') e.preventDefault();
                 if (!this.user || this.user.energy < this.user.click_lvl) return;
-                this.user.balance += this.user.click_lvl;
-                this.user.energy -= this.user.click_lvl;
+
+                // Математика с явным преобразованием
+                this.user.balance = Number(this.user.balance) + Number(this.user.click_lvl);
+                this.user.energy = Number(this.user.energy) - Number(this.user.click_lvl);
+                
                 this.checkLvl();
                 ui.update();
                 this.anim(e);
@@ -173,7 +185,6 @@
             }
         };
 
-        // --- UI ОБЪЕКТ ---
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
             manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json'
         });
@@ -186,14 +197,19 @@
             init() { this.update(); this.finishLoading(); },
             update() {
                 if (!logic.user) return;
-                document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
+                // Красивое отображение баланса без лишних "склеек"
+                document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString('ru-RU');
                 document.getElementById('eng-val').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
                 document.getElementById('eng-fill').style.width = `${(logic.user.energy / logic.user.max_energy) * 100}%`;
                 document.getElementById('u-lvl').innerText = `LVL ${logic.user.lvl}`;
                 document.getElementById('u-name').innerText = logic.user.username;
                 document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
-                document.getElementById('profit-val').innerText = Math.floor(logic.user.profit_hr).toLocaleString();
-                if (logic.user.photo_url) document.getElementById('u-avatar').src = logic.user.photo_url;
+                document.getElementById('profit-val').innerText = Math.floor(logic.user.profit_hr).toLocaleString('ru-RU');
+                
+                const avatar = document.getElementById('u-avatar');
+                if (logic.user.photo_url && logic.user.photo_url !== "") {
+                    avatar.src = logic.user.photo_url;
+                }
             },
             openM(type) {
                 const body = document.getElementById('modal-body');
@@ -203,11 +219,17 @@
                 
                 if (type === 'wallet') {
                     const addr = logic.user.wallet;
-                    h = `<div style="text-align:center;"><div id="ton-connect-button" style="display:flex; justify-content:center;"></div><p style="color:#00ffff; margin-top:10px; font-size:12px;">${addr ? addr.slice(0,8)+'...'+addr.slice(-8) : "NOT CONNECTED"}</p>${addr ? `<button onclick="logic.disconnectWallet()" class="back-btn" style="color:red; border:1px solid red; background:transparent; margin-top:10px;">DISCONNECT</button>` : ''}</div>`;
+                    h = `<div style="text-align:center;">
+                            <div id="ton-connect-button" style="display:flex; justify-content:center;"></div>
+                            <p style="color:#00ffff; margin-top:10px; font-size:12px; word-break:break-all; padding:0 10px;">
+                                ${addr ? addr : "NOT CONNECTED"}
+                            </p>
+                            ${addr ? `<button onclick="logic.disconnectWallet()" class="back-btn" style="color:red; border:1px solid red; background:transparent; margin-top:10px; width:80%;">DISCONNECT</button>` : ''}
+                         </div>`;
                     body.innerHTML = h;
                     setTimeout(() => { tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-button' }; }, 100);
                 } else if (type === 'boost') {
-                    h = `<div class="up-card" onclick="logic.buyUpgrade('tap')"><div><b>Multi-Tap</b><br><small>Level Up</small></div><div class="price">💰 5,000</div></div>
+                    h = `<div class="up-card" onclick="logic.buyUpgrade('tap')"><div><b>Multi-Tap</b><br><small>Level ${logic.user.click_lvl}</small></div><div class="price">💰 5,000</div></div>
                          <div class="up-card" onclick="logic.buyUpgrade('energy')"><div><b>Energy Cap</b><br><small>+500 Limit</small></div><div class="price">💰 10,000</div></div>`;
                     body.innerHTML = h;
                 } else if (type === 'mine') {
@@ -217,11 +239,11 @@
                     body.innerHTML = '<p style="text-align:center;">SCANNING NETWORK...</p>';
                     fetch('/api/top').then(r => r.json()).then(data => {
                         let list = '';
-                        data.forEach((u, i) => list += `<div class="up-card">#${i+1} ${u.username} <b>${Math.floor(u.balance)}</b></div>`);
+                        data.forEach((u, i) => list += `<div class="up-card">#${i+1} ${u.username} <b>${Math.floor(u.balance).toLocaleString()}</b></div>`);
                         body.innerHTML = list;
-                    });
+                    }).catch(() => { body.innerHTML = '<p>Offline Mode</p>'; });
                 } else {
-                    body.innerHTML = `<p style="text-align:center; padding:20px;">Encrypted data. Coming soon.</p>`;
+                    body.innerHTML = `<p style="text-align:center; padding:20px; color:#888;">Module ${type} is encrypted.</p>`;
                 }
                 document.getElementById('modal-container').classList.add('active');
             },
@@ -246,6 +268,7 @@
         window.onload = () => {
             const tg = window.Telegram.WebApp;
             tg.expand();
+            tg.ready();
             const u = tg.initDataUnsafe?.user || {};
             logic.init(u.id, u.username || u.first_name, u.photo_url);
         };
