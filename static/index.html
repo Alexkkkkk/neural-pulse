@@ -5,54 +5,58 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-
     <div id="loading-screen">
         <div class="loader-container">
-            <div class="main-logo-circle">
-                <img src="images/logo.png" class="logo-img">
-                <div class="scan-line"></div>
-            </div>
-            <div class="loading-text-row">
-                <span class="status-msg">ACCESS GRANTED</span>
-                <span class="percent" id="load-pct">0%</span>
-            </div>
-            <div class="load-bar-wrapper"><div id="load-bar" class="load-bar-fill"></div></div>
+            <div class="loader-ring"></div>
+            <img src="images/logo.png" class="loader-logo">
         </div>
+        <div class="loading-text">NEURAL NET LOADING...</div>
+        <div id="load-pct" class="percent">0%</div>
+        <div class="load-bar-wrapper"><div id="load-bar" style="width: 0%; height: 100%; background: var(--accent);"></div></div>
     </div>
 
-    <div id="app" style="display:none;">
+    <div id="app">
         <div class="header">
-            <div class="u-profile">
-                <div class="u-av"><img src="images/logo.png" id="u-avatar"></div>
-                <div class="u-info"><b id="u-name">Agent</b><br><small>v4.0.0 Neural Mining</small></div>
+            <div class="header-left">
+                <div class="avatar">
+                    <img src="images/logo.png" id="u-avatar" onerror="this.src='images/logo.png'">
+                </div>
+                <div class="u-info">
+                    <b id="u-name">Agent</b>
+                    <small>v4.0.0 Neural Mining</small>
+                </div>
             </div>
-            <div class="u-lvl-badge" id="u-lvl">LVL 1</div>
+            <div class="lvl-badge" id="u-lvl">LVL 1</div>
         </div>
 
         <div class="stats-row">
-            <div class="stat-card"><small>EARN PER TAP</small><b id="tap-val">+1</b></div>
-            <div class="stat-card"><small>PROFIT PER HR</small><b id="profit-val">0</b></div>
+            <div class="stat-card"><small>TAP</small><b id="tap-val" style="color:var(--accent)">+1</b></div>
+            <div class="stat-card"><small>PROFIT</small><b id="profit-val">0</b></div>
         </div>
 
         <div class="balance" id="balance">0</div>
 
         <div class="play-area">
-            <div class="main-logo-btn" ontouchstart="logic.tap(event)">
-                <img src="images/logo.png">
-            </div>
+            <img src="images/logo.png" class="main-logo" id="tap-target" 
+                 ontouchstart="logic.tap(event)" onmousedown="logic.tap(event)">
             <div class="side-menu">
-                <div class="side-btn" onclick="ui.openM('wallet')">👛 WALLET</div>
-                <div class="side-btn" onclick="ui.openM('friends')">🤝 FRIENDS</div>
+                <div class="side-btn" onclick="ui.toggleWalletMenu(true)">👛 WALLET</div>
+                <div class="side-btn" onclick="ui.openM('squad')">🤝 FRIENDS</div>
+                <div class="side-btn" onclick="ui.openM('bonus')">🎁 BONUS</div>
             </div>
         </div>
 
-        <div class="energy-box">
-            <div class="en-txt"><span>ENERGY</span><span id="eng-val">1000/1000</span></div>
-            <div class="en-track"><div id="eng-fill" class="en-fill"></div></div>
+        <div style="margin-top: 20px;">
+            <div style="display:flex; justify-content:space-between; font-size:10px; margin-bottom:5px;">
+                <span>ENERGY</span><span id="eng-val">1000/1000</span>
+            </div>
+            <div style="height:8px; background:#111; border-radius:10px; border:1px solid #222; overflow:hidden;">
+                <div id="eng-fill" style="height:100%; background:var(--accent); width:100%;"></div>
+            </div>
         </div>
 
         <div class="bottom-nav">
@@ -63,45 +67,39 @@
         </div>
     </div>
 
-    <div id="modal" class="modal" onclick="if(event.target === this) ui.closeM()">
+    <div id="wallet-overlay" class="modal" onclick="if(event.target === this) ui.toggleWalletMenu(false)">
+        <div class="modal-content" style="max-width: 400px; border: 1px solid var(--accent);">
+            <div style="text-align:center; margin-bottom:20px; font-weight:800;">CONNECT WALLET</div>
+            <div id="ton-connect-button" style="display:flex; justify-content:center; margin-bottom:20px;"></div>
+            <p id="wallet-addr" style="color:var(--accent); font-size:10px; text-align:center; word-break:break-all;"></p>
+            <button class="back-btn" onclick="ui.toggleWalletMenu(false)">BACK</button>
+        </div>
+    </div>
+
+    <div id="modal-container" class="modal" onclick="if(event.target === this) ui.closeM()">
         <div class="modal-content">
-            <h2 id="m-title" style="text-align:center; margin-bottom:15px;"></h2>
-            <div id="m-body"></div>
-            <button class="back-btn" onclick="ui.closeM()">CLOSE TERMINAL</button>
+            <div id="modal-header" style="font-weight:800; text-align:center; margin-bottom:20px;"></div>
+            <div id="modal-body"></div>
+            <button class="back-btn" onclick="ui.closeM()">CLOSE</button>
         </div>
     </div>
 
     <script>
-        // Глобальный объект для TonConnect
-        let tonConnectUI;
+        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
+            buttonRootId: 'ton-connect-button'
+        });
 
         const logic = {
-            user: { id: 0, username: "Agent", balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0 },
+            user: { balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0, lvl: 1, username: "Agent" },
             async init() {
                 const tg = window.Telegram.WebApp;
-                tg.ready();
                 tg.expand();
-
-                // Инициализируем кошелек сразу
-                tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                    manifestUrl: window.location.origin + '/static/tonconnect-manifest.json'
-                });
-
-                const tgUser = tg.initDataUnsafe?.user || { id: "123", username: "Agent" };
+                tg.ready();
+                const u = tg.initDataUnsafe?.user || {};
+                this.user.username = u.username || u.first_name || "Agent";
                 
-                // Запускаем визуальную загрузку НЕЗАВИСИМО от API
                 ui.startLoading();
-
-                try {
-                    const res = await fetch(`/api/user/${tgUser.id}?username=${encodeURIComponent(tgUser.username)}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        this.user = { ...this.user, ...data };
-                    }
-                } catch (e) {
-                    console.log("Using local fallback");
-                }
-                
                 this.startLoops();
             },
             tap(e) {
@@ -115,7 +113,6 @@
             startLoops() {
                 setInterval(() => {
                     if (this.user.energy < this.user.max_energy) this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
-                    if (this.user.profit_hr > 0) this.user.balance += (this.user.profit_hr / 3600);
                     ui.update();
                 }, 1000);
             }
@@ -125,16 +122,15 @@
             startLoading() {
                 let p = 0;
                 const iv = setInterval(() => {
-                    p += 2;
+                    p += 5;
                     document.getElementById('load-pct').innerText = p + '%';
                     document.getElementById('load-bar').style.width = p + '%';
                     if (p >= 100) {
                         clearInterval(iv);
                         document.getElementById('loading-screen').style.display = 'none';
                         document.getElementById('app').style.display = 'flex';
-                        this.update();
                     }
-                }, 20);
+                }, 50);
             },
             update() {
                 document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
@@ -142,26 +138,21 @@
                 document.getElementById('eng-fill').style.width = (logic.user.energy / logic.user.max_energy * 100) + '%';
                 document.getElementById('u-name').innerText = logic.user.username;
             },
-            openM(type) {
-                const body = document.getElementById('m-body');
-                document.getElementById('m-title').innerText = type.toUpperCase();
-                if(type === 'wallet') {
-                    body.innerHTML = `<div class="up-card" onclick="tonConnectUI.openModal()"><b>TON CONNECT</b><span>GO</span></div>`;
-                } else {
-                    body.innerHTML = `<div class="up-card"><b>${type}</b><span>Soon</span></div>`;
-                }
-                document.getElementById('modal').classList.add('active');
+            toggleWalletMenu(s) { document.getElementById('wallet-overlay').style.display = s ? 'flex' : 'none'; },
+            openM(t) {
+                document.getElementById('modal-header').innerText = t.toUpperCase();
+                document.getElementById('modal-body').innerHTML = `<div class="up-card"><b>${t} Module</b><span>Active</span></div>`;
+                document.getElementById('modal-container').style.display = 'flex';
             },
-            closeM() { document.getElementById('modal').classList.remove('active'); },
+            closeM() { document.getElementById('modal-container').style.display = 'none'; },
             pop(e) {
                 const t = e.touches ? e.touches[0] : e;
                 const p = document.createElement('div');
                 p.className = 'tap-pop'; p.innerText = `+${logic.user.click_lvl}`;
                 p.style.left = t.clientX + 'px'; p.style.top = t.clientY + 'px';
-                document.body.appendChild(p); setTimeout(() => p.remove(), 700);
+                document.body.appendChild(p); setTimeout(() => p.remove(), 800);
             }
         };
-
         window.onload = () => logic.init();
     </script>
 </body>
