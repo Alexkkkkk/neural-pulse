@@ -15,30 +15,24 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// --- АВТОМАТИЧЕСКАЯ СИНХРОНИЗАЦИЯ СТРУКТУРЫ БД ---
+// --- ЖЕСТКАЯ ИНИЦИАЛИЗАЦИЯ БД ---
 const initDB = async () => {
-    console.log("🛠 [DB] Проверка структуры таблицы...");
+    console.log("🛠 [DB] Принудительная проверка структуры...");
     try {
-        // Проверяем наличие колонки 'id'. Если её нет, пробуем переименовать старую 'userid'
-        await pool.query(`
-            DO $$ 
-            BEGIN 
-                IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users') THEN
-                    IF NOT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'id') THEN
-                        IF EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'userid') THEN
-                            ALTER TABLE users RENAME COLUMN userid TO id;
-                            RAISE NOTICE 'Колонка userid переименована в id';
-                        ELSE
-                            -- Если структура совсем не совпадает, пересоздаем таблицу
-                            DROP TABLE users;
-                            RAISE NOTICE 'Таблица users имела критические отличия и была пересоздана';
-                        END IF;
-                    END IF;
-                END IF;
-            END $$;
+        // Проверяем наличие колонки 'id'
+        const checkRes = await pool.query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'users' AND column_name = 'id'
         `);
 
-        // Создание таблицы с актуальными полями
+        // Если таблицы нет или в ней нет колонки 'id' — пересоздаем всё через CASCADE
+        if (checkRes.rowCount === 0) {
+            console.log("⚠️ [DB] Структура устарела. Выполняю DROP TABLE ... CASCADE");
+            await pool.query(`DROP TABLE IF EXISTS users CASCADE`);
+        }
+
+        // Создаем чистую таблицу с правильными именами
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id BIGINT PRIMARY KEY, 
@@ -51,9 +45,9 @@ const initDB = async () => {
                 profit INTEGER DEFAULT 0,  
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
-        console.log("✅ [DB] Таблица users синхронизирована и готова");
+        console.log("✅ [DB] Таблица users успешно инициализирована");
     } catch (e) { 
-        console.error("❌ [DB ERROR] Ошибка инициализации:", e.message); 
+        console.error("❌ [DB ERROR] Ошибка принудительной очистки:", e.message); 
     }
 };
 initDB();
@@ -62,13 +56,13 @@ initDB();
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     const { username, photo_url } = req.query;
-    console.log(`\n📥 [GET] Запрос данных: ID ${userId} (${username})`);
+    console.log(`\n📥 [GET] Запрос: ID ${userId}`);
 
     try {
         let result = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
         
         if (result.rows.length === 0) {
-            console.log(`👤 [DB] Регистрация нового агента: ${userId}`);
+            console.log(`👤 [DB] Регистрация нового юзера: ${userId}`);
             const newUser = await pool.query(
                 `INSERT INTO users (id, username, photo_url) VALUES ($1, $2, $3) RETURNING *`,
                 [userId, username || 'AGENT', photo_url || '']
@@ -76,7 +70,7 @@ app.get('/api/user/:id', async (req, res) => {
             return res.json(newUser.rows[0]);
         }
         
-        console.log(`✔ [DB] Пользователь найден. Баланс: ${Math.floor(result.rows[0].balance)}`);
+        console.log(`✔ [DB] Юзер найден. Bal: ${result.rows[0].balance}`);
         res.json(result.rows[0]);
     } catch (e) { 
         console.error(`❌ [API ERROR] GET /api/user/${userId}:`, e.message);
@@ -84,24 +78,19 @@ app.get('/api/user/:id', async (req, res) => {
     }
 });
 
-// --- API: СОХРАНЕНИЕ ПРОГРЕССА ---
+// --- API: СОХРАНЕНИЕ ---
 app.post('/api/save', async (req, res) => {
     const d = req.body;
-    console.log(`📤 [POST] Save: ID ${d.userId} | Bal: ${Math.floor(d.balance)} | Eng: ${Math.floor(d.energy)}`);
+    console.log(`📤 [POST] Сохранение: ID ${d.userId} | Bal: ${d.balance}`);
 
     try {
-        const result = await pool.query(
+        await pool.query(
             `UPDATE users SET balance=$2, energy=$3, tap=$4, profit=$5, last_seen=NOW() WHERE id=$1`, 
             [d.userId, d.balance, d.energy, d.tap, d.profit]
         );
-        
-        if (result.rowCount > 0) {
-            res.json({ ok: true });
-        } else {
-            res.status(404).json({ error: "User not found" });
-        }
+        res.json({ ok: true });
     } catch (e) { 
-        console.error(`❌ [API ERROR] POST /api/save для ${d.userId}:`, e.message);
+        console.error(`❌ [API ERROR] Save Fail для ${d.userId}:`, e.message);
         res.status(500).json({ error: "Save error" }); 
     }
 });
@@ -118,8 +107,7 @@ app.get('/api/top', async (req, res) => {
 
 // --- БОТ ---
 bot.start((ctx) => {
-    console.log(`🤖 [BOT] Start от ${ctx.from.id}`);
-    ctx.reply(`<b>Neural Pulse | System Online</b>\nWelcome, Agent <b>${ctx.from.first_name}</b>.`, {
+    ctx.reply(`<b>Neural Pulse | Syncing...</b>\nWelcome back, Agent <b>${ctx.from.first_name}</b>.`, {
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", DOMAIN)]])
     });
@@ -129,15 +117,6 @@ const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
 app.use(bot.webhookCallback(WEBHOOK_PATH));
 
 app.listen(PORT, async () => {
-    console.log(`\n🚀 ==========================================`);
-    console.log(`🚀 СЕРВЕР ЗАПУЩЕН НА ПОРТУ: ${PORT}`);
-    console.log(`🚀 ДОМЕН: ${DOMAIN}`);
-    console.log(`🚀 ==========================================\n`);
-    
-    try {
-        await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
-        console.log("🔗 [BOT] Webhook установлен");
-    } catch (e) {
-        console.error("❌ [BOT ERROR] Webhook fail:", e.message);
-    }
+    console.log(`🚀 SERVER START: ${DOMAIN}`);
+    await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
 });
