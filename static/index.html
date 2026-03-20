@@ -49,7 +49,7 @@
 
         <div class="play-area">
             <img src="images/logo.png" class="main-logo" id="tap-target" 
-                  ontouchstart="logic.tap(event)" onmousedown="logic.tap(event)">
+                 ontouchstart="logic.tap(event)" onmousedown="logic.tap(event)">
             
             <div class="side-menu">
                 <div class="side-btn" onclick="ui.openM('wallet')">👛 WALLET</div>
@@ -86,16 +86,14 @@
     </div>
 
     <script>
-        // Инициализируем TON Connect без привязки к ID (сделаем это позже)
+        // Инициализация TON Connect
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
             manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json'
         });
 
         tonConnectUI.onStatusChange(wallet => {
-            if (wallet) {
+            if (wallet && typeof logic !== 'undefined') {
                 logic.saveWallet(wallet.account.address);
-            } else {
-                logic.saveWallet(null);
             }
         });
     </script>
@@ -109,7 +107,7 @@
                 this.finishLoading(); 
             },
             update() {
-                if (!logic.user) return;
+                if (!logic || !logic.user) return;
                 document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
                 document.getElementById('eng-val').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
                 document.getElementById('eng-fill').style.width = `${(logic.user.energy / logic.user.max_energy) * 100}%`;
@@ -123,9 +121,13 @@
                 }
             },
             openM(type) {
+                console.log("Opening modal:", type);
                 const body = document.getElementById('modal-body');
                 const header = document.getElementById('modal-header');
                 const container = document.getElementById('modal-container');
+                
+                if (!body || !container) return;
+
                 header.innerText = type.toUpperCase();
                 let h = '';
 
@@ -143,13 +145,9 @@
                              </div>`;
                         body.innerHTML = h;
                         
-                        // Критически важный фикс: принудительно перенаправляем кнопку в новый элемент
                         setTimeout(() => {
-                            const btnRoot = document.getElementById('ton-connect-button');
-                            if (btnRoot) {
-                                tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-button' };
-                            }
-                        }, 150);
+                            tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-button' };
+                        }, 200);
                         break;
                     
                     case 'boost':
@@ -172,32 +170,14 @@
                         body.innerHTML = h;
                         break;
 
-                    case 'top':
-                        body.innerHTML = `<div class="top-container" id="top-list"><p style="text-align:center; padding:20px; color:#00ffff;">📡 SYNCHRONIZING...</p></div>`;
-                        fetch('/api/top').then(res => res.json()).then(leaders => {
-                            let html = `<div class="top-container">`;
-                            leaders.forEach((p, i) => {
-                                const place = i + 1;
-                                const isMe = String(p.user_id) === String(logic.user.user_id);
-                                let trophy = `<span class="rank-num">${place}</span>`;
-                                if (place === 1) trophy = `<span class="rank-trophy gold">🏆</span>`;
-                                else if (place === 2) trophy = `<span class="rank-trophy silver">🥈</span>`;
-                                else if (place === 3) trophy = `<span class="rank-trophy bronze">🥉</span>`;
-                                const val = p.balance >= 1000000 ? (p.balance / 1000000).toFixed(1) + 'M' : Math.floor(p.balance).toLocaleString();
-                                html += `<div class="rank-item ${isMe ? 'active' : ''}">
-                                    <div class="rank-left">${trophy}<div class="rank-avatar"><img src="${p.photo_url || 'images/logo.png'}"></div><span>${p.username}</span></div>
-                                    <b>${val}</b></div>`;
-                            });
-                            html += `</div>`;
-                            document.getElementById('top-list').innerHTML = html;
-                        }).catch(() => {
-                            document.getElementById('top-list').innerHTML = '<p style="text-align:center; color:red;">Connection error</p>';
-                        });
-                        break;
+                    default:
+                        body.innerHTML = `<p style="text-align:center; padding:20px;">Section ${type} is under construction.</p>`;
                 }
                 container.classList.add('active');
             },
-            closeM() { document.getElementById('modal-container').classList.remove('active'); },
+            closeM() { 
+                document.getElementById('modal-container').classList.remove('active'); 
+            },
             finishLoading() {
                 let p = 0;
                 const iv = setInterval(() => {
@@ -212,7 +192,7 @@
                             const ls = document.getElementById('loading-screen');
                             if(ls) ls.style.opacity = '0';
                             document.getElementById('app').style.display = 'flex';
-                            setTimeout(() => ls.remove(), 500);
+                            setTimeout(() => { if(ls) ls.remove(); }, 500);
                         }, 400);
                     }
                 }, 40);
@@ -224,7 +204,9 @@
             tg.expand();
             tg.ready();
             const user = tg.initDataUnsafe?.user || {};
-            logic.init(user.id, user.username || user.first_name, user.photo_url);
+            if (typeof logic !== 'undefined') {
+                logic.init(user.id, user.username || user.first_name, user.photo_url);
+            }
         };
     </script>
 </body>
