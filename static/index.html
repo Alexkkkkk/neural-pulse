@@ -87,6 +87,7 @@
 
     <script src="logic.js"></script>
     <script>
+        // Инициализация TON Connect для подключения кошелька
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
             manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
             buttonRootId: null 
@@ -99,13 +100,18 @@
             },
             update() {
                 if (!logic.user) return;
+                // Обновление основных показателей баланса и энергии
                 document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
                 document.getElementById('eng-val').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
                 document.getElementById('eng-fill').style.width = `${(logic.user.energy / logic.user.max_energy) * 100}%`;
+                
+                // Обновление заголовка (имя и уровень)
                 document.getElementById('u-lvl').innerText = `LVL ${logic.user.lvl}`;
+                document.getElementById('u-name').innerText = logic.user.username || 'Agent';
+                
+                // Обновление карточек статистики
                 document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
                 document.getElementById('profit-val').innerText = Math.floor(logic.user.profit_hr).toLocaleString();
-                document.getElementById('u-name').innerText = logic.user.username || 'Agent';
             },
             openM(type) {
                 const body = document.getElementById('modal-body');
@@ -146,9 +152,11 @@
                         break;
 
                     case 'squad':
+                        // Ссылка инвайта с ID пользователя
+                        const inviteLink = `https://t.me/share/url?url=https://t.me/NeuralPulseBot?start=${logic.user.user_id}`;
                         h = `<div style="padding:10px; text-align:center;">
                                 <p style="margin-bottom:15px;">Invite friends to earn 10% of their mining profit!</p>
-                                <button class="nav-btn" style="width:100%;" onclick="window.Telegram.WebApp.openTelegramLink('https://t.me/share/url?url=https://t.me/YourBot?start=${logic.user.user_id}')">INVITE AGENT</button>
+                                <button class="nav-btn" style="width:100%;" onclick="window.Telegram.WebApp.openTelegramLink('${inviteLink}')">INVITE AGENT</button>
                                 <div class="rank-item" style="margin-top:20px;"><span>Total Friends:</span><b>0</b></div>
                              </div>`;
                         body.innerHTML = h;
@@ -178,6 +186,7 @@
                     case 'top':
                         body.innerHTML = `<div class="top-container" id="top-list"><p style="text-align:center; padding:20px; color:#00ffff;">📡 SYNCHRONIZING WITH NETWORK...</p></div>`;
                         
+                        // Внедрена логика реальных аватарок
                         fetch('/api/top')
                             .then(res => res.json())
                             .then(leaders => {
@@ -193,6 +202,10 @@
                                         else if (place === 2) trophy = `<span class="rank-trophy silver">🥈</span>`;
                                         else if (place === 3) trophy = `<span class="rank-trophy bronze">🥉</span>`;
 
+                                        // Если photo_url нет, используем images/logo.png
+                                        const avatarUrl = p.photo_url || 'images/logo.png';
+
+                                        // Сокращаем большие числа (например, 1.2M)
                                         const val = p.balance >= 1000000 
                                             ? (p.balance / 1000000).toFixed(1) + 'M' 
                                             : Math.floor(p.balance).toLocaleString();
@@ -202,7 +215,7 @@
                                             <div class="rank-left">
                                                 ${trophy}
                                                 <div class="rank-avatar">
-                                                    <img src="images/logo.png" onerror="this.src='images/logo.png'">
+                                                    <img src="${avatarUrl}" onerror="this.src='images/logo.png'">
                                                 </div>
                                                 <span>${p.username} ${isMe ? '<small>(YOU)</small>' : ''}</span>
                                             </div>
@@ -223,6 +236,7 @@
             },
             closeM() { document.getElementById('modal-container').classList.remove('active'); },
             finishLoading() {
+                // Эмуляция прогресса загрузки
                 let p = 0;
                 const iv = setInterval(() => {
                     p += 5;
@@ -239,6 +253,7 @@
                 }, 40);
             }
         };
+        // Старт логики после полной загрузки окна
         window.onload = () => logic.init();
     </script>
 </body>
