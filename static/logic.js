@@ -8,6 +8,9 @@ const logic = {
 
         try {
             const res = await fetch(`/api/user/${userId}?username=${encodeURIComponent(firstName)}&photo_url=${encodeURIComponent(photoUrl)}`);
+            
+            if (!res.ok) throw new Error("Server response not OK");
+            
             const data = await res.json();
 
             this.user = {
@@ -22,14 +25,27 @@ const logic = {
                 lvl: Number(data.lvl || 1),
                 wallet: data.wallet || null
             };
-
-            if (typeof ui !== 'undefined') ui.init();
-            this.startLoops();
-            return true;
         } catch (e) { 
-            console.error("Logic Init Error:", e);
-            return false; 
+            console.error("Logic Init Error, using fallback:", e);
+            // ФОЛБЕК: если сервер не ответил, создаем локального юзера, чтобы функции не пропали
+            this.user = {
+                user_id: String(userId),
+                username: firstName,
+                photo_url: photoUrl,
+                balance: 0,
+                energy: 1000,
+                max_energy: 1000,
+                click_lvl: 1,
+                profit_hr: 0,
+                lvl: 1,
+                wallet: null
+            };
         }
+
+        // Гарантированный запуск интерфейса
+        if (typeof ui !== 'undefined') ui.init();
+        this.startLoops();
+        return true;
     },
 
     tap(e) {
@@ -74,7 +90,9 @@ const logic = {
         const newLvl = Math.floor(this.user.balance / 100000) + 1;
         if (newLvl > this.user.lvl) {
             this.user.lvl = newLvl;
-            window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+            if (window.Telegram?.WebApp?.HapticFeedback) {
+                window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+            }
         }
     },
 
