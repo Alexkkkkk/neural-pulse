@@ -11,18 +11,14 @@ const PORT = 3000;
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
-
-const pool = new Pool({ 
-    connectionString: PG_URI, 
-    ssl: false 
-});
+const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
 const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
 
-// --- ИНИЦИАЛИЗАЦИЯ БД ---
+// Инициализация БД
 const initDB = async () => {
     try {
         await pool.query(`
@@ -39,32 +35,28 @@ const initDB = async () => {
                 photo_url TEXT, 
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
-        console.log("✅ [DB] Connected and Ready");
+        console.log("✅ [DB] Connected");
     } catch (e) { console.error("❌ [DB ERROR]:", e.message); }
 };
 initDB();
 
-// --- API ЭНДПОИНТЫ ---
-
-// Получение или создание пользователя
+// API: Загрузка/Создание юзера
 app.get('/api/user/:id', async (req, res) => {
     const userId = String(req.params.id);
-    const username = req.query.username || 'Agent';
-    const photoUrl = req.query.photo_url || null; 
+    const { username, photo_url } = req.query;
     try {
         let result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
         if (result.rows.length === 0) {
-            await pool.query('INSERT INTO users (user_id, username, photo_url) VALUES ($1, $2, $3)', [userId, username, photoUrl]);
+            await pool.query('INSERT INTO users (user_id, username, photo_url) VALUES ($1, $2, $3)', [userId, username, photo_url]);
             result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
         } else {
-            // Обновляем имя и фото при каждом входе
-            await pool.query('UPDATE users SET username = $2, photo_url = $3, last_seen = NOW() WHERE user_id = $1', [userId, username, photoUrl]);
+            await pool.query('UPDATE users SET username = $2, photo_url = $3, last_seen = NOW() WHERE user_id = $1', [userId, username, photo_url]);
         }
         res.json(result.rows[0]);
     } catch (e) { res.status(500).json({ error: "DB Error" }); }
 });
 
-// Сохранение состояния игры
+// API: Сохранение
 app.post('/api/save', async (req, res) => {
     const d = req.body;
     try {
@@ -76,35 +68,24 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Save error" }); }
 });
 
-// Сохранение кошелька
-app.post('/api/wallet', async (req, res) => {
-    const { userId, address } = req.body;
-    try {
-        await pool.query('UPDATE users SET wallet = $2 WHERE user_id = $1', [String(userId), address]);
-        res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: "Wallet error" }); }
-});
-
-// Лидерборд
+// API: ТОП 50
 app.get('/api/top', async (req, res) => {
     try {
-        const result = await pool.query('SELECT user_id, username, balance, photo_url FROM users ORDER BY balance DESC LIMIT 50');
+        const result = await pool.query('SELECT username, balance, photo_url FROM users ORDER BY balance DESC LIMIT 50');
         res.json(result.rows);
     } catch (e) { res.status(500).json({ error: "Top error" }); }
 });
 
-// Бот Старт
+// Бот
 bot.start((ctx) => {
-    const welcome = `<b>Neural Pulse | Synchronization Initialized</b>\n\nWelcome, Agent <b>${ctx.from.first_name}</b>. Access the neural network via the button below.`;
-    ctx.reply(welcome, {
+    ctx.reply(`<b>Neural Pulse | Sync Active</b>\nWelcome, Agent <b>${ctx.from.first_name}</b>.`, {
         parse_mode: 'HTML',
-        ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ВХОД В СИСТЕМУ", DOMAIN)]])
+        ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ СИНХРОНИЗАЦИЯ", DOMAIN)]])
     });
 });
 
-// Запуск
 app.use(bot.webhookCallback(WEBHOOK_PATH));
 app.listen(PORT, async () => {
-    console.log(`🚀 SERVER RUNNING ON PORT ${PORT}`);
+    console.log(`🚀 SERVER STARTED ON ${PORT}`);
     await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
 });
