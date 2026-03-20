@@ -105,6 +105,7 @@
                 document.getElementById('u-lvl').innerText = `LVL ${logic.user.lvl}`;
                 document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
                 document.getElementById('profit-val').innerText = Math.floor(logic.user.profit_hr).toLocaleString();
+                document.getElementById('u-name').innerText = logic.user.username || 'Agent';
             },
             openM(type) {
                 const body = document.getElementById('modal-body');
@@ -175,41 +176,47 @@
                         break;
 
                     case 'top':
-                        // Демо-данные лидеров
-                        const leaders = [
-                            { id: "1", name: "Satoshi_N", balance: 150000000, photo: "images/logo.png" },
-                            { id: "2", name: "Matrix_Runner", balance: 85400000, photo: "images/logo.png" },
-                            { id: "3", name: "Cyber_Punk", balance: 42100000, photo: "images/logo.png" }
-                        ];
+                        body.innerHTML = `<div class="top-container" id="top-list"><p style="text-align:center; padding:20px; color:#00ffff;">📡 SYNCHRONIZING WITH NETWORK...</p></div>`;
                         
-                        // Добавляем тебя в список
-                        const myPhoto = window.Telegram?.WebApp?.initDataUnsafe?.user?.photo_url || "images/logo.png";
-                        leaders.push({ id: logic.user.user_id, name: logic.user.username, balance: logic.user.balance, photo: myPhoto });
-                        
-                        leaders.sort((a, b) => b.balance - a.balance);
+                        fetch('/api/top')
+                            .then(res => res.json())
+                            .then(leaders => {
+                                let html = `<div class="top-container">`;
+                                if (!leaders || leaders.length === 0) {
+                                    html += `<p style="text-align:center; color:#888; padding:20px;">No data in Neural Network</p>`;
+                                } else {
+                                    leaders.forEach((p, i) => {
+                                        const place = i + 1;
+                                        const isMe = String(p.user_id) === String(logic.user.user_id);
+                                        let trophy = `<span class="rank-num">${place}</span>`;
+                                        if (place === 1) trophy = `<span class="rank-trophy gold">🏆</span>`;
+                                        else if (place === 2) trophy = `<span class="rank-trophy silver">🥈</span>`;
+                                        else if (place === 3) trophy = `<span class="rank-trophy bronze">🥉</span>`;
 
-                        h = `<div class="top-container">`;
-                        leaders.forEach((p, i) => {
-                            const place = i + 1;
-                            const isMe = p.id === logic.user.user_id;
-                            let trophy = `<span class="rank-num">${place}</span>`;
-                            if (place === 1) trophy = `<span class="rank-trophy gold">🏆</span>`;
-                            else if (place === 2) trophy = `<span class="rank-trophy silver">🥈</span>`;
-                            else if (place === 3) trophy = `<span class="rank-trophy bronze">🥉</span>`;
+                                        const val = p.balance >= 1000000 
+                                            ? (p.balance / 1000000).toFixed(1) + 'M' 
+                                            : Math.floor(p.balance).toLocaleString();
 
-                            h += `<div class="rank-item ${isMe ? 'active' : ''}">
-                                    <div class="rank-left">
-                                        ${trophy}
-                                        <div class="rank-avatar">
-                                            <img src="${p.photo}" onerror="this.src='images/logo.png'">
-                                        </div>
-                                        <span>${p.name} ${isMe ? '(You)' : ''}</span>
-                                    </div>
-                                    <b>${(p.balance/1000000).toFixed(1)}M</b>
-                                  </div>`;
-                        });
-                        h += `</div>`;
-                        body.innerHTML = h;
+                                        html += `
+                                        <div class="rank-item ${isMe ? 'active' : ''}">
+                                            <div class="rank-left">
+                                                ${trophy}
+                                                <div class="rank-avatar">
+                                                    <img src="images/logo.png" onerror="this.src='images/logo.png'">
+                                                </div>
+                                                <span>${p.username} ${isMe ? '<small>(YOU)</small>' : ''}</span>
+                                            </div>
+                                            <b>${val}</b>
+                                        </div>`;
+                                    });
+                                }
+                                html += `</div>`;
+                                document.getElementById('top-list').innerHTML = html;
+                            })
+                            .catch(err => {
+                                console.error("Top load error:", err);
+                                document.getElementById('top-list').innerHTML = `<p style="text-align:center; color:#ff4444; padding:20px;">CONNECTION FAILED</p>`;
+                            });
                         break;
                 }
                 container.classList.add('active');
