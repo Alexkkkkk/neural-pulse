@@ -15,7 +15,7 @@
             <img src="images/logo.png" class="loader-logo">
         </div>
         <div class="loading-text">ACCESS GRANTED</div>
-        <div id="load-pct">0%</div>
+        <div class="percent" id="load-pct">0%</div>
         <div class="load-bar-wrapper"><div id="load-bar" class="load-bar-f"></div></div>
     </div>
 
@@ -97,24 +97,24 @@
             openM(type) {
                 const body = document.getElementById('modal-body');
                 const header = document.getElementById('modal-header');
-                const container = document.getElementById('modal-container');
                 header.innerText = type.toUpperCase();
-                
+                let h = '';
                 if (type === 'wallet') {
                     const addr = logic.user.wallet;
-                    body.innerHTML = `<div style="text-align:center;"><div id="ton-connect-button"></div><p style="color:#00ffff; margin-top:10px;">${addr ? addr.slice(0,6)+'...'+addr.slice(-4) : 'Disconnected'}</p>${addr ? '<button onclick="logic.disconnectWallet()" class="back-btn" style="background:red;">LOGOUT</button>' : ''}</div>`;
+                    h = `<div style="text-align:center;"><div id="ton-connect-button" style="display:flex; justify-content:center;"></div><p style="margin-top:10px; font-family:monospace; color:#00ffff;">${addr ? addr.slice(0,6)+'...'+addr.slice(-4) : "Not Connected"}</p>${addr ? `<button onclick="logic.disconnectWallet()" style="background:rgba(255,0,0,0.2); color:red; border:1px solid red; padding:5px 10px; border-radius:10px; margin-top:10px;">DISCONNECT</button>` : ''}</div>`;
+                    body.innerHTML = h;
                     setTimeout(() => { tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-button' }; }, 100);
                 } else if (type === 'top') {
-                    body.innerHTML = '<p>Loading scores...</p>';
+                    body.innerHTML = '<p style="text-align:center;">Loading...</p>';
                     fetch('/api/top').then(r => r.json()).then(data => {
-                        let h = '';
-                        data.forEach((u, i) => h += `<div class="up-card">#${i+1} ${u.username} <b>${Math.floor(u.balance)}</b></div>`);
-                        body.innerHTML = h;
-                    });
+                        let html = '';
+                        data.forEach((u, i) => html += `<div class="up-card"><span>#${i+1} ${u.username}</span><b>${Math.floor(u.balance)}</b></div>`);
+                        body.innerHTML = html;
+                    }).catch(() => body.innerHTML = 'Error loading Top');
                 } else {
-                    body.innerHTML = `<p style="text-align:center; padding:20px;">${type} is under construction</p>`;
+                    body.innerHTML = `<p style="text-align:center; padding:20px;">${type} coming soon.</p>`;
                 }
-                container.classList.add('active');
+                document.getElementById('modal-container').classList.add('active');
             },
             closeM() { document.getElementById('modal-container').classList.remove('active'); },
             finishLoading() {
@@ -130,7 +130,7 @@
                             document.getElementById('app').style.display = 'flex';
                         }, 200);
                     }
-                }, 40);
+                }, 50);
             }
         };
 
