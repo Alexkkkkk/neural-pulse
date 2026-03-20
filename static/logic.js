@@ -1,12 +1,15 @@
 const logic = {
     user: null,
+
     async init(userIdFromTg = null, userNameFromTg = null, photoUrlFromTg = null) {
         const userId = userIdFromTg || "12345";
         const firstName = userNameFromTg || "Agent";
         const photoUrl = photoUrlFromTg || "";
+
         try {
             const res = await fetch(`/api/user/${userId}?username=${encodeURIComponent(firstName)}&photo_url=${encodeURIComponent(photoUrl)}`);
             const data = await res.json();
+
             this.user = {
                 user_id: String(userId),
                 username: data.username || firstName,
@@ -19,6 +22,7 @@ const logic = {
                 lvl: Number(data.lvl || 1),
                 wallet: data.wallet || null
             };
+
             if (typeof ui !== 'undefined') ui.init();
             this.startLoops();
             return true;
@@ -27,28 +31,28 @@ const logic = {
             return false; 
         }
     },
+
     tap(e) {
         if (e.type === 'touchstart') e.preventDefault();
         if (!this.user || this.user.energy < this.user.click_lvl) return;
+        
         this.user.balance += this.user.click_lvl;
         this.user.energy -= this.user.click_lvl;
+        
         this.checkLvl();
         if (typeof ui !== 'undefined') ui.update();
         this.anim(e);
+        
         if (window.Telegram?.WebApp?.HapticFeedback) {
             window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
         }
     },
+
     async saveWallet(address) {
         if (!this.user) return;
         this.user.wallet = address;
-        const statusEl = document.getElementById('wallet-status');
-        if (statusEl) {
-            statusEl.innerText = address ? address.slice(0,6)+'...'+address.slice(-4) : "Not Connected";
-        }
-        if (typeof ui !== 'undefined' && document.getElementById('modal-container').classList.contains('active')) {
-            setTimeout(() => ui.openM('wallet'), 500);
-        }
+        if (typeof ui !== 'undefined') ui.openM('wallet');
+        
         try {
             await fetch('/api/wallet', {
                 method: 'POST',
@@ -57,11 +61,13 @@ const logic = {
             });
         } catch (err) { console.warn("Save Wallet Error:", err); }
     },
+
     async disconnectWallet() {
         if (typeof tonConnectUI !== 'undefined') {
             await tonConnectUI.disconnect();
         }
     },
+
     checkLvl() {
         const newLvl = Math.floor(this.user.balance / 100000) + 1;
         if (newLvl > this.user.lvl) {
@@ -69,6 +75,7 @@ const logic = {
             window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
         }
     },
+
     anim(e) {
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -80,6 +87,7 @@ const logic = {
         document.body.appendChild(p);
         setTimeout(() => p.remove(), 800);
     },
+
     async buyUpgrade(type) {
         if (!this.user) return;
         let success = false;
@@ -91,13 +99,12 @@ const logic = {
             this.user.balance -= 25000; this.user.profit_hr += 500; success = true;
         }
         if (success) {
-            if (typeof ui !== 'undefined') { 
-                ui.update(); 
-                ui.openM(type === 'profit' ? 'mine' : 'boost'); 
-            }
+            ui.update();
+            ui.openM(type === 'profit' ? 'mine' : 'boost');
             await this.save();
         }
     },
+
     async save() {
         if (!this.user) return;
         try {
@@ -116,6 +123,7 @@ const logic = {
             });
         } catch (err) { console.warn("Save Error:", err); }
     },
+
     startLoops() {
         setInterval(() => {
             if (!this.user) return;
