@@ -87,9 +87,19 @@
 
     <script src="logic.js"></script>
     <script>
+        // Инициализация TON Connect
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
             manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
             buttonRootId: null 
+        });
+
+        // Следим за статусом кошелька
+        tonConnectUI.onStatusChange(wallet => {
+            if (wallet) {
+                logic.saveWallet(wallet.account.address);
+            } else {
+                logic.saveWallet(null);
+            }
         });
 
         const ui = {
@@ -107,7 +117,6 @@
                 document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
                 document.getElementById('profit-val').innerText = Math.floor(logic.user.profit_hr).toLocaleString();
                 
-                // Установка аватарки в хедере
                 if (logic.user.photo_url) {
                     document.getElementById('u-avatar').src = logic.user.photo_url;
                 }
@@ -121,9 +130,14 @@
 
                 switch(type) {
                     case 'wallet':
+                        const addr = logic.user.wallet;
+                        const shortAddr = addr ? addr.slice(0,6)+'...'+addr.slice(-4) : "Not Connected";
+                        
                         h = `<div class="wallet-box" style="text-align:center; padding:10px;">
                                 <img src="images/logo.png" style="width:60px; margin-bottom:15px; filter:drop-shadow(0 0 10px #00ffff);">
                                 <div id="ton-connect-button" style="display:flex; justify-content:center;"></div>
+                                <p id="wallet-status" style="font-size:14px; color:#00ffff; margin-top:15px; font-family:monospace;">${shortAddr}</p>
+                                ${addr ? `<button onclick="logic.disconnectWallet()" style="background:rgba(255,0,0,0.2); color:#ff5555; border:1px solid #ff5555; padding:8px 15px; border-radius:10px; margin-top:10px; font-size:12px;">DISCONNECT</button>` : ''}
                                 <p style="font-size:12px; color:#888; margin-top:15px;">Connect TON for Airdrop eligibility.</p>
                              </div>`;
                         body.innerHTML = h;
@@ -152,38 +166,23 @@
 
                     case 'top':
                         body.innerHTML = `<div class="top-container" id="top-list"><p style="text-align:center; padding:20px; color:#00ffff;">📡 SYNCHRONIZING...</p></div>`;
-                        fetch('/api/top')
-                            .then(res => res.json())
-                            .then(leaders => {
-                                let html = `<div class="top-container">`;
-                                leaders.forEach((p, i) => {
-                                    const place = i + 1;
-                                    const isMe = String(p.user_id) === String(logic.user.user_id);
-                                    let trophy = `<span class="rank-num">${place}</span>`;
-                                    if (place === 1) trophy = `<span class="rank-trophy gold">🏆</span>`;
-                                    else if (place === 2) trophy = `<span class="rank-trophy silver">🥈</span>`;
-                                    else if (place === 3) trophy = `<span class="rank-trophy bronze">🥉</span>`;
-
-                                    const avatarUrl = p.photo_url || 'images/logo.png';
-                                    const val = p.balance >= 1000000 
-                                        ? (p.balance / 1000000).toFixed(1) + 'M' 
-                                        : Math.floor(p.balance).toLocaleString();
-
-                                    html += `
-                                    <div class="rank-item ${isMe ? 'active' : ''}">
-                                        <div class="rank-left">
-                                            ${trophy}
-                                            <div class="rank-avatar">
-                                                <img src="${avatarUrl}" onerror="this.src='images/logo.png'">
-                                            </div>
-                                            <span>${p.username} ${isMe ? '<small>(YOU)</small>' : ''}</span>
-                                        </div>
-                                        <b>${val}</b>
-                                    </div>`;
-                                });
-                                html += `</div>`;
-                                document.getElementById('top-list').innerHTML = html;
+                        fetch('/api/top').then(res => res.json()).then(leaders => {
+                            let html = `<div class="top-container">`;
+                            leaders.forEach((p, i) => {
+                                const place = i + 1;
+                                const isMe = String(p.user_id) === String(logic.user.user_id);
+                                let trophy = `<span class="rank-num">${place}</span>`;
+                                if (place === 1) trophy = `<span class="rank-trophy gold">🏆</span>`;
+                                else if (place === 2) trophy = `<span class="rank-trophy silver">🥈</span>`;
+                                else if (place === 3) trophy = `<span class="rank-trophy bronze">🥉</span>`;
+                                const val = p.balance >= 1000000 ? (p.balance / 1000000).toFixed(1) + 'M' : Math.floor(p.balance).toLocaleString();
+                                html += `<div class="rank-item ${isMe ? 'active' : ''}">
+                                    <div class="rank-left">${trophy}<div class="rank-avatar"><img src="${p.photo_url || 'images/logo.png'}"></div><span>${p.username}</span></div>
+                                    <b>${val}</b></div>`;
                             });
+                            html += `</div>`;
+                            document.getElementById('top-list').innerHTML = html;
+                        });
                         break;
                 }
                 container.classList.add('active');
@@ -208,12 +207,9 @@
         };
 
         window.onload = () => {
-            // Передаем данные из Telegram SDK в логику
             const tg = window.Telegram.WebApp;
             tg.expand();
             const user = tg.initDataUnsafe?.user || {};
-            
-            // Инициализация игры с передачей ID, имени и фото
             logic.init(user.id, user.username || user.first_name, user.photo_url);
         };
     </script>
