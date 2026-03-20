@@ -6,6 +6,7 @@
     <title>Neural Pulse v4.0.0</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
 </head>
 <body>
 
@@ -80,6 +81,12 @@
         tg.expand();
         tg.enableClosingConfirmation();
 
+        // Инициализируем TON Connect UI один раз
+        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
+            buttonRootId: 'ton-connect-btn' // Кнопка будет внедряться сюда
+        });
+
         const game = {
             data: { id: 0, balance: 0, energy: 1000, max_energy: 1000, tap: 1, profit: 0 },
             isLoaded: false,
@@ -118,7 +125,6 @@
                 tg.HapticFeedback.impactOccurred('medium');
             },
 
-            // Логика покупки буста
             upgrade(type) {
                 if(type === 'tap') {
                     const cost = this.data.tap * 500;
@@ -126,10 +132,10 @@
                         this.data.balance -= cost;
                         this.data.tap += 1;
                         tg.HapticFeedback.notificationOccurred('success');
-                        ui.openM('boost'); // Обновить окно бустов
+                        ui.openM('boost');
                         ui.render();
                     } else {
-                        tg.showAlert("Недостаточно средств для апгрейда!");
+                        tg.showAlert("Недостаточно средств!");
                     }
                 }
             },
@@ -189,7 +195,7 @@
             async openM(type) {
                 const b = document.getElementById('m-body');
                 document.getElementById('modal').classList.add('active');
-                b.innerHTML = ''; // Очистка
+                b.innerHTML = ''; 
 
                 if(type === 'top') {
                     b.innerHTML = '<h2>RANKING</h2>';
@@ -208,12 +214,15 @@
                         <h2>CRYPTO WALLET</h2>
                         <div style="background:#0A0A0A; padding:20px; border-radius:20px; text-align:center; border:1px solid #1A1A1A;">
                             <small style="color:#888;">CURRENT BALANCE</small>
-                            <h1 style="color:#00FFFF; font-size:40px; margin:10px 0;">${Math.floor(game.data.balance).toLocaleString('ru-RU')}</h1>
-                            <div style="background:#000; padding:10px; border-radius:10px; font-family:monospace; font-size:10px; color: #444; margin-bottom:15px; border:1px dashed #222;">
-                                ADDR: EQB...x4z9_NEURAL
-                            </div>
-                            <button onclick="tg.showAlert('Coming Soon!')" style="width:100%; background:#00FFFF; color:#000; border:none; padding:15px; border-radius:12px; font-weight:900;">WITHDRAW</button>
+                            <h1 style="color:#00FFFF; font-size:40px; margin:10px 0;">${Math.floor(game.data.balance).toLocaleString('ru-RU')} NP</h1>
+                            
+                            <div id="ton-connect-btn" style="margin-bottom: 20px; display: flex; justify-content: center;"></div>
+                            
+                            <button onclick="ui.handleWithdraw()" id="withdraw-btn" style="width:100%; background:#111; color:#444; border:1px solid #222; padding:15px; border-radius:12px; font-weight:900;">WITHDRAW</button>
                         </div>`;
+                    
+                    // Перерисовываем кнопку TON Connect в новом контейнере
+                    tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
                 } else if(type === 'friends') {
                     const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
                     b.innerHTML = `
@@ -229,11 +238,17 @@
                             <div class="t-user"><b>🚀</b><span>Multitap (Lvl ${game.data.tap})</span></div>
                             <button style="background:#00FFFF; color:#000; border:none; padding:8px 15px; border-radius:10px; font-weight:bold;">${game.data.tap * 500} ⚡</button>
                         </div>`;
-                } else {
-                    b.innerHTML = `<h2>${type.toUpperCase()}</h2><p style="text-align:center; padding:20px; color:#444;">Accessing secure layer...</p>`;
                 }
             },
-            closeM() { document.getElementById('modal').classList.remove('active'); }
+            closeM() { document.getElementById('modal').classList.remove('active'); },
+            
+            handleWithdraw() {
+                if (tonConnectUI.connected) {
+                    tg.showAlert("Вывод временно недоступен. Накопите больше NP!");
+                } else {
+                    tg.showAlert("Сначала подключите кошелек!");
+                }
+            }
         };
 
         window.onload = () => game.init();
