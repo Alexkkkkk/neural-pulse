@@ -12,7 +12,6 @@ const logic = {
         const firstName = tg?.initDataUnsafe?.user?.first_name || "Agent";
 
         try {
-            // Запрос данных пользователя с сервера
             const res = await fetch(`/api/user/${userId}?username=${encodeURIComponent(firstName)}`);
             const data = await res.json();
 
@@ -30,9 +29,7 @@ const logic = {
             const nameEl = document.getElementById('u-name');
             if (nameEl) nameEl.innerText = this.user.username;
 
-            // Инициализация интерфейса (ui.js / script в HTML)
             if (typeof ui !== 'undefined') ui.init();
-            
             this.startLoops();
             return true;
         } catch (e) {
@@ -42,9 +39,7 @@ const logic = {
     },
 
     tap(e) {
-        // Предотвращаем зум и лишние срабатывания на мобилках
         if (e.type === 'touchstart') e.preventDefault();
-        
         if (!this.user || this.user.energy < this.user.click_lvl) return;
         
         this.user.balance += this.user.click_lvl;
@@ -76,7 +71,6 @@ const logic = {
         if (!this.user) return;
         
         let success = false;
-        // Простая логика цен (можно усложнить формулой)
         if (type === 'tap' && this.user.balance >= 5000) {
             this.user.balance -= 5000;
             this.user.click_lvl += 1;
@@ -95,23 +89,26 @@ const logic = {
         if (success) {
             if (typeof ui !== 'undefined') {
                 ui.update();
-                // Перерисовываем модалку, чтобы обновить уровни и цены
-                ui.openM(type === 'profit' ? 'mine' : 'boost');
+                ui.openM(type === 'profit' ? 'mine' : 'boost'); // Обновить текст в модалке
             }
             await this.save();
         } else {
-            window.Telegram?.WebApp?.showConfirm ? 
-                window.Telegram.WebApp.showAlert("Not enough Pulse!") : 
-                alert("Not enough Pulse!");
+            window.Telegram?.WebApp?.showAlert("Insufficient balance for this protocol!");
         }
     },
 
-    // Новая функция для выполнения заданий
-    async claimTask(taskId, reward) {
+    // Реализация КНОПОК заданий
+    async claimTask(taskId, reward, url = null) {
         if (!this.user) return;
         
+        // Если есть ссылка (например на канал), открываем её
+        if (url) {
+            window.Telegram.WebApp.openLink(url);
+        }
+
+        // В простейшем случае сразу даем награду
         this.user.balance += reward;
-        window.Telegram?.WebApp?.showAlert(`Task Completed! +${reward.toLocaleString()} Pulse`);
+        window.Telegram?.WebApp?.showAlert(`Protocol Verified! +${reward.toLocaleString()} Pulse`);
         
         if (typeof ui !== 'undefined') ui.update();
         await this.save();
@@ -134,30 +131,28 @@ const logic = {
                 })
             });
         } catch (err) { 
-            console.warn("Sync failed (background)", err); 
+            console.warn("Sync failed", err); 
         }
     },
 
     startLoops() {
-        // Цикл 1: Регенерация энергии и пассивный доход (каждую секунду)
         setInterval(() => {
             if (!this.user) return;
             
-            // Реген энергии (+1.5 в сек)
+            // Регенерация энергии
             if (this.user.energy < this.user.max_energy) {
                 this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
             }
             
-            // Доход в час -> Доход в секунду
+            // Пассивный доход
             if (this.user.profit_hr > 0) {
                 this.user.balance += (this.user.profit_hr / 3600);
             }
             
-            // Обновляем только цифры в UI, чтобы не нагружать DOM
             if (typeof ui !== 'undefined') ui.update();
         }, 1000);
 
-        // Цикл 2: Автосохранение на сервер (каждые 10 секунд)
+        // Автосохранение
         setInterval(() => this.save(), 10000);
     }
 };
