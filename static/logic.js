@@ -58,7 +58,6 @@ const logic = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: this.user.user_id, address: address })
             });
-            // Обновляем UI после сохранения
             if (typeof ui !== 'undefined') ui.openM('wallet');
         } catch (err) { console.warn("Save Wallet Error:", err); }
     },
