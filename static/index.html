@@ -8,95 +8,57 @@
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        /* Стили для создания "прозрачных кружочков" в стиле киберпанк */
         :root {
             --neon-cyan: #00ffff;
             --neon-magenta: #ff00ff;
-            --bg-dark: #050505;
-            /* Прозрачный фон для кругов */
             --circle-bg: rgba(0, 255, 255, 0.03); 
             --circle-border: rgba(0, 255, 255, 0.2);
         }
 
-        /* Элементы списка (Boost, Mine, Top) теперь круглые и прозрачные */
+        /* Прозрачные кружочки (карточки) */
         .up-card {
             display: flex;
             justify-content: space-between;
             align-items: center;
             background: var(--circle-bg);
-            /* Яркая тонкая обводка */
             border: 1px solid var(--circle-border); 
-            padding: 20px; /* Больше отступов для округлости */
+            padding: 20px;
             margin-bottom: 15px;
-            /* Делаем элемент круглым */
             border-radius: 50px; 
-            /* Мягкое неоновое свечение */
             box-shadow: 0 0 15px rgba(0, 255, 255, 0.1), inset 0 0 10px rgba(0, 255, 255, 0.05);
             transition: all 0.3s ease;
-            backdrop-filter: blur(3px); /* Легкое размытие фона за кругом */
+            backdrop-filter: blur(3px);
+            cursor: pointer;
         }
 
-        /* Эффект при нажатии на круг */
         .up-card:active {
             transform: scale(0.95);
             background: rgba(0, 255, 255, 0.1);
             border-color: var(--neon-cyan);
-            box-shadow: 0 0 25px rgba(0, 255, 255, 0.3), inset 0 0 15px rgba(0, 255, 255, 0.1);
         }
 
-        .up-card b {
-            color: #fff;
-            font-size: 16px;
-            text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
-        }
-
-        .up-card small {
-            color: #ccc;
-            opacity: 0.8;
-        }
-
-        /* Цена внутри круга */
         .price {
             color: var(--neon-cyan);
             font-family: 'Courier New', monospace;
             font-weight: bold;
-            font-size: 15px;
             text-shadow: 0 0 10px var(--neon-cyan);
         }
 
-        /* Круглые аватарки в ТОПе */
         .mini-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            border: 2px solid var(--neon-cyan);
-            object-fit: cover;
-            box-shadow: 0 0 10px var(--neon-cyan);
+            width: 40px; height: 40px; border-radius: 50%;
+            border: 2px solid var(--neon-cyan); object-fit: cover;
         }
 
-        .top-user-info {
-            display: flex;
-            align-items: center;
-            gap: 15px;
+        /* Специальный оверлей для кошелька поверх всего */
+        #wallet-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.9);
+            display: none; align-items: center; justify-content: center;
+            z-index: 10000; backdrop-filter: blur(15px);
+            padding: 20px;
         }
+        #wallet-overlay.active { display: flex; animation: fadeIn 0.3s ease; }
 
-        /* Стилизация заголовка модального окна */
-        .modal-header {
-            color: var(--neon-cyan);
-            text-align: center;
-            text-transform: uppercase;
-            letter-spacing: 3px;
-            text-shadow: 0 0 15px var(--neon-cyan);
-            margin-bottom: 25px;
-        }
-
-        /* Полоса прокрутки, чтобы не портила вид кругов */
-        #modal-body {
-            padding: 10px;
-            max-height: 70vh;
-            overflow-y: auto;
-        }
-        #modal-body::-webkit-scrollbar { width: 0px; } /* Скрываем скроллбар */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -113,13 +75,8 @@
     <div id="app" style="display: none;">
         <div class="header">
             <div class="header-left">
-                <div class="avatar">
-                    <img src="images/logo.png" id="u-avatar" onerror="this.src='images/logo.png'">
-                </div>
-                <div class="u-info">
-                    <b id="u-name">Agent</b>
-                    <small>v4.0.0 Neural Mining</small>
-                </div>
+                <div class="avatar"><img src="images/logo.png" id="u-avatar"></div>
+                <div class="u-info"><b id="u-name">Agent</b><small>v4.0.0 Neural Mining</small></div>
             </div>
             <div class="lvl-badge" id="u-lvl">LVL 1</div>
         </div>
@@ -132,10 +89,9 @@
         <div class="balance" id="balance">0</div>
 
         <div class="play-area">
-            <img src="images/logo.png" class="main-logo" id="tap-target" 
-                 ontouchstart="logic.tap(event)" onmousedown="logic.tap(event)">
+            <img src="images/logo.png" class="main-logo" id="tap-target" ontouchstart="logic.tap(event)">
             <div class="side-menu">
-                <div class="side-btn" onclick="ui.openM('wallet')">👛 WALLET</div>
+                <div class="side-btn" onclick="ui.toggleWalletMenu(true)">👛 WALLET</div>
                 <div class="side-btn" onclick="ui.openM('squad')">🤝 FRIENDS</div>
                 <div class="side-btn" onclick="ui.openM('bonus')">🎁 BONUS</div>
             </div>
@@ -163,203 +119,122 @@
         </div>
     </div>
 
+    <div id="wallet-overlay" onclick="if(event.target === this) ui.toggleWalletMenu(false)">
+        <div class="modal-content" style="max-width: 400px; border: 1px solid var(--neon-cyan); border-radius: 30px;">
+            <div class="modal-header">CONNECT WALLET</div>
+            <div id="ton-connect-button" style="display:flex; justify-content:center; margin-bottom: 20px;"></div>
+            
+            <div class="up-card" onclick="ui.connectTon()">
+                <b>TON CONNECT</b>
+                <span class="price">AUTO</span>
+            </div>
+
+            <p id="wallet-addr" style="color:var(--neon-cyan); font-size:10px; text-align:center; word-break:break-all;"></p>
+            
+            <button id="dis-btn" class="back-btn" style="display:none; color:red; border-color:red;" onclick="logic.disconnectWallet()">DISCONNECT</button>
+            <button class="back-btn" onclick="ui.toggleWalletMenu(false)">BACK</button>
+        </div>
+    </div>
+
     <script>
         const logic = {
             user: null,
-            async init(userIdFromTg, userNameFromTg, photoUrlFromTg) {
-                const userId = userIdFromTg || "12345";
-                const firstName = userNameFromTg || "Agent";
-                const photoUrl = photoUrlFromTg || "";
-
+            async init(id, name, photo) {
                 try {
-                    const res = await fetch(`/api/user/${userId}?username=${encodeURIComponent(firstName)}&photo_url=${encodeURIComponent(photoUrl)}`);
-                    if (!res.ok) throw new Error("API Error");
-                    const data = await res.json();
-                    
-                    this.user = {
-                        ...data,
-                        photo_url: (data.photo_url && data.photo_url.length > 5) ? data.photo_url : photoUrl,
-                        balance: Number(data.balance),
-                        energy: Number(data.energy),
-                        max_energy: Number(data.max_energy),
-                        click_lvl: Number(data.click_lvl),
-                        profit_hr: Number(data.profit_hr),
-                        lvl: Number(data.lvl)
-                    };
+                    const res = await fetch(`/api/user/${id || 12345}?username=${encodeURIComponent(name || 'Agent')}&photo_url=${encodeURIComponent(photo || '')}`);
+                    this.user = await res.json();
                 } catch (e) {
-                    this.user = { user_id: userId, username: firstName, photo_url: photoUrl, balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0, lvl: 1, wallet: null };
+                    this.user = { balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0, lvl: 1 };
                 }
                 ui.init();
                 this.startLoops();
             },
             tap(e) {
-                if (e.type === 'touchstart') e.preventDefault();
                 if (!this.user || this.user.energy < this.user.click_lvl) return;
                 this.user.balance += this.user.click_lvl;
                 this.user.energy -= this.user.click_lvl;
-                this.checkLvl();
                 ui.update();
                 this.anim(e);
-                if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
-            },
-            async buyUpgrade(type) {
-                let cost = (type === 'tap') ? 5000 : (type === 'energy' ? 10000 : 25000);
-                if (this.user.balance >= cost) {
-                    this.user.balance -= cost;
-                    if (type === 'tap') this.user.click_lvl += 1;
-                    if (type === 'energy') { this.user.max_energy += 500; this.user.energy += 500; }
-                    if (type === 'profit') this.user.profit_hr += 500;
-                    ui.update();
-                    ui.openM(type === 'profit' ? 'mine' : 'boost');
-                    this.save();
-                }
-            },
-            checkLvl() {
-                const newLvl = Math.floor(this.user.balance / 100000) + 1;
-                if (newLvl > this.user.lvl) {
-                    this.user.lvl = newLvl;
-                    if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-                }
             },
             anim(e) {
                 const x = e.touches ? e.touches[0].clientX : e.clientX;
                 const y = e.touches ? e.touches[0].clientY : e.clientY;
                 const p = document.createElement('div');
-                p.className = 'tap-pop';
-                p.innerText = `+${this.user.click_lvl}`;
-                p.style.left = `${x}px`; p.style.top = `${y}px`;
+                p.className = 'tap-pop'; p.innerText = `+${this.user.click_lvl}`;
+                p.style.left = x+'px'; p.style.top = y+'px';
                 document.body.appendChild(p);
                 setTimeout(() => p.remove(), 800);
-            },
-            async save() {
-                if (!this.user) return;
-                fetch('/api/save', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        userId: this.user.user_id, balance: Math.floor(this.user.balance),
-                        energy: Math.floor(this.user.energy), max_energy: this.user.max_energy,
-                        click_lvl: this.user.click_lvl, profit_hr: this.user.profit_hr, lvl: this.user.lvl
-                    })
-                });
-            },
-            async saveWallet(address) {
-                if (!this.user) return;
-                this.user.wallet = address;
-                fetch('/api/wallet', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({userId: this.user.user_id, address: address})
-                });
-                ui.openM('wallet');
             },
             async disconnectWallet() {
                 await tonConnectUI.disconnect();
                 this.user.wallet = null;
-                ui.openM('wallet');
+                ui.toggleWalletMenu(false);
             },
             startLoops() {
                 setInterval(() => {
                     if (!this.user) return;
                     if (this.user.energy < this.user.max_energy) this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
-                    if (this.user.profit_hr > 0) this.user.balance += (this.user.profit_hr / 3600);
                     ui.update();
                 }, 1000);
-                setInterval(() => this.save(), 15000);
             }
         };
 
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json'
-        });
-
-        tonConnectUI.onStatusChange(wallet => {
-            if (wallet && logic.user) logic.saveWallet(wallet.account.address);
+            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
+            buttonRootId: 'ton-connect-button'
         });
 
         const ui = {
             init() { this.update(); this.finishLoading(); },
+            finishLoading() {
+                let p = 0;
+                const iv = setInterval(() => {
+                    p += 5; document.getElementById('load-pct').innerText = p+'%';
+                    document.getElementById('load-bar').style.width = p+'%';
+                    if(p>=100){ clearInterval(iv); document.getElementById('loading-screen').style.display='none'; document.getElementById('app').style.display='flex'; }
+                }, 30);
+            },
             update() {
                 if (!logic.user) return;
-                document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString('ru-RU');
+                document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
                 document.getElementById('eng-val').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
                 document.getElementById('eng-fill').style.width = `${(logic.user.energy / logic.user.max_energy) * 100}%`;
-                document.getElementById('u-lvl').innerText = `LVL ${logic.user.lvl}`;
-                document.getElementById('u-name').innerText = logic.user.username;
-                document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
-                document.getElementById('profit-val').innerText = Math.floor(logic.user.profit_hr).toLocaleString('ru-RU');
+                document.getElementById('u-name').innerText = logic.user.username || 'Agent';
+                document.getElementById('u-lvl').innerText = 'LVL ' + (logic.user.lvl || 1);
                 
-                const avatarImg = document.getElementById('u-avatar');
-                if (logic.user.photo_url && logic.user.photo_url.length > 5) {
-                    avatarImg.src = logic.user.photo_url;
-                }
+                const addr = logic.user.wallet;
+                document.getElementById('wallet-addr').innerText = addr ? addr : "";
+                document.getElementById('dis-btn').style.display = addr ? "block" : "none";
+            },
+            toggleWalletMenu(show) {
+                const el = document.getElementById('wallet-overlay');
+                show ? el.classList.add('active') : el.classList.remove('active');
+            },
+            async connectTon() {
+                await tonConnectUI.openModal();
             },
             openM(type) {
                 const body = document.getElementById('modal-body');
                 const header = document.getElementById('modal-header');
                 header.innerText = type.toUpperCase();
-                let h = '';
                 
-                if (type === 'wallet') {
-                    const addr = logic.user.wallet;
-                    h = `<div style="text-align:center;">
-                            <div id="ton-connect-button" style="display:flex; justify-content:center;"></div>
-                            <p style="color:#00ffff; margin-top:10px; font-size:10px; word-break:break-all; padding:0 10px;">${addr ? addr : "NOT CONNECTED"}</p>
-                            ${addr ? `<button onclick="logic.disconnectWallet()" class="back-btn" style="color:red; border:1px solid red; background:transparent; margin-top:10px; width:90%;">DISCONNECT</button>` : ''}
-                         </div>`;
-                    body.innerHTML = h;
-                    setTimeout(() => { tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-button' }; }, 100);
-                } else if (type === 'boost') {
-                    h = `<div class="up-card" onclick="logic.buyUpgrade('tap')"><div><b>Multi-Tap</b><br><small>Level ${logic.user.click_lvl}</small></div><div class="price">💰 5,000</div></div>
-                         <div class="up-card" onclick="logic.buyUpgrade('energy')"><div><b>Energy Cap</b><br><small>+500 Limit</small></div><div class="price">💰 10,000</div></div>`;
-                    body.innerHTML = h;
-                } else if (type === 'mine') {
-                    h = `<div class="up-card" onclick="logic.buyUpgrade('profit')"><div><b>Neural Core</b><br><small>+500/hr Profit</small></div><div class="price">💰 25,000</div></div>`;
-                    body.innerHTML = h;
+                if (type === 'boost') {
+                    body.innerHTML = `
+                        <div class="up-card" onclick="logic.buyUpgrade('tap')"><b>Multi-Tap</b><span class="price">💰 5k</span></div>
+                        <div class="up-card" onclick="logic.buyUpgrade('energy')"><b>Energy Cap</b><span class="price">💰 10k</span></div>`;
                 } else if (type === 'top') {
-                    body.innerHTML = '<p style="text-align:center;">SCANNING NETWORK...</p>';
-                    fetch('/api/top').then(r => r.json()).then(data => {
-                        let list = '';
-                        data.forEach((u, i) => {
-                            const pic = (u.photo_url && u.photo_url.length > 5) ? u.photo_url : 'images/logo.png';
-                            list += `<div class="up-card">
-                                        <div class="top-user-info">
-                                            <span style="color:var(--neon-cyan); font-weight:bold; min-width:30px;">#${i+1}</span>
-                                            <img src="${pic}" class="mini-avatar" onerror="this.src='images/logo.png'">
-                                            <span>${u.username}</span>
-                                        </div>
-                                        <b class="price">${Math.floor(u.balance).toLocaleString()}</b>
-                                     </div>`;
-                        });
-                        body.innerHTML = list;
-                    }).catch(() => { body.innerHTML = '<p style="text-align:center;">OFFLINE</p>'; });
+                    body.innerHTML = '<p style="text-align:center">Loading Leaders...</p>';
                 } else {
-                    body.innerHTML = `<p style="text-align:center; padding:20px; color:#888;">Module ${type} is encrypted.</p>`;
+                    body.innerHTML = '<p style="text-align:center; opacity:0.5">Access Denied</p>';
                 }
                 document.getElementById('modal-container').classList.add('active');
             },
-            closeM() { document.getElementById('modal-container').classList.remove('active'); },
-            finishLoading() {
-                let p = 0;
-                const iv = setInterval(() => {
-                    p += 10;
-                    document.getElementById('load-pct').innerText = p + '%';
-                    document.getElementById('load-bar').style.width = p + '%';
-                    if (p >= 100) {
-                        clearInterval(iv);
-                        setTimeout(() => {
-                            document.getElementById('loading-screen').style.display = 'none';
-                            document.getElementById('app').style.display = 'flex';
-                        }, 300);
-                    }
-                }, 50);
-            }
+            closeM() { document.getElementById('modal-container').classList.remove('active'); }
         };
 
         window.onload = () => {
             const tg = window.Telegram.WebApp;
             tg.expand();
-            tg.ready();
             const u = tg.initDataUnsafe?.user || {};
             logic.init(u.id, u.username || u.first_name, u.photo_url);
         };
