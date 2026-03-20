@@ -11,16 +11,22 @@
 <body>
 
     <div id="loading-screen">
-        <div class="loader-circle-wrapper">
-            <svg viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="45" class="l-track"></circle>
-                <circle cx="50" cy="50" r="45" class="l-fill" id="l-svg-bar"></circle>
-            </svg>
-            <div class="l-center">AI</div>
+        <div class="loader-container">
+            <div class="main-logo-circle">
+                <img src="images/logo.png" class="logo-img" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'">
+                <div class="scan-line"></div>
+            </div>
+            <div class="loading-text">
+                <span class="status-msg">ACCESS GRANTED</span>
+                <span class="percent" id="load-num">0%</span>
+            </div>
+            <div class="progress-wrapper">
+                <div class="progress-bar-bg">
+                    <div class="progress-fill" id="bar-fill"></div>
+                </div>
+            </div>
+            <div class="system-ready">SYSTEM READY...</div>
         </div>
-        <div class="access-txt">ACCESS GRANTED</div>
-        <div class="load-num" id="load-num">0%</div>
-        <div class="bar-bg"><div class="bar-fill" id="bar-fill"></div></div>
     </div>
 
     <div id="app" style="display: none;">
@@ -62,7 +68,7 @@
             <div class="e-track"><div class="e-bar" id="e-fill"></div></div>
         </div>
 
-        <div class="bottom-menu">
+        <div class="nav-bar">
             <button onclick="ui.openM('boost')">🚀 BOOST</button>
             <button onclick="ui.openM('mine')">⛏️ MINE</button>
             <button onclick="ui.openM('tasks')">📋 TASKS</button>
@@ -150,7 +156,7 @@
                             <b class="t-val">${Math.floor(u.balance).toLocaleString()}</b>
                         </div>`).join('');
                 } else if(type === 'wallet') {
-                    body.innerHTML = `<div class="w-cont"><h2 class="w-title">WALLET</h2><img src="https://ton.org/download/ton_symbol.png" class="w-icon"><h3 class="w-sub">TON CONNECT</h3><p class="w-desc">Connect your wallet for Airdrop eligibility.</p><button class="w-connect-btn" id="w-conn">CONNECT WALLET</button></div>`;
+                    body.innerHTML = `<div class="w-cont"><h2 class="w-head">WALLET</h2><img src="https://ton.org/download/ton_symbol.png" class="w-logo"><h3 class="w-sub">TON CONNECT</h3><p class="w-text">Connect your wallet for Airdrop eligibility.</p><button class="w-btn" id="w-conn">CONNECT WALLET</button></div>`;
                     setTimeout(() => { document.getElementById('w-conn').onclick = () => { tonConnectUI.openModal(); ui.closeM(); } }, 50);
                 }
             },
@@ -164,11 +170,19 @@
             startLoad() {
                 let p = 0;
                 const i = setInterval(() => {
-                    p += 2; document.getElementById('load-num').innerText = p+'%';
+                    p += 2;
+                    document.getElementById('load-num').innerText = p+'%';
                     document.getElementById('bar-fill').style.width = p+'%';
-                    document.getElementById('l-svg-bar').style.strokeDashoffset = 283 - (283 * p / 100);
-                    if(p>=100) { clearInterval(i); document.getElementById('loading-screen').style.display='none'; document.getElementById('app').style.display='flex'; this.update(); }
-                }, 30);
+                    if(p>=100) {
+                        clearInterval(i);
+                        document.getElementById('loading-screen').style.opacity = '0';
+                        setTimeout(() => {
+                            document.getElementById('loading-screen').style.display='none';
+                            document.getElementById('app').style.display='flex';
+                            this.update();
+                        }, 500);
+                    }
+                }, 40);
             }
         };
         window.onload = () => logic.init();
