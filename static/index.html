@@ -175,9 +175,40 @@
                         break;
 
                     case 'top':
-                        h = `<div class="rank-item"><span>1. Matrix_Runner</span><b>85.4M</b></div>
-                             <div class="rank-item"><span>2. Satoshi_N</span><b>42.1M</b></div>
-                             <div class="rank-item active"><span>${logic.user.username} (You)</span><b>${(logic.user.balance/1000).toFixed(1)}K</b></div>`;
+                        // Демо-данные лидеров
+                        const leaders = [
+                            { id: "1", name: "Satoshi_N", balance: 150000000, photo: "images/logo.png" },
+                            { id: "2", name: "Matrix_Runner", balance: 85400000, photo: "images/logo.png" },
+                            { id: "3", name: "Cyber_Punk", balance: 42100000, photo: "images/logo.png" }
+                        ];
+                        
+                        // Добавляем тебя в список
+                        const myPhoto = window.Telegram?.WebApp?.initDataUnsafe?.user?.photo_url || "images/logo.png";
+                        leaders.push({ id: logic.user.user_id, name: logic.user.username, balance: logic.user.balance, photo: myPhoto });
+                        
+                        leaders.sort((a, b) => b.balance - a.balance);
+
+                        h = `<div class="top-container">`;
+                        leaders.forEach((p, i) => {
+                            const place = i + 1;
+                            const isMe = p.id === logic.user.user_id;
+                            let trophy = `<span class="rank-num">${place}</span>`;
+                            if (place === 1) trophy = `<span class="rank-trophy gold">🏆</span>`;
+                            else if (place === 2) trophy = `<span class="rank-trophy silver">🥈</span>`;
+                            else if (place === 3) trophy = `<span class="rank-trophy bronze">🥉</span>`;
+
+                            h += `<div class="rank-item ${isMe ? 'active' : ''}">
+                                    <div class="rank-left">
+                                        ${trophy}
+                                        <div class="rank-avatar">
+                                            <img src="${p.photo}" onerror="this.src='images/logo.png'">
+                                        </div>
+                                        <span>${p.name} ${isMe ? '(You)' : ''}</span>
+                                    </div>
+                                    <b>${(p.balance/1000000).toFixed(1)}M</b>
+                                  </div>`;
+                        });
+                        h += `</div>`;
                         body.innerHTML = h;
                         break;
                 }
