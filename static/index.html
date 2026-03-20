@@ -81,6 +81,9 @@
         tg.expand();
         tg.enableClosingConfirmation();
 
+        // АДРЕС ДЛЯ ПРИЕМА ТОНОВ
+        const ADMIN_WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI";
+
         let tonConnectUI = null;
 
         const game = {
@@ -88,40 +91,51 @@
             isLoaded: false,
 
             async init() {
-                // 1. Сразу запускаем лоадер, чтобы он не ждал сервер
                 ui.startLoader();
-
                 const u = tg.initDataUnsafe.user || { id: 476014374, first_name: 'Agent' };
                 const name = (u.username || u.first_name).toUpperCase();
                 
-                // 2. TON Connect (в блоке try, чтобы не висло)
                 try {
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
                         manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
                     });
                 } catch(err) { console.error(err); }
 
-                // 3. Загрузка данных
                 try {
                     const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(name)}&photo_url=${encodeURIComponent(u.photo_url || '')}`);
                     if (r.ok) {
                         const d = await r.json();
-                        this.data.id = d.id;
-                        this.data.balance = parseFloat(d.balance) || 0;
-                        this.data.energy = parseFloat(d.energy) || 1000;
-                        this.data.max_energy = parseInt(d.max_energy) || 1000;
-                        this.data.tap = parseInt(d.tap) || 1;
-                        this.data.profit = parseInt(d.profit) || 0;
+                        Object.assign(this.data, d);
                     }
                 } catch(e) {
-                    console.error("API Offline, using defaults");
+                    console.error("API Offline");
                     this.data.id = u.id;
                 } finally {
-                    // Это выполнится всегда
                     document.getElementById('my-name').innerText = name;
                     if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
                     this.isLoaded = true;
                     this.loop();
+                }
+            },
+
+            // ФУНКЦИЯ ОПЛАТЫ ЧЕРЕЗ TON
+            async buyPremium(tonAmount, upgradeName) {
+                if (!tonConnectUI || !tonConnectUI.connected) {
+                    tg.showAlert("Сначала подключите кошелек в разделе WALLET!");
+                    return;
+                }
+
+                const amountInNano = (tonAmount * 1000000000).toString();
+                const transaction = {
+                    validUntil: Math.floor(Date.now() / 1000) + 300,
+                    messages: [{ address: ADMIN_WALLET, amount: amountInNano }]
+                };
+
+                try {
+                    await tonConnectUI.sendTransaction(transaction);
+                    tg.showAlert(`Транзакция отправлена! ${upgradeName} будет активирован после подтверждения сети.`);
+                } catch (e) {
+                    tg.showAlert("Оплата отменена или произошла ошибка.");
                 }
             },
 
@@ -135,17 +149,15 @@
             },
 
             upgrade(type) {
-                if(type === 'tap') {
-                    const cost = this.data.tap * 500;
-                    if(this.data.balance >= cost) {
-                        this.data.balance -= cost;
-                        this.data.tap += 1;
-                        tg.HapticFeedback.notificationOccurred('success');
-                        ui.openM('boost');
-                        ui.render();
-                    } else {
-                        tg.showAlert("Недостаточно средств!");
-                    }
+                const cost = this.data.tap * 500;
+                if(this.data.balance >= cost) {
+                    this.data.balance -= cost;
+                    this.data.tap += 1;
+                    tg.HapticFeedback.notificationOccurred('success');
+                    ui.render();
+                    ui.openM('boost');
+                } else {
+                    tg.showAlert("Недостаточно NP!");
                 }
             },
 
@@ -164,7 +176,7 @@
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ userId: this.data.id, ...this.data })
-                }).catch(e => console.error("Save error"));
+                }).catch(() => {});
             }
         };
 
@@ -210,36 +222,32 @@
                     b.innerHTML = `
                         <h2>CRYPTO WALLET</h2>
                         <div style="background:#0A0A0A; padding:20px; border-radius:20px; text-align:center; border:1px solid #1A1A1A;">
-                            <small style="color:#888;">CURRENT BALANCE</small>
-                            <h1 style="color:#00FFFF; font-size:40px; margin:10px 0;">${Math.floor(game.data.balance).toLocaleString('ru-RU')} NP</h1>
                             <div id="ton-connect-btn" style="margin-bottom: 20px; display: flex; justify-content: center;"></div>
-                            <button onclick="ui.handleWithdraw()" id="withdraw-btn" style="width:100%; background:#111; color:#444; border:1px solid #222; padding:15px; border-radius:12px; font-weight:900;">WITHDRAW</button>
+                            <small style="color:#888;">BALANCE: ${Math.floor(game.data.balance).toLocaleString('ru-RU')} NP</small>
                         </div>`;
                     if(tonConnectUI) tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
+                } else if(type === 'boost') {
+                    b.innerHTML = `
+                        <h2>UPGRADES</h2>
+                        <div class="top-item" onclick="game.upgrade('tap')">
+                            <div class="t-user"><b>🚀</b><span>Multitap (Lvl ${game.data.tap})</span></div>
+                            <button style="background:#00FFFF; color:#000; border:none; padding:8px 15px; border-radius:10px; font-weight:bold;">${game.data.tap * 500} NP</button>
+                        </div>
+                        <div class="top-item" onclick="game.buyPremium(0.1, 'Neural Booster')" style="border: 1px solid #0088cc; margin-top:10px;">
+                            <div class="t-user"><b>💎</b><span>Neural Booster (Limitless)</span></div>
+                            <button style="background:#0088cc; color:#fff; border:none; padding:8px 15px; border-radius:10px; font-weight:bold;">0.1 TON</button>
+                        </div>`;
                 } else if(type === 'top') {
                     b.innerHTML = '<h2>RANKING</h2>';
                     fetch('/api/top').then(r => r.json()).then(top => {
                         top.forEach((u, i) => {
                             const isMe = u.id == game.data.id ? 'me' : '';
-                            b.innerHTML += `
-                            <div class="top-item ${isMe}">
-                                <div class="t-user"><b>#${i+1}</b><img src="${u.photo_url || 'images/logo.png'}"><span>${u.username}</span></div>
-                                <b>${Math.floor(u.balance).toLocaleString('ru-RU')}</b>
-                            </div>`;
+                            b.innerHTML += `<div class="top-item ${isMe}"><div class="t-user"><b>#${i+1}</b><img src="${u.photo_url || 'images/logo.png'}"><span>${u.username}</span></div><b>${Math.floor(u.balance).toLocaleString('ru-RU')}</b></div>`;
                         });
-                    }).catch(e => { b.innerHTML = '<p>Ranking unavailable</p>'; });
-                } else if(type === 'friends') {
-                    const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
-                    b.innerHTML = `<h2>FRIENDS</h2><div class="top-item" style="justify-content:center; border: 1px dashed #00FFFF; color:#00FFFF;" onclick="navigator.clipboard.writeText('${link}'); tg.showAlert('Copied!')">COPY LINK</div>`;
-                } else if(type === 'boost') {
-                    b.innerHTML = `<h2>UPGRADES</h2><div class="top-item" onclick="game.upgrade('tap')"><div class="t-user"><b>🚀</b><span>Multitap (Lvl ${game.data.tap})</span></div><button style="background:#00FFFF; color:#000; border:none; padding:8px 15px; border-radius:10px; font-weight:bold;">${game.data.tap * 500} ⚡</button></div>`;
+                    }).catch(() => { b.innerHTML = '<p>Error loading top</p>'; });
                 }
             },
-            closeM() { document.getElementById('modal').classList.remove('active'); },
-            handleWithdraw() {
-                if (tonConnectUI && tonConnectUI.connected) tg.showAlert("Min withdraw 50,000 NP");
-                else tg.showAlert("Connect wallet first!");
-            }
+            closeM() { document.getElementById('modal').classList.remove('active'); }
         };
 
         window.onload = () => game.init();
