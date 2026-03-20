@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -85,7 +86,6 @@
                     if (!res.ok) throw new Error("API Error");
                     const data = await res.json();
                     
-                    // Гарантируем, что числа — это числа, а не строки
                     this.user = {
                         ...data,
                         balance: Number(data.balance),
@@ -105,7 +105,6 @@
                 if (e.type === 'touchstart') e.preventDefault();
                 if (!this.user || this.user.energy < this.user.click_lvl) return;
 
-                // Математика с явным преобразованием
                 this.user.balance = Number(this.user.balance) + Number(this.user.click_lvl);
                 this.user.energy = Number(this.user.energy) - Number(this.user.click_lvl);
                 
@@ -115,11 +114,7 @@
                 if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
             },
             async buyUpgrade(type) {
-                let cost = 0;
-                if (type === 'tap') cost = 5000;
-                if (type === 'energy') cost = 10000;
-                if (type === 'profit') cost = 25000;
-
+                let cost = (type === 'tap') ? 5000 : (type === 'energy' ? 10000 : 25000);
                 if (this.user.balance >= cost) {
                     this.user.balance -= cost;
                     if (type === 'tap') this.user.click_lvl += 1;
@@ -197,7 +192,6 @@
             init() { this.update(); this.finishLoading(); },
             update() {
                 if (!logic.user) return;
-                // Красивое отображение баланса без лишних "склеек"
                 document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString('ru-RU');
                 document.getElementById('eng-val').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
                 document.getElementById('eng-fill').style.width = `${(logic.user.energy / logic.user.max_energy) * 100}%`;
@@ -206,9 +200,11 @@
                 document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
                 document.getElementById('profit-val').innerText = Math.floor(logic.user.profit_hr).toLocaleString('ru-RU');
                 
-                const avatar = document.getElementById('u-avatar');
-                if (logic.user.photo_url && logic.user.photo_url !== "") {
-                    avatar.src = logic.user.photo_url;
+                // ИСПРАВЛЕНИЕ АВАТАРКИ: 
+                // Если фото из ТГ есть - ставим его. Если нет или ошибка - остается logo.png (прописан в HTML)
+                const avatarImg = document.getElementById('u-avatar');
+                if (logic.user.photo_url && logic.user.photo_url.length > 5) {
+                    avatarImg.src = logic.user.photo_url;
                 }
             },
             openM(type) {
@@ -221,10 +217,8 @@
                     const addr = logic.user.wallet;
                     h = `<div style="text-align:center;">
                             <div id="ton-connect-button" style="display:flex; justify-content:center;"></div>
-                            <p style="color:#00ffff; margin-top:10px; font-size:12px; word-break:break-all; padding:0 10px;">
-                                ${addr ? addr : "NOT CONNECTED"}
-                            </p>
-                            ${addr ? `<button onclick="logic.disconnectWallet()" class="back-btn" style="color:red; border:1px solid red; background:transparent; margin-top:10px; width:80%;">DISCONNECT</button>` : ''}
+                            <p style="color:#00ffff; margin-top:10px; font-size:10px; word-break:break-all;">${addr ? addr : "NOT CONNECTED"}</p>
+                            ${addr ? `<button onclick="logic.disconnectWallet()" class="back-btn" style="color:red; border:1px solid red; background:transparent; margin-top:10px; width:100%;">DISCONNECT</button>` : ''}
                          </div>`;
                     body.innerHTML = h;
                     setTimeout(() => { tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-button' }; }, 100);
@@ -241,7 +235,7 @@
                         let list = '';
                         data.forEach((u, i) => list += `<div class="up-card">#${i+1} ${u.username} <b>${Math.floor(u.balance).toLocaleString()}</b></div>`);
                         body.innerHTML = list;
-                    }).catch(() => { body.innerHTML = '<p>Offline Mode</p>'; });
+                    }).catch(() => { body.innerHTML = '<p style="text-align:center;">OFFLINE</p>'; });
                 } else {
                     body.innerHTML = `<p style="text-align:center; padding:20px; color:#888;">Module ${type} is encrypted.</p>`;
                 }
