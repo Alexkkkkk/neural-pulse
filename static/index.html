@@ -23,12 +23,12 @@
         <div class="bar-bg"><div class="bar-fill" id="bar-fill"></div></div>
     </div>
 
-    <div id="app">
+    <div id="app" style="display: none;">
         <div class="header">
             <div class="u-profile">
                 <div class="u-av"><img src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'"></div>
                 <div class="u-info">
-                    <b id="u-name">...</b><br>
+                    <b id="u-name">Player</b><br>
                     <small>v4.0.0 Neural Mining</small>
                 </div>
             </div>
@@ -56,7 +56,7 @@
         </div>
 
         <div class="energy-area">
-            <div class="e-labels"><span>ENERGY</span><span id="e-num">0/0</span></div>
+            <div class="e-labels"><span>ENERGY</span><span id="e-num">1000/1000</span></div>
             <div class="e-bar"><div class="e-fill" id="e-fill"></div></div>
         </div>
 
@@ -83,14 +83,13 @@
         });
 
         const logic = {
-            user: null,
+            user: { balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0 },
             async init() {
                 const tg = window.Telegram.WebApp;
-                const u = tg.initDataUnsafe?.user || { id: 0, username: "Player" };
+                const u = tg.initDataUnsafe?.user || { id: 0, username: "Guest" };
                 try {
                     const r = await fetch(`/api/user/${u.id}?username=${u.username}`);
                     const d = await r.json();
-                    // Фикс "НЕ ЧИСЛО": форсируем Number
                     this.user = {
                         id: u.id,
                         username: d.username || u.username,
@@ -100,7 +99,7 @@
                         click_lvl: Number(d.click_lvl) || 1,
                         profit_hr: Number(d.profit_hr) || 0
                     };
-                } catch(e) { this.user = { id: 0, balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0, username: "Guest" }; }
+                } catch(e) { console.error("DB Error", e); }
                 ui.startLoad();
                 this.loop();
             },
@@ -114,7 +113,7 @@
             },
             loop() {
                 setInterval(() => {
-                    this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
+                    this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
                     if(this.user.profit_hr > 0) this.user.balance += (this.user.profit_hr / 3600);
                     ui.update();
                 }, 1000);
@@ -124,20 +123,26 @@
                 fetch('/api/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: this.user.id, balance: Math.floor(this.user.balance), energy: Math.floor(this.user.energy), max_energy: this.user.max_energy, click_lvl: this.user.click_lvl, profit_hr: this.user.profit_hr })
+                    body: JSON.stringify({
+                        userId: this.user.id,
+                        balance: Math.floor(this.user.balance),
+                        energy: Math.floor(this.user.energy),
+                        max_energy: this.user.max_energy,
+                        click_lvl: this.user.click_lvl,
+                        profit_hr: this.user.profit_hr
+                    })
                 });
             }
         };
 
         const ui = {
             update() {
-                if(!logic.user) return;
-                const bal = Math.floor(logic.user.balance);
-                document.getElementById('balance').innerText = isNaN(bal) ? 0 : bal.toLocaleString();
+                const b = Math.floor(logic.user.balance || 0);
+                document.getElementById('balance').innerText = b.toLocaleString();
                 document.getElementById('e-num').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
                 document.getElementById('e-fill').style.width = (logic.user.energy/logic.user.max_energy*100)+'%';
                 document.getElementById('u-name').innerText = logic.user.username;
-                document.getElementById('u-lvl').innerText = `LVL ${Math.floor(bal/100000)+1}`;
+                document.getElementById('u-lvl').innerText = `LVL ${Math.floor(b/200000)+1}`;
                 document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
                 document.getElementById('profit-val').innerText = logic.user.profit_hr;
             },
@@ -145,6 +150,7 @@
                 const body = document.getElementById('m-body');
                 body.innerHTML = '';
                 if(type === 'top') {
+                    logic.save(); // Обновляем свои данные перед просмотром топа
                     body.innerHTML = `<h2 class="m-head">TOP</h2>`;
                     const res = await fetch('/api/top');
                     const users = await res.json();
@@ -164,10 +170,17 @@
                             <img src="https://ton.org/download/ton_symbol.png" class="w-icon">
                             <h3 class="w-sub">TON CONNECT</h3>
                             <p class="w-desc">Connect your wallet for Airdrop eligibility.</p>
-                            <button class="w-connect-btn" onclick="tonConnectUI.connected ? tonConnectUI.disconnect() : tonConnectUI.openModal()">
+                            <button class="w-connect-btn" id="ton-logic-btn">
                                 ${tonConnectUI.connected ? 'DISCONNECT' : 'CONNECT WALLET'}
                             </button>
                         </div>`;
+                    setTimeout(() => {
+                        document.getElementById('ton-logic-btn').onclick = () => {
+                            if(tonConnectUI.connected) tonConnectUI.disconnect();
+                            else tonConnectUI.openModal();
+                            ui.closeM();
+                        }
+                    }, 10);
                 }
                 document.getElementById('modal').classList.add('show');
             },
