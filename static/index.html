@@ -7,6 +7,64 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        /* Восстановление дизайна со скриншотов */
+        :root {
+            --neon-blue: #00ffff;
+            --bg-dark: #0a0a0a;
+            --card-bg: rgba(255, 255, 255, 0.05);
+        }
+
+        .up-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--card-bg);
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            padding: 15px;
+            margin-bottom: 12px;
+            border-radius: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .up-card:active {
+            transform: scale(0.97);
+            background: rgba(0, 255, 255, 0.1);
+            border-color: var(--neon-blue);
+        }
+
+        .up-card b { color: #fff; font-size: 16px; display: block; }
+        .up-card small { color: #888; }
+        .up-card .price { 
+            color: var(--neon-blue); 
+            font-family: 'Courier New', monospace; 
+            font-weight: bold;
+            background: rgba(0, 255, 255, 0.1);
+            padding: 5px 10px;
+            border-radius: 8px;
+        }
+
+        .mini-avatar {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            border: 1.5px solid var(--neon-blue);
+            object-fit: cover;
+            box-shadow: 0 0 5px var(--neon-blue);
+        }
+
+        .top-user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .modal-header {
+            text-shadow: 0 0 10px var(--neon-blue);
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+        }
+    </style>
 </head>
 <body>
     <div id="loading-screen">
@@ -87,7 +145,6 @@
                     
                     this.user = {
                         ...data,
-                        // Сохраняем фото из ТГ, если API вернуло пустоту
                         photo_url: (data.photo_url && data.photo_url.length > 5) ? data.photo_url : photoUrl,
                         balance: Number(data.balance),
                         energy: Number(data.energy),
@@ -105,10 +162,8 @@
             tap(e) {
                 if (e.type === 'touchstart') e.preventDefault();
                 if (!this.user || this.user.energy < this.user.click_lvl) return;
-
-                this.user.balance = Number(this.user.balance) + Number(this.user.click_lvl);
-                this.user.energy = Number(this.user.energy) - Number(this.user.click_lvl);
-                
+                this.user.balance += this.user.click_lvl;
+                this.user.energy -= this.user.click_lvl;
                 this.checkLvl();
                 ui.update();
                 this.anim(e);
@@ -201,7 +256,6 @@
                 document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
                 document.getElementById('profit-val').innerText = Math.floor(logic.user.profit_hr).toLocaleString('ru-RU');
                 
-                // Ставим аватарку
                 const avatarImg = document.getElementById('u-avatar');
                 if (logic.user.photo_url && logic.user.photo_url.length > 5) {
                     avatarImg.src = logic.user.photo_url;
@@ -234,12 +288,14 @@
                     fetch('/api/top').then(r => r.json()).then(data => {
                         let list = '';
                         data.forEach((u, i) => {
-                            // Если у игрока в топе нет фото, ставим лого
                             const pic = (u.photo_url && u.photo_url.length > 5) ? u.photo_url : 'images/logo.png';
-                            list += `<div class="up-card" style="display:flex; align-items:center; gap:10px;">
-                                        <img src="${pic}" style="width:30px; height:30px; border-radius:50%; border:1px solid #00ffff;">
-                                        <div style="flex:1;">#${i+1} ${u.username}</div>
-                                        <b>${Math.floor(u.balance).toLocaleString()}</b>
+                            list += `<div class="up-card">
+                                        <div class="top-user-info">
+                                            <span style="color:var(--neon-blue); font-weight:bold; min-width:25px;">#${i+1}</span>
+                                            <img src="${pic}" class="mini-avatar" onerror="this.src='images/logo.png'">
+                                            <span>${u.username}</span>
+                                        </div>
+                                        <b class="price">${Math.floor(u.balance).toLocaleString()}</b>
                                      </div>`;
                         });
                         body.innerHTML = list;
