@@ -15,7 +15,7 @@
             <img src="images/logo.png" class="loader-logo">
         </div>
         <div class="loading-text">ACCESS GRANTED</div>
-        <div class="percent" id="load-pct">0%</div>
+        <div id="load-pct">0%</div>
         <div class="load-bar-wrapper"><div id="load-bar" class="load-bar-f"></div></div>
     </div>
 
@@ -101,18 +101,18 @@
                 let h = '';
                 if (type === 'wallet') {
                     const addr = logic.user.wallet;
-                    h = `<div style="text-align:center;"><div id="ton-connect-button" style="display:flex; justify-content:center;"></div><p style="margin-top:10px; font-family:monospace; color:#00ffff;">${addr ? addr.slice(0,6)+'...'+addr.slice(-4) : "Not Connected"}</p>${addr ? `<button onclick="logic.disconnectWallet()" style="background:rgba(255,0,0,0.2); color:red; border:1px solid red; padding:5px 10px; border-radius:10px; margin-top:10px;">DISCONNECT</button>` : ''}</div>`;
+                    h = `<div style="text-align:center;"><div id="ton-connect-button" style="display:flex; justify-content:center;"></div><p style="margin-top:10px; color:#00ffff;">${addr ? addr.slice(0,6)+'...'+addr.slice(-4) : "Not Connected"}</p>${addr ? `<button onclick="logic.disconnectWallet()" class="back-btn" style="background:rgba(255,0,0,0.2); color:red;">DISCONNECT</button>` : ''}</div>`;
                     body.innerHTML = h;
                     setTimeout(() => { tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-button' }; }, 100);
                 } else if (type === 'top') {
-                    body.innerHTML = '<p style="text-align:center;">Loading...</p>';
+                    body.innerHTML = '<p style="text-align:center;">Loading ranking...</p>';
                     fetch('/api/top').then(r => r.json()).then(data => {
                         let html = '';
-                        data.forEach((u, i) => html += `<div class="up-card"><span>#${i+1} ${u.username}</span><b>${Math.floor(u.balance)}</b></div>`);
+                        data.forEach((u, i) => html += `<div class="up-card">#${i+1} ${u.username} <b>${Math.floor(u.balance)}</b></div>`);
                         body.innerHTML = html;
-                    }).catch(() => body.innerHTML = 'Error loading Top');
+                    });
                 } else {
-                    body.innerHTML = `<p style="text-align:center; padding:20px;">${type} coming soon.</p>`;
+                    body.innerHTML = `<p style="text-align:center; padding:20px;">${type} is coming soon.</p>`;
                 }
                 document.getElementById('modal-container').classList.add('active');
             },
@@ -130,7 +130,7 @@
                             document.getElementById('app').style.display = 'flex';
                         }, 200);
                     }
-                }, 50);
+                }, 40);
             }
         };
 
