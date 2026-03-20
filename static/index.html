@@ -28,19 +28,21 @@
             <div class="u-profile">
                 <div class="u-av"><img src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'"></div>
                 <div class="u-info">
-                    <b id="u-name">Player</b><br>
+                    <b id="u-name">...</b><br>
                     <small>v4.0.0 Neural Mining</small>
                 </div>
             </div>
             <div class="u-lvl" id="u-lvl">LVL 1</div>
         </div>
 
-        <div class="stats">
+        <div class="stats-row">
             <div class="s-card"><small>EARN PER TAP</small><b id="tap-val">+1</b></div>
             <div class="s-card"><small>PROFIT PER HOUR</small><b id="profit-val">0</b></div>
         </div>
 
-        <div class="balance-main" id="balance">0</div>
+        <div class="balance-container">
+            <h1 id="balance">0</h1>
+        </div>
 
         <div class="click-zone">
             <div class="ai-button" ontouchstart="logic.tap(event)">
@@ -55,12 +57,12 @@
             </div>
         </div>
 
-        <div class="energy-area">
-            <div class="e-labels"><span>ENERGY</span><span id="e-num">1000/1000</span></div>
+        <div class="energy-section">
+            <div class="e-labels"><span>ENERGY</span><span id="e-num">0/0</span></div>
             <div class="e-bar"><div class="e-fill" id="e-fill"></div></div>
         </div>
 
-        <div class="nav-bar">
+        <div class="bottom-nav">
             <button onclick="ui.openM('boost')">🚀 BOOST</button>
             <button onclick="ui.openM('mine')">⛏️ MINE</button>
             <button onclick="ui.openM('tasks')">📋 TASKS</button>
@@ -78,15 +80,14 @@
 
     <script>
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: window.location.origin + '/static/tonconnect-manifest.json',
-            buttonRootId: null
+            manifestUrl: window.location.origin + '/static/tonconnect-manifest.json'
         });
 
         const logic = {
-            user: { balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0 },
+            user: null,
             async init() {
                 const tg = window.Telegram.WebApp;
-                const u = tg.initDataUnsafe?.user || { id: 0, username: "Guest" };
+                const u = tg.initDataUnsafe?.user || { id: 0, username: "Player" };
                 try {
                     const r = await fetch(`/api/user/${u.id}?username=${u.username}`);
                     const d = await r.json();
@@ -99,7 +100,7 @@
                         click_lvl: Number(d.click_lvl) || 1,
                         profit_hr: Number(d.profit_hr) || 0
                     };
-                } catch(e) { console.error("DB Error", e); }
+                } catch(e) { this.user = { id: 0, balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0, username: "Guest" }; }
                 ui.startLoad();
                 this.loop();
             },
@@ -113,48 +114,45 @@
             },
             loop() {
                 setInterval(() => {
-                    this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
+                    if(!this.user) return;
+                    this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
                     if(this.user.profit_hr > 0) this.user.balance += (this.user.profit_hr / 3600);
                     ui.update();
                 }, 1000);
                 setInterval(() => this.save(), 10000);
             },
             async save() {
+                if(!this.user) return;
                 fetch('/api/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        userId: this.user.id,
-                        balance: Math.floor(this.user.balance),
-                        energy: Math.floor(this.user.energy),
-                        max_energy: this.user.max_energy,
-                        click_lvl: this.user.click_lvl,
-                        profit_hr: this.user.profit_hr
-                    })
+                    body: JSON.stringify({ userId: this.user.id, balance: Math.floor(this.user.balance), energy: Math.floor(this.user.energy), max_energy: this.user.max_energy, click_lvl: this.user.click_lvl, profit_hr: this.user.profit_hr })
                 });
             }
         };
 
         const ui = {
             update() {
-                const b = Math.floor(logic.user.balance || 0);
+                if(!logic.user) return;
+                const b = Math.floor(logic.user.balance);
                 document.getElementById('balance').innerText = b.toLocaleString();
                 document.getElementById('e-num').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
                 document.getElementById('e-fill').style.width = (logic.user.energy/logic.user.max_energy*100)+'%';
                 document.getElementById('u-name').innerText = logic.user.username;
-                document.getElementById('u-lvl').innerText = `LVL ${Math.floor(b/200000)+1}`;
+                document.getElementById('u-lvl').innerText = `LVL ${Math.floor(b/100000)+1}`;
                 document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
                 document.getElementById('profit-val').innerText = logic.user.profit_hr;
             },
             async openM(type) {
                 const body = document.getElementById('m-body');
-                body.innerHTML = '';
+                body.innerHTML = '<div class="loader"></div>';
+                document.getElementById('modal').classList.add('show');
+
                 if(type === 'top') {
-                    logic.save(); // Обновляем свои данные перед просмотром топа
-                    body.innerHTML = `<h2 class="m-head">TOP</h2>`;
                     const res = await fetch('/api/top');
                     const users = await res.json();
-                    body.innerHTML += users.sort((a,b)=>b.balance-a.balance).slice(0, 100).map((u, i) => `
+                    body.innerHTML = `<h2 class="m-head">TOP</h2>`;
+                    body.innerHTML += users.sort((a,b)=>b.balance-a.balance).slice(0, 50).map((u, i) => `
                         <div class="t-row ${u.username === logic.user.username ? 't-me' : ''}">
                             <div class="t-left">
                                 <span class="t-rank">${i+1}</span>
@@ -170,25 +168,15 @@
                             <img src="https://ton.org/download/ton_symbol.png" class="w-icon">
                             <h3 class="w-sub">TON CONNECT</h3>
                             <p class="w-desc">Connect your wallet for Airdrop eligibility.</p>
-                            <button class="w-connect-btn" id="ton-logic-btn">
-                                ${tonConnectUI.connected ? 'DISCONNECT' : 'CONNECT WALLET'}
-                            </button>
+                            <button class="w-connect-btn" onclick="tonConnectUI.openModal()">CONNECT WALLET</button>
                         </div>`;
-                    setTimeout(() => {
-                        document.getElementById('ton-logic-btn').onclick = () => {
-                            if(tonConnectUI.connected) tonConnectUI.disconnect();
-                            else tonConnectUI.openModal();
-                            ui.closeM();
-                        }
-                    }, 10);
                 }
-                document.getElementById('modal').classList.add('show');
             },
             closeM() { document.getElementById('modal').classList.remove('show'); },
             pop(e) {
-                const x = e.touches[0].clientX; const y = e.touches[0].clientY;
+                const t = e.touches[0];
                 const d = document.createElement('div'); d.className = 'pop'; d.innerText = `+${logic.user.click_lvl}`;
-                d.style.left = x+'px'; d.style.top = y+'px';
+                d.style.left = t.clientX+'px'; d.style.top = t.clientY+'px';
                 document.body.appendChild(d); setTimeout(() => d.remove(), 700);
             },
             startLoad() {
