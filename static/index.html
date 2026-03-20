@@ -10,97 +10,146 @@
 </head>
 <body>
 
+    <div id="loading-screen">
+        <div class="l-container">
+            <div class="l-circle">
+                <img src="images/logo.png" class="l-logo" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'">
+                <div class="l-scan"></div>
+            </div>
+            <div class="l-pct" id="l-pct">0%</div>
+            <div class="l-bar-bg"><div id="l-bar" class="l-bar-fill"></div></div>
+        </div>
+    </div>
+
     <div id="app">
         <div class="header">
-            <div class="u-profile">
-                <div class="u-av"><img src="images/logo.png" id="avatar-img"></div>
-                <div class="u-info"><b id="u-name">...</b><br><small>Neural Agent</small></div>
+            <div class="u-info">
+                <div class="u-av"><img src="images/logo.png" id="u-img"></div>
+                <div><b id="u-name">...</b><br><small>Neural Mining</small></div>
             </div>
-            <div class="u-lvl" id="lvl-txt">LVL 1</div>
+            <div class="u-lvl" id="u-lvl">LVL 1</div>
         </div>
 
-        <div class="stats-row">
-            <div class="s-card"><small>Per Tap</small><b id="tap-power">+1</b></div>
-            <div class="s-card"><small>Profit/Hr</small><b id="p-hr">0</b></div>
+        <div class="stats">
+            <div class="s-item"><small>PER TAP</small><b id="s-tap">+1</b></div>
+            <div class="s-item"><small>PROFIT/HR</small><b id="s-profit">0</b></div>
         </div>
 
-        <div class="balance-container">
-            <h1 id="balance-num">0</h1>
-        </div>
+        <h1 class="balance" id="balance">0</h1>
 
-        <div class="click-zone">
-            <div class="main-btn-wrapper">
-                <div class="ring-glow"></div>
-                <img src="images/logo.png" class="ai-logo-btn" ontouchstart="logic.tap(event)">
+        <div class="game">
+            <div class="ring"></div>
+            <div class="tap-btn" ontouchstart="logic.tap(event)">
+                <img src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'">
             </div>
-            
-            <div class="side-menu">
-                <div class="side-item" onclick="ui.modal('wallet')">👛 WALLET</div>
-                <div class="side-item" onclick="ui.modal('friends')">🤝 FRIENDS</div>
+            <div class="side">
+                <div class="side-btn" onclick="ui.openM('wallet')">👛 WALLET</div>
+                <div class="side-btn" onclick="ui.openM('friends')">🤝 FRIENDS</div>
+                <div class="side-btn" onclick="ui.openM('bonus')">🎁 BONUS</div>
             </div>
         </div>
 
-        <div class="energy-box">
-            <div class="e-info"><span>ENERGY</span><span id="e-count">1000/1000</span></div>
-            <div class="e-bar"><div class="e-fill" id="e-bar-fill" style="width: 100%"></div></div>
+        <div class="energy">
+            <div class="e-txt"><span>ENERGY</span><span id="e-val">1000/1000</span></div>
+            <div class="e-bg"><div id="e-fill" class="e-fill"></div></div>
         </div>
 
-        <div class="bottom-nav">
-            <button onclick="ui.modal('boost')">🚀 BOOST</button>
-            <button onclick="ui.modal('mine')">⛏️ MINE</button>
-            <button onclick="ui.modal('tasks')">📋 TASKS</button>
-            <button onclick="ui.modal('top')">🏆 TOP</button>
+        <div class="nav">
+            <button onclick="ui.openM('boost')">🚀 BOOST</button>
+            <button onclick="ui.openM('mine')">⛏️ MINE</button>
+            <button onclick="ui.openM('tasks')">📋 TASKS</button>
+            <button onclick="ui.openM('top')">🏆 TOP</button>
         </div>
+    </div>
+
+    <div id="modal" class="modal" onclick="if(event.target===this) ui.closeM()">
+        <div class="m-content" id="m-content"></div>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
 
+        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: window.location.origin + '/static/tonconnect-manifest.json',
+            buttonRootId: 'ton-btn'
+        });
+
         const logic = {
-            balance: 0,
-            energy: 1000,
-            max_energy: 1000,
-            tap_val: 1,
-            init() {
-                document.getElementById('u-name').innerText = tg.initDataUnsafe?.user?.username || "Agent";
+            user: { balance: 0, energy: 1000, max_energy: 1000, tap: 1, profit: 0, username: "Player" },
+            async init() {
+                const u = tg.initDataUnsafe?.user || { id: 0, username: "Guest" };
+                this.user.username = u.username || u.first_name;
+                try {
+                    const r = await fetch(`/api/user/${u.id}?username=${this.user.username}`);
+                    const d = await r.json();
+                    Object.assign(this.user, d);
+                } catch(e) {}
+                ui.startLoad();
                 this.loop();
             },
             tap(e) {
-                if (this.energy <= 0) return;
-                this.balance += this.tap_val;
-                this.energy -= this.tap_val;
-                this.updateUI();
-                this.createPop(e);
-                if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-            },
-            updateUI() {
-                document.getElementById('balance-num').innerText = Math.floor(this.balance).toLocaleString();
-                document.getElementById('e-count').innerText = `${Math.floor(this.energy)}/${this.max_energy}`;
-                document.getElementById('e-bar-fill').style.width = (this.energy / this.max_energy * 100) + '%';
-            },
-            createPop(e) {
-                const t = e.touches[0];
-                const p = document.createElement('div');
-                p.className = 'pop'; p.innerText = `+${this.tap_val}`;
-                p.style.left = t.clientX + 'px'; p.style.top = t.clientY + 'px';
-                document.body.appendChild(p);
-                setTimeout(() => p.remove(), 600);
+                if (this.user.energy < this.user.tap) return;
+                this.user.balance += this.user.tap;
+                this.user.energy -= this.user.tap;
+                ui.update();
+                ui.pop(e);
+                if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
             },
             loop() {
                 setInterval(() => {
-                    if (this.energy < this.max_energy) {
-                        this.energy = Math.min(this.max_energy, this.energy + 1);
-                        this.updateUI();
-                    }
+                    if(this.user.energy < this.user.max_energy) this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
+                    if(this.user.profit > 0) this.user.balance += (this.user.profit / 3600);
+                    ui.update();
                 }, 1000);
+                setInterval(() => this.save(), 10000);
+            },
+            async save() {
+                fetch('/api/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ userId: tg.initDataUnsafe?.user?.id, balance: Math.floor(this.user.balance), energy: Math.floor(this.user.energy) })
+                });
             }
         };
 
         const ui = {
-            modal(type) { alert("Модуль " + type + " в разработке"); }
+            startLoad() {
+                let p = 0;
+                const i = setInterval(() => {
+                    p += 2;
+                    document.getElementById('l-pct').innerText = p + '%';
+                    document.getElementById('l-bar').style.width = p + '%';
+                    if(p >= 100) { clearInterval(i); document.getElementById('loading-screen').style.display = 'none'; document.getElementById('app').style.display = 'flex'; this.update(); }
+                }, 30);
+            },
+            update() {
+                document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
+                document.getElementById('e-val').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
+                document.getElementById('e-fill').style.width = (logic.user.energy/logic.user.max_energy*100)+'%';
+                document.getElementById('u-name').innerText = logic.user.username;
+                document.getElementById('s-tap').innerText = `+${logic.user.tap}`;
+                document.getElementById('s-profit').innerText = logic.user.profit;
+                document.getElementById('u-lvl').innerText = `LVL ${Math.floor(logic.user.balance/100000)+1}`;
+            },
+            openM(t) {
+                const c = document.getElementById('m-content');
+                c.innerHTML = `<h2 style="margin-bottom:20px">${t.toUpperCase()}</h2>`;
+                if(t === 'wallet') {
+                    c.innerHTML += `<div id="ton-btn" style="margin-bottom:20px"></div><div class="up-card" onclick="tonConnectUI.openModal()"><b>CONNECT TON</b><span>></span></div>`;
+                } else {
+                    c.innerHTML += `<div class="up-card"><b>${t} module</b><span>Coming Soon</span></div>`;
+                }
+                document.getElementById('modal').classList.add('active');
+            },
+            closeM() { document.getElementById('modal').classList.remove('active'); },
+            pop(e) {
+                const t = e.touches[0];
+                const d = document.createElement('div'); d.className = 'pop'; d.innerText = `+${logic.user.tap}`;
+                d.style.left = t.clientX+'px'; d.style.top = t.clientY+'px';
+                document.body.appendChild(d); setTimeout(() => d.remove(), 700);
+            }
         };
-
         window.onload = () => logic.init();
     </script>
 </body>
