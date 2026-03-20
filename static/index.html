@@ -87,12 +87,13 @@
 
     <script src="logic.js"></script>
     <script>
-        // Инициализация TON Connect для подключения кошелька
+        // Инициализация TON Connect
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
             manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
             buttonRootId: null 
         });
 
+        // Объект для управления Интерфейсом
         const ui = {
             init() { 
                 this.update(); 
@@ -100,16 +101,16 @@
             },
             update() {
                 if (!logic.user) return;
-                // Обновление основных показателей баланса и энергии
+                // Баланс и энергия
                 document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
                 document.getElementById('eng-val').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
                 document.getElementById('eng-fill').style.width = `${(logic.user.energy / logic.user.max_energy) * 100}%`;
                 
-                // Обновление заголовка (имя и уровень)
+                // Данные заголовка
                 document.getElementById('u-lvl').innerText = `LVL ${logic.user.lvl}`;
                 document.getElementById('u-name').innerText = logic.user.username || 'Agent';
                 
-                // Обновление карточек статистики
+                // Статистика
                 document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
                 document.getElementById('profit-val').innerText = Math.floor(logic.user.profit_hr).toLocaleString();
             },
@@ -152,7 +153,7 @@
                         break;
 
                     case 'squad':
-                        // Ссылка инвайта с ID пользователя
+                        // Генерируем ссылку инвайта с ID
                         const inviteLink = `https://t.me/share/url?url=https://t.me/NeuralPulseBot?start=${logic.user.user_id}`;
                         h = `<div style="padding:10px; text-align:center;">
                                 <p style="margin-bottom:15px;">Invite friends to earn 10% of their mining profit!</p>
@@ -186,7 +187,7 @@
                     case 'top':
                         body.innerHTML = `<div class="top-container" id="top-list"><p style="text-align:center; padding:20px; color:#00ffff;">📡 SYNCHRONIZING WITH NETWORK...</p></div>`;
                         
-                        // Внедрена логика реальных аватарок
+                        // Запрашиваем реальный ТОП
                         fetch('/api/top')
                             .then(res => res.json())
                             .then(leaders => {
@@ -202,11 +203,11 @@
                                         else if (place === 2) trophy = `<span class="rank-trophy silver">🥈</span>`;
                                         else if (place === 3) trophy = `<span class="rank-trophy bronze">🥉</span>`;
 
-                                        // Если photo_url нет, используем images/logo.png
-                                        const avatarUrl = p.photo_url || 'images/logo.png';
+                                        // ИСПОЛЬЗУЕМ photo_url ИЗ БД. onerror подставит твой лого.
+                                        const avatar = p.photo_url ? p.photo_url : 'images/logo.png';
 
-                                        // Сокращаем большие числа (например, 1.2M)
-                                        const val = p.balance >= 1000000 
+                                        // Сокращаем большие балансы
+                                        const displayBalance = p.balance >= 1000000 
                                             ? (p.balance / 1000000).toFixed(1) + 'M' 
                                             : Math.floor(p.balance).toLocaleString();
 
@@ -215,11 +216,11 @@
                                             <div class="rank-left">
                                                 ${trophy}
                                                 <div class="rank-avatar">
-                                                    <img src="${avatarUrl}" onerror="this.src='images/logo.png'">
+                                                    <img src="${avatar}" onerror="this.src='images/logo.png'">
                                                 </div>
-                                                <span>${p.username} ${isMe ? '<small>(YOU)</small>' : ''}</span>
+                                                <span class="rank-name">${p.username} ${isMe ? '<small>(YOU)</small>' : ''}</span>
                                             </div>
-                                            <b>${val}</b>
+                                            <b class="rank-balance">${displayBalance}</b>
                                         </div>`;
                                     });
                                 }
@@ -228,7 +229,7 @@
                             })
                             .catch(err => {
                                 console.error("Top load error:", err);
-                                document.getElementById('top-list').innerHTML = `<p style="text-align:center; color:#ff4444; padding:20px;">CONNECTION FAILED</p>`;
+                                document.getElementById('top-list').innerHTML = `<p style="text-align:center; color:#ff4444; padding:20px;">PROTOCOL FAILED</p>`;
                             });
                         break;
                 }
@@ -245,15 +246,16 @@
                     if (p >= 100) {
                         clearInterval(iv);
                         setTimeout(() => {
-                            document.getElementById('loading-screen').style.opacity = '0';
+                            const ls = document.getElementById('loading-screen');
+                            if(ls) ls.style.opacity = '0';
                             document.getElementById('app').style.display = 'flex';
-                            setTimeout(() => document.getElementById('loading-screen').remove(), 500);
+                            setTimeout(() => { if(ls) ls.remove(); }, 500);
                         }, 400);
                     }
                 }, 40);
             }
         };
-        // Старт логики после полной загрузки окна
+        // Старт logic после полной загрузки окна
         window.onload = () => logic.init();
     </script>
 </body>
