@@ -40,7 +40,7 @@
             <div class="s-card"><small>PROFIT PER HOUR</small><b id="profit-val">0</b></div>
         </div>
 
-        <div class="balance-wrap">
+        <div class="balance-container">
             <h1 id="balance">0</h1>
         </div>
 
@@ -57,9 +57,9 @@
             </div>
         </div>
 
-        <div class="energy-box">
-            <div class="e-info"><span>ENERGY</span><span id="e-num">0/0</span></div>
-            <div class="e-track"><div class="e-bar" id="e-fill"></div></div>
+        <div class="energy-section">
+            <div class="e-labels"><span>ENERGY</span><span id="e-num">0/0</span></div>
+            <div class="e-track"><div class="e-fill" id="e-fill"></div></div>
         </div>
 
         <div class="nav-bar">
@@ -72,9 +72,9 @@
 
     <div id="modal" class="modal-overlay" onclick="if(event.target===this) ui.closeM()">
         <div class="modal-content">
-            <div class="modal-drag"></div>
+            <div class="modal-handle"></div>
             <div id="m-body"></div>
-            <button class="m-btn-close" onclick="ui.closeM()">CLOSE TERMINAL</button>
+            <button class="m-close" onclick="ui.closeM()">CLOSE TERMINAL</button>
         </div>
     </div>
 
@@ -92,12 +92,9 @@
                     const r = await fetch(`/api/user/${u.id}?username=${u.username}`);
                     const d = await r.json();
                     this.user = {
-                        id: u.id,
-                        username: d.username || u.username,
-                        balance: Number(d.balance) || 0,
-                        energy: Number(d.energy) || 1000,
-                        max_energy: Number(d.max_energy) || 1000,
-                        click_lvl: Number(d.click_lvl) || 1,
+                        id: u.id, username: d.username || u.username,
+                        balance: Number(d.balance) || 0, energy: Number(d.energy) || 1000,
+                        max_energy: Number(d.max_energy) || 1000, click_lvl: Number(d.click_lvl) || 1,
                         profit_hr: Number(d.profit_hr) || 0
                     };
                 } catch(e) { this.user = { id: 0, balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0, username: "Player" }; }
@@ -126,14 +123,7 @@
                 fetch('/api/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ 
-                        userId: this.user.id, 
-                        balance: Math.floor(this.user.balance), 
-                        energy: Math.floor(this.user.energy), 
-                        max_energy: this.user.max_energy, 
-                        click_lvl: this.user.click_lvl, 
-                        profit_hr: this.user.profit_hr 
-                    })
+                    body: JSON.stringify({ userId: this.user.id, balance: Math.floor(this.user.balance), energy: Math.floor(this.user.energy), max_energy: this.user.max_energy, click_lvl: this.user.click_lvl, profit_hr: this.user.profit_hr })
                 });
             }
         };
@@ -146,43 +136,41 @@
                 document.getElementById('e-num').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
                 document.getElementById('e-fill').style.width = (logic.user.energy/logic.user.max_energy*100)+'%';
                 document.getElementById('u-name').innerText = logic.user.username;
-                document.getElementById('u-lvl').innerText = `LVL ${Math.floor(b/250000)+1}`;
+                document.getElementById('u-lvl').innerText = `LVL ${Math.floor(b/200000)+1}`;
                 document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
                 document.getElementById('profit-val').innerText = logic.user.profit_hr;
             },
             async openM(type) {
                 const body = document.getElementById('m-body');
-                body.innerHTML = '<div style="text-align:center;padding:20px;">LOADING...</div>';
+                body.innerHTML = '<div style="text-align:center;padding:20px;color:#444">LOADING...</div>';
                 document.getElementById('modal').classList.add('show');
-
                 if(type === 'top') {
                     const res = await fetch('/api/top');
                     const users = await res.json();
                     body.innerHTML = `<h2 class="m-title">TOP 100</h2>`;
                     body.innerHTML += users.sort((a,b)=>b.balance-a.balance).slice(0, 100).map((u, i) => `
-                        <div class="top-row ${u.username === logic.user.username ? 'top-me' : ''}">
-                            <div class="top-left">
-                                <span class="top-rank">${i+1}</span>
-                                <div class="top-avatar">AI</div>
-                                <span class="top-name">${u.username}</span>
+                        <div class="t-row ${u.username === logic.user.username ? 't-me' : ''}">
+                            <div class="t-left">
+                                <span class="t-rank">${i+1}</span>
+                                <div class="t-av">AI</div>
+                                <span class="t-name">${u.username}</span>
                             </div>
-                            <b class="top-val">${Math.floor(u.balance).toLocaleString()}</b>
+                            <b class="t-val">${Math.floor(u.balance).toLocaleString()}</b>
                         </div>`).join('');
                 } else if(type === 'wallet') {
-                    body.innerHTML = `
-                        <div class="wallet-wrap">
-                            <h2 class="w-head">WALLET</h2>
-                            <img src="https://ton.org/download/ton_symbol.png" class="w-logo">
-                            <h3 class="w-sub">TON CONNECT</h3>
-                            <p class="w-text">Connect your wallet for Airdrop eligibility.</p>
-                            <button class="w-btn-blue" onclick="tonConnectUI.openModal()">CONNECT WALLET</button>
-                        </div>`;
+                    body.innerHTML = `<div class="w-cont">
+                        <h2 class="w-head">WALLET</h2>
+                        <img src="https://ton.org/download/ton_symbol.png" class="w-logo">
+                        <h3 class="w-sub">TON CONNECT</h3>
+                        <p class="w-text">Connect your wallet for Airdrop eligibility.</p>
+                        <button class="w-btn" onclick="tonConnectUI.openModal()">CONNECT WALLET</button>
+                    </div>`;
                 }
             },
             closeM() { document.getElementById('modal').classList.remove('show'); },
             pop(e) {
                 const t = e.touches[0];
-                const d = document.createElement('div'); d.className = 'tap-pop'; d.innerText = `+${logic.user.click_lvl}`;
+                const d = document.createElement('div'); d.className = 'pop'; d.innerText = `+${logic.user.click_lvl}`;
                 d.style.left = t.clientX+'px'; d.style.top = t.clientY+'px';
                 document.body.appendChild(d); setTimeout(() => d.remove(), 700);
             },
