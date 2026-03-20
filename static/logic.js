@@ -6,12 +6,15 @@ const logic = {
         if (tg) { 
             tg.ready(); 
             tg.expand(); 
+            // Устанавливаем цвет темы (опционально)
+            tg.setHeaderColor('#000000');
         }
 
         const userId = tg?.initDataUnsafe?.user?.id || "12345";
         const firstName = tg?.initDataUnsafe?.user?.first_name || "Agent";
 
         try {
+            // Запрашиваем данные у нашего Node.js сервера
             const res = await fetch(`/api/user/${userId}?username=${encodeURIComponent(firstName)}`);
             const data = await res.json();
 
@@ -26,10 +29,12 @@ const logic = {
                 lvl: Number(data.lvl || 1)
             };
 
+            // Обновляем имя в интерфейсе сразу после загрузки
             const nameEl = document.getElementById('u-name');
             if (nameEl) nameEl.innerText = this.user.username;
 
             if (typeof ui !== 'undefined') ui.init();
+            
             this.startLoops();
             return true;
         } catch (e) {
@@ -39,17 +44,31 @@ const logic = {
     },
 
     tap(e) {
+        // Предотвращаем стандартное поведение (зум/скролл) на мобилках
         if (e.type === 'touchstart') e.preventDefault();
         if (!this.user || this.user.energy < this.user.click_lvl) return;
         
         this.user.balance += this.user.click_lvl;
         this.user.energy -= this.user.click_lvl;
         
+        // Проверка на повышение уровня (каждые 100к баланса для примера)
+        this.checkLvl();
+
         if (typeof ui !== 'undefined') ui.update();
         this.anim(e);
 
+        // Виброотклик Telegram
         if (window.Telegram?.WebApp?.HapticFeedback) {
             window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
+        }
+    },
+
+    checkLvl() {
+        // Простая формула: уровень растет от общего баланса
+        const newLvl = Math.floor(this.user.balance / 100000) + 1;
+        if (newLvl > this.user.lvl) {
+            this.user.lvl = newLvl;
+            window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
         }
     },
 
@@ -71,6 +90,7 @@ const logic = {
         if (!this.user) return;
         
         let success = false;
+        // Расчет стоимости можно сделать динамическим, но пока оставим как у тебя
         if (type === 'tap' && this.user.balance >= 5000) {
             this.user.balance -= 5000;
             this.user.click_lvl += 1;
@@ -89,7 +109,8 @@ const logic = {
         if (success) {
             if (typeof ui !== 'undefined') {
                 ui.update();
-                ui.openM(type === 'profit' ? 'mine' : 'boost'); // Обновить текст в модалке
+                // Перерисовываем модалку, чтобы цена/уровень обновились визуально
+                ui.openM(type === 'profit' ? 'mine' : 'boost'); 
             }
             await this.save();
         } else {
@@ -97,16 +118,14 @@ const logic = {
         }
     },
 
-    // Реализация КНОПОК заданий
     async claimTask(taskId, reward, url = null) {
         if (!this.user) return;
         
-        // Если есть ссылка (например на канал), открываем её
         if (url) {
             window.Telegram.WebApp.openLink(url);
         }
 
-        // В простейшем случае сразу даем награду
+        // В будущем здесь можно добавить fetch('/api/check-task')
         this.user.balance += reward;
         window.Telegram?.WebApp?.showAlert(`Protocol Verified! +${reward.toLocaleString()} Pulse`);
         
@@ -130,21 +149,23 @@ const logic = {
                     lvl: this.user.lvl
                 })
             });
+            console.log("🧬 Sync: OK");
         } catch (err) { 
             console.warn("Sync failed", err); 
         }
     },
 
     startLoops() {
+        // Цикл обновлений (1 раз в секунду)
         setInterval(() => {
             if (!this.user) return;
             
-            // Регенерация энергии
+            // Регенерация энергии (плавная)
             if (this.user.energy < this.user.max_energy) {
                 this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
             }
             
-            // Пассивный доход
+            // Пассивный доход (начисляем каждую секунду часть от часовой прибыли)
             if (this.user.profit_hr > 0) {
                 this.user.balance += (this.user.profit_hr / 3600);
             }
@@ -152,7 +173,7 @@ const logic = {
             if (typeof ui !== 'undefined') ui.update();
         }, 1000);
 
-        // Автосохранение
-        setInterval(() => this.save(), 10000);
+        // Автосохранение на сервер (раз в 15 секунд, чтобы не спамить базу)
+        setInterval(() => this.save(), 15000);
     }
 };
