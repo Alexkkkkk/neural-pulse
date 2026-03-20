@@ -87,6 +87,8 @@
                     
                     this.user = {
                         ...data,
+                        // Сохраняем фото из ТГ, если API вернуло пустоту
+                        photo_url: (data.photo_url && data.photo_url.length > 5) ? data.photo_url : photoUrl,
                         balance: Number(data.balance),
                         energy: Number(data.energy),
                         max_energy: Number(data.max_energy),
@@ -141,6 +143,18 @@
                 document.body.appendChild(p);
                 setTimeout(() => p.remove(), 800);
             },
+            async save() {
+                if (!this.user) return;
+                fetch('/api/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        userId: this.user.user_id, balance: Math.floor(this.user.balance),
+                        energy: Math.floor(this.user.energy), max_energy: this.user.max_energy,
+                        click_lvl: this.user.click_lvl, profit_hr: this.user.profit_hr, lvl: this.user.lvl
+                    })
+                });
+            },
             async saveWallet(address) {
                 if (!this.user) return;
                 this.user.wallet = address;
@@ -155,18 +169,6 @@
                 await tonConnectUI.disconnect();
                 this.user.wallet = null;
                 ui.openM('wallet');
-            },
-            async save() {
-                if (!this.user) return;
-                fetch('/api/save', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        userId: this.user.user_id, balance: Math.floor(this.user.balance),
-                        energy: Math.floor(this.user.energy), max_energy: this.user.max_energy,
-                        click_lvl: this.user.click_lvl, profit_hr: this.user.profit_hr, lvl: this.user.lvl
-                    })
-                });
             },
             startLoops() {
                 setInterval(() => {
@@ -199,8 +201,7 @@
                 document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
                 document.getElementById('profit-val').innerText = Math.floor(logic.user.profit_hr).toLocaleString('ru-RU');
                 
-                // ИСПРАВЛЕНИЕ АВАТАРКИ: 
-                // Если фото из ТГ есть - ставим его. Если нет или ошибка - остается logo.png (прописан в HTML)
+                // Ставим аватарку
                 const avatarImg = document.getElementById('u-avatar');
                 if (logic.user.photo_url && logic.user.photo_url.length > 5) {
                     avatarImg.src = logic.user.photo_url;
@@ -216,8 +217,8 @@
                     const addr = logic.user.wallet;
                     h = `<div style="text-align:center;">
                             <div id="ton-connect-button" style="display:flex; justify-content:center;"></div>
-                            <p style="color:#00ffff; margin-top:10px; font-size:10px; word-break:break-all;">${addr ? addr : "NOT CONNECTED"}</p>
-                            ${addr ? `<button onclick="logic.disconnectWallet()" class="back-btn" style="color:red; border:1px solid red; background:transparent; margin-top:10px; width:100%;">DISCONNECT</button>` : ''}
+                            <p style="color:#00ffff; margin-top:10px; font-size:10px; word-break:break-all; padding:0 10px;">${addr ? addr : "NOT CONNECTED"}</p>
+                            ${addr ? `<button onclick="logic.disconnectWallet()" class="back-btn" style="color:red; border:1px solid red; background:transparent; margin-top:10px; width:90%;">DISCONNECT</button>` : ''}
                          </div>`;
                     body.innerHTML = h;
                     setTimeout(() => { tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-button' }; }, 100);
@@ -232,7 +233,15 @@
                     body.innerHTML = '<p style="text-align:center;">SCANNING NETWORK...</p>';
                     fetch('/api/top').then(r => r.json()).then(data => {
                         let list = '';
-                        data.forEach((u, i) => list += `<div class="up-card">#${i+1} ${u.username} <b>${Math.floor(u.balance).toLocaleString()}</b></div>`);
+                        data.forEach((u, i) => {
+                            // Если у игрока в топе нет фото, ставим лого
+                            const pic = (u.photo_url && u.photo_url.length > 5) ? u.photo_url : 'images/logo.png';
+                            list += `<div class="up-card" style="display:flex; align-items:center; gap:10px;">
+                                        <img src="${pic}" style="width:30px; height:30px; border-radius:50%; border:1px solid #00ffff;">
+                                        <div style="flex:1;">#${i+1} ${u.username}</div>
+                                        <b>${Math.floor(u.balance).toLocaleString()}</b>
+                                     </div>`;
+                        });
                         body.innerHTML = list;
                     }).catch(() => { body.innerHTML = '<p style="text-align:center;">OFFLINE</p>'; });
                 } else {
