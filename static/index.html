@@ -25,7 +25,7 @@
     <div id="app" style="display: none;">
         <div class="header">
             <div class="header-left">
-                <div class="avatar"><img src="images/logo.png"></div>
+                <div class="avatar"><img src="images/logo.png" id="u-avatar"></div>
                 <div class="u-info">
                     <b id="u-name">Agent</b>
                     <small>v4.0.0 Neural Mining</small>
@@ -87,13 +87,11 @@
 
     <script src="logic.js"></script>
     <script>
-        // Инициализация TON Connect
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
             manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
             buttonRootId: null 
         });
 
-        // Объект для управления Интерфейсом
         const ui = {
             init() { 
                 this.update(); 
@@ -101,18 +99,18 @@
             },
             update() {
                 if (!logic.user) return;
-                // Баланс и энергия
                 document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
                 document.getElementById('eng-val').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
                 document.getElementById('eng-fill').style.width = `${(logic.user.energy / logic.user.max_energy) * 100}%`;
-                
-                // Данные заголовка
                 document.getElementById('u-lvl').innerText = `LVL ${logic.user.lvl}`;
                 document.getElementById('u-name').innerText = logic.user.username || 'Agent';
-                
-                // Статистика
                 document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
                 document.getElementById('profit-val').innerText = Math.floor(logic.user.profit_hr).toLocaleString();
+                
+                // Установка аватарки в хедере
+                if (logic.user.photo_url) {
+                    document.getElementById('u-avatar').src = logic.user.photo_url;
+                }
             },
             openM(type) {
                 const body = document.getElementById('modal-body');
@@ -152,84 +150,39 @@
                         body.innerHTML = h;
                         break;
 
-                    case 'squad':
-                        // Генерируем ссылку инвайта с ID
-                        const inviteLink = `https://t.me/share/url?url=https://t.me/NeuralPulseBot?start=${logic.user.user_id}`;
-                        h = `<div style="padding:10px; text-align:center;">
-                                <p style="margin-bottom:15px;">Invite friends to earn 10% of their mining profit!</p>
-                                <button class="nav-btn" style="width:100%;" onclick="window.Telegram.WebApp.openTelegramLink('${inviteLink}')">INVITE AGENT</button>
-                                <div class="rank-item" style="margin-top:20px;"><span>Total Friends:</span><b>0</b></div>
-                             </div>`;
-                        body.innerHTML = h;
-                        break;
-
-                    case 'tasks':
-                        h = `<div class="up-card">
-                                <div class="up-info"><b>📢 Join Channel</b><small>+10,000 Pulse</small></div>
-                                <button class="side-btn" onclick="logic.claimTask('tg_join', 10000, 'https://t.me/your_channel')">GO</button>
-                             </div>
-                             <div class="up-card">
-                                <div class="up-info"><b>🐦 Follow X</b><small>+5,000 Pulse</small></div>
-                                <button class="side-btn" onclick="logic.claimTask('x_follow', 5000, 'https://x.com/your_profile')">GO</button>
-                             </div>`;
-                        body.innerHTML = h;
-                        break;
-
-                    case 'bonus':
-                        h = `<div style="text-align:center; padding:20px;">
-                                <h3 style="color:#00ffff; margin-bottom:10px;">DAILY REWARD</h3>
-                                <p>Come back every 24h to claim your Pulse reward.</p>
-                                <button class="nav-btn" style="margin-top:15px;" onclick="logic.claimTask('daily', 20000)">CLAIM 20,000</button>
-                             </div>`;
-                        body.innerHTML = h;
-                        break;
-
                     case 'top':
-                        body.innerHTML = `<div class="top-container" id="top-list"><p style="text-align:center; padding:20px; color:#00ffff;">📡 SYNCHRONIZING WITH NETWORK...</p></div>`;
-                        
-                        // Запрашиваем реальный ТОП
+                        body.innerHTML = `<div class="top-container" id="top-list"><p style="text-align:center; padding:20px; color:#00ffff;">📡 SYNCHRONIZING...</p></div>`;
                         fetch('/api/top')
                             .then(res => res.json())
                             .then(leaders => {
                                 let html = `<div class="top-container">`;
-                                if (!leaders || leaders.length === 0) {
-                                    html += `<p style="text-align:center; color:#888; padding:20px;">No data in Neural Network</p>`;
-                                } else {
-                                    leaders.forEach((p, i) => {
-                                        const place = i + 1;
-                                        const isMe = String(p.user_id) === String(logic.user.user_id);
-                                        let trophy = `<span class="rank-num">${place}</span>`;
-                                        if (place === 1) trophy = `<span class="rank-trophy gold">🏆</span>`;
-                                        else if (place === 2) trophy = `<span class="rank-trophy silver">🥈</span>`;
-                                        else if (place === 3) trophy = `<span class="rank-trophy bronze">🥉</span>`;
+                                leaders.forEach((p, i) => {
+                                    const place = i + 1;
+                                    const isMe = String(p.user_id) === String(logic.user.user_id);
+                                    let trophy = `<span class="rank-num">${place}</span>`;
+                                    if (place === 1) trophy = `<span class="rank-trophy gold">🏆</span>`;
+                                    else if (place === 2) trophy = `<span class="rank-trophy silver">🥈</span>`;
+                                    else if (place === 3) trophy = `<span class="rank-trophy bronze">🥉</span>`;
 
-                                        // ИСПОЛЬЗУЕМ photo_url ИЗ БД. onerror подставит твой лого.
-                                        const avatar = p.photo_url ? p.photo_url : 'images/logo.png';
+                                    const avatarUrl = p.photo_url || 'images/logo.png';
+                                    const val = p.balance >= 1000000 
+                                        ? (p.balance / 1000000).toFixed(1) + 'M' 
+                                        : Math.floor(p.balance).toLocaleString();
 
-                                        // Сокращаем большие балансы
-                                        const displayBalance = p.balance >= 1000000 
-                                            ? (p.balance / 1000000).toFixed(1) + 'M' 
-                                            : Math.floor(p.balance).toLocaleString();
-
-                                        html += `
-                                        <div class="rank-item ${isMe ? 'active' : ''}">
-                                            <div class="rank-left">
-                                                ${trophy}
-                                                <div class="rank-avatar">
-                                                    <img src="${avatar}" onerror="this.src='images/logo.png'">
-                                                </div>
-                                                <span class="rank-name">${p.username} ${isMe ? '<small>(YOU)</small>' : ''}</span>
+                                    html += `
+                                    <div class="rank-item ${isMe ? 'active' : ''}">
+                                        <div class="rank-left">
+                                            ${trophy}
+                                            <div class="rank-avatar">
+                                                <img src="${avatarUrl}" onerror="this.src='images/logo.png'">
                                             </div>
-                                            <b class="rank-balance">${displayBalance}</b>
-                                        </div>`;
-                                    });
-                                }
+                                            <span>${p.username} ${isMe ? '<small>(YOU)</small>' : ''}</span>
+                                        </div>
+                                        <b>${val}</b>
+                                    </div>`;
+                                });
                                 html += `</div>`;
                                 document.getElementById('top-list').innerHTML = html;
-                            })
-                            .catch(err => {
-                                console.error("Top load error:", err);
-                                document.getElementById('top-list').innerHTML = `<p style="text-align:center; color:#ff4444; padding:20px;">PROTOCOL FAILED</p>`;
                             });
                         break;
                 }
@@ -237,7 +190,6 @@
             },
             closeM() { document.getElementById('modal-container').classList.remove('active'); },
             finishLoading() {
-                // Эмуляция прогресса загрузки
                 let p = 0;
                 const iv = setInterval(() => {
                     p += 5;
@@ -246,17 +198,24 @@
                     if (p >= 100) {
                         clearInterval(iv);
                         setTimeout(() => {
-                            const ls = document.getElementById('loading-screen');
-                            if(ls) ls.style.opacity = '0';
+                            document.getElementById('loading-screen').style.opacity = '0';
                             document.getElementById('app').style.display = 'flex';
-                            setTimeout(() => { if(ls) ls.remove(); }, 500);
+                            setTimeout(() => document.getElementById('loading-screen').remove(), 500);
                         }, 400);
                     }
                 }, 40);
             }
         };
-        // Старт logic после полной загрузки окна
-        window.onload = () => logic.init();
+
+        window.onload = () => {
+            // Передаем данные из Telegram SDK в логику
+            const tg = window.Telegram.WebApp;
+            tg.expand();
+            const user = tg.initDataUnsafe?.user || {};
+            
+            // Инициализация игры с передачей ID, имени и фото
+            logic.init(user.id, user.username || user.first_name, user.photo_url);
+        };
     </script>
 </body>
 </html>
