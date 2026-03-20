@@ -22,7 +22,7 @@
     <div id="app" style="display: none;">
         <div class="header">
             <div class="header-left">
-                <div class="avatar"><img src="images/logo.png" id="u-avatar"></div>
+                <div class="avatar"><img src="images/logo.png" id="u-avatar" onerror="this.src='images/logo.png'"></div>
                 <div class="u-info">
                     <b id="u-name">Agent</b>
                     <small>v4.0.0 Neural Mining</small>
@@ -69,76 +69,116 @@
         </div>
     </div>
 
-    <script>
-        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json'
-        });
-        tonConnectUI.onStatusChange(wallet => {
-            if (wallet && typeof logic !== 'undefined') logic.saveWallet(wallet.account.address);
-        });
-    </script>
-
     <script src="logic.js"></script>
 
     <script>
+        // Инициализация TON Connect
+        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json'
+        });
+
+        tonConnectUI.onStatusChange(wallet => {
+            if (wallet && typeof logic !== 'undefined' && logic.user) {
+                logic.saveWallet(wallet.account.address);
+            }
+        });
+
         const ui = {
-            init() { this.update(); this.finishLoading(); },
+            init() { 
+                this.update(); 
+                this.finishLoading(); 
+            },
             update() {
-                if (!logic.user) return;
-                document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
-                document.getElementById('eng-val').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
-                document.getElementById('eng-fill').style.width = `${(logic.user.energy / logic.user.max_energy) * 100}%`;
-                document.getElementById('u-lvl').innerText = `LVL ${logic.user.lvl}`;
-                document.getElementById('u-name').innerText = logic.user.username;
-                document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
-                document.getElementById('profit-val').innerText = Math.floor(logic.user.profit_hr).toLocaleString();
-                if (logic.user.photo_url) document.getElementById('u-avatar').src = logic.user.photo_url;
+                if (!logic || !logic.user) return;
+                try {
+                    document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
+                    document.getElementById('eng-val').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
+                    document.getElementById('eng-fill').style.width = `${(logic.user.energy / logic.user.max_energy) * 100}%`;
+                    document.getElementById('u-lvl').innerText = `LVL ${logic.user.lvl}`;
+                    document.getElementById('u-name').innerText = logic.user.username;
+                    document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
+                    document.getElementById('profit-val').innerText = Math.floor(logic.user.profit_hr).toLocaleString();
+                    
+                    // Обновляем аватарку только если она есть
+                    const avatar = document.getElementById('u-avatar');
+                    if (logic.user.photo_url && logic.user.photo_url !== "") {
+                        avatar.src = logic.user.photo_url;
+                    }
+                } catch (err) {
+                    console.error("UI Update error:", err);
+                }
             },
             openM(type) {
                 const body = document.getElementById('modal-body');
                 const header = document.getElementById('modal-header');
                 header.innerText = type.toUpperCase();
-                let h = '';
+                let html = '';
+                
                 if (type === 'wallet') {
-                    const addr = logic.user.wallet;
-                    h = `<div style="text-align:center;"><div id="ton-connect-button" style="display:flex; justify-content:center;"></div><p style="margin-top:10px; color:#00ffff;">${addr ? addr.slice(0,6)+'...'+addr.slice(-4) : "Not Connected"}</p>${addr ? `<button onclick="logic.disconnectWallet()" class="back-btn" style="background:rgba(255,0,0,0.2); color:red;">DISCONNECT</button>` : ''}</div>`;
-                    body.innerHTML = h;
-                    setTimeout(() => { tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-button' }; }, 100);
+                    const addr = logic.user?.wallet;
+                    html = `
+                        <div style="text-align:center;">
+                            <div id="ton-connect-button" style="display:flex; justify-content:center; margin-bottom:15px;"></div>
+                            <p style="color:#00ffff; font-family:monospace; font-size:12px; word-break:break-all;">
+                                ${addr ? addr : "Not Connected"}
+                            </p>
+                            ${addr ? `<button onclick="logic.disconnectWallet()" class="back-btn" style="background:rgba(255,0,0,0.2); color:red; margin-top:15px; border:1px solid red;">DISCONNECT</button>` : ''}
+                        </div>`;
+                    body.innerHTML = html;
+                    setTimeout(() => {
+                        tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-button' };
+                    }, 100);
                 } else if (type === 'top') {
-                    body.innerHTML = '<p style="text-align:center;">Loading ranking...</p>';
+                    body.innerHTML = '<p style="text-align:center;">ACCESSING RANKINGS...</p>';
                     fetch('/api/top').then(r => r.json()).then(data => {
-                        let html = '';
-                        data.forEach((u, i) => html += `<div class="up-card">#${i+1} ${u.username} <b>${Math.floor(u.balance)}</b></div>`);
-                        body.innerHTML = html;
-                    });
+                        let list = '';
+                        data.forEach((u, i) => {
+                            list += `<div class="up-card">#${i+1} ${u.username} <b>${Math.floor(u.balance)}</b></div>`;
+                        });
+                        body.innerHTML = list;
+                    }).catch(() => { body.innerHTML = '<p>Error loading top.</p>'; });
                 } else {
-                    body.innerHTML = `<p style="text-align:center; padding:20px;">${type} is coming soon.</p>`;
+                    body.innerHTML = `<p style="text-align:center; padding:20px; color:#888;">Module ${type} is encrypted or coming soon.</p>`;
                 }
                 document.getElementById('modal-container').classList.add('active');
             },
-            closeM() { document.getElementById('modal-container').classList.remove('active'); },
+            closeM() { 
+                document.getElementById('modal-container').classList.remove('active'); 
+            },
             finishLoading() {
                 let p = 0;
+                const bar = document.getElementById('load-bar');
+                const pct = document.getElementById('load-pct');
                 const iv = setInterval(() => {
-                    p += 10;
-                    document.getElementById('load-pct').innerText = p + '%';
-                    document.getElementById('load-bar').style.width = p + '%';
+                    p += 5;
+                    if (pct) pct.innerText = p + '%';
+                    if (bar) bar.style.width = p + '%';
                     if (p >= 100) {
                         clearInterval(iv);
                         setTimeout(() => {
-                            document.getElementById('loading-screen').style.display = 'none';
-                            document.getElementById('app').style.display = 'flex';
+                            document.getElementById('loading-screen').style.opacity = '0';
+                            setTimeout(() => {
+                                document.getElementById('loading-screen').style.display = 'none';
+                                document.getElementById('app').style.display = 'flex';
+                            }, 500);
                         }, 200);
                     }
-                }, 40);
+                }, 30);
             }
         };
 
         window.onload = () => {
             const tg = window.Telegram.WebApp;
             tg.expand();
+            tg.ready();
             const user = tg.initDataUnsafe?.user || {};
-            logic.init(user.id, user.username || user.first_name, user.photo_url);
+            // Запуск логики
+            if (typeof logic !== 'undefined') {
+                logic.init(user.id, user.username || user.first_name, user.photo_url);
+            } else {
+                // Если logic.js не загрузился, всё равно показываем приложение
+                ui.finishLoading();
+            }
         };
     </script>
 </body>
