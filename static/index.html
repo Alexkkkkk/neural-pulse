@@ -74,7 +74,7 @@
         <div class="modal-content">
             <div class="modal-handle"></div>
             <div id="m-body"></div>
-            <button class="m-close" onclick="ui.closeM()">CLOSE TERMINAL</button>
+            <button class="m-close-btn" onclick="ui.closeM()">CLOSE TERMINAL</button>
         </div>
     </div>
 
@@ -92,10 +92,8 @@
                 try {
                     const r = await fetch(`/api/user/${u.id}?username=${u.username}`);
                     const d = await r.json();
-                    this.user = d;
-                } catch(e) { 
-                    this.user = { id: 0, balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0, username: "Player" }; 
-                }
+                    this.user = { id: u.id, username: d.username || u.username, balance: Number(d.balance) || 0, energy: Number(d.energy) || 1000, max_energy: Number(d.max_energy) || 1000, click_lvl: Number(d.click_lvl) || 1, profit_hr: Number(d.profit_hr) || 0 };
+                } catch(e) { this.user = { id: 0, balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0, username: "Player" }; }
                 ui.startLoad();
                 this.loop();
             },
@@ -110,7 +108,7 @@
             loop() {
                 setInterval(() => {
                     if(!this.user) return;
-                    this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
+                    this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
                     if(this.user.profit_hr > 0) this.user.balance += (this.user.profit_hr / 3600);
                     ui.update();
                 }, 1000);
@@ -121,7 +119,7 @@
                 fetch('/api/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(this.user)
+                    body: JSON.stringify({ userId: this.user.id, balance: Math.floor(this.user.balance), energy: Math.floor(this.user.energy), max_energy: this.user.max_energy, click_lvl: this.user.click_lvl, profit_hr: this.user.profit_hr })
                 });
             }
         };
@@ -134,13 +132,13 @@
                 document.getElementById('e-num').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
                 document.getElementById('e-fill').style.width = (logic.user.energy/logic.user.max_energy*100)+'%';
                 document.getElementById('u-name').innerText = logic.user.username;
-                document.getElementById('u-lvl').innerText = `LVL ${Math.floor(b/200000)+1}`;
+                document.getElementById('u-lvl').innerText = `LVL ${Math.floor(b/100000)+1}`;
                 document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
                 document.getElementById('profit-val').innerText = logic.user.profit_hr;
             },
             async openM(type) {
                 const body = document.getElementById('m-body');
-                body.innerHTML = '<div>LOADING...</div>';
+                body.innerHTML = '<div style="text-align:center;padding:20px;color:#444">LOADING...</div>';
                 document.getElementById('modal').classList.add('show');
                 if(type === 'top') {
                     const res = await fetch('/api/top');
@@ -152,13 +150,13 @@
                             <b class="t-val">${Math.floor(u.balance).toLocaleString()}</b>
                         </div>`).join('');
                 } else if(type === 'wallet') {
-                    body.innerHTML = `<div class="w-cont"><h2 class="w-head">WALLET</h2><img src="https://ton.org/download/ton_symbol.png" class="w-logo"><h3 class="w-sub">TON CONNECT</h3><p class="w-text">Connect your wallet for Airdrop eligibility.</p><button class="w-btn" id="w-conn">CONNECT WALLET</button></div>`;
+                    body.innerHTML = `<div class="w-cont"><h2 class="w-title">WALLET</h2><img src="https://ton.org/download/ton_symbol.png" class="w-icon"><h3 class="w-sub">TON CONNECT</h3><p class="w-desc">Connect your wallet for Airdrop eligibility.</p><button class="w-connect-btn" id="w-conn">CONNECT WALLET</button></div>`;
                     setTimeout(() => { document.getElementById('w-conn').onclick = () => { tonConnectUI.openModal(); ui.closeM(); } }, 50);
                 }
             },
             closeM() { document.getElementById('modal').classList.remove('show'); },
             pop(e) {
-                const t = e.touches ? e.touches[0] : e;
+                const t = e.touches[0];
                 const d = document.createElement('div'); d.className = 'pop'; d.innerText = `+${logic.user.click_lvl}`;
                 d.style.left = t.clientX+'px'; d.style.top = t.clientY+'px';
                 document.body.appendChild(d); setTimeout(() => d.remove(), 700);
@@ -169,7 +167,7 @@
                     p += 2; document.getElementById('load-num').innerText = p+'%';
                     document.getElementById('bar-fill').style.width = p+'%';
                     document.getElementById('l-svg-bar').style.strokeDashoffset = 283 - (283 * p / 100);
-                    if(p>=100) { clearInterval(i); document.getElementById('loading-screen').style.opacity='0'; setTimeout(()=>{document.getElementById('loading-screen').style.display='none';document.getElementById('app').style.display='flex';this.update();},500); }
+                    if(p>=100) { clearInterval(i); document.getElementById('loading-screen').style.display='none'; document.getElementById('app').style.display='flex'; this.update(); }
                 }, 30);
             }
         };
