@@ -85,15 +85,12 @@
         </div>
     </div>
 
-    <script src="logic.js"></script>
     <script>
-        // Инициализация TON Connect
         const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
-            buttonRootId: null 
+            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json'
         });
 
-        // Следим за статусом кошелька
+        // Слушатель статуса кошелька
         tonConnectUI.onStatusChange(wallet => {
             if (wallet) {
                 logic.saveWallet(wallet.account.address);
@@ -101,7 +98,11 @@
                 logic.saveWallet(null);
             }
         });
+    </script>
 
+    <script src="logic.js"></script>
+
+    <script>
         const ui = {
             init() { 
                 this.update(); 
@@ -137,11 +138,14 @@
                                 <img src="images/logo.png" style="width:60px; margin-bottom:15px; filter:drop-shadow(0 0 10px #00ffff);">
                                 <div id="ton-connect-button" style="display:flex; justify-content:center;"></div>
                                 <p id="wallet-status" style="font-size:14px; color:#00ffff; margin-top:15px; font-family:monospace;">${shortAddr}</p>
-                                ${addr ? `<button onclick="logic.disconnectWallet()" style="background:rgba(255,0,0,0.2); color:#ff5555; border:1px solid #ff5555; padding:8px 15px; border-radius:10px; margin-top:10px; font-size:12px;">DISCONNECT</button>` : ''}
+                                ${addr ? `<button onclick="logic.disconnectWallet()" style="background:rgba(255,0,0,0.2); color:#ff5555; border:1px solid #ff5555; padding:8px 15px; border-radius:10px; margin-top:10px; font-size:12px; cursor:pointer;">DISCONNECT</button>` : ''}
                                 <p style="font-size:12px; color:#888; margin-top:15px;">Connect TON for Airdrop eligibility.</p>
                              </div>`;
                         body.innerHTML = h;
-                        setTimeout(() => { tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-button' }; }, 50);
+                        // Привязываем кнопку к контейнеру после отрисовки HTML
+                        setTimeout(() => {
+                            tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-button' };
+                        }, 50);
                         break;
                     
                     case 'boost':
@@ -182,6 +186,8 @@
                             });
                             html += `</div>`;
                             document.getElementById('top-list').innerHTML = html;
+                        }).catch(() => {
+                            document.getElementById('top-list').innerHTML = '<p style="text-align:center; color:red;">Connection error</p>';
                         });
                         break;
                 }
@@ -192,14 +198,17 @@
                 let p = 0;
                 const iv = setInterval(() => {
                     p += 5;
-                    document.getElementById('load-pct').innerText = `${p}%`;
-                    if(document.getElementById('load-bar')) document.getElementById('load-bar').style.width = `${p}%`;
+                    const pctEl = document.getElementById('load-pct');
+                    const barEl = document.getElementById('load-bar');
+                    if(pctEl) pctEl.innerText = `${p}%`;
+                    if(barEl) barEl.style.width = `${p}%`;
                     if (p >= 100) {
                         clearInterval(iv);
                         setTimeout(() => {
-                            document.getElementById('loading-screen').style.opacity = '0';
+                            const ls = document.getElementById('loading-screen');
+                            if(ls) ls.style.opacity = '0';
                             document.getElementById('app').style.display = 'flex';
-                            setTimeout(() => document.getElementById('loading-screen').remove(), 500);
+                            setTimeout(() => ls.remove(), 500);
                         }, 400);
                     }
                 }, 40);
@@ -209,6 +218,7 @@
         window.onload = () => {
             const tg = window.Telegram.WebApp;
             tg.expand();
+            tg.ready();
             const user = tg.initDataUnsafe?.user || {};
             logic.init(user.id, user.username || user.first_name, user.photo_url);
         };
