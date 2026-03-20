@@ -3,240 +3,329 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+    <title>Neural Clicker</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
+        /* ВСТАВЛЯЕМ ТВОЙ CSS */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+
         :root {
-            --neon-cyan: #00ffff;
-            --neon-magenta: #ff00ff;
-            --circle-bg: rgba(0, 255, 255, 0.03); 
-            --circle-border: rgba(0, 255, 255, 0.2);
+            --bg: #000000;
+            --card: #080808;
+            --accent: #00ffff;
+            --text: #ffffff;
+            --purple: #ae00ff;
+            --border: #151515;
+            --glow-cyan: rgba(0, 255, 255, 0.4);
         }
 
-        /* Прозрачные кружочки (карточки) */
-        .up-card {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: var(--circle-bg);
-            border: 1px solid var(--circle-border); 
-            padding: 20px;
-            margin-bottom: 15px;
-            border-radius: 50px; 
-            box-shadow: 0 0 15px rgba(0, 255, 255, 0.1), inset 0 0 10px rgba(0, 255, 255, 0.05);
-            transition: all 0.3s ease;
-            backdrop-filter: blur(3px);
+        * { 
+            box-sizing: border-box; 
+            -webkit-tap-highlight-color: transparent; 
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background: var(--bg); 
+            color: var(--text); 
+            font-family: 'Inter', sans-serif;
+            margin: 0; 
+            overflow: hidden; 
+            touch-action: none; 
+            height: 100vh;
+        }
+
+        /* --- LOADER --- */
+        #loading-screen { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; }
+        .loader-container { position: relative; width: 180px; height: 180px; display: flex; justify-content: center; align-items: center; }
+        .loader-ring { position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 3px solid transparent; border-top: 3px solid var(--accent); border-right: 3px solid var(--purple); animation: spin 1.5s linear infinite; }
+        .loader-logo { width: 80px; filter: drop-shadow(0 0 15px var(--purple)); }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .loading-text { margin-top: 20px; font-size: 14px; letter-spacing: 4px; color: #fff; text-transform: uppercase; font-weight: bold; }
+        .percent { font-size: 38px; font-weight: 900; color: var(--accent); margin: 10px 0; text-shadow: 0 0 15px rgba(0, 255, 255, 0.4); }
+        .load-bar-wrapper { width: 220px; height: 6px; background: #111; border-radius: 10px; overflow: hidden; border: 1px solid #1a1a1a; }
+        .load-bar-f { height: 100%; width: 0%; transition: width 0.3s ease; background: linear-gradient(90deg, var(--accent), var(--purple)); box-shadow: 0 0 10px var(--accent); }
+
+        /* --- APP LAYOUT --- */
+        #app { display: none; flex-direction: column; height: 100vh; padding: 15px; padding-bottom: 85px; }
+        .header { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
+        .header-left { display: flex; align-items: center; gap: 10px; }
+        .avatar { width: 40px; height: 40px; border-radius: 10px; background: #111; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .avatar img { width: 26px; filter: drop-shadow(0 0 5px var(--purple)); }
+        .u-info b { font-size: 15px; }
+        .u-info small { color: #666; font-size: 11px; display: block; margin-top: -2px; }
+        .lvl-badge { background: rgba(0, 255, 255, 0.1); color: var(--accent); padding: 6px 14px; border-radius: 10px; font-weight: bold; font-size: 12px; border: 1px solid rgba(0, 255, 255, 0.2); }
+
+        .stats-row { display: flex; gap: 10px; margin-bottom: 10px; }
+        .stat-card { background: var(--card); border: 1px solid var(--border); padding: 10px; border-radius: 14px; flex: 1; text-align: center; }
+        .stat-card small { color: #888; font-size: 10px; letter-spacing: 0.5px; }
+        .stat-card b { display: block; font-size: 18px; font-weight: 800; margin-top: 2px; }
+        .accent-val { color: var(--accent); }
+
+        .balance { font-size: 48px; font-weight: 800; text-align: center; margin: 20px 0; text-shadow: 0 0 20px rgba(255, 255, 255, 0.1); font-variant-numeric: tabular-nums; }
+
+        .play-area { flex-grow: 1; position: relative; display: flex; justify-content: center; align-items: center; }
+        .main-logo { width: 230px; cursor: pointer; transition: transform 0.05s, filter 0.1s; z-index: 20; position: relative; }
+        .main-logo:active { transform: scale(0.96); filter: drop-shadow(0 0 25px var(--accent)); }
+
+        .side-menu { position: absolute; right: 0; display: flex; flex-direction: column; gap: 8px; z-index: 101; pointer-events: auto; }
+        .side-btn { 
+            background: #0c0c0c; 
+            border: 1px solid var(--border); 
+            color: #fff; 
+            padding: 10px 14px; 
+            border-radius: 14px; 
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+            font-size: 11px; 
+            font-weight: 700; 
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+        }
+        .side-btn:active { transform: scale(0.92); border-color: var(--accent); }
+
+        .energy-box { margin-top: auto; margin-bottom: 15px;}
+        .en-txt { display: flex; justify-content: space-between; font-size: 12px; color: #888; font-weight: bold; margin-bottom: 5px;}
+        .progress-bar-wrap { height: 8px; background: #1a1a1d; border-radius: 10px; overflow: hidden; }
+        .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--purple)); transition: 0.3s; box-shadow: 0 0 10px var(--accent); }
+
+        .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: var(--card); border-top: 1px solid var(--border); z-index: 1000; padding: 5px; padding-bottom: calc(5px + env(safe-area-inset-bottom)); }
+        .nav-btn { background: transparent; flex: 1; padding: 10px 0; color: #888; font-size: 10px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-weight: 700; border: none; }
+        .nav-btn.active { color: var(--accent); }
+        .nav-btn span { font-size: 20px; }
+
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: flex-end; z-index: 2000; backdrop-filter: blur(10px); }
+        .modal.active { display: flex; animation: slideUp 0.3s ease; }
+        .modal-content { background: var(--card); width: 100%; border-radius: 25px 25px 0 0; padding: 25px; border-top: 1px solid #222; max-height: 80vh; overflow-y: auto; position: relative; }
+        .modal-drag-line { width: 40px; height: 4px; background: #333; border-radius: 10px; margin: 0 auto 20px; }
+        .modal-header { font-size: 20px; font-weight: 900; text-align: center; margin-bottom: 20px; letter-spacing: 2px; color: var(--accent); text-shadow: 0 0 10px var(--glow-cyan); }
+
+        .up-card { 
+            background: linear-gradient(145deg, #111, #0a0a0c); 
+            border: 1px solid var(--border); 
+            border-radius: 18px; 
+            padding: 15px; 
+            margin-bottom: 12px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            transition: 0.2s;
             cursor: pointer;
         }
+        .up-card:active { transform: scale(0.97); border-color: var(--purple); background: #151518; }
+        .up-info { display: flex; flex-direction: column; gap: 4px; }
+        .up-info b { color: #fff; font-size: 15px; font-weight: 700; }
+        .up-info small { color: var(--accent); font-weight: 700; font-size: 11px; }
+        .up-price { background: #1a1a1d; padding: 8px 14px; border-radius: 12px; font-weight: 800; font-size: 13px; color: #fff; border: 1px solid #333; }
 
-        .up-card:active {
-            transform: scale(0.95);
-            background: rgba(0, 255, 255, 0.1);
-            border-color: var(--neon-cyan);
-        }
+        .rank-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #0c0c0c; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 8px; }
+        .rank-left { display: flex; align-items: center; gap: 12px; }
+        .rank-num { width: 24px; font-weight: 800; color: #555; }
+        .back-btn { width: 100%; padding: 16px; background: #111; border: 1px solid var(--border); border-radius: 14px; color: #fff; font-weight: 800; margin-top: 15px; cursor: pointer; }
 
-        .price {
-            color: var(--neon-cyan);
-            font-family: 'Courier New', monospace;
-            font-weight: bold;
-            text-shadow: 0 0 10px var(--neon-cyan);
-        }
-
-        .mini-avatar {
-            width: 40px; height: 40px; border-radius: 50%;
-            border: 2px solid var(--neon-cyan); object-fit: cover;
-        }
-
-        /* Специальный оверлей для кошелька поверх всего */
-        #wallet-overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.9);
-            display: none; align-items: center; justify-content: center;
-            z-index: 10000; backdrop-filter: blur(15px);
-            padding: 20px;
-        }
-        #wallet-overlay.active { display: flex; animation: fadeIn 0.3s ease; }
-
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .tap-pop { position: fixed; color: var(--accent); font-size: 38px; font-weight: 900; pointer-events: none; animation: floatUp 0.8s forwards; text-shadow: 0 0 10px var(--accent); z-index: 100; }
+        @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-150px); opacity: 0; } }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
     </style>
 </head>
 <body>
+
     <div id="loading-screen">
         <div class="loader-container">
             <div class="loader-ring"></div>
-            <img src="images/logo.png" class="loader-logo">
+            <img src="images/logo.png" class="loader-logo" onerror="this.src='https://via.placeholder.com/80/00ffff/000000?text=LOGO'">
         </div>
-        <div class="loading-text">NEURAL NET LOADING...</div>
-        <div id="load-pct">0%</div>
+        <div class="loading-text">SYSTEM LOADING</div>
+        <div id="load-pct" class="percent">0%</div>
         <div class="load-bar-wrapper"><div id="load-bar" class="load-bar-f"></div></div>
     </div>
 
-    <div id="app" style="display: none;">
+    <div id="app">
         <div class="header">
             <div class="header-left">
-                <div class="avatar"><img src="images/logo.png" id="u-avatar"></div>
-                <div class="u-info"><b id="u-name">Agent</b><small>v4.0.0 Neural Mining</small></div>
+                <div class="avatar">
+                    <img src="images/logo.png" id="user-avatar" onerror="this.src='https://via.placeholder.com/40/ae00ff/ffffff?text=U'">
+                </div>
+                <div class="u-info">
+                    <b id="user-name">Loading...</b>
+                    <small>NEURAL AGENT</small>
+                </div>
             </div>
-            <div class="lvl-badge" id="u-lvl">LVL 1</div>
+            <div class="lvl-badge">LVL 1</div>
         </div>
 
         <div class="stats-row">
-            <div class="stat-card"><small>TAP</small><b id="tap-val" class="accent-val">+1</b></div>
-            <div class="stat-card"><small>PROFIT</small><b id="profit-val">0</b></div>
+            <div class="stat-card">
+                <small>TAP</small>
+                <b class="accent-val">+1</b>
+            </div>
+            <div class="stat-card">
+                <small>LIMIT</small>
+                <b id="max-energy-val">1000</b>
+            </div>
         </div>
 
         <div class="balance" id="balance">0</div>
 
         <div class="play-area">
-            <img src="images/logo.png" class="main-logo" id="tap-target" ontouchstart="logic.tap(event)">
+            <img src="images/logo.png" class="main-logo" id="click-target" onerror="this.src='https://via.placeholder.com/230/00ffff/000000?text=CORE'">
             <div class="side-menu">
-                <div class="side-btn" onclick="ui.toggleWalletMenu(true)">👛 WALLET</div>
-                <div class="side-btn" onclick="ui.openM('squad')">🤝 FRIENDS</div>
-                <div class="side-btn" onclick="ui.openM('bonus')">🎁 BONUS</div>
+                <div class="side-btn">👛 WALLET</div>
+                <div class="side-btn" onclick="openModal('top')">🏆 RANK</div>
             </div>
         </div>
 
         <div class="energy-box">
-            <div class="en-txt"><span>ENERGY</span><span id="eng-val">0/0</span></div>
-            <div class="progress-bar-wrap"><div id="eng-fill" class="progress-bar-fill"></div></div>
+            <div class="en-txt">
+                <span>ENERGY</span>
+                <span id="energy-text">1000/1000</span>
+            </div>
+            <div class="progress-bar-wrap">
+                <div id="energy-fill" class="progress-bar-fill" style="width: 100%;"></div>
+            </div>
         </div>
 
         <div class="bottom-nav">
-            <button class="nav-btn" onclick="ui.openM('boost')">🚀 BOOST</button>
-            <button class="nav-btn" onclick="ui.openM('mine')">⛏️ MINE</button>
-            <button class="nav-btn" onclick="ui.openM('tasks')">📋 TASKS</button>
-            <button class="nav-btn" onclick="ui.openM('top')">🏆 TOP</button>
+            <button class="nav-btn active"><span>🏠</span>HOME</button>
+            <button class="nav-btn" onclick="openModal('mine')"><span>⛏️</span>MINE</button>
+            <button class="nav-btn" onclick="openModal('boost')"><span>🚀</span>BOOST</button>
+            <button class="nav-btn" onclick="openModal('top')"><span>🏆</span>TOP</button>
         </div>
     </div>
 
-    <div id="modal-container" class="modal" onclick="if(event.target === this) ui.closeM()">
+    <div id="modal" class="modal" onclick="closeModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-drag-line"></div>
-            <div id="modal-header" class="modal-header"></div>
-            <div id="modal-body"></div>
-            <button class="back-btn" onclick="ui.closeM()">CLOSE TERMINAL</button>
-        </div>
-    </div>
-
-    <div id="wallet-overlay" onclick="if(event.target === this) ui.toggleWalletMenu(false)">
-        <div class="modal-content" style="max-width: 400px; border: 1px solid var(--neon-cyan); border-radius: 30px;">
-            <div class="modal-header">CONNECT WALLET</div>
-            <div id="ton-connect-button" style="display:flex; justify-content:center; margin-bottom: 20px;"></div>
-            
-            <div class="up-card" onclick="ui.connectTon()">
-                <b>TON CONNECT</b>
-                <span class="price">AUTO</span>
-            </div>
-
-            <p id="wallet-addr" style="color:var(--neon-cyan); font-size:10px; text-align:center; word-break:break-all;"></p>
-            
-            <button id="dis-btn" class="back-btn" style="display:none; color:red; border-color:red;" onclick="logic.disconnectWallet()">DISCONNECT</button>
-            <button class="back-btn" onclick="ui.toggleWalletMenu(false)">BACK</button>
+            <div id="modal-header" class="modal-header">UPGRADES</div>
+            <div id="modal-list">
+                </div>
+            <button class="back-btn" onclick="closeModal()">BACK TO BASE</button>
         </div>
     </div>
 
     <script>
-        const logic = {
-            user: null,
-            async init(id, name, photo) {
-                try {
-                    const res = await fetch(`/api/user/${id || 12345}?username=${encodeURIComponent(name || 'Agent')}&photo_url=${encodeURIComponent(photo || '')}`);
-                    this.user = await res.json();
-                } catch (e) {
-                    this.user = { balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0, lvl: 1 };
-                }
-                ui.init();
-                this.startLoops();
-            },
-            tap(e) {
-                if (!this.user || this.user.energy < this.user.click_lvl) return;
-                this.user.balance += this.user.click_lvl;
-                this.user.energy -= this.user.click_lvl;
-                ui.update();
-                this.anim(e);
-            },
-            anim(e) {
-                const x = e.touches ? e.touches[0].clientX : e.clientX;
-                const y = e.touches ? e.touches[0].clientY : e.clientY;
-                const p = document.createElement('div');
-                p.className = 'tap-pop'; p.innerText = `+${this.user.click_lvl}`;
-                p.style.left = x+'px'; p.style.top = y+'px';
-                document.body.appendChild(p);
-                setTimeout(() => p.remove(), 800);
-            },
-            async disconnectWallet() {
-                await tonConnectUI.disconnect();
-                this.user.wallet = null;
-                ui.toggleWalletMenu(false);
-            },
-            startLoops() {
-                setInterval(() => {
-                    if (!this.user) return;
-                    if (this.user.energy < this.user.max_energy) this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
-                    ui.update();
-                }, 1000);
-            }
+        // Инициализация Telegram
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        
+        // Данные игрока
+        let state = {
+            balance: 0,
+            energy: 1000,
+            maxEnergy: 1000,
+            power: 1,
+            rechargeRate: 1
         };
 
-        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
-            buttonRootId: 'ton-connect-button'
+        // Загрузка
+        function initLoader() {
+            let pct = 0;
+            const bar = document.getElementById('load-bar');
+            const pctText = document.getElementById('load-pct');
+            
+            const interval = setInterval(() => {
+                pct += Math.floor(Math.random() * 10) + 5;
+                if (pct > 100) pct = 100;
+                bar.style.width = pct + '%';
+                pctText.innerText = pct + '%';
+                
+                if (pct >= 100) {
+                    clearInterval(interval);
+                    document.getElementById('loading-screen').style.display = 'none';
+                    document.getElementById('app').style.display = 'flex';
+                }
+            }, 150);
+        }
+
+        // Клик
+        const target = document.getElementById('click-target');
+        target.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (state.energy >= state.power) {
+                state.balance += state.power;
+                state.energy -= state.power;
+                updateUI();
+                createPop(e.touches[0].clientX, e.touches[0].clientY);
+                if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            }
         });
 
-        const ui = {
-            init() { this.update(); this.finishLoading(); },
-            finishLoading() {
-                let p = 0;
-                const iv = setInterval(() => {
-                    p += 5; document.getElementById('load-pct').innerText = p+'%';
-                    document.getElementById('load-bar').style.width = p+'%';
-                    if(p>=100){ clearInterval(iv); document.getElementById('loading-screen').style.display='none'; document.getElementById('app').style.display='flex'; }
-                }, 30);
-            },
-            update() {
-                if (!logic.user) return;
-                document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
-                document.getElementById('eng-val').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
-                document.getElementById('eng-fill').style.width = `${(logic.user.energy / logic.user.max_energy) * 100}%`;
-                document.getElementById('u-name').innerText = logic.user.username || 'Agent';
-                document.getElementById('u-lvl').innerText = 'LVL ' + (logic.user.lvl || 1);
-                
-                const addr = logic.user.wallet;
-                document.getElementById('wallet-addr').innerText = addr ? addr : "";
-                document.getElementById('dis-btn').style.display = addr ? "block" : "none";
-            },
-            toggleWalletMenu(show) {
-                const el = document.getElementById('wallet-overlay');
-                show ? el.classList.add('active') : el.classList.remove('active');
-            },
-            async connectTon() {
-                await tonConnectUI.openModal();
-            },
-            openM(type) {
-                const body = document.getElementById('modal-body');
-                const header = document.getElementById('modal-header');
-                header.innerText = type.toUpperCase();
-                
-                if (type === 'boost') {
-                    body.innerHTML = `
-                        <div class="up-card" onclick="logic.buyUpgrade('tap')"><b>Multi-Tap</b><span class="price">💰 5k</span></div>
-                        <div class="up-card" onclick="logic.buyUpgrade('energy')"><b>Energy Cap</b><span class="price">💰 10k</span></div>`;
-                } else if (type === 'top') {
-                    body.innerHTML = '<p style="text-align:center">Loading Leaders...</p>';
-                } else {
-                    body.innerHTML = '<p style="text-align:center; opacity:0.5">Access Denied</p>';
-                }
-                document.getElementById('modal-container').classList.add('active');
-            },
-            closeM() { document.getElementById('modal-container').classList.remove('active'); }
-        };
+        function updateUI() {
+            document.getElementById('balance').innerText = state.balance.toLocaleString();
+            document.getElementById('energy-text').innerText = `${state.energy}/${state.maxEnergy}`;
+            document.getElementById('energy-fill').style.width = (state.energy / state.maxEnergy * 100) + '%';
+        }
 
+        function createPop(x, y) {
+            const pop = document.createElement('div');
+            pop.className = 'tap-pop';
+            pop.innerText = `+${state.power}`;
+            pop.style.left = x + 'px';
+            pop.style.top = y + 'px';
+            document.body.appendChild(pop);
+            setTimeout(() => pop.remove(), 800);
+        }
+
+        // Регенерация
+        setInterval(() => {
+            if (state.energy < state.maxEnergy) {
+                state.energy = Math.min(state.maxEnergy, state.energy + state.rechargeRate);
+                updateUI();
+            }
+        }, 1000);
+
+        // Управление модалками
+        function openModal(type) {
+            const m = document.getElementById('modal');
+            const header = document.getElementById('modal-header');
+            const list = document.getElementById('modal-list');
+            
+            m.classList.add('active');
+            list.innerHTML = '';
+
+            if (type === 'boost') {
+                header.innerText = 'BOOSTERS';
+                list.innerHTML = `
+                    <div class="up-card">
+                        <div class="up-info"><b>Multitap</b><small>Level 1</small></div>
+                        <div class="up-price">💰 1,000</div>
+                    </div>
+                    <div class="up-card">
+                        <div class="up-info"><b>Energy Limit</b><small>Level 1</small></div>
+                        <div class="up-price">💰 1,500</div>
+                    </div>
+                `;
+            } else if (type === 'top') {
+                header.innerText = 'LEADERBOARD';
+                list.innerHTML = `
+                    <div class="rank-item">
+                        <div class="rank-left"><div class="rank-num">1</div><span>CyberPunk</span></div>
+                        <b>1.2M</b>
+                    </div>
+                    <div class="rank-item active">
+                        <div class="rank-left"><div class="rank-num">2</div><span>${tg.initDataUnsafe?.user?.first_name || 'You'}</span></div>
+                        <b>${state.balance}</b>
+                    </div>
+                `;
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('active');
+        }
+
+        // Старт
         window.onload = () => {
-            const tg = window.Telegram.WebApp;
-            tg.expand();
-            const u = tg.initDataUnsafe?.user || {};
-            logic.init(u.id, u.username || u.first_name, u.photo_url);
+            if (tg.initDataUnsafe?.user) {
+                document.getElementById('user-name').innerText = tg.initDataUnsafe.user.first_name;
+                if (tg.initDataUnsafe.user.photo_url) {
+                    document.getElementById('user-avatar').src = tg.initDataUnsafe.user.photo_url;
+                }
+            }
+            initLoader();
+            updateUI();
         };
     </script>
 </body>
