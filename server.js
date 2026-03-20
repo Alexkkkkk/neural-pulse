@@ -15,10 +15,30 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// --- ПОСТРОЧНОЕ ЛОГИРОВАНИЕ БАЗЫ ДАННЫХ ---
+// --- АВТОМАТИЧЕСКАЯ СИНХРОНИЗАЦИЯ СТРУКТУРЫ БД ---
 const initDB = async () => {
-    console.log("🛠 [DB] Попытка инициализации таблицы...");
+    console.log("🛠 [DB] Проверка структуры таблицы...");
     try {
+        // Проверяем наличие колонки 'id'. Если её нет, пробуем переименовать старую 'userid'
+        await pool.query(`
+            DO $$ 
+            BEGIN 
+                IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users') THEN
+                    IF NOT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'id') THEN
+                        IF EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'userid') THEN
+                            ALTER TABLE users RENAME COLUMN userid TO id;
+                            RAISE NOTICE 'Колонка userid переименована в id';
+                        ELSE
+                            -- Если структура совсем не совпадает, пересоздаем таблицу
+                            DROP TABLE users;
+                            RAISE NOTICE 'Таблица users имела критические отличия и была пересоздана';
+                        END IF;
+                    END IF;
+                END IF;
+            END $$;
+        `);
+
+        // Создание таблицы с актуальными полями
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id BIGINT PRIMARY KEY, 
@@ -31,9 +51,9 @@ const initDB = async () => {
                 profit INTEGER DEFAULT 0,  
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
-        console.log("✅ [DB] Таблица users готова к работе");
+        console.log("✅ [DB] Таблица users синхронизирована и готова");
     } catch (e) { 
-        console.error("❌ [DB ERROR] Ошибка при создании таблицы:", e.message); 
+        console.error("❌ [DB ERROR] Ошибка инициализации:", e.message); 
     }
 };
 initDB();
@@ -42,25 +62,24 @@ initDB();
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     const { username, photo_url } = req.query;
-    console.log(`\n📥 [GET] Запрос данных пользователя: ID ${userId} (${username})`);
+    console.log(`\n📥 [GET] Запрос данных: ID ${userId} (${username})`);
 
     try {
         let result = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
         
         if (result.rows.length === 0) {
-            console.log(`👤 [DB] Новый пользователь! Создаю запись для ${userId}...`);
+            console.log(`👤 [DB] Регистрация нового агента: ${userId}`);
             const newUser = await pool.query(
                 `INSERT INTO users (id, username, photo_url) VALUES ($1, $2, $3) RETURNING *`,
                 [userId, username || 'AGENT', photo_url || '']
             );
-            console.log(`✨ [DB] Пользователь ${userId} успешно создан.`);
             return res.json(newUser.rows[0]);
         }
         
-        console.log(`✔ [DB] Данные для ${userId} найдены. Баланс: ${result.rows[0].balance}`);
+        console.log(`✔ [DB] Пользователь найден. Баланс: ${Math.floor(result.rows[0].balance)}`);
         res.json(result.rows[0]);
     } catch (e) { 
-        console.error(`❌ [API ERROR] Ошибка GET /api/user/${userId}:`, e.message);
+        console.error(`❌ [API ERROR] GET /api/user/${userId}:`, e.message);
         res.status(500).json({ error: "DB Read Error" }); 
     }
 });
@@ -68,8 +87,7 @@ app.get('/api/user/:id', async (req, res) => {
 // --- API: СОХРАНЕНИЕ ПРОГРЕССА ---
 app.post('/api/save', async (req, res) => {
     const d = req.body;
-    // Логируем только важные изменения, чтобы не спамить консоль каждые 10 секунд слишком сильно
-    console.log(`📤 [POST] Сохранение: ID ${d.userId} | Bal: ${Math.floor(d.balance)} | Eng: ${Math.floor(d.energy)}`);
+    console.log(`📤 [POST] Save: ID ${d.userId} | Bal: ${Math.floor(d.balance)} | Eng: ${Math.floor(d.energy)}`);
 
     try {
         const result = await pool.query(
@@ -80,32 +98,28 @@ app.post('/api/save', async (req, res) => {
         if (result.rowCount > 0) {
             res.json({ ok: true });
         } else {
-            console.warn(`⚠️ [DB] Предупреждение: ID ${d.userId} не найден при сохранении.`);
             res.status(404).json({ error: "User not found" });
         }
     } catch (e) { 
-        console.error(`❌ [API ERROR] Ошибка POST /api/save для ${d.userId}:`, e.message);
+        console.error(`❌ [API ERROR] POST /api/save для ${d.userId}:`, e.message);
         res.status(500).json({ error: "Save error" }); 
     }
 });
 
 // --- API: ТОП 50 ---
 app.get('/api/top', async (req, res) => {
-    console.log("🏆 [GET] Запрос таблицы лидеров");
     try {
         const result = await pool.query('SELECT id, username, balance, photo_url FROM users ORDER BY balance DESC LIMIT 50');
-        console.log(`📊 [DB] Топ-лист сформирован. Всего участников: ${result.rowCount}`);
         res.json(result.rows);
     } catch (e) { 
-        console.error("❌ [API ERROR] Ошибка при получении ТОПа:", e.message);
         res.status(500).json({ error: "Top error" }); 
     }
 });
 
-// --- ЛОГИРОВАНИЕ БОТА ---
+// --- БОТ ---
 bot.start((ctx) => {
-    console.log(`🤖 [BOT] Команда /start от ${ctx.from.username || ctx.from.id}`);
-    ctx.reply(`<b>Neural Pulse | Sync Active</b>\nWelcome, Agent <b>${ctx.from.first_name}</b>.`, {
+    console.log(`🤖 [BOT] Start от ${ctx.from.id}`);
+    ctx.reply(`<b>Neural Pulse | System Online</b>\nWelcome, Agent <b>${ctx.from.first_name}</b>.`, {
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", DOMAIN)]])
     });
@@ -122,8 +136,8 @@ app.listen(PORT, async () => {
     
     try {
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
-        console.log("🔗 [BOT] Webhook успешно установлен");
+        console.log("🔗 [BOT] Webhook установлен");
     } catch (e) {
-        console.error("❌ [BOT ERROR] Ошибка установки Webhook:", e.message);
+        console.error("❌ [BOT ERROR] Webhook fail:", e.message);
     }
 });
