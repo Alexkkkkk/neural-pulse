@@ -13,7 +13,7 @@
     <div id="loading-screen">
         <div class="loader-container">
             <div class="main-logo-circle">
-                <img src="images/logo.png" class="logo-img" id="load-logo" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'">
+                <img src="images/logo.png" class="logo-img">
                 <div class="scan-line"></div>
             </div>
             <div class="loading-text-row">
@@ -21,14 +21,13 @@
                 <span class="percent" id="load-pct">0%</span>
             </div>
             <div class="load-bar-wrapper"><div id="load-bar" class="load-bar-fill"></div></div>
-            <div class="system-ready">SYSTEM READY...</div>
         </div>
     </div>
 
-    <div id="app">
+    <div id="app" style="display:none;">
         <div class="header">
             <div class="u-profile">
-                <div class="u-av"><img src="images/logo.png" id="u-avatar" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'"></div>
+                <div class="u-av"><img src="images/logo.png" id="u-avatar"></div>
                 <div class="u-info"><b id="u-name">Agent</b><br><small>v4.0.0 Neural Mining</small></div>
             </div>
             <div class="u-lvl-badge" id="u-lvl">LVL 1</div>
@@ -43,17 +42,16 @@
 
         <div class="play-area">
             <div class="main-logo-btn" ontouchstart="logic.tap(event)">
-                <img src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'">
+                <img src="images/logo.png">
             </div>
             <div class="side-menu">
                 <div class="side-btn" onclick="ui.openM('wallet')">👛 WALLET</div>
                 <div class="side-btn" onclick="ui.openM('friends')">🤝 FRIENDS</div>
-                <div class="side-btn" onclick="ui.openM('bonus')">🎁 BONUS</div>
             </div>
         </div>
 
         <div class="energy-box">
-            <div class="en-txt"><span>ENERGY</span><span id="eng-val">0/0</span></div>
+            <div class="en-txt"><span>ENERGY</span><span id="eng-val">1000/1000</span></div>
             <div class="en-track"><div id="eng-fill" class="en-fill"></div></div>
         </div>
 
@@ -67,87 +65,63 @@
 
     <div id="modal" class="modal" onclick="if(event.target === this) ui.closeM()">
         <div class="modal-content">
-            <h2 id="m-title" style="margin-bottom:20px; text-align:center; letter-spacing:2px;"></h2>
+            <h2 id="m-title" style="text-align:center; margin-bottom:15px;"></h2>
             <div id="m-body"></div>
             <button class="back-btn" onclick="ui.closeM()">CLOSE TERMINAL</button>
         </div>
     </div>
 
     <script>
-        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: window.location.origin + '/static/tonconnect-manifest.json',
-            buttonRootId: 'ton-connect-button'
-        });
+        // Глобальный объект для TonConnect
+        let tonConnectUI;
 
         const logic = {
-            user: null,
+            user: { id: 0, username: "Agent", balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0 },
             async init() {
                 const tg = window.Telegram.WebApp;
+                tg.ready();
                 tg.expand();
-                const u = tg.initDataUnsafe?.user || { id: "123", username: "LocalUser" };
+
+                // Инициализируем кошелек сразу
+                tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+                    manifestUrl: window.location.origin + '/static/tonconnect-manifest.json'
+                });
+
+                const tgUser = tg.initDataUnsafe?.user || { id: "123", username: "Agent" };
                 
+                // Запускаем визуальную загрузку НЕЗАВИСИМО от API
+                ui.startLoading();
+
                 try {
-                    const res = await fetch(`/api/user/${u.id}?username=${u.username}`);
-                    const data = await res.json();
-                    this.user = { 
-                        ...data, 
-                        balance: Number(data.balance), 
-                        energy: Number(data.energy), 
-                        max_energy: Number(data.max_energy) || 1000,
-                        click_lvl: Number(data.click_lvl) || 1,
-                        profit_hr: Number(data.profit_hr) || 0
-                    };
+                    const res = await fetch(`/api/user/${tgUser.id}?username=${encodeURIComponent(tgUser.username)}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        this.user = { ...this.user, ...data };
+                    }
                 } catch (e) {
-                    this.user = { id: u.id, username: u.username, balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0 };
+                    console.log("Using local fallback");
                 }
                 
-                ui.startLoading();
                 this.startLoops();
             },
             tap(e) {
-                if (!this.user || this.user.energy < this.user.click_lvl) return;
+                if (this.user.energy < this.user.click_lvl) return;
                 this.user.balance += this.user.click_lvl;
                 this.user.energy -= this.user.click_lvl;
                 ui.update();
                 ui.pop(e);
-                if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
+                if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
             },
             startLoops() {
                 setInterval(() => {
-                    if (!this.user) return;
-                    if (this.user.energy < this.user.max_energy) this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
+                    if (this.user.energy < this.user.max_energy) this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1);
                     if (this.user.profit_hr > 0) this.user.balance += (this.user.profit_hr / 3600);
                     ui.update();
                 }, 1000);
-                setInterval(() => this.save(), 10000);
-            },
-            async save() {
-                if (!this.user) return;
-                fetch('/api/save', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        userId: this.user.id,
-                        balance: Math.floor(this.user.balance),
-                        energy: Math.floor(this.user.energy),
-                        click_lvl: this.user.click_lvl,
-                        profit_hr: this.user.profit_hr
-                    })
-                });
             }
         };
 
         const ui = {
-            update() {
-                if (!logic.user) return;
-                document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
-                document.getElementById('eng-val').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
-                document.getElementById('eng-fill').style.width = (logic.user.energy / logic.user.max_energy * 100) + '%';
-                document.getElementById('u-name').innerText = logic.user.username;
-                document.getElementById('tap-val').innerText = `+${logic.user.click_lvl}`;
-                document.getElementById('profit-val').innerText = Math.floor(logic.user.profit_hr);
-                document.getElementById('u-lvl').innerText = `LVL ${Math.floor(logic.user.balance / 100000) + 1}`;
-            },
             startLoading() {
                 let p = 0;
                 const iv = setInterval(() => {
@@ -156,42 +130,27 @@
                     document.getElementById('load-bar').style.width = p + '%';
                     if (p >= 100) {
                         clearInterval(iv);
-                        document.getElementById('loading-screen').style.opacity = '0';
-                        setTimeout(() => {
-                            document.getElementById('loading-screen').style.display = 'none';
-                            document.getElementById('app').style.display = 'flex';
-                            this.update();
-                        }, 500);
+                        document.getElementById('loading-screen').style.display = 'none';
+                        document.getElementById('app').style.display = 'flex';
+                        this.update();
                     }
-                }, 30);
+                }, 20);
             },
-            async openM(type) {
+            update() {
+                document.getElementById('balance').innerText = Math.floor(logic.user.balance).toLocaleString();
+                document.getElementById('eng-val').innerText = `${Math.floor(logic.user.energy)}/${logic.user.max_energy}`;
+                document.getElementById('eng-fill').style.width = (logic.user.energy / logic.user.max_energy * 100) + '%';
+                document.getElementById('u-name').innerText = logic.user.username;
+            },
+            openM(type) {
                 const body = document.getElementById('m-body');
-                const title = document.getElementById('m-title');
-                title.innerText = type.toUpperCase();
-                body.innerHTML = '<p style="text-align:center; opacity:0.5;">LOADING MODULE...</p>';
-                document.getElementById('modal').classList.add('active');
-
-                if (type === 'wallet') {
-                    body.innerHTML = `
-                        <div id="ton-connect-button" style="display:flex; justify-content:center; margin-bottom:20px;"></div>
-                        <div class="up-card" onclick="tonConnectUI.openModal()">
-                            <b>CONNECT TON</b>
-                            <span style="color:var(--accent)">TON</span>
-                        </div>
-                    `;
-                } else if (type === 'top') {
-                    const r = await fetch('/api/top');
-                    const users = await r.json();
-                    body.innerHTML = users.slice(0, 10).map((u, i) => `
-                        <div class="up-card">
-                            <span>#${i+1} ${u.username}</span>
-                            <b>${Math.floor(u.balance).toLocaleString()}</b>
-                        </div>
-                    `).join('');
+                document.getElementById('m-title').innerText = type.toUpperCase();
+                if(type === 'wallet') {
+                    body.innerHTML = `<div class="up-card" onclick="tonConnectUI.openModal()"><b>TON CONNECT</b><span>GO</span></div>`;
                 } else {
-                    body.innerHTML = `<div class="up-card"><b>Module ${type}</b><span>ENCRYPTED</span></div>`;
+                    body.innerHTML = `<div class="up-card"><b>${type}</b><span>Soon</span></div>`;
                 }
+                document.getElementById('modal').classList.add('active');
             },
             closeM() { document.getElementById('modal').classList.remove('active'); },
             pop(e) {
