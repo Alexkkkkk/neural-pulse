@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse V4</title>
+    <title>Neural Pulse v4.0.0</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
@@ -12,7 +12,7 @@
     <div id="loader">
         <div class="l-content">
             <div class="ring"></div>
-            <img src="images/logo.png" class="l-logo" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2082/2082855.png'">
+            <img src="images/logo.png" class="l-logo" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'">
         </div>
         <div class="l-status">ACCESS GRANTED</div>
         <div class="l-pct" id="pct">0%</div>
@@ -20,11 +20,11 @@
     </div>
 
     <div id="app" style="display: none;">
-        <header class="u-card">
+        <header>
             <div class="u-avatar"><img id="my-avatar" src="images/logo.png"></div>
             <div class="u-info">
-                <b id="my-name">LOADING...</b>
-                <small>Neural Mining v4.0</small>
+                <b id="my-name">AGENT</b><br>
+                <small>v4.0.0 Neural Mining</small>
             </div>
             <div class="u-lvl" id="my-lvl">LVL 1</div>
         </header>
@@ -34,7 +34,9 @@
             <div class="s-box"><small>PROFIT PER HOUR</small><b id="ui-profit">0</b></div>
         </div>
 
-        <div class="balance-area"><h1 id="ui-balance">0</h1></div>
+        <div class="balance-area">
+            <h1 id="ui-balance">0</h1>
+        </div>
 
         <main class="game-core">
             <div class="glow"></div>
@@ -49,8 +51,13 @@
         </main>
 
         <footer class="energy-section">
-            <div class="e-labels"><span>ENERGY</span><span id="ui-energy">1000/1000</span></div>
-            <div class="e-track"><div id="e-fill"></div></div>
+            <div class="e-labels">
+                <span>ENERGY</span>
+                <span id="ui-energy">1000/1000</span>
+            </div>
+            <div class="e-track">
+                <div id="e-fill"></div>
+            </div>
             <nav class="bottom-tabs">
                 <button onclick="ui.openM('boost')">🚀 BOOST</button>
                 <button onclick="ui.openM('mine')">⛏️ MINE</button>
@@ -71,36 +78,38 @@
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
+        tg.enableClosingConfirmation();
 
         const game = {
+            // Исправление NaN: прописываем жесткие дефолты
             data: { id: 0, balance: 0, energy: 1000, max_energy: 1000, tap: 1, profit: 0 },
             isLoaded: false,
 
             async init() {
-                const u = tg.initDataUnsafe.user || { id: 1, username: 'AGENT', photo_url: '' };
-                const name = (u.username || u.first_name || 'AGENT').toUpperCase();
-                document.getElementById('my-name').innerText = name;
+                const u = tg.initDataUnsafe.user || { id: 1, first_name: 'Agent' };
+                const name = (u.username || u.first_name).toUpperCase();
                 
                 try {
                     const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(name)}&photo_url=${encodeURIComponent(u.photo_url || '')}`);
                     const d = await r.json();
                     
-                    this.data.id = d.id || u.id;
+                    // Синхронизация: берем данные сервера, если их нет - используем дефолт
+                    this.data.id = d.id;
                     this.data.balance = parseFloat(d.balance) || 0;
                     this.data.energy = parseFloat(d.energy) || 1000;
                     this.data.max_energy = parseInt(d.max_energy) || 1000;
                     this.data.tap = parseInt(d.tap) || 1;
                     this.data.profit = parseInt(d.profit) || 0;
 
+                    document.getElementById('my-name').innerText = name;
                     if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
+                    
                     this.isLoaded = true;
-                } catch(e) { 
-                    console.error("Server Error"); 
-                    this.isLoaded = true; 
-                }
-
+                    this.loop();
+                } catch(e) { console.error("API Error"); this.isLoaded = true; }
+                
+                // Запускаем лоадер (как на image_6.png)
                 ui.startLoader();
-                this.mainLoop();
             },
 
             tap(e) {
@@ -112,22 +121,18 @@
                 tg.HapticFeedback.impactOccurred('medium');
             },
 
-            mainLoop() {
+            loop() {
                 setInterval(() => {
-                    if(!this.isLoaded) return;
-                    if(this.data.energy < this.data.max_energy) {
-                        this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1.5);
-                    }
-                    if(this.data.profit > 0) {
-                        this.data.balance += (this.data.profit / 3600);
-                    }
+                    // Энергия
+                    if(this.data.energy < this.data.max_energy) this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1.5);
+                    // Доход
+                    if(this.data.profit > 0) this.data.balance += (this.data.profit / 3600);
                     ui.render();
                 }, 1000);
                 setInterval(() => this.save(), 10000);
             },
 
             async save() {
-                if(!this.isLoaded) return;
                 fetch('/api/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -140,7 +145,7 @@
             startLoader() {
                 let p = 0;
                 const i = setInterval(() => {
-                    p += 2;
+                    p += 4; // Скорость загрузки
                     document.getElementById('pct').innerText = p + '%';
                     document.getElementById('bar').style.width = p + '%';
                     if(p >= 100) {
@@ -149,22 +154,26 @@
                         document.getElementById('app').style.display = 'flex';
                         this.render();
                     }
-                }, 20);
+                }, 50);
             },
             render() {
                 const d = game.data;
-                document.getElementById('ui-balance').innerText = Math.floor(d.balance).toLocaleString();
+                // Красивое форматирование баланса с пробелами: 1 428 111
+                document.getElementById('ui-balance').innerText = Math.floor(d.balance).toLocaleString('ru-RU');
                 document.getElementById('ui-energy').innerText = `${Math.floor(d.energy)}/${d.max_energy}`;
-                document.getElementById('e-fill').style.width = (d.energy / d.max_energy * 100) + '%';
+                document.getElementById('e-fill').style.width = (d.energy/d.max_energy*100)+'%';
                 document.getElementById('ui-tap').innerText = `+${d.tap}`;
-                document.getElementById('ui-profit').innerText = d.profit.toLocaleString();
-                document.getElementById('my-lvl').innerText = `LVL ${Math.floor(d.balance / 5000) + 1}`;
+                document.getElementById('ui-profit').innerText = d.profit.toLocaleString('ru-RU');
+                
+                // Исправление LVL NaN
+                const currentBalance = Math.floor(d.balance || 0);
+                document.getElementById('my-lvl').innerText = `LVL ${Math.floor(currentBalance/5000)+1}`;
             },
             pop(e) {
                 const t = e.touches[0];
                 const p = document.createElement('div');
                 p.className = 'pop'; p.innerText = `+${game.data.tap}`;
-                p.style.left = t.clientX + 'px'; p.style.top = t.clientY + 'px';
+                p.style.left = t.clientX+'px'; p.style.top = t.clientY+'px';
                 document.body.appendChild(p);
                 setTimeout(() => p.remove(), 700);
             },
@@ -177,37 +186,21 @@
                     const r = await fetch('/api/top');
                     const top = await r.json();
                     top.forEach((u, i) => {
-                        const isMe = String(u.id) === String(game.data.id) ? 'me' : '';
-                        b.innerHTML += `<div class="top-item ${isMe}">
+                        const isMe = u.id == game.data.id ? 'me' : '';
+                        b.innerHTML += `
+                        <div class="top-item ${isMe}">
                             <div class="t-user"><b>#${i+1}</b><img src="${u.photo_url || 'images/logo.png'}"><span>${u.username}</span></div>
-                            <b>${Math.floor(u.balance).toLocaleString()}</b>
+                            <b>${Math.floor(u.balance).toLocaleString('ru-RU')}</b>
                         </div>`;
                     });
-                } else if(type === 'mine') {
-                    b.innerHTML = `<h2>MINING</h2><div class="shop-item" onclick="ui.buy('mine', 5000, 500)">
-                        <b>AI CORE V1</b><br><small>+500/hr | Cost: 5,000</small></div>`;
-                } else if(type === 'boost') {
-                    b.innerHTML = `<h2>BOOSTERS</h2><div class="shop-item" onclick="ui.buy('tap', 1000, 1)">
-                        <b>MULTITAP</b><br><small>+1/tap | Cost: 1,000</small></div>`;
-                } else {
-                    b.innerHTML = `<h2>${type.toUpperCase()}</h2><p>Coming Soon...</p>`;
-                }
-            },
-            buy(type, cost, value) {
-                if(game.data.balance >= cost) {
-                    game.data.balance -= cost;
-                    if(type === 'tap') game.data.tap += value;
-                    if(type === 'mine') game.data.profit += value;
-                    game.save(); // Мгновенная синхронизация после покупки
-                    this.render();
-                    this.closeM();
-                    tg.HapticFeedback.notificationOccurred('success');
-                } else {
-                    tg.showAlert("Not enough balance!");
+                } else if(type === 'wallet' || type === 'boost') {
+                    // image_2.png
+                    b.innerHTML = `<h2>${type.toUpperCase()}</h2><p style="text-align:center; padding:20px; color:#888;">Module encryption in progress...</p>`;
                 }
             },
             closeM() { document.getElementById('modal').classList.remove('active'); }
         };
+
         window.onload = () => game.init();
     </script>
 </body>
