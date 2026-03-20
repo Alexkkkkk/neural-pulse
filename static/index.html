@@ -45,24 +45,24 @@
         </div>
 
         <div class="click-zone">
-            <div class="ai-button-main-frame" ontouchstart="logic.tap(event)">
+            <div class="main-tap-area" ontouchstart="logic.tap(event)">
                 <div class="ai-inner">AI</div>
                 <div class="ai-glow"></div>
             </div>
             
-            <div class="side-nav">
-                <div class="side-item" onclick="ui.openM('wallet')">👛 WALLET</div>
-                <div class="side-item" onclick="ui.openM('friends')">🤝 FRIENDS</div>
-                <div class="side-item" onclick="ui.openM('bonus')">🎁 BONUS</div>
+            <div class="side-menu">
+                <div class="side-btn" onclick="ui.openM('wallet')">👛 WALLET</div>
+                <div class="side-btn" onclick="ui.openM('friends')">🤝 FRIENDS</div>
+                <div class="side-btn" onclick="ui.openM('bonus')">🎁 BONUS</div>
             </div>
         </div>
 
-        <div class="energy-section">
-            <div class="e-labels"><span>ENERGY</span><span id="e-num">1000/1000</span></div>
+        <div class="energy-box">
+            <div class="e-info"><span>ENERGY</span><span id="e-num">1000/1000</span></div>
             <div class="e-track"><div class="e-bar" id="e-fill"></div></div>
         </div>
 
-        <div class="nav-bar">
+        <div class="bottom-menu">
             <button onclick="ui.openM('boost')">🚀 BOOST</button>
             <button onclick="ui.openM('mine')">⛏️ MINE</button>
             <button onclick="ui.openM('tasks')">📋 TASKS</button>
@@ -92,12 +92,7 @@
                 try {
                     const r = await fetch(`/api/user/${u.id}?username=${u.username}`);
                     const d = await r.json();
-                    this.user = {
-                        id: u.id, username: d.username || u.username,
-                        balance: Number(d.balance) || 0, energy: Number(d.energy) || 1000,
-                        max_energy: Number(d.max_energy) || 1000, click_lvl: Number(d.click_lvl) || 1,
-                        profit_hr: Number(d.profit_hr) || 0
-                    };
+                    this.user = d; 
                 } catch(e) { this.user = { id: 0, balance: 0, energy: 1000, max_energy: 1000, click_lvl: 1, profit_hr: 0, username: "Player" }; }
                 ui.startLoad();
                 this.loop();
@@ -113,7 +108,7 @@
             loop() {
                 setInterval(() => {
                     if(!this.user) return;
-                    this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.2);
+                    this.user.energy = Math.min(this.user.max_energy, this.user.energy + 1.5);
                     if(this.user.profit_hr > 0) this.user.balance += (this.user.profit_hr / 3600);
                     ui.update();
                 }, 1000);
@@ -124,7 +119,7 @@
                 fetch('/api/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: this.user.id, balance: Math.floor(this.user.balance), energy: Math.floor(this.user.energy), max_energy: this.user.max_energy, click_lvl: this.user.click_lvl, profit_hr: this.user.profit_hr })
+                    body: JSON.stringify(this.user)
                 });
             }
         };
@@ -143,20 +138,16 @@
             },
             async openM(type) {
                 const body = document.getElementById('m-body');
-                body.innerHTML = '<div style="text-align:center;padding:20px;color:#444">LOADING...</div>';
+                body.innerHTML = '<div>LOADING...</div>';
                 document.getElementById('modal').classList.add('show');
                 if(type === 'top') {
                     const res = await fetch('/api/top');
                     const users = await res.json();
                     body.innerHTML = `<h2 class="m-title">TOP 100</h2>`;
                     body.innerHTML += users.sort((a,b)=>b.balance-a.balance).slice(0, 100).map((u, i) => `
-                        <div class="top-row ${u.username === logic.user.username ? 'top-me' : ''}">
-                            <div class="top-left">
-                                <span class="top-rank">${i+1}</span>
-                                <div class="top-avatar">AI</div>
-                                <span class="top-name">${u.username}</span>
-                            </div>
-                            <b class="top-val">${Math.floor(u.balance).toLocaleString()}</b>
+                        <div class="t-row ${u.username === logic.user.username ? 't-me' : ''}">
+                            <div class="t-left"><span class="t-rank">${i+1}</span><div class="t-av">AI</div><span class="t-name">${u.username}</span></div>
+                            <b class="t-val">${Math.floor(u.balance).toLocaleString()}</b>
                         </div>`).join('');
                 } else if(type === 'wallet') {
                     body.innerHTML = `<div class="w-cont">
@@ -164,17 +155,10 @@
                         <img src="https://ton.org/download/ton_symbol.png" class="w-logo">
                         <h3 class="w-sub">TON CONNECT</h3>
                         <p class="w-text">Connect your wallet for Airdrop eligibility.</p>
-                        <button class="w-btn" id="wallet-connect-logic">CONNECT WALLET</button>
+                        <button class="w-btn" id="w-conn">CONNECT WALLET</button>
                     </div>`;
-                    setTimeout(() => {
-                        document.getElementById('wallet-connect-logic').onclick = () => {
-                            if(tonConnectUI.connected) tonConnectUI.disconnect();
-                            else tonConnectUI.openModal();
-                            ui.closeM();
-                        }
-                    }, 50);
+                    setTimeout(() => { document.getElementById('w-conn').onclick = () => { tonConnectUI.openModal(); ui.closeM(); } }, 50);
                 }
-                logic.save();
             },
             closeM() { document.getElementById('modal').classList.remove('show'); },
             pop(e) {
