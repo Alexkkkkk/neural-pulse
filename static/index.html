@@ -81,11 +81,8 @@
         tg.expand();
         tg.enableClosingConfirmation();
 
-        // Инициализируем TON Connect UI один раз
-        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json',
-            buttonRootId: 'ton-connect-btn' // Кнопка будет внедряться сюда
-        });
+        // Объявляем переменную, но не инициализируем сразу, чтобы не вешать загрузку
+        let tonConnectUI = null;
 
         const game = {
             data: { id: 0, balance: 0, energy: 1000, max_energy: 1000, tap: 1, profit: 0 },
@@ -95,6 +92,16 @@
                 const u = tg.initDataUnsafe.user || { id: 476014374, first_name: 'Agent' };
                 const name = (u.username || u.first_name).toUpperCase();
                 
+                // 1. Пытаемся запустить TON Connect в фоновом режиме
+                try {
+                    tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+                        manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
+                    });
+                } catch(err) {
+                    console.error("TON Connect Error:", err);
+                }
+                
+                // 2. Загружаем данные пользователя
                 try {
                     const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(name)}&photo_url=${encodeURIComponent(u.photo_url || '')}`);
                     const d = await r.json();
@@ -102,156 +109,4 @@
                     this.data.id = d.id;
                     this.data.balance = parseFloat(d.balance) || 0;
                     this.data.energy = parseFloat(d.energy) || 1000;
-                    this.data.max_energy = parseInt(d.max_energy) || 1000;
-                    this.data.tap = parseInt(d.tap) || 1;
-                    this.data.profit = parseInt(d.profit) || 0;
-
-                    document.getElementById('my-name').innerText = name;
-                    if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
-                    
-                    this.isLoaded = true;
-                    this.loop();
-                } catch(e) { console.error("API Error"); this.isLoaded = true; }
-                
-                ui.startLoader();
-            },
-
-            tap(e) {
-                if(!this.isLoaded || this.data.energy < this.data.tap) return;
-                this.data.balance += this.data.tap;
-                this.data.energy -= this.data.tap;
-                ui.render();
-                ui.pop(e);
-                tg.HapticFeedback.impactOccurred('medium');
-            },
-
-            upgrade(type) {
-                if(type === 'tap') {
-                    const cost = this.data.tap * 500;
-                    if(this.data.balance >= cost) {
-                        this.data.balance -= cost;
-                        this.data.tap += 1;
-                        tg.HapticFeedback.notificationOccurred('success');
-                        ui.openM('boost');
-                        ui.render();
-                    } else {
-                        tg.showAlert("Недостаточно средств!");
-                    }
-                }
-            },
-
-            loop() {
-                setInterval(() => {
-                    if(this.data.energy < this.data.max_energy) this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1.5);
-                    if(this.data.profit > 0) this.data.balance += (this.data.profit / 3600);
-                    ui.render();
-                }, 1000);
-                setInterval(() => this.save(), 10000);
-            },
-
-            async save() {
-                fetch('/api/save', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ userId: this.data.id, ...this.data })
-                });
-            }
-        };
-
-        const ui = {
-            startLoader() {
-                let p = 0;
-                const i = setInterval(() => {
-                    p += 4;
-                    document.getElementById('pct').innerText = p + '%';
-                    document.getElementById('bar').style.width = p + '%';
-                    if(p >= 100) {
-                        clearInterval(i);
-                        document.getElementById('loader').style.display = 'none';
-                        document.getElementById('app').style.display = 'flex';
-                        this.render();
-                    }
-                }, 30);
-            },
-            render() {
-                const d = game.data;
-                document.getElementById('ui-balance').innerText = Math.floor(d.balance).toLocaleString('ru-RU');
-                document.getElementById('ui-energy').innerText = `${Math.floor(d.energy)}/${d.max_energy}`;
-                document.getElementById('e-fill').style.width = (d.energy/d.max_energy*100)+'%';
-                document.getElementById('ui-tap').innerText = `+${d.tap}`;
-                document.getElementById('ui-profit').innerText = d.profit.toLocaleString('ru-RU');
-                
-                const currentBalance = Math.floor(d.balance || 0);
-                document.getElementById('my-lvl').innerText = `LVL ${Math.floor(currentBalance/5000)+1}`;
-            },
-            pop(e) {
-                const t = e.touches[0];
-                const p = document.createElement('div');
-                p.className = 'pop'; p.innerText = `+${game.data.tap}`;
-                p.style.left = t.clientX+'px'; p.style.top = t.clientY+'px';
-                document.body.appendChild(p);
-                setTimeout(() => p.remove(), 700);
-            },
-            async openM(type) {
-                const b = document.getElementById('m-body');
-                document.getElementById('modal').classList.add('active');
-                b.innerHTML = ''; 
-
-                if(type === 'top') {
-                    b.innerHTML = '<h2>RANKING</h2>';
-                    const r = await fetch('/api/top');
-                    const top = await r.json();
-                    top.forEach((u, i) => {
-                        const isMe = u.id == game.data.id ? 'me' : '';
-                        b.innerHTML += `
-                        <div class="top-item ${isMe}">
-                            <div class="t-user"><b>#${i+1}</b><img src="${u.photo_url || 'images/logo.png'}"><span>${u.username}</span></div>
-                            <b>${Math.floor(u.balance).toLocaleString('ru-RU')}</b>
-                        </div>`;
-                    });
-                } else if(type === 'wallet') {
-                    b.innerHTML = `
-                        <h2>CRYPTO WALLET</h2>
-                        <div style="background:#0A0A0A; padding:20px; border-radius:20px; text-align:center; border:1px solid #1A1A1A;">
-                            <small style="color:#888;">CURRENT BALANCE</small>
-                            <h1 style="color:#00FFFF; font-size:40px; margin:10px 0;">${Math.floor(game.data.balance).toLocaleString('ru-RU')} NP</h1>
-                            
-                            <div id="ton-connect-btn" style="margin-bottom: 20px; display: flex; justify-content: center;"></div>
-                            
-                            <button onclick="ui.handleWithdraw()" id="withdraw-btn" style="width:100%; background:#111; color:#444; border:1px solid #222; padding:15px; border-radius:12px; font-weight:900;">WITHDRAW</button>
-                        </div>`;
-                    
-                    // Перерисовываем кнопку TON Connect в новом контейнере
-                    tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
-                } else if(type === 'friends') {
-                    const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
-                    b.innerHTML = `
-                        <h2>FRIENDS</h2>
-                        <p style="text-align:center; color:#888; margin-bottom:20px;">Invite friends to earn more!</p>
-                        <div class="top-item" style="justify-content:center; border: 1px dashed #00FFFF; color:#00FFFF;" onclick="navigator.clipboard.writeText('${link}'); tg.showAlert('Link Copied!')">
-                            COPY REFERRAL LINK
-                        </div>`;
-                } else if(type === 'boost') {
-                    b.innerHTML = `
-                        <h2>UPGRADES</h2>
-                        <div class="top-item" onclick="game.upgrade('tap')">
-                            <div class="t-user"><b>🚀</b><span>Multitap (Lvl ${game.data.tap})</span></div>
-                            <button style="background:#00FFFF; color:#000; border:none; padding:8px 15px; border-radius:10px; font-weight:bold;">${game.data.tap * 500} ⚡</button>
-                        </div>`;
-                }
-            },
-            closeM() { document.getElementById('modal').classList.remove('active'); },
-            
-            handleWithdraw() {
-                if (tonConnectUI.connected) {
-                    tg.showAlert("Вывод временно недоступен. Накопите больше NP!");
-                } else {
-                    tg.showAlert("Сначала подключите кошелек!");
-                }
-            }
-        };
-
-        window.onload = () => game.init();
-    </script>
-</body>
-</html>
+                    this.data.max_energy = parseInt(d.max_energy) || 10
