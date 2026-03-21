@@ -111,16 +111,15 @@
                 }
             },
 
-            async buyPremium(tonAmount, upgradeName) {
-                if (!tonConnectUI?.connected) return tg.showAlert("Сначала подключи кошелек!");
-                const nano = (tonAmount * 1000000000).toString();
+            async payTon(amount, title) {
+                if (!tonConnectUI?.connected) return tg.showAlert("Сначала подключите кошелек!");
                 try {
                     await tonConnectUI.sendTransaction({
                         validUntil: Math.floor(Date.now()/1000)+300,
-                        messages: [{ address: ADMIN_WALLET, amount: nano }]
+                        messages: [{ address: ADMIN_WALLET, amount: (amount * 1e9).toString() }]
                     });
-                    tg.showAlert("Оплата прошла! Улучшение будет активно после 1 подтверждения.");
-                } catch(e) { tg.showAlert("Ошибка транзакции"); }
+                    tg.showAlert(`Транзакция для "${title}" отправлена.`);
+                } catch(e) { tg.showAlert("Ошибка оплаты"); }
             },
 
             tap(e) {
@@ -133,33 +132,24 @@
             },
 
             upgrade(type) {
-                let cost = 0;
-                if(type === 'tap') cost = this.data.tap * 500;
-                if(type === 'mine') cost = (this.data.profit + 100) * 10;
-
+                let cost = type === 'tap' ? this.data.tap * 700 : (this.data.profit + 100) * 10;
                 if(this.data.balance >= cost) {
                     this.data.balance -= cost;
-                    if(type === 'tap') this.data.tap += 1;
-                    if(type === 'mine') this.data.profit += 150;
+                    if(type === 'tap') this.data.tap++; else this.data.profit += 100;
                     tg.HapticFeedback.notificationOccurred('success');
                     ui.render();
                     ui.openM(type === 'tap' ? 'boost' : 'mine');
-                } else {
-                    tg.showAlert("Недостаточно NP!");
-                }
+                } else tg.showAlert("Недостаточно NP!");
             },
 
             claimBonus() {
                 const now = Date.now();
                 if (now - this.data.last_bonus > 86400000) {
-                    this.data.balance += 5000;
+                    this.data.balance += 2000;
                     this.data.last_bonus = now;
-                    tg.showAlert("Вы получили ежедневный бонус 5,000 NP!");
-                    ui.closeM();
-                    ui.render();
-                } else {
-                    tg.showAlert("Бонус уже получен. Возвращайтесь завтра!");
-                }
+                    tg.showAlert("Вы получили 2,000 NP!");
+                    ui.render(); ui.closeM();
+                } else tg.showAlert("Заходите завтра!");
             },
 
             loop() {
@@ -168,7 +158,7 @@
                     if(this.data.profit > 0) this.data.balance += (this.data.profit / 3600);
                     ui.render();
                 }, 1000);
-                setInterval(() => this.save(), 10000);
+                setInterval(() => this.save(), 15000);
             },
 
             async save() {
@@ -185,21 +175,20 @@
             startLoader() {
                 let p = 0;
                 const i = setInterval(() => {
-                    p += 2;
+                    p += 5;
                     document.getElementById('pct').innerText = p + '%';
                     document.getElementById('bar').style.width = p + '%';
                     if(p >= 100) { clearInterval(i); document.getElementById('loader').style.display='none'; document.getElementById('app').style.display='flex'; this.render(); }
-                }, 20);
+                }, 30);
             },
             render() {
-                if(!game.isLoaded) return;
                 const d = game.data;
-                document.getElementById('ui-balance').innerText = Math.floor(d.balance).toLocaleString('ru-RU');
+                document.getElementById('ui-balance').innerText = Math.floor(d.balance).toLocaleString();
                 document.getElementById('ui-energy').innerText = `${Math.floor(d.energy)}/${d.max_energy}`;
                 document.getElementById('e-fill').style.width = (d.energy/d.max_energy*100)+'%';
                 document.getElementById('ui-tap').innerText = `+${d.tap}`;
-                document.getElementById('ui-profit').innerText = d.profit.toLocaleString('ru-RU');
-                document.getElementById('my-lvl').innerText = `LVL ${Math.floor(d.balance/10000)+1}`;
+                document.getElementById('ui-profit').innerText = d.profit;
+                document.getElementById('my-lvl').innerText = `LVL ${Math.floor(d.balance/8000)+1}`;
             },
             pop(e) {
                 const t = e.touches[0];
@@ -207,57 +196,36 @@
                 p.className = 'pop'; p.innerText = `+${game.data.tap}`;
                 p.style.left = t.clientX+'px'; p.style.top = t.clientY+'px';
                 document.body.appendChild(p);
-                setTimeout(() => p.remove(), 700);
+                setTimeout(() => p.remove(), 600);
             },
             async openM(type) {
                 const b = document.getElementById('m-body');
                 document.getElementById('modal').classList.add('active');
-                b.innerHTML = ''; 
-
+                b.innerHTML = '';
                 if(type === 'wallet') {
-                    b.innerHTML = `<h2>WALLET</h2><div id="ton-connect-btn" style="display:flex;justify-content:center;margin:20px 0;"></div><p style="text-align:center;font-size:12px;color:#888;">Connect your wallet for TON transactions</p>`;
+                    b.innerHTML = `<h2>WALLET</h2><div id="ton-connect-btn" style="display:flex;justify-content:center;margin:20px 0;"></div>`;
                     if(tonConnectUI) tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
-                } 
-                else if(type === 'boost') {
-                    b.innerHTML = `<h2>BOOST</h2>
-                        <div class="top-item" onclick="game.upgrade('tap')"><span>Multi-Tap (Lvl ${game.data.tap})</span><b>${game.data.tap * 500} NP</b></div>
-                        <div class="top-item" onclick="game.buyPremium(0.1, 'Double Tap')" style="border:1px solid #00FFFF"><span>Double Tap Power</span><b>0.1 TON</b></div>`;
-                }
-                else if(type === 'mine') {
-                    b.innerHTML = `<h2>MINING</h2>
-                        <div class="top-item" onclick="game.upgrade('mine')"><span>Neural Node</span><b>${(game.data.profit + 100) * 10} NP</b></div>`;
-                }
-                else if(type === 'friends') {
-                    const refLink = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
-                    b.innerHTML = `<h2>FRIENDS</h2><p style="font-size:14px;color:#888;margin-bottom:15px;">Invite friends to earn 10% of their mining!</p>
-                        <button onclick="navigator.clipboard.writeText('${refLink}');tg.showAlert('Ссылка скопирована!')" style="width:100%;padding:15px;background:#111;color:#00FFFF;border:1px solid #00FFFF;border-radius:12px;font-weight:bold;">COPY INVITE LINK</button>`;
-                }
-                else if(type === 'bonus') {
-                    b.innerHTML = `<h2>DAILY BONUS</h2><div style="text-align:center;padding:20px;">
-                        <div style="font-size:50px;margin-bottom:10px;">🎁</div>
-                        <p>Claim your daily 5,000 NP to grow faster!</p><br>
-                        <button onclick="game.claimBonus()" style="width:100%;padding:15px;background:#00FFFF;color:#000;border:none;border-radius:12px;font-weight:900;">CLAIM NP</button>
-                    </div>`;
-                }
-                else if(type === 'tasks') {
-                    b.innerHTML = `<h2>TASKS</h2>
-                        <div class="top-item" onclick="tg.openLink('https://t.me/your_channel')"><span>Subscribe Channel</span><b>+10,000 NP</b></div>
-                        <div class="top-item" onclick="tg.openLink('https://twitter.com/')"><span>Follow X (Twitter)</span><b>+5,000 NP</b></div>`;
-                }
-                else if(type === 'top') {
-                    b.innerHTML = '<h2>RANKING</h2><div id="top-list">Loading...</div>';
-                    fetch('/api/top').then(r => r.json()).then(top => {
-                        let html = '';
-                        top.forEach((u, i) => {
-                            html += `<div class="top-item"><span>#${i+1} ${u.username}</span><b>${Math.floor(u.balance).toLocaleString()}</b></div>`;
-                        });
-                        document.getElementById('top-list').innerHTML = html;
-                    }).catch(() => document.getElementById('top-list').innerText = 'Top miners list is empty');
+                } else if(type === 'boost') {
+                    b.innerHTML = `<h2>BOOST</h2><div class="top-item" onclick="game.upgrade('tap')"><span>Multitap (Lvl ${game.data.tap})</span><b>${game.data.tap*700} NP</b></div><div class="top-item" onclick="game.payTon(0.5, 'Infinity Energy')" style="border:1px solid #00FFFF"><span>Infinite Energy</span><b>0.5 TON</b></div>`;
+                } else if(type === 'mine') {
+                    b.innerHTML = `<h2>MINING</h2><div class="top-item" onclick="game.upgrade('mine')"><span>Neural Node</span><b>${(game.data.profit+100)*10} NP</b></div>`;
+                } else if(type === 'friends') {
+                    const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
+                    b.innerHTML = `<h2>FRIENDS</h2><p>Share link to get 10% bonus:</p><input type="text" value="${link}" readonly style="width:100%;background:#111;color:#00FFFF;border:1px solid #333;padding:10px;border-radius:10px;margin-bottom:10px;"><button onclick="tg.openTelegramLink('https://t.me/share/url?url=${link}')" style="width:100%;padding:15px;background:#00FFFF;color:#000;border-radius:10px;font-weight:bold;">INVITE</button>`;
+                } else if(type === 'bonus') {
+                    b.innerHTML = `<h2>DAILY BONUS</h2><div style="text-align:center;padding:20px;"><div style="font-size:40px;">🎁</div><p>Get 2,000 NP every 24h</p><br><button onclick="game.claimBonus()" style="width:100%;padding:15px;background:#00FFFF;color:#000;border-radius:12px;font-weight:900;">CLAIM</button></div>`;
+                } else if(type === 'tasks') {
+                    b.innerHTML = `<h2>TASKS</h2><div class="top-item" onclick="tg.openLink('https://t.me/your_channel')"><span>Subscribe Channel</span><b>+5k NP</b></div><div class="top-item" onclick="tg.openLink('https://t.me/your_chat')"><span>Join Community</span><b>+3k NP</b></div>`;
+                } else if(type === 'top') {
+                    b.innerHTML = `<h2>LEADERS</h2><div id="top-list">Loading...</div>`;
+                    fetch('/api/top').then(r=>r.json()).then(list=>{
+                        let h = ''; list.forEach((u,i)=> h+=`<div class="top-item"><span>#${i+1} ${u.username}</span><b>${Math.floor(u.balance).toLocaleString()}</b></div>`);
+                        document.getElementById('top-list').innerHTML = h;
+                    }).catch(()=> document.getElementById('top-list').innerHTML = "No data available");
                 }
             },
             closeM() { document.getElementById('modal').classList.remove('active'); }
         };
-
         window.onload = () => game.init();
     </script>
 </body>
