@@ -231,11 +231,30 @@
                     <div class="top-item" onclick="tg.openLink('https://twitter.com/')"><div class="t-user"><b>🐦</b><span>Follow X</span></div><b>+3k NP</b></div>`;
                 } 
                 else if(type === 'top') {
-                    b.innerHTML = `<h2>🏆 HALL OF FAME</h2><div id="top-list">Loading ranking...</div>`;
+                    b.innerHTML = `<h2>🏆 HALL OF FAME</h2><div id="top-list" style="max-height: 380px; overflow-y: auto; padding-right: 5px;">Loading ranking...</div>`;
                     fetch('/api/top').then(r=>r.json()).then(list=>{
-                        let h = ''; list.forEach((u,i)=> h+=`<div class="top-item"><div class="t-user"><b>#${i+1}</b><img src="${u.photo_url || 'images/logo.png'}" style="width:24px;height:24px;border-radius:50%;margin:0 10px;"><span>${u.username}</span></div><b>${Math.floor(u.balance).toLocaleString()}</b></div>`);
+                        let h = ''; 
+                        list.slice(0, 100).forEach((u, i) => {
+                            let trophy = '';
+                            if(i === 0) trophy = '🥇';
+                            else if(i === 1) trophy = '🥈';
+                            else if(i === 2) trophy = '🥉';
+                            else trophy = '💎';
+
+                            const isMe = u.id == game.data.id ? 'style="border: 1px solid #00FFFF; background: rgba(0,255,255,0.1);"' : '';
+                            
+                            h += `
+                            <div class="top-item" ${isMe}>
+                                <div class="t-user">
+                                    <b style="min-width: 25px; display: inline-block; text-align: center;">${trophy}</b>
+                                    <img src="${u.photo_url || 'images/logo.png'}" style="width:24px;height:24px;border-radius:50%;margin:0 10px; border: 1px solid #333;">
+                                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px;">${u.username}</span>
+                                </div>
+                                <b style="color: #00FFFF;">${Math.floor(u.balance).toLocaleString()}</b>
+                            </div>`;
+                        });
                         document.getElementById('top-list').innerHTML = h;
-                    }).catch(()=> document.getElementById('top-list').innerHTML = "No data from server");
+                    }).catch(() => document.getElementById('top-list').innerHTML = "No data from server");
                 }
             },
             closeM() { document.getElementById('modal').classList.remove('active'); }
