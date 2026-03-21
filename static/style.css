@@ -26,7 +26,7 @@ body {
     overflow: hidden;
 }
 
-/* ЗАГРУЗКА (image_6.png) */
+/* ЗАГРУЗКА */
 #loader {
     position: fixed;
     inset: 0;
@@ -65,10 +65,10 @@ body {
 }
 
 .l-status {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 700;
     letter-spacing: 2px;
-    color: var(--text);
+    color: var(--sub-text);
     margin-bottom: 15px;
 }
 
@@ -97,7 +97,7 @@ body {
     transition: width 0.3s;
 }
 
-/* ГЛАВНЫЙ ЭКРАН (image_0.png, image_1.png) */
+/* ГЛАВНЫЙ ЭКРАН */
 #app {
     display: flex;
     flex-direction: column;
@@ -122,6 +122,7 @@ header {
     border: 2px solid var(--accent);
     border-radius: 12px;
     overflow: hidden;
+    background: #111;
 }
 
 .u-avatar img {
@@ -182,11 +183,11 @@ header {
 /* Баланс */
 .balance-area {
     text-align: center;
-    margin: 30px 0;
+    margin: 20px 0;
 }
 
 .balance-area h1 {
-    font-size: 64px;
+    font-size: 56px;
     font-weight: 900;
     letter-spacing: -2px;
 }
@@ -208,13 +209,14 @@ header {
 }
 
 .brain-target {
-    width: 250px;
+    width: 220px;
     z-index: 5;
     transition: transform 0.05s;
+    cursor: pointer;
 }
 
 .brain-target:active {
-    transform: scale(0.96);
+    transform: scale(0.92);
 }
 
 .brain-target img {
@@ -240,6 +242,7 @@ header {
     font-size: 11px;
     font-weight: 700;
     backdrop-filter: blur(10px);
+    cursor: pointer;
 }
 
 /* Энергия */
@@ -285,15 +288,16 @@ header {
     color: var(--text);
     padding: 18px 0;
     border-radius: 18px;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 800;
+    cursor: pointer;
 }
 
-/* МОДАЛКА (image_5.png) */
+/* МОДАЛКА */
 .modal-bg {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.8);
+    background: rgba(0,0,0,0.85);
     backdrop-filter: blur(5px);
     display: none;
     align-items: flex-end;
@@ -310,7 +314,7 @@ header {
     border-radius: 30px 30px 0 0;
     padding: 25px;
     padding-bottom: max(25px, env(safe-area-inset-bottom));
-    border-top: 1px solid #222;
+    border-top: 2px solid var(--accent);
     transform: translateY(100%);
     transition: transform 0.3s ease-out;
 }
@@ -333,6 +337,7 @@ header {
     font-weight: 900;
     color: var(--accent);
     margin-bottom: 25px;
+    text-transform: uppercase;
 }
 
 .m-close {
@@ -346,9 +351,10 @@ header {
     font-size: 12px;
     font-weight: 700;
     margin-top: 20px;
+    cursor: pointer;
 }
 
-/* ТОП список */
+/* Список в модалке */
 .top-item {
     display: flex;
     justify-content: space-between;
@@ -375,7 +381,7 @@ header {
 .t-user img {
     width: 30px;
     height: 30px;
-    border-radius: 50%;
+    border-radius: 8px;
 }
 
 .top-item > b {
@@ -386,15 +392,21 @@ header {
 .pop {
     position: fixed;
     color: var(--text);
-    font-size: 32px;
+    font-size: 28px;
     font-weight: 900;
     pointer-events: none;
     animation: fly 0.8s forwards;
     z-index: 9999;
 }
 
+.pop.crit { 
+    color: #FFD700 !important; 
+    text-shadow: 0 0 15px #FFD700; 
+    scale: 1.4;
+}
+
 @keyframes rotateRing { to { transform: rotate(360deg); } }
 @keyframes fly {
-    0% { opacity: 1; transform: translateY(0); }
-    100% { opacity: 0; transform: translateY(-100px); }
+    0% { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-120px) scale(1.2); }
 }
