@@ -112,16 +112,20 @@
                 if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
                 this.isLoaded = true;
                 
-                // Проверка дохода от друзей при входе
                 this.checkReferralIncome();
                 this.loop();
             },
 
-            // --- МАТЕМАТИКА БОНУСА (500 стартовый) ---
+            // --- ОБНОВЛЕННАЯ ЛОГИКА БОНУСА ---
             getDailyBonusAmount() {
-                let lvl = Math.floor(Math.log10(this.data.balance + 1)) + 1;
-                if (lvl === 1 && this.data.balance <= 1000) return 500;
-                return Math.floor(500 * Math.pow(1.5, lvl - 1));
+                // Вычисляем уровень на основе баланса
+                let lvl = Math.floor(Math.log10(Math.max(1, this.data.balance))) + 1;
+                
+                // Если баланс меньше 1000, даем базу 500 NP
+                if (this.data.balance < 1000) return 500;
+                
+                // Плавная прогрессия x1.2 за каждый порядок баланса
+                return Math.floor(500 * Math.pow(1.2, lvl - 1));
             },
 
             async claimBonus() {
@@ -137,11 +141,19 @@
                         this.data.last_bonus = res.last_bonus;
                         tg.HapticFeedback.notificationOccurred('success');
                         tg.showAlert(`SUCCESS: +${res.reward} NP`);
-                        ui.render(); ui.openM('bonus');
+                        ui.render(); 
+                        ui.openM('bonus');
                     } else {
                         tg.showAlert(res.error || "LOCKED");
                     }
-                } catch(e) { tg.showAlert("SERVER OFFLINE"); }
+                } catch(e) { 
+                    // Fallback для тестов без бэкенда
+                    const amount = this.getDailyBonusAmount();
+                    this.data.balance += amount;
+                    this.data.last_bonus = Date.now();
+                    ui.render(); ui.openM('bonus');
+                    tg.showAlert(`TEST MODE: +${amount} NP`);
+                }
             },
 
             async checkReferralIncome() {
@@ -149,7 +161,7 @@
                     const r = await fetch(`/api/friends/${this.data.id}`);
                     const data = await r.json();
                     if (data.total_referral_profit > 0) {
-                        tg.showConfirm(`SQUAD REPORT: Your agents earned you ${Math.floor(data.total_referral_profit).toLocaleString()} NP while you were away!`);
+                        tg.showConfirm(`SQUAD REPORT: Your agents earned you ${Math.floor(data.total_referral_profit).toLocaleString()} NP!`);
                         ui.render();
                     }
                 } catch(e) {}
@@ -188,6 +200,7 @@
 
             async handleTask(id, url) {
                 const btn = document.getElementById(`t-${id}`);
+                if(!btn) return;
                 if(btn.innerText === 'GO') {
                     tg.openTelegramLink(url);
                     btn.innerText = 'CHECK';
@@ -242,12 +255,12 @@
                 document.getElementById('e-fill').style.width = (d.energy/d.max_energy*100)+'%';
                 document.getElementById('ui-tap').innerText = `+${game.getTapPower()}`;
                 document.getElementById('ui-profit').innerText = Math.floor(d.profit);
-                let lvl = Math.floor(Math.log10(d.balance + 1)) + 1;
+                let lvl = Math.floor(Math.log10(Math.max(1, d.balance))) + 1;
                 document.getElementById('my-lvl').innerText = `LVL ${lvl}`;
             },
 
             pop(e, p) {
-                const t = e.touches[0];
+                const t = (e.touches && e.touches[0]) || e;
                 const d = document.createElement('div');
                 d.className = 'pop'; d.innerText = `+${p}`;
                 d.style.left = t.clientX+'px'; d.style.top = t.clientY+'px';
@@ -267,7 +280,7 @@
                             <div class="s-box" style="background:rgba(0,255,255,0.05);"><small>AGENTS</small><b id="f-count">0</b></div>
                             <div class="s-box" style="background:rgba(0,255,255,0.05);"><small>YIELD (10%)</small><b id="f-yield" style="color:#49ff49;">0</b></div>
                         </div>
-                        <button class="m-close" style="background:cyan;color:black;width:100%;font-weight:bold;" onclick="tg.openTelegramLink('https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my Cyber-Army! +500 NP start bonus!')">INVITE AGENT</button>
+                        <button class="m-close" style="background:cyan;color:black;width:100%;font-weight:bold;" onclick="tg.openTelegramLink('https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my Cyber-Army!')">INVITE AGENT</button>
                         <div id="f-list" style="margin-top:15px; max-height:150px; overflow-y:auto; border-radius:10px; background:rgba(0,0,0,0.2);"></div>`;
                     
                     fetch(`/api/friends/${game.data.id}`).then(r => r.json()).then(data => {
@@ -277,7 +290,7 @@
                             <div style="display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #222;">
                                 <span>👤 ${f.username}</span><b style="color:#49ff49;">+${Math.floor(f.balance * 0.1)}</b>
                             </div>`).join('');
-                    }).catch(() => { document.getElementById('f-list').innerHTML = '<p style="padding:10px;opacity:0.5;">No agents yet.</p>'; });
+                    }).catch(() => { document.getElementById('f-list').innerHTML = '<p style="padding:10px;opacity:0.5;">No agents found.</p>'; });
                 }
 
                 if(type === 'bonus') {
@@ -285,10 +298,10 @@
                     const amount = game.getDailyBonusAmount();
                     b.innerHTML = `<h2>🎁 DAILY SUPPLY</h2>
                         <div style="text-align:center; padding:20px; border:1px solid cyan; border-radius:15px; margin:15px 0;">
-                            <small>AVAILABLE REWARD</small>
+                            <small>CURRENT REWARD</small>
                             <h1 style="color:cyan;">${amount.toLocaleString()} NP</h1>
                         </div>
-                        ${canClaim ? `<button class="m-close" style="background:cyan;color:black;width:100%" onclick="game.claimBonus()">CLAIM NOW</button>` : `<button class="m-close" style="background:#222;color:#555;width:100%" disabled>LOCKED (24h)</button>`}`;
+                        ${canClaim ? `<button class="m-close" style="background:cyan;color:black;width:100%" onclick="game.claimBonus()">CLAIM NOW</button>` : `<button class="m-close" style="background:#222;color:#555;width:100%" disabled>COOLDOWN ACTIVE</button>`}`;
                 }
 
                 if(type === 'tasks') {
@@ -300,12 +313,12 @@
                 }
 
                 if(type === 'wallet') {
-                    const isConn = tonConnectUI.connected;
+                    const isConn = tonConnectUI && tonConnectUI.connected;
                     b.innerHTML = `<h2>👛 WALLET</h2><div id="ton-connect-btn" style="display:flex;justify-content:center;padding:10px;"></div>
                         ${isConn ? `<div style="text-align:center; padding:15px; background: rgba(0,255,255,0.05); border-radius:10px;">
-                            <b style="font-size:14px; word-break:break-all;">${tonConnectUI.account.address.slice(0,8)}...${tonConnectUI.account.address.slice(-8)}</b>
+                            <b style="font-size:12px; word-break:break-all;">${tonConnectUI.account.address}</b>
                             <button class="m-close" style="background:#ff4444; color:white; width:100%; margin-top:15px; border:none;" onclick="tonConnectUI.disconnect()">DISCONNECT</button>
-                        </div>` : `<p style="text-align:center">Connect TON wallet for Web3 features.</p>`}`;
+                        </div>` : `<p style="text-align:center">Connect wallet for Web3 rewards.</p>`}`;
                     setTimeout(() => { if(tonConnectUI) tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' }; }, 50);
                 }
 
@@ -318,16 +331,14 @@
 
                 if(type === 'top') {
                     b.innerHTML = `<h2>🏆 TOP AGENTS</h2><div id="t-list"></div>`;
-                    try {
-                        const r = await fetch('/api/top');
-                        const list = await r.json();
+                    fetch('/api/top').then(r => r.json()).then(list => {
                         let h = '';
                         list.sort((x,y) => y.balance - x.balance).slice(0, 10).forEach((u, i) => {
                             let icon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
                             h += `<div class="top-item"><div class="t-user"><span>${icon}</span><img src="${u.photo_url || 'images/logo.png'}" style="width:30px;height:30px;border-radius:50%;margin:0 10px;border:1px solid cyan"><span>${u.username || 'Unknown'}</span></div><b>${Math.floor(u.balance).toLocaleString()}</b></div>`;
                         });
                         document.getElementById('t-list').innerHTML = h;
-                    } catch(e) { document.getElementById('t-list').innerText = "OFFLINE"; }
+                    }).catch(() => { document.getElementById('t-list').innerText = "OFFLINE"; });
                 }
 
                 if(type === 'mine') {
