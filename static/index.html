@@ -87,13 +87,13 @@
             data: { 
                 id: 0, balance: 0, energy: 1000, max_energy: 1000, 
                 tap_lvl: 1, mine_lvl: 1, profit: 0, last_bonus: 0, 
-                total_taps: 0 
+                total_taps: 0, tasks: [] 
             },
             isLoaded: false,
 
             async init() {
                 ui.startLoader();
-                const u = tg.initDataUnsafe.user || { id: 476014374, first_name: 'Agent' };
+                const u = tg.initDataUnsafe.user || { id: 476014374, first_name: 'Agent', photo_url: '' };
                 const name = (u.username || u.first_name).toUpperCase();
                 
                 try {
@@ -126,7 +126,7 @@
                 return 0;
             },
 
-            async payTon(amount, title) {
+            async payTon(amount) {
                 if (!tonConnectUI?.connected) return tg.showAlert("PLEASE CONNECT WALLET");
                 try {
                     await tonConnectUI.sendTransaction({
@@ -135,8 +135,7 @@
                     });
                     this.data.profit += 5000;
                     tg.showAlert("Elite Server Online: +5,000 NP/h");
-                    ui.render();
-                    this.save();
+                    ui.render(); this.save();
                 } catch(e) { tg.showAlert("Transaction Cancelled"); }
             },
 
@@ -183,9 +182,21 @@
                     this.data.balance += 5000;
                     this.data.last_bonus = now;
                     tg.showAlert("Bonus claimed: +5,000 NP");
-                    ui.render(); ui.closeM();
-                    this.save();
+                    ui.render(); ui.closeM(); this.save();
                 } else tg.showAlert("Retry in 24h.");
+            },
+
+            async completeTask(taskId, reward, link) {
+                if (this.data.tasks.includes(taskId)) return tg.showAlert("ALREADY DONE");
+                tg.openTelegramLink(link);
+                setTimeout(() => {
+                    this.data.balance += reward;
+                    this.data.tasks.push(taskId);
+                    tg.showAlert(`Task Complete! +${reward.toLocaleString()} NP`);
+                    ui.render();
+                    ui.openM('tasks');
+                    this.save();
+                }, 2000);
             },
 
             loop() {
@@ -260,11 +271,11 @@
                         break;
                     case 'friends':
                         const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
-                        b.innerHTML = `<h2>🤝 FRIENDS</h2><p style="text-align:center">Earn 10% from your partners</p>
+                        b.innerHTML = `<h2>🤝 FRIENDS</h2><p style="text-align:center">Earn 10% from partners</p>
                         <button class="m-close" style="background:cyan;color:black;width:100%;margin-top:10px" onclick="tg.openTelegramLink('https://t.me/share/url?url=${encodeURIComponent(link)}')">INVITE AGENT</button>`;
                         break;
                     case 'bonus':
-                        b.innerHTML = `<h2>🎁 DAILY BONUS</h2><p style="text-align:center">Core synchronization reward</p>
+                        b.innerHTML = `<h2>🎁 DAILY BONUS</h2><p style="text-align:center">24h Core Refresh Reward</p>
                         <button class="m-close" style="background:white;color:black;width:100%;margin-top:10px" onclick="game.claimBonus()">COLLECT 5,000 NP</button>`;
                         break;
                     case 'mine':
@@ -273,7 +284,7 @@
                             <div class="t-user"><b>🧠</b><span>CPU Node (+150/h)</span></div>
                             <b>${game.getUpgradeCost('mine').toLocaleString()} NP</b>
                         </div>
-                        <div class="top-item" onclick="game.payTon(0.5, 'Elite Server')">
+                        <div class="top-item" onclick="game.payTon(0.5)">
                             <div class="t-user"><b>🛰️</b><span>Elite Server (+5k/h)</span></div>
                             <b>0.5 TON</b>
                         </div>`;
@@ -286,10 +297,11 @@
                         </div>`;
                         break;
                     case 'tasks':
+                        const hasTask = game.data.tasks.includes('channel_join');
                         b.innerHTML = `<h2>📋 MISSIONS</h2>
-                        <div class="top-item" onclick="tg.openTelegramLink('https://t.me/your_channel')">
+                        <div class="top-item" onclick="game.completeTask('channel_join', 10000, 'https://t.me/your_channel')">
                             <div class="t-user"><b>📢</b><span>Join Channel</span></div>
-                            <b>+10,000 NP</b>
+                            <b>${hasTask ? '✅ DONE' : '+10,000 NP'}</b>
                         </div>`;
                         break;
                     case 'top':
@@ -301,7 +313,7 @@
                             list.sort((x,y) => y.balance - x.balance).slice(0,10).forEach((u,i) => {
                                 h += `<div class="top-item"><span>#${i+1} ${u.username || 'Agent'}</span><b>${Math.floor(u.balance).toLocaleString()}</b></div>`;
                             });
-                            document.getElementById('top-list').innerHTML = h;
+                            document.getElementById('top-list').innerHTML = h || 'No data';
                         } catch(e) { document.getElementById('top-list').innerText = "Terminal Offline"; }
                         break;
                 }
