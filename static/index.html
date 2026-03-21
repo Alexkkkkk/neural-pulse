@@ -83,7 +83,8 @@
         let tonConnectUI = null;
 
         const game = {
-            data: { id: 0, balance: 0, energy: 1000, max_energy: 1000, tap: 1, profit: 0, last_bonus: 0 },
+            // Добавлено поле auto_click_until для хранения времени истечения буста
+            data: { id: 0, balance: 0, energy: 1000, max_energy: 1000, tap: 1, profit: 0, last_bonus: 0, auto_click_until: 0 },
             isLoaded: false,
 
             async init() {
@@ -96,7 +97,6 @@
                         manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
                     });
                     
-                    // Слушатель изменения статуса кошелька для обновления UI в реальном времени
                     tonConnectUI.onStatusChange(wallet => {
                         if (document.getElementById('modal').classList.contains('active')) {
                             const currentType = document.querySelector('#m-body h2')?.innerText;
@@ -140,15 +140,36 @@
                 tg.HapticFeedback.impactOccurred('medium');
             },
 
+            // Переработанная функция апгрейдов: всё за NP
             upgrade(type) {
-                let cost = type === 'tap' ? this.data.tap * 800 : (this.data.profit + 150) * 12;
-                if(this.data.balance >= cost) {
+                let cost = 0;
+                if (type === 'tap') cost = this.data.tap * 800;
+                else if (type === 'energy') cost = 5000;
+                else if (type === 'autoclick') cost = 50000;
+                else if (type === 'mine') cost = (this.data.profit + 150) * 12;
+
+                if (this.data.balance >= cost) {
                     this.data.balance -= cost;
-                    if(type === 'tap') this.data.tap++; else this.data.profit += 150;
+                    
+                    if (type === 'tap') {
+                        this.data.tap++;
+                    } else if (type === 'energy') {
+                        this.data.energy = this.data.max_energy;
+                        tg.showAlert("Энергия восстановлена!");
+                    } else if (type === 'autoclick') {
+                        const day = 24 * 60 * 60 * 1000;
+                        this.data.auto_click_until = Date.now() + day;
+                        tg.showAlert("Автокликер активирован на 24 часа!");
+                    } else if (type === 'mine') {
+                        this.data.profit += 150;
+                    }
+
                     tg.HapticFeedback.notificationOccurred('success');
                     ui.render();
-                    ui.openM(type === 'tap' ? 'boost' : 'mine');
-                } else tg.showAlert("Недостаточно NP!");
+                    ui.openM(type === 'mine' ? 'mine' : 'boost');
+                } else {
+                    tg.showAlert("Недостаточно NP!");
+                }
             },
 
             claimBonus() {
@@ -163,8 +184,20 @@
 
             loop() {
                 setInterval(() => {
+                    // Регенерация энергии
                     if(this.data.energy < this.data.max_energy) this.data.energy = Math.min(this.data.max_energy, this.data.energy + 3);
+                    
+                    // Логика пассивного дохода (Mining)
                     if(this.data.profit > 0) this.data.balance += (this.data.profit / 3600);
+                    
+                    // ЛОГИКА АВТОКЛИКЕРА: срабатывает каждую секунду, если активен буст
+                    if (this.data.auto_click_until > Date.now()) {
+                        if (this.data.energy >= this.data.tap) {
+                            this.data.balance += this.data.tap;
+                            this.data.energy -= this.data.tap;
+                        }
+                    }
+
                     ui.render();
                 }, 1000);
                 setInterval(() => this.save(), 15000);
@@ -235,15 +268,23 @@
                     if(tonConnectUI) tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
                 } 
                 else if(type === 'boost') {
+                    const autoActive = game.data.auto_click_until > Date.now();
+                    const timeLeft = autoActive ? Math.round((game.data.auto_click_until - Date.now()) / 3600000) : 0;
+                    
                     b.innerHTML = `<h2>🚀 UPGRADES</h2>
                     <div class="top-item" onclick="game.upgrade('tap')"><div class="t-user"><b>⚡</b><span>Multitap (Lvl ${game.data.tap})</span></div><b>${game.data.tap*800} NP</b></div>
-                    <div class="top-item" onclick="game.payTon(0.1, 'Energy Refill')"><div class="t-user"><b>🔋</b><span>Full Energy Restore</span></div><b>0.1 TON</b></div>`;
+                    <div class="top-item" onclick="game.upgrade('energy')"><div class="t-user"><b>🔋</b><span>Full Energy Restore</span></div><b>5,000 NP</b></div>
+                    <div class="top-item" onclick="game.upgrade('autoclick')">
+                        <div class="t-user"><b>🤖</b><span>Auto-Clicker (24h) ${autoActive ? `<br><small style="color:#00ff00;">Active: ${timeLeft}h left</small>` : ''}</span></div>
+                        <b>50,000 NP</b>
+                    </div>`;
                 } 
                 else if(type === 'mine') {
                     b.innerHTML = `<h2>⛏️ NEURAL MINING</h2>
                     <div class="top-item" onclick="game.upgrade('mine')"><div class="t-user"><b>🧠</b><span>CPU Node (+150/h)</span></div><b>${(game.data.profit+150)*12} NP</b></div>
                     <div class="top-item" onclick="game.payTon(0.5, 'Elite Server')"><div class="t-user"><b>🛰️</b><span>Elite Server (+5k/h)</span></div><b>0.5 TON</b></div>`;
                 } 
+                // ... (остальные разделы: friends, bonus, tasks, top — без изменений)
                 else if(type === 'friends') {
                     const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
                     b.innerHTML = `<h2>🤝 REFERRALS</h2><div class="top-item"><div class="t-user"><b>🔗</b><span>Your Link:</span></div></div>
@@ -264,15 +305,7 @@
                         list.slice(0, 100).forEach((u, i) => {
                             let trophy = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '💎';
                             const isMe = u.id == game.data.id ? 'style="border: 1px solid #00FFFF; background: rgba(0,255,255,0.1);"' : '';
-                            h += `
-                            <div class="top-item" ${isMe}>
-                                <div class="t-user">
-                                    <b style="min-width: 25px; display: inline-block; text-align: center;">${trophy}</b>
-                                    <img src="${u.photo_url || 'images/logo.png'}" style="width:24px;height:24px;border-radius:50%;margin:0 10px; border: 1px solid #333;">
-                                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px;">${u.username}</span>
-                                </div>
-                                <b style="color: #00FFFF;">${Math.floor(u.balance).toLocaleString()}</b>
-                            </div>`;
+                            h += `<div class="top-item" ${isMe}><div class="t-user"><b style="min-width: 25px; display: inline-block; text-align: center;">${trophy}</b><img src="${u.photo_url || 'images/logo.png'}" style="width:24px;height:24px;border-radius:50%;margin:0 10px; border: 1px solid #333;"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px;">${u.username}</span></div><b style="color: #00FFFF;">${Math.floor(u.balance).toLocaleString()}</b></div>`;
                         });
                         document.getElementById('top-list').innerHTML = h;
                     }).catch(() => document.getElementById('top-list').innerHTML = "No data from server");
