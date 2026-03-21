@@ -2,13 +2,12 @@
 
 :root {
     --bg: #000000;
-    --card-bg: #0A0A0A; /* Темный фон карточек */
+    --card-bg: #0A0A0A;
     --text: #FFFFFF;
     --sub-text: #888888;
     --accent: #00FFFF;
     --neon-purple: #AE00FF;
     --border: #1A1A1A;
-    --btn-height: 62px; /* Стандартная высота кнопок со скрина */
 }
 
 * {
@@ -104,6 +103,7 @@ body {
     flex-direction: column;
     height: 100vh;
     padding: 15px;
+    padding-top: 10px;
     padding-bottom: env(safe-area-inset-bottom);
 }
 
@@ -123,7 +123,6 @@ header {
     border: 2px solid var(--accent);
     border-radius: 12px;
     overflow: hidden;
-    background: #111;
 }
 
 .u-avatar img {
@@ -150,7 +149,6 @@ header {
     font-weight: 900;
     padding: 6px 14px;
     border-radius: 10px;
-    text-align: center;
 }
 
 /* Статистика */
@@ -188,9 +186,9 @@ header {
 }
 
 .balance-area h1 {
-    font-size: 56px;
+    font-size: 52px;
     font-weight: 900;
-    letter-spacing: -2px;
+    letter-spacing: -1px;
 }
 
 /* Ядро игры */
@@ -206,14 +204,13 @@ header {
     position: absolute;
     width: 300px;
     height: 300px;
-    background: radial-gradient(circle, rgba(174,0,255,0.15) 0%, rgba(0,0,0,0) 70%);
+    background: radial-gradient(circle, rgba(0,255,255,0.1) 0%, rgba(0,0,0,0) 70%);
 }
 
 .brain-target {
-    width: 220px;
+    width: 260px;
     z-index: 5;
-    transition: transform 0.05s;
-    cursor: pointer;
+    transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .brain-target:active {
@@ -222,10 +219,9 @@ header {
 
 .brain-target img {
     width: 100%;
-    filter: drop-shadow(0 0 30px rgba(0,255,255,0.3));
+    filter: drop-shadow(0 0 30px rgba(0,255,255,0.2));
 }
 
-/* Боковое меню */
 .side-menu {
     position: absolute;
     right: 0;
@@ -238,20 +234,16 @@ header {
     background: rgba(15, 15, 15, 0.8);
     border: 1px solid var(--border);
     color: var(--text);
-    height: 50px; /* Увеличенная высота */
-    min-width: 90px;
-    border-radius: 16px; /* Более круглые углы */
-    font-size: 11px;
+    padding: 12px 15px;
+    border-radius: 15px;
+    font-size: 10px;
     font-weight: 700;
-    backdrop-filter: blur(15px);
-    cursor: pointer;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    backdrop-filter: blur(5px);
 }
 
 /* Энергия */
 .energy-section {
     margin-top: auto;
-    margin-bottom: 15px;
 }
 
 .e-labels {
@@ -268,6 +260,7 @@ header {
     border-radius: 10px;
     overflow: hidden;
     border: 1px solid var(--border);
+    margin-bottom: 15px;
 }
 
 #e-fill {
@@ -278,44 +271,27 @@ header {
     transition: width 0.3s;
 }
 
-/* БОТТОМ-БАР (Размеры как на картинке) */
 .bottom-tabs {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    padding: 5px 0;
+    gap: 8px;
 }
 
 .bottom-tabs button {
     background: var(--card-bg);
     border: 1px solid var(--border);
     color: var(--text);
-    height: var(--btn-height); /* 62px - высота как на скрине */
-    border-radius: 20px; /* Сильное скругление */
+    padding: 15px 0;
+    border-radius: 18px;
     font-size: 10px;
     font-weight: 800;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    cursor: pointer;
-    transition: all 0.2s;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.bottom-tabs button:active {
-    background: #151515;
-    transform: scale(0.95);
-    border-color: var(--accent);
 }
 
 /* МОДАЛКА */
 .modal-bg {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.9);
+    background: rgba(0,0,0,0.85);
     backdrop-filter: blur(8px);
     display: none;
     align-items: flex-end;
@@ -327,14 +303,14 @@ header {
 }
 
 .modal-box {
-    background: #050505;
+    background: #080808;
     width: 100%;
-    border-radius: 35px 35px 0 0;
+    border-radius: 30px 30px 0 0;
     padding: 25px;
-    padding-bottom: max(30px, env(safe-area-inset-bottom));
-    border-top: 2px solid var(--accent);
+    padding-bottom: max(25px, env(safe-area-inset-bottom));
+    border-top: 2px solid #1a1a1a;
     transform: translateY(100%);
-    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition: transform 0.3s ease-out;
 }
 
 .modal-bg.active .modal-box {
@@ -342,11 +318,11 @@ header {
 }
 
 .handle {
-    width: 45px;
-    height: 5px;
-    background: #222;
+    width: 40px;
+    height: 4px;
+    background: #333;
     border-radius: 10px;
-    margin: 0 auto 25px;
+    margin: 0 auto 20px;
 }
 
 #m-body h2 {
@@ -356,24 +332,6 @@ header {
     color: var(--accent);
     margin-bottom: 25px;
     text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-/* Список в модалке (Элементы улучшений) */
-.upgrade-item, .top-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0 20px;
-    height: 70px; /* Высота плашек как на скрине с улучшениями */
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    margin-bottom: 12px;
-}
-
-.upgrade-item:active {
-    background: #111;
 }
 
 .m-close {
@@ -382,28 +340,56 @@ header {
     background: #111;
     border: 1px solid var(--border);
     color: var(--sub-text);
-    height: 55px;
-    border-radius: 18px;
-    font-size: 13px;
+    padding: 16px;
+    border-radius: 15px;
+    font-size: 12px;
     font-weight: 700;
-    margin-top: 15px;
+    margin-top: 20px;
+}
+
+/* СПИСКИ */
+.top-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background: #0c0c0c;
+    border: 1px solid var(--border);
+    border-radius: 15px;
+    margin-bottom: 10px;
     cursor: pointer;
 }
 
-/* Анимация клика */
+.t-user {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.top-item b {
+    color: var(--accent);
+}
+
+/* АНИМАЦИИ */
 .pop {
     position: fixed;
     color: var(--text);
-    font-size: 32px;
+    font-size: 28px;
     font-weight: 900;
     pointer-events: none;
-    animation: fly 0.8s ease-out forwards;
+    animation: fly 0.7s ease-out forwards;
     z-index: 9999;
-    text-shadow: 0 0 10px rgba(0,255,255,0.8);
+    text-shadow: 0 0 10px rgba(255,255,255,0.5);
+}
+
+.pop.crit { 
+    color: #FFD700 !important; 
+    text-shadow: 0 0 15px #FFD700; 
+    scale: 1.5;
 }
 
 @keyframes rotateRing { to { transform: rotate(360deg); } }
 @keyframes fly {
-    0% { opacity: 1; transform: translateY(0) scale(1); }
-    100% { opacity: 0; transform: translateY(-140px) scale(1.3); }
+    0% { opacity: 1; transform: translate(-50%, 0); }
+    100% { opacity: 0; transform: translate(-50%, -120px); }
 }
