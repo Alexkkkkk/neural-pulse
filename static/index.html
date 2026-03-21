@@ -112,14 +112,14 @@
             },
 
             async payTon(amount, title) {
-                if (!tonConnectUI?.connected) return tg.showAlert("Сначала подключите кошелек!");
+                if (!tonConnectUI?.connected) return tg.showAlert("Подключите кошелек!");
                 try {
                     await tonConnectUI.sendTransaction({
                         validUntil: Math.floor(Date.now()/1000)+300,
                         messages: [{ address: ADMIN_WALLET, amount: (amount * 1e9).toString() }]
                     });
-                    tg.showAlert(`Транзакция для "${title}" отправлена.`);
-                } catch(e) { tg.showAlert("Ошибка оплаты"); }
+                    tg.showAlert(`Транзакция "${title}" отправлена.`);
+                } catch(e) { tg.showAlert("Оплата отменена"); }
             },
 
             tap(e) {
@@ -132,10 +132,10 @@
             },
 
             upgrade(type) {
-                let cost = type === 'tap' ? this.data.tap * 700 : (this.data.profit + 100) * 10;
+                let cost = type === 'tap' ? this.data.tap * 800 : (this.data.profit + 150) * 12;
                 if(this.data.balance >= cost) {
                     this.data.balance -= cost;
-                    if(type === 'tap') this.data.tap++; else this.data.profit += 100;
+                    if(type === 'tap') this.data.tap++; else this.data.profit += 150;
                     tg.HapticFeedback.notificationOccurred('success');
                     ui.render();
                     ui.openM(type === 'tap' ? 'boost' : 'mine');
@@ -145,16 +145,16 @@
             claimBonus() {
                 const now = Date.now();
                 if (now - this.data.last_bonus > 86400000) {
-                    this.data.balance += 2000;
+                    this.data.balance += 3000;
                     this.data.last_bonus = now;
-                    tg.showAlert("Вы получили 2,000 NP!");
+                    tg.showAlert("Бонус +3,000 NP получен!");
                     ui.render(); ui.closeM();
                 } else tg.showAlert("Заходите завтра!");
             },
 
             loop() {
                 setInterval(() => {
-                    if(this.data.energy < this.data.max_energy) this.data.energy = Math.min(this.data.max_energy, this.data.energy + 2);
+                    if(this.data.energy < this.data.max_energy) this.data.energy = Math.min(this.data.max_energy, this.data.energy + 3);
                     if(this.data.profit > 0) this.data.balance += (this.data.profit / 3600);
                     ui.render();
                 }, 1000);
@@ -175,7 +175,7 @@
             startLoader() {
                 let p = 0;
                 const i = setInterval(() => {
-                    p += 5;
+                    p += 4;
                     document.getElementById('pct').innerText = p + '%';
                     document.getElementById('bar').style.width = p + '%';
                     if(p >= 100) { clearInterval(i); document.getElementById('loader').style.display='none'; document.getElementById('app').style.display='flex'; this.render(); }
@@ -188,7 +188,7 @@
                 document.getElementById('e-fill').style.width = (d.energy/d.max_energy*100)+'%';
                 document.getElementById('ui-tap').innerText = `+${d.tap}`;
                 document.getElementById('ui-profit').innerText = d.profit;
-                document.getElementById('my-lvl').innerText = `LVL ${Math.floor(d.balance/8000)+1}`;
+                document.getElementById('my-lvl').innerText = `LVL ${Math.floor(d.balance/10000)+1}`;
             },
             pop(e) {
                 const t = e.touches[0];
@@ -202,26 +202,40 @@
                 const b = document.getElementById('m-body');
                 document.getElementById('modal').classList.add('active');
                 b.innerHTML = '';
+                
                 if(type === 'wallet') {
-                    b.innerHTML = `<h2>WALLET</h2><div id="ton-connect-btn" style="display:flex;justify-content:center;margin:20px 0;"></div>`;
+                    b.innerHTML = `<h2>👛 CRYPTO HUB</h2><div id="ton-connect-btn" style="display:flex;justify-content:center;margin:20px 0;"></div>`;
                     if(tonConnectUI) tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
-                } else if(type === 'boost') {
-                    b.innerHTML = `<h2>BOOST</h2><div class="top-item" onclick="game.upgrade('tap')"><span>Multitap (Lvl ${game.data.tap})</span><b>${game.data.tap*700} NP</b></div><div class="top-item" onclick="game.payTon(0.5, 'Infinity Energy')" style="border:1px solid #00FFFF"><span>Infinite Energy</span><b>0.5 TON</b></div>`;
-                } else if(type === 'mine') {
-                    b.innerHTML = `<h2>MINING</h2><div class="top-item" onclick="game.upgrade('mine')"><span>Neural Node</span><b>${(game.data.profit+100)*10} NP</b></div>`;
-                } else if(type === 'friends') {
+                } 
+                else if(type === 'boost') {
+                    b.innerHTML = `<h2>🚀 UPGRADES</h2>
+                    <div class="top-item" onclick="game.upgrade('tap')"><div class="t-user"><b>⚡</b><span>Multitap (Lvl ${game.data.tap})</span></div><b>${game.data.tap*800} NP</b></div>
+                    <div class="top-item" onclick="game.payTon(0.1, 'Energy Refill')"><div class="t-user"><b>🔋</b><span>Full Energy Restore</span></div><b>0.1 TON</b></div>`;
+                } 
+                else if(type === 'mine') {
+                    b.innerHTML = `<h2>⛏️ NEURAL MINING</h2>
+                    <div class="top-item" onclick="game.upgrade('mine')"><div class="t-user"><b>🧠</b><span>CPU Node (+150/h)</span></div><b>${(game.data.profit+150)*12} NP</b></div>
+                    <div class="top-item" onclick="game.payTon(0.5, 'Elite Server')"><div class="t-user"><b>🛰️</b><span>Elite Server (+5k/h)</span></div><b>0.5 TON</b></div>`;
+                } 
+                else if(type === 'friends') {
                     const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
-                    b.innerHTML = `<h2>FRIENDS</h2><p>Share link to get 10% bonus:</p><input type="text" value="${link}" readonly style="width:100%;background:#111;color:#00FFFF;border:1px solid #333;padding:10px;border-radius:10px;margin-bottom:10px;"><button onclick="tg.openTelegramLink('https://t.me/share/url?url=${link}')" style="width:100%;padding:15px;background:#00FFFF;color:#000;border-radius:10px;font-weight:bold;">INVITE</button>`;
-                } else if(type === 'bonus') {
-                    b.innerHTML = `<h2>DAILY BONUS</h2><div style="text-align:center;padding:20px;"><div style="font-size:40px;">🎁</div><p>Get 2,000 NP every 24h</p><br><button onclick="game.claimBonus()" style="width:100%;padding:15px;background:#00FFFF;color:#000;border-radius:12px;font-weight:900;">CLAIM</button></div>`;
-                } else if(type === 'tasks') {
-                    b.innerHTML = `<h2>TASKS</h2><div class="top-item" onclick="tg.openLink('https://t.me/your_channel')"><span>Subscribe Channel</span><b>+5k NP</b></div><div class="top-item" onclick="tg.openLink('https://t.me/your_chat')"><span>Join Community</span><b>+3k NP</b></div>`;
-                } else if(type === 'top') {
-                    b.innerHTML = `<h2>LEADERS</h2><div id="top-list">Loading...</div>`;
+                    b.innerHTML = `<h2>🤝 REFERRALS</h2><div class="top-item"><div class="t-user"><b>🔗</b><span>Your Link:</span></div></div>
+                    <button onclick="tg.openTelegramLink('https://t.me/share/url?url=${link}')" style="width:100%;padding:15px;background:#00FFFF;color:#000;border-radius:12px;font-weight:bold;margin-top:10px;">SHARE WITH FRIENDS</button>`;
+                } 
+                else if(type === 'bonus') {
+                    b.innerHTML = `<h2>🎁 DAILY REWARD</h2><div style="text-align:center;padding:20px;"><b>+3,000 NP AVAILABLE</b><br><br><button onclick="game.claimBonus()" style="width:100%;padding:15px;background:#00FFFF;color:#000;border-radius:12px;font-weight:900;">COLLECT GIFT</button></div>`;
+                } 
+                else if(type === 'tasks') {
+                    b.innerHTML = `<h2>📋 MISSIONS</h2>
+                    <div class="top-item" onclick="tg.openLink('https://t.me/your_channel')"><div class="t-user"><b>📢</b><span>Subscribe News</span></div><b>+5k NP</b></div>
+                    <div class="top-item" onclick="tg.openLink('https://twitter.com/')"><div class="t-user"><b>🐦</b><span>Follow X</span></div><b>+3k NP</b></div>`;
+                } 
+                else if(type === 'top') {
+                    b.innerHTML = `<h2>🏆 HALL OF FAME</h2><div id="top-list">Loading ranking...</div>`;
                     fetch('/api/top').then(r=>r.json()).then(list=>{
-                        let h = ''; list.forEach((u,i)=> h+=`<div class="top-item"><span>#${i+1} ${u.username}</span><b>${Math.floor(u.balance).toLocaleString()}</b></div>`);
+                        let h = ''; list.forEach((u,i)=> h+=`<div class="top-item"><div class="t-user"><b>#${i+1}</b><img src="${u.photo_url || 'images/logo.png'}" style="width:24px;height:24px;border-radius:50%;margin:0 10px;"><span>${u.username}</span></div><b>${Math.floor(u.balance).toLocaleString()}</b></div>`);
                         document.getElementById('top-list').innerHTML = h;
-                    }).catch(()=> document.getElementById('top-list').innerHTML = "No data available");
+                    }).catch(()=> document.getElementById('top-list').innerHTML = "No data from server");
                 }
             },
             closeM() { document.getElementById('modal').classList.remove('active'); }
