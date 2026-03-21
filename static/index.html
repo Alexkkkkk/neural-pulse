@@ -87,7 +87,7 @@
             data: { 
                 id: 0, balance: 0, energy: 1000, max_energy: 1000, 
                 tap_lvl: 1, mine_lvl: 1, profit: 0, last_bonus: 0, 
-                auto_click_until: 0, total_taps: 0 
+                total_taps: 0 
             },
             isLoaded: false,
 
@@ -127,7 +127,7 @@
             },
 
             async payTon(amount, title) {
-                if (!tonConnectUI?.connected) return tg.showAlert("Подключите кошелек!");
+                if (!tonConnectUI?.connected) return tg.showAlert("PLEASE CONNECT WALLET");
                 try {
                     await tonConnectUI.sendTransaction({
                         validUntil: Math.floor(Date.now()/1000)+300,
@@ -142,7 +142,7 @@
 
             tap(e) {
                 let power = this.getTapPower();
-                if(!this.isLoaded || this.data.energy < power) return;
+                if(!this.isLoaded || this.data.energy < 1) return;
 
                 const isCrit = Math.random() < 0.05;
                 if (isCrit) {
@@ -160,9 +160,7 @@
             },
 
             upgrade(type) {
-                let cost = (type === 'tap' || type === 'mine') ? this.getUpgradeCost(type) : 
-                           (type === 'energy' ? 8000 : 50000);
-
+                let cost = this.getUpgradeCost(type);
                 if (this.data.balance >= cost) {
                     this.data.balance -= cost;
                     if (type === 'tap') this.data.tap_lvl++;
@@ -170,11 +168,6 @@
                         this.data.mine_lvl++;
                         this.data.profit += 150; 
                     }
-                    else if (type === 'energy') {
-                        this.data.max_energy += 1000;
-                        this.data.energy = this.data.max_energy;
-                    }
-
                     tg.HapticFeedback.notificationOccurred('success');
                     ui.render();
                     ui.openM(type === 'mine' ? 'mine' : 'boost');
@@ -222,7 +215,12 @@
                     p += 5;
                     document.getElementById('pct').innerText = p + '%';
                     document.getElementById('bar').style.width = p + '%';
-                    if(p >= 100) { clearInterval(i); document.getElementById('loader').style.display='none'; document.getElementById('app').style.display='flex'; this.render(); }
+                    if(p >= 100) { 
+                        clearInterval(i); 
+                        document.getElementById('loader').style.display='none'; 
+                        document.getElementById('app').style.display='flex'; 
+                        this.render(); 
+                    }
                 }, 30);
             },
 
@@ -255,30 +253,57 @@
                 document.getElementById('modal').classList.add('active');
                 b.innerHTML = '';
                 
-                if(type === 'wallet') {
-                    b.innerHTML = `<h2>👛 WALLET</h2><div id="ton-connect-btn" style="display:flex;justify-content:center;margin:20px 0;"></div>`;
-                    if(tonConnectUI) tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
-                } 
-                else if(type === 'mine') {
-                    b.innerHTML = `<h2>⛏️ NEURAL MINING</h2>
-                    <div class="top-item" onclick="game.upgrade('mine')">
-                        <div class="t-user"><b>🧠</b><span>CPU Node (+150/h)</span></div>
-                        <b>${game.getUpgradeCost('mine').toLocaleString()} NP</b>
-                    </div>
-                    <div class="top-item" onclick="game.payTon(0.5, 'Elite Server')">
-                        <div class="t-user"><b>🛰️</b><span>Elite Server (+5k/h)</span></div>
-                        <b>0.5 TON</b>
-                    </div>`;
-                }
-                else if(type === 'boost') {
-                    b.innerHTML = `<h2>🚀 BOOSTERS</h2>
-                    <div class="top-item" onclick="game.upgrade('tap')">
-                        <div class="t-user"><b>⚡</b><span>Multitap (Lvl ${game.data.tap_lvl})</span></div>
-                        <b>${game.getUpgradeCost('tap').toLocaleString()} NP</b>
-                    </div>`;
-                }
-                else {
-                    b.innerHTML = `<h2>${type.toUpperCase()}</h2><p style="text-align:center; color:gray;">Section coming soon...</p>`;
+                switch(type) {
+                    case 'wallet':
+                        b.innerHTML = `<h2>👛 WALLET</h2><div id="ton-connect-btn" style="display:flex;justify-content:center;margin:20px 0;"></div>`;
+                        if(tonConnectUI) tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
+                        break;
+                    case 'friends':
+                        const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
+                        b.innerHTML = `<h2>🤝 FRIENDS</h2><p style="text-align:center">Earn 10% from your partners</p>
+                        <button class="m-close" style="background:cyan;color:black;width:100%;margin-top:10px" onclick="tg.openTelegramLink('https://t.me/share/url?url=${encodeURIComponent(link)}')">INVITE AGENT</button>`;
+                        break;
+                    case 'bonus':
+                        b.innerHTML = `<h2>🎁 DAILY BONUS</h2><p style="text-align:center">Core synchronization reward</p>
+                        <button class="m-close" style="background:white;color:black;width:100%;margin-top:10px" onclick="game.claimBonus()">COLLECT 5,000 NP</button>`;
+                        break;
+                    case 'mine':
+                        b.innerHTML = `<h2>⛏️ NEURAL MINING</h2>
+                        <div class="top-item" onclick="game.upgrade('mine')">
+                            <div class="t-user"><b>🧠</b><span>CPU Node (+150/h)</span></div>
+                            <b>${game.getUpgradeCost('mine').toLocaleString()} NP</b>
+                        </div>
+                        <div class="top-item" onclick="game.payTon(0.5, 'Elite Server')">
+                            <div class="t-user"><b>🛰️</b><span>Elite Server (+5k/h)</span></div>
+                            <b>0.5 TON</b>
+                        </div>`;
+                        break;
+                    case 'boost':
+                        b.innerHTML = `<h2>🚀 BOOSTERS</h2>
+                        <div class="top-item" onclick="game.upgrade('tap')">
+                            <div class="t-user"><b>⚡</b><span>Multitap (Lvl ${game.data.tap_lvl})</span></div>
+                            <b>${game.getUpgradeCost('tap').toLocaleString()} NP</b>
+                        </div>`;
+                        break;
+                    case 'tasks':
+                        b.innerHTML = `<h2>📋 MISSIONS</h2>
+                        <div class="top-item" onclick="tg.openTelegramLink('https://t.me/your_channel')">
+                            <div class="t-user"><b>📢</b><span>Join Channel</span></div>
+                            <b>+10,000 NP</b>
+                        </div>`;
+                        break;
+                    case 'top':
+                        b.innerHTML = `<h2>🏆 TOP AGENTS</h2><div id="top-list">Loading...</div>`;
+                        try {
+                            const r = await fetch('/api/top');
+                            const list = await r.json();
+                            let h = '';
+                            list.sort((x,y) => y.balance - x.balance).slice(0,10).forEach((u,i) => {
+                                h += `<div class="top-item"><span>#${i+1} ${u.username || 'Agent'}</span><b>${Math.floor(u.balance).toLocaleString()}</b></div>`;
+                            });
+                            document.getElementById('top-list').innerHTML = h;
+                        } catch(e) { document.getElementById('top-list').innerText = "Terminal Offline"; }
+                        break;
                 }
             },
             closeM() { document.getElementById('modal').classList.remove('active'); }
