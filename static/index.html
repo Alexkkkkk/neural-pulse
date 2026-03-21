@@ -95,6 +95,15 @@
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
                         manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
                     });
+                    
+                    // Слушатель изменения статуса кошелька для обновления UI в реальном времени
+                    tonConnectUI.onStatusChange(wallet => {
+                        if (document.getElementById('modal').classList.contains('active')) {
+                            const currentType = document.querySelector('#m-body h2')?.innerText;
+                            if (currentType && currentType.includes('CRYPTO HUB')) ui.openM('wallet');
+                        }
+                    });
+
                 } catch(err) { console.error(err); }
 
                 try {
@@ -172,6 +181,8 @@
         };
 
         const ui = {
+            shortAddr(addr) { return addr ? addr.slice(0, 4) + '...' + addr.slice(-4) : ''; },
+            
             startLoader() {
                 let p = 0;
                 const i = setInterval(() => {
@@ -181,6 +192,7 @@
                     if(p >= 100) { clearInterval(i); document.getElementById('loader').style.display='none'; document.getElementById('app').style.display='flex'; this.render(); }
                 }, 30);
             },
+
             render() {
                 const d = game.data;
                 document.getElementById('ui-balance').innerText = Math.floor(d.balance).toLocaleString();
@@ -190,6 +202,7 @@
                 document.getElementById('ui-profit').innerText = d.profit;
                 document.getElementById('my-lvl').innerText = `LVL ${Math.floor(d.balance/10000)+1}`;
             },
+
             pop(e) {
                 const t = e.touches[0];
                 const p = document.createElement('div');
@@ -198,13 +211,27 @@
                 document.body.appendChild(p);
                 setTimeout(() => p.remove(), 600);
             },
+
             async openM(type) {
                 const b = document.getElementById('m-body');
                 document.getElementById('modal').classList.add('active');
                 b.innerHTML = '';
                 
                 if(type === 'wallet') {
-                    b.innerHTML = `<h2>👛 CRYPTO HUB</h2><div id="ton-connect-btn" style="display:flex;justify-content:center;margin:20px 0;"></div>`;
+                    const isConn = tonConnectUI && tonConnectUI.connected;
+                    b.innerHTML = `
+                        <h2>👛 CRYPTO HUB</h2>
+                        <div id="ton-connect-btn" style="display:flex;justify-content:center;margin:20px 0;"></div>
+                        ${isConn ? `
+                            <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px; text-align:center; margin-bottom:15px;">
+                                <small style="color:#888;">STATUS: CONNECTED</small><br>
+                                <b style="color:#00FFFF; font-family:monospace;">${this.shortAddr(tonConnectUI.account.address)}</b>
+                            </div>
+                            <button onclick="tonConnectUI.disconnect()" style="width:100%; padding:15px; background:#ff4444; color:#fff; border-radius:12px; font-weight:bold; border:none;">DISCONNECT</button>
+                        ` : `
+                            <p style="text-align:center; color:#888; font-size:0.9em; padding:10px;">Connect your TON wallet for secure payments and mining bonuses.</p>
+                        `}
+                    `;
                     if(tonConnectUI) tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
                 } 
                 else if(type === 'boost') {
@@ -235,14 +262,8 @@
                     fetch('/api/top').then(r=>r.json()).then(list=>{
                         let h = ''; 
                         list.slice(0, 100).forEach((u, i) => {
-                            let trophy = '';
-                            if(i === 0) trophy = '🥇';
-                            else if(i === 1) trophy = '🥈';
-                            else if(i === 2) trophy = '🥉';
-                            else trophy = '💎';
-
+                            let trophy = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '💎';
                             const isMe = u.id == game.data.id ? 'style="border: 1px solid #00FFFF; background: rgba(0,255,255,0.1);"' : '';
-                            
                             h += `
                             <div class="top-item" ${isMe}>
                                 <div class="t-user">
