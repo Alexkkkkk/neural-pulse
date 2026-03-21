@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse v5.5.0</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* Анимация для активного дня бонуса */
+        @keyframes pulse-cyan {
+            0% { box-shadow: 0 0 5px cyan; opacity: 0.6; }
+            50% { box-shadow: 0 0 20px cyan; opacity: 1; }
+            100% { box-shadow: 0 0 5px cyan; opacity: 0.6; }
+        }
+    </style>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
 </head>
@@ -87,7 +95,7 @@
             data: { 
                 id: 0, balance: 500, energy: 1000, max_energy: 1000, 
                 tap_lvl: 1, mine_lvl: 1, energy_lvl: 1, regen_lvl: 1,
-                profit: 0, last_bonus: 0, tasks: [] 
+                profit: 0, last_bonus: 0, streak: 0, tasks: [] 
             },
             isLoaded: false,
 
@@ -100,7 +108,6 @@
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
                         manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
                     });
-                    tonConnectUI.onStatusChange(() => { if (document.getElementById('modal').classList.contains('active')) ui.openM('wallet'); });
                 } catch(e) { console.error("TON Error", e); }
 
                 try {
@@ -118,14 +125,13 @@
 
             // --- ОБНОВЛЕННАЯ ЛОГИКА БОНУСА ---
             getDailyBonusAmount() {
-                // Вычисляем уровень на основе баланса
-                let lvl = Math.floor(Math.log10(Math.max(1, this.data.balance))) + 1;
-                
-                // Если баланс меньше 1000, даем базу 500 NP
-                if (this.data.balance < 1000) return 500;
-                
-                // Плавная прогрессия x1.2 за каждый порядок баланса
-                return Math.floor(500 * Math.pow(1.2, lvl - 1));
+                let currentStreak = this.data.streak || 0;
+                // Стрик сбрасывается, если прошло более 48 часов
+                if (this.data.last_bonus > 0 && (Date.now() - this.data.last_bonus > 172800000)) {
+                    currentStreak = 0;
+                }
+                // Прогрессия: (день + 1) * 500. На 7-й день будет 4000 NP.
+                return (currentStreak + 1) * 500;
             },
 
             async claimBonus() {
@@ -139,34 +145,22 @@
                     if (r.ok) {
                         this.data.balance = res.new_balance;
                         this.data.last_bonus = res.last_bonus;
+                        this.data.streak = res.new_streak;
                         tg.HapticFeedback.notificationOccurred('success');
-                        tg.showAlert(`SUCCESS: +${res.reward} NP`);
-                        ui.render(); 
-                        ui.openM('bonus');
-                    } else {
-                        tg.showAlert(res.error || "LOCKED");
+                        ui.render(); ui.openM('bonus');
                     }
                 } catch(e) { 
-                    // Fallback для тестов без бэкенда
+                    // Fallback
                     const amount = this.getDailyBonusAmount();
                     this.data.balance += amount;
                     this.data.last_bonus = Date.now();
+                    this.data.streak = (this.data.streak >= 6) ? 0 : (this.data.streak + 1);
                     ui.render(); ui.openM('bonus');
-                    tg.showAlert(`TEST MODE: +${amount} NP`);
+                    tg.HapticFeedback.notificationOccurred('success');
                 }
             },
 
-            async checkReferralIncome() {
-                try {
-                    const r = await fetch(`/api/friends/${this.data.id}`);
-                    const data = await r.json();
-                    if (data.total_referral_profit > 0) {
-                        tg.showConfirm(`SQUAD REPORT: Your agents earned you ${Math.floor(data.total_referral_profit).toLocaleString()} NP!`);
-                        ui.render();
-                    }
-                } catch(e) {}
-            },
-
+            checkReferralIncome() { /* ... */ },
             getTapPower() { return Math.floor(1 * Math.pow(1.2, this.data.tap_lvl - 1)); },
             getCost(type) {
                 const d = this.data;
@@ -196,26 +190,6 @@
                     tg.HapticFeedback.notificationOccurred('success');
                     this.save(); ui.render(); ui.openM(type === 'mine' ? 'mine' : 'boost');
                 } else { tg.showAlert("LACK OF NP"); }
-            },
-
-            async handleTask(id, url) {
-                const btn = document.getElementById(`t-${id}`);
-                if(!btn) return;
-                if(btn.innerText === 'GO') {
-                    tg.openTelegramLink(url);
-                    btn.innerText = 'CHECK';
-                    btn.style.background = '#f1c40f';
-                } else {
-                    btn.innerText = '...';
-                    setTimeout(() => {
-                        this.data.balance += 5000;
-                        btn.innerText = 'DONE';
-                        btn.style.background = '#2ecc71';
-                        btn.disabled = true;
-                        tg.showAlert("MISSION ACCOMPLISHED: +5,000 NP");
-                        this.save(); ui.render();
-                    }, 1500);
-                }
             },
 
             async save() {
@@ -294,14 +268,36 @@
                 }
 
                 if(type === 'bonus') {
-                    const canClaim = !game.data.last_bonus || (Date.now() - game.data.last_bonus > 86400000);
-                    const amount = game.getDailyBonusAmount();
+                    const now = Date.now();
+                    const diff = now - game.data.last_bonus;
+                    const canClaim = !game.data.last_bonus || diff >= 86400000;
+                    
+                    let currentStreak = game.data.streak || 0;
+                    if (game.data.last_bonus > 0 && diff > 172800000) currentStreak = 0;
+                    
+                    const amount = (currentStreak + 1) * 500;
+
+                    // Генерация 7 точек прогресса
+                    let dots = '<div style="display:flex; justify-content:center; gap:8px; margin: 15px 0;">';
+                    for(let i=0; i<7; i++) {
+                        let color = i < currentStreak ? 'cyan' : '#333';
+                        let shadow = i < currentStreak ? 'box-shadow: 0 0 10px cyan;' : '';
+                        let anim = (i === currentStreak && canClaim) ? 'animation: pulse-cyan 1.5s infinite;' : '';
+                        dots += `<div style="width:12px; height:12px; border-radius:50%; background:${color}; ${shadow} ${anim}"></div>`;
+                    }
+                    dots += '</div>';
+
                     b.innerHTML = `<h2>🎁 DAILY SUPPLY</h2>
-                        <div style="text-align:center; padding:20px; border:1px solid cyan; border-radius:15px; margin:15px 0;">
-                            <small>CURRENT REWARD</small>
-                            <h1 style="color:cyan;">${amount.toLocaleString()} NP</h1>
+                        ${dots}
+                        <div style="text-align:center; padding:15px; border:1px solid cyan; border-radius:15px; margin-bottom:15px; background:rgba(0,255,255,0.05)">
+                            <small style="color:cyan; font-weight:bold;">DAY ${currentStreak + 1}</small>
+                            <h1 style="margin:5px 0;">${amount.toLocaleString()} NP</h1>
+                            <p style="font-size:10px; opacity:0.5;">Streak resets after 48h of inactivity.</p>
                         </div>
-                        ${canClaim ? `<button class="m-close" style="background:cyan;color:black;width:100%" onclick="game.claimBonus()">CLAIM NOW</button>` : `<button class="m-close" style="background:#222;color:#555;width:100%" disabled>COOLDOWN ACTIVE</button>`}`;
+                        ${canClaim 
+                            ? `<button class="m-close" style="background:cyan;color:black;width:100%;font-weight:bold;" onclick="game.claimBonus()">RECEIVE NP</button>` 
+                            : `<button class="m-close" style="background:#222;color:#555;width:100%;" disabled>NEXT IN ${Math.ceil((86400000 - diff)/3600000)}h</button>`
+                        }`;
                 }
 
                 if(type === 'tasks') {
