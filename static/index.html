@@ -83,7 +83,6 @@
         let tonConnectUI = null;
 
         const game = {
-            // Добавлено поле auto_click_until для хранения времени истечения буста
             data: { id: 0, balance: 0, energy: 1000, max_energy: 1000, tap: 1, profit: 0, last_bonus: 0, auto_click_until: 0 },
             isLoaded: false,
 
@@ -103,7 +102,6 @@
                             if (currentType && currentType.includes('CRYPTO HUB')) ui.openM('wallet');
                         }
                     });
-
                 } catch(err) { console.error(err); }
 
                 try {
@@ -120,14 +118,27 @@
                 }
             },
 
-            async payTon(amount, title) {
-                if (!tonConnectUI?.connected) return tg.showAlert("Подключите кошелек!");
+            async payTon(amount, type, title) {
+                if (!tonConnectUI?.connected) return tg.showAlert("Сначала подключите кошелек в разделе WALLET!");
                 try {
                     await tonConnectUI.sendTransaction({
                         validUntil: Math.floor(Date.now()/1000)+300,
                         messages: [{ address: ADMIN_WALLET, amount: (amount * 1e9).toString() }]
                     });
-                    tg.showAlert(`Транзакция "${title}" отправлена.`);
+
+                    // Обработка покупки в зависимости от типа
+                    if (type === 'elite') {
+                        this.data.profit += 5000;
+                        tg.showAlert("Elite Server активирован! +5,000 NP/h");
+                    } else if (type === 'autoclick') {
+                        const day = 24 * 60 * 60 * 1000;
+                        this.data.auto_click_until = Date.now() + day;
+                        tg.showAlert("Автокликер активирован на 24 часа!");
+                    }
+
+                    ui.render();
+                    ui.closeM();
+                    this.save();
                 } catch(e) { tg.showAlert("Оплата отменена"); }
             },
 
@@ -140,12 +151,10 @@
                 tg.HapticFeedback.impactOccurred('medium');
             },
 
-            // Переработанная функция апгрейдов: всё за NP
             upgrade(type) {
                 let cost = 0;
                 if (type === 'tap') cost = this.data.tap * 800;
                 else if (type === 'energy') cost = 5000;
-                else if (type === 'autoclick') cost = 50000;
                 else if (type === 'mine') cost = (this.data.profit + 150) * 12;
 
                 if (this.data.balance >= cost) {
@@ -156,10 +165,6 @@
                     } else if (type === 'energy') {
                         this.data.energy = this.data.max_energy;
                         tg.showAlert("Энергия восстановлена!");
-                    } else if (type === 'autoclick') {
-                        const day = 24 * 60 * 60 * 1000;
-                        this.data.auto_click_until = Date.now() + day;
-                        tg.showAlert("Автокликер активирован на 24 часа!");
                     } else if (type === 'mine') {
                         this.data.profit += 150;
                     }
@@ -187,10 +192,10 @@
                     // Регенерация энергии
                     if(this.data.energy < this.data.max_energy) this.data.energy = Math.min(this.data.max_energy, this.data.energy + 3);
                     
-                    // Логика пассивного дохода (Mining)
+                    // Пассивный доход
                     if(this.data.profit > 0) this.data.balance += (this.data.profit / 3600);
                     
-                    // ЛОГИКА АВТОКЛИКЕРА: срабатывает каждую секунду, если активен буст
+                    // Логика автокликера
                     if (this.data.auto_click_until > Date.now()) {
                         if (this.data.energy >= this.data.tap) {
                             this.data.balance += this.data.tap;
@@ -222,7 +227,12 @@
                     p += 4;
                     document.getElementById('pct').innerText = p + '%';
                     document.getElementById('bar').style.width = p + '%';
-                    if(p >= 100) { clearInterval(i); document.getElementById('loader').style.display='none'; document.getElementById('app').style.display='flex'; this.render(); }
+                    if(p >= 100) { 
+                        clearInterval(i); 
+                        document.getElementById('loader').style.display='none'; 
+                        document.getElementById('app').style.display='flex'; 
+                        this.render(); 
+                    }
                 }, 30);
             },
 
@@ -232,7 +242,7 @@
                 document.getElementById('ui-energy').innerText = `${Math.floor(d.energy)}/${d.max_energy}`;
                 document.getElementById('e-fill').style.width = (d.energy/d.max_energy*100)+'%';
                 document.getElementById('ui-tap').innerText = `+${d.tap}`;
-                document.getElementById('ui-profit').innerText = d.profit;
+                document.getElementById('ui-profit').innerText = Math.floor(d.profit);
                 document.getElementById('my-lvl').innerText = `LVL ${Math.floor(d.balance/10000)+1}`;
             },
 
@@ -262,29 +272,37 @@
                             </div>
                             <button onclick="tonConnectUI.disconnect()" style="width:100%; padding:15px; background:#ff4444; color:#fff; border-radius:12px; font-weight:bold; border:none;">DISCONNECT</button>
                         ` : `
-                            <p style="text-align:center; color:#888; font-size:0.9em; padding:10px;">Connect your TON wallet for secure payments and mining bonuses.</p>
+                            <p style="text-align:center; color:#888; font-size:0.9em; padding:10px;">Connect your TON wallet for secure payments and elite upgrades.</p>
                         `}
                     `;
                     if(tonConnectUI) tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
                 } 
                 else if(type === 'boost') {
+                    b.innerHTML = `<h2>🚀 UPGRADES</h2>
+                    <div class="top-item" onclick="game.upgrade('tap')"><div class="t-user"><b>⚡</b><span>Multitap (Lvl ${game.data.tap})</span></div><b>${game.data.tap*800} NP</b></div>
+                    <div class="top-item" onclick="game.upgrade('energy')"><div class="t-user"><b>🔋</b><span>Full Energy Restore</span></div><b>5,000 NP</b></div>`;
+                } 
+                else if(type === 'mine') {
                     const autoActive = game.data.auto_click_until > Date.now();
                     const timeLeft = autoActive ? Math.round((game.data.auto_click_until - Date.now()) / 3600000) : 0;
                     
-                    b.innerHTML = `<h2>🚀 UPGRADES</h2>
-                    <div class="top-item" onclick="game.upgrade('tap')"><div class="t-user"><b>⚡</b><span>Multitap (Lvl ${game.data.tap})</span></div><b>${game.data.tap*800} NP</b></div>
-                    <div class="top-item" onclick="game.upgrade('energy')"><div class="t-user"><b>🔋</b><span>Full Energy Restore</span></div><b>5,000 NP</b></div>
-                    <div class="top-item" onclick="game.upgrade('autoclick')">
-                        <div class="t-user"><b>🤖</b><span>Auto-Clicker (24h) ${autoActive ? `<br><small style="color:#00ff00;">Active: ${timeLeft}h left</small>` : ''}</span></div>
-                        <b>50,000 NP</b>
+                    b.innerHTML = `<h2>⛏️ NEURAL MINING</h2>
+                    <div class="top-item" onclick="game.upgrade('mine')">
+                        <div class="t-user"><b>🧠</b><span>CPU Node (+150/h)</span></div>
+                        <b>${(game.data.profit+150)*12} NP</b>
+                    </div>
+                    <div class="top-item" onclick="game.payTon(0.5, 'elite', 'Elite Server')">
+                        <div class="t-user"><b>🛰️</b><span>Elite Server (+5k/h)</span></div>
+                        <b>0.5 TON</b>
+                    </div>
+                    <div class="top-item" onclick="game.payTon(0.3, 'autoclick', 'Auto-Clicker')">
+                        <div class="t-user">
+                            <b>🤖</b>
+                            <span>Auto-Clicker (24h) ${autoActive ? `<br><small style="color:#00ff00;">Active: ~${timeLeft}h left</small>` : ''}</span>
+                        </div>
+                        <b>0.3 TON</b>
                     </div>`;
                 } 
-                else if(type === 'mine') {
-                    b.innerHTML = `<h2>⛏️ NEURAL MINING</h2>
-                    <div class="top-item" onclick="game.upgrade('mine')"><div class="t-user"><b>🧠</b><span>CPU Node (+150/h)</span></div><b>${(game.data.profit+150)*12} NP</b></div>
-                    <div class="top-item" onclick="game.payTon(0.5, 'Elite Server')"><div class="t-user"><b>🛰️</b><span>Elite Server (+5k/h)</span></div><b>0.5 TON</b></div>`;
-                } 
-                // ... (остальные разделы: friends, bonus, tasks, top — без изменений)
                 else if(type === 'friends') {
                     const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
                     b.innerHTML = `<h2>🤝 REFERRALS</h2><div class="top-item"><div class="t-user"><b>🔗</b><span>Your Link:</span></div></div>
