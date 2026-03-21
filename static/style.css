@@ -26,6 +26,7 @@ body {
     overflow: hidden;
 }
 
+/* Лоадер */
 #loader {
     position: fixed;
     inset: 0;
@@ -58,6 +59,7 @@ body {
 .l-bar { width: 100%; height: 6px; background: #111; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
 #bar { height: 100%; width: 0%; background: var(--accent); transition: width 0.3s; }
 
+/* Приложение */
 #app {
     display: flex;
     flex-direction: column;
@@ -91,37 +93,40 @@ header {
     display: flex; align-items: center; justify-content: center;
 }
 
-.brain-target { width: 250px; z-index: 5; transition: transform 0.05s; }
-.brain-target:active { transform: scale(0.95); }
+.brain-target { width: 250px; z-index: 5; transition: transform 0.05s; cursor: pointer; }
+.brain-target:active { transform: scale(0.92); }
 .brain-target img { width: 100%; }
 
-/* --- БОКОВОЕ МЕНЮ (РАЗМЕРЫ ИЗ СКРИНШОТА) --- */
+/* БОКОВОЕ МЕНЮ */
 .side-menu {
     position: absolute;
     right: 0;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    z-index: 10;
 }
 
 .side-menu button {
     background: rgba(20, 20, 20, 0.8);
     border: 1px solid var(--border);
     color: var(--text);
-    width: 95px; /* Фиксированная ширина */
+    width: 95px;
     padding: 12px 0;
     border-radius: 12px;
     font-size: 10px;
     font-weight: 700;
     backdrop-filter: blur(10px);
+    cursor: pointer;
 }
 
+/* Энергия */
 .energy-section { margin-top: auto; margin-bottom: 10px; }
 .e-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--sub-text); margin-bottom: 8px; }
 .e-track { height: 8px; background: #111; border-radius: 10px; border: 1px solid var(--border); overflow: hidden; }
 #e-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
 
-/* --- НИЖНЕЕ МЕНЮ (РАЗМЕРЫ ИЗ СКРИНШОТА) --- */
+/* НИЖНЕЕ МЕНЮ */
 .bottom-tabs {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -137,9 +142,10 @@ header {
     border-radius: 15px;
     font-size: 11px;
     font-weight: 800;
+    cursor: pointer;
 }
 
-/* МОДАЛЬНОЕ ОКНО */
+/* Модалки */
 .modal-bg {
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.85);
@@ -155,7 +161,7 @@ header {
 .m-close { 
     width: 100%; padding: 15px; margin-top: 20px;
     background: #111; border: 1px solid #222; color: white;
-    border-radius: 12px; font-weight: bold;
+    border-radius: 12px; font-weight: bold; cursor: pointer;
 }
 
 .top-item {
@@ -164,6 +170,7 @@ header {
     border-radius: 15px; margin-bottom: 10px;
 }
 
-.pop { position: fixed; font-size: 30px; font-weight: 900; animation: fly 0.7s forwards; pointer-events: none; }
+/* Анимации */
+.pop { position: fixed; font-size: 30px; font-weight: 900; color: var(--accent); animation: fly 0.7s forwards; pointer-events: none; z-index: 100; }
 @keyframes fly { 0% { opacity:1; transform:translateY(0); } 100% { opacity:0; transform:translateY(-100px); } }
 @keyframes rotateRing { to { transform: rotate(360deg); } }
