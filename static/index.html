@@ -100,6 +100,13 @@
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
                         manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
                     });
+                    
+                    // Слушатель изменения состояния кошелька для обновления UI модалки
+                    tonConnectUI.onStatusChange(wallet => {
+                        if (document.getElementById('modal').classList.contains('active')) {
+                            ui.openM('wallet');
+                        }
+                    });
                 } catch(e) { console.error("TON Error", e); }
 
                 try {
@@ -133,6 +140,18 @@
                 ui.render();
             },
 
+            async payTon(amount) {
+                if (!tonConnectUI.connected) return tg.showAlert("CONNECT WALLET FIRST");
+                const transaction = {
+                    validUntil: Math.floor(Date.now() / 1000) + 300,
+                    messages: [{ address: ADMIN_WALLET, amount: (amount * 1000000000).toString() }]
+                };
+                try {
+                    await tonConnectUI.sendTransaction(transaction);
+                    tg.showAlert("SUCCESSFUL! NP REWARD COMING SOON.");
+                } catch(e) { tg.showAlert("TRANSACTION REJECTED"); }
+            },
+
             upgrade(type) {
                 let cost = this.getCost(type);
                 if(this.data.balance >= cost) {
@@ -141,14 +160,9 @@
                     if(type === 'energy') { this.data.energy_lvl++; this.data.max_energy += 500; }
                     if(type === 'regen') this.data.regen_lvl++;
                     if(type === 'mine') { this.data.mine_lvl++; this.data.profit += 150; }
-                    
                     tg.HapticFeedback.notificationOccurred('success');
-                    this.save();
-                    ui.render();
-                    ui.openM(type === 'mine' ? 'mine' : 'boost');
-                } else {
-                    tg.showAlert("LACK OF NP");
-                }
+                    this.save(); ui.render(); ui.openM(type === 'mine' ? 'mine' : 'boost');
+                } else { tg.showAlert("LACK OF NP"); }
             },
 
             async save() {
@@ -162,7 +176,6 @@
 
             loop() {
                 setInterval(() => {
-                    // Регенерация зависит от уровня regen_lvl
                     const regenAmount = 1 + (this.data.regen_lvl - 1);
                     if(this.data.energy < this.data.max_energy) {
                         this.data.energy = Math.min(this.data.max_energy, this.data.energy + regenAmount);
@@ -191,7 +204,6 @@
                 document.getElementById('e-fill').style.width = (d.energy/d.max_energy*100)+'%';
                 document.getElementById('ui-tap').innerText = `+${game.getTapPower()}`;
                 document.getElementById('ui-profit').innerText = Math.floor(d.profit);
-                
                 let lvl = Math.floor(Math.log10(d.balance + 1)) + 1;
                 document.getElementById('my-lvl').innerText = `LVL ${lvl}`;
             },
@@ -211,7 +223,17 @@
                 b.innerHTML = 'LOADING...';
 
                 if(type === 'wallet') {
-                    b.innerHTML = `<h2>👛 WALLET</h2><div id="ton-connect-btn" style="display:flex;justify-content:center;padding:20px;"></div>`;
+                    const isConn = tonConnectUI.connected;
+                    b.innerHTML = `<h2>👛 WALLET</h2>
+                        <div id="ton-connect-btn" style="display:flex;justify-content:center;padding:10px;"></div>
+                        ${isConn ? `
+                            <div style="text-align:center; padding:15px; background: rgba(0,255,255,0.05); border-radius:10px;">
+                                <p style="color:cyan; font-size:12px;">CONNECTED ADDRESS:</p>
+                                <b style="font-size:14px; word-break:break-all;">${tonConnectUI.account.address.slice(0,8)}...${tonConnectUI.account.address.slice(-8)}</b>
+                                <button class="m-close" style="background:#ff4444; color:white; width:100%; margin-top:15px; border:none;" onclick="tonConnectUI.disconnect()">DISCONNECT</button>
+                            </div>
+                        ` : `<p style="text-align:center">Connect TON wallet for Web3 features.</p>`}
+                    `;
                     setTimeout(() => {
                         if(tonConnectUI) tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
                     }, 50);
@@ -235,22 +257,24 @@
 
                 if(type === 'top') {
                     b.innerHTML = `<h2>🏆 TOP AGENTS</h2><div id="t-list"></div>`;
-                    const r = await fetch('/api/top');
-                    const list = await r.json();
-                    let h = '';
-                    list.sort((x,y) => y.balance - x.balance).slice(0, 10).forEach((u, i) => {
-                        let icon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
-                        let ava = u.photo_url || 'https://cdn-icons-png.flaticon.com/512/2103/2103633.png';
-                        h += `<div class="top-item">
-                            <div class="t-user">
-                                <span style="width:25px;font-weight:bold">${icon}</span>
-                                <img src="${ava}" style="width:30px;height:30px;border-radius:50%;margin:0 10px;border:1px solid cyan">
-                                <span>${u.username || 'Unknown'}</span>
-                            </div>
-                            <b>${Math.floor(u.balance).toLocaleString()}</b>
-                        </div>`;
-                    });
-                    document.getElementById('t-list').innerHTML = h;
+                    try {
+                        const r = await fetch('/api/top');
+                        const list = await r.json();
+                        let h = '';
+                        list.sort((x,y) => y.balance - x.balance).slice(0, 10).forEach((u, i) => {
+                            let icon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
+                            let ava = u.photo_url || 'https://cdn-icons-png.flaticon.com/512/2103/2103633.png';
+                            h += `<div class="top-item">
+                                <div class="t-user">
+                                    <span style="width:25px;font-weight:bold">${icon}</span>
+                                    <img src="${ava}" style="width:30px;height:30px;border-radius:50%;margin:0 10px;border:1px solid cyan">
+                                    <span>${u.username || 'Unknown'}</span>
+                                </div>
+                                <b>${Math.floor(u.balance).toLocaleString()}</b>
+                            </div>`;
+                        });
+                        document.getElementById('t-list').innerHTML = h;
+                    } catch(e) { document.getElementById('t-list').innerText = "OFFLINE"; }
                 }
 
                 if(type === 'mine') {
@@ -258,6 +282,10 @@
                     <div class="top-item" onclick="game.upgrade('mine')">
                         <div class="t-user"><b>🧠</b><span>Neural Node (Lvl ${game.data.mine_lvl})</span></div>
                         <b>${game.getCost('mine').toLocaleString()}</b>
+                    </div>
+                    <div class="top-item" onclick="game.payTon(0.5)">
+                        <div class="t-user"><b>🛰️</b><span>Elite Server (+5k NP/h)</span></div>
+                        <b style="color: #49ff49">0.5 TON</b>
                     </div>`;
                 }
 
@@ -266,10 +294,6 @@
                     b.innerHTML = `<h2>🤝 FRIENDS</h2><button class="m-close" style="background:cyan;color:black;width:100%" onclick="tg.openTelegramLink('https://t.me/share/url?url=${encodeURIComponent(link)}')">INVITE AGENT</button>`;
                 }
                 
-                if(type === 'tasks') {
-                    b.innerHTML = `<h2>📋 MISSIONS</h2><p>Complete tasks to earn NP</p>`;
-                }
-
                 if(type === 'bonus') {
                     b.innerHTML = `<h2>🎁 DAILY BONUS</h2><button class="m-close" style="width:100%" onclick="game.claimBonus()">CLAIM 5,000 NP</button>`;
                 }
