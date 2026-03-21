@@ -3,7 +3,7 @@ const { Telegraf, Markup } = require('telegraf');
 const { Pool } = require('pg');
 const path = require('path');
 
-const BOT_TOKEN = "8745333905:AAGTuUyJmU2oHp5FXH98ky6IhP3jmAOttjw";
+const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const PG_URI = "postgresql://bothost_db_4405eff8747f:xqUdDdjCZViF1FqeU9jiWMqyd69boOTjHtHvjlcDmeM@node1.pghost.ru:32820/bothost_db_4405eff8747f";
 const DOMAIN = "https://neural-pulse.bothost.ru"; 
 const PORT = 3000;
