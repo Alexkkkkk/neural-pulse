@@ -85,7 +85,7 @@
 
         const game = {
             data: { 
-                id: 0, balance: 0, energy: 1000, max_energy: 1000, 
+                id: 0, balance: 500, energy: 1000, max_energy: 1000, 
                 tap_lvl: 1, mine_lvl: 1, energy_lvl: 1, regen_lvl: 1,
                 profit: 0, last_bonus: 0, tasks: [] 
             },
@@ -100,13 +100,7 @@
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
                         manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
                     });
-                    
-                    // Слушатель изменения состояния кошелька для обновления UI модалки
-                    tonConnectUI.onStatusChange(wallet => {
-                        if (document.getElementById('modal').classList.contains('active')) {
-                            ui.openM('wallet');
-                        }
-                    });
+                    tonConnectUI.onStatusChange(() => { if (document.getElementById('modal').classList.contains('active')) ui.openM('wallet'); });
                 } catch(e) { console.error("TON Error", e); }
 
                 try {
@@ -117,11 +111,51 @@
                 document.getElementById('my-name').innerText = name;
                 if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
                 this.isLoaded = true;
+                
+                // Проверка дохода от друзей при входе
+                this.checkReferralIncome();
                 this.loop();
             },
 
+            // --- МАТЕМАТИКА БОНУСА (500 стартовый) ---
+            getDailyBonusAmount() {
+                let lvl = Math.floor(Math.log10(this.data.balance + 1)) + 1;
+                if (lvl === 1 && this.data.balance <= 1000) return 500;
+                return Math.floor(500 * Math.pow(1.5, lvl - 1));
+            },
+
+            async claimBonus() {
+                try {
+                    const r = await fetch(`/api/bonus/claim`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ user_id: this.data.id })
+                    });
+                    const res = await r.json();
+                    if (r.ok) {
+                        this.data.balance = res.new_balance;
+                        this.data.last_bonus = res.last_bonus;
+                        tg.HapticFeedback.notificationOccurred('success');
+                        tg.showAlert(`SUCCESS: +${res.reward} NP`);
+                        ui.render(); ui.openM('bonus');
+                    } else {
+                        tg.showAlert(res.error || "LOCKED");
+                    }
+                } catch(e) { tg.showAlert("SERVER OFFLINE"); }
+            },
+
+            async checkReferralIncome() {
+                try {
+                    const r = await fetch(`/api/friends/${this.data.id}`);
+                    const data = await r.json();
+                    if (data.total_referral_profit > 0) {
+                        tg.showConfirm(`SQUAD REPORT: Your agents earned you ${Math.floor(data.total_referral_profit).toLocaleString()} NP while you were away!`);
+                        ui.render();
+                    }
+                } catch(e) {}
+            },
+
             getTapPower() { return Math.floor(1 * Math.pow(1.2, this.data.tap_lvl - 1)); },
-            
             getCost(type) {
                 const d = this.data;
                 if(type === 'tap') return Math.floor(450 * Math.pow(1.7, d.tap_lvl - 1));
@@ -136,20 +170,7 @@
                 let power = this.getTapPower();
                 this.data.balance += power;
                 this.data.energy -= 1;
-                ui.pop(e, power);
-                ui.render();
-            },
-
-            async payTon(amount) {
-                if (!tonConnectUI.connected) return tg.showAlert("CONNECT WALLET FIRST");
-                const transaction = {
-                    validUntil: Math.floor(Date.now() / 1000) + 300,
-                    messages: [{ address: ADMIN_WALLET, amount: (amount * 1000000000).toString() }]
-                };
-                try {
-                    await tonConnectUI.sendTransaction(transaction);
-                    tg.showAlert("SUCCESSFUL! NP REWARD COMING SOON.");
-                } catch(e) { tg.showAlert("TRANSACTION REJECTED"); }
+                ui.pop(e, power); ui.render();
             },
 
             upgrade(type) {
@@ -165,6 +186,25 @@
                 } else { tg.showAlert("LACK OF NP"); }
             },
 
+            async handleTask(id, url) {
+                const btn = document.getElementById(`t-${id}`);
+                if(btn.innerText === 'GO') {
+                    tg.openTelegramLink(url);
+                    btn.innerText = 'CHECK';
+                    btn.style.background = '#f1c40f';
+                } else {
+                    btn.innerText = '...';
+                    setTimeout(() => {
+                        this.data.balance += 5000;
+                        btn.innerText = 'DONE';
+                        btn.style.background = '#2ecc71';
+                        btn.disabled = true;
+                        tg.showAlert("MISSION ACCOMPLISHED: +5,000 NP");
+                        this.save(); ui.render();
+                    }, 1500);
+                }
+            },
+
             async save() {
                 if(!this.isLoaded) return;
                 fetch('/api/save', {
@@ -177,9 +217,7 @@
             loop() {
                 setInterval(() => {
                     const regenAmount = 1 + (this.data.regen_lvl - 1);
-                    if(this.data.energy < this.data.max_energy) {
-                        this.data.energy = Math.min(this.data.max_energy, this.data.energy + regenAmount);
-                    }
+                    if(this.data.energy < this.data.max_energy) this.data.energy = Math.min(this.data.max_energy, this.data.energy + regenAmount);
                     if(this.data.profit > 0) this.data.balance += (this.data.profit / 3600);
                     ui.render();
                 }, 1000);
@@ -222,37 +260,60 @@
                 document.getElementById('modal').classList.add('active');
                 b.innerHTML = 'LOADING...';
 
+                if(type === 'friends') {
+                    const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
+                    b.innerHTML = `<h2>🤝 SQUAD NETWORK</h2>
+                        <div class="stats-row" style="margin-bottom:15px;">
+                            <div class="s-box" style="background:rgba(0,255,255,0.05);"><small>AGENTS</small><b id="f-count">0</b></div>
+                            <div class="s-box" style="background:rgba(0,255,255,0.05);"><small>YIELD (10%)</small><b id="f-yield" style="color:#49ff49;">0</b></div>
+                        </div>
+                        <button class="m-close" style="background:cyan;color:black;width:100%;font-weight:bold;" onclick="tg.openTelegramLink('https://t.me/share/url?url=${encodeURIComponent(link)}&text=Join my Cyber-Army! +500 NP start bonus!')">INVITE AGENT</button>
+                        <div id="f-list" style="margin-top:15px; max-height:150px; overflow-y:auto; border-radius:10px; background:rgba(0,0,0,0.2);"></div>`;
+                    
+                    fetch(`/api/friends/${game.data.id}`).then(r => r.json()).then(data => {
+                        document.getElementById('f-count').innerText = data.friends.length;
+                        document.getElementById('f-yield').innerText = Math.floor(data.total_referral_profit).toLocaleString();
+                        document.getElementById('f-list').innerHTML = data.friends.map(f => `
+                            <div style="display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #222;">
+                                <span>👤 ${f.username}</span><b style="color:#49ff49;">+${Math.floor(f.balance * 0.1)}</b>
+                            </div>`).join('');
+                    }).catch(() => { document.getElementById('f-list').innerHTML = '<p style="padding:10px;opacity:0.5;">No agents yet.</p>'; });
+                }
+
+                if(type === 'bonus') {
+                    const canClaim = !game.data.last_bonus || (Date.now() - game.data.last_bonus > 86400000);
+                    const amount = game.getDailyBonusAmount();
+                    b.innerHTML = `<h2>🎁 DAILY SUPPLY</h2>
+                        <div style="text-align:center; padding:20px; border:1px solid cyan; border-radius:15px; margin:15px 0;">
+                            <small>AVAILABLE REWARD</small>
+                            <h1 style="color:cyan;">${amount.toLocaleString()} NP</h1>
+                        </div>
+                        ${canClaim ? `<button class="m-close" style="background:cyan;color:black;width:100%" onclick="game.claimBonus()">CLAIM NOW</button>` : `<button class="m-close" style="background:#222;color:#555;width:100%" disabled>LOCKED (24h)</button>`}`;
+                }
+
+                if(type === 'tasks') {
+                    b.innerHTML = `<h2>📋 MISSIONS</h2>
+                        <div class="top-item" style="padding:15px; border-radius:12px; margin-bottom:10px;">
+                            <div style="text-align:left;"><b style="font-size:14px;">JOIN OUR CHANNEL</b><div style="color:#49ff49; font-size:12px;">+5,000 NP</div></div>
+                            <button id="t-sub" class="m-close" style="margin:0; width:80px; background:cyan; color:black;" onclick="game.handleTask('sub', 'https://t.me/neural_pulse_news')">GO</button>
+                        </div>`;
+                }
+
                 if(type === 'wallet') {
                     const isConn = tonConnectUI.connected;
-                    b.innerHTML = `<h2>👛 WALLET</h2>
-                        <div id="ton-connect-btn" style="display:flex;justify-content:center;padding:10px;"></div>
-                        ${isConn ? `
-                            <div style="text-align:center; padding:15px; background: rgba(0,255,255,0.05); border-radius:10px;">
-                                <p style="color:cyan; font-size:12px;">CONNECTED ADDRESS:</p>
-                                <b style="font-size:14px; word-break:break-all;">${tonConnectUI.account.address.slice(0,8)}...${tonConnectUI.account.address.slice(-8)}</b>
-                                <button class="m-close" style="background:#ff4444; color:white; width:100%; margin-top:15px; border:none;" onclick="tonConnectUI.disconnect()">DISCONNECT</button>
-                            </div>
-                        ` : `<p style="text-align:center">Connect TON wallet for Web3 features.</p>`}
-                    `;
-                    setTimeout(() => {
-                        if(tonConnectUI) tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' };
-                    }, 50);
+                    b.innerHTML = `<h2>👛 WALLET</h2><div id="ton-connect-btn" style="display:flex;justify-content:center;padding:10px;"></div>
+                        ${isConn ? `<div style="text-align:center; padding:15px; background: rgba(0,255,255,0.05); border-radius:10px;">
+                            <b style="font-size:14px; word-break:break-all;">${tonConnectUI.account.address.slice(0,8)}...${tonConnectUI.account.address.slice(-8)}</b>
+                            <button class="m-close" style="background:#ff4444; color:white; width:100%; margin-top:15px; border:none;" onclick="tonConnectUI.disconnect()">DISCONNECT</button>
+                        </div>` : `<p style="text-align:center">Connect TON wallet for Web3 features.</p>`}`;
+                    setTimeout(() => { if(tonConnectUI) tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' }; }, 50);
                 }
 
                 if(type === 'boost') {
                     b.innerHTML = `<h2>🚀 BOOSTERS</h2>
-                    <div class="top-item" onclick="game.upgrade('tap')">
-                        <div class="t-user"><b>⚡</b><span>Multitap (Lvl ${game.data.tap_lvl})</span></div>
-                        <b>${game.getCost('tap').toLocaleString()}</b>
-                    </div>
-                    <div class="top-item" onclick="game.upgrade('energy')">
-                        <div class="t-user"><b>🔋</b><span>Energy Cap (Lvl ${game.data.energy_lvl})</span></div>
-                        <b>${game.getCost('energy').toLocaleString()}</b>
-                    </div>
-                    <div class="top-item" onclick="game.upgrade('regen')">
-                        <div class="t-user"><b>🌪️</b><span>Regen Speed (Lvl ${game.data.regen_lvl})</span></div>
-                        <b>${game.getCost('regen').toLocaleString()}</b>
-                    </div>`;
+                    <div class="top-item" onclick="game.upgrade('tap')"><div class="t-user"><b>⚡</b><span>Multitap (Lvl ${game.data.tap_lvl})</span></div><b>${game.getCost('tap').toLocaleString()}</b></div>
+                    <div class="top-item" onclick="game.upgrade('energy')"><div class="t-user"><b>🔋</b><span>Energy Cap (Lvl ${game.data.energy_lvl})</span></div><b>${game.getCost('energy').toLocaleString()}</b></div>
+                    <div class="top-item" onclick="game.upgrade('regen')"><div class="t-user"><b>🌪️</b><span>Regen Speed (Lvl ${game.data.regen_lvl})</span></div><b>${game.getCost('regen').toLocaleString()}</b></div>`;
                 }
 
                 if(type === 'top') {
@@ -263,15 +324,7 @@
                         let h = '';
                         list.sort((x,y) => y.balance - x.balance).slice(0, 10).forEach((u, i) => {
                             let icon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
-                            let ava = u.photo_url || 'https://cdn-icons-png.flaticon.com/512/2103/2103633.png';
-                            h += `<div class="top-item">
-                                <div class="t-user">
-                                    <span style="width:25px;font-weight:bold">${icon}</span>
-                                    <img src="${ava}" style="width:30px;height:30px;border-radius:50%;margin:0 10px;border:1px solid cyan">
-                                    <span>${u.username || 'Unknown'}</span>
-                                </div>
-                                <b>${Math.floor(u.balance).toLocaleString()}</b>
-                            </div>`;
+                            h += `<div class="top-item"><div class="t-user"><span>${icon}</span><img src="${u.photo_url || 'images/logo.png'}" style="width:30px;height:30px;border-radius:50%;margin:0 10px;border:1px solid cyan"><span>${u.username || 'Unknown'}</span></div><b>${Math.floor(u.balance).toLocaleString()}</b></div>`;
                         });
                         document.getElementById('t-list').innerHTML = h;
                     } catch(e) { document.getElementById('t-list').innerText = "OFFLINE"; }
@@ -279,23 +332,8 @@
 
                 if(type === 'mine') {
                     b.innerHTML = `<h2>⛏️ MINING</h2>
-                    <div class="top-item" onclick="game.upgrade('mine')">
-                        <div class="t-user"><b>🧠</b><span>Neural Node (Lvl ${game.data.mine_lvl})</span></div>
-                        <b>${game.getCost('mine').toLocaleString()}</b>
-                    </div>
-                    <div class="top-item" onclick="game.payTon(0.5)">
-                        <div class="t-user"><b>🛰️</b><span>Elite Server (+5k NP/h)</span></div>
-                        <b style="color: #49ff49">0.5 TON</b>
-                    </div>`;
-                }
-
-                if(type === 'friends') {
-                    const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
-                    b.innerHTML = `<h2>🤝 FRIENDS</h2><button class="m-close" style="background:cyan;color:black;width:100%" onclick="tg.openTelegramLink('https://t.me/share/url?url=${encodeURIComponent(link)}')">INVITE AGENT</button>`;
-                }
-                
-                if(type === 'bonus') {
-                    b.innerHTML = `<h2>🎁 DAILY BONUS</h2><button class="m-close" style="width:100%" onclick="game.claimBonus()">CLAIM 5,000 NP</button>`;
+                    <div class="top-item" onclick="game.upgrade('mine')"><div class="t-user"><b>🧠</b><span>Neural Node (Lvl ${game.data.mine_lvl})</span></div><b>${game.getCost('mine').toLocaleString()}</b></div>
+                    <div class="top-item" onclick="game.payTon(0.5)"><div class="t-user"><b>🛰️</b><span>Elite Server (+5k NP/h)</span></div><b style="color: #49ff49">0.5 TON</b></div>`;
                 }
             },
 
