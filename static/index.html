@@ -91,9 +91,21 @@
             },
             isLoaded: false,
 
+            // Заголовки для авторизации запросов
+            getHeaders() {
+                return {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${tg.initData}` 
+                };
+            },
+
             async init() {
                 ui.startLoader();
+                
+                // Извлекаем данные пользователя Telegram
                 const u = tg.initDataUnsafe.user || { id: 0, first_name: 'Agent', photo_url: '' };
+                this.data.id = u.id; // Фиксируем ID сразу
+
                 const name = (u.username || u.first_name).toUpperCase();
                 
                 try {
@@ -103,15 +115,25 @@
                 } catch(e) { console.error("TON Error", e); }
 
                 try {
-                    const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(name)}`);
-                    if (r.ok) Object.assign(this.data, await r.json());
-                } catch(e) { this.data.id = u.id; }
+                    // Загрузка данных с сервера Bothost
+                    const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(name)}`, {
+                        headers: this.getHeaders()
+                    });
+                    if (r.ok) {
+                        const serverData = await r.json();
+                        Object.assign(this.data, serverData);
+                        this.data.id = u.id; // Перестраховка ID
+                    }
+                } catch(e) { 
+                    console.error("Load error:", e);
+                }
 
                 document.getElementById('my-name').innerText = name;
                 if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
-                this.isLoaded = true;
                 
+                this.isLoaded = true;
                 this.loop();
+                ui.render();
             },
 
             getDailyBonusAmount() {
@@ -165,21 +187,25 @@
             },
 
             async save() {
-                if(!this.isLoaded) return;
+                if(!this.isLoaded || !this.data.id) return;
                 fetch('/api/save', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: this.getHeaders(),
                     body: JSON.stringify(this.data)
-                }).catch(() => {});
+                }).catch((e) => console.error("Save error:", e));
             },
 
             loop() {
+                // Энергия и пассивный доход раз в сек
                 setInterval(() => {
                     const regenAmount = 1 + (this.data.regen_lvl - 1);
                     if(this.data.energy < this.data.max_energy) this.data.energy = Math.min(this.data.max_energy, this.data.energy + regenAmount);
                     if(this.data.profit > 0) this.data.balance += (this.data.profit / 3600);
                     ui.render();
                 }, 1000);
+
+                // Автосохранение в БД раз в 20 секунд
+                setInterval(() => this.save(), 20000);
             }
         };
 
