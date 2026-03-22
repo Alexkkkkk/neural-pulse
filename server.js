@@ -36,17 +36,13 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-const pool = new Pool({ 
-    connectionString: PG_URI, 
-    ssl: false,
-    max: 20
-});
+const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
 // --- ИНИЦИАЛИЗАЦИЯ БД ---
 const initDB = async () => {
     try {
         const client = await pool.connect();
-        // Таблица пользователей
+        // Пользователи
         await client.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id BIGINT PRIMARY KEY, 
@@ -58,10 +54,11 @@ const initDB = async () => {
                 tap INTEGER DEFAULT 1, 
                 profit INTEGER DEFAULT 0,
                 referrer_id BIGINT,
+                last_daily_claim TIMESTAMP,
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
         
-        // Таблица заданий
+        // Задания
         await client.query(`
             CREATE TABLE IF NOT EXISTS tasks (
                 id SERIAL PRIMARY KEY,
@@ -71,54 +68,29 @@ const initDB = async () => {
                 category TEXT DEFAULT 'social'
             )`);
 
-        // Выполненные задания
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS user_tasks (
-                user_id BIGINT REFERENCES users(id),
-                task_id INTEGER REFERENCES tasks(id),
-                PRIMARY KEY (user_id, task_id)
-            )`);
+        await client.query(`CREATE TABLE IF NOT EXISTS user_tasks (
+            user_id BIGINT REFERENCES users(id),
+            task_id INTEGER REFERENCES tasks(id),
+            PRIMARY KEY (user_id, task_id)
+        )`);
 
-        await client.query(`CREATE INDEX IF NOT EXISTS idx_users_balance ON users(balance DESC)`);
-        console.log("✅ [DB] Структура базы данных обновлена");
+        console.log("✅ [DB] Таблицы проверены");
         client.release();
     } catch (e) { console.error("❌ [DB ERROR]:", e.message); }
 };
 
-// --- АДМИНКА ---
-const startAdmin = async () => {
-    try {
-        const adminJs = new AdminJS({
-            resources: [
-                {
-                    resource: { model: { tableName: 'users', connectionOptions: { connectionString: PG_URI, dialect: 'postgres' } }, adapter: AdminJSSql },
-                    options: { navigation: { name: 'Игроки', icon: 'User' } }
-                },
-                {
-                    resource: { model: { tableName: 'tasks', connectionOptions: { connectionString: PG_URI, dialect: 'postgres' } }, adapter: AdminJSSql },
-                    options: { navigation: { name: 'Задания', icon: 'Checkmark' } }
-                }
-            ],
-            rootPath: '/admin',
-            branding: { companyName: 'Neural Pulse Admin', softwareBrothers: false }
-        });
-
-        const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
-            authenticate: async (email, password) => {
-                if (email === ADMIN_USER.email && password === ADMIN_USER.password) return ADMIN_USER;
-                return null;
-            },
-            cookieName: 'adminjs-session',
-            cookiePassword: 'super-secret-password-123',
-        }, null, { resave: false, saveUninitialized: true, secret: 'secret' });
-
-        app.use(adminJs.options.rootPath, router);
-    } catch (error) { console.error("❌ [ADMIN ERROR]:", error.message); }
+// --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+const getLevel = (balance) => {
+    if (balance < 50000) return { name: 'Bronze', level: 1, next: 50000 };
+    if (balance < 250000) return { name: 'Silver', level: 2, next: 250000 };
+    if (balance < 1000000) return { name: 'Gold', level: 3, next: 1000000 };
+    if (balance < 5000000) return { name: 'Platinum', level: 4, next: 5000000 };
+    return { name: 'Diamond', level: 5, next: null };
 };
 
 // --- API ---
 
-// 1. Загрузка данных + Offline Profit
+// 1. Вход в игру (с уровнями и прибылью)
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     const { username, photo_url, ref } = req.query;
@@ -132,69 +104,75 @@ app.get('/api/user/:id', async (req, res) => {
                 [userId, username || 'AGENT', photo_url || '', refId]
             );
             if (refId) await pool.query('UPDATE users SET balance = balance + 5000 WHERE id = $1', [refId]);
-            return res.json({ ...newUser.rows[0], offlineProfit: 0, isNew: true });
+            return res.json({ ...newUser.rows[0], offlineProfit: 0, levelInfo: getLevel(0) });
         }
 
         const user = result.rows[0];
         const secondsOffline = Math.floor((new Date(user.current_server_time) - new Date(user.last_seen)) / 1000);
-        const offlineProfit = Math.floor((user.profit / 3600) * Math.min(secondsOffline, 3 * 3600));
+        const offlineProfit = Math.floor((user.profit / 3600) * Math.min(secondsOffline, 10800)); // Макс за 3 часа
 
-        res.json({ ...user, offlineProfit });
+        res.json({ 
+            ...user, 
+            offlineProfit,
+            levelInfo: getLevel(user.balance)
+        });
     } catch (e) { res.status(500).json({ error: "DB Error" }); }
 });
 
-// 2. Сохранение
+// 2. Ежедневная награда
+app.post('/api/daily-claim', async (req, res) => {
+    const { userId } = req.body;
+    try {
+        const result = await pool.query('SELECT last_daily_claim, NOW() as now FROM users WHERE id = $1', [userId]);
+        const user = result.rows[0];
+        
+        if (user.last_daily_claim) {
+            const diff = new Date(user.now) - new Date(user.last_daily_claim);
+            if (diff < 24 * 3600 * 1000) {
+                return res.status(400).json({ error: "Wait 24h" });
+            }
+        }
+
+        const reward = 10000; // Фиксированная награда
+        await pool.query('UPDATE users SET balance = balance + $1, last_daily_claim = NOW() WHERE id = $2', [reward, userId]);
+        res.json({ ok: true, reward });
+    } catch (e) { res.status(500).json({ error: "Claim error" }); }
+});
+
+// 3. Сохранение данных
 app.post('/api/save', async (req, res) => {
-    const d = req.body;
+    const { userId, balance, energy, tap, profit } = req.body;
     try {
         await pool.query(
             `UPDATE users SET balance=$2, energy=$3, tap=$4, profit=$5, last_seen=NOW() WHERE id=$1`, 
-            [d.userId, d.balance, d.energy, d.tap, d.profit]
+            [userId, balance, energy, tap, profit]
         );
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: "Save error" }); }
 });
 
-// 3. Список заданий
-app.get('/api/tasks/:userId', async (req, res) => {
+// --- АДМИНКА ---
+const startAdmin = async () => {
     try {
-        const tasks = await pool.query(`
-            SELECT t.*, (ut.user_id IS NOT NULL) as completed
-            FROM tasks t
-            LEFT JOIN user_tasks ut ON t.id = ut.task_id AND ut.user_id = $1
-        `, [req.params.userId]);
-        res.json(tasks.rows);
-    } catch (e) { res.status(500).json({ error: "Tasks error" }); }
-});
+        const adminJs = new AdminJS({
+            resources: [
+                { resource: { model: { tableName: 'users', connectionOptions: { connectionString: PG_URI, dialect: 'postgres' } }, adapter: AdminJSSql } },
+                { resource: { model: { tableName: 'tasks', connectionOptions: { connectionString: PG_URI, dialect: 'postgres' } }, adapter: AdminJSSql } }
+            ],
+            rootPath: '/admin'
+        });
+        const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
+            authenticate: async (email, password) => (email === ADMIN_USER.email && password === ADMIN_USER.password) ? ADMIN_USER : null,
+            cookieName: 'pulse-session',
+            cookiePassword: 'super-secret-password-123',
+        }, null, { resave: false, saveUninitialized: true, secret: 'secret' });
+        app.use(adminJs.options.rootPath, router);
+    } catch (e) { console.error("Admin error:", e.message); }
+};
 
-// 4. Выполнение задания
-app.post('/api/tasks/complete', async (req, res) => {
-    const { userId, taskId } = req.body;
-    try {
-        const check = await pool.query('SELECT * FROM user_tasks WHERE user_id=$1 AND task_id=$2', [userId, taskId]);
-        if (check.rows.length > 0) return res.status(400).json({ error: "Already completed" });
-
-        const task = await pool.query('SELECT reward FROM tasks WHERE id=$1', [taskId]);
-        if (task.rows.length === 0) return res.status(404).json({ error: "Task not found" });
-
-        await pool.query('INSERT INTO user_tasks (user_id, task_id) VALUES ($1, $2)', [userId, taskId]);
-        await pool.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [task.rows[0].reward, userId]);
-        
-        res.json({ ok: true, reward: task.rows[0].reward });
-    } catch (e) { res.status(500).json({ error: "Completion error" }); }
-});
-
-app.get('/api/top', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT username, balance, photo_url FROM users ORDER BY balance DESC LIMIT 50');
-        res.json(result.rows);
-    } catch (e) { res.status(500).json({ error: "Top error" }); }
-});
-
-// --- БОТ ---
+// Бот
 bot.start((ctx) => {
-    const refId = ctx.startPayload;
-    const webAppUrl = refId ? `${DOMAIN}?ref=${refId}` : DOMAIN;
+    const webAppUrl = ctx.startPayload ? `${DOMAIN}?ref=${ctx.startPayload}` : DOMAIN;
     ctx.reply(`<b>Neural Pulse | Sync Active</b>\nWelcome, Agent <b>${ctx.from.first_name}</b>.`, {
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", webAppUrl)]])
