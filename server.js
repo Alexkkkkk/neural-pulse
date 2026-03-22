@@ -4,7 +4,6 @@ import pg from 'pg';
 const { Pool } = pg;
 import path from 'path';
 import { fileURLToPath } from 'url';
-import cors from 'cors'; // Добавили для работы Mini App
 
 // --- ПАКЕТЫ АДМИНКИ ---
 import AdminJS from 'adminjs';
@@ -14,7 +13,6 @@ import * as AdminJSSql from '@adminjs/sql';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 1. Регистрация адаптера
 AdminJS.registerAdapter({
     Database: AdminJSSql.Database,
     Resource: AdminJSSql.Resource,
@@ -33,20 +31,22 @@ const ADMIN_USER = {
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// Разрешаем запросы с любых доменов (важно для Telegram WebApp)
-app.use(cors());
+// Встроенный CORS
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    if (req.method === 'OPTIONS') return res.sendStatus(200);
+    next();
+});
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-const pool = new Pool({ 
-    connectionString: PG_URI, 
-    ssl: false,
-    max: 20
-});
+const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
-// --- ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ ---
+// --- ИНИЦИАЛИЗАЦИЯ БД ---
 const initDB = async () => {
-    console.log("🛠 [DB] Проверка структуры...");
     try {
         const client = await pool.connect();
         await client.query(`
@@ -62,42 +62,30 @@ const initDB = async () => {
                 referrer_id BIGINT,
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
-        await client.query(`CREATE INDEX IF NOT EXISTS idx_users_balance ON users(balance DESC)`);
         console.log("✅ [DB] Таблица users готова");
         client.release();
-    } catch (e) { 
-        console.error("❌ [DB ERROR]:", e.message); 
-    }
+    } catch (e) { console.error("❌ [DB ERROR]:", e.message); }
 };
 
-// --- ФУНКЦИЯ ЗАПУСКА АДМИНКИ ---
+// --- АДМИН-ПАНЕЛЬ ---
 const startAdmin = async () => {
     try {
         const adminJs = new AdminJS({
-            // Вместо передачи пула, мы явно указываем ресурс через адаптер SQL
             resources: [{
                 resource: {
                     adapter: AdminJSSql,
-                    model: { 
-                        tableName: 'users', 
-                        connectionOptions: { connectionString: PG_URI, dialect: 'postgres' } 
-                    }
+                    model: { tableName: 'users', connectionOptions: { connectionString: PG_URI, dialect: 'postgres' } }
                 },
                 options: {
                     navigation: { name: 'Игроки', icon: 'User' },
                     properties: {
                         id: { isId: true, isTitle: true },
-                        photo_url: { isVisible: { list: false, edit: true, filter: false, show: true } },
                         last_seen: { isVisible: { list: true, edit: false, filter: true, show: true } }
                     }
                 }
             }],
             rootPath: '/admin',
-            branding: {
-                companyName: 'Neural Pulse Admin',
-                softwareBrothers: false,
-                theme: { colors: { primary100: '#00ff41' } }
-            }
+            branding: { companyName: 'Neural Pulse Admin', softwareBrothers: false }
         });
 
         const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
@@ -107,47 +95,62 @@ const startAdmin = async () => {
             },
             cookieName: 'adminjs-session',
             cookiePassword: 'super-secret-password-123',
-        }, null, {
-            resave: false,
-            saveUninitialized: true,
-            secret: 'super-secret-session-secret',
-        });
+        }, null, { resave: false, saveUninitialized: true, secret: 'session-secret' });
 
         app.use(adminJs.options.rootPath, router);
-        console.log(`🔐 [ADMIN] Панель управления готова на ${DOMAIN}/admin`);
-    } catch (error) {
-        console.error("❌ [ADMIN ERROR]:", error.message);
-    }
+    } catch (error) { console.error("❌ [ADMIN ERROR]:", error.message); }
 };
 
-// Запуск сервера
-await initDB();
-await startAdmin();
-
 // --- API ЭНДПОИНТЫ ---
+
+// Получение данных игрока + Рефералка + Offline Profit
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     const { username, photo_url, ref } = req.query;
+    
     try {
-        let result = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+        let result = await pool.query('SELECT *, NOW() as current_time FROM users WHERE id = $1', [userId]);
+        
         if (result.rows.length === 0) {
-            const referrer = (ref && ref !== userId) ? ref : null;
+            // НОВЫЙ ПОЛЬЗОВАТЕЛЬ
+            const refId = (ref && ref !== userId) ? parseInt(ref) : null;
+            
             const newUser = await pool.query(
                 `INSERT INTO users (id, username, photo_url, referrer_id) VALUES ($1, $2, $3, $4) RETURNING *`,
-                [userId, username || 'AGENT', photo_url || '', referrer]
+                [userId, username || 'AGENT', photo_url || '', refId]
             );
-            return res.json(newUser.rows[0]);
+
+            // Если есть реферер - даем ему бонус
+            if (refId) {
+                await pool.query('UPDATE users SET balance = balance + 5000 WHERE id = $1', [refId]);
+            }
+            
+            return res.json({ ...newUser.rows[0], offlineProfit: 0 });
         }
-        res.json(result.rows[0]);
-    } catch (e) { res.status(500).json({ error: "DB Error" }); }
+
+        // СУЩЕСТВУЮЩИЙ ПОЛЬЗОВАТЕЛЬ (Расчет Offline прибыли)
+        const user = result.rows[0];
+        const lastSeen = new Date(user.last_seen);
+        const now = new Date(user.current_time);
+        const secondsOffline = Math.floor((now - lastSeen) / 1000);
+        
+        // Начисляем прибыль (макс. за 3 часа отсутствия)
+        const cappedSeconds = Math.min(secondsOffline, 3 * 3600);
+        const offlineProfit = Math.floor((user.profit / 3600) * cappedSeconds);
+
+        res.json({ ...user, offlineProfit });
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Сохранение прогресса
 app.post('/api/save', async (req, res) => {
-    const d = req.body;
+    const { userId, balance, energy, tap, profit } = req.body;
     try {
+        if (balance < 0) return res.status(400).json({ error: "Invalid balance" });
+        
         await pool.query(
             `UPDATE users SET balance=$2, energy=$3, tap=$4, profit=$5, last_seen=NOW() WHERE id=$1`, 
-            [d.userId, d.balance, d.energy, d.tap, d.profit]
+            [userId, balance, energy, tap, profit]
         );
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: "Save error" }); }
@@ -164,9 +167,13 @@ app.get('/api/top', async (req, res) => {
 bot.start((ctx) => {
     const refId = ctx.startPayload;
     const webAppUrl = refId ? `${DOMAIN}?ref=${refId}` : DOMAIN;
-    ctx.reply(`<b>Neural Pulse | Sync Active</b>\nWelcome, Agent <b>${ctx.from.first_name}</b>.`, {
+    
+    ctx.reply(`<b>Neural Pulse | Sync Active</b>\n\nWelcome, Agent <b>${ctx.from.first_name}</b>.\nYour terminal is ready for operation.`, {
         parse_mode: 'HTML',
-        ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", webAppUrl)]])
+        ...Markup.inlineKeyboard([
+            [Markup.button.webApp("⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", webAppUrl)],
+            [Markup.button.url("📢 Канал проекта", "https://t.me/your_channel")]
+        ])
     });
 });
 
@@ -174,6 +181,8 @@ const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
 app.use(bot.webhookCallback(WEBHOOK_PATH));
 
 app.listen(PORT, async () => {
-    console.log(`\n🚀 СЕРВЕР ЗАПУЩЕН: ${DOMAIN}`);
+    await initDB();
+    await startAdmin();
+    console.log(`🚀 СЕРВЕР ЗАПУЩЕН: ${DOMAIN}`);
     await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
 });
