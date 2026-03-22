@@ -9,13 +9,17 @@ import session from 'express-session';
 // --- ПАКЕТЫ АДМИНКИ ---
 import AdminJS from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
-import AdminJSSql from '@adminjs/sql';
+import * as AdminJSSql from '@adminjs/sql'; // Изменено здесь
 
-// Исправляем __dirname для использования в ES Modules
+// Исправляем __dirname для ES модулей
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-AdminJS.registerAdapter(AdminJSSql);
+// Регистрация адаптера (в AdminJS 7 передаем объект целиком)
+AdminJS.registerAdapter({
+  Database: AdminJSSql.Database,
+  Resource: AdminJSSql.Resource,
+});
 
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const PG_URI = "postgresql://bothost_db_db5b342fc026:gwp3jv20PY7JtERt4cNIvSpReq8YpLYzlH99BY5vyc4@node1.pghost.ru:32867/bothost_db_db5b342fc026";
@@ -105,7 +109,7 @@ const startAdmin = async () => {
 };
 
 initDB();
-startAdmin(); // Запускаем админку
+startAdmin();
 
 // --- API: ЗАГРУЗКА ПОЛЬЗОВАТЕЛЯ ---
 app.get('/api/user/:id', async (req, res) => {
