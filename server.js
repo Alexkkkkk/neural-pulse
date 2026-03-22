@@ -9,6 +9,7 @@ const AdminJS = require('adminjs');
 const AdminJSExpress = require('@adminjs/express');
 const AdminJSSql = require('@adminjs/sql');
 
+// Регистрация адаптера для работы с PostgreSQL
 AdminJS.registerAdapter(AdminJSSql);
 
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
@@ -34,6 +35,14 @@ const pool = new Pool({
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
+
+// --- НАСТРОЙКА СЕССИЙ (КРИТИЧНО ДЛЯ АДМИНКИ) ---
+app.use(session({
+  secret: 'super-secret-session-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 24 * 60 * 60 * 1000 } // 24 часа
+}));
 
 // --- ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ ---
 const initDB = async () => {
@@ -67,16 +76,14 @@ const initDB = async () => {
 // --- ФУНКЦИЯ ЗАПУСКА АДМИНКИ ---
 const startAdmin = async () => {
     const adminJs = new AdminJS({
-      databases: [{
-        connectionString: PG_URI,
-        dialect: 'postgres',
-      }],
+      databases: [pool], // Используем уже созданный pool для админки
       rootPath: '/admin',
       branding: {
         companyName: 'Neural Pulse Admin',
+        logo: false,
         softwareBrothers: false,
-        theme: { colors: { primary100: '#00ff41' } }
       },
+      resources: [], // Здесь можно будет детально настроить отображение таблицы users
     });
 
     const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
@@ -99,9 +106,9 @@ const startAdmin = async () => {
 };
 
 initDB();
-startAdmin(); // Запускаем админку
+startAdmin();
 
-// --- API: ЗАГРУЗКА ПОЛЬЗОВАТЕЛЯ ---
+// --- API ЭНДПОИНТЫ ---
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     const { username, photo_url, ref } = req.query;
@@ -121,7 +128,6 @@ app.get('/api/user/:id', async (req, res) => {
     }
 });
 
-// --- API: СОХРАНЕНИЕ ПРОГРЕССА ---
 app.post('/api/save', async (req, res) => {
     const d = req.body;
     try {
@@ -136,7 +142,6 @@ app.post('/api/save', async (req, res) => {
     }
 });
 
-// --- API: ТОП ИГРОКОВ ---
 app.get('/api/top', async (req, res) => {
     try {
         const result = await pool.query('SELECT username, balance, photo_url FROM users ORDER BY balance DESC LIMIT 50');
