@@ -6,7 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
 
-// --- ПАКЕТЫ АДМИНКИ ---
+// --- ИМПОРТЫ АДМИНКИ ---
 import AdminJS from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSql from '@adminjs/sql';
@@ -14,7 +14,7 @@ import * as AdminJSSql from '@adminjs/sql';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 1. РЕГИСТРАЦИЯ АДАПТЕРА (Строго в самом начале)
+// 1. РЕГИСТРАЦИЯ АДАПТЕРА
 AdminJS.registerAdapter({
     Database: AdminJSSql.Database,
     Resource: AdminJSSql.Resource,
@@ -39,15 +39,18 @@ app.use(express.static(path.join(__dirname, 'static')));
 
 const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
-// --- ИНИЦИАЛИЗАЦИЯ БД С ПРОВЕРКОЙ ОШИБОК ---
+// --- ИНИЦИАЛИЗАЦИЯ БД С ПРИНУДИТЕЛЬНЫМ СБРОСОМ ---
 const initDB = async () => {
     const client = await pool.connect();
     try {
-        console.log("🛠 [DB] Синхронизация таблиц...");
+        console.log("🛠 [DB] Принудительная очистка и создание структур...");
         
-        // Создаем таблицу пользователей (id должен быть BIGINT)
+        // Удаляем старые таблицы, чтобы разорвать неправильные связи
+        await client.query(`DROP TABLE IF EXISTS user_tasks, tasks, users CASCADE`);
+
+        // Создаем заново в строгом порядке
         await client.query(`
-            CREATE TABLE IF NOT EXISTS users (
+            CREATE TABLE users (
                 id BIGINT PRIMARY KEY, 
                 username TEXT, 
                 photo_url TEXT,
@@ -61,9 +64,8 @@ const initDB = async () => {
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
         
-        // Создаем таблицу заданий
         await client.query(`
-            CREATE TABLE IF NOT EXISTS tasks (
+            CREATE TABLE tasks (
                 id SERIAL PRIMARY KEY,
                 title TEXT NOT NULL,
                 reward INTEGER DEFAULT 1000,
@@ -71,26 +73,14 @@ const initDB = async () => {
                 category TEXT DEFAULT 'social'
             )`);
 
-        // Создаем связующую таблицу (с удалением старой версии, если она мешает)
-        try {
-            await client.query(`
-                CREATE TABLE IF NOT EXISTS user_tasks (
-                    user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
-                    task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
-                    PRIMARY KEY (user_id, task_id)
-                )`);
-        } catch (err) {
-            console.log("⚠️ [DB] Пересоздание связей...");
-            await client.query(`DROP TABLE IF EXISTS user_tasks`);
-            await client.query(`
-                CREATE TABLE user_tasks (
-                    user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
-                    task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
-                    PRIMARY KEY (user_id, task_id)
-                )`);
-        }
+        await client.query(`
+            CREATE TABLE user_tasks (
+                user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+                task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+                PRIMARY KEY (user_id, task_id)
+            )`);
 
-        console.log("✅ [DB] Структура базы данных в норме");
+        console.log("✅ [DB] База данных успешно пересоздана");
     } catch (e) {
         console.error("❌ [DB ERROR]:", e.message);
     } finally {
@@ -101,15 +91,16 @@ const initDB = async () => {
 // --- ЗАПУСК АДМИНКИ ---
 const startAdmin = async () => {
     try {
+        // Мы передаем адаптер прямо в ресурс для надежности
         const adminJs = new AdminJS({
             resources: [
                 { 
                     resource: { model: { tableName: 'users', connectionOptions: { connectionString: PG_URI, dialect: 'postgres' } }, adapter: AdminJSSql },
-                    options: { navigation: { name: 'Игроки', icon: 'User' } }
+                    options: { navigation: { name: 'Управление', icon: 'User' } }
                 },
                 { 
                     resource: { model: { tableName: 'tasks', connectionOptions: { connectionString: PG_URI, dialect: 'postgres' } }, adapter: AdminJSSql },
-                    options: { navigation: { name: 'Задания', icon: 'Task' } }
+                    options: { navigation: { name: 'Управление', icon: 'Task' } }
                 }
             ],
             rootPath: '/admin',
@@ -121,25 +112,23 @@ const startAdmin = async () => {
                 if (email === ADMIN_USER.email && password === ADMIN_USER.password) return ADMIN_USER;
                 return null;
             },
-            cookieName: 'pulse-admin-session',
-            cookiePassword: 'super-secret-password-123-very-long',
-        }, null, { resave: false, saveUninitialized: true, secret: 'secret' });
+            cookieName: 'neural_session',
+            cookiePassword: 'super-secret-password-123-long-enough',
+        }, null, { resave: false, saveUninitialized: true, secret: 'session_secret' });
 
         app.use(adminJs.options.rootPath, router);
-        console.log(`🔐 [ADMIN] Панель готова: ${DOMAIN}/admin`);
+        console.log(`🔐 [ADMIN] Панель: ${DOMAIN}/admin`);
     } catch (e) { 
         console.error("❌ [ADMIN ERROR]:", e.message); 
     }
 };
 
-// --- API ЭНДПОИНТЫ ---
-
+// Остальные API (get /api/user/:id, post /api/save) остаются без изменений...
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     const { username, photo_url, ref } = req.query;
     try {
         let result = await pool.query('SELECT *, NOW() as now FROM users WHERE id = $1', [userId]);
-        
         if (result.rows.length === 0) {
             const refId = (ref && ref !== userId) ? parseInt(ref) : null;
             const newUser = await pool.query(
@@ -149,11 +138,9 @@ app.get('/api/user/:id', async (req, res) => {
             if (refId) await pool.query('UPDATE users SET balance = balance + 5000 WHERE id = $1', [refId]);
             return res.json({ ...newUser.rows[0], offlineProfit: 0 });
         }
-
         const user = result.rows[0];
         const secondsOffline = Math.floor((new Date(user.now) - new Date(user.last_seen)) / 1000);
         const offlineProfit = Math.floor((user.profit / 3600) * Math.min(secondsOffline, 10800));
-
         res.json({ ...user, offlineProfit });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -169,10 +156,9 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Save failed" }); }
 });
 
-// Бот
 bot.start((ctx) => {
     const webAppUrl = ctx.startPayload ? `${DOMAIN}?ref=${ctx.startPayload}` : DOMAIN;
-    ctx.reply(`<b>Neural Pulse | Terminal</b>\nAgent <b>${ctx.from.first_name}</b>, sync active.`, {
+    ctx.reply(`<b>Neural Pulse | System</b>\nAgent <b>${ctx.from.first_name}</b>, terminal ready.`, {
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", webAppUrl)]])
     });
