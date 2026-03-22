@@ -14,7 +14,8 @@
     "express-formidable": "1.2.0",
     "tslib": "2.6.2",
     "styled-components": "5.3.9",
-    "regenerator-runtime": "0.13.11"
+    "regenerator-runtime": "0.13.11",
+    "cors": "2.8.5"
   },
   "scripts": {
     "start": "node server.js"
