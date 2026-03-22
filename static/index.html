@@ -91,14 +91,6 @@
             },
             isLoaded: false,
 
-            // Создание заголовков с авторизацией
-            getHeaders() {
-                return {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${tg.initData}` 
-                };
-            },
-
             async init() {
                 ui.startLoader();
                 const u = tg.initDataUnsafe.user || { id: 0, first_name: 'Agent', photo_url: '' };
@@ -111,15 +103,9 @@
                 } catch(e) { console.error("TON Error", e); }
 
                 try {
-                    // Запрос данных пользователя с заголовком Authorization
-                    const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(name)}`, {
-                        headers: this.getHeaders()
-                    });
+                    const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(name)}`);
                     if (r.ok) Object.assign(this.data, await r.json());
-                } catch(e) { 
-                    console.error("Load error:", e);
-                    this.data.id = u.id; 
-                }
+                } catch(e) { this.data.id = u.id; }
 
                 document.getElementById('my-name').innerText = name;
                 if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
@@ -182,22 +168,18 @@
                 if(!this.isLoaded) return;
                 fetch('/api/save', {
                     method: 'POST',
-                    headers: this.getHeaders(),
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(this.data)
-                }).catch((e) => console.error("Sync error:", e));
+                }).catch(() => {});
             },
 
             loop() {
-                // Основной игровой цикл (раз в секунду)
                 setInterval(() => {
                     const regenAmount = 1 + (this.data.regen_lvl - 1);
                     if(this.data.energy < this.data.max_energy) this.data.energy = Math.min(this.data.max_energy, this.data.energy + regenAmount);
                     if(this.data.profit > 0) this.data.balance += (this.data.profit / 3600);
                     ui.render();
                 }, 1000);
-
-                // Автосохранение раз в 20 секунд
-                setInterval(() => this.save(), 20000);
             }
         };
 
