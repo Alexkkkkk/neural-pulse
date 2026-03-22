@@ -11,7 +11,6 @@ import AdminJS from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSql from '@adminjs/sql';
 
-// Исправляем __dirname для ES модулей
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -73,9 +72,8 @@ const initDB = async () => {
 // --- ФУНКЦИЯ ЗАПУСКА АДМИНКИ ---
 const startAdmin = async () => {
     try {
-        // Явно создаем ресурс, чтобы AdminJS точно знал, какой адаптер использовать
         const adminJs = new AdminJS({
-            databases: [pool], 
+            // Убираем databases: [pool], чтобы избежать ошибки forEach
             rootPath: '/admin',
             branding: {
                 companyName: 'Neural Pulse Admin',
@@ -84,11 +82,16 @@ const startAdmin = async () => {
             },
             resources: [
                 {
-                    // Используем Resource напрямую из адаптера для стабильности
-                    resource: new AdminJSSql.Resource({ tableName: 'users', database: 'bothost_db_db5b342fc026' }),
+                    // Явно указываем ресурс через параметры подключения
+                    resource: {
+                        adapter: AdminJSSql,
+                        model: { tableName: 'users', connectionOptions: { connectionString: PG_URI, dialect: 'postgres' } }
+                    },
                     options: {
+                        navigation: { name: 'Игроки', icon: 'User' },
                         properties: {
                             id: { isId: true },
+                            photo_url: { isVisible: { list: false, edit: true, filter: false, show: true } },
                             last_seen: { isVisible: { list: true, edit: false, filter: true, show: true } }
                         }
                     }
@@ -112,13 +115,12 @@ const startAdmin = async () => {
         });
 
         app.use(adminJs.options.rootPath, router);
-        console.log(`🔐 [ADMIN] Панель управления настроена успешно`);
+        console.log(`🔐 [ADMIN] Панель управления активирована`);
     } catch (error) {
         console.error("❌ [ADMIN ERROR]:", error.message);
     }
 };
 
-// Запуск (используем Top-level await)
 await initDB();
 await startAdmin();
 
@@ -143,7 +145,6 @@ app.get('/api/user/:id', async (req, res) => {
 app.post('/api/save', async (req, res) => {
     const d = req.body;
     try {
-        if (d.balance < 0) throw new Error("Negative balance attempt");
         await pool.query(
             `UPDATE users SET balance=$2, energy=$3, tap=$4, profit=$5, last_seen=NOW() WHERE id=$1`, 
             [d.userId, d.balance, d.energy, d.tap, d.profit]
