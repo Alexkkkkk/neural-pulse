@@ -6,7 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
 
-// --- ИМПОРТЫ АДМИНКИ ---
+// --- ПАКЕТЫ АДМИНКИ ---
 import AdminJS from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSql from '@adminjs/sql';
@@ -39,18 +39,18 @@ app.use(express.static(path.join(__dirname, 'static')));
 
 const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
-// --- ИНИЦИАЛИЗАЦИЯ БД С ПРИНУДИТЕЛЬНЫМ СБРОСОМ ---
+// --- ИНИЦИАЛИЗАЦИЯ БД ---
 const initDB = async () => {
     const client = await pool.connect();
     try {
-        console.log("🛠 [DB] Принудительная очистка и создание структур...");
+        console.log("🛠 [DB] Синхронизация таблиц...");
         
-        // Удаляем старые таблицы, чтобы разорвать неправильные связи
-        await client.query(`DROP TABLE IF EXISTS user_tasks, tasks, users CASCADE`);
+        // ВАЖНО: После того как база один раз пересоздалась, 
+        // DROP TABLE можно закомментировать, если хочешь сохранять игроков.
+        // await client.query(`DROP TABLE IF EXISTS user_tasks, tasks, users CASCADE`);
 
-        // Создаем заново в строгом порядке
         await client.query(`
-            CREATE TABLE users (
+            CREATE TABLE IF NOT EXISTS users (
                 id BIGINT PRIMARY KEY, 
                 username TEXT, 
                 photo_url TEXT,
@@ -65,7 +65,7 @@ const initDB = async () => {
             )`);
         
         await client.query(`
-            CREATE TABLE tasks (
+            CREATE TABLE IF NOT EXISTS tasks (
                 id SERIAL PRIMARY KEY,
                 title TEXT NOT NULL,
                 reward INTEGER DEFAULT 1000,
@@ -74,13 +74,13 @@ const initDB = async () => {
             )`);
 
         await client.query(`
-            CREATE TABLE user_tasks (
+            CREATE TABLE IF NOT EXISTS user_tasks (
                 user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
                 task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
                 PRIMARY KEY (user_id, task_id)
             )`);
 
-        console.log("✅ [DB] База данных успешно пересоздана");
+        console.log("✅ [DB] База данных готова");
     } catch (e) {
         console.error("❌ [DB ERROR]:", e.message);
     } finally {
@@ -88,23 +88,26 @@ const initDB = async () => {
     }
 };
 
-// --- ЗАПУСК АДМИНКИ ---
+// --- ЗАПУСК АДМИНКИ (ИСПРАВЛЕННЫЙ) ---
 const startAdmin = async () => {
     try {
-        // Мы передаем адаптер прямо в ресурс для надежности
         const adminJs = new AdminJS({
+            // Явно указываем адаптер для каждого ресурса
             resources: [
                 { 
                     resource: { model: { tableName: 'users', connectionOptions: { connectionString: PG_URI, dialect: 'postgres' } }, adapter: AdminJSSql },
-                    options: { navigation: { name: 'Управление', icon: 'User' } }
+                    options: { 
+                        navigation: { name: 'Neural Pulse', icon: 'User' },
+                        properties: { last_seen: { isVisible: { list: true, edit: false, filter: true, show: true } } }
+                    }
                 },
                 { 
                     resource: { model: { tableName: 'tasks', connectionOptions: { connectionString: PG_URI, dialect: 'postgres' } }, adapter: AdminJSSql },
-                    options: { navigation: { name: 'Управление', icon: 'Task' } }
+                    options: { navigation: { name: 'Neural Pulse', icon: 'Task' } }
                 }
             ],
             rootPath: '/admin',
-            branding: { companyName: 'Neural Pulse', softwareBrothers: false }
+            branding: { companyName: 'Neural Pulse Admin', softwareBrothers: false }
         });
 
         const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
@@ -112,18 +115,18 @@ const startAdmin = async () => {
                 if (email === ADMIN_USER.email && password === ADMIN_USER.password) return ADMIN_USER;
                 return null;
             },
-            cookieName: 'neural_session',
-            cookiePassword: 'super-secret-password-123-long-enough',
-        }, null, { resave: false, saveUninitialized: true, secret: 'session_secret' });
+            cookieName: 'pulse_admin_session',
+            cookiePassword: 'super-secret-password-123-must-be-very-long-and-secure',
+        }, null, { resave: false, saveUninitialized: true, secret: 'session_key' });
 
         app.use(adminJs.options.rootPath, router);
-        console.log(`🔐 [ADMIN] Панель: ${DOMAIN}/admin`);
+        console.log(`🔐 [ADMIN] Панель доступна по адресу: ${DOMAIN}/admin`);
     } catch (e) { 
         console.error("❌ [ADMIN ERROR]:", e.message); 
     }
 };
 
-// Остальные API (get /api/user/:id, post /api/save) остаются без изменений...
+// --- API ЭНДПОИНТЫ ---
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     const { username, photo_url, ref } = req.query;
@@ -153,9 +156,10 @@ app.post('/api/save', async (req, res) => {
             [userId, balance, energy, tap, profit]
         );
         res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: "Save failed" }); }
+    } catch (e) { res.status(500).json({ error: "Save error" }); }
 });
 
+// Бот
 bot.start((ctx) => {
     const webAppUrl = ctx.startPayload ? `${DOMAIN}?ref=${ctx.startPayload}` : DOMAIN;
     ctx.reply(`<b>Neural Pulse | System</b>\nAgent <b>${ctx.from.first_name}</b>, terminal ready.`, {
