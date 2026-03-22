@@ -1,6 +1,7 @@
 {
   "name": "neural-pulse",
   "version": "2.6.0",
+  "type": "module",
   "main": "server.js",
   "dependencies": {
     "express": "4.18.2",
