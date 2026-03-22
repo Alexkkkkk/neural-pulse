@@ -4,6 +4,7 @@ import pg from 'pg';
 const { Pool } = pg;
 import path from 'path';
 import { fileURLToPath } from 'url';
+import cors from 'cors';
 
 // --- ПАКЕТЫ АДМИНКИ ---
 import AdminJS from 'adminjs';
@@ -13,6 +14,7 @@ import * as AdminJSSql from '@adminjs/sql';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Регистрация адаптера SQL
 AdminJS.registerAdapter({
     Database: AdminJSSql.Database,
     Resource: AdminJSSql.Resource,
@@ -31,22 +33,20 @@ const ADMIN_USER = {
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// Встроенный CORS
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    if (req.method === 'OPTIONS') return res.sendStatus(200);
-    next();
-});
-
+app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-const pool = new Pool({ connectionString: PG_URI, ssl: false });
+const pool = new Pool({ 
+    connectionString: PG_URI, 
+    ssl: false,
+    max: 20, 
+    idleTimeoutMillis: 30000 
+});
 
 // --- ИНИЦИАЛИЗАЦИЯ БД ---
 const initDB = async () => {
+    console.log("🛠 [DB] Проверка структуры...");
     try {
         const client = await pool.connect();
         await client.query(`
@@ -62,19 +62,25 @@ const initDB = async () => {
                 referrer_id BIGINT,
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_users_balance ON users(balance DESC)`);
         console.log("✅ [DB] Таблица users готова");
         client.release();
-    } catch (e) { console.error("❌ [DB ERROR]:", e.message); }
+    } catch (e) { 
+        console.error("❌ [DB ERROR]:", e.message); 
+    }
 };
 
-// --- АДМИН-ПАНЕЛЬ ---
+// --- ФУНКЦИЯ ЗАПУСКА АДМИНКИ ---
 const startAdmin = async () => {
     try {
         const adminJs = new AdminJS({
             resources: [{
                 resource: {
                     adapter: AdminJSSql,
-                    model: { tableName: 'users', connectionOptions: { connectionString: PG_URI, dialect: 'postgres' } }
+                    model: { 
+                        tableName: 'users', 
+                        connectionOptions: { connectionString: PG_URI, dialect: 'postgres' } 
+                    }
                 },
                 options: {
                     navigation: { name: 'Игроки', icon: 'User' },
@@ -85,7 +91,11 @@ const startAdmin = async () => {
                 }
             }],
             rootPath: '/admin',
-            branding: { companyName: 'Neural Pulse Admin', softwareBrothers: false }
+            branding: {
+                companyName: 'Neural Pulse Admin',
+                softwareBrothers: false,
+                theme: { colors: { primary100: '#00ff41' } }
+            }
         });
 
         const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
@@ -95,24 +105,34 @@ const startAdmin = async () => {
             },
             cookieName: 'adminjs-session',
             cookiePassword: 'super-secret-password-123',
-        }, null, { resave: false, saveUninitialized: true, secret: 'session-secret' });
+        }, null, {
+            resave: false,
+            saveUninitialized: true,
+            secret: 'super-secret-session-secret',
+        });
 
         app.use(adminJs.options.rootPath, router);
-    } catch (error) { console.error("❌ [ADMIN ERROR]:", error.message); }
+        console.log(`🔐 [ADMIN] Панель готова: ${DOMAIN}/admin`);
+    } catch (error) {
+        console.error("❌ [ADMIN ERROR]:", error.message);
+    }
 };
 
-// --- API ЭНДПОИНТЫ ---
+await initDB();
+await startAdmin();
 
-// Получение данных игрока + Рефералка + Offline Profit
+// --- API ---
+
+// Получение данных пользователя + Рефералка + Offline Profit
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     const { username, photo_url, ref } = req.query;
     
     try {
-        let result = await pool.query('SELECT *, NOW() as current_time FROM users WHERE id = $1', [userId]);
+        let result = await pool.query('SELECT *, NOW() as current_server_time FROM users WHERE id = $1', [userId]);
         
         if (result.rows.length === 0) {
-            // НОВЫЙ ПОЛЬЗОВАТЕЛЬ
+            // Новый пользователь
             const refId = (ref && ref !== userId) ? parseInt(ref) : null;
             
             const newUser = await pool.query(
@@ -120,7 +140,7 @@ app.get('/api/user/:id', async (req, res) => {
                 [userId, username || 'AGENT', photo_url || '', refId]
             );
 
-            // Если есть реферер - даем ему бонус
+            // Бонус пригласившему
             if (refId) {
                 await pool.query('UPDATE users SET balance = balance + 5000 WHERE id = $1', [refId]);
             }
@@ -128,29 +148,25 @@ app.get('/api/user/:id', async (req, res) => {
             return res.json({ ...newUser.rows[0], offlineProfit: 0 });
         }
 
-        // СУЩЕСТВУЮЩИЙ ПОЛЬЗОВАТЕЛЬ (Расчет Offline прибыли)
         const user = result.rows[0];
         const lastSeen = new Date(user.last_seen);
-        const now = new Date(user.current_time);
+        const now = new Date(user.current_server_time);
         const secondsOffline = Math.floor((now - lastSeen) / 1000);
         
-        // Начисляем прибыль (макс. за 3 часа отсутствия)
+        // Лимит пассивного дохода - 3 часа
         const cappedSeconds = Math.min(secondsOffline, 3 * 3600);
         const offlineProfit = Math.floor((user.profit / 3600) * cappedSeconds);
 
         res.json({ ...user, offlineProfit });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { res.status(500).json({ error: "DB Error" }); }
 });
 
-// Сохранение прогресса
 app.post('/api/save', async (req, res) => {
-    const { userId, balance, energy, tap, profit } = req.body;
+    const d = req.body;
     try {
-        if (balance < 0) return res.status(400).json({ error: "Invalid balance" });
-        
         await pool.query(
             `UPDATE users SET balance=$2, energy=$3, tap=$4, profit=$5, last_seen=NOW() WHERE id=$1`, 
-            [userId, balance, energy, tap, profit]
+            [d.userId, d.balance, d.energy, d.tap, d.profit]
         );
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: "Save error" }); }
@@ -167,13 +183,9 @@ app.get('/api/top', async (req, res) => {
 bot.start((ctx) => {
     const refId = ctx.startPayload;
     const webAppUrl = refId ? `${DOMAIN}?ref=${refId}` : DOMAIN;
-    
-    ctx.reply(`<b>Neural Pulse | Sync Active</b>\n\nWelcome, Agent <b>${ctx.from.first_name}</b>.\nYour terminal is ready for operation.`, {
+    ctx.reply(`<b>Neural Pulse | Sync Active</b>\nWelcome, Agent <b>${ctx.from.first_name}</b>.`, {
         parse_mode: 'HTML',
-        ...Markup.inlineKeyboard([
-            [Markup.button.webApp("⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", webAppUrl)],
-            [Markup.button.url("📢 Канал проекта", "https://t.me/your_channel")]
-        ])
+        ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", webAppUrl)]])
     });
 });
 
@@ -181,8 +193,6 @@ const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
 app.use(bot.webhookCallback(WEBHOOK_PATH));
 
 app.listen(PORT, async () => {
-    await initDB();
-    await startAdmin();
-    console.log(`🚀 СЕРВЕР ЗАПУЩЕН: ${DOMAIN}`);
+    console.log(`🚀 СЕРВЕР: ${DOMAIN}`);
     await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
 });
