@@ -4,7 +4,7 @@ import pg from 'pg';
 const { Pool } = pg;
 import path from 'path';
 import { fileURLToPath } from 'url';
-import session from 'express-session';
+import cors from 'cors'; // Добавили для работы Mini App
 
 // --- ПАКЕТЫ АДМИНКИ ---
 import AdminJS from 'adminjs';
@@ -14,7 +14,7 @@ import * as AdminJSSql from '@adminjs/sql';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Регистрация адаптера
+// 1. Регистрация адаптера
 AdminJS.registerAdapter({
     Database: AdminJSSql.Database,
     Resource: AdminJSSql.Resource,
@@ -33,15 +33,16 @@ const ADMIN_USER = {
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
+// Разрешаем запросы с любых доменов (важно для Telegram WebApp)
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'static')));
+
 const pool = new Pool({ 
     connectionString: PG_URI, 
     ssl: false,
-    max: 20, 
-    idleTimeoutMillis: 30000 
+    max: 20
 });
-
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'static')));
 
 // --- ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ ---
 const initDB = async () => {
@@ -72,39 +73,36 @@ const initDB = async () => {
 // --- ФУНКЦИЯ ЗАПУСКА АДМИНКИ ---
 const startAdmin = async () => {
     try {
-        // Создаем инстанс базы данных для адаптера
-        const db = new AdminJSSql.Database({
-            connectionString: PG_URI,
-            dialect: 'postgres'
-        });
-
         const adminJs = new AdminJS({
-            databases: [db], // Передаем объект базы, созданный через адаптер
+            // Вместо передачи пула, мы явно указываем ресурс через адаптер SQL
+            resources: [{
+                resource: {
+                    adapter: AdminJSSql,
+                    model: { 
+                        tableName: 'users', 
+                        connectionOptions: { connectionString: PG_URI, dialect: 'postgres' } 
+                    }
+                },
+                options: {
+                    navigation: { name: 'Игроки', icon: 'User' },
+                    properties: {
+                        id: { isId: true, isTitle: true },
+                        photo_url: { isVisible: { list: false, edit: true, filter: false, show: true } },
+                        last_seen: { isVisible: { list: true, edit: false, filter: true, show: true } }
+                    }
+                }
+            }],
             rootPath: '/admin',
             branding: {
                 companyName: 'Neural Pulse Admin',
                 softwareBrothers: false,
                 theme: { colors: { primary100: '#00ff41' } }
-            },
-            resources: [
-                {
-                    resource: { tableName: 'users', database: 'bothost_db_db5b342fc026' },
-                    options: {
-                        navigation: { name: 'Управление', icon: 'User' },
-                        properties: {
-                            id: { isId: true, isTitle: true },
-                            last_seen: { isVisible: { list: true, edit: false, filter: true, show: true } }
-                        }
-                    }
-                }
-            ]
+            }
         });
 
         const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                if (email === ADMIN_USER.email && password === ADMIN_USER.password) {
-                    return ADMIN_USER;
-                }
+                if (email === ADMIN_USER.email && password === ADMIN_USER.password) return ADMIN_USER;
                 return null;
             },
             cookieName: 'adminjs-session',
@@ -116,13 +114,13 @@ const startAdmin = async () => {
         });
 
         app.use(adminJs.options.rootPath, router);
-        console.log(`🔐 [ADMIN] Панель управления успешно инициализирована`);
+        console.log(`🔐 [ADMIN] Панель управления готова на ${DOMAIN}/admin`);
     } catch (error) {
         console.error("❌ [ADMIN ERROR]:", error.message);
     }
 };
 
-// Запуск
+// Запуск сервера
 await initDB();
 await startAdmin();
 
@@ -176,9 +174,6 @@ const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
 app.use(bot.webhookCallback(WEBHOOK_PATH));
 
 app.listen(PORT, async () => {
-    console.log(`\n🚀 ==========================================`);
-    console.log(`🚀 СЕРВЕР: ${DOMAIN}`);
-    console.log(`🚀 ПОРТ: ${PORT}`);
-    console.log(`🚀 ==========================================\n`);
+    console.log(`\n🚀 СЕРВЕР ЗАПУЩЕН: ${DOMAIN}`);
     await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
 });
