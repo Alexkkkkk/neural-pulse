@@ -12,9 +12,14 @@
     "@adminjs/sql": "2.2.6",
     "express-session": "1.17.3",
     "express-formidable": "1.2.0",
-    "tslib": "2.6.2"
+    "tslib": "2.6.2",
+    "styled-components": "5.3.9",
+    "regenerator-runtime": "0.13.11"
   },
   "scripts": {
     "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
