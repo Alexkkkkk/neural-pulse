@@ -72,8 +72,14 @@ const initDB = async () => {
 // --- ФУНКЦИЯ ЗАПУСКА АДМИНКИ ---
 const startAdmin = async () => {
     try {
+        // Создаем инстанс базы данных для адаптера
+        const db = new AdminJSSql.Database({
+            connectionString: PG_URI,
+            dialect: 'postgres'
+        });
+
         const adminJs = new AdminJS({
-            // Убираем databases: [pool], чтобы избежать ошибки forEach
+            databases: [db], // Передаем объект базы, созданный через адаптер
             rootPath: '/admin',
             branding: {
                 companyName: 'Neural Pulse Admin',
@@ -82,16 +88,11 @@ const startAdmin = async () => {
             },
             resources: [
                 {
-                    // Явно указываем ресурс через параметры подключения
-                    resource: {
-                        adapter: AdminJSSql,
-                        model: { tableName: 'users', connectionOptions: { connectionString: PG_URI, dialect: 'postgres' } }
-                    },
+                    resource: { tableName: 'users', database: 'bothost_db_db5b342fc026' },
                     options: {
-                        navigation: { name: 'Игроки', icon: 'User' },
+                        navigation: { name: 'Управление', icon: 'User' },
                         properties: {
-                            id: { isId: true },
-                            photo_url: { isVisible: { list: false, edit: true, filter: false, show: true } },
+                            id: { isId: true, isTitle: true },
                             last_seen: { isVisible: { list: true, edit: false, filter: true, show: true } }
                         }
                     }
@@ -115,12 +116,13 @@ const startAdmin = async () => {
         });
 
         app.use(adminJs.options.rootPath, router);
-        console.log(`🔐 [ADMIN] Панель управления активирована`);
+        console.log(`🔐 [ADMIN] Панель управления успешно инициализирована`);
     } catch (error) {
         console.error("❌ [ADMIN ERROR]:", error.message);
     }
 };
 
+// Запуск
 await initDB();
 await startAdmin();
 
