@@ -73,8 +73,8 @@ const initDB = async () => {
 // --- ФУНКЦИЯ ЗАПУСКА АДМИНКИ ---
 const startAdmin = async () => {
     try {
+        // Явно создаем ресурс, чтобы AdminJS точно знал, какой адаптер использовать
         const adminJs = new AdminJS({
-            // Передаем pool напрямую — это решает проблему NoDatabaseAdapterError
             databases: [pool], 
             rootPath: '/admin',
             branding: {
@@ -82,10 +82,10 @@ const startAdmin = async () => {
                 softwareBrothers: false,
                 theme: { colors: { primary100: '#00ff41' } }
             },
-            // Добавляем таблицу пользователей в меню админки
             resources: [
                 {
-                    resource: { tableName: 'users', database: pool.options.database },
+                    // Используем Resource напрямую из адаптера для стабильности
+                    resource: new AdminJSSql.Resource({ tableName: 'users', database: 'bothost_db_db5b342fc026' }),
                     options: {
                         properties: {
                             id: { isId: true },
@@ -112,13 +112,13 @@ const startAdmin = async () => {
         });
 
         app.use(adminJs.options.rootPath, router);
-        console.log(`🔐 [ADMIN] Панель управления доступна: ${DOMAIN}/admin`);
+        console.log(`🔐 [ADMIN] Панель управления настроена успешно`);
     } catch (error) {
         console.error("❌ [ADMIN ERROR]:", error.message);
     }
 };
 
-// Запуск базы и админки
+// Запуск (используем Top-level await)
 await initDB();
 await startAdmin();
 
