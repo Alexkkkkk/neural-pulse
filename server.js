@@ -14,11 +14,14 @@ import * as AdminJSSql from '@adminjs/sql';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 1. СТРОГАЯ РЕГИСТРАЦИЯ АДАПТЕРА
+console.log("🚀 [SYSTEM] Инициализация системы...");
+
+// 1. РЕГИСТРАЦИЯ АДАПТЕРА
 AdminJS.registerAdapter({
     Database: AdminJSSql.Database,
     Resource: AdminJSSql.Resource,
 });
+console.log("📦 [SYSTEM] Адаптер AdminJS зарегистрирован");
 
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const PG_URI = "postgresql://bothost_db_db5b342fc026:gwp3jv20PY7JtERt4cNIvSpReq8YpLYzlH99BY5vyc4@node1.pghost.ru:32867/bothost_db_db5b342fc026";
@@ -41,6 +44,7 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
 // --- ИНИЦИАЛИЗАЦИЯ БД ---
 const initDB = async () => {
+    console.log("🛠 [DB] Попытка подключения к PostgreSQL...");
     const client = await pool.connect();
     try {
         console.log("🛠 [DB] Проверка таблиц...");
@@ -74,7 +78,7 @@ const initDB = async () => {
                 task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
                 PRIMARY KEY (user_id, task_id)
             )`);
-        console.log("✅ [DB] Структура базы данных проверена");
+        console.log("✅ [DB] Таблицы готовы");
     } catch (e) {
         console.error("❌ [DB ERROR]:", e.message);
     } finally {
@@ -85,10 +89,11 @@ const initDB = async () => {
 // --- ЗАПУСК АДМИНКИ ---
 const startAdmin = async () => {
     try {
-        const db = await new AdminJSSql.Database({
+        console.log("⚙️ [ADMIN] Подключение базы к AdminJS...");
+        const db = new AdminJSSql.Database({
             connectionString: PG_URI,
             dialect: 'postgres'
-        }).init();
+        });
 
         const adminJs = new AdminJS({
             databases: [db],
@@ -110,7 +115,7 @@ const startAdmin = async () => {
                     console.log(`🔐 [ADMIN] Успешный вход: ${email}`);
                     return ADMIN_USER;
                 }
-                console.warn(`⚠️ [ADMIN] Неудачная попытка входа: ${email}`);
+                console.warn(`⚠️ [ADMIN] Отказ в доступе: ${email}`);
                 return null;
             },
             cookieName: 'neural_pulse_session',
@@ -118,7 +123,7 @@ const startAdmin = async () => {
         }, null, { resave: false, saveUninitialized: true, secret: 'admin_secret' });
 
         app.use(adminJs.options.rootPath, router);
-        console.log(`🔐 [ADMIN] Панель готова: ${DOMAIN}/admin`);
+        console.log(`✅ [ADMIN] Панель доступна по адресу: ${DOMAIN}/admin`);
     } catch (e) { 
         console.error("❌ [ADMIN ERROR]:", e.message); 
     }
@@ -127,14 +132,14 @@ const startAdmin = async () => {
 // --- API ---
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
-    const { username, photo_url, ref } = req.query;
-    console.log(`👤 [API] Запрос данных юзера: ${userId} (${username || 'unknown'})`);
+    console.log(`👤 [GET /api/user] Запрос для ID: ${userId}`);
 
     try {
         let result = await pool.query('SELECT *, NOW() as now FROM users WHERE id = $1', [userId]);
         
         if (result.rows.length === 0) {
-            console.log(`🆕 [API] Новый пользователь! Регистрация: ${userId}`);
+            console.log(`🆕 [API] Регистрация нового юзера: ${userId}`);
+            const { username, photo_url, ref } = req.query;
             const refId = (ref && ref !== userId) ? parseInt(ref) : null;
             
             const newUser = await pool.query(
@@ -143,7 +148,7 @@ app.get('/api/user/:id', async (req, res) => {
             );
 
             if (refId) {
-                console.log(`🎁 [API] Начисление бонуса рефереру: ${refId} от ${userId}`);
+                console.log(`🎁 [API] Реферальный бонус для ID: ${refId}`);
                 await pool.query('UPDATE users SET balance = balance + 5000 WHERE id = $1', [refId]);
             }
             return res.json({ ...newUser.rows[0], offlineProfit: 0 });
@@ -154,7 +159,7 @@ app.get('/api/user/:id', async (req, res) => {
         const recoveredEnergy = Math.min(user.max_energy, user.energy + (secondsOffline * 3));
         const offlineProfit = Math.floor((user.profit / 3600) * Math.min(secondsOffline, 10800));
 
-        console.log(`📈 [API] Юзер ${userId} вернулся. Оффлайн: ${secondsOffline}с. Профит: +${offlineProfit}`);
+        console.log(`📊 [API] Юзер ${userId} онлайн. Оффлайн профит: ${offlineProfit}`);
         res.json({ ...user, energy: recoveredEnergy, offlineProfit });
     } catch (e) { 
         console.error(`❌ [API ERROR] Ошибка /user/${userId}:`, e.message);
@@ -169,22 +174,19 @@ app.post('/api/save', async (req, res) => {
             `UPDATE users SET balance=$2, energy=$3, tap=$4, profit=$5, last_seen=NOW() WHERE id=$1`, 
             [userId, balance, energy, tap, profit]
         );
-        console.log(`💾 [API] Сохранение прогресса: ID ${userId} | Баланс: ${balance} | Энергия: ${energy}`);
+        console.log(`💾 [SAVE] Сохранение: ID ${userId} | Bal: ${balance} | En: ${energy}`);
         res.json({ ok: true });
     } catch (e) { 
-        console.error(`❌ [API ERROR] Ошибка сохранения ID ${userId}:`, e.message);
+        console.error(`❌ [SAVE ERROR] ID ${userId}:`, e.message);
         res.status(500).json({ error: "Save error" }); 
     }
 });
 
 // --- BOT ---
 bot.start((ctx) => {
-    const userId = ctx.from.id;
-    const refPayload = ctx.startPayload || 'none';
-    console.log(`🤖 [BOT] Команда /start от ${userId}. Payload: ${refPayload}`);
-
+    console.log(`🤖 [BOT] Юзер ${ctx.from.id} запустил бота. Payload: ${ctx.startPayload || 'нет'}`);
     const webAppUrl = ctx.startPayload ? `${DOMAIN}?ref=${ctx.startPayload}` : DOMAIN;
-    ctx.reply(`<b>Neural Pulse | Terminal</b>\nAgent <b>${ctx.from.first_name}</b>, sync complete.`, {
+    ctx.reply(`<b>Neural Pulse | Terminal</b>\nAgent <b>${ctx.from.first_name}</b>, terminal sync complete.`, {
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", webAppUrl)]])
     });
@@ -196,7 +198,12 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 app.listen(PORT, async () => {
     await initDB();
     await startAdmin();
-    console.log(`🚀 СЕРВЕР ЗАПУЩЕН: ${DOMAIN}`);
-    console.log(`📡 WEBHOOK: ${DOMAIN}${WEBHOOK_PATH}`);
-    await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
+    console.log(`🚀 [SERVER] Запущен на порту ${PORT}`);
+    console.log(`🌐 [SERVER] Домен: ${DOMAIN}`);
+    try {
+        await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
+        console.log(`📡 [BOT] Webhook установлен: ${DOMAIN}${WEBHOOK_PATH}`);
+    } catch (e) {
+        console.error("❌ [BOT WEBHOOK ERROR]:", e.message);
+    }
 });
