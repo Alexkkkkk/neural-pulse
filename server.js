@@ -15,7 +15,7 @@ import * as AdminJSSql from '@adminjs/sql';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 1. РЕГИСТРАЦИЯ АДАПТЕРА (без динамического импорта, напрямую)
+// 1. РЕГИСТРАЦИЯ АДАПТЕРА
 AdminJS.registerAdapter({
     Database: AdminJSSql.Database,
     Resource: AdminJSSql.Resource,
@@ -37,7 +37,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(session({
-    secret: 'neural_pulse_secret_2026',
+    secret: 'neural_pulse_2026_secure',
     resave: false,
     saveUninitialized: true,
     cookie: { httpOnly: true, secure: false }
@@ -69,31 +69,20 @@ const initDB = async () => {
 // --- ЗАПУСК АДМИНКИ ---
 const startAdmin = async () => {
     try {
-        console.log("⚙️ [ADMIN] Настройка ресурсов...");
+        console.log("⚙️ [ADMIN] Подключение базы данных...");
+
+        // Создаем инстанс базы данных
+        const db = new AdminJSSql.Database({
+            connectionString: PG_URI,
+            dialect: 'postgres'
+        });
+
+        // Прямой метод инициализации ресурсов через адаптер
+        // Ждем, пока адаптер сам "вытащит" модели из базы
+        const resources = await db.resources();
 
         const adminJs = new AdminJS({
-            // Вместо databases используем явное перечисление ресурсов
-            // Это обходит проблему "no adapters" при сканировании всей БД
-            resources: [
-                {
-                    resource: {
-                        model: AdminJSSql.Resource,
-                        database: AdminJSSql.Database,
-                        tableName: 'users',
-                        connectionOptions: {
-                            connectionString: PG_URI,
-                            dialect: 'postgres'
-                        }
-                    },
-                    options: { 
-                        navigation: { name: 'Игроки', icon: 'User' },
-                        properties: {
-                            id: { isId: true },
-                            last_seen: { isVisible: { list: true, show: true, edit: false } }
-                        }
-                    }
-                }
-            ],
+            resources: resources, // Передаем уже готовые ресурсы, которые нашел адаптер
             rootPath: '/admin',
             branding: { 
                 companyName: 'Neural Pulse Admin', 
@@ -116,13 +105,13 @@ const startAdmin = async () => {
         });
 
         app.use(adminJs.options.rootPath, router);
-        console.log(`✅ [ADMIN] Админка готова: ${DOMAIN}/admin`);
+        console.log(`✅ [ADMIN] Админка запущена через db.resources(): ${DOMAIN}/admin`);
     } catch (e) { 
         console.error("❌ [ADMIN ERROR]:", e.message); 
     }
 };
 
-// --- API ---
+// --- API (ОСТАВЛЯЕМ БЕЗ ИЗМЕНЕНИЙ) ---
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     try {
@@ -142,10 +131,7 @@ app.get('/api/user/:id', async (req, res) => {
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy } = req.body;
     try {
-        await pool.query(
-            `UPDATE users SET balance=$2, energy=$3, last_seen=NOW() WHERE id=$1`, 
-            [userId, balance, energy]
-        );
+        await pool.query(`UPDATE users SET balance=$2, energy=$3, last_seen=NOW() WHERE id=$1`, [userId, balance, energy]);
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: "Save error" }); }
 });
