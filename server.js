@@ -19,7 +19,7 @@ AdminJS.registerAdapter(AdminJSSequelize);
 
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const PG_URI = "postgresql://bothost_db_db5b342fc026:gwp3jv20PY7JtERt4cNIvSpReq8YpLYzlH99BY5vyc4@node1.pghost.ru:32867/bothost_db_db5b342fc026";
-const DOMAIN = "https://neural-pulse.bothost.ru"; 
+const DOMAIN = "https://np.bothost.tech"; 
 const PORT = 3000;
 
 const bot = new Telegraf(BOT_TOKEN);
