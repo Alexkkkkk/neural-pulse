@@ -30,13 +30,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(session({
-    secret: 'neural_pulse_fix_2026',
+    secret: 'neural_pulse_fix_2026_secure',
     resave: false,
     saveUninitialized: true
 }));
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Пул для API
+// Пул для API (оставляем для совместимости с твоими текущими запросами)
 const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
 // Инициализация Sequelize для Админки
@@ -46,9 +46,15 @@ const sequelize = new Sequelize(PG_URI, {
     dialectOptions: { ssl: false } 
 });
 
-// Описание модели User для AdminJS
+// --- ОПИСАНИЕ МОДЕЛЕЙ ---
+
+// Модель User (Игроки)
 const User = sequelize.define('users', {
-    id: { type: DataTypes.BIGINT, primary_key: true, autoIncrement: false },
+    id: { 
+        type: DataTypes.BIGINT, 
+        primaryKey: true,    // ИСПРАВЛЕНО: Теперь с большой буквы K
+        autoIncrement: false 
+    },
     username: { type: DataTypes.STRING },
     balance: { type: DataTypes.DOUBLE, defaultValue: 0 },
     energy: { type: DataTypes.DOUBLE, defaultValue: 1000 },
@@ -58,13 +64,22 @@ const User = sequelize.define('users', {
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: false });
 
+// Модель Task (Задания) - ДОБАВЛЕНО
+const Task = sequelize.define('tasks', {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    title: { type: DataTypes.STRING, allowNull: false },
+    reward: { type: DataTypes.INTEGER, defaultValue: 1000 },
+    url: { type: DataTypes.STRING }
+}, { timestamps: false });
+
 // --- ИНИЦИАЛИЗАЦИЯ БД ---
 const initDB = async () => {
     try {
         console.log("🛠 [DB] Синхронизация через Sequelize...");
         await sequelize.authenticate();
-        await sequelize.sync(); 
-        console.log("✅ [DB] Таблицы готовы");
+        // sync() создаст таблицы, если их еще нет в базе
+        await sequelize.sync({ alter: true }); 
+        console.log("✅ [DB] Таблицы синхронизированы");
     } catch (e) {
         console.error("❌ [DB ERROR]:", e.message);
     }
@@ -78,13 +93,27 @@ const startAdmin = async () => {
                 { 
                     resource: User, 
                     options: { 
-                        navigation: { name: 'Игроки', icon: 'User' },
-                        properties: { id: { isId: true } }
+                        navigation: { name: 'Управление', icon: 'User' },
+                        properties: {
+                            id: { isId: true },
+                            last_seen: { isVisible: { list: true, show: true, edit: false } }
+                        }
                     } 
+                },
+                {
+                    resource: Task,
+                    options: {
+                        navigation: { name: 'Управление', icon: 'Checklist' },
+                        branding: { companyName: 'Задания' }
+                    }
                 }
             ],
             rootPath: '/admin',
-            branding: { companyName: 'Neural Pulse Admin', softwareBrothers: false }
+            branding: { 
+                companyName: 'Neural Pulse Panel', 
+                softwareBrothers: false,
+                logo: false 
+            }
         });
 
         const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
@@ -93,11 +122,15 @@ const startAdmin = async () => {
                 return null;
             },
             cookieName: 'adminjs_session',
-            cookiePassword: 'super-long-secure-password-longer-than-32-chars',
-        }, null, { resave: false, saveUninitialized: true, secret: 'session_secret' });
+            cookiePassword: 'super-long-secure-password-longer-than-32-chars-2026',
+        }, null, { 
+            resave: false, 
+            saveUninitialized: true, 
+            secret: 'session_secret_key' 
+        });
 
         app.use(adminJs.options.rootPath, router);
-        console.log(`✅ [ADMIN] Админка на Sequelize успешно запущена!`);
+        console.log(`✅ [ADMIN] Админка успешно запущена!`);
     } catch (e) { 
         console.error("❌ [ADMIN ERROR]:", e.message); 
     }
@@ -128,19 +161,33 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Save error" }); }
 });
 
+// Эндпоинт для получения списка заданий в игре
+app.get('/api/tasks', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM tasks');
+        res.json(result.rows);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // --- BOT ---
 bot.start((ctx) => {
-    ctx.reply(`<b>Neural Pulse | Terminal</b>`, {
+    ctx.reply(`<b>Neural Pulse | Terminal</b>\nAgent <b>${ctx.from.first_name}</b>, connection established.`, {
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])
     });
 });
 
-app.use(bot.webhookCallback(`/telegraf/${BOT_TOKEN}`));
+const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
+app.use(bot.webhookCallback(WEBHOOK_PATH));
 
 app.listen(PORT, async () => {
     await initDB();
     await startAdmin();
     console.log(`🚀 [SERVER] Запущен на ${DOMAIN}`);
-    await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`);
+    try {
+        await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
+        console.log(`✅ [BOT] Webhook установлен`);
+    } catch (err) {
+        console.error(`❌ [BOT ERROR] Webhook: ${err.message}`);
+    }
 });
