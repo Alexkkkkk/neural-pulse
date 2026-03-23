@@ -1,58 +1,56 @@
 import React from 'react'
-import { Box, H2, H5, Text, Illustration, Section, Card } from '@adminjs/design-system'
+import { Box, H2, H5, Text, Illustration, Section, Card, Icon } from '@adminjs/design-system'
 
 const Dashboard = (props) => {
-  const { totalUsers, currentMem, dbStatus, serverStatus } = props.data
+  const { totalUsers, currentMem, dbLatency, cpu } = props.data
 
   return (
-    <Box variant="grey">
-      <Box variant="white" padding="xl" marginBottom="xl">
-        <H2>Neural Pulse: System OS</H2>
-        <Text>Добро пожаловать в центр управления терминалом. Ниже приведена сводка состояния системы.</Text>
+    <Box variant="grey" padding="xl">
+      <Box variant="white" padding="xl" marginBottom="xl" boxShadow="card">
+        <H2>Neural Pulse: Command Center</H2>
+        <Text>Проект на стадии бета-тестирования. Ниже актуальные показатели системы.</Text>
       </Box>
 
       <Box display="flex" flexDirection="row" flexWrap="wrap">
-        {/* Карточка: Пользователи */}
         <Box width={[1, 1/2, 1/4]} padding="sm">
-          <Card variant="white" padding="md">
-            <H5 color="primary100">Игроков в сети</H5>
+          <Card padding="md">
+            <H5 color="primary100"><Icon icon="User" /> Игроков</H5>
             <H2>{totalUsers}</H2>
-            <Text size="sm">Общее количество регистраций</Text>
+            <Text size="sm">Всего регистраций</Text>
           </Card>
         </Box>
 
-        {/* Карточка: Память */}
         <Box width={[1, 1/2, 1/4]} padding="sm">
-          <Card variant="white" padding="md">
-            <H5 color="success">Загрузка RAM</H5>
+          <Card padding="md">
+            <H5 color="success"><Icon icon="Cpu" /> Нагрузка CPU</H5>
+            <H2>{cpu}%</H2>
+            <Text size="sm">Загрузка процессора NL2</Text>
+          </Card>
+        </Box>
+
+        <Box width={[1, 1/2, 1/4]} padding="sm">
+          <Card padding="md">
+            <H5 color="info"><Icon icon="Layers" /> RAM (Memory)</H5>
             <H2>{currentMem} MB</H2>
-            <Text size="sm">Потребление памяти сервером</Text>
+            <Text size="sm">Использование памяти</Text>
           </Card>
         </Box>
 
-        {/* Карточка: База данных */}
         <Box width={[1, 1/2, 1/4]} padding="sm">
-          <Card variant="white" padding="md">
-            <H5 color="info">Статус БД</H5>
-            <H2>{dbStatus}</H2>
-            <Text size="sm">Время отклика (Latency)</Text>
-          </Card>
-        </Box>
-
-        {/* Карточка: Сервер */}
-        <Box width={[1, 1/2, 1/4]} padding="sm">
-          <Card variant="white" padding="md">
-            <H5 color="danger">Node.js</H5>
-            <H2>{serverStatus}</H2>
-            <Text size="sm">Локация: Нидерланды (NL2)</Text>
+          <Card padding="md">
+            <H5 color={dbLatency < 100 ? "success" : "danger"}><Icon icon="Database" /> Latency</H5>
+            <H2>{dbLatency} ms</H2>
+            <Text size="sm">Скорость работы базы</Text>
           </Card>
         </Box>
       </Box>
 
-      <Section marginBottom="xl">
-        <Illustration variant="Rocket" width="100px" />
-        <H5>Подключение TON</H5>
-        <Text>Графики пополнений будут доступны после интеграции TonConnect API.</Text>
+      <Section marginTop="xl">
+        <Box variant="white" padding="xl" boxShadow="card">
+            <Illustration variant="Rocket" width="80px" />
+            <H5>Интеграция TON</H5>
+            <Text>Блокчейн-графики будут активированы после настройки TonConnect.</Text>
+        </Box>
       </Section>
     </Box>
   )
