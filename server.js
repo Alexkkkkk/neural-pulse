@@ -26,18 +26,13 @@ const PG_URI = "postgresql://bothost_db_db5b342fc026:gwp3jv20PY7JtERt4cNIvSpReq8
 const DOMAIN = "https://neural-pulse.bothost.ru"; 
 const PORT = 3000;
 
-const ADMIN_USER = {
-    email: 'admin@pulse.com',
-    password: 'Kander3132001574', 
-};
-
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 app.use(session({
-    secret: 'neural_pulse_2026_secure',
+    secret: 'neural_pulse_fix_2026',
     resave: false,
     saveUninitialized: true,
     cookie: { httpOnly: true, secure: false }
@@ -62,27 +57,37 @@ const initDB = async () => {
                 profit INTEGER DEFAULT 0,
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
-        console.log("✅ [DB] Таблицы готовы");
+        console.log("✅ [DB] Таблицы проверены");
     } finally { client.release(); }
 };
 
 // --- ЗАПУСК АДМИНКИ ---
 const startAdmin = async () => {
     try {
-        console.log("⚙️ [ADMIN] Подключение базы данных...");
-
-        // Создаем инстанс базы данных
-        const db = new AdminJSSql.Database({
-            connectionString: PG_URI,
-            dialect: 'postgres'
-        });
-
-        // Прямой метод инициализации ресурсов через адаптер
-        // Ждем, пока адаптер сам "вытащит" модели из базы
-        const resources = await db.resources();
+        console.log("⚙️ [ADMIN] Ручная настройка ресурсов...");
 
         const adminJs = new AdminJS({
-            resources: resources, // Передаем уже готовые ресурсы, которые нашел адаптер
+            resources: [
+                {
+                    // Мы создаем ресурс ВРУЧНУЮ, указывая tableName
+                    // Это самый "железобетонный" способ в @adminjs/sql
+                    resource: {
+                        model: AdminJSSql.Resource,
+                        tableName: 'users',
+                        connectionOptions: {
+                            connectionString: PG_URI,
+                            dialect: 'postgres'
+                        }
+                    },
+                    options: { 
+                        navigation: { name: 'Игроки', icon: 'User' },
+                        properties: {
+                            id: { isId: true },
+                            last_seen: { isVisible: { list: true, show: true, edit: false } }
+                        }
+                    }
+                }
+            ],
             rootPath: '/admin',
             branding: { 
                 companyName: 'Neural Pulse Admin', 
@@ -93,7 +98,9 @@ const startAdmin = async () => {
 
         const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                if (email === ADMIN_USER.email && password === ADMIN_USER.password) return ADMIN_USER;
+                if (email === 'admin@pulse.com' && password === 'Kander3132001574') {
+                    return { email: 'admin@pulse.com' };
+                }
                 return null;
             },
             cookieName: 'adminjs_session',
@@ -105,23 +112,21 @@ const startAdmin = async () => {
         });
 
         app.use(adminJs.options.rootPath, router);
-        console.log(`✅ [ADMIN] Админка запущена через db.resources(): ${DOMAIN}/admin`);
+        console.log(`✅ [ADMIN] Админка запущена вручную: ${DOMAIN}/admin`);
     } catch (e) { 
         console.error("❌ [ADMIN ERROR]:", e.message); 
+        console.error(e.stack); // Выведем стек ошибки для подробностей
     }
 };
 
-// --- API (ОСТАВЛЯЕМ БЕЗ ИЗМЕНЕНИЙ) ---
+// --- API ---
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     try {
         let result = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
         if (result.rows.length === 0) {
             const { username } = req.query;
-            const newUser = await pool.query(
-                `INSERT INTO users (id, username) VALUES ($1, $2) RETURNING *`,
-                [userId, username || 'Agent']
-            );
+            const newUser = await pool.query(`INSERT INTO users (id, username) VALUES ($1, $2) RETURNING *`, [userId, username || 'Agent']);
             return res.json(newUser.rows[0]);
         }
         res.json(result.rows[0]);
