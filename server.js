@@ -14,7 +14,7 @@ import * as AdminJSSql from '@adminjs/sql';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 1. ПРИНУДИТЕЛЬНАЯ РЕГИСТРАЦИЯ АДАПТЕРА
+// 1. РЕГИСТРАЦИЯ АДАПТЕРА (ВАЖНО: Должна быть первой)
 AdminJS.registerAdapter({
     Database: AdminJSSql.Database,
     Resource: AdminJSSql.Resource,
@@ -74,7 +74,7 @@ const initDB = async () => {
                 task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
                 PRIMARY KEY (user_id, task_id)
             )`);
-        console.log("✅ [DB] Таблицы проверены");
+        console.log("✅ [DB] Таблицы готовы");
     } catch (e) {
         console.error("❌ [DB ERROR]:", e.message);
     } finally {
@@ -85,35 +85,18 @@ const initDB = async () => {
 // --- ЗАПУСК АДМИНКИ ---
 const startAdmin = async () => {
     try {
-        console.log("⚙️ [ADMIN] Настройка ресурсов...");
+        console.log("⚙️ [ADMIN] Подключение ресурсов...");
 
-        // Опции подключения, которые мы передадим в каждый ресурс
-        const connectionOptions = {
+        // Инициализируем соединение
+        const db = new AdminJSSql.Database({
             connectionString: PG_URI,
-            dialect: 'postgres',
-        };
+            dialect: 'postgres'
+        });
 
+        // Прямой метод получения ресурсов через сканирование
+        // Это самый надежный способ для @adminjs/sql
         const adminJs = new AdminJS({
-            resources: [
-                {
-                    resource: {
-                        model: AdminJSSql.Resource,
-                        database: AdminJSSql.Database,
-                        tableName: 'users',
-                        connectionOptions: connectionOptions // Передаем настройки напрямую
-                    },
-                    options: { navigation: { name: 'Игроки', icon: 'User' } }
-                },
-                {
-                    resource: {
-                        model: AdminJSSql.Resource,
-                        database: AdminJSSql.Database,
-                        tableName: 'tasks',
-                        connectionOptions: connectionOptions // Передаем настройки напрямую
-                    },
-                    options: { navigation: { name: 'Система', icon: 'Task' } }
-                }
-            ],
+            databases: [db],
             rootPath: '/admin',
             branding: { 
                 companyName: 'Neural Pulse Admin', 
@@ -130,6 +113,9 @@ const startAdmin = async () => {
             cookieName: 'neural_pulse_session',
             cookiePassword: 'super-long-secure-password-for-cookie-encryption-123',
         }, null, { resave: false, saveUninitialized: true, secret: 'admin_secret' });
+
+            // Ждем, пока AdminJS просканирует базу
+            console.log("🔍 [ADMIN] Сканирование таблиц...");
 
         app.use(adminJs.options.rootPath, router);
         console.log(`✅ [ADMIN] Админка успешно запущена: ${DOMAIN}/admin`);
