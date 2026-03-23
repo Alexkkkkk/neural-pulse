@@ -14,14 +14,11 @@ import * as AdminJSSql from '@adminjs/sql';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-console.log("🚀 [SYSTEM] Инициализация системы...");
-
-// 1. РЕГИСТРАЦИЯ АДАПТЕРА
+// 1. ПЕРВАЯ ОЧЕРЕДЬ: Регистрация адаптера
 AdminJS.registerAdapter({
     Database: AdminJSSql.Database,
     Resource: AdminJSSql.Resource,
 });
-console.log("📦 [SYSTEM] Адаптер AdminJS зарегистрирован");
 
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const PG_URI = "postgresql://bothost_db_db5b342fc026:gwp3jv20PY7JtERt4cNIvSpReq8YpLYzlH99BY5vyc4@node1.pghost.ru:32867/bothost_db_db5b342fc026";
@@ -44,9 +41,9 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 
 // --- ИНИЦИАЛИЗАЦИЯ БД ---
 const initDB = async () => {
-    console.log("🛠 [DB] Проверка таблиц...");
     const client = await pool.connect();
     try {
+        console.log("🛠 [DB] Проверка таблиц...");
         await client.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id BIGINT PRIMARY KEY, 
@@ -77,7 +74,7 @@ const initDB = async () => {
                 task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
                 PRIMARY KEY (user_id, task_id)
             )`);
-        console.log("✅ [DB] Таблицы готовы");
+        console.log("✅ [DB] Таблицы созданы/проверены");
     } catch (e) {
         console.error("❌ [DB ERROR]:", e.message);
     } finally {
@@ -88,26 +85,26 @@ const initDB = async () => {
 // --- ЗАПУСК АДМИНКИ ---
 const startAdmin = async () => {
     try {
-        console.log("⚙️ [ADMIN] Подключение ресурсов...");
-        
+        console.log("⚙️ [ADMIN] Инициализация ресурсов...");
+
+        // Создаем инстанс базы данных
+        const db = new AdminJSSql.Database({
+            connectionString: PG_URI,
+            dialect: 'postgres'
+        });
+
+        // Прямое определение ресурсов через адаптер
         const adminJs = new AdminJS({
-            // Передаем параметры подключения напрямую в ресурсы
+            databases: [db], 
             resources: [
-                { 
-                    resource: { model: AdminJSSql.Resource, database: AdminJSSql.Database, tableName: 'users' },
+                {
+                    resource: { model: AdminJSSql.Resource, database: db, tableName: 'users' },
                     options: { navigation: { name: 'Игроки', icon: 'User' } }
                 },
-                { 
-                    resource: { model: AdminJSSql.Resource, database: AdminJSSql.Database, tableName: 'tasks' },
+                {
+                    resource: { model: AdminJSSql.Resource, database: db, tableName: 'tasks' },
                     options: { navigation: { name: 'Система', icon: 'Task' } }
                 }
-            ],
-            // Указываем базу данных для сканирования
-            databases: [
-                new AdminJSSql.Database({
-                    connectionString: PG_URI,
-                    dialect: 'postgres'
-                })
             ],
             rootPath: '/admin',
             branding: { 
@@ -120,7 +117,7 @@ const startAdmin = async () => {
         const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
                 if (email === ADMIN_USER.email && password === ADMIN_USER.password) {
-                    console.log(`🔐 [ADMIN] Вход: ${email}`);
+                    console.log(`🔐 [ADMIN] Успешный вход: ${email}`);
                     return ADMIN_USER;
                 }
                 return null;
@@ -130,19 +127,17 @@ const startAdmin = async () => {
         }, null, { resave: false, saveUninitialized: true, secret: 'admin_secret' });
 
         app.use(adminJs.options.rootPath, router);
-        console.log(`✅ [ADMIN] Админка готова: ${DOMAIN}/admin`);
+        console.log(`✅ [ADMIN] Доступ: ${DOMAIN}/admin`);
     } catch (e) { 
         console.error("❌ [ADMIN ERROR]:", e.message); 
     }
 };
 
-// --- API ЭНДПОИНТЫ ---
+// --- API ---
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
-    console.log(`👤 [GET] Данные юзера: ${userId}`);
     try {
         let result = await pool.query('SELECT *, NOW() as now FROM users WHERE id = $1', [userId]);
-        
         if (result.rows.length === 0) {
             const { username, photo_url, ref } = req.query;
             const refId = (ref && ref !== userId) ? parseInt(ref) : null;
@@ -153,12 +148,10 @@ app.get('/api/user/:id', async (req, res) => {
             if (refId) await pool.query('UPDATE users SET balance = balance + 5000 WHERE id = $1', [refId]);
             return res.json({ ...newUser.rows[0], offlineProfit: 0 });
         }
-
         const user = result.rows[0];
         const secondsOffline = Math.floor((new Date(user.now) - new Date(user.last_seen)) / 1000);
         const recoveredEnergy = Math.min(user.max_energy, user.energy + (secondsOffline * 3));
         const offlineProfit = Math.floor((user.profit / 3600) * Math.min(secondsOffline, 10800));
-
         res.json({ ...user, energy: recoveredEnergy, offlineProfit });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -170,14 +163,13 @@ app.post('/api/save', async (req, res) => {
             `UPDATE users SET balance=$2, energy=$3, tap=$4, profit=$5, last_seen=NOW() WHERE id=$1`, 
             [userId, balance, energy, tap, profit]
         );
-        console.log(`💾 [SAVE] ID ${userId} | Bal: ${balance}`);
+        console.log(`💾 [SAVE] ID ${userId} | Balance: ${balance}`);
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: "Save error" }); }
 });
 
 // --- BOT ---
 bot.start((ctx) => {
-    console.log(`🤖 [BOT] Start от ${ctx.from.id}`);
     const webAppUrl = ctx.startPayload ? `${DOMAIN}?ref=${ctx.startPayload}` : DOMAIN;
     ctx.reply(`<b>Neural Pulse | Terminal</b>\nAgent <b>${ctx.from.first_name}</b>, sync complete.`, {
         parse_mode: 'HTML',
@@ -191,6 +183,6 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 app.listen(PORT, async () => {
     await initDB();
     await startAdmin();
-    console.log(`🚀 [SERVER] Запущен: ${DOMAIN}`);
+    console.log(`🚀 [SERVER] На порту ${PORT}`);
     await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
 });
