@@ -1,4 +1,83 @@
-const tg = window.Telegram.WebApp;
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Neural Pulse v5.5.0</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+</head>
+<body>
+
+    <div id="loader">
+        <div class="l-content">
+            <div class="ring"></div>
+            <img src="images/logo.png" class="l-logo" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'">
+        </div>
+        <div class="l-status">QUANTUM LINK ESTABLISHED</div>
+        <div class="l-pct" id="pct">0%</div>
+        <div class="l-bar"><div id="bar"></div></div>
+    </div>
+
+    <div id="app" style="display: none;">
+        <header>
+            <div class="u-avatar"><img id="my-avatar" src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'"></div>
+            <div class="u-info">
+                <b id="my-name">AGENT</b><br>
+                <small id="ui-rank">INITIALIZING...</small>
+            </div>
+            <div class="u-lvl" id="my-lvl">LVL 1</div>
+        </header>
+
+        <div class="stats-row">
+            <div class="s-box"><small>EARN PER TAP</small><b id="ui-tap">+1</b></div>
+            <div class="s-box"><small>PROFIT PER HOUR</small><b id="ui-profit">0</b></div>
+        </div>
+
+        <div class="balance-area">
+            <h1 id="ui-balance">0</h1>
+        </div>
+
+        <main class="game-core">
+            <div class="glow"></div>
+            <div class="brain-target" ontouchstart="game.tap(event)">
+                <img src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'">
+            </div>
+            
+            <div class="side-menu">
+                <button onclick="ui.openM('wallet')">👛 WALLET</button>
+                <button onclick="ui.openM('friends')">🤝 FRIENDS</button>
+                <button onclick="ui.openM('bonus')">🎁 BONUS</button>
+            </div>
+        </main>
+
+        <footer class="energy-section">
+            <div class="e-labels">
+                <span>CORE STABILITY</span>
+                <span id="ui-energy">1000/1000</span>
+            </div>
+            <div class="e-track"><div id="e-fill"></div></div>
+            
+            <nav class="bottom-tabs">
+                <button onclick="ui.openM('boost')">🚀 BOOST</button>
+                <button onclick="ui.openM('mine')">⛏️ MINE</button>
+                <button onclick="ui.openM('tasks')">📋 TASKS</button>
+                <button onclick="ui.openM('top')">🏆 TOP</button>
+            </nav>
+        </footer>
+    </div>
+
+    <div id="modal" class="modal-bg" onclick="if(event.target===this) ui.closeM()">
+        <div class="modal-box">
+            <div class="handle"></div>
+            <div id="m-body"></div>
+            <button class="m-close" onclick="ui.closeM()">CLOSE TERMINAL</button>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
         tg.expand();
         tg.enableClosingConfirmation();
 
@@ -10,9 +89,8 @@ const tg = window.Telegram.WebApp;
                 tap_lvl: 1, mine_lvl: 1, energy_lvl: 1, regen_lvl: 1,
                 profit: 0, last_bonus: 0, tasks: [] 
             },
-            serverTasks: [], // Список всех доступных заданий
-            serverTop: [],   // Список лидеров
-            serverFriends: [], // Список друзей
+            serverTasks: [], 
+            serverTop: [],
             isLoaded: false,
 
             getHeaders() {
@@ -24,8 +102,10 @@ const tg = window.Telegram.WebApp;
 
             async init() {
                 ui.startLoader();
+                
                 const u = tg.initDataUnsafe.user || { id: 0, first_name: 'Agent', username: 'Agent', photo_url: '' };
                 this.data.id = u.id;
+
                 const name = (u.username || u.first_name).toUpperCase();
                 
                 try {
@@ -35,20 +115,27 @@ const tg = window.Telegram.WebApp;
                 } catch(e) { console.error("TON Error", e); }
 
                 try {
-                    // 1. Загрузка профиля
-                    const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(name)}`, { headers: this.getHeaders() });
-                    if (r.ok) Object.assign(this.data, await r.json());
+                    // Загрузка данных пользователя
+                    const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(name)}`, {
+                        headers: this.getHeaders()
+                    });
+                    if (r.ok) {
+                        const serverData = await r.json();
+                        Object.assign(this.data, serverData);
+                    }
 
-                    // 2. Загрузка доп. данных (задания, топ)
-                    const [tRes, topRes] = await Promise.all([
+                    // Загрузка глобальных данных (Задания и Топ)
+                    const [tasksRes, topRes] = await Promise.all([
                         fetch('/api/tasks', { headers: this.getHeaders() }),
                         fetch('/api/top', { headers: this.getHeaders() })
                     ]);
                     
-                    if (tRes.ok) this.serverTasks = await tRes.json();
+                    if (tasksRes.ok) this.serverTasks = await tasksRes.json();
                     if (topRes.ok) this.serverTop = await topRes.json();
 
-                } catch(e) { console.error("Load error:", e); }
+                } catch(e) { 
+                    console.error("Load error:", e);
+                }
 
                 document.getElementById('my-name').innerText = name;
                 if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
@@ -58,42 +145,25 @@ const tg = window.Telegram.WebApp;
                 ui.render();
             },
 
-            // --- МЕХАНИКА ЗАДАНИЙ ---
-            async completeTask(taskId, url) {
-                // Имитация проверки: открываем ссылку и сразу шлем запрос на награду
-                window.open(url, '_blank');
-                try {
-                    const r = await fetch('/api/tasks/complete', {
-                        method: 'POST',
-                        headers: this.getHeaders(),
-                        body: JSON.stringify({ userId: this.data.id, taskId: taskId })
-                    });
-                    if (r.ok) {
-                        const res = await r.json();
-                        this.data.balance += res.reward;
-                        tg.showAlert(`TASK COMPLETE: +${res.reward} NP`);
-                        ui.render();
-                        ui.closeM();
-                    }
-                } catch(e) { console.error(e); }
-            },
-
             getDailyBonusAmount() {
                 let lvl = Math.floor(Math.log10(Math.max(1, this.data.balance))) + 1;
                 return Math.floor(500 * Math.pow(1.2, lvl - 1));
             },
 
             async claimBonus() {
-                const amount = this.getDailyBonusAmount();
                 const now = Date.now();
-                // Простая проверка на 24 часа (86400000 мс)
-                if (now - this.data.last_bonus < 86400000) {
-                    tg.showAlert("TERMINAL LOCKED: Come back tomorrow");
+                const day = 24 * 60 * 60 * 1000;
+                
+                if (now - this.data.last_bonus < day) {
+                    tg.showAlert("TERMINAL LOCKED: Come back tomorrow!");
                     return;
                 }
+
+                const amount = this.getDailyBonusAmount();
                 this.data.balance += amount;
                 this.data.last_bonus = now;
                 tg.HapticFeedback.notificationOccurred('success');
+                tg.showAlert(`SUCCESS: +${amount} NP`);
                 ui.render(); 
                 ui.closeM();
                 this.save();
@@ -105,6 +175,7 @@ const tg = window.Telegram.WebApp;
                 const d = this.data;
                 if(type === 'tap') return Math.floor(450 * Math.pow(1.7, d.tap_lvl - 1));
                 if(type === 'energy') return Math.floor(600 * Math.pow(1.6, d.energy_lvl - 1));
+                if(type === 'regen') return Math.floor(1000 * Math.pow(2, d.regen_lvl - 1));
                 if(type === 'mine') return Math.floor(1500 * Math.pow(1.65, d.mine_lvl - 1));
                 return 0;
             },
@@ -124,10 +195,23 @@ const tg = window.Telegram.WebApp;
                     this.data.balance -= cost;
                     if(type === 'tap') this.data.tap_lvl++;
                     if(type === 'energy') { this.data.energy_lvl++; this.data.max_energy += 500; }
+                    if(type === 'regen') this.data.regen_lvl++;
                     if(type === 'mine') { this.data.mine_lvl++; this.data.profit += 150; }
                     tg.HapticFeedback.notificationOccurred('success');
                     this.save(); ui.render(); ui.openM(type === 'mine' ? 'mine' : 'boost');
                 } else { tg.showAlert("LACK OF NP"); }
+            },
+
+            async completeTask(id, url) {
+                window.open(url, '_blank');
+                // Логика проверки на сервере
+                fetch('/api/tasks/complete', {
+                    method: 'POST',
+                    headers: this.getHeaders(),
+                    body: JSON.stringify({ taskId: id })
+                }).then(r => {
+                    if(r.ok) tg.showAlert("MISSION ACCOUNTED");
+                });
             },
 
             async save() {
@@ -141,8 +225,8 @@ const tg = window.Telegram.WebApp;
 
             loop() {
                 setInterval(() => {
-                    const regen = 1 + (this.data.regen_lvl - 1);
-                    if(this.data.energy < this.data.max_energy) this.data.energy = Math.min(this.data.max_energy, this.data.energy + regen);
+                    const regenAmount = 1 + (this.data.regen_lvl - 1);
+                    if(this.data.energy < this.data.max_energy) this.data.energy = Math.min(this.data.max_energy, this.data.energy + regenAmount);
                     if(this.data.profit > 0) this.data.balance += (this.data.profit / 3600);
                     ui.render();
                 }, 1000);
@@ -168,12 +252,12 @@ const tg = window.Telegram.WebApp;
                 document.getElementById('e-fill').style.width = (d.energy/d.max_energy*100)+'%';
                 document.getElementById('ui-tap').innerText = `+${game.getTapPower()}`;
                 document.getElementById('ui-profit').innerText = Math.floor(d.profit).toLocaleString();
+                
                 let lvl = Math.floor(Math.log10(Math.max(1, d.balance))) + 1;
                 document.getElementById('my-lvl').innerText = `LVL ${lvl}`;
                 
-                // Ранги по балансу
-                const ranks = ["ROOKIE", "CYBER", "NEURAL", "OVERLORD", "QUANTUM"];
-                document.getElementById('ui-rank').innerText = ranks[Math.min(lvl-1, 4)];
+                const ranks = ["ROOKIE", "PULSE AGENT", "CYBER RUNNER", "NEURAL MASTER", "OVERLORD"];
+                document.getElementById('ui-rank').innerText = ranks[Math.min(lvl - 1, 4)];
             },
 
             pop(e, p) {
@@ -190,68 +274,56 @@ const tg = window.Telegram.WebApp;
                 document.getElementById('modal').classList.add('active');
                 
                 if(type === 'wallet') {
-                    b.innerHTML = `<h2>👛 WALLET</h2><div id="ton-connect-btn"></div><p style="text-align:center;margin-top:10px; font-size:12px; color:#888;">Connect to unlock airdrop features</p>`;
+                    b.innerHTML = `<h2>👛 WALLET</h2><div id="ton-connect-btn"></div><p style="text-align:center;margin-top:10px;">Connect your TON wallet for future airdrops</p>`;
                     setTimeout(() => { if(tonConnectUI) tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' }; }, 50);
                 }
                 
                 if(type === 'bonus') {
                     const amount = game.getDailyBonusAmount();
-                    b.innerHTML = `<h2>🎁 DAILY SUPPLY</h2><div class="s-box" style="text-align:center"><h1>${amount} NP</h1><p>Available every 24h</p></div><button class="m-close" style="background:cyan;color:black;width:100%;margin-top:15px" onclick="game.claimBonus()">CLAIM BONUS</button>`;
-                }
-
-                if(type === 'tasks') {
-                    let h = `<h2>📋 MISSIONS</h2>`;
-                    if(game.serverTasks.length === 0) h += `<p style="text-align:center;color:#666">No missions available</p>`;
-                    game.serverTasks.forEach(t => {
-                        h += `<div class="top-item" onclick="game.completeTask(${t.id}, '${t.url}')">
-                                <div><b>${t.title}</b><br><small style="color:cyan">+${t.reward} NP</small></div>
-                                <span>GO ➔</span>
-                              </div>`;
-                    });
-                    b.innerHTML = h;
-                }
-
-                if(type === 'top') {
-                    let h = `<h2>🏆 GLOBAL TOP</h2>`;
-                    game.serverTop.slice(0, 10).forEach((u, i) => {
-                        h += `<div class="top-item">
-                                <span>${i+1}. ${u.username}</span>
-                                <b style="color:cyan">${Math.floor(u.balance).toLocaleString()}</b>
-                              </div>`;
-                    });
-                    b.innerHTML = h;
+                    b.innerHTML = `<h2>🎁 DAILY SUPPLY</h2><div class="s-box" style="text-align:center"><h1>${amount} NP</h1><p>Reset in 24h</p></div>
+                    <button class="m-close" style="background:cyan;color:black;width:100%;margin-top:10px" onclick="game.claimBonus()">INITIALIZE CLAIM</button>`;
                 }
 
                 if(type === 'friends') {
-                    const refLink = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
-                    b.innerHTML = `<h2>🤝 NODES NETWORK</h2>
-                        <div class="s-box" style="margin-bottom:15px">
-                            <small>YOUR INVITE LINK:</small>
-                            <input type="text" value="${refLink}" readonly style="width:100%; background:black; color:cyan; border:1px solid #333; padding:8px; margin-top:5px; border-radius:5px">
-                            <button onclick="navigator.clipboard.writeText('${refLink}'); tg.showAlert('COPIED')" style="width:100%; margin-top:10px; background:#222; color:white; border:none; padding:8px; border-radius:5px">COPY LINK</button>
-                        </div>
-                        <p style="font-size:12px; color:#888; text-align:center">Get 5,000 NP for each invited friend!</p>`;
+                    const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
+                    b.innerHTML = `<h2>🤝 NODES</h2>
+                    <div class="s-box" style="word-break:break-all; font-size:12px; padding:10px">${link}</div>
+                    <button class="m-close" style="background:white;color:black;width:100%;margin-top:10px" onclick="navigator.clipboard.writeText('${link}'); tg.showAlert('COPIED')">COPY INVITE LINK</button>
+                    <p style="text-align:center; font-size:11px; margin-top:10px; color:#888">Get 5,000 NP for each active node connected</p>`;
+                }
+
+                if(type === 'tasks') {
+                    let html = `<h2>📋 MISSIONS</h2>`;
+                    if(game.serverTasks.length === 0) html += `<p style="text-align:center">Scanning for missions...</p>`;
+                    game.serverTasks.forEach(t => {
+                        html += `<div class="top-item" onclick="game.completeTask(${t.id}, '${t.url}')">
+                            <span>${t.title}</span><b>+${t.reward}</b>
+                        </div>`;
+                    });
+                    b.innerHTML = html;
+                }
+
+                if(type === 'top') {
+                    let html = `<h2>🏆 GLOBAL RANKING</h2>`;
+                    game.serverTop.slice(0, 10).forEach((u, i) => {
+                        html += `<div class="top-item">
+                            <span>${i+1}. ${u.username}</span><b>${Math.floor(u.balance).toLocaleString()}</b>
+                        </div>`;
+                    });
+                    b.innerHTML = html;
                 }
 
                 if(type === 'boost') {
                     b.innerHTML = `<h2>🚀 BOOSTERS</h2>
-                        <div class="top-item" onclick="game.upgrade('tap')">
-                            <div><b>⚡ Multitap</b><br><small>Level ${game.data.tap_lvl}</small></div>
-                            <b>💰 ${game.getCost('tap')}</b>
-                        </div>
-                        <div class="top-item" onclick="game.upgrade('energy')">
-                            <div><b>🔋 Energy Cap</b><br><small>Level ${game.data.energy_lvl}</small></div>
-                            <b>💰 ${game.getCost('energy')}</b>
-                        </div>`;
+                    <div class="top-item" onclick="game.upgrade('tap')"><span>⚡ Multitap (Lvl ${game.data.tap_lvl})</span><b>${game.getCost('tap')}</b></div>
+                    <div class="top-item" onclick="game.upgrade('energy')"><span>🔋 Capacity (Lvl ${game.data.energy_lvl})</span><b>${game.getCost('energy')}</b></div>
+                    <div class="top-item" onclick="game.upgrade('regen')"><span>🔄 Regen (Lvl ${game.data.regen_lvl})</span><b>${game.getCost('regen')}</b></div>`;
                 }
 
                 if(type === 'mine') {
                     b.innerHTML = `<h2>⛏️ NEURAL MINING</h2>
-                        <div class="top-item" onclick="game.upgrade('mine')">
-                            <div><b>🧠 Neural Node</b><br><small>Level ${game.data.mine_lvl}</small></div>
-                            <b>💰 ${game.getCost('mine')}</b>
-                        </div>
-                        <p style="font-size:11px; color:#666; text-align:center; margin-top:10px">+150 NP/hour per node level</p>`;
+                    <div class="top-item" onclick="game.upgrade('mine')"><span>🧠 Neural Node (Lvl ${game.data.mine_lvl})</span><b>${game.getCost('mine')}</b></div>
+                    <p style="text-align:center; font-size:11px; color:cyan; margin-top:10px">Mining generates NP even when terminal is offline</p>`;
                 }
             },
 
@@ -259,3 +331,6 @@ const tg = window.Telegram.WebApp;
         };
 
         window.onload = () => game.init();
+    </script>
+</body>
+</html>
