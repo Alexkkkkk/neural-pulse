@@ -22,7 +22,8 @@ AdminJS.registerAdapter({
 
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const PG_URI = "postgresql://bothost_db_db5b342fc026:gwp3jv20PY7JtERt4cNIvSpReq8YpLYzlH99BY5vyc4@node1.pghost.ru:32867/bothost_db_db5b342fc026";
-const DOMAIN = "https://neural-pulse.duckdns.org"; 
+// ОБНОВЛЕННЫЙ ДОМЕН
+const DOMAIN = "https://neural-pulse.bothost.ru"; 
 const PORT = 3000;
 
 const ADMIN_USER = {
@@ -85,23 +86,19 @@ const initDB = async () => {
 // --- ЗАПУСК АДМИНКИ ---
 const startAdmin = async () => {
     try {
-        // Создаем подключение к базе специально для AdminJS
         const db = new AdminJSSql.Database({
-            connectionOptions: {
-                connectionString: PG_URI,
-                dialect: 'postgres',
-            }
+            connectionOptions: { connectionString: PG_URI, dialect: 'postgres' }
         });
 
         const adminJs = new AdminJS({
             resources: [
                 { 
                     resource: { model: AdminJSSql.Resource, database: db, tableName: 'users' },
-                    options: { navigation: { name: 'Neural Pulse', icon: 'User' } }
+                    options: { navigation: { name: 'Игроки', icon: 'User' } }
                 },
                 { 
                     resource: { model: AdminJSSql.Resource, database: db, tableName: 'tasks' },
-                    options: { navigation: { name: 'Neural Pulse', icon: 'Task' } }
+                    options: { navigation: { name: 'Задания', icon: 'Task' } }
                 }
             ],
             rootPath: '/admin',
@@ -118,13 +115,12 @@ const startAdmin = async () => {
         }, null, { resave: false, saveUninitialized: true, secret: 'admin_secret' });
 
         app.use(adminJs.options.rootPath, router);
-        console.log(`🔐 [ADMIN] Доступ: ${DOMAIN}/admin`);
-    } catch (e) { 
-        console.error("❌ [ADMIN ERROR]:", e.message); 
-    }
+    } catch (e) { console.error("❌ [ADMIN ERROR]:", e.message); }
 };
 
 // --- API ЭНДПОИНТЫ ---
+
+// 1. Получение данных юзера (с авто-регеном энергии)
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     const { username, photo_url, ref } = req.query;
@@ -150,6 +146,49 @@ app.get('/api/user/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// 2. Список заданий для пользователя
+app.get('/api/tasks/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const tasks = await pool.query(`
+            SELECT t.*, 
+            CASE WHEN ut.user_id IS NOT NULL THEN true ELSE false END as completed
+            FROM tasks t
+            LEFT JOIN user_tasks ut ON t.id = ut.task_id AND ut.user_id = $1
+        `, [userId]);
+        res.json(tasks.rows);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 3. Выполнение задания
+app.post('/api/tasks/complete', async (req, res) => {
+    const { userId, taskId } = req.body;
+    try {
+        const check = await pool.query('SELECT * FROM user_tasks WHERE user_id = $1 AND task_id = $2', [userId, taskId]);
+        if (check.rows.length > 0) return res.status(400).json({ error: "Уже выполнено" });
+
+        const task = await pool.query('SELECT reward FROM tasks WHERE id = $1', [taskId]);
+        if (task.rows.length === 0) return res.status(404).json({ error: "Задание не найдено" });
+
+        await pool.query('INSERT INTO user_tasks (user_id, task_id) VALUES ($1, $2)', [userId, taskId]);
+        await pool.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [task.rows[0].reward, userId]);
+        
+        res.json({ ok: true, reward: task.rows[0].reward });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 4. Список рефералов
+app.get('/api/referrals/:userId', async (req, res) => {
+    try {
+        const result = await pool.query(
+            'SELECT username, balance, photo_url FROM users WHERE referrer_id = $1 LIMIT 50', 
+            [req.params.userId]
+        );
+        res.json(result.rows);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 5. Сохранение прогресса
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, tap, profit } = req.body;
     try {
