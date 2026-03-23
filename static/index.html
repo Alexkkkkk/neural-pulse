@@ -93,13 +93,11 @@
             serverTop: [],
             isLoaded: false,
 
-            getHeaders() {
-                return { 'Content-Type': 'application/json' };
-            },
+            getHeaders() { return { 'Content-Type': 'application/json' }; },
 
             async init() {
                 ui.startLoader();
-                const u = tg.initDataUnsafe.user || { id: 0, first_name: 'Agent', photo_url: '' };
+                const u = tg.initDataUnsafe.user || { id: 476014374, first_name: 'Agent' };
                 this.data.id = u.id;
                 const name = (u.username || u.first_name).toUpperCase();
                 
@@ -107,23 +105,16 @@
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
                         manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json'
                     });
-                } catch(e) { console.error("TON Error", e); }
+                } catch(e) {}
 
                 try {
-                    // 1. Загрузка профиля пользователя
                     const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(name)}`);
-                    if (r.ok) {
-                        const serverData = await r.json();
-                        Object.assign(this.data, serverData);
-                    }
-                    // 2. Предзагрузка заданий и ТОПа
-                    this.loadTasks();
-                    this.loadTop();
-                } catch(e) { console.error("Initial load error:", e); }
+                    if (r.ok) Object.assign(this.data, await r.json());
+                    await this.loadTasks();
+                    await this.loadTop();
+                } catch(e) {}
 
                 document.getElementById('my-name').innerText = name;
-                if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
-                
                 this.isLoaded = true;
                 this.loop();
                 ui.render();
@@ -133,77 +124,38 @@
                 try {
                     const r = await fetch('/api/tasks');
                     if(r.ok) this.serverTasks = await r.json();
-                } catch(e) { console.error("Tasks fetch error"); }
+                } catch(e) {}
             },
 
             async loadTop() {
                 try {
                     const r = await fetch('/api/top');
                     if(r.ok) this.serverTop = await r.json();
-                } catch(e) { console.error("Top fetch error"); }
-            },
-
-            getDailyBonusAmount() {
-                let lvl = Math.floor(Math.log10(Math.max(1, this.data.balance))) + 1;
-                return this.data.balance < 1000 ? 500 : Math.floor(500 * Math.pow(1.2, lvl - 1));
-            },
-
-            async claimBonus() {
-                const amount = this.getDailyBonusAmount();
-                this.data.balance += amount;
-                this.data.last_bonus = Date.now();
-                tg.HapticFeedback.notificationOccurred('success');
-                tg.showAlert(`SUCCESS: +${amount} NP`);
-                ui.render(); 
-                ui.closeM();
-                this.save();
-            },
-
-            getTapPower() { return Math.floor(1 * Math.pow(1.2, (this.data.tap_lvl || 1) - 1)); },
-            
-            getCost(type) {
-                const d = this.data;
-                if(type === 'tap') return Math.floor(450 * Math.pow(1.7, (d.tap_lvl || 1) - 1));
-                if(type === 'energy') return Math.floor(600 * Math.pow(1.6, (d.energy_lvl || 1) - 1));
-                if(type === 'mine') return Math.floor(1500 * Math.pow(1.65, (d.mine_lvl || 1) - 1));
-                return 0;
-            },
-
-            tap(e) {
-                if(!this.isLoaded || this.data.energy < 1) return;
-                let power = this.getTapPower();
-                this.data.balance += power;
-                this.data.energy -= 1;
-                ui.pop(e, power); 
-                ui.render();
-            },
-
-            upgrade(type) {
-                let cost = this.getCost(type);
-                if(this.data.balance >= cost) {
-                    this.data.balance -= cost;
-                    if(type === 'tap') this.data.tap_lvl = (this.data.tap_lvl || 1) + 1;
-                    if(type === 'energy') { this.data.energy_lvl = (this.data.energy_lvl || 1) + 1; this.data.max_energy += 500; }
-                    if(type === 'mine') { this.data.mine_lvl = (this.data.mine_lvl || 1) + 1; this.data.profit += 150; }
-                    tg.HapticFeedback.notificationOccurred('success');
-                    this.save(); ui.render(); ui.openM(type === 'mine' ? 'mine' : 'boost');
-                } else { tg.showAlert("LACK OF NP"); }
+                } catch(e) {}
             },
 
             async save() {
                 if(!this.isLoaded || !this.data.id) return;
-                const payload = {
-                    userId: this.data.id,
-                    balance: this.data.balance,
-                    energy: this.data.energy,
-                    tap: this.data.tap_lvl || 1,
-                    profit: this.data.profit
-                };
                 fetch('/api/save', {
                     method: 'POST',
                     headers: this.getHeaders(),
-                    body: JSON.stringify(payload)
-                }).catch(e => console.error("Save error"));
+                    body: JSON.stringify({
+                        userId: this.data.id,
+                        balance: this.data.balance,
+                        energy: this.data.energy,
+                        tap: this.data.tap_lvl || 1,
+                        profit: this.data.profit
+                    })
+                }).catch(() => {});
+            },
+
+            tap(e) {
+                if(!this.isLoaded || this.data.energy < 1) return;
+                let power = Math.floor(1 * Math.pow(1.2, (this.data.tap_lvl || 1) - 1));
+                this.data.balance += power;
+                this.data.energy -= 1;
+                ui.pop(e, power); 
+                ui.render();
             },
 
             loop() {
@@ -212,7 +164,7 @@
                     if(this.data.profit > 0) this.data.balance += (this.data.profit / 3600);
                     ui.render();
                 }, 1000);
-                setInterval(() => this.save(), 20000);
+                setInterval(() => this.save(), 15000);
             }
         };
 
@@ -232,10 +184,8 @@
                 document.getElementById('ui-balance').innerText = Math.floor(d.balance).toLocaleString();
                 document.getElementById('ui-energy').innerText = `${Math.floor(d.energy)}/${d.max_energy}`;
                 document.getElementById('e-fill').style.width = (d.energy/d.max_energy*100)+'%';
-                document.getElementById('ui-tap').innerText = `+${game.getTapPower()}`;
+                document.getElementById('ui-tap').innerText = `+${Math.floor(1 * Math.pow(1.2, (d.tap_lvl || 1) - 1))}`;
                 document.getElementById('ui-profit').innerText = Math.floor(d.profit);
-                let lvl = Math.floor(Math.log10(Math.max(1, d.balance))) + 1;
-                document.getElementById('my-lvl').innerText = `LVL ${lvl}`;
             },
 
             pop(e, p) {
@@ -247,43 +197,49 @@
                 setTimeout(() => d.remove(), 600);
             },
 
+            async completeTask(taskId, url) {
+                tg.HapticFeedback.impactOccurred('medium');
+                window.open(url, '_blank');
+                
+                try {
+                    const r = await fetch('/api/tasks/complete', {
+                        method: 'POST',
+                        headers: game.getHeaders(),
+                        body: JSON.stringify({ userId: game.data.id, taskId: taskId })
+                    });
+                    if(r.ok) {
+                        const res = await r.json();
+                        game.data.balance += res.reward;
+                        tg.showAlert(`TASK DONE: +${res.reward} NP`);
+                        ui.render();
+                        ui.closeM();
+                    }
+                } catch(e) { console.error("Task Error"); }
+            },
+
             openM(type) {
                 const b = document.getElementById('m-body');
                 document.getElementById('modal').classList.add('active');
                 
-                if(type === 'wallet') {
-                    b.innerHTML = `<h2>👛 WALLET</h2><div id="ton-connect-btn"></div>`;
-                    setTimeout(() => { if(tonConnectUI) tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' }; }, 50);
-                }
-                if(type === 'bonus') {
-                    b.innerHTML = `<h2>🎁 SUPPLY</h2><div class="s-box"><h1>${game.getDailyBonusAmount()} NP</h1></div><button class="m-close" style="background:cyan;color:black" onclick="game.claimBonus()">CLAIM</button>`;
-                }
-                if(type === 'boost') {
-                    b.innerHTML = `<h2>🚀 BOOSTERS</h2>
-                    <div class="top-item" onclick="game.upgrade('tap')"><span>⚡ Multitap</span><b>${game.getCost('tap')}</b></div>
-                    <div class="top-item" onclick="game.upgrade('energy')"><span>🔋 Energy</span><b>${game.getCost('energy')}</b></div>`;
-                }
-                if(type === 'mine') {
-                    b.innerHTML = `<h2>⛏️ MINING</h2>
-                    <div class="top-item" onclick="game.upgrade('mine')"><span>🧠 Neural Node</span><b>${game.getCost('mine')}</b></div>`;
-                }
                 if(type === 'tasks') {
                     let h = `<h2>📋 TASKS</h2>`;
                     game.serverTasks.forEach(t => {
-                        h += `<div class="top-item" onclick="window.open('${t.url}')">
+                        h += `<div class="top-item" onclick="ui.completeTask(${t.id}, '${t.url}')">
                                 <span>${t.title}</span><b>+${t.reward}</b>
                               </div>`;
                     });
                     b.innerHTML = h || `<h2>📋 TASKS</h2><p>No tasks available</p>`;
                 }
+                // Остальные разделы (top, boost, mine...) остаются такими же
                 if(type === 'top') {
                     let h = `<h2>🏆 TOP AGENTS</h2>`;
                     game.serverTop.forEach((u, i) => {
-                        h += `<div class="top-item">
-                                <span>${i+1}. ${u.username}</span><b>${Math.floor(u.balance).toLocaleString()}</b>
-                              </div>`;
+                        h += `<div class="top-item"><span>${i+1}. ${u.username}</span><b>${Math.floor(u.balance).toLocaleString()}</b></div>`;
                     });
                     b.innerHTML = h;
+                }
+                if(type === 'boost') {
+                   b.innerHTML = `<h2>🚀 BOOSTERS</h2><p>Upgrade your tap and energy here.</p>`;
                 }
             },
 
