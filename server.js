@@ -14,7 +14,7 @@ import * as AdminJSSql from '@adminjs/sql';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 1. РЕГИСТРАЦИЯ АДАПТЕРА
+// 1. СТРОГАЯ РЕГИСТРАЦИЯ АДАПТЕРА
 AdminJS.registerAdapter({
     Database: AdminJSSql.Database,
     Resource: AdminJSSql.Resource,
@@ -22,7 +22,6 @@ AdminJS.registerAdapter({
 
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const PG_URI = "postgresql://bothost_db_db5b342fc026:gwp3jv20PY7JtERt4cNIvSpReq8YpLYzlH99BY5vyc4@node1.pghost.ru:32867/bothost_db_db5b342fc026";
-// ОБНОВЛЕННЫЙ ДОМЕН
 const DOMAIN = "https://neural-pulse.bothost.ru"; 
 const PORT = 3000;
 
@@ -75,7 +74,7 @@ const initDB = async () => {
                 task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
                 PRIMARY KEY (user_id, task_id)
             )`);
-        console.log("✅ [DB] База готова");
+        console.log("✅ [DB] Структура базы данных проверена");
     } catch (e) {
         console.error("❌ [DB ERROR]:", e.message);
     } finally {
@@ -86,28 +85,32 @@ const initDB = async () => {
 // --- ЗАПУСК АДМИНКИ ---
 const startAdmin = async () => {
     try {
-        const db = new AdminJSSql.Database({
-            connectionOptions: { connectionString: PG_URI, dialect: 'postgres' }
-        });
+        const db = await new AdminJSSql.Database({
+            connectionString: PG_URI,
+            dialect: 'postgres'
+        }).init();
 
         const adminJs = new AdminJS({
-            resources: [
-                { 
-                    resource: { model: AdminJSSql.Resource, database: db, tableName: 'users' },
-                    options: { navigation: { name: 'Игроки', icon: 'User' } }
-                },
-                { 
-                    resource: { model: AdminJSSql.Resource, database: db, tableName: 'tasks' },
-                    options: { navigation: { name: 'Задания', icon: 'Task' } }
-                }
-            ],
+            databases: [db],
             rootPath: '/admin',
-            branding: { companyName: 'Neural Pulse Admin', softwareBrothers: false }
+            branding: { 
+                companyName: 'Neural Pulse Admin', 
+                softwareBrothers: false,
+                logo: false 
+            },
+            resources: [
+                { resource: db.table('users'), options: { navigation: { name: 'Игроки', icon: 'User' } } },
+                { resource: db.table('tasks'), options: { navigation: { name: 'Система', icon: 'Task' } } }
+            ]
         });
 
         const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                if (email === ADMIN_USER.email && password === ADMIN_USER.password) return ADMIN_USER;
+                if (email === ADMIN_USER.email && password === ADMIN_USER.password) {
+                    console.log(`🔐 [ADMIN] Успешный вход: ${email}`);
+                    return ADMIN_USER;
+                }
+                console.warn(`⚠️ [ADMIN] Неудачная попытка входа: ${email}`);
                 return null;
             },
             cookieName: 'neural_pulse_session',
@@ -115,25 +118,34 @@ const startAdmin = async () => {
         }, null, { resave: false, saveUninitialized: true, secret: 'admin_secret' });
 
         app.use(adminJs.options.rootPath, router);
-    } catch (e) { console.error("❌ [ADMIN ERROR]:", e.message); }
+        console.log(`🔐 [ADMIN] Панель готова: ${DOMAIN}/admin`);
+    } catch (e) { 
+        console.error("❌ [ADMIN ERROR]:", e.message); 
+    }
 };
 
-// --- API ЭНДПОИНТЫ ---
-
-// 1. Получение данных юзера (с авто-регеном энергии)
+// --- API ---
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     const { username, photo_url, ref } = req.query;
+    console.log(`👤 [API] Запрос данных юзера: ${userId} (${username || 'unknown'})`);
+
     try {
         let result = await pool.query('SELECT *, NOW() as now FROM users WHERE id = $1', [userId]);
         
         if (result.rows.length === 0) {
+            console.log(`🆕 [API] Новый пользователь! Регистрация: ${userId}`);
             const refId = (ref && ref !== userId) ? parseInt(ref) : null;
+            
             const newUser = await pool.query(
                 `INSERT INTO users (id, username, photo_url, referrer_id) VALUES ($1, $2, $3, $4) RETURNING *`,
                 [userId, username || 'Agent', photo_url || '', refId]
             );
-            if (refId) await pool.query('UPDATE users SET balance = balance + 5000 WHERE id = $1', [refId]);
+
+            if (refId) {
+                console.log(`🎁 [API] Начисление бонуса рефереру: ${refId} от ${userId}`);
+                await pool.query('UPDATE users SET balance = balance + 5000 WHERE id = $1', [refId]);
+            }
             return res.json({ ...newUser.rows[0], offlineProfit: 0 });
         }
 
@@ -142,53 +154,14 @@ app.get('/api/user/:id', async (req, res) => {
         const recoveredEnergy = Math.min(user.max_energy, user.energy + (secondsOffline * 3));
         const offlineProfit = Math.floor((user.profit / 3600) * Math.min(secondsOffline, 10800));
 
+        console.log(`📈 [API] Юзер ${userId} вернулся. Оффлайн: ${secondsOffline}с. Профит: +${offlineProfit}`);
         res.json({ ...user, energy: recoveredEnergy, offlineProfit });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+        console.error(`❌ [API ERROR] Ошибка /user/${userId}:`, e.message);
+        res.status(500).json({ error: e.message }); 
+    }
 });
 
-// 2. Список заданий для пользователя
-app.get('/api/tasks/:userId', async (req, res) => {
-    try {
-        const { userId } = req.params;
-        const tasks = await pool.query(`
-            SELECT t.*, 
-            CASE WHEN ut.user_id IS NOT NULL THEN true ELSE false END as completed
-            FROM tasks t
-            LEFT JOIN user_tasks ut ON t.id = ut.task_id AND ut.user_id = $1
-        `, [userId]);
-        res.json(tasks.rows);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// 3. Выполнение задания
-app.post('/api/tasks/complete', async (req, res) => {
-    const { userId, taskId } = req.body;
-    try {
-        const check = await pool.query('SELECT * FROM user_tasks WHERE user_id = $1 AND task_id = $2', [userId, taskId]);
-        if (check.rows.length > 0) return res.status(400).json({ error: "Уже выполнено" });
-
-        const task = await pool.query('SELECT reward FROM tasks WHERE id = $1', [taskId]);
-        if (task.rows.length === 0) return res.status(404).json({ error: "Задание не найдено" });
-
-        await pool.query('INSERT INTO user_tasks (user_id, task_id) VALUES ($1, $2)', [userId, taskId]);
-        await pool.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [task.rows[0].reward, userId]);
-        
-        res.json({ ok: true, reward: task.rows[0].reward });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// 4. Список рефералов
-app.get('/api/referrals/:userId', async (req, res) => {
-    try {
-        const result = await pool.query(
-            'SELECT username, balance, photo_url FROM users WHERE referrer_id = $1 LIMIT 50', 
-            [req.params.userId]
-        );
-        res.json(result.rows);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// 5. Сохранение прогресса
 app.post('/api/save', async (req, res) => {
     const { userId, balance, energy, tap, profit } = req.body;
     try {
@@ -196,14 +169,22 @@ app.post('/api/save', async (req, res) => {
             `UPDATE users SET balance=$2, energy=$3, tap=$4, profit=$5, last_seen=NOW() WHERE id=$1`, 
             [userId, balance, energy, tap, profit]
         );
+        console.log(`💾 [API] Сохранение прогресса: ID ${userId} | Баланс: ${balance} | Энергия: ${energy}`);
         res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: "Save error" }); }
+    } catch (e) { 
+        console.error(`❌ [API ERROR] Ошибка сохранения ID ${userId}:`, e.message);
+        res.status(500).json({ error: "Save error" }); 
+    }
 });
 
 // --- BOT ---
 bot.start((ctx) => {
+    const userId = ctx.from.id;
+    const refPayload = ctx.startPayload || 'none';
+    console.log(`🤖 [BOT] Команда /start от ${userId}. Payload: ${refPayload}`);
+
     const webAppUrl = ctx.startPayload ? `${DOMAIN}?ref=${ctx.startPayload}` : DOMAIN;
-    ctx.reply(`<b>Neural Pulse | Terminal</b>\nAgent <b>${ctx.from.first_name}</b>, terminal sync complete.`, {
+    ctx.reply(`<b>Neural Pulse | Terminal</b>\nAgent <b>${ctx.from.first_name}</b>, sync complete.`, {
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", webAppUrl)]])
     });
@@ -215,6 +196,7 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 app.listen(PORT, async () => {
     await initDB();
     await startAdmin();
-    console.log(`🚀 СЕРВЕР: ${DOMAIN}`);
+    console.log(`🚀 СЕРВЕР ЗАПУЩЕН: ${DOMAIN}`);
+    console.log(`📡 WEBHOOK: ${DOMAIN}${WEBHOOK_PATH}`);
     await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
 });
