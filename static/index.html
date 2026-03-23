@@ -15,7 +15,7 @@
             <div class="ring"></div>
             <img src="images/logo.png" class="l-logo" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'">
         </div>
-        <div class="l-status">DATABASE SYNC...</div>
+        <div class="l-status">SYNCHRONIZING CORE...</div>
         <div class="l-pct" id="pct">0%</div>
         <div class="l-bar"><div id="bar"></div></div>
     </div>
@@ -25,7 +25,7 @@
             <div class="u-avatar"><img src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'"></div>
             <div class="u-info">
                 <b id="my-name">AGENT</b><br>
-                <small id="ui-rank">LEVEL 1</small>
+                <small id="ui-rank">ROOKIE</small>
             </div>
             <div class="u-lvl" id="my-lvl">LVL 1</div>
         </header>
@@ -53,7 +53,10 @@
         </main>
 
         <footer class="energy-section">
-            <div class="e-labels"><span>STABILITY</span><span id="ui-energy">1000/1000</span></div>
+            <div class="e-labels">
+                <span>ENERGY STABILITY</span>
+                <span id="ui-energy">1000/1000</span>
+            </div>
             <div class="e-track"><div id="e-fill"></div></div>
             
             <nav class="bottom-tabs">
@@ -90,40 +93,36 @@
 
             async init() {
                 ui.startLoader();
-                const u = tg.initDataUnsafe.user || { id: 476014374, username: 'KANDERRR' };
-                this.data.id = u.id.toString();
-                this.data.username = (u.username || "AGENT").toUpperCase();
+                const user = tg.initDataUnsafe.user || { id: 476014374, username: 'KANDERRR' };
+                this.data.id = user.id.toString();
+                this.data.username = (user.username || "AGENT").toUpperCase();
 
                 try {
-                    // Твой домен из панели Bothost
+                    // Инициализация кошелька
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
                         manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json'
                     });
 
-                    // Загрузка данных
-                    const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(this.data.username)}`);
+                    // Загрузка данных из Bothost API
+                    const r = await fetch(`/api/user/${user.id}?username=${encodeURIComponent(this.data.username)}`);
                     if (r.ok) {
-                        const s = await r.json();
-                        // Синхронизация строго по именам в БД
-                        this.data.balance = s.balance || 0;
-                        this.data.energy = s.energy || 1000;
-                        this.data.max_energy = s.max_energy || 1000;
-                        this.data.tap = s.tap || 1;
-                        this.data.profit = s.profit || 0;
+                        const sData = await r.json();
+                        Object.assign(this.data, sData);
                     }
 
+                    // Загрузка списков
                     const [tRes, topRes] = await Promise.all([fetch('/api/tasks'), fetch('/api/top')]);
                     if (tRes.ok) this.serverTasks = await tRes.json();
                     if (topRes.ok) this.serverTop = await topRes.json();
 
-                } catch(e) { console.error("Sync error"); }
+                } catch(e) { console.error("Sync error:", e); }
 
                 this.isLoaded = true;
                 this.loop();
                 ui.render();
             },
 
-            // --- ВСЕ КНОПКИ ---
+            // --- МАТЕМАТИКА И ЛОГИКА ---
 
             tap(e) {
                 if(!this.isLoaded || this.data.energy < 1) return;
@@ -131,16 +130,16 @@
                 this.data.energy -= 1;
                 ui.pop(e, this.data.tap);
                 ui.render();
-                tg.HapticFeedback.impactOccurred('medium');
+                tg.HapticFeedback.impactOccurred('light');
             },
 
             getCost(type) {
-                const base = { tap: 500, energy: 700, mine: 1500 };
+                const costs = { tap: 500, energy: 800, mine: 1500 };
                 let lvl = 1;
                 if(type === 'tap') lvl = this.data.tap;
-                if(type === 'energy') lvl = Math.floor((this.data.max_energy-1000)/500)+1;
-                if(type === 'mine') lvl = Math.floor(this.data.profit/300)+1;
-                return Math.floor(base[type] * Math.pow(1.6, lvl - 1));
+                if(type === 'energy') lvl = Math.floor((this.data.max_energy - 1000) / 500) + 1;
+                if(type === 'mine') lvl = Math.floor(this.data.profit / 250) + 1;
+                return Math.floor(costs[type] * Math.pow(1.6, lvl - 1));
             },
 
             upgrade(type) {
@@ -149,21 +148,20 @@
                     this.data.balance -= cost;
                     if(type === 'tap') this.data.tap++;
                     if(type === 'energy') this.data.max_energy += 500;
-                    if(type === 'mine') this.data.profit += 300;
+                    if(type === 'mine') this.data.profit += 250;
 
                     tg.HapticFeedback.notificationOccurred('success');
                     this.save();
                     ui.render();
                     ui.openM(type === 'mine' ? 'mine' : 'boost');
                 } else {
-                    tg.showAlert("НЕДОСТАТОЧНО NP");
+                    tg.showAlert("INSUFFICIENT FUNDS");
                 }
             },
 
             async save() {
                 if(!this.isLoaded) return;
                 this.data.last_seen = new Date().toISOString();
-                // Отправляем чистый объект без лишних полей
                 fetch('/api/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -173,7 +171,7 @@
 
             loop() {
                 setInterval(() => {
-                    // Регенерация +1 в сек (базовая)
+                    // Регенерация энергии (+1 в сек)
                     if(this.data.energy < this.data.max_energy) {
                         this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1);
                     }
@@ -183,8 +181,8 @@
                     }
                     ui.render();
                 }, 1000);
-                // Автосейв каждые 20 сек
-                setInterval(() => this.save(), 20000);
+                // Автосохранение
+                setInterval(() => this.save(), 15000);
             }
         };
 
@@ -192,7 +190,7 @@
             startLoader() {
                 let p = 0;
                 const i = setInterval(() => {
-                    p += 4;
+                    p += 5;
                     document.getElementById('pct').innerText = p+'%';
                     document.getElementById('bar').style.width = p+'%';
                     if(p>=100) { 
@@ -211,8 +209,9 @@
                 document.getElementById('ui-tap').innerText = `+${d.tap}`;
                 document.getElementById('ui-profit').innerText = Math.floor(d.profit).toLocaleString();
                 document.getElementById('my-name').innerText = d.username;
-                let lvl = Math.floor(Math.log10(Math.max(10, d.balance/10))) + 1;
-                document.getElementById('my-lvl').innerText = `LVL ${lvl}`;
+                
+                let rankLvl = Math.floor(Math.log10(Math.max(10, d.balance/10))) + 1;
+                document.getElementById('my-lvl').innerText = `LVL ${rankLvl}`;
             },
 
             pop(e, p) {
@@ -229,22 +228,22 @@
                 document.getElementById('modal').classList.add('active');
                 
                 if(type === 'boost') {
-                    b.innerHTML = `<h2>🚀 BOOST</h2>
+                    b.innerHTML = `<h2>🚀 BOOSTERS</h2>
                     <div class="top-item" onclick="game.upgrade('tap')"><span>⚡ Multitap (Lvl ${game.data.tap})</span><b>${game.getCost('tap')}</b></div>
                     <div class="top-item" onclick="game.upgrade('energy')"><span>🔋 Capacity</span><b>${game.getCost('energy')}</b></div>`;
                 }
                 else if(type === 'mine') {
-                    b.innerHTML = `<h2>⛏️ MINE</h2>
-                    <div class="top-item" onclick="game.upgrade('mine')"><span>🧠 Neural Unit</span><b>${game.getCost('mine')}</b></div>`;
+                    b.innerHTML = `<h2>⛏️ MINING</h2>
+                    <div class="top-item" onclick="game.upgrade('mine')"><span>🧠 Neural Node</span><b>${game.getCost('mine')}</b></div>`;
                 }
                 else if(type === 'tasks') {
                     let h = `<h2>📋 MISSIONS</h2>`;
                     game.serverTasks.forEach(t => h += `<div class="top-item" onclick="window.open('${t.url}')"><span>${t.title}</span><b>+${t.reward}</b></div>`);
-                    b.innerHTML = h || `<p>No tasks</p>`;
+                    b.innerHTML = h || `<p>No tasks available</p>`;
                 }
                 else if(type === 'top') {
-                    let h = `<h2>🏆 RANKING</h2>`;
-                    game.serverTop.slice(0, 10).forEach((u, i) => h += `<div class="top-item"><span>${i+1}. ${u.username}</span><b>${Math.floor(u.balance)}</b></div>`);
+                    let h = `<h2>🏆 GLOBAL TOP</h2>`;
+                    game.serverTop.slice(0, 10).forEach((u, i) => h += `<div class="top-item"><span>${i+1}. ${u.username}</span><b>${Math.floor(u.balance).toLocaleString()}</b></div>`);
                     b.innerHTML = h;
                 }
                 else if(type === 'wallet') {
@@ -253,11 +252,11 @@
                 }
                 else if(type === 'friends') {
                     const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
-                    b.innerHTML = `<h2>🤝 REFERRAL</h2><div class="s-box">${link}</div>
-                    <button class="m-close" style="background:white;color:black;width:100%;margin-top:10px" onclick="navigator.clipboard.writeText('${link}'); tg.showAlert('COPIED')">COPY LINK</button>`;
+                    b.innerHTML = `<h2>🤝 REFERRALS</h2><div class="s-box">${link}</div>
+                    <button class="m-close" style="background:#00ffff;color:#000;width:100%;margin-top:10px" onclick="navigator.clipboard.writeText('${link}'); tg.showAlert('COPIED')">COPY LINK</button>`;
                 }
                 else if(type === 'bonus') {
-                    b.innerHTML = `<h2>🎁 DAILY</h2><button class="m-close" style="background:cyan;color:black;width:100%" onclick="tg.showAlert('Daily bonus claimed!'); game.data.balance+=1000; game.save(); ui.render(); ui.closeM()">GET 1,000 NP</button>`;
+                    b.innerHTML = `<h2>🎁 DAILY SUPPLY</h2><button class="m-close" style="background:#00ffff;color:#000;width:100%" onclick="game.data.balance+=1000; game.save(); ui.render(); ui.closeM(); tg.showAlert('1,000 NP Collected!')">CLAIM 1,000 NP</button>`;
                 }
             },
 
