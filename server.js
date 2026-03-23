@@ -6,20 +6,18 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
 import session from 'express-session';
+import { Sequelize, DataTypes } from 'sequelize';
 
 // --- ИМПОРТЫ АДМИНКИ ---
 import AdminJS from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
-import * as AdminJSSql from '@adminjs/sql';
+import * as AdminJSSequelize from '@adminjs/sequelize';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 1. РЕГИСТРАЦИЯ АДАПТЕРА
-AdminJS.registerAdapter({
-    Database: AdminJSSql.Database,
-    Resource: AdminJSSql.Resource,
-});
+// Регистрация адаптера Sequelize
+AdminJS.registerAdapter(AdminJSSequelize);
 
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const PG_URI = "postgresql://bothost_db_db5b342fc026:gwp3jv20PY7JtERt4cNIvSpReq8YpLYzlH99BY5vyc4@node1.pghost.ru:32867/bothost_db_db5b342fc026";
@@ -34,88 +32,74 @@ app.use(express.json());
 app.use(session({
     secret: 'neural_pulse_fix_2026',
     resave: false,
-    saveUninitialized: true,
-    cookie: { httpOnly: true, secure: false }
+    saveUninitialized: true
 }));
 app.use(express.static(path.join(__dirname, 'static')));
 
+// Пул для API
 const pool = new Pool({ connectionString: PG_URI, ssl: false });
+
+// Инициализация Sequelize для Админки
+const sequelize = new Sequelize(PG_URI, { 
+    dialect: 'postgres', 
+    logging: false,
+    dialectOptions: { ssl: false } 
+});
+
+// Описание модели User для AdminJS
+const User = sequelize.define('users', {
+    id: { type: DataTypes.BIGINT, primary_key: true, autoIncrement: false },
+    username: { type: DataTypes.STRING },
+    balance: { type: DataTypes.DOUBLE, defaultValue: 0 },
+    energy: { type: DataTypes.DOUBLE, defaultValue: 1000 },
+    max_energy: { type: DataTypes.INTEGER, defaultValue: 1000 },
+    tap: { type: DataTypes.INTEGER, defaultValue: 1 },
+    profit: { type: DataTypes.INTEGER, defaultValue: 0 },
+    last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
+}, { timestamps: false });
 
 // --- ИНИЦИАЛИЗАЦИЯ БД ---
 const initDB = async () => {
-    const client = await pool.connect();
     try {
-        console.log("🛠 [DB] Проверка таблиц...");
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS users (
-                id BIGINT PRIMARY KEY, 
-                username TEXT, 
-                balance DOUBLE PRECISION DEFAULT 0,  
-                energy DOUBLE PRECISION DEFAULT 1000, 
-                max_energy INTEGER DEFAULT 1000,  
-                tap INTEGER DEFAULT 1, 
-                profit INTEGER DEFAULT 0,
-                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )`);
-        console.log("✅ [DB] Таблицы проверены");
-    } finally { client.release(); }
+        console.log("🛠 [DB] Синхронизация через Sequelize...");
+        await sequelize.authenticate();
+        await sequelize.sync(); 
+        console.log("✅ [DB] Таблицы готовы");
+    } catch (e) {
+        console.error("❌ [DB ERROR]:", e.message);
+    }
 };
 
 // --- ЗАПУСК АДМИНКИ ---
 const startAdmin = async () => {
     try {
-        console.log("⚙️ [ADMIN] Ручная настройка ресурсов...");
-
         const adminJs = new AdminJS({
             resources: [
-                {
-                    // Мы создаем ресурс ВРУЧНУЮ, указывая tableName
-                    // Это самый "железобетонный" способ в @adminjs/sql
-                    resource: {
-                        model: AdminJSSql.Resource,
-                        tableName: 'users',
-                        connectionOptions: {
-                            connectionString: PG_URI,
-                            dialect: 'postgres'
-                        }
-                    },
+                { 
+                    resource: User, 
                     options: { 
                         navigation: { name: 'Игроки', icon: 'User' },
-                        properties: {
-                            id: { isId: true },
-                            last_seen: { isVisible: { list: true, show: true, edit: false } }
-                        }
-                    }
+                        properties: { id: { isId: true } }
+                    } 
                 }
             ],
             rootPath: '/admin',
-            branding: { 
-                companyName: 'Neural Pulse Admin', 
-                softwareBrothers: false,
-                logo: false 
-            }
+            branding: { companyName: 'Neural Pulse Admin', softwareBrothers: false }
         });
 
         const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                if (email === 'admin@pulse.com' && password === 'Kander3132001574') {
-                    return { email: 'admin@pulse.com' };
-                }
+                if (email === 'admin@pulse.com' && password === 'Kander3132001574') return { email };
                 return null;
             },
             cookieName: 'adminjs_session',
-            cookiePassword: 'super-secret-password-longer-than-32-chars-123',
-        }, null, { 
-            resave: false, 
-            saveUninitialized: true, 
-            secret: 'session_secret' 
-        });
+            cookiePassword: 'super-long-secure-password-longer-than-32-chars',
+        }, null, { resave: false, saveUninitialized: true, secret: 'session_secret' });
 
         app.use(adminJs.options.rootPath, router);
-        console.log(`✅ [ADMIN] Админка запущена вручную: ${DOMAIN}/admin`);
+        console.log(`✅ [ADMIN] Админка на Sequelize успешно запущена!`);
     } catch (e) { 
         console.error("❌ [ADMIN ERROR]:", e.message); 
-        console.error(e.stack); // Выведем стек ошибки для подробностей
     }
 };
 
@@ -134,27 +118,29 @@ app.get('/api/user/:id', async (req, res) => {
 });
 
 app.post('/api/save', async (req, res) => {
-    const { userId, balance, energy } = req.body;
+    const { userId, balance, energy, tap, profit } = req.body;
     try {
-        await pool.query(`UPDATE users SET balance=$2, energy=$3, last_seen=NOW() WHERE id=$1`, [userId, balance, energy]);
+        await pool.query(
+            `UPDATE users SET balance=$2, energy=$3, tap=$4, profit=$5, last_seen=NOW() WHERE id=$1`, 
+            [userId, balance, energy, tap, profit]
+        );
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: "Save error" }); }
 });
 
 // --- BOT ---
 bot.start((ctx) => {
-    ctx.reply(`<b>Neural Pulse | Terminal</b>\nAgent <b>${ctx.from.first_name}</b>, sync complete.`, {
+    ctx.reply(`<b>Neural Pulse | Terminal</b>`, {
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])
     });
 });
 
-const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
-app.use(bot.webhookCallback(WEBHOOK_PATH));
+app.use(bot.webhookCallback(`/telegraf/${BOT_TOKEN}`));
 
 app.listen(PORT, async () => {
     await initDB();
     await startAdmin();
     console.log(`🚀 [SERVER] Запущен на ${DOMAIN}`);
-    await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
+    await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`);
 });
