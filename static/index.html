@@ -79,157 +79,124 @@
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        tg.enableClosingConfirmation();
 
         let tonConnectUI = null;
 
         const game = {
             data: { 
-                id: 0, balance: 500, energy: 1000, max_energy: 1000, 
-                tap_lvl: 1, mine_lvl: 1, energy_lvl: 1, regen_lvl: 1,
-                profit: 0, last_bonus: 0, tasks: [] 
+                id: 0, 
+                balance: 0, 
+                energy: 1000, 
+                max_energy: 1000, 
+                tap: 1,      // Соответствует полю в вашей БД
+                profit: 0,   // Соответствует полю в вашей БД
+                username: "AGENT",
+                last_seen: ""
             },
+            // Виртуальные уровни для расчета стоимости
+            lvls: { regen: 1 }, 
             serverTasks: [], 
             serverTop: [],
             isLoaded: false,
 
-            getHeaders() {
-                return {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${tg.initData}` 
-                };
-            },
-
             async init() {
                 ui.startLoader();
-                
-                const u = tg.initDataUnsafe.user || { id: 0, first_name: 'Agent', username: 'Agent', photo_url: '' };
-                this.data.id = u.id;
+                const u = tg.initDataUnsafe.user || { id: 476014374, username: 'KANDERRR' };
+                this.data.id = u.id.toString();
+                this.data.username = (u.username || "AGENT").toUpperCase();
 
-                const name = (u.username || u.first_name).toUpperCase();
-                
                 try {
+                    // Инициализация TON
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
                         manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
                     });
-                } catch(e) { console.error("TON Error", e); }
 
-                try {
-                    // Загрузка данных пользователя
-                    const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(name)}`, {
-                        headers: this.getHeaders()
-                    });
+                    // 1. Загрузка данных пользователя из БД
+                    const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(this.data.username)}`);
                     if (r.ok) {
-                        const serverData = await r.json();
-                        Object.assign(this.data, serverData);
+                        const sData = await r.json();
+                        Object.assign(this.data, sData);
                     }
 
-                    // Загрузка глобальных данных (Задания и Топ)
-                    const [tasksRes, topRes] = await Promise.all([
-                        fetch('/api/tasks', { headers: this.getHeaders() }),
-                        fetch('/api/top', { headers: this.getHeaders() })
+                    // 2. Загрузка задач и топа
+                    const [tRes, topRes] = await Promise.all([
+                        fetch('/api/tasks'),
+                        fetch('/api/top')
                     ]);
-                    
-                    if (tasksRes.ok) this.serverTasks = await tasksRes.json();
+                    if (tRes.ok) this.serverTasks = await tRes.json();
                     if (topRes.ok) this.serverTop = await topRes.json();
 
-                } catch(e) { 
-                    console.error("Load error:", e);
-                }
+                } catch(e) { console.error("Init Error:", e); }
 
-                document.getElementById('my-name').innerText = name;
-                if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
-                
                 this.isLoaded = true;
                 this.loop();
                 ui.render();
             },
 
-            getDailyBonusAmount() {
-                let lvl = Math.floor(Math.log10(Math.max(1, this.data.balance))) + 1;
-                return Math.floor(500 * Math.pow(1.2, lvl - 1));
-            },
-
-            async claimBonus() {
-                const now = Date.now();
-                const day = 24 * 60 * 60 * 1000;
-                
-                if (now - this.data.last_bonus < day) {
-                    tg.showAlert("TERMINAL LOCKED: Come back tomorrow!");
-                    return;
-                }
-
-                const amount = this.getDailyBonusAmount();
-                this.data.balance += amount;
-                this.data.last_bonus = now;
-                tg.HapticFeedback.notificationOccurred('success');
-                tg.showAlert(`SUCCESS: +${amount} NP`);
-                ui.render(); 
-                ui.closeM();
-                this.save();
-            },
-
-            getTapPower() { return Math.floor(1 * Math.pow(1.2, this.data.tap_lvl - 1)); },
-            
+            // --- МАТЕМАТИКА ---
             getCost(type) {
-                const d = this.data;
-                if(type === 'tap') return Math.floor(450 * Math.pow(1.7, d.tap_lvl - 1));
-                if(type === 'energy') return Math.floor(600 * Math.pow(1.6, d.energy_lvl - 1));
-                if(type === 'regen') return Math.floor(1000 * Math.pow(2, d.regen_lvl - 1));
-                if(type === 'mine') return Math.floor(1500 * Math.pow(1.65, d.mine_lvl - 1));
-                return 0;
+                const base = { tap: 400, energy: 500, regen: 800, mine: 1200 };
+                const mult = 1.6;
+                // Определяем текущий уровень для расчета цены
+                let clvl = 1;
+                if(type === 'tap') clvl = this.data.tap;
+                if(type === 'energy') clvl = Math.floor((this.data.max_energy - 1000) / 500) + 1;
+                if(type === 'mine') clvl = Math.floor(this.data.profit / 150) + 1;
+                if(type === 'regen') clvl = this.lvls.regen;
+
+                return Math.floor(base[type] * Math.pow(mult, clvl - 1));
             },
 
             tap(e) {
                 if(!this.isLoaded || this.data.energy < 1) return;
-                let power = this.getTapPower();
-                this.data.balance += power;
+                this.data.balance += this.data.tap;
                 this.data.energy -= 1;
-                ui.pop(e, power); 
+                ui.pop(e, this.data.tap);
                 ui.render();
+                tg.HapticFeedback.impactOccurred('light');
             },
 
             upgrade(type) {
-                let cost = this.getCost(type);
+                const cost = this.getCost(type);
                 if(this.data.balance >= cost) {
                     this.data.balance -= cost;
-                    if(type === 'tap') this.data.tap_lvl++;
-                    if(type === 'energy') { this.data.energy_lvl++; this.data.max_energy += 500; }
-                    if(type === 'regen') this.data.regen_lvl++;
-                    if(type === 'mine') { this.data.mine_lvl++; this.data.profit += 150; }
-                    tg.HapticFeedback.notificationOccurred('success');
-                    this.save(); ui.render(); ui.openM(type === 'mine' ? 'mine' : 'boost');
-                } else { tg.showAlert("LACK OF NP"); }
-            },
+                    if(type === 'tap') this.data.tap++;
+                    if(type === 'energy') this.data.max_energy += 500;
+                    if(type === 'mine') this.data.profit += 150;
+                    if(type === 'regen') this.lvls.regen++;
 
-            async completeTask(id, url) {
-                window.open(url, '_blank');
-                // Логика проверки на сервере
-                fetch('/api/tasks/complete', {
-                    method: 'POST',
-                    headers: this.getHeaders(),
-                    body: JSON.stringify({ taskId: id })
-                }).then(r => {
-                    if(r.ok) tg.showAlert("MISSION ACCOUNTED");
-                });
+                    tg.HapticFeedback.notificationOccurred('success');
+                    this.save();
+                    ui.render();
+                    ui.openM(type === 'mine' ? 'mine' : 'boost');
+                } else {
+                    tg.showAlert("НЕДОСТАТОЧНО СРЕДСТВ");
+                }
             },
 
             async save() {
-                if(!this.isLoaded || !this.data.id) return;
+                if(!this.isLoaded) return;
+                this.data.last_seen = new Date().toISOString();
                 fetch('/api/save', {
                     method: 'POST',
-                    headers: this.getHeaders(),
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(this.data)
-                }).catch((e) => console.error("Save error:", e));
+                });
             },
 
             loop() {
                 setInterval(() => {
-                    const regenAmount = 1 + (this.data.regen_lvl - 1);
-                    if(this.data.energy < this.data.max_energy) this.data.energy = Math.min(this.data.max_energy, this.data.energy + regenAmount);
-                    if(this.data.profit > 0) this.data.balance += (this.data.profit / 3600);
+                    // Регенерация
+                    if(this.data.energy < this.data.max_energy) {
+                        this.data.energy = Math.min(this.data.max_energy, this.data.energy + (this.lvls.regen || 1));
+                    }
+                    // Пассивный доход
+                    if(this.data.profit > 0) {
+                        this.data.balance += (this.data.profit / 3600);
+                    }
                     ui.render();
                 }, 1000);
+                // Сохранение каждые 20 сек
                 setInterval(() => this.save(), 20000);
             }
         };
@@ -241,7 +208,11 @@
                     p += 5;
                     document.getElementById('pct').innerText = p+'%';
                     document.getElementById('bar').style.width = p+'%';
-                    if(p>=100) { clearInterval(i); document.getElementById('loader').style.display='none'; document.getElementById('app').style.display='flex'; }
+                    if(p>=100) { 
+                        clearInterval(i); 
+                        document.getElementById('loader').style.display='none'; 
+                        document.getElementById('app').style.display='flex'; 
+                    }
                 }, 30);
             },
 
@@ -250,80 +221,56 @@
                 document.getElementById('ui-balance').innerText = Math.floor(d.balance).toLocaleString();
                 document.getElementById('ui-energy').innerText = `${Math.floor(d.energy)}/${d.max_energy}`;
                 document.getElementById('e-fill').style.width = (d.energy/d.max_energy*100)+'%';
-                document.getElementById('ui-tap').innerText = `+${game.getTapPower()}`;
+                document.getElementById('ui-tap').innerText = `+${d.tap}`;
                 document.getElementById('ui-profit').innerText = Math.floor(d.profit).toLocaleString();
+                document.getElementById('my-name').innerText = d.username;
                 
-                let lvl = Math.floor(Math.log10(Math.max(1, d.balance))) + 1;
+                let lvl = Math.floor(Math.log10(Math.max(10, d.balance/10))) + 1;
                 document.getElementById('my-lvl').innerText = `LVL ${lvl}`;
-                
-                const ranks = ["ROOKIE", "PULSE AGENT", "CYBER RUNNER", "NEURAL MASTER", "OVERLORD"];
-                document.getElementById('ui-rank').innerText = ranks[Math.min(lvl - 1, 4)];
             },
 
             pop(e, p) {
                 const t = (e.touches && e.touches[0]) || e;
-                const d = document.createElement('div');
-                d.className = 'pop'; d.innerText = `+${p}`;
-                d.style.left = t.clientX+'px'; d.style.top = t.clientY+'px';
-                document.body.appendChild(d);
-                setTimeout(() => d.remove(), 600);
+                const div = document.createElement('div');
+                div.className = 'pop'; div.innerText = `+${p}`;
+                div.style.left = t.clientX+'px'; div.style.top = t.clientY+'px';
+                document.body.appendChild(div);
+                setTimeout(() => div.remove(), 600);
             },
 
             openM(type) {
                 const b = document.getElementById('m-body');
                 document.getElementById('modal').classList.add('active');
                 
-                if(type === 'wallet') {
-                    b.innerHTML = `<h2>👛 WALLET</h2><div id="ton-connect-btn"></div><p style="text-align:center;margin-top:10px;">Connect your TON wallet for future airdrops</p>`;
-                    setTimeout(() => { if(tonConnectUI) tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' }; }, 50);
-                }
-                
-                if(type === 'bonus') {
-                    const amount = game.getDailyBonusAmount();
-                    b.innerHTML = `<h2>🎁 DAILY SUPPLY</h2><div class="s-box" style="text-align:center"><h1>${amount} NP</h1><p>Reset in 24h</p></div>
-                    <button class="m-close" style="background:cyan;color:black;width:100%;margin-top:10px" onclick="game.claimBonus()">INITIALIZE CLAIM</button>`;
-                }
-
-                if(type === 'friends') {
-                    const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
-                    b.innerHTML = `<h2>🤝 NODES</h2>
-                    <div class="s-box" style="word-break:break-all; font-size:12px; padding:10px">${link}</div>
-                    <button class="m-close" style="background:white;color:black;width:100%;margin-top:10px" onclick="navigator.clipboard.writeText('${link}'); tg.showAlert('COPIED')">COPY INVITE LINK</button>
-                    <p style="text-align:center; font-size:11px; margin-top:10px; color:#888">Get 5,000 NP for each active node connected</p>`;
-                }
-
-                if(type === 'tasks') {
-                    let html = `<h2>📋 MISSIONS</h2>`;
-                    if(game.serverTasks.length === 0) html += `<p style="text-align:center">Scanning for missions...</p>`;
-                    game.serverTasks.forEach(t => {
-                        html += `<div class="top-item" onclick="game.completeTask(${t.id}, '${t.url}')">
-                            <span>${t.title}</span><b>+${t.reward}</b>
-                        </div>`;
-                    });
-                    b.innerHTML = html;
-                }
-
-                if(type === 'top') {
-                    let html = `<h2>🏆 GLOBAL RANKING</h2>`;
-                    game.serverTop.slice(0, 10).forEach((u, i) => {
-                        html += `<div class="top-item">
-                            <span>${i+1}. ${u.username}</span><b>${Math.floor(u.balance).toLocaleString()}</b>
-                        </div>`;
-                    });
-                    b.innerHTML = html;
-                }
-
                 if(type === 'boost') {
                     b.innerHTML = `<h2>🚀 BOOSTERS</h2>
-                    <div class="top-item" onclick="game.upgrade('tap')"><span>⚡ Multitap (Lvl ${game.data.tap_lvl})</span><b>${game.getCost('tap')}</b></div>
-                    <div class="top-item" onclick="game.upgrade('energy')"><span>🔋 Capacity (Lvl ${game.data.energy_lvl})</span><b>${game.getCost('energy')}</b></div>
-                    <div class="top-item" onclick="game.upgrade('regen')"><span>🔄 Regen (Lvl ${game.data.regen_lvl})</span><b>${game.getCost('regen')}</b></div>`;
+                    <div class="top-item" onclick="game.upgrade('tap')"><span>⚡ Multitap (Lvl ${game.data.tap})</span><b>${game.getCost('tap')}</b></div>
+                    <div class="top-item" onclick="game.upgrade('energy')"><span>🔋 Capacity (Lvl ${Math.floor((game.data.max_energy-1000)/500)+1})</span><b>${game.getCost('energy')}</b></div>
+                    <div class="top-item" onclick="game.upgrade('regen')"><span>🔄 Regen (Lvl ${game.lvls.regen})</span><b>${game.getCost('regen')}</b></div>`;
                 }
-
                 if(type === 'mine') {
-                    b.innerHTML = `<h2>⛏️ NEURAL MINING</h2>
-                    <div class="top-item" onclick="game.upgrade('mine')"><span>🧠 Neural Node (Lvl ${game.data.mine_lvl})</span><b>${game.getCost('mine')}</b></div>
-                    <p style="text-align:center; font-size:11px; color:cyan; margin-top:10px">Mining generates NP even when terminal is offline</p>`;
+                    b.innerHTML = `<h2>⛏️ MINING</h2>
+                    <div class="top-item" onclick="game.upgrade('mine')"><span>🧠 Neural Node (Lvl ${Math.floor(game.data.profit/150)+1})</span><b>${game.getCost('mine')}</b></div>`;
+                }
+                if(type === 'tasks') {
+                    let h = `<h2>📋 MISSIONS</h2>`;
+                    if(game.serverTasks.length === 0) h += `<p>Scanning for nodes...</p>`;
+                    game.serverTasks.forEach(t => {
+                        h += `<div class="top-item" onclick="window.open('${t.url}')"><span>${t.title}</span><b>+${t.reward}</b></div>`;
+                    });
+                    b.innerHTML = h;
+                }
+                if(type === 'top') {
+                    let h = `<h2>🏆 GLOBAL RANK</h2>`;
+                    const list = Array.isArray(game.serverTop) ? game.serverTop : [];
+                    list.slice(0, 10).forEach((u, i) => {
+                        h += `<div class="top-item"><span>${i+1}. ${u.username}</span><b>${Math.floor(u.balance).toLocaleString()}</b></div>`;
+                    });
+                    b.innerHTML = h;
+                }
+                if(type === 'wallet') {
+                    b.innerHTML = `<h2>👛 WALLET</h2><div id="ton-btn"></div>`;
+                    setTimeout(() => { if(tonConnectUI) tonConnectUI.uiOptions = { buttonRootId: 'ton-btn' }; }, 100);
                 }
             },
 
