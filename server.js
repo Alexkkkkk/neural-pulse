@@ -14,7 +14,7 @@ import * as AdminJSSql from '@adminjs/sql';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 1. ПЕРВАЯ ОЧЕРЕДЬ: Регистрация адаптера
+// 1. ПРИНУДИТЕЛЬНАЯ РЕГИСТРАЦИЯ АДАПТЕРА
 AdminJS.registerAdapter({
     Database: AdminJSSql.Database,
     Resource: AdminJSSql.Resource,
@@ -74,7 +74,7 @@ const initDB = async () => {
                 task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
                 PRIMARY KEY (user_id, task_id)
             )`);
-        console.log("✅ [DB] Таблицы созданы/проверены");
+        console.log("✅ [DB] Таблицы проверены");
     } catch (e) {
         console.error("❌ [DB ERROR]:", e.message);
     } finally {
@@ -85,24 +85,32 @@ const initDB = async () => {
 // --- ЗАПУСК АДМИНКИ ---
 const startAdmin = async () => {
     try {
-        console.log("⚙️ [ADMIN] Инициализация ресурсов...");
+        console.log("⚙️ [ADMIN] Настройка ресурсов...");
 
-        // Создаем инстанс базы данных
-        const db = new AdminJSSql.Database({
+        // Опции подключения, которые мы передадим в каждый ресурс
+        const connectionOptions = {
             connectionString: PG_URI,
-            dialect: 'postgres'
-        });
+            dialect: 'postgres',
+        };
 
-        // Прямое определение ресурсов через адаптер
         const adminJs = new AdminJS({
-            databases: [db], 
             resources: [
                 {
-                    resource: { model: AdminJSSql.Resource, database: db, tableName: 'users' },
+                    resource: {
+                        model: AdminJSSql.Resource,
+                        database: AdminJSSql.Database,
+                        tableName: 'users',
+                        connectionOptions: connectionOptions // Передаем настройки напрямую
+                    },
                     options: { navigation: { name: 'Игроки', icon: 'User' } }
                 },
                 {
-                    resource: { model: AdminJSSql.Resource, database: db, tableName: 'tasks' },
+                    resource: {
+                        model: AdminJSSql.Resource,
+                        database: AdminJSSql.Database,
+                        tableName: 'tasks',
+                        connectionOptions: connectionOptions // Передаем настройки напрямую
+                    },
                     options: { navigation: { name: 'Система', icon: 'Task' } }
                 }
             ],
@@ -116,10 +124,7 @@ const startAdmin = async () => {
 
         const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                if (email === ADMIN_USER.email && password === ADMIN_USER.password) {
-                    console.log(`🔐 [ADMIN] Успешный вход: ${email}`);
-                    return ADMIN_USER;
-                }
+                if (email === ADMIN_USER.email && password === ADMIN_USER.password) return ADMIN_USER;
                 return null;
             },
             cookieName: 'neural_pulse_session',
@@ -127,7 +132,7 @@ const startAdmin = async () => {
         }, null, { resave: false, saveUninitialized: true, secret: 'admin_secret' });
 
         app.use(adminJs.options.rootPath, router);
-        console.log(`✅ [ADMIN] Доступ: ${DOMAIN}/admin`);
+        console.log(`✅ [ADMIN] Админка успешно запущена: ${DOMAIN}/admin`);
     } catch (e) { 
         console.error("❌ [ADMIN ERROR]:", e.message); 
     }
@@ -171,7 +176,7 @@ app.post('/api/save', async (req, res) => {
 // --- BOT ---
 bot.start((ctx) => {
     const webAppUrl = ctx.startPayload ? `${DOMAIN}?ref=${ctx.startPayload}` : DOMAIN;
-    ctx.reply(`<b>Neural Pulse | Terminal</b>\nAgent <b>${ctx.from.first_name}</b>, sync complete.`, {
+    ctx.reply(`<b>Neural Pulse | Terminal</b>\nAgent <b>${ctx.from.first_name}</b>, terminal sync complete.`, {
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", webAppUrl)]])
     });
@@ -183,6 +188,6 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 app.listen(PORT, async () => {
     await initDB();
     await startAdmin();
-    console.log(`🚀 [SERVER] На порту ${PORT}`);
+    console.log(`🚀 [SERVER] Запущен на ${DOMAIN}`);
     await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
 });
