@@ -34,12 +34,12 @@ app.use(session({
 }));
 app.use(express.static(path.join(__dirname, 'static')));
 
-// 1. МАКСИМАЛЬНОЕ ЛОГИРОВАНИЕ HTTP
+// ЛОГИРОВАНИЕ HTTP
 app.use((req, res, next) => {
     const start = Date.now();
     res.on('finish', () => {
         const duration = Date.now() - start;
-        if (!req.url.includes('telegraf')) { // Не спамим логами вебхука
+        if (!req.url.includes('telegraf')) {
             console.log(`[HTTP] ${req.method} ${req.url} | Status: ${res.statusCode} | ${duration}ms`);
             if (req.method === 'POST') console.log(`[DATA] Body:`, JSON.stringify(req.body));
         }
@@ -49,10 +49,9 @@ app.use((req, res, next) => {
 
 const pool = new Pool({ connectionString: PG_URI });
 
-// 2. ЛОГИРОВАНИЕ SQL (Sequelize)
 const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
-    logging: (sql) => console.log(`[SQL] ${sql}`), // Выводит каждый запрос к БД
+    logging: (sql) => console.log(`[SQL] ${sql}`), 
     dialectOptions: { ssl: false } 
 });
 
@@ -77,14 +76,14 @@ const Task = sequelize.define('tasks', {
 }, { timestamps: false });
 
 // --- API ---
+
+// Получение профиля
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     const { username, photo_url } = req.query;
-    console.log(`[API] Запрос игрока: ID ${userId} | User: ${username}`);
     try {
         let result = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
         if (result.rows.length === 0) {
-            console.log(`[API] Регистрация нового агента: ${userId}`);
             const newUser = await pool.query(
                 `INSERT INTO users (id, username, photo_url) VALUES ($1, $2, $3) RETURNING *`,
                 [userId, username || 'AGENT', photo_url || '']
@@ -92,12 +91,10 @@ app.get('/api/user/:id', async (req, res) => {
             return res.json(newUser.rows[0]);
         }
         res.json(result.rows[0]);
-    } catch (e) { 
-        console.error(`[ERR API] /user/${userId}:`, e);
-        res.status(500).send("DB Error"); 
-    }
+    } catch (e) { res.status(500).send("DB Error"); }
 });
 
+// Сохранение состояния
 app.post('/api/save', async (req, res) => {
     const d = req.body;
     try {
@@ -106,14 +103,30 @@ app.post('/api/save', async (req, res) => {
             [d.userId, d.balance, d.energy, d.tap, d.profit]
         );
         res.json({ ok: true });
-    } catch (e) { 
-        console.error(`[ERR SAVE] User ${d.userId}:`, e.message);
-        res.status(500).send("Save Error"); 
+    } catch (e) { res.status(500).send("Save Error"); }
+});
+
+// ВЫПОЛНЕНИЕ ЗАДАНИЯ (НОВОЕ)
+app.post('/api/tasks/complete', async (req, res) => {
+    const { userId, taskId } = req.body;
+    try {
+        const taskResult = await pool.query('SELECT * FROM tasks WHERE id = $1', [taskId]);
+        if (taskResult.rows.length === 0) return res.status(404).send("Task not found");
+        
+        const reward = taskResult.rows[0].reward;
+        
+        // Начисляем награду
+        await pool.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [reward, userId]);
+        
+        console.log(`[TASK] User ${userId} completed task ${taskId}. Reward: +${reward}`);
+        res.json({ ok: true, reward });
+    } catch (e) {
+        console.error(e);
+        res.status(500).send("Task processing error");
     }
 });
 
 app.get('/api/top', async (req, res) => {
-    console.log(`[API] Запрос Leaderboard`);
     try {
         const result = await pool.query('SELECT username, balance, photo_url FROM users ORDER BY balance DESC LIMIT 50');
         res.json(result.rows);
@@ -121,7 +134,6 @@ app.get('/api/top', async (req, res) => {
 });
 
 app.get('/api/tasks', async (req, res) => {
-    console.log(`[API] Запрос списка задач`);
     try {
         const result = await pool.query('SELECT * FROM tasks');
         res.json(result.rows);
@@ -137,32 +149,22 @@ const startAdmin = async () => {
                 { resource: Task, options: { navigation: { name: 'Neural Pulse', icon: 'Checklist' } } }
             ],
             rootPath: '/admin',
-            branding: { 
-                companyName: 'Neural Pulse Admin', 
-                softwareBrothers: false 
-            }
+            branding: { companyName: 'Neural Pulse Admin', softwareBrothers: false }
         });
         const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                console.log(`[ADMIN] Попытка входа: ${email}`);
-                if (email === 'admin@pulse.com' && password === 'Kander3132001574') {
-                    console.log(`[ADMIN] Авторизация успешна: ${email}`);
-                    return { email };
-                }
-                console.warn(`[ADMIN] ОТКАЗ В ДОСТУПЕ: ${email}`);
+                if (email === 'admin@pulse.com' && password === 'Kander3132001574') return { email };
                 return null;
             },
             cookieName: 'adminjs_session',
             cookiePassword: 'super-long-secure-password-longer-than-32-chars-2026',
         }, null, { resave: false, saveUninitialized: true, secret: 'session_secret' });
         app.use(adminJs.options.rootPath, router);
-        console.log(`[ADMIN] Панель готова на /admin`);
     } catch (e) { console.error(`[ERR ADMIN]`, e); }
 };
 
 // --- BOT ---
 bot.start((ctx) => {
-    console.log(`[BOT] Пользователь ${ctx.from.id} (@${ctx.from.username}) запустил бота`);
     ctx.reply(`<b>Neural Pulse | Terminal</b>`, {
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])
@@ -174,20 +176,10 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 
 app.listen(PORT, async () => {
     try {
-        console.log(`[SERVER] Запуск...`);
         await sequelize.authenticate();
-        console.log(`[DB] Подключение к Postgres установлено.`);
-        
         await sequelize.sync({ alter: true });
-        console.log(`[DB] Таблицы проверены и синхронизированы.`);
-        
         await startAdmin();
-        
-        console.log(`🚀 [READY] Домен: ${DOMAIN}`);
-        
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
-        console.log(`[BOT] Вебхук активен: ${WEBHOOK_PATH}`);
-    } catch (err) {
-        console.error(`[CRITICAL] Ошибка старта:`, err);
-    }
+        console.log(`🚀 [READY] System Online`);
+    } catch (err) { console.error(err); }
 });
