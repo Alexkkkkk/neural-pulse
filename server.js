@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import cors from 'cors';
 import session from 'express-session';
 import { Sequelize, DataTypes } from 'sequelize';
-import os from 'os'; // Для получения данных о системе
+import os from 'os';
 
 import AdminJS from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
@@ -35,23 +35,10 @@ app.use(session({
 }));
 app.use(express.static(path.join(__dirname, 'static')));
 
-// ЛОГИРОВАНИЕ HTTP
-app.use((req, res, next) => {
-    const start = Date.now();
-    res.on('finish', () => {
-        const duration = Date.now() - start;
-        if (!req.url.includes('telegraf')) {
-            console.log(`[HTTP] ${req.method} ${req.url} | Status: ${res.statusCode} | ${duration}ms`);
-        }
-    });
-    next();
-});
-
 const pool = new Pool({ connectionString: PG_URI });
-
 const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
-    logging: false, // Отключим лишний спам в логах
+    logging: false, 
     dialectOptions: { ssl: false } 
 });
 
@@ -75,36 +62,81 @@ const Task = sequelize.define('tasks', {
     url: { type: DataTypes.STRING }
 }, { timestamps: false });
 
-// НОВАЯ МОДЕЛЬ ДЛЯ ГРАФИКОВ
 const Stats = sequelize.define('stats', {
     id: { type: DataTypes.INTEGER, primary_key: true, autoIncrement: true },
     timestamp: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
-    user_count: { type: DataTypes.INTEGER },    // График подключения людей
-    total_ton_deposits: { type: DataTypes.DOUBLE, defaultValue: 0 }, // График пополнения TON
-    server_load: { type: DataTypes.FLOAT },     // График загрузки сервера (CPU %)
-    mem_usage: { type: DataTypes.FLOAT },       // График памяти (MB)
-    db_response_time: { type: DataTypes.INTEGER } // Работа БД (ms)
+    user_count: { type: DataTypes.INTEGER },
+    total_ton_deposits: { type: DataTypes.DOUBLE, defaultValue: 0 },
+    server_load: { type: DataTypes.FLOAT },
+    mem_usage: { type: DataTypes.FLOAT },
+    db_response_time: { type: DataTypes.INTEGER }
 }, { timestamps: false });
 
-// --- ФУНКЦИЯ СБОРА МЕТРИК ---
+// --- МОНИТОРИНГ ---
 const collectMetrics = async () => {
     try {
         const startDb = Date.now();
         const userCount = await User.count();
         const dbTime = Date.now() - startDb;
-
-        const memUsed = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2);
-        const cpuLoad = (os.loadavg()[0] * 10).toFixed(2); // Примерный расчет нагрузки
+        const memUsed = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
+        const cpuLoad = (os.loadavg()[0] * 10).toFixed(2);
 
         await Stats.create({
             user_count: userCount,
             server_load: parseFloat(cpuLoad),
             mem_usage: parseFloat(memUsed),
             db_response_time: dbTime,
-            total_ton_deposits: 0 // Сюда можно будет приплюсовывать реальные транзакции
+            total_ton_deposits: 0 
         });
-        console.log(`[MONITOR] Metrics saved. Users: ${userCount}, RAM: ${memUsed}MB`);
     } catch (e) { console.error("Metrics error:", e); }
+};
+
+// --- ADMIN JS (МАКСИМАЛЬНЫЙ ТЮНИНГ) ---
+const startAdmin = async () => {
+    try {
+        const adminJs = new AdminJS({
+            resources: [
+                { resource: User, options: { navigation: { name: 'Система', icon: 'User' } } },
+                { resource: Task, options: { navigation: { name: 'Система', icon: 'Checklist' } } },
+                { resource: Stats, options: { 
+                    navigation: { name: 'Аналитика', icon: 'Activity' },
+                    listProperties: ['timestamp', 'user_count', 'server_load', 'mem_usage', 'db_response_time'],
+                    editProperties: [] 
+                } }
+            ],
+            rootPath: '/admin',
+            branding: { 
+                companyName: 'Neural Pulse Control',
+                softwareBrothers: false,
+                logo: '/images/logo.png' 
+            },
+            // Настройка Dashboard
+            dashboard: {
+                handler: async () => {
+                    const totalUsers = await User.count();
+                    const lastStat = await Stats.findOne({ order: [['timestamp', 'DESC']] });
+                    return {
+                        totalUsers,
+                        currentMem: lastStat?.mem_usage || 0,
+                        dbLatency: lastStat?.db_response_time || 0,
+                        cpu: lastStat?.server_load || 0
+                    }
+                },
+                component: AdminJS.bundle('./dashboard-component.jsx')
+            }
+        });
+
+        const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
+            authenticate: async (email, password) => {
+                if (email === 'admin@pulse.com' && password === 'Kander3132001574') return { email };
+                return null;
+            },
+            cookieName: 'adminjs_session',
+            cookiePassword: 'super-long-secure-password-longer-than-32-chars-2026',
+        }, null, { resave: false, saveUninitialized: true, secret: 'session_secret' });
+
+        app.use(adminJs.options.rootPath, router);
+    } catch (e) { console.error(`[ERR ADMIN]`, e); }
 };
 
 // --- API ---
@@ -135,53 +167,7 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).send("Save Error"); }
 });
 
-app.post('/api/tasks/complete', async (req, res) => {
-    const { userId, taskId } = req.body;
-    try {
-        const taskResult = await pool.query('SELECT * FROM tasks WHERE id = $1', [taskId]);
-        if (taskResult.rows.length === 0) return res.status(404).send("Task not found");
-        const reward = taskResult.rows[0].reward;
-        await pool.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [reward, userId]);
-        res.json({ ok: true, reward });
-    } catch (e) { res.status(500).send("Task processing error"); }
-});
-
-app.get('/api/tasks', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM tasks');
-        res.json(result.rows);
-    } catch (e) { res.status(500).send("Tasks Error"); }
-});
-
-// --- ADMIN JS ---
-const startAdmin = async () => {
-    try {
-        const adminJs = new AdminJS({
-            resources: [
-                { resource: User, options: { navigation: { name: 'Neural Pulse', icon: 'User' } } },
-                { resource: Task, options: { navigation: { name: 'Neural Pulse', icon: 'Checklist' } } },
-                { resource: Stats, options: { 
-                    navigation: { name: 'Monitoring', icon: 'Activity' },
-                    listProperties: ['timestamp', 'user_count', 'server_load', 'mem_usage'],
-                    editProperties: [] // Запрещаем редактировать статистику вручную
-                } }
-            ],
-            rootPath: '/admin',
-            branding: { companyName: 'Neural Pulse Admin', softwareBrothers: false }
-        });
-        const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
-            authenticate: async (email, password) => {
-                if (email === 'admin@pulse.com' && password === 'Kander3132001574') return { email };
-                return null;
-            },
-            cookieName: 'adminjs_session',
-            cookiePassword: 'super-long-secure-password-longer-than-32-chars-2026',
-        }, null, { resave: false, saveUninitialized: true, secret: 'session_secret' });
-        app.use(adminJs.options.rootPath, router);
-    } catch (e) { console.error(`[ERR ADMIN]`, e); }
-};
-
-// --- BOT ---
+// --- ЗАПУСК ---
 bot.start((ctx) => {
     ctx.reply(`<b>Neural Pulse | Terminal</b>`, {
         parse_mode: 'HTML',
@@ -199,10 +185,9 @@ app.listen(PORT, async () => {
         await startAdmin();
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
-        // Запуск сбора метрик каждые 30 минут
-        setInterval(collectMetrics, 30 * 60 * 1000);
-        collectMetrics(); // Инициализирующий запуск
+        setInterval(collectMetrics, 15 * 60 * 1000); // Раз в 15 минут
+        collectMetrics();
 
-        console.log(`🚀 [READY] System Online with Monitoring`);
+        console.log(`🚀 [MAX-MODE] System Online`);
     } catch (err) { console.error(err); }
 });
