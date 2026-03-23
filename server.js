@@ -6,19 +6,19 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
 
-// --- ПАКЕТЫ АДМИНКИ ---
+// --- ИМПОРТЫ АДМИНКИ ---
 import AdminJS from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSql from '@adminjs/sql';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// 1. РЕГИСТРАЦИЯ АДАПТЕРА
+// 1. РЕГИСТРАЦИЯ АДАПТЕРА (Должна быть первой!)
 AdminJS.registerAdapter({
     Database: AdminJSSql.Database,
     Resource: AdminJSSql.Resource,
 });
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const PG_URI = "postgresql://bothost_db_db5b342fc026:gwp3jv20PY7JtERt4cNIvSpReq8YpLYzlH99BY5vyc4@node1.pghost.ru:32867/bothost_db_db5b342fc026";
@@ -43,12 +43,7 @@ const pool = new Pool({ connectionString: PG_URI, ssl: false });
 const initDB = async () => {
     const client = await pool.connect();
     try {
-        console.log("🛠 [DB] Синхронизация таблиц...");
-        
-        // ВАЖНО: После того как база один раз пересоздалась, 
-        // DROP TABLE можно закомментировать, если хочешь сохранять игроков.
-        // await client.query(`DROP TABLE IF EXISTS user_tasks, tasks, users CASCADE`);
-
+        console.log("🛠 [DB] Проверка таблиц...");
         await client.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id BIGINT PRIMARY KEY, 
@@ -79,8 +74,7 @@ const initDB = async () => {
                 task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
                 PRIMARY KEY (user_id, task_id)
             )`);
-
-        console.log("✅ [DB] База данных готова");
+        console.log("✅ [DB] База готова");
     } catch (e) {
         console.error("❌ [DB ERROR]:", e.message);
     } finally {
@@ -88,26 +82,33 @@ const initDB = async () => {
     }
 };
 
-// --- ЗАПУСК АДМИНКИ (ИСПРАВЛЕННЫЙ) ---
+// --- ЗАПУСК АДМИНКИ (Новый надежный метод) ---
 const startAdmin = async () => {
     try {
         const adminJs = new AdminJS({
-            // Явно указываем адаптер для каждого ресурса
             resources: [
                 { 
-                    resource: { model: { tableName: 'users', connectionOptions: { connectionString: PG_URI, dialect: 'postgres' } }, adapter: AdminJSSql },
-                    options: { 
-                        navigation: { name: 'Neural Pulse', icon: 'User' },
-                        properties: { last_seen: { isVisible: { list: true, edit: false, filter: true, show: true } } }
-                    }
+                    // Используем прямой объект подключения вместо строки
+                    resource: { 
+                        model: AdminJSSql.Resource, 
+                        database: AdminJSSql.Database,
+                        client: pool, // Передаем наш пул напрямую
+                        tableName: 'users' 
+                    },
+                    options: { navigation: { name: 'Игроки', icon: 'User' } }
                 },
                 { 
-                    resource: { model: { tableName: 'tasks', connectionOptions: { connectionString: PG_URI, dialect: 'postgres' } }, adapter: AdminJSSql },
-                    options: { navigation: { name: 'Neural Pulse', icon: 'Task' } }
+                    resource: { 
+                        model: AdminJSSql.Resource, 
+                        database: AdminJSSql.Database,
+                        client: pool, 
+                        tableName: 'tasks' 
+                    },
+                    options: { navigation: { name: 'Задания', icon: 'Task' } }
                 }
             ],
             rootPath: '/admin',
-            branding: { companyName: 'Neural Pulse Admin', softwareBrothers: false }
+            branding: { companyName: 'Neural Pulse', softwareBrothers: false }
         });
 
         const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
@@ -115,18 +116,18 @@ const startAdmin = async () => {
                 if (email === ADMIN_USER.email && password === ADMIN_USER.password) return ADMIN_USER;
                 return null;
             },
-            cookieName: 'pulse_admin_session',
-            cookiePassword: 'super-secret-password-123-must-be-very-long-and-secure',
-        }, null, { resave: false, saveUninitialized: true, secret: 'session_key' });
+            cookieName: 'neural_pulse_session',
+            cookiePassword: 'super-long-secure-password-for-cookie-encryption-123',
+        }, null, { resave: false, saveUninitialized: true, secret: 'admin_secret' });
 
         app.use(adminJs.options.rootPath, router);
-        console.log(`🔐 [ADMIN] Панель доступна по адресу: ${DOMAIN}/admin`);
+        console.log(`🔐 [ADMIN] Доступ: ${DOMAIN}/admin`);
     } catch (e) { 
         console.error("❌ [ADMIN ERROR]:", e.message); 
     }
 };
 
-// --- API ЭНДПОИНТЫ ---
+// API
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     const { username, photo_url, ref } = req.query;
@@ -141,10 +142,7 @@ app.get('/api/user/:id', async (req, res) => {
             if (refId) await pool.query('UPDATE users SET balance = balance + 5000 WHERE id = $1', [refId]);
             return res.json({ ...newUser.rows[0], offlineProfit: 0 });
         }
-        const user = result.rows[0];
-        const secondsOffline = Math.floor((new Date(user.now) - new Date(user.last_seen)) / 1000);
-        const offlineProfit = Math.floor((user.profit / 3600) * Math.min(secondsOffline, 10800));
-        res.json({ ...user, offlineProfit });
+        res.json(result.rows[0]);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -159,10 +157,9 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Save error" }); }
 });
 
-// Бот
 bot.start((ctx) => {
     const webAppUrl = ctx.startPayload ? `${DOMAIN}?ref=${ctx.startPayload}` : DOMAIN;
-    ctx.reply(`<b>Neural Pulse | System</b>\nAgent <b>${ctx.from.first_name}</b>, terminal ready.`, {
+    ctx.reply(`<b>Neural Pulse | System</b>\nReady, Agent <b>${ctx.from.first_name}</b>.`, {
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", webAppUrl)]])
     });
