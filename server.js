@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import cors from 'cors';
 import session from 'express-session';
 import { Sequelize, DataTypes } from 'sequelize';
+import os from 'os'; // Для получения данных о системе
 
 import AdminJS from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
@@ -41,7 +42,6 @@ app.use((req, res, next) => {
         const duration = Date.now() - start;
         if (!req.url.includes('telegraf')) {
             console.log(`[HTTP] ${req.method} ${req.url} | Status: ${res.statusCode} | ${duration}ms`);
-            if (req.method === 'POST') console.log(`[DATA] Body:`, JSON.stringify(req.body));
         }
     });
     next();
@@ -51,13 +51,13 @@ const pool = new Pool({ connectionString: PG_URI });
 
 const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
-    logging: (sql) => console.log(`[SQL] ${sql}`), 
+    logging: false, // Отключим лишний спам в логах
     dialectOptions: { ssl: false } 
 });
 
 // --- МОДЕЛИ ---
 const User = sequelize.define('users', {
-    id: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: false },
+    id: { type: DataTypes.BIGINT, primary_key: true },
     username: { type: DataTypes.STRING },
     photo_url: { type: DataTypes.TEXT },
     balance: { type: DataTypes.DOUBLE, defaultValue: 0 },
@@ -69,15 +69,45 @@ const User = sequelize.define('users', {
 }, { timestamps: false });
 
 const Task = sequelize.define('tasks', {
-    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    id: { type: DataTypes.INTEGER, primary_key: true, autoIncrement: true },
     title: { type: DataTypes.STRING, allowNull: false },
     reward: { type: DataTypes.INTEGER, defaultValue: 1000 },
     url: { type: DataTypes.STRING }
 }, { timestamps: false });
 
-// --- API ---
+// НОВАЯ МОДЕЛЬ ДЛЯ ГРАФИКОВ
+const Stats = sequelize.define('stats', {
+    id: { type: DataTypes.INTEGER, primary_key: true, autoIncrement: true },
+    timestamp: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
+    user_count: { type: DataTypes.INTEGER },    // График подключения людей
+    total_ton_deposits: { type: DataTypes.DOUBLE, defaultValue: 0 }, // График пополнения TON
+    server_load: { type: DataTypes.FLOAT },     // График загрузки сервера (CPU %)
+    mem_usage: { type: DataTypes.FLOAT },       // График памяти (MB)
+    db_response_time: { type: DataTypes.INTEGER } // Работа БД (ms)
+}, { timestamps: false });
 
-// Получение профиля
+// --- ФУНКЦИЯ СБОРА МЕТРИК ---
+const collectMetrics = async () => {
+    try {
+        const startDb = Date.now();
+        const userCount = await User.count();
+        const dbTime = Date.now() - startDb;
+
+        const memUsed = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2);
+        const cpuLoad = (os.loadavg()[0] * 10).toFixed(2); // Примерный расчет нагрузки
+
+        await Stats.create({
+            user_count: userCount,
+            server_load: parseFloat(cpuLoad),
+            mem_usage: parseFloat(memUsed),
+            db_response_time: dbTime,
+            total_ton_deposits: 0 // Сюда можно будет приплюсовывать реальные транзакции
+        });
+        console.log(`[MONITOR] Metrics saved. Users: ${userCount}, RAM: ${memUsed}MB`);
+    } catch (e) { console.error("Metrics error:", e); }
+};
+
+// --- API ---
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     const { username, photo_url } = req.query;
@@ -94,7 +124,6 @@ app.get('/api/user/:id', async (req, res) => {
     } catch (e) { res.status(500).send("DB Error"); }
 });
 
-// Сохранение состояния
 app.post('/api/save', async (req, res) => {
     const d = req.body;
     try {
@@ -106,31 +135,15 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).send("Save Error"); }
 });
 
-// ВЫПОЛНЕНИЕ ЗАДАНИЯ (НОВОЕ)
 app.post('/api/tasks/complete', async (req, res) => {
     const { userId, taskId } = req.body;
     try {
         const taskResult = await pool.query('SELECT * FROM tasks WHERE id = $1', [taskId]);
         if (taskResult.rows.length === 0) return res.status(404).send("Task not found");
-        
         const reward = taskResult.rows[0].reward;
-        
-        // Начисляем награду
         await pool.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [reward, userId]);
-        
-        console.log(`[TASK] User ${userId} completed task ${taskId}. Reward: +${reward}`);
         res.json({ ok: true, reward });
-    } catch (e) {
-        console.error(e);
-        res.status(500).send("Task processing error");
-    }
-});
-
-app.get('/api/top', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT username, balance, photo_url FROM users ORDER BY balance DESC LIMIT 50');
-        res.json(result.rows);
-    } catch (e) { res.status(500).send("Top Error"); }
+    } catch (e) { res.status(500).send("Task processing error"); }
 });
 
 app.get('/api/tasks', async (req, res) => {
@@ -146,7 +159,12 @@ const startAdmin = async () => {
         const adminJs = new AdminJS({
             resources: [
                 { resource: User, options: { navigation: { name: 'Neural Pulse', icon: 'User' } } },
-                { resource: Task, options: { navigation: { name: 'Neural Pulse', icon: 'Checklist' } } }
+                { resource: Task, options: { navigation: { name: 'Neural Pulse', icon: 'Checklist' } } },
+                { resource: Stats, options: { 
+                    navigation: { name: 'Monitoring', icon: 'Activity' },
+                    listProperties: ['timestamp', 'user_count', 'server_load', 'mem_usage'],
+                    editProperties: [] // Запрещаем редактировать статистику вручную
+                } }
             ],
             rootPath: '/admin',
             branding: { companyName: 'Neural Pulse Admin', softwareBrothers: false }
@@ -180,6 +198,11 @@ app.listen(PORT, async () => {
         await sequelize.sync({ alter: true });
         await startAdmin();
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
-        console.log(`🚀 [READY] System Online`);
+        
+        // Запуск сбора метрик каждые 30 минут
+        setInterval(collectMetrics, 30 * 60 * 1000);
+        collectMetrics(); // Инициализирующий запуск
+
+        console.log(`🚀 [READY] System Online with Monitoring`);
     } catch (err) { console.error(err); }
 });
