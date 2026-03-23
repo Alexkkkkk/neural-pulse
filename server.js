@@ -10,9 +10,16 @@ import session from 'express-session';
 // --- ИМПОРТЫ АДМИНКИ ---
 import AdminJS from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
+import * as AdminJSSql from '@adminjs/sql';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// 1. РЕГИСТРАЦИЯ АДАПТЕРА (без динамического импорта, напрямую)
+AdminJS.registerAdapter({
+    Database: AdminJSSql.Database,
+    Resource: AdminJSSql.Resource,
+});
 
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const PG_URI = "postgresql://bothost_db_db5b342fc026:gwp3jv20PY7JtERt4cNIvSpReq8YpLYzlH99BY5vyc4@node1.pghost.ru:32867/bothost_db_db5b342fc026";
@@ -33,6 +40,7 @@ app.use(session({
     secret: 'neural_pulse_secret_2026',
     resave: false,
     saveUninitialized: true,
+    cookie: { httpOnly: true, secure: false }
 }));
 app.use(express.static(path.join(__dirname, 'static')));
 
@@ -54,34 +62,43 @@ const initDB = async () => {
                 profit INTEGER DEFAULT 0,
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
-        console.log("✅ [DB] Таблицы проверены");
+        console.log("✅ [DB] Таблицы готовы");
     } finally { client.release(); }
 };
 
 // --- ЗАПУСК АДМИНКИ ---
 const startAdmin = async () => {
     try {
-        console.log("⚙️ [ADMIN] Динамическая загрузка адаптера...");
-        
-        // Динамический импорт адаптера для решения проблемы ESM
-        const AdminJSSql = await import('@adminjs/sql');
-        
-        AdminJS.registerAdapter({
-            Database: AdminJSSql.Database,
-            Resource: AdminJSSql.Resource,
-        });
+        console.log("⚙️ [ADMIN] Настройка ресурсов...");
 
         const adminJs = new AdminJS({
-            databases: [
-                new AdminJSSql.Database({
-                    connectionString: PG_URI,
-                    dialect: 'postgres'
-                })
+            // Вместо databases используем явное перечисление ресурсов
+            // Это обходит проблему "no adapters" при сканировании всей БД
+            resources: [
+                {
+                    resource: {
+                        model: AdminJSSql.Resource,
+                        database: AdminJSSql.Database,
+                        tableName: 'users',
+                        connectionOptions: {
+                            connectionString: PG_URI,
+                            dialect: 'postgres'
+                        }
+                    },
+                    options: { 
+                        navigation: { name: 'Игроки', icon: 'User' },
+                        properties: {
+                            id: { isId: true },
+                            last_seen: { isVisible: { list: true, show: true, edit: false } }
+                        }
+                    }
+                }
             ],
             rootPath: '/admin',
             branding: { 
                 companyName: 'Neural Pulse Admin', 
-                softwareBrothers: false 
+                softwareBrothers: false,
+                logo: false 
             }
         });
 
@@ -92,10 +109,14 @@ const startAdmin = async () => {
             },
             cookieName: 'adminjs_session',
             cookiePassword: 'super-secret-password-longer-than-32-chars-123',
-        }, null, { resave: false, saveUninitialized: true, secret: 'session_secret' });
+        }, null, { 
+            resave: false, 
+            saveUninitialized: true, 
+            secret: 'session_secret' 
+        });
 
         app.use(adminJs.options.rootPath, router);
-        console.log(`✅ [ADMIN] Админка успешно запущена: ${DOMAIN}/admin`);
+        console.log(`✅ [ADMIN] Админка готова: ${DOMAIN}/admin`);
     } catch (e) { 
         console.error("❌ [ADMIN ERROR]:", e.message); 
     }
