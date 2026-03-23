@@ -89,44 +89,37 @@
                 tap_lvl: 1, mine_lvl: 1, energy_lvl: 1, regen_lvl: 1,
                 profit: 0, last_bonus: 0, tasks: [] 
             },
+            serverTasks: [],
+            serverTop: [],
             isLoaded: false,
 
-            // Заголовки для авторизации запросов
             getHeaders() {
-                return {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${tg.initData}` 
-                };
+                return { 'Content-Type': 'application/json' };
             },
 
             async init() {
                 ui.startLoader();
-                
-                // Извлекаем данные пользователя Telegram
                 const u = tg.initDataUnsafe.user || { id: 0, first_name: 'Agent', photo_url: '' };
-                this.data.id = u.id; // Фиксируем ID сразу
-
+                this.data.id = u.id;
                 const name = (u.username || u.first_name).toUpperCase();
                 
                 try {
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                        manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
+                        manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json'
                     });
                 } catch(e) { console.error("TON Error", e); }
 
                 try {
-                    // Загрузка данных с сервера Bothost
-                    const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(name)}`, {
-                        headers: this.getHeaders()
-                    });
+                    // 1. Загрузка профиля пользователя
+                    const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(name)}`);
                     if (r.ok) {
                         const serverData = await r.json();
                         Object.assign(this.data, serverData);
-                        this.data.id = u.id; // Перестраховка ID
                     }
-                } catch(e) { 
-                    console.error("Load error:", e);
-                }
+                    // 2. Предзагрузка заданий и ТОПа
+                    this.loadTasks();
+                    this.loadTop();
+                } catch(e) { console.error("Initial load error:", e); }
 
                 document.getElementById('my-name').innerText = name;
                 if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
@@ -136,10 +129,23 @@
                 ui.render();
             },
 
+            async loadTasks() {
+                try {
+                    const r = await fetch('/api/tasks');
+                    if(r.ok) this.serverTasks = await r.json();
+                } catch(e) { console.error("Tasks fetch error"); }
+            },
+
+            async loadTop() {
+                try {
+                    const r = await fetch('/api/top');
+                    if(r.ok) this.serverTop = await r.json();
+                } catch(e) { console.error("Top fetch error"); }
+            },
+
             getDailyBonusAmount() {
                 let lvl = Math.floor(Math.log10(Math.max(1, this.data.balance))) + 1;
-                if (this.data.balance < 1000) return 500;
-                return Math.floor(500 * Math.pow(1.2, lvl - 1));
+                return this.data.balance < 1000 ? 500 : Math.floor(500 * Math.pow(1.2, lvl - 1));
             },
 
             async claimBonus() {
@@ -149,18 +155,17 @@
                 tg.HapticFeedback.notificationOccurred('success');
                 tg.showAlert(`SUCCESS: +${amount} NP`);
                 ui.render(); 
-                ui.openM('bonus');
+                ui.closeM();
                 this.save();
             },
 
-            getTapPower() { return Math.floor(1 * Math.pow(1.2, this.data.tap_lvl - 1)); },
+            getTapPower() { return Math.floor(1 * Math.pow(1.2, (this.data.tap_lvl || 1) - 1)); },
             
             getCost(type) {
                 const d = this.data;
-                if(type === 'tap') return Math.floor(450 * Math.pow(1.7, d.tap_lvl - 1));
-                if(type === 'energy') return Math.floor(600 * Math.pow(1.6, d.energy_lvl - 1));
-                if(type === 'regen') return Math.floor(1000 * Math.pow(2, d.regen_lvl - 1));
-                if(type === 'mine') return Math.floor(1500 * Math.pow(1.65, d.mine_lvl - 1));
+                if(type === 'tap') return Math.floor(450 * Math.pow(1.7, (d.tap_lvl || 1) - 1));
+                if(type === 'energy') return Math.floor(600 * Math.pow(1.6, (d.energy_lvl || 1) - 1));
+                if(type === 'mine') return Math.floor(1500 * Math.pow(1.65, (d.mine_lvl || 1) - 1));
                 return 0;
             },
 
@@ -177,10 +182,9 @@
                 let cost = this.getCost(type);
                 if(this.data.balance >= cost) {
                     this.data.balance -= cost;
-                    if(type === 'tap') this.data.tap_lvl++;
-                    if(type === 'energy') { this.data.energy_lvl++; this.data.max_energy += 500; }
-                    if(type === 'regen') this.data.regen_lvl++;
-                    if(type === 'mine') { this.data.mine_lvl++; this.data.profit += 150; }
+                    if(type === 'tap') this.data.tap_lvl = (this.data.tap_lvl || 1) + 1;
+                    if(type === 'energy') { this.data.energy_lvl = (this.data.energy_lvl || 1) + 1; this.data.max_energy += 500; }
+                    if(type === 'mine') { this.data.mine_lvl = (this.data.mine_lvl || 1) + 1; this.data.profit += 150; }
                     tg.HapticFeedback.notificationOccurred('success');
                     this.save(); ui.render(); ui.openM(type === 'mine' ? 'mine' : 'boost');
                 } else { tg.showAlert("LACK OF NP"); }
@@ -188,23 +192,26 @@
 
             async save() {
                 if(!this.isLoaded || !this.data.id) return;
+                const payload = {
+                    userId: this.data.id,
+                    balance: this.data.balance,
+                    energy: this.data.energy,
+                    tap: this.data.tap_lvl || 1,
+                    profit: this.data.profit
+                };
                 fetch('/api/save', {
                     method: 'POST',
                     headers: this.getHeaders(),
-                    body: JSON.stringify(this.data)
-                }).catch((e) => console.error("Save error:", e));
+                    body: JSON.stringify(payload)
+                }).catch(e => console.error("Save error"));
             },
 
             loop() {
-                // Энергия и пассивный доход раз в сек
                 setInterval(() => {
-                    const regenAmount = 1 + (this.data.regen_lvl - 1);
-                    if(this.data.energy < this.data.max_energy) this.data.energy = Math.min(this.data.max_energy, this.data.energy + regenAmount);
+                    if(this.data.energy < this.data.max_energy) this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1);
                     if(this.data.profit > 0) this.data.balance += (this.data.profit / 3600);
                     ui.render();
                 }, 1000);
-
-                // Автосохранение в БД раз в 20 секунд
                 setInterval(() => this.save(), 20000);
             }
         };
@@ -245,12 +252,11 @@
                 document.getElementById('modal').classList.add('active');
                 
                 if(type === 'wallet') {
-                    b.innerHTML = `<h2>👛 WALLET</h2><div id="ton-connect-btn"></div><p style="text-align:center;margin-top:10px;">Connect your TON wallet</p>`;
+                    b.innerHTML = `<h2>👛 WALLET</h2><div id="ton-connect-btn"></div>`;
                     setTimeout(() => { if(tonConnectUI) tonConnectUI.uiOptions = { buttonRootId: 'ton-connect-btn' }; }, 50);
                 }
                 if(type === 'bonus') {
-                    const amount = game.getDailyBonusAmount();
-                    b.innerHTML = `<h2>🎁 DAILY SUPPLY</h2><div class="s-box"><h1>${amount} NP</h1></div><button class="m-close" style="background:cyan;color:black" onclick="game.claimBonus()">CLAIM</button>`;
+                    b.innerHTML = `<h2>🎁 SUPPLY</h2><div class="s-box"><h1>${game.getDailyBonusAmount()} NP</h1></div><button class="m-close" style="background:cyan;color:black" onclick="game.claimBonus()">CLAIM</button>`;
                 }
                 if(type === 'boost') {
                     b.innerHTML = `<h2>🚀 BOOSTERS</h2>
@@ -260,6 +266,24 @@
                 if(type === 'mine') {
                     b.innerHTML = `<h2>⛏️ MINING</h2>
                     <div class="top-item" onclick="game.upgrade('mine')"><span>🧠 Neural Node</span><b>${game.getCost('mine')}</b></div>`;
+                }
+                if(type === 'tasks') {
+                    let h = `<h2>📋 TASKS</h2>`;
+                    game.serverTasks.forEach(t => {
+                        h += `<div class="top-item" onclick="window.open('${t.url}')">
+                                <span>${t.title}</span><b>+${t.reward}</b>
+                              </div>`;
+                    });
+                    b.innerHTML = h || `<h2>📋 TASKS</h2><p>No tasks available</p>`;
+                }
+                if(type === 'top') {
+                    let h = `<h2>🏆 TOP AGENTS</h2>`;
+                    game.serverTop.forEach((u, i) => {
+                        h += `<div class="top-item">
+                                <span>${i+1}. ${u.username}</span><b>${Math.floor(u.balance).toLocaleString()}</b>
+                              </div>`;
+                    });
+                    b.innerHTML = h;
                 }
             },
 
