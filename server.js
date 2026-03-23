@@ -28,24 +28,31 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(session({
-    secret: 'neural_pulse_2026_final',
+    secret: 'neural_pulse_ultra_secret_2026',
     resave: false,
     saveUninitialized: true
 }));
 app.use(express.static(path.join(__dirname, 'static')));
 
-// Логгер входящих HTTP запросов
+// 1. МАКСИМАЛЬНОЕ ЛОГИРОВАНИЕ HTTP
 app.use((req, res, next) => {
-    if (req.url !== '/telegraf/' + BOT_TOKEN) { // Не спамим логами вебхука бота
-        console.log(`[HTTP] ${req.method} ${req.url}`);
-    }
+    const start = Date.now();
+    res.on('finish', () => {
+        const duration = Date.now() - start;
+        if (!req.url.includes('telegraf')) { // Не спамим логами вебхука
+            console.log(`[HTTP] ${req.method} ${req.url} | Status: ${res.statusCode} | ${duration}ms`);
+            if (req.method === 'POST') console.log(`[DATA] Body:`, JSON.stringify(req.body));
+        }
+    });
     next();
 });
 
-const pool = new Pool({ connectionString: PG_URI, ssl: false });
+const pool = new Pool({ connectionString: PG_URI });
+
+// 2. ЛОГИРОВАНИЕ SQL (Sequelize)
 const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
-    logging: (msg) => console.log(`[DB-SQL] ${msg}`), // Логируем SQL запросы Sequelize
+    logging: (sql) => console.log(`[SQL] ${sql}`), // Выводит каждый запрос к БД
     dialectOptions: { ssl: false } 
 });
 
@@ -73,11 +80,11 @@ const Task = sequelize.define('tasks', {
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     const { username, photo_url } = req.query;
-    console.log(`[API] Запрос данных пользователя: ${userId} (${username || 'no name'})`);
+    console.log(`[API] Запрос игрока: ID ${userId} | User: ${username}`);
     try {
         let result = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
         if (result.rows.length === 0) {
-            console.log(`[API] Новый пользователь! Регистрация: ${userId}`);
+            console.log(`[API] Регистрация нового агента: ${userId}`);
             const newUser = await pool.query(
                 `INSERT INTO users (id, username, photo_url) VALUES ($1, $2, $3) RETURNING *`,
                 [userId, username || 'AGENT', photo_url || '']
@@ -86,14 +93,13 @@ app.get('/api/user/:id', async (req, res) => {
         }
         res.json(result.rows[0]);
     } catch (e) { 
-        console.error(`[API ERROR] /api/user/:id : ${e.message}`);
-        res.status(500).json({ error: "DB Error" }); 
+        console.error(`[ERR API] /user/${userId}:`, e);
+        res.status(500).send("DB Error"); 
     }
 });
 
 app.post('/api/save', async (req, res) => {
     const d = req.body;
-    console.log(`[API] Сохранение: User ${d.userId} | Balance: ${d.balance} | Energy: ${d.energy}`);
     try {
         await pool.query(
             `UPDATE users SET balance=$2, energy=$3, tap=$4, profit=$5, last_seen=NOW() WHERE id=$1`, 
@@ -101,69 +107,65 @@ app.post('/api/save', async (req, res) => {
         );
         res.json({ ok: true });
     } catch (e) { 
-        console.error(`[API ERROR] /api/save : ${e.message}`);
-        res.status(500).json({ error: "Save error" }); 
+        console.error(`[ERR SAVE] User ${d.userId}:`, e.message);
+        res.status(500).send("Save Error"); 
     }
 });
 
 app.get('/api/top', async (req, res) => {
-    console.log(`[API] Запрос таблицы лидеров`);
+    console.log(`[API] Запрос Leaderboard`);
     try {
-        const result = await pool.query('SELECT id, username, balance, photo_url FROM users ORDER BY balance DESC LIMIT 50');
+        const result = await pool.query('SELECT username, balance, photo_url FROM users ORDER BY balance DESC LIMIT 50');
         res.json(result.rows);
-    } catch (e) { 
-        console.error(`[API ERROR] /api/top : ${e.message}`);
-        res.status(500).json({ error: "Top error" }); 
-    }
+    } catch (e) { res.status(500).send("Top Error"); }
 });
 
 app.get('/api/tasks', async (req, res) => {
-    console.log(`[API] Запрос списка заданий`);
+    console.log(`[API] Запрос списка задач`);
     try {
         const result = await pool.query('SELECT * FROM tasks');
         res.json(result.rows);
-    } catch (e) { 
-        console.error(`[API ERROR] /api/tasks : ${e.message}`);
-        res.status(500).json({ error: e.message }); 
-    }
+    } catch (e) { res.status(500).send("Tasks Error"); }
 });
 
-// --- ADMIN ---
+// --- ADMIN JS ---
 const startAdmin = async () => {
     try {
         const adminJs = new AdminJS({
             resources: [
-                { resource: User, options: { navigation: { name: 'Игроки', icon: 'User' } } },
-                { resource: Task, options: { navigation: { name: 'Задания', icon: 'Checklist' } } }
+                { resource: User, options: { navigation: { name: 'Neural Pulse', icon: 'User' } } },
+                { resource: Task, options: { navigation: { name: 'Neural Pulse', icon: 'Checklist' } } }
             ],
             rootPath: '/admin',
-            branding: { companyName: 'Neural Admin', softwareBrothers: false }
+            branding: { 
+                companyName: 'Neural Pulse Admin', 
+                softwareBrothers: false 
+            }
         });
         const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
+                console.log(`[ADMIN] Попытка входа: ${email}`);
                 if (email === 'admin@pulse.com' && password === 'Kander3132001574') {
-                    console.log(`[ADMIN] Успешный вход: ${email}`);
+                    console.log(`[ADMIN] Авторизация успешна: ${email}`);
                     return { email };
                 }
-                console.warn(`[ADMIN] Неудачная попытка входа: ${email}`);
+                console.warn(`[ADMIN] ОТКАЗ В ДОСТУПЕ: ${email}`);
                 return null;
             },
             cookieName: 'adminjs_session',
             cookiePassword: 'super-long-secure-password-longer-than-32-chars-2026',
         }, null, { resave: false, saveUninitialized: true, secret: 'session_secret' });
         app.use(adminJs.options.rootPath, router);
-        console.log(`[ADMIN] Панель управления инициализирована на /admin`);
-    } catch (err) {
-        console.error(`[ADMIN ERROR] Сбой запуска админки: ${err.message}`);
-    }
+        console.log(`[ADMIN] Панель готова на /admin`);
+    } catch (e) { console.error(`[ERR ADMIN]`, e); }
 };
 
-// --- START ---
+// --- BOT ---
 bot.start((ctx) => {
-    console.log(`[BOT] Пользователь ${ctx.from.id} нажал /start`);
-    ctx.reply(`<b>Neural Pulse | Sync Active</b>`, {
+    console.log(`[BOT] Пользователь ${ctx.from.id} (@${ctx.from.username}) запустил бота`);
+    ctx.reply(`<b>Neural Pulse | Terminal</b>`, {
         parse_mode: 'HTML',
-        ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", DOMAIN)]])
+        ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])
     });
 });
 
@@ -172,20 +174,20 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 
 app.listen(PORT, async () => {
     try {
-        console.log(`[SERVER] Попытка подключения к БД...`);
+        console.log(`[SERVER] Запуск...`);
         await sequelize.authenticate();
-        console.log(`[SERVER] Подключение к БД успешно.`);
+        console.log(`[DB] Подключение к Postgres установлено.`);
         
         await sequelize.sync({ alter: true });
-        console.log(`[SERVER] Таблицы синхронизированы (alter mode).`);
+        console.log(`[DB] Таблицы проверены и синхронизированы.`);
         
         await startAdmin();
         
-        console.log(`🚀 SERVER READY: ${DOMAIN}`);
+        console.log(`🚀 [READY] Домен: ${DOMAIN}`);
         
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
-        console.log(`[BOT] Webhook установлен на ${DOMAIN}${WEBHOOK_PATH}`);
+        console.log(`[BOT] Вебхук активен: ${WEBHOOK_PATH}`);
     } catch (err) {
-        console.error(`[CRITICAL ERROR] Ошибка при запуске сервера: ${err.message}`);
+        console.error(`[CRITICAL] Ошибка старта:`, err);
     }
 });
