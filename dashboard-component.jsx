@@ -1,4 +1,3 @@
-
 import React from 'react'
 import { Box, H2, H5, Text, Illustration, Section, Card } from '@adminjs/design-system'
 
