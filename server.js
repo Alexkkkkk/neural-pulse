@@ -48,7 +48,7 @@ const sessionOptions = {
     cookie: { 
         secure: true, 
         httpOnly: true, 
-        sameSite: 'none', // Обязательно для Telegram WebApp и прокси
+        sameSite: 'none', // Для работы внутри Telegram WebApp
         maxAge: 24 * 60 * 60 * 1000 
     }
 };
@@ -131,13 +131,13 @@ const startAdmin = async () => {
             branding: { companyName: 'Neural Pulse Control', withMadeWithLove: false }
         });
 
-        // ИСПРАВЛЕНО: передаем express третьим аргументом
+        // ИСПРАВЛЕНО: передаем express и настройки сессии корректно
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(
             adminJs, 
             {
                 authenticate: async (email, password) => {
                     if (email === '1' && password === '1') {
-                        console.log(`[ADMIN] User authenticated successfully.`);
+                        console.log(`[ADMIN] Auth Success`);
                         return { email: 'admin@pulse.com' };
                     }
                     return null;
@@ -145,8 +145,8 @@ const startAdmin = async () => {
                 cookieName: 'adminjs_session',
                 cookiePassword: 'secure-cookie-password-2026-v2',
             }, 
-            express, // Обязательный аргумент для актуальных версий
-            sessionOptions // Используем общие настройки сессии
+            null, // router (если null, AdminJS создаст его сам)
+            sessionOptions // Опции сессии
         );
 
         app.use(adminJs.options.rootPath, adminRouter);
