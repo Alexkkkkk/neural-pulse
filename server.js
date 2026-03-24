@@ -19,7 +19,7 @@ const __dirname = path.dirname(__filename);
 // Регистрация адаптера
 AdminJS.registerAdapter(AdminJSSequelize);
 
-// --- КУСТОМНОЕ ЛОГИРОВАНИЕ ---
+// --- КУСТОМНОЕ ЛОГИРОВАНИЕ (Глаза ИИ) ---
 const logger = {
     info: (msg) => console.log(`[${new Date().toISOString()}] 🔵 INFO: ${msg}`),
     warn: (msg) => console.log(`[${new Date().toISOString()}] 🟡 WARN: ${msg}`),
@@ -35,8 +35,8 @@ const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
 const ADMIN_ID = 1774360651;
 
-// Инициализация ИИ (Вставь ключ в переменные окружения Bothost или сюда)
-const openai = new OpenAI({ apiKey: 'YOUR_OPENAI_API_KEY' });
+// Инициализация ИИ
+const openai = new OpenAI({ apiKey: 'YOUR_OPENAI_API_KEY' }); // Убедись, что ключ вставлен
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
@@ -54,9 +54,9 @@ async function initSession() {
         const { default: connectSessionSequelize } = await import('connect-session-sequelize');
         const SequelizeStore = connectSessionSequelize(session.Store);
         sessionStore = new SequelizeStore({ db: sequelize, tableName: 'sessions' });
-        logger.system('Session store connected to DB.');
+        logger.system('Neural Network Sessions Linked.');
     } catch (e) {
-        logger.error('SessionStore initialization failed', e);
+        logger.error('SessionStore failure', e);
     }
 }
 await initSession();
@@ -65,10 +65,10 @@ app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json());
 
-// Логирование входящих API запросов
+// Логирование трафика
 app.use((req, res, next) => {
-    if (!req.url.startsWith('/admin')) { // Не заспамливаем логи админкой
-        logger.info(`HTTP ${req.method} ${req.url}`);
+    if (!req.url.startsWith('/admin')) {
+        logger.info(`TRAFFIC: ${req.method} ${req.url}`);
     }
     next();
 });
@@ -122,31 +122,40 @@ const Stats = sequelize.define('stats', {
     mem_usage: { type: DataTypes.FLOAT }
 }, { timestamps: false });
 
-// --- AI ENGINE & SECURITY ---
+// --- AI CORE & MODERATION ---
 const AIEngine = {
     async getGlobalReport() {
         try {
             const count = await User.count();
-            const top = await User.findAll({ limit: 5, order: [['balance', 'DESC']] });
-            logger.ai('Generating global economy report...');
+            const top = await User.findAll({ limit: 10, order: [['balance', 'DESC']] });
+            const suspects = await User.count({ where: { status: 'suspected' } });
+            
+            logger.ai('Executing Deep Analysis...');
             const completion = await openai.chat.completions.create({
                 model: "gpt-4o-mini",
-                messages: [{ role: "system", content: "Ты ИИ Neural Pulse. Дай анализ экономики." }, { role: "user", content: `Игроков: ${count}. Топ: ${JSON.stringify(top)}` }]
+                messages: [
+                    { role: "system", content: "Ты — Центральный Процессор Neural Pulse. Сделай краткий технический аудит системы. Используй термины: ликвидность, аномалии, прогноз." },
+                    { role: "user", content: `Игроков: ${count}. Подозрительных: ${suspects}. Данные топа: ${JSON.stringify(top)}` }
+                ]
             });
             return completion.choices[0].message.content;
         } catch (e) { 
-            logger.error('AI Report Error', e);
-            return "Ошибка протокола ИИ."; 
+            return "Аналитический модуль недоступен."; 
         }
     },
     async scanSuspects() {
-        logger.info('Starting security scan for suspected cheaters...');
-        const suspects = await User.findAll({
-            where: { balance: { [Op.gt]: 5000000 }, level: { [Op.lt]: 2 } } // Порог 5 млн для подозрений
+        logger.ai('Scanning for neural anomalies (Anti-Cheat)...');
+        const suspiciousUsers = await User.findAll({
+            where: {
+                [Op.or]: [
+                    { balance: { [Op.gt]: 5000000 }, level: { [Op.lt]: 3 } }, // Много денег на малом уровне
+                    { tap: { [Op.gt]: 100 } } // Нереальный урон за тап
+                ]
+            }
         });
-        for (let u of suspects) {
+        for (let u of suspiciousUsers) {
             await u.update({ status: 'suspected' });
-            logger.warn(`User ${u.id} (${u.username}) marked as suspected.`);
+            logger.warn(`AI FLAG: User ${u.id} marked as SUSPECTED.`);
         }
     }
 };
@@ -159,15 +168,12 @@ const calculateLevel = (balance) => {
     return 5;
 };
 
-// --- API ROUTES ---
-
-// Получить данные пользователя + оффлайн фарм
+// --- API ---
 app.get('/api/user/:id', async (req, res) => {
     try {
         let user = await User.findByPk(req.params.id);
         if (!user) {
             user = await User.create({ id: req.params.id, username: req.query.username || 'AGENT' });
-            logger.info(`New user created: ${req.params.id}`);
             return res.json(user);
         }
 
@@ -181,92 +187,56 @@ app.get('/api/user/:id', async (req, res) => {
             user.last_seen = now;
             user.level = calculateLevel(user.balance);
             await user.save();
-            logger.info(`User ${user.id} farmed ${earned.toFixed(2)} NP offline.`);
+            logger.info(`AI Offline Farm: User ${user.id} +${earned.toFixed(2)} NP.`);
         }
         res.json(user);
-    } catch (e) { 
-        logger.error(`API GET /api/user/${req.params.id} failed`, e);
-        res.status(500).send("DB Error"); 
-    }
+    } catch (e) { res.status(500).send("AI_CORE_ERROR"); }
 });
 
-// Сохранение прогресса (тапы, энергия)
 app.post('/api/save', async (req, res) => {
     try {
         const { id, ...data } = req.body;
-        if (!id) return res.status(400).send("ID required");
+        if (!id) return res.status(400).send("ID_MISSING");
         if (data.balance !== undefined) data.level = calculateLevel(data.balance);
         await User.update({ ...data, last_seen: new Date() }, { where: { id } });
         res.json({ ok: true });
-    } catch (e) { 
-        logger.error(`API POST /api/save failed`, e);
-        res.status(500).send("Save Error"); 
-    }
+    } catch (e) { res.status(500).send("SAVE_ERROR"); }
 });
 
-// ТОП игроков (то, что искал твой фронтенд)
 app.get('/api/top', async (req, res) => {
     try {
-        const topUsers = await User.findAll({
-            limit: 50,
-            order: [['balance', 'DESC']],
-            attributes: ['username', 'balance', 'level', 'photo_url']
-        });
-        res.json(topUsers);
-    } catch (e) {
-        logger.error("API GET /api/top failed", e);
-        res.status(500).json([]);
-    }
+        const top = await User.findAll({ limit: 50, order: [['balance', 'DESC']], attributes: ['username', 'balance', 'level', 'photo_url'] });
+        res.json(top);
+    } catch (e) { res.status(500).json([]); }
 });
 
-// Список квестов
 app.get('/api/tasks', async (req, res) => {
     try {
         const tasks = await Task.findAll();
         res.json(tasks);
-    } catch (e) {
-        logger.error("API GET /api/tasks failed", e);
-        res.status(500).json([]);
-    }
+    } catch (e) { res.status(500).json([]); }
 });
 
-// --- ADMIN PANEL ---
+// --- ADMIN ---
 const startAdmin = async () => {
     try {
         const adminJs = new AdminJS({
             resources: [
-                { resource: User, options: { navigation: { name: 'Игроки' } } },
-                { resource: Task, options: { navigation: { name: 'Квесты' } } },
-                { resource: Stats, options: { navigation: { name: 'Метрики' } } }
+                { resource: User, options: { navigation: { name: 'Агенты' } } },
+                { resource: Task, options: { navigation: { name: 'Контракты' } } },
+                { resource: Stats, options: { navigation: { name: 'Система' } } }
             ],
             rootPath: '/admin',
-            branding: { companyName: 'Neural Pulse Control', logo: false },
+            branding: { companyName: 'Neural Pulse Hub', logo: false },
             bundler: { enabled: false }
         });
-
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
-            authenticate: async (email, password) => (email === '1' && password === '1') ? { email: 'admin@pulse.com' } : null,
+            authenticate: async (email, password) => (email === '1' && password === '1') ? { email: 'admin@pulse.tech' } : null,
             cookieName: 'adminjs_session',
-            cookiePassword: 'secure-cookie-password-2026-final',
+            cookiePassword: 'secure-ai-pass-2026',
         }, null, sessionOptions);
-
         app.use(adminJs.options.rootPath, adminRouter);
-        logger.system(`Admin panel ready at ${DOMAIN}/admin`);
-    } catch (e) { logger.error("Admin setup failed", e); }
-};
-
-// --- MONITORING ---
-const collectMetrics = async () => {
-    try {
-        const userCount = await User.count();
-        const metrics = {
-            user_count: userCount,
-            server_load: parseFloat((os.loadavg()[0] * 10).toFixed(2)),
-            mem_usage: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2))
-        };
-        await Stats.create(metrics);
-        logger.info(`Metrics: Users: ${metrics.user_count}, RAM: ${metrics.mem_usage}MB`);
-    } catch (e) { logger.error("Metrics collection failed", e); }
+    } catch (e) { logger.error("Admin init failed", e); }
 };
 
 // --- BOT LOGIC ---
@@ -274,8 +244,6 @@ bot.start(async (ctx) => {
     const userId = ctx.from.id;
     const refId = ctx.startPayload ? parseInt(ctx.startPayload) : null;
     const photoPath = path.join(__dirname, 'static/images/logo.png');
-
-    logger.info(`Bot /start by user ${userId} (Ref: ${refId || 'None'})`);
 
     try {
         let user = await User.findByPk(userId);
@@ -286,25 +254,25 @@ bot.start(async (ctx) => {
                 if (referrer) {
                     referredBy = refId; startBalance = 5000;
                     await referrer.update({ balance: referrer.balance + 10000, referrals: referrer.referrals + 1 });
-                    bot.telegram.sendMessage(refId, `💎 <b>Агент принят!</b>\n+10,000 NP на баланс.`, { parse_mode: 'HTML' }).catch(() => {});
+                    bot.telegram.sendMessage(refId, `✅ <b>Система:</b> Новый агент в вашей сети! +10k NP.`, { parse_mode: 'HTML' }).catch(() => {});
                 }
             }
             user = await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: startBalance, referred_by: referredBy });
         }
 
         ctx.replyWithPhoto({ source: photoPath }, {
-            caption: `<b>Neural Pulse | Terminal</b>\n\nАгент, система инициализирована.\n\n🎁 Реф. ссылка:\n<code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`,
+            caption: `<b>Neural Pulse | Terminal</b>\n\nИдентификация пройдена.\nМайнинг доступен.\n\n🔗 Протокол связи:\n<code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`,
             parse_mode: 'HTML',
-            ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])
-        }).catch(() => ctx.reply("System Online.", Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])));
-    } catch (e) { logger.error(`Bot /start failed`, e); }
+            ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ТЕРМИНАЛ", DOMAIN)]])
+        }).catch(() => ctx.reply("System Online.", Markup.inlineKeyboard([[Markup.button.webApp("⚡ ТЕРМИНАЛ", DOMAIN)]])));
+    } catch (e) { logger.error(`Bot Fail`, e); }
 });
 
 bot.command('ai_report', async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return;
-    ctx.reply("⌛ Анализирую нейронную сеть...");
+    ctx.reply("⌛ Запрашиваю отчет у ядра...");
     const report = await AIEngine.getGlobalReport();
-    ctx.reply(`📊 <b>ОТЧЕТ ИИ:</b>\n\n${report}`, { parse_mode: 'HTML' });
+    ctx.reply(`📊 <b>AUDIT REPORT:</b>\n\n${report}`, { parse_mode: 'HTML' });
 });
 
 bot.on('text', async (ctx) => {
@@ -313,35 +281,42 @@ bot.on('text', async (ctx) => {
         await ctx.sendChatAction('typing');
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
-            messages: [{ role: "system", content: "Ты ИИ Neural Pulse. Твой стиль: киберпанк, хакер, кратко." }, { role: "user", content: ctx.message.text }]
+            messages: [{ role: "system", content: "Ты ИИ Neural Pulse. Твой стиль: киберпанк, краткий. Ты помогаешь игрокам." }, { role: "user", content: ctx.message.text }]
         });
-        ctx.reply(`📟: ${response.choices[0].message.content}`);
+        ctx.reply(`📟 AI: ${response.choices[0].message.content}`);
     } catch (e) { }
 });
 
 const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
 app.use(bot.webhookCallback(WEBHOOK_PATH));
 
-// --- SERVER RUN ---
+// --- RUN ---
 const server = app.listen(PORT, '0.0.0.0', async () => {
     try {
-        logger.system(`Initializing database connection...`);
         await sequelize.authenticate();
         if (sessionStore) await sessionStore.sync().catch(() => {});
         await sequelize.sync({ alter: true }); 
-        
         await startAdmin();
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
-        setInterval(collectMetrics, 15 * 60 * 1000);
+        // Фоновые ИИ-процессы
+        setInterval(() => {
+            const userCount = User.count();
+            const metrics = {
+                user_count: userCount,
+                server_load: parseFloat((os.loadavg()[0] * 10).toFixed(2)),
+                mem_usage: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2))
+            };
+            Stats.create(metrics);
+        }, 15 * 60 * 1000);
+
         setInterval(() => AIEngine.scanSuspects(), 60 * 60 * 1000);
         
-        logger.system(`Neural Pulse ONLINE on Port ${PORT}`);
-    } catch (err) { logger.error("CRITICAL Startup Failure", err); }
+        logger.system(`Neural Pulse Core Online [Port ${PORT}]`);
+    } catch (err) { logger.error("CRITICAL", err); }
 });
 
 process.on('SIGTERM', () => server.close(async () => { 
-    logger.system("SIGTERM received. Cleaning up...");
     await sequelize.close(); 
     process.exit(0); 
 }));
