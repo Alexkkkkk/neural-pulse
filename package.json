@@ -14,8 +14,8 @@
     "pg-hstore": "^2.3.4",
     "express-session": "^1.17.3",
     "connect-session-sequelize": "^9.1.3",
-    "adminjs": "^6.8.7",
-    "@adminjs/express": "^5.1.0",
+    "adminjs": "^7.8.1",
+    "@adminjs/express": "^6.1.0",
     "@adminjs/sequelize": "^4.0.0",
     "cors": "^2.8.5"
   }
