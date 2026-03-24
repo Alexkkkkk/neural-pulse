@@ -6,7 +6,14 @@ import cors from 'cors';
 import session from 'express-session';
 import { Sequelize, DataTypes } from 'sequelize';
 import os from 'os';
-import connectSessionSequelize from 'connect-session-sequelize'; // Добавлено
+
+// Попытка импорта хранилища сессий (чтобы сервер не падал без пакета)
+let connectSessionSequelize;
+try {
+    connectSessionSequelize = (await import('connect-session-sequelize')).default;
+} catch (e) {
+    console.log('--- [WARNING] connect-session-sequelize not found. Using MemoryStore. ---');
+}
 
 import AdminJS from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
@@ -30,13 +37,16 @@ const app = express();
 
 const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
-    logging: false, // Отключил лишний спам в логах, оставь true если нужно дебажить
+    logging: false, 
     dialectOptions: { ssl: false } 
 });
 
-// --- SESSION STORE (Хранение сессий в БД) ---
-const SequelizeStore = connectSessionSequelize(session.Store);
-const sessionStore = new SequelizeStore({ db: sequelize });
+// --- SESSION STORE LOGIC ---
+let sessionStore = null;
+if (connectSessionSequelize) {
+    const SequelizeStore = connectSessionSequelize(session.Store);
+    sessionStore = new SequelizeStore({ db: sequelize, tableName: 'sessions' });
+}
 
 // --- СЕТЕВЫЕ НАСТРОЙКИ ---
 app.set('trust proxy', 1); 
@@ -46,7 +56,7 @@ app.use(express.json());
 // --- ЕДИНАЯ НАСТРОЙКА СЕССИЙ ---
 const sessionOptions = {
     secret: 'neural_pulse_ultra_secret_2026',
-    store: sessionStore, // Сессии теперь в базе данных
+    store: sessionStore, // Будет либо DB store, либо null (MemoryStore по умолчанию)
     resave: false, 
     saveUninitialized: false, 
     proxy: true,
@@ -54,7 +64,7 @@ const sessionOptions = {
     cookie: { 
         secure: true, 
         httpOnly: true, 
-        sameSite: 'lax', // 'lax' лучше подходит для работы в обычном браузере
+        sameSite: 'lax', // Критично для работы через прокси np.bothost.tech
         maxAge: 24 * 60 * 60 * 1000 
     }
 };
@@ -135,19 +145,20 @@ const startAdmin = async () => {
             {
                 authenticate: async (email, password) => {
                     if (email === '1' && password === '1') {
+                        console.log(`[ADMIN] Auth Success for ${email}`);
                         return { email: 'admin@pulse.com' };
                     }
                     return null;
                 },
                 cookieName: 'adminjs_session',
-                cookiePassword: 'secure-cookie-password-2026-v3',
+                cookiePassword: 'secure-cookie-password-2026-final',
             }, 
             null, 
             sessionOptions
         );
 
         app.use(adminJs.options.rootPath, adminRouter);
-        console.log(`--- [ADMIN] AdminJS panel ready ---`);
+        console.log(`--- [ADMIN] AdminJS panel ready at /admin ---`);
     } catch (e) { 
         console.error(`[ADMIN ERROR]`, e); 
     }
@@ -156,14 +167,12 @@ const startAdmin = async () => {
 // --- MONITORING ---
 const collectMetrics = async () => {
     try {
-        const startDb = Date.now();
         const userCount = await User.count();
-        const dbTime = Date.now() - startDb;
         await Stats.create({
             user_count: userCount,
             server_load: parseFloat((os.loadavg()[0] * 10).toFixed(2)),
             mem_usage: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2)),
-            db_response_time: dbTime
+            db_response_time: 0
         });
     } catch (e) { console.log("Metrics error"); }
 };
@@ -185,7 +194,7 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 app.listen(PORT, '0.0.0.0', async () => {
     try {
         await sequelize.authenticate();
-        sessionStore.sync(); // Синхронизируем таблицу сессий
+        if (sessionStore) await sessionStore.sync(); 
         await sequelize.sync({ alter: true }); 
         await startAdmin();
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
