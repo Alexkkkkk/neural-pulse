@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
 import session from 'express-session';
-import { Sequelize, DataTypes } from 'sequelize';
+import { Sequelize, DataTypes, Op } from 'sequelize';
 import os from 'os';
 
 // Пакеты AdminJS
@@ -41,7 +41,8 @@ const app = express();
 const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
     logging: false, 
-    dialectOptions: { ssl: false } 
+    dialectOptions: { ssl: false },
+    retry: { max: 5 } // Попытки переподключения при сбое БД
 });
 
 // --- SESSION CONFIG ---
@@ -78,6 +79,7 @@ const User = sequelize.define('users', {
     max_energy: { type: DataTypes.INTEGER, defaultValue: 1000 },
     tap: { type: DataTypes.INTEGER, defaultValue: 1 },
     profit: { type: DataTypes.INTEGER, defaultValue: 0 }, 
+    level: { type: DataTypes.INTEGER, defaultValue: 1 }, // Добавлено: текущий уровень
     tap_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     mine_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     energy_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
@@ -102,6 +104,14 @@ const Stats = sequelize.define('stats', {
     mem_usage: { type: DataTypes.FLOAT }
 }, { timestamps: false });
 
+// --- UTILS ---
+const calculateLevel = (balance) => {
+    if (balance < 50000) return 1;
+    if (balance < 250000) return 2;
+    if (balance < 1000000) return 3;
+    return Math.floor(Math.log10(balance / 100000)) + 3;
+};
+
 // --- API (OFFLINE PROFIT & DATA) ---
 app.get('/api/user/:id', async (req, res) => {
     try {
@@ -115,22 +125,27 @@ app.get('/api/user/:id', async (req, res) => {
         const lastSeen = new Date(user.last_seen);
         const secondsOffline = Math.floor((now - lastSeen) / 1000);
 
-        // Офлайн прибыль: если пользователь отсутствовал > 1 минуты
+        // Офлайн прибыль
         if (secondsOffline > 60 && user.profit > 0) {
-            const farmTime = Math.min(secondsOffline, 86400); // Ограничение 24 часа
+            const farmTime = Math.min(secondsOffline, 86400); 
             const earned = (user.profit / 3600) * farmTime; 
             user.balance += parseFloat(earned.toFixed(2));
             user.last_seen = now;
-            await user.save();
-            console.log(`[FARM] User ${user.id} earned ${earned.toFixed(2)} while away`);
+            console.log(`[FARM] User ${user.id} +${earned.toFixed(2)} NP`);
         }
+
+        // Авто-обновление уровня
+        user.level = calculateLevel(user.balance);
+        await user.save();
+
         res.json(user);
     } catch (e) { res.status(500).send("DB Error"); }
 });
 
 app.post('/api/save', async (req, res) => {
     try {
-        await User.update({ ...req.body, last_seen: new Date() }, { where: { id: req.body.id } });
+        const { id, ...data } = req.body;
+        await User.update({ ...data, last_seen: new Date() }, { where: { id } });
         res.json({ ok: true });
     } catch (e) { res.status(500).send("Save Error"); }
 });
@@ -186,12 +201,11 @@ bot.start(async (ctx) => {
             let startBalance = 0;
             let referredBy = null;
 
-            // Логика рефералов
             if (refId && refId !== userId) {
                 const referrer = await User.findByPk(refId);
                 if (referrer) {
                     referredBy = refId;
-                    startBalance = 5000; // Бонус новичку
+                    startBalance = 5000;
                     await referrer.update({ 
                         balance: referrer.balance + 10000, 
                         referrals: referrer.referrals + 1 
