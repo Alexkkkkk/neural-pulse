@@ -7,7 +7,7 @@ import session from 'express-session';
 import { Sequelize, DataTypes } from 'sequelize';
 import os from 'os';
 
-// Пакеты AdminJS (v7+)
+// AdminJS (v7+)
 import AdminJS from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
@@ -42,7 +42,7 @@ async function initSession() {
         sessionStore = new SequelizeStore({ db: sequelize, tableName: 'sessions' });
         console.log('✅ [STORAGE] Session store initialized.');
     } catch (e) {
-        console.log('⚠️ [WARNING] SessionStore init failed. Admin access might be unstable.');
+        console.log('⚠️ [WARNING] SessionStore init failed.');
     }
 }
 await initSession();
@@ -158,11 +158,15 @@ const startAdmin = async () => {
                 { resource: Stats, options: { navigation: { name: 'Метрики' } } }
             ],
             rootPath: '/admin',
-            branding: { companyName: 'Neural Pulse Control', withMadeWithLove: false },
-            // Отключаем динамический билд для стабильности на хостинге
-            bundler: { enabled: false }
+            branding: { 
+                companyName: 'Neural Pulse Control', 
+                withMadeWithLove: false,
+                logo: false 
+            },
+            bundler: { enabled: false } // КРИТИЧНО для Bothost: отключаем сборку фронта
         });
 
+        // Создаем роутер с поддержкой аутентификации
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
                 if (email === '1' && password === '1') return { email: 'admin@pulse.com' };
@@ -172,9 +176,13 @@ const startAdmin = async () => {
             cookiePassword: 'secure-cookie-password-2026-final',
         }, null, sessionOptions);
 
+        // Монтируем роутер в приложение
         app.use(adminJs.options.rootPath, adminRouter);
-        console.log(`🚀 [ADMIN] Panel ready at ${DOMAIN}/admin`);
-    } catch (e) { console.error(`❌ [ADMIN ERROR]`, e); }
+        
+        console.log(`🚀 [ADMIN] Panel active at ${DOMAIN}/admin`);
+    } catch (e) { 
+        console.error(`❌ [ADMIN ERROR] Fail:`, e); 
+    }
 };
 
 // --- MONITORING ---
@@ -220,6 +228,8 @@ bot.start(async (ctx) => {
             caption: `<b>Neural Pulse | Terminal</b>\n\nДобро пожаловать, Агент. Твоя нейросеть готова к работе.\n\n🎁 Реф. ссылка:\n<code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`,
             parse_mode: 'HTML',
             ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])
+        }).catch(() => {
+            ctx.reply("System Online.", Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]]));
         });
     } catch (e) { 
         ctx.reply("System Online.", Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])); 
@@ -236,7 +246,7 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
         if (sessionStore) await sessionStore.sync().catch(() => {});
         await sequelize.sync({ alter: true }); 
         
-        // Сначала запускаем админку, потом вебхук
+        // Порядок важен: сначала админка
         await startAdmin();
         
         await bot.telegram.deleteWebhook().catch(() => {});
