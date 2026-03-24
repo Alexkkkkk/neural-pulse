@@ -33,11 +33,10 @@ const sequelize = new Sequelize(PG_URI, {
     pool: { max: 5, min: 0, acquire: 30000, idle: 10000 }
 });
 
-// --- СИСТЕМА СЕССИЙ (ЗАЩИТА ОТ ОШИБОК ИМПОРТА) ---
+// --- СИСТЕМА СЕССИЙ ---
 let sessionStore = null;
 async function initSession() {
     try {
-        // Динамический импорт для совместимости с ESM на Bothost
         const { default: connectSessionSequelize } = await import('connect-session-sequelize');
         const SequelizeStore = connectSessionSequelize(session.Store);
         sessionStore = new SequelizeStore({ db: sequelize, tableName: 'sessions' });
@@ -127,7 +126,6 @@ app.get('/api/user/:id', async (req, res) => {
         const lastSeen = new Date(user.last_seen);
         const secondsOffline = Math.floor((now - lastSeen) / 1000);
 
-        // Офлайн прибыль (максимум за 24 часа)
         if (secondsOffline > 60 && user.profit > 0) {
             const farmTime = Math.min(secondsOffline, 86400); 
             const earned = (user.profit / 3600) * farmTime; 
@@ -144,32 +142,26 @@ app.post('/api/save', async (req, res) => {
     try {
         const { id, ...data } = req.body;
         if (!id) return res.status(400).send("ID required");
-        
-        // Автоматический пересчет уровня при изменении баланса
-        if (data.balance !== undefined) {
-            data.level = calculateLevel(data.balance);
-        }
-        
+        if (data.balance !== undefined) data.level = calculateLevel(data.balance);
         await User.update({ ...data, last_seen: new Date() }, { where: { id } });
         res.json({ ok: true });
     } catch (e) { res.status(500).send("Save Error"); }
 });
 
-// --- ADMIN PANEL (v7 Compatible) ---
+// --- ADMIN PANEL (v7) ---
 const startAdmin = async () => {
     try {
         const adminJs = new AdminJS({
             resources: [
-                { resource: User, options: { navigation: { name: 'Players' } } },
-                { resource: Task, options: { navigation: { name: 'Quests' } } },
-                { resource: Stats, options: { navigation: { name: 'Metrics' } } }
+                { resource: User, options: { navigation: { name: 'Игроки' } } },
+                { resource: Task, options: { navigation: { name: 'Квесты' } } },
+                { resource: Stats, options: { navigation: { name: 'Метрики' } } }
             ],
             rootPath: '/admin',
             branding: { companyName: 'Neural Pulse Control', withMadeWithLove: false }
         });
 
-        // В AdminJS v7+ роутер инициализируется через app напрямую
-        const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
+        AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
                 if (email === '1' && password === '1') return { email: 'admin@pulse.com' };
                 return null;
@@ -247,11 +239,9 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
         await sequelize.sync({ alter: true }); 
         await startAdmin();
         
-        // Очистка и установка вебхука
         await bot.telegram.deleteWebhook().catch(() => {});
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
-        // Запуск мониторинга
         setInterval(collectMetrics, 15 * 60 * 1000);
         setTimeout(collectMetrics, 5000); 
         
@@ -259,7 +249,6 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
     } catch (err) { console.error("Startup Failure:", err); }
 });
 
-// Грациозное завершение (важно для Docker/Bothost)
 process.on('SIGTERM', () => {
     server.close(async () => {
         await sequelize.close();
