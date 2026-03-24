@@ -15,6 +15,7 @@ import * as AdminJSSequelize from '@adminjs/sequelize';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Регистрация адаптера для работы AdminJS с Sequelize
 AdminJS.registerAdapter(AdminJSSequelize);
 
 // --- CONFIG ---
@@ -36,12 +37,13 @@ const sequelize = new Sequelize(PG_URI, {
 let sessionStore = null;
 async function initSession() {
     try {
+        // Динамический импорт для совместимости с ESM на Bothost
         const { default: connectSessionSequelize } = await import('connect-session-sequelize');
         const SequelizeStore = connectSessionSequelize(session.Store);
         sessionStore = new SequelizeStore({ db: sequelize, tableName: 'sessions' });
-        console.log('✅ [STORAGE] connect-session-sequelize loaded.');
+        console.log('✅ [STORAGE] Session store initialized.');
     } catch (e) {
-        console.log('⚠️ [WARNING] connect-session-sequelize not found. Using MemoryStore.');
+        console.log('⚠️ [WARNING] Could not init SequelizeStore. Using MemoryStore.');
     }
 }
 await initSession();
@@ -57,7 +59,12 @@ const sessionOptions = {
     saveUninitialized: false, 
     proxy: true,
     name: 'neural_pulse_sid',
-    cookie: { secure: true, httpOnly: true, sameSite: 'lax', maxAge: 24 * 60 * 60 * 1000 }
+    cookie: { 
+        secure: true, 
+        httpOnly: true, 
+        sameSite: 'lax', 
+        maxAge: 24 * 60 * 60 * 1000 
+    }
 };
 
 app.use(session(sessionOptions));
@@ -120,6 +127,7 @@ app.get('/api/user/:id', async (req, res) => {
         const lastSeen = new Date(user.last_seen);
         const secondsOffline = Math.floor((now - lastSeen) / 1000);
 
+        // Офлайн прибыль (максимум за 24 часа)
         if (secondsOffline > 60 && user.profit > 0) {
             const farmTime = Math.min(secondsOffline, 86400); 
             const earned = (user.profit / 3600) * farmTime; 
@@ -137,6 +145,7 @@ app.post('/api/save', async (req, res) => {
         const { id, ...data } = req.body;
         if (!id) return res.status(400).send("ID required");
         
+        // Автоматический пересчет уровня при изменении баланса
         if (data.balance !== undefined) {
             data.level = calculateLevel(data.balance);
         }
@@ -159,7 +168,7 @@ const startAdmin = async () => {
             branding: { companyName: 'Neural Pulse Control', withMadeWithLove: false }
         });
 
-        // В AdminJS v7+ роутер подключается через app напрямую
+        // В AdminJS v7+ роутер инициализируется через app напрямую
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
                 if (email === '1' && password === '1') return { email: 'admin@pulse.com' };
@@ -167,9 +176,9 @@ const startAdmin = async () => {
             },
             cookieName: 'adminjs_session',
             cookiePassword: 'secure-cookie-password-2026-final',
-        }, app, sessionOptions); // Передаем app третьим аргументом
+        }, app, sessionOptions); 
 
-        console.log(`🚀 [ADMIN] Panel ready at ${DOMAIN}/admin`);
+        console.log(`🚀 [ADMIN] Panel active at ${DOMAIN}/admin`);
     } catch (e) { console.error(`[ADMIN ERROR]`, e); }
 };
 
@@ -209,7 +218,12 @@ bot.start(async (ctx) => {
                     bot.telegram.sendMessage(refId, `💎 <b>Новый Агент!</b>\nВам начислено +10,000 NP.`, { parse_mode: 'HTML' }).catch(() => {});
                 }
             }
-            user = await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: startBalance, referred_by: referredBy });
+            user = await User.create({ 
+                id: userId, 
+                username: ctx.from.username || 'AGENT', 
+                balance: startBalance, 
+                referred_by: referredBy 
+            });
         }
 
         ctx.replyWithPhoto({ source: photoPath }, {
@@ -233,18 +247,19 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
         await sequelize.sync({ alter: true }); 
         await startAdmin();
         
-        // Переустановка вебхука для чистоты запуска
-        await bot.telegram.deleteWebhook();
+        // Очистка и установка вебхука
+        await bot.telegram.deleteWebhook().catch(() => {});
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
+        // Запуск мониторинга
         setInterval(collectMetrics, 15 * 60 * 1000);
         setTimeout(collectMetrics, 5000); 
         
-        console.log(`🚀 [SYSTEM ONLINE]`);
+        console.log(`🚀 [SYSTEM ONLINE] on Port ${PORT}`);
     } catch (err) { console.error("Startup Failure:", err); }
 });
 
-// Обработка закрытия
+// Грациозное завершение (важно для Docker/Bothost)
 process.on('SIGTERM', () => {
     server.close(async () => {
         await sequelize.close();
