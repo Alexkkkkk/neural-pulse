@@ -15,24 +15,33 @@ import * as AdminJSSequelize from '@adminjs/sequelize';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+console.log('--- [STARTUP] Initialization started ---');
+
 AdminJS.registerAdapter(AdminJSSequelize);
 
 // --- CONFIG ---
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const PG_URI = "postgresql://bothost_db_130943b4f3f6:oY6CieQ5aohyTLgU9i23M6w80naZt9_1mJ4V6roejTs@node1.pghost.ru:32834/bothost_db_130943b4f3f6";
 const DOMAIN = "https://np.bothost.tech"; 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
 // --- СЕРВЕРНЫЕ НАСТРОЙКИ (ФИКС ОШИБКИ TRUST) ---
+console.log('--- [CONFIG] Setting trust proxy to true ---');
 app.set('trust proxy', true); 
 
 app.use(cors());
 app.use(express.json());
 
-// Настройка сессий (необходима для работы AdminJS)
+// Middleware для логирования всех входящих HTTP запросов
+app.use((req, res, next) => {
+    console.log(`[REQ] ${req.method} ${req.url} | IP: ${req.ip}`);
+    next();
+});
+
+// Настройка сессий
 app.use(session({
     secret: 'neural_pulse_ultra_secret_2026',
     resave: false,
@@ -49,7 +58,7 @@ app.use(express.static(path.join(__dirname, 'static')));
 
 const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
-    logging: false, 
+    logging: (msg) => console.log(`[DB LOG] ${msg}`), 
     dialectOptions: { ssl: false } 
 });
 
@@ -90,11 +99,13 @@ const Stats = sequelize.define('stats', {
 // --- API ---
 
 app.get('/api/user/:id', async (req, res) => {
+    console.log(`[API] GET User request for ID: ${req.params.id}`);
     const userId = req.params.id;
     const { username, photo_url } = req.query;
     try {
         let user = await User.findByPk(userId);
         if (!user) {
+            console.log(`[API] Creating new user: ${userId}`);
             user = await User.create({
                 id: userId,
                 username: username || 'AGENT',
@@ -103,13 +114,14 @@ app.get('/api/user/:id', async (req, res) => {
         }
         res.json(user);
     } catch (e) { 
-        console.error("Load User Error:", e);
+        console.error("[API ERROR] Load User:", e);
         res.status(500).send("DB Error"); 
     }
 });
 
 app.post('/api/save', async (req, res) => {
     const d = req.body;
+    console.log(`[API] SAVE request for ID: ${d.id}`);
     if (!d.id) return res.status(400).send("No ID");
     try {
         await User.update({
@@ -126,31 +138,14 @@ app.post('/api/save', async (req, res) => {
         }, { where: { id: d.id } });
         res.json({ ok: true });
     } catch (e) { 
-        console.error("Save Error:", e);
+        console.error("[API ERROR] Save:", e);
         res.status(500).send("Save Error"); 
     }
 });
 
-app.get('/api/tasks', async (req, res) => {
-    try {
-        const tasks = await Task.findAll();
-        res.json(tasks);
-    } catch (e) { res.status(500).send("Tasks Error"); }
-});
-
-app.get('/api/top', async (req, res) => {
-    try {
-        const topUsers = await User.findAll({
-            order: [['balance', 'DESC']],
-            limit: 50,
-            attributes: ['username', 'balance', 'photo_url']
-        });
-        res.json(topUsers);
-    } catch (e) { res.status(500).send("Top Error"); }
-});
-
 // --- АДМИНКА ---
 const startAdmin = async () => {
+    console.log('--- [ADMIN] Starting AdminJS setup ---');
     try {
         const adminJs = new AdminJS({
             resources: [
@@ -168,8 +163,12 @@ const startAdmin = async () => {
 
         const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                // ВХОД: email = 1, password = 1
-                if (email === '1' && password === '1') return { email: 'admin@pulse.com' };
+                console.log(`[ADMIN AUTH] Attempt with login: ${email}`);
+                if (email === '1' && password === '1') {
+                    console.log('[ADMIN AUTH] Success for login 1');
+                    return { email: 'admin@pulse.com' };
+                }
+                console.log('[ADMIN AUTH] Failed');
                 return null;
             },
             cookieName: 'adminjs_session',
@@ -183,7 +182,10 @@ const startAdmin = async () => {
         });
 
         app.use(adminJs.options.rootPath, router);
-    } catch (e) { console.error(`[ADMIN ERROR]`, e); }
+        console.log(`--- [ADMIN] AdminJS panel ready at ${DOMAIN}/admin ---`);
+    } catch (e) { 
+        console.error(`--- [ADMIN ERROR] Initialization failed:`, e); 
+    }
 };
 
 // --- МОНИТОРИНГ ---
@@ -201,11 +203,13 @@ const collectMetrics = async () => {
             mem_usage: parseFloat(memUsed),
             db_response_time: dbTime
         });
-    } catch (e) { console.log("Metrics error"); }
+        console.log(`[METRICS] Recorded: Users: ${userCount}, Mem: ${memUsed}MB`);
+    } catch (e) { console.log("[METRICS ERROR] Failed to collect metrics"); }
 };
 
 // --- БОТ ЛОГИКА ---
 bot.start(async (ctx) => {
+    console.log(`[BOT] Start command from user: ${ctx.from.id}`);
     const userId = ctx.from.id;
     const startPayload = ctx.startPayload;
 
@@ -217,8 +221,9 @@ bot.start(async (ctx) => {
                     { balance: referrer.balance + 5000, referrals: referrer.referrals + 1 },
                     { where: { id: startPayload } }
                 );
+                console.log(`[BOT] Referral reward given to: ${startPayload}`);
             }
-        } catch (e) { console.log("Referral error"); }
+        } catch (e) { console.log("[BOT ERROR] Referral processing failed"); }
     }
 
     ctx.replyWithPhoto({ source: path.join(__dirname, 'static/images/logo.png') }, {
@@ -228,7 +233,8 @@ bot.start(async (ctx) => {
             [Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)],
             [Markup.button.url("📢 КАНАЛ", "https://t.me/neural_pulse_news")]
         ])
-    }).catch(() => {
+    }).catch((err) => {
+        console.error("[BOT ERROR] Photo reply failed, sending text only:", err.message);
         ctx.reply(`<b>Neural Pulse | Terminal</b>`, {
             parse_mode: 'HTML',
             ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])
@@ -240,16 +246,27 @@ const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
 app.use(bot.webhookCallback(WEBHOOK_PATH));
 
 // --- ЗАПУСК ---
-app.listen(PORT, async () => {
+app.listen(PORT, '0.0.0.0', async () => {
+    console.log(`--- [SERVER] Listening on ${DOMAIN} (Port: ${PORT}) ---`);
     try {
+        console.log('[DB] Connecting to Postgres...');
         await sequelize.authenticate();
+        console.log('[DB] Connection has been established successfully.');
+        
         await sequelize.sync({ alter: true }); 
+        console.log('[DB] Models synced.');
+
         await startAdmin();
+
+        console.log('[BOT] Setting Telegram webhook...');
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
+        console.log('[BOT] Webhook is set.');
         
         setInterval(collectMetrics, 15 * 60 * 1000); 
         collectMetrics();
 
-        console.log(`🚀 [SYSTEM ONLINE] Database & Bot Connected`);
-    } catch (err) { console.error("Startup Failure:", err); }
+        console.log(`🚀 [SYSTEM ONLINE] Initialization complete.`);
+    } catch (err) { 
+        console.error("!!! [STARTUP FAILURE] !!!", err); 
+    }
 });
