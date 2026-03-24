@@ -6,7 +6,7 @@
     <title>Neural Pulse v5.5.9 | Terminal</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        /* Анимации и специфичные стили */
+        /* Твои спецификации анимаций */
         @keyframes pulse { 0% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.1); } 100% { opacity: 0.5; transform: scale(1); } }
         .modal-bg.active { display: flex; }
         .task-item, .top-item {
@@ -24,8 +24,6 @@
         .task-btn:disabled { background: #555; color: #888; cursor: not-allowed; }
         
         .ref-box { background: #000; border: 1px dashed cyan; padding: 10px; border-radius: 8px; margin: 10px 0; word-break: break-all; font-family: monospace; font-size: 11px; color: #0ff; }
-        .top-avatar { width: 32px; height: 32px; border-radius: 50%; margin-right: 10px; border: 1px solid cyan; object-fit: cover; }
-        .top-info { display: flex; align-items: center; }
         .loading { text-align: center; padding: 20px; color: cyan; animation: pulse 1.5s infinite; font-family: monospace; }
         
         .pop {
@@ -43,6 +41,7 @@
             100% { transform: translateY(-120px) scale(1.2); opacity: 0; }
         }
 
+        /* Дизайн терминала ИИ */
         .ai-terminal {
             background: rgba(0, 20, 20, 0.9);
             border: 1px solid cyan;
@@ -155,7 +154,7 @@
             async init() {
                 ui.startLoader();
                 const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
-                this.data.id = String(u.id); // Безопасное хранение ID как строки
+                this.data.id = String(u.id);
 
                 try {
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
@@ -163,6 +162,7 @@
                     });
                 } catch(e) { console.warn("TON Connect UI error"); }
 
+                // Загрузка данных
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
                     if (r.ok) {
@@ -170,7 +170,7 @@
                         this.data = { ...this.data, ...db, id: String(u.id) };
                         if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
                     }
-                } catch(e) { console.error("DB Sync Error"); }
+                } catch(e) { console.error("Sync Error"); }
 
                 document.getElementById('my-name').innerText = (u.username || u.first_name).toUpperCase();
                 this.isLoaded = true;
@@ -312,8 +312,33 @@
                     if(tonConnectUI) tonConnectUI.renderButton({ container: document.getElementById('ton-btn') });
                 }
                 else if(type === 'bonus') {
-                    const canClaim = (Date.now() - (game.data.last_bonus || 0)) > 86400000;
-                    b.innerHTML = `<h2>🎁 DAILY BONUS</h2><button class="task-btn" style="width:100%" ${canClaim ? '' : 'disabled'} onclick="ui.claimDaily()">${canClaim ? 'CLAIM 5,000 NP' : 'LOCKED'}</button>`;
+                    const diff = Date.now() - (game.data.last_bonus || 0);
+                    const canClaim = diff > 86400000;
+                    b.innerHTML = `<h2>🎁 DAILY BONUS</h2>
+                    <p style="text-align:center; opacity:0.6; font-size:12px;">Next supply available in 24h</p>
+                    <button class="task-btn" style="width:100%; margin-top:15px;" ${canClaim ? '' : 'disabled'} onclick="ui.claimDaily()">${canClaim ? 'CLAIM 5,000 NP' : 'RECHARGING...'}</button>`;
+                }
+                else if(type === 'top') {
+                    try {
+                        const r = await fetch('/api/top');
+                        const top = await r.json();
+                        let html = '<h2>🏆 TOP AGENTS</h2>';
+                        top.forEach((u, i) => {
+                            html += `<div class="top-item">
+                                <div style="display:flex; align-items:center;">
+                                    <b style="color:cyan; margin-right:10px;">#${i+1}</b>
+                                    <span>${u.username}</span>
+                                </div>
+                                <b>${Math.floor(u.balance).toLocaleString()}</b>
+                            </div>`;
+                        });
+                        b.innerHTML = html;
+                    } catch(e) { b.innerHTML = '<h2>LEADERBOARD OFFLINE</h2>'; }
+                }
+                else if(type === 'tasks') {
+                    b.innerHTML = `<h2>📋 MISSIONS</h2>
+                    <div class="task-item"><span>Join Telegram</span><button class="task-btn" onclick="tg.openTelegramLink('https://t.me/yourchannel')">+10k</button></div>
+                    <div class="task-item"><span>Follow X</span><button class="task-btn" onclick="tg.openLink('https://twitter.com')">+5k</button></div>`;
                 }
             },
 
@@ -328,49 +353,39 @@
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({
-                            id: String(game.data.id),
+                            id: game.data.id,
                             balance: game.data.balance,
-                            levels: { tap: game.data.tap_lvl, mine: game.data.mine_lvl, energy: game.data.energy_lvl }
+                            levels: { tap: game.data.tap_lvl, mine: game.data.mine_lvl }
                         })
                     });
                     const res = await r.json();
-                    const fullText = res.text || "Analysis complete: Keep mining, Agent.";
+                    const text = res.text || "Keep scanning, Agent. Profit is imminent.";
                     
                     resDiv.innerText = "";
-                    let i = 0;
-                    const speed = 30; 
-                    
-                    function typeWriter() {
-                        if (i < fullText.length) {
-                            resDiv.innerText += fullText.charAt(i);
-                            i++;
-                            setTimeout(typeWriter, speed);
+                    let charIdx = 0;
+                    const typeWriter = () => {
+                        if (charIdx < text.length) {
+                            resDiv.innerText += text.charAt(charIdx);
+                            charIdx++;
+                            setTimeout(typeWriter, 30);
                             resDiv.scrollTop = resDiv.scrollHeight;
                         }
-                    }
+                    };
                     typeWriter();
-
-                } catch(e) { 
-                    resDiv.innerText = "Error: Connection lost. Check your uplink."; 
-                } finally { 
-                    btn.disabled = false; 
-                }
+                } catch(e) { resDiv.innerText = "Error: Uplink failed."; }
+                finally { btn.disabled = false; }
             },
 
             copyRef() {
                 const text = document.getElementById('ref-url').innerText;
-                navigator.clipboard.writeText(text).then(() => {
-                    tg.showAlert('Link copied to clipboard!');
-                }).catch(() => {
-                    tg.showAlert('Copy failed. Please select and copy manually.');
-                });
+                navigator.clipboard.writeText(text).then(() => tg.showAlert('Link Copied!'));
             },
 
             async claimDaily() {
                 game.data.balance += 5000;
                 game.data.last_bonus = Date.now();
                 ui.render(); ui.closeM();
-                tg.showAlert('Daily reward secured!');
+                tg.showAlert('5,000 NP Received!');
                 await game.save();
             },
 
