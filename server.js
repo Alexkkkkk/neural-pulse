@@ -4,8 +4,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
 import session from 'express-session';
-import { Sequelize, DataTypes } from 'sequelize';
+import { Sequelize, DataTypes, Op } from 'sequelize';
 import os from 'os';
+import OpenAI from 'openai';
 
 // AdminJS (v7+)
 import AdminJS from 'adminjs';
@@ -18,19 +19,32 @@ const __dirname = path.dirname(__filename);
 // Регистрация адаптера
 AdminJS.registerAdapter(AdminJSSequelize);
 
+// --- КУСТОМНОЕ ЛОГИРОВАНИЕ ---
+const logger = {
+    info: (msg) => console.log(`[${new Date().toISOString()}] 🔵 INFO: ${msg}`),
+    warn: (msg) => console.log(`[${new Date().toISOString()}] 🟡 WARN: ${msg}`),
+    error: (msg, err) => console.error(`[${new Date().toISOString()}] 🔴 ERROR: ${msg}`, err || ''),
+    system: (msg) => console.log(`[${new Date().toISOString()}] 🚀 SYSTEM: ${msg}`),
+    ai: (msg) => console.log(`[${new Date().toISOString()}] 📟 AI_LOG: ${msg}`)
+};
+
 // --- CONFIG ---
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const PG_URI = "postgresql://bothost_db_130943b4f3f6:oY6CieQ5aohyTLgU9i23M6w80naZt9_1mJ4V6roejTs@node1.pghost.ru:32834/bothost_db_130943b4f3f6";
 const DOMAIN = "https://np.bothost.tech"; 
 const PORT = process.env.PORT || 3000;
+const ADMIN_ID = 1774360651;
+
+// Инициализация ИИ
+const openai = new OpenAI({ apiKey: 'YOUR_OPENAI_API_KEY' });
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
-    logging: false, 
+    logging: (msg) => logger.info(`[DB] ${msg.substring(0, 100)}...`), // Логирование запросов БД
     dialectOptions: { ssl: false },
-    pool: { max: 5, min: 0, acquire: 30000, idle: 10000 }
+    pool: { max: 10, min: 2, acquire: 30000, idle: 10000 }
 });
 
 // --- СИСТЕМА СЕССИЙ ---
@@ -40,9 +54,9 @@ async function initSession() {
         const { default: connectSessionSequelize } = await import('connect-session-sequelize');
         const SequelizeStore = connectSessionSequelize(session.Store);
         sessionStore = new SequelizeStore({ db: sequelize, tableName: 'sessions' });
-        console.log('✅ [STORAGE] Session store initialized.');
+        logger.system('Session store connected to DB.');
     } catch (e) {
-        console.log('⚠️ [WARNING] SessionStore init failed.');
+        logger.error('SessionStore initialization failed', e);
     }
 }
 await initSession();
@@ -51,6 +65,12 @@ app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json());
 
+// Логирование входящих API запросов
+app.use((req, res, next) => {
+    logger.info(`HTTP ${req.method} ${req.url}`);
+    next();
+});
+
 const sessionOptions = {
     secret: 'neural_pulse_ultra_secret_2026',
     store: sessionStore, 
@@ -58,12 +78,7 @@ const sessionOptions = {
     saveUninitialized: false, 
     proxy: true,
     name: 'neural_pulse_sid',
-    cookie: { 
-        secure: true, 
-        httpOnly: true, 
-        sameSite: 'lax', 
-        maxAge: 24 * 60 * 60 * 1000 
-    }
+    cookie: { secure: true, httpOnly: true, sameSite: 'lax', maxAge: 24 * 60 * 60 * 1000 }
 };
 
 app.use(session(sessionOptions));
@@ -85,6 +100,7 @@ const User = sequelize.define('users', {
     energy_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     referrals: { type: DataTypes.INTEGER, defaultValue: 0 },
     referred_by: { type: DataTypes.BIGINT, allowNull: true },
+    status: { type: DataTypes.STRING, defaultValue: 'active' },
     last_bonus: { type: DataTypes.DATE },
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: false });
@@ -104,7 +120,39 @@ const Stats = sequelize.define('stats', {
     mem_usage: { type: DataTypes.FLOAT }
 }, { timestamps: false });
 
-// --- UTILS ---
+// --- AI ENGINE & SECURITY ---
+const AIEngine = {
+    async getGlobalReport() {
+        try {
+            const count = await User.count();
+            const top = await User.findAll({ limit: 5, order: [['balance', 'DESC']] });
+            logger.ai('Generating global economy report...');
+            const completion = await openai.chat.completions.create({
+                model: "gpt-4o-mini",
+                messages: [{ role: "system", content: "Ты ИИ Neural Pulse. Дай анализ экономики." }, { role: "user", content: `Игроков: ${count}. Топ: ${JSON.stringify(top)}` }]
+            });
+            return completion.choices[0].message.content;
+        } catch (e) { 
+            logger.error('AI Report Error', e);
+            return "Ошибка протокола ИИ."; 
+        }
+    },
+    async scanSuspects() {
+        logger.info('Starting security scan for suspected cheaters...');
+        const suspects = await User.findAll({
+            where: { balance: { [Op.gt]: 1000000 }, level: { [Op.lt]: 2 } }
+        });
+        if (suspects.length > 0) {
+            logger.warn(`Found ${suspects.length} suspected users!`);
+            for (let u of suspects) {
+                await u.update({ status: 'suspected' });
+            }
+        } else {
+            logger.info('Security scan completed. No suspects found.');
+        }
+    }
+};
+
 const calculateLevel = (balance) => {
     if (balance < 10000) return 1;
     if (balance < 100000) return 2;
@@ -119,12 +167,12 @@ app.get('/api/user/:id', async (req, res) => {
         let user = await User.findByPk(req.params.id);
         if (!user) {
             user = await User.create({ id: req.params.id, username: req.query.username || 'AGENT' });
+            logger.info(`New user created: ${req.params.id}`);
             return res.json(user);
         }
 
         const now = new Date();
-        const lastSeen = new Date(user.last_seen);
-        const secondsOffline = Math.floor((now - lastSeen) / 1000);
+        const secondsOffline = Math.floor((now - new Date(user.last_seen)) / 1000);
 
         if (secondsOffline > 60 && user.profit > 0) {
             const farmTime = Math.min(secondsOffline, 86400); 
@@ -133,9 +181,13 @@ app.get('/api/user/:id', async (req, res) => {
             user.last_seen = now;
             user.level = calculateLevel(user.balance);
             await user.save();
+            logger.info(`User ${user.id} farmed ${earned.toFixed(2)} NP offline.`);
         }
         res.json(user);
-    } catch (e) { res.status(500).send("DB Error"); }
+    } catch (e) { 
+        logger.error(`API GET /api/user/${req.params.id} failed`, e);
+        res.status(500).send("DB Error"); 
+    }
 });
 
 app.post('/api/save', async (req, res) => {
@@ -145,7 +197,10 @@ app.post('/api/save', async (req, res) => {
         if (data.balance !== undefined) data.level = calculateLevel(data.balance);
         await User.update({ ...data, last_seen: new Date() }, { where: { id } });
         res.json({ ok: true });
-    } catch (e) { res.status(500).send("Save Error"); }
+    } catch (e) { 
+        logger.error(`API POST /api/save for user ${req.body.id} failed`, e);
+        res.status(500).send("Save Error"); 
+    }
 });
 
 // --- ADMIN PANEL ---
@@ -158,43 +213,33 @@ const startAdmin = async () => {
                 { resource: Stats, options: { navigation: { name: 'Метрики' } } }
             ],
             rootPath: '/admin',
-            branding: { 
-                companyName: 'Neural Pulse Control', 
-                withMadeWithLove: false,
-                logo: false 
-            },
-            bundler: { enabled: false } // КРИТИЧНО для Bothost: отключаем сборку фронта
+            branding: { companyName: 'Neural Pulse Control', logo: false },
+            bundler: { enabled: false }
         });
 
-        // Создаем роутер с поддержкой аутентификации
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
-            authenticate: async (email, password) => {
-                if (email === '1' && password === '1') return { email: 'admin@pulse.com' };
-                return null;
-            },
+            authenticate: async (email, password) => (email === '1' && password === '1') ? { email: 'admin@pulse.com' } : null,
             cookieName: 'adminjs_session',
             cookiePassword: 'secure-cookie-password-2026-final',
         }, null, sessionOptions);
 
-        // Монтируем роутер в приложение
         app.use(adminJs.options.rootPath, adminRouter);
-        
-        console.log(`🚀 [ADMIN] Panel active at ${DOMAIN}/admin`);
-    } catch (e) { 
-        console.error(`❌ [ADMIN ERROR] Fail:`, e); 
-    }
+        logger.system(`Admin panel ready at ${DOMAIN}/admin`);
+    } catch (e) { logger.error("Admin setup failed", e); }
 };
 
 // --- MONITORING ---
 const collectMetrics = async () => {
     try {
         const userCount = await User.count();
-        await Stats.create({
+        const metrics = {
             user_count: userCount,
             server_load: parseFloat((os.loadavg()[0] * 10).toFixed(2)),
             mem_usage: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2))
-        });
-    } catch (e) { console.log("Metrics skipped."); }
+        };
+        await Stats.create(metrics);
+        logger.info(`Metrics collected: Users: ${metrics.user_count}, RAM: ${metrics.mem_usage}MB`);
+    } catch (e) { logger.error("Metrics collection failed", e); }
 };
 
 // --- BOT LOGIC ---
@@ -203,37 +248,51 @@ bot.start(async (ctx) => {
     const refId = ctx.startPayload ? parseInt(ctx.startPayload) : null;
     const photoPath = path.join(__dirname, 'static/images/logo.png');
 
+    logger.info(`Bot /start by user ${userId} (Ref: ${refId || 'None'})`);
+
     try {
         let user = await User.findByPk(userId);
         if (!user) {
-            let startBalance = 0;
-            let referredBy = null;
-
+            let startBalance = 0; let referredBy = null;
             if (refId && refId !== userId) {
                 const referrer = await User.findByPk(refId);
                 if (referrer) {
-                    referredBy = refId;
-                    startBalance = 5000;
-                    await referrer.update({ 
-                        balance: referrer.balance + 10000, 
-                        referrals: referrer.referrals + 1 
-                    });
-                    bot.telegram.sendMessage(refId, `💎 <b>Новый Агент!</b>\nВам начислено +10,000 NP.`, { parse_mode: 'HTML' }).catch(() => {});
+                    referredBy = refId; startBalance = 5000;
+                    await referrer.update({ balance: referrer.balance + 10000, referrals: referrer.referrals + 1 });
+                    bot.telegram.sendMessage(refId, `💎 <b>Агент принят!</b>\n+10,000 NP на баланс.`, { parse_mode: 'HTML' }).catch(() => {});
+                    logger.info(`Referral reward given to ${refId} for user ${userId}`);
                 }
             }
             user = await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: startBalance, referred_by: referredBy });
         }
 
         ctx.replyWithPhoto({ source: photoPath }, {
-            caption: `<b>Neural Pulse | Terminal</b>\n\nДобро пожаловать, Агент. Твоя нейросеть готова к работе.\n\n🎁 Реф. ссылка:\n<code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`,
+            caption: `<b>Neural Pulse | Terminal</b>\n\nАгент, система инициализирована.\n\n🎁 Реф. ссылка:\n<code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`,
             parse_mode: 'HTML',
             ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])
-        }).catch(() => {
-            ctx.reply("System Online.", Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]]));
+        }).catch(() => ctx.reply("System Online.", Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])));
+    } catch (e) { logger.error(`Bot /start failed for ${userId}`, e); }
+});
+
+bot.command('ai_report', async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return;
+    logger.ai(`Admin ${ctx.from.id} requested economy report.`);
+    ctx.reply("⌛ Анализирую нейронную сеть...");
+    const report = await AIEngine.getGlobalReport();
+    ctx.reply(`📊 <b>ОТЧЕТ ИИ:</b>\n\n${report}`, { parse_mode: 'HTML' });
+});
+
+bot.on('text', async (ctx) => {
+    if (ctx.message.text.startsWith('/')) return;
+    try {
+        logger.ai(`User ${ctx.from.id} message: ${ctx.message.text}`);
+        await ctx.sendChatAction('typing');
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [{ role: "system", content: "Ты ИИ Neural Pulse. Твой стиль: киберпанк, хакер, кратко." }, { role: "user", content: ctx.message.text }]
         });
-    } catch (e) { 
-        ctx.reply("System Online.", Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])); 
-    }
+        ctx.reply(`📟: ${response.choices[0].message.content}`);
+    } catch (e) { logger.error("AI Chat failed", e); }
 });
 
 const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
@@ -242,26 +301,27 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 // --- SERVER RUN ---
 const server = app.listen(PORT, '0.0.0.0', async () => {
     try {
+        logger.system(`Initializing database connection...`);
         await sequelize.authenticate();
         if (sessionStore) await sessionStore.sync().catch(() => {});
         await sequelize.sync({ alter: true }); 
         
-        // Порядок важен: сначала админка
+        logger.system(`Setting up admin panel...`);
         await startAdmin();
         
-        await bot.telegram.deleteWebhook().catch(() => {});
+        logger.system(`Setting up Telegram Webhook...`);
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
+        // Таймеры
         setInterval(collectMetrics, 15 * 60 * 1000);
-        setTimeout(collectMetrics, 5000); 
+        setInterval(() => AIEngine.scanSuspects(), 60 * 60 * 1000);
         
-        console.log(`🚀 [SYSTEM ONLINE] on Port ${PORT}`);
-    } catch (err) { console.error("Startup Failure:", err); }
+        logger.system(`Neural Pulse ONLINE on Port ${PORT}`);
+    } catch (err) { logger.error("CRITICAL Startup Failure", err); }
 });
 
-process.on('SIGTERM', () => {
-    server.close(async () => {
-        await sequelize.close();
-        process.exit(0);
-    });
-});
+process.on('SIGTERM', () => server.close(async () => { 
+    logger.system("SIGTERM received. Cleaning up...");
+    await sequelize.close(); 
+    process.exit(0); 
+}));
