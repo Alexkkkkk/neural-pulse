@@ -62,6 +62,7 @@ async function initSession() {
 }
 await initSession();
 
+// ВАЖНО: Доверяем прокси Bothost для работы куки
 app.set('trust proxy', 1); 
 app.use(cors());
 app.use(express.json());
@@ -74,6 +75,7 @@ app.use((req, res, next) => {
     next();
 });
 
+// Настройки сессии исправлены для стабильного входа
 const sessionOptions = {
     secret: 'neural_pulse_ultra_secret_2026',
     store: sessionStore, 
@@ -81,7 +83,12 @@ const sessionOptions = {
     saveUninitialized: false, 
     proxy: true,
     name: 'neural_pulse_sid',
-    cookie: { secure: true, httpOnly: true, sameSite: 'lax', maxAge: 24 * 60 * 60 * 1000 }
+    cookie: { 
+        secure: false, // Изменено на false для корректной работы на Bothost
+        httpOnly: true, 
+        sameSite: 'lax', 
+        maxAge: 24 * 60 * 60 * 1000 
+    }
 };
 
 app.use(session(sessionOptions));
@@ -172,7 +179,6 @@ const calculateLevel = (balance) => {
 
 // --- API ---
 
-// Эндпоинт для ИИ-советника в приложении
 app.post('/api/ai-advice', async (req, res) => {
     try {
         const userData = req.body;
@@ -260,12 +266,16 @@ const startAdmin = async () => {
             branding: { companyName: 'Neural Pulse Hub', logo: false },
             bundler: { enabled: false }
         });
+
+        // Создаем защищенный роутер с исправленными куками
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => (email === '1' && password === '1') ? { email: 'admin@pulse.tech' } : null,
             cookieName: 'adminjs_session',
             cookiePassword: 'secure-ai-pass-2026',
         }, null, sessionOptions);
+
         app.use(adminJs.options.rootPath, adminRouter);
+        logger.system('Admin Panel Interface Online.');
     } catch (e) { logger.error("Admin init failed", e); }
 };
 
