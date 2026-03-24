@@ -7,7 +7,7 @@ import session from 'express-session';
 import { Sequelize, DataTypes } from 'sequelize';
 import os from 'os';
 
-// Попытка динамического импорта хранилища сессий
+// --- ДИНАМИЧЕСКИЙ ИМПОРТ ---
 let connectSessionSequelize;
 try {
     const mod = await import('connect-session-sequelize');
@@ -24,8 +24,6 @@ import * as AdminJSSequelize from '@adminjs/sequelize';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-console.log('--- [STARTUP] Initialization started ---');
-
 AdminJS.registerAdapter(AdminJSSequelize);
 
 // --- CONFIG ---
@@ -36,31 +34,24 @@ const PORT = process.env.PORT || 3000;
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
+const sequelize = new Sequelize(PG_URI, { dialect: 'postgres', logging: false, dialectOptions: { ssl: false } });
 
-const sequelize = new Sequelize(PG_URI, { 
-    dialect: 'postgres', 
-    logging: false, 
-    dialectOptions: { ssl: false } 
-});
-
-// --- SESSION STORE LOGIC ---
+// --- SESSION STORE ---
 let sessionStore = null;
 if (connectSessionSequelize) {
     const SequelizeStore = connectSessionSequelize(session.Store);
     sessionStore = new SequelizeStore({ 
         db: sequelize, 
         tableName: 'sessions',
-        checkExpirationInterval: 15 * 60 * 1000, 
+        checkExpirationInterval: 15 * 60 * 1000,
         expiration: 24 * 60 * 60 * 1000 
     });
 }
 
-// --- СЕТЕВЫЕ НАСТРОЙКИ ---
 app.set('trust proxy', 1); 
 app.use(cors());
 app.use(express.json());
 
-// --- ЕДИНАЯ НАСТРОЙКА СЕССИЙ ---
 const sessionOptions = {
     secret: 'neural_pulse_ultra_secret_2026',
     store: sessionStore, 
@@ -68,12 +59,7 @@ const sessionOptions = {
     saveUninitialized: false, 
     proxy: true,
     name: 'neural_pulse_sid',
-    cookie: { 
-        secure: true, 
-        httpOnly: true, 
-        sameSite: 'lax', 
-        maxAge: 24 * 60 * 60 * 1000 
-    }
+    cookie: { secure: true, httpOnly: true, sameSite: 'lax', maxAge: 24 * 60 * 60 * 1000 }
 };
 
 app.use(session(sessionOptions));
@@ -88,7 +74,7 @@ const User = sequelize.define('users', {
     energy: { type: DataTypes.DOUBLE, defaultValue: 1000 },
     max_energy: { type: DataTypes.INTEGER, defaultValue: 1000 },
     tap: { type: DataTypes.INTEGER, defaultValue: 1 },
-    profit: { type: DataTypes.INTEGER, defaultValue: 0 },
+    profit: { type: DataTypes.INTEGER, defaultValue: 0 }, // Прибыль в секунду (или в час, смотря как настроишь)
     tap_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     mine_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     energy_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
@@ -113,11 +99,32 @@ const Stats = sequelize.define('stats', {
     db_response_time: { type: DataTypes.INTEGER }
 }, { timestamps: false });
 
-// --- API ---
+// --- API С ЛОГИКОЙ ОФЛАЙН-ПРИБЫЛИ ---
 app.get('/api/user/:id', async (req, res) => {
     try {
         let user = await User.findByPk(req.params.id);
-        if (!user) user = await User.create({ id: req.params.id, username: req.query.username || 'AGENT' });
+        if (!user) {
+            user = await User.create({ id: req.params.id, username: req.query.username || 'AGENT' });
+            return res.json(user);
+        }
+
+        // РАСЧЕТ ОФЛАЙН ДОХОДА
+        const now = new Date();
+        const lastSeen = new Date(user.last_seen);
+        const secondsOffline = Math.floor((now - lastSeen) / 1000);
+
+        if (secondsOffline > 60 && user.profit > 0) {
+            // Ограничиваем фарм 24 часами (86400 сек)
+            const farmTime = Math.min(secondsOffline, 86400); 
+            const earned = (user.profit / 3600) * farmTime; // Если profit указан "в час"
+            
+            user.balance += parseFloat(earned.toFixed(2));
+            user.last_seen = now;
+            await user.save();
+            
+            console.log(`[FARM] User ${user.id} earned ${earned.toFixed(2)} while offline`);
+        }
+
         res.json(user);
     } catch (e) { res.status(500).send("DB Error"); }
 });
@@ -143,32 +150,21 @@ const startAdmin = async () => {
                 { resource: Stats, options: { navigation: { name: 'Metrics' } } }
             ],
             rootPath: '/admin',
-            bundler: { disableCache: true },
             branding: { companyName: 'Neural Pulse Control', withMadeWithLove: false }
         });
 
-        const adminRouter = AdminJSExpress.buildAuthenticatedRouter(
-            adminJs, 
-            {
-                authenticate: async (email, password) => {
-                    if (email === '1' && password === '1') {
-                        console.log(`[ADMIN] Auth Success for ${email}`);
-                        return { email: 'admin@pulse.com' };
-                    }
-                    return null;
-                },
-                cookieName: 'adminjs_session',
-                cookiePassword: 'secure-cookie-password-2026-final',
-            }, 
-            null, 
-            sessionOptions
-        );
+        const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
+            authenticate: async (email, password) => {
+                if (email === '1' && password === '1') return { email: 'admin@pulse.com' };
+                return null;
+            },
+            cookieName: 'adminjs_session',
+            cookiePassword: 'secure-cookie-password-2026-final',
+        }, null, sessionOptions);
 
         app.use(adminJs.options.rootPath, adminRouter);
         console.log(`--- [ADMIN] AdminJS panel ready at /admin ---`);
-    } catch (e) { 
-        console.error(`[ADMIN ERROR]`, e); 
-    }
+    } catch (e) { console.error(`[ADMIN ERROR]`, e); }
 };
 
 // --- MONITORING ---
@@ -181,7 +177,7 @@ const collectMetrics = async () => {
             mem_usage: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2)),
             db_response_time: 0
         });
-    } catch (e) { console.log("Metrics collection skipped - table likely not ready."); }
+    } catch (e) { console.log("Metrics collection skipped."); }
 };
 
 // --- BOT ---
@@ -203,23 +199,17 @@ app.listen(PORT, '0.0.0.0', async () => {
         await sequelize.authenticate();
         console.log('--- [DB] Connection established ---');
 
-        // Важно: сначала синхронизируем хранилище сессий
         if (sessionStore) {
-            await sessionStore.sync();
+            await sessionStore.sync().catch(e => console.log("Session sync skip"));
         }
         
-        // Синхронизируем остальные модели
         await sequelize.sync({ alter: true }); 
-        
         await startAdmin();
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
-        // Запуск интервала метрик
         setInterval(collectMetrics, 15 * 60 * 1000);
-        setTimeout(collectMetrics, 10000); // Запуск первых метрик через 10 сек
+        setTimeout(collectMetrics, 10000); 
         
         console.log(`🚀 [SYSTEM ONLINE]`);
-    } catch (err) { 
-        console.error("Startup Failure:", err); 
-    }
+    } catch (err) { console.error("Startup Failure:", err); }
 });
