@@ -48,7 +48,7 @@ app.use(express.static(path.join(__dirname, 'static'), {
     lastModified: false
 }));
 
-// --- БАЗА ДАННЫХ (ОПТИМИЗИРОВАННЫЙ ПУЛ) ---
+// --- БАЗА ДАННЫХ ---
 const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
     logging: false, 
@@ -72,7 +72,7 @@ const User = sequelize.define('users', {
     energy_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     referrals: { type: DataTypes.INTEGER, defaultValue: 0 },
     referred_by: { type: DataTypes.BIGINT, allowNull: true },
-    last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 },
+    last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 }, // Исправлено на BIGINT
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: false });
 
@@ -97,32 +97,34 @@ const calculateLevel = (b) => b < 10000 ? 1 : b < 100000 ? 2 : b < 500000 ? 3 : 
 
 app.get('/api/user/:id', async (req, res) => {
     try {
-        const user = await User.findByPk(req.params.id, { raw: true });
+        const user = await User.findByPk(req.params.id);
         if (!user) {
             const newUser = await User.create({ id: req.params.id, username: req.query.username || 'AGENT' });
             return res.json(newUser);
         }
         
         const now = new Date();
-        const offline = Math.floor((now - new Date(user.last_seen)) / 1000);
+        const lastSeenDate = new Date(user.last_seen);
+        const offline = Math.floor((now - lastSeenDate) / 1000);
         
         if (offline > 60 && user.profit > 0) {
             const earned = (user.profit / 3600) * Math.min(offline, 86400);
             user.balance += parseFloat(earned.toFixed(2));
             user.last_seen = now;
             user.level = calculateLevel(user.balance);
-            User.update(user, { where: { id: user.id } }).catch(()=>{});
+            await user.save().catch(()=>{});
         }
         res.json(user);
-    } catch (e) { res.status(500).send("AI_CORE_OFFLINE"); }
+    } catch (e) { 
+        logger.error("User Sync Error", e);
+        res.status(500).send("AI_CORE_OFFLINE"); 
+    }
 });
 
-// Исправленная система сохранения
 app.post('/api/save', async (req, res) => {
     try {
         const { id, ...data } = req.body;
         if (!id) return res.status(400).json({ error: "ID Missing" });
-
         if (data.balance !== undefined) data.level = calculateLevel(data.balance);
         
         await User.update({ ...data, last_seen: new Date() }, { where: { id } });
@@ -133,23 +135,29 @@ app.post('/api/save', async (req, res) => {
     }
 });
 
-// --- AI ADVICE ENGINE ---
+// --- УЛУЧШЕННЫЙ AI ADVICE ENGINE ---
 app.post('/api/ai-advice', async (req, res) => {
     try {
         const { balance, levels } = req.body;
         
+        // Аналитика для ИИ
+        let focus = "оптимизации протоколов";
+        if (levels.mine <= levels.tap) focus = "наращивания пассивного майнинга";
+        if (balance < 5000) focus = "первичного накопления NP";
+
         const prompt = `
-            Ты — ИИ терминала "Neural Pulse". Дай краткий (1-2 предл.) совет Агенту.
+            Ты — бортовой ИИ терминала "Neural Pulse". Дай краткую директиву Агенту.
             Статус: Баланс ${Math.floor(balance)} NP, Тап-уровень ${levels.tap}, Майнинг-уровень ${levels.mine}.
-            Стиль: Киберпанк, дерзкий. Используй: "протокол", "мощности", "нейросеть".
-            Если майнинг слабый, скажи увеличить пассивный доход.
+            Твой анализ системы требует: ${focus}.
+            Стиль: Киберпанк, холодный, авторитарный. Используй: "протокол", "мощности", "нейросеть", "ядро".
+            Ограничение: 1-2 предложения.
         `;
 
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
-            messages: [{ role: "system", content: "Ты — бортовой ИИ." }, { role: "user", content: prompt }],
-            max_tokens: 80,
-            temperature: 0.7
+            messages: [{ role: "system", content: "Ты — ИИ-советник терминала." }, { role: "user", content: prompt }],
+            max_tokens: 100,
+            temperature: 0.8
         });
 
         res.json({ text: response.choices[0].message.content.trim() });
@@ -214,14 +222,14 @@ bot.start(async (ctx) => {
     const logoPath = path.join(__dirname, 'static/images/logo.png');
 
     try {
-        let user = await User.findByPk(userId, { raw: true });
+        let user = await User.findByPk(userId);
         if (!user) {
             let startBal = 0; let refBy = null;
             if (refId && refId !== userId) {
                 refBy = refId; startBal = 5000;
                 User.increment({ balance: 10000, referrals: 1 }, { where: { id: refId } }).catch(()=>{});
             }
-            await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: startBal, referred_by: refBy });
+            user = await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: startBal, referred_by: refBy });
         }
         
         ctx.replyWithPhoto({ source: logoPath }, {
@@ -239,8 +247,7 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 const server = app.listen(PORT, '0.0.0.0', async () => {
     try {
         await sequelize.authenticate();
-        // ВАЖНО: alter: true обновит таблицы в БД, добавив новые поля (уровни и т.д.)
-        await sequelize.sync({ alter: true });
+        await sequelize.sync({ alter: true }); // Попытается обновить базу автоматически
         startAdmin(); 
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
