@@ -6,6 +6,7 @@ import cors from 'cors';
 import session from 'express-session';
 import { Sequelize, DataTypes } from 'sequelize';
 import os from 'os';
+import connectSessionSequelize from 'connect-session-sequelize'; // Добавлено
 
 import AdminJS from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
@@ -27,41 +28,39 @@ const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// --- СЕТЕВЫЕ НАСТРОЙКИ (Критично для работы через прокси Bothost) ---
+const sequelize = new Sequelize(PG_URI, { 
+    dialect: 'postgres', 
+    logging: false, // Отключил лишний спам в логах, оставь true если нужно дебажить
+    dialectOptions: { ssl: false } 
+});
+
+// --- SESSION STORE (Хранение сессий в БД) ---
+const SequelizeStore = connectSessionSequelize(session.Store);
+const sessionStore = new SequelizeStore({ db: sequelize });
+
+// --- СЕТЕВЫЕ НАСТРОЙКИ ---
 app.set('trust proxy', 1); 
 app.use(cors());
 app.use(express.json());
 
-// Логирование HTTP трафика
-app.use((req, res, next) => {
-    console.log(`[REQ] ${req.method} ${req.url} | IP: ${req.ip}`);
-    next();
-});
-
 // --- ЕДИНАЯ НАСТРОЙКА СЕССИЙ ---
 const sessionOptions = {
     secret: 'neural_pulse_ultra_secret_2026',
-    resave: true,
-    saveUninitialized: true,
+    store: sessionStore, // Сессии теперь в базе данных
+    resave: false, 
+    saveUninitialized: false, 
     proxy: true,
     name: 'neural_pulse_sid',
     cookie: { 
         secure: true, 
         httpOnly: true, 
-        sameSite: 'none', // Для работы внутри Telegram WebApp
+        sameSite: 'lax', // 'lax' лучше подходит для работы в обычном браузере
         maxAge: 24 * 60 * 60 * 1000 
     }
 };
 
-const sessionMiddleware = session(sessionOptions);
-app.use(sessionMiddleware);
+app.use(session(sessionOptions));
 app.use(express.static(path.join(__dirname, 'static')));
-
-const sequelize = new Sequelize(PG_URI, { 
-    dialect: 'postgres', 
-    logging: (msg) => console.log(`[DB LOG] ${msg}`), 
-    dialectOptions: { ssl: false } 
-});
 
 // --- MODELS ---
 const User = sequelize.define('users', {
@@ -131,22 +130,20 @@ const startAdmin = async () => {
             branding: { companyName: 'Neural Pulse Control', withMadeWithLove: false }
         });
 
-        // ИСПРАВЛЕНО: передаем express и настройки сессии корректно
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(
             adminJs, 
             {
                 authenticate: async (email, password) => {
                     if (email === '1' && password === '1') {
-                        console.log(`[ADMIN] Auth Success`);
                         return { email: 'admin@pulse.com' };
                     }
                     return null;
                 },
                 cookieName: 'adminjs_session',
-                cookiePassword: 'secure-cookie-password-2026-v2',
+                cookiePassword: 'secure-cookie-password-2026-v3',
             }, 
-            null, // router (если null, AdminJS создаст его сам)
-            sessionOptions // Опции сессии
+            null, 
+            sessionOptions
         );
 
         app.use(adminJs.options.rootPath, adminRouter);
@@ -168,7 +165,6 @@ const collectMetrics = async () => {
             mem_usage: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2)),
             db_response_time: dbTime
         });
-        console.log(`[METRICS] Saved | RAM: ${(process.memoryUsage().rss / 1024 / 1024).toFixed(2)}MB`);
     } catch (e) { console.log("Metrics error"); }
 };
 
@@ -189,6 +185,7 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 app.listen(PORT, '0.0.0.0', async () => {
     try {
         await sequelize.authenticate();
+        sessionStore.sync(); // Синхронизируем таблицу сессий
         await sequelize.sync({ alter: true }); 
         await startAdmin();
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
