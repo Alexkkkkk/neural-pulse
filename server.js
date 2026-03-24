@@ -7,10 +7,12 @@ import session from 'express-session';
 import { Sequelize, DataTypes } from 'sequelize';
 import os from 'os';
 
-// Попытка импорта хранилища сессий (чтобы сервер не падал без пакета)
+// Попытка динамического импорта хранилища сессий
 let connectSessionSequelize;
 try {
-    connectSessionSequelize = (await import('connect-session-sequelize')).default;
+    const mod = await import('connect-session-sequelize');
+    connectSessionSequelize = mod.default;
+    console.log('--- [STORAGE] connect-session-sequelize detected ---');
 } catch (e) {
     console.log('--- [WARNING] connect-session-sequelize not found. Using MemoryStore. ---');
 }
@@ -45,7 +47,12 @@ const sequelize = new Sequelize(PG_URI, {
 let sessionStore = null;
 if (connectSessionSequelize) {
     const SequelizeStore = connectSessionSequelize(session.Store);
-    sessionStore = new SequelizeStore({ db: sequelize, tableName: 'sessions' });
+    sessionStore = new SequelizeStore({ 
+        db: sequelize, 
+        tableName: 'sessions',
+        checkExpirationInterval: 15 * 60 * 1000, 
+        expiration: 24 * 60 * 60 * 1000 
+    });
 }
 
 // --- СЕТЕВЫЕ НАСТРОЙКИ ---
@@ -56,7 +63,7 @@ app.use(express.json());
 // --- ЕДИНАЯ НАСТРОЙКА СЕССИЙ ---
 const sessionOptions = {
     secret: 'neural_pulse_ultra_secret_2026',
-    store: sessionStore, // Будет либо DB store, либо null (MemoryStore по умолчанию)
+    store: sessionStore, 
     resave: false, 
     saveUninitialized: false, 
     proxy: true,
@@ -64,7 +71,7 @@ const sessionOptions = {
     cookie: { 
         secure: true, 
         httpOnly: true, 
-        sameSite: 'lax', // Критично для работы через прокси np.bothost.tech
+        sameSite: 'lax', 
         maxAge: 24 * 60 * 60 * 1000 
     }
 };
@@ -174,7 +181,7 @@ const collectMetrics = async () => {
             mem_usage: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2)),
             db_response_time: 0
         });
-    } catch (e) { console.log("Metrics error"); }
+    } catch (e) { console.log("Metrics collection skipped - table likely not ready."); }
 };
 
 // --- BOT ---
@@ -194,12 +201,25 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 app.listen(PORT, '0.0.0.0', async () => {
     try {
         await sequelize.authenticate();
-        if (sessionStore) await sessionStore.sync(); 
+        console.log('--- [DB] Connection established ---');
+
+        // Важно: сначала синхронизируем хранилище сессий
+        if (sessionStore) {
+            await sessionStore.sync();
+        }
+        
+        // Синхронизируем остальные модели
         await sequelize.sync({ alter: true }); 
+        
         await startAdmin();
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
+        
+        // Запуск интервала метрик
         setInterval(collectMetrics, 15 * 60 * 1000);
-        collectMetrics();
+        setTimeout(collectMetrics, 10000); // Запуск первых метрик через 10 сек
+        
         console.log(`🚀 [SYSTEM ONLINE]`);
-    } catch (err) { console.error("Startup Failure:", err); }
+    } catch (err) { 
+        console.error("Startup Failure:", err); 
+    }
 });
