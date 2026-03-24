@@ -27,7 +27,8 @@ const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-app.set('trust proxy', true); 
+// --- ВАЖНО: Настройки прокси для корректных куки ---
+app.set('trust proxy', 1); 
 app.use(cors());
 app.use(express.json());
 
@@ -37,12 +38,19 @@ app.use((req, res, next) => {
     next();
 });
 
+// Настройка основной сессии
 app.use(session({
     secret: 'neural_pulse_ultra_secret_2026',
-    resave: false,
-    saveUninitialized: false,
+    resave: true,               // Изменено на true для стабильности
+    saveUninitialized: true,    // Изменено на true
     proxy: true,
-    cookie: { secure: true, httpOnly: true, maxAge: 24 * 60 * 60 * 1000 }
+    name: 'neural_pulse_sid',
+    cookie: { 
+        secure: true, 
+        httpOnly: true, 
+        sameSite: 'none',       // Позволяет работать внутри Telegram WebApp
+        maxAge: 24 * 60 * 60 * 1000 
+    }
 }));
 
 app.use(express.static(path.join(__dirname, 'static')));
@@ -123,12 +131,24 @@ const startAdmin = async () => {
 
         const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                if (email === '1' && password === '1') return { email: 'admin@pulse.com' };
+                if (email === '1' && password === '1') {
+                    console.log(`[ADMIN] User ${email} authenticated.`);
+                    return { email: 'admin@pulse.com' };
+                }
                 return null;
             },
             cookieName: 'adminjs_session',
             cookiePassword: 'secure-cookie-password-2026-v2',
-        }, null, { resave: false, saveUninitialized: false, secret: 'session_secret', proxy: true, cookie: { secure: true } });
+        }, null, { 
+            resave: true, 
+            saveUninitialized: true, 
+            secret: 'session_secret_admin', 
+            proxy: true, 
+            cookie: { 
+                secure: true,
+                sameSite: 'none' 
+            } 
+        });
 
         app.use(adminJs.options.rootPath, router);
         console.log(`--- [ADMIN] AdminJS panel ready ---`);
