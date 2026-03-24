@@ -35,14 +35,14 @@ const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
 const ADMIN_ID = 1774360651;
 
-// Инициализация ИИ
+// Инициализация ИИ (Вставь ключ в переменные окружения Bothost или сюда)
 const openai = new OpenAI({ apiKey: 'YOUR_OPENAI_API_KEY' });
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
-    logging: (msg) => logger.info(`[DB] ${msg.substring(0, 100)}...`), // Логирование запросов БД
+    logging: (msg) => logger.info(`[DB] ${msg.substring(0, 100)}...`),
     dialectOptions: { ssl: false },
     pool: { max: 10, min: 2, acquire: 30000, idle: 10000 }
 });
@@ -67,7 +67,9 @@ app.use(express.json());
 
 // Логирование входящих API запросов
 app.use((req, res, next) => {
-    logger.info(`HTTP ${req.method} ${req.url}`);
+    if (!req.url.startsWith('/admin')) { // Не заспамливаем логи админкой
+        logger.info(`HTTP ${req.method} ${req.url}`);
+    }
     next();
 });
 
@@ -140,15 +142,11 @@ const AIEngine = {
     async scanSuspects() {
         logger.info('Starting security scan for suspected cheaters...');
         const suspects = await User.findAll({
-            where: { balance: { [Op.gt]: 1000000 }, level: { [Op.lt]: 2 } }
+            where: { balance: { [Op.gt]: 5000000 }, level: { [Op.lt]: 2 } } // Порог 5 млн для подозрений
         });
-        if (suspects.length > 0) {
-            logger.warn(`Found ${suspects.length} suspected users!`);
-            for (let u of suspects) {
-                await u.update({ status: 'suspected' });
-            }
-        } else {
-            logger.info('Security scan completed. No suspects found.');
+        for (let u of suspects) {
+            await u.update({ status: 'suspected' });
+            logger.warn(`User ${u.id} (${u.username}) marked as suspected.`);
         }
     }
 };
@@ -161,7 +159,9 @@ const calculateLevel = (balance) => {
     return 5;
 };
 
-// --- API ---
+// --- API ROUTES ---
+
+// Получить данные пользователя + оффлайн фарм
 app.get('/api/user/:id', async (req, res) => {
     try {
         let user = await User.findByPk(req.params.id);
@@ -190,6 +190,7 @@ app.get('/api/user/:id', async (req, res) => {
     }
 });
 
+// Сохранение прогресса (тапы, энергия)
 app.post('/api/save', async (req, res) => {
     try {
         const { id, ...data } = req.body;
@@ -198,8 +199,34 @@ app.post('/api/save', async (req, res) => {
         await User.update({ ...data, last_seen: new Date() }, { where: { id } });
         res.json({ ok: true });
     } catch (e) { 
-        logger.error(`API POST /api/save for user ${req.body.id} failed`, e);
+        logger.error(`API POST /api/save failed`, e);
         res.status(500).send("Save Error"); 
+    }
+});
+
+// ТОП игроков (то, что искал твой фронтенд)
+app.get('/api/top', async (req, res) => {
+    try {
+        const topUsers = await User.findAll({
+            limit: 50,
+            order: [['balance', 'DESC']],
+            attributes: ['username', 'balance', 'level', 'photo_url']
+        });
+        res.json(topUsers);
+    } catch (e) {
+        logger.error("API GET /api/top failed", e);
+        res.status(500).json([]);
+    }
+});
+
+// Список квестов
+app.get('/api/tasks', async (req, res) => {
+    try {
+        const tasks = await Task.findAll();
+        res.json(tasks);
+    } catch (e) {
+        logger.error("API GET /api/tasks failed", e);
+        res.status(500).json([]);
     }
 });
 
@@ -238,7 +265,7 @@ const collectMetrics = async () => {
             mem_usage: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2))
         };
         await Stats.create(metrics);
-        logger.info(`Metrics collected: Users: ${metrics.user_count}, RAM: ${metrics.mem_usage}MB`);
+        logger.info(`Metrics: Users: ${metrics.user_count}, RAM: ${metrics.mem_usage}MB`);
     } catch (e) { logger.error("Metrics collection failed", e); }
 };
 
@@ -260,7 +287,6 @@ bot.start(async (ctx) => {
                     referredBy = refId; startBalance = 5000;
                     await referrer.update({ balance: referrer.balance + 10000, referrals: referrer.referrals + 1 });
                     bot.telegram.sendMessage(refId, `💎 <b>Агент принят!</b>\n+10,000 NP на баланс.`, { parse_mode: 'HTML' }).catch(() => {});
-                    logger.info(`Referral reward given to ${refId} for user ${userId}`);
                 }
             }
             user = await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: startBalance, referred_by: referredBy });
@@ -271,12 +297,11 @@ bot.start(async (ctx) => {
             parse_mode: 'HTML',
             ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])
         }).catch(() => ctx.reply("System Online.", Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])));
-    } catch (e) { logger.error(`Bot /start failed for ${userId}`, e); }
+    } catch (e) { logger.error(`Bot /start failed`, e); }
 });
 
 bot.command('ai_report', async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return;
-    logger.ai(`Admin ${ctx.from.id} requested economy report.`);
     ctx.reply("⌛ Анализирую нейронную сеть...");
     const report = await AIEngine.getGlobalReport();
     ctx.reply(`📊 <b>ОТЧЕТ ИИ:</b>\n\n${report}`, { parse_mode: 'HTML' });
@@ -285,14 +310,13 @@ bot.command('ai_report', async (ctx) => {
 bot.on('text', async (ctx) => {
     if (ctx.message.text.startsWith('/')) return;
     try {
-        logger.ai(`User ${ctx.from.id} message: ${ctx.message.text}`);
         await ctx.sendChatAction('typing');
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [{ role: "system", content: "Ты ИИ Neural Pulse. Твой стиль: киберпанк, хакер, кратко." }, { role: "user", content: ctx.message.text }]
         });
         ctx.reply(`📟: ${response.choices[0].message.content}`);
-    } catch (e) { logger.error("AI Chat failed", e); }
+    } catch (e) { }
 });
 
 const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
@@ -306,13 +330,9 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
         if (sessionStore) await sessionStore.sync().catch(() => {});
         await sequelize.sync({ alter: true }); 
         
-        logger.system(`Setting up admin panel...`);
         await startAdmin();
-        
-        logger.system(`Setting up Telegram Webhook...`);
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
-        // Таймеры
         setInterval(collectMetrics, 15 * 60 * 1000);
         setInterval(() => AIEngine.scanSuspects(), 60 * 60 * 1000);
         
