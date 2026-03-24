@@ -21,6 +21,8 @@
         }
         .task-btn { background: cyan; color: black; border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .task-btn:active { transform: scale(0.95); }
+        .task-btn:disabled { background: #555; color: #888; cursor: not-allowed; }
+        
         .ref-box { background: #000; border: 1px dashed cyan; padding: 10px; border-radius: 8px; margin: 10px 0; word-break: break-all; font-family: monospace; font-size: 11px; color: #0ff; }
         .top-avatar { width: 32px; height: 32px; border-radius: 50%; margin-right: 10px; border: 1px solid cyan; object-fit: cover; }
         .top-info { display: flex; align-items: center; }
@@ -51,12 +53,18 @@
             color: #0ff;
             margin: 10px 0;
             line-height: 1.5;
-            min-height: 100px;
-            max-height: 200px;
+            min-height: 120px;
+            max-height: 220px;
             box-shadow: inset 0 0 15px rgba(0,255,255,0.2);
             overflow-y: auto;
             white-space: pre-wrap;
+            position: relative;
         }
+        .ai-terminal::after {
+            content: '_';
+            animation: blink 1s infinite;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
     </style>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
@@ -155,7 +163,6 @@
                     });
                 } catch(e) { console.warn("TON Connect UI error"); }
 
-                // Синхронизация с БД
                 try {
                     const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
                     if (r.ok) {
@@ -327,9 +334,28 @@
                         })
                     });
                     const res = await r.json();
-                    resDiv.innerText = res.text || "Analysis complete: Keep mining, Agent.";
-                } catch(e) { resDiv.innerText = "Error: Connection lost."; }
-                finally { btn.disabled = false; }
+                    const fullText = res.text || "Analysis complete: Keep mining, Agent.";
+                    
+                    // Эффект печатающегося текста
+                    resDiv.innerText = "";
+                    let i = 0;
+                    const speed = 30; // Скорость печати
+                    
+                    function typeWriter() {
+                        if (i < fullText.length) {
+                            resDiv.innerText += fullText.charAt(i);
+                            i++;
+                            setTimeout(typeWriter, speed);
+                            resDiv.scrollTop = resDiv.scrollHeight; // Автоскролл вниз
+                        }
+                    }
+                    typeWriter();
+
+                } catch(e) { 
+                    resDiv.innerText = "Error: Connection lost. Check your uplink."; 
+                } finally { 
+                    btn.disabled = false; 
+                }
             },
 
             copyRef() {
