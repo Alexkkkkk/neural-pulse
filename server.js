@@ -154,6 +154,9 @@ const startAdmin = async () => {
                 { resource: Stats, options: { navigation: { name: 'Metrics', icon: 'Activity' } } }
             ],
             rootPath: '/admin',
+            bundler: {
+                disableCache: true // Отключаем кэш для стабильной сборки фронтенда на Bothost
+            },
             branding: { 
                 companyName: 'Neural Pulse Control',
                 logo: '/images/logo.png',
@@ -168,7 +171,7 @@ const startAdmin = async () => {
                     console.log('[ADMIN AUTH] Success for login 1');
                     return { email: 'admin@pulse.com' };
                 }
-                console.log('[ADMIN AUTH] Failed');
+                console.log('[ADMIN AUTH] Failed attempt');
                 return null;
             },
             cookieName: 'adminjs_session',
@@ -184,7 +187,7 @@ const startAdmin = async () => {
         app.use(adminJs.options.rootPath, router);
         console.log(`--- [ADMIN] AdminJS panel ready at ${DOMAIN}/admin ---`);
     } catch (e) { 
-        console.error(`--- [ADMIN ERROR] Initialization failed:`, e); 
+        console.error(`--- [ADMIN ERROR] Full Stack:`, e); 
     }
 };
 
@@ -203,13 +206,13 @@ const collectMetrics = async () => {
             mem_usage: parseFloat(memUsed),
             db_response_time: dbTime
         });
-        console.log(`[METRICS] Recorded: Users: ${userCount}, Mem: ${memUsed}MB`);
+        console.log(`[METRICS] Saved | Users: ${userCount} | RAM: ${memUsed}MB`);
     } catch (e) { console.log("[METRICS ERROR] Failed to collect metrics"); }
 };
 
 // --- БОТ ЛОГИКА ---
 bot.start(async (ctx) => {
-    console.log(`[BOT] Start command from user: ${ctx.from.id}`);
+    console.log(`[BOT] Start command: ${ctx.from.id}`);
     const userId = ctx.from.id;
     const startPayload = ctx.startPayload;
 
@@ -221,9 +224,9 @@ bot.start(async (ctx) => {
                     { balance: referrer.balance + 5000, referrals: referrer.referrals + 1 },
                     { where: { id: startPayload } }
                 );
-                console.log(`[BOT] Referral reward given to: ${startPayload}`);
+                console.log(`[BOT] Referral reward for: ${startPayload}`);
             }
-        } catch (e) { console.log("[BOT ERROR] Referral processing failed"); }
+        } catch (e) { console.log("[BOT ERROR] Referral processing error"); }
     }
 
     ctx.replyWithPhoto({ source: path.join(__dirname, 'static/images/logo.png') }, {
@@ -234,7 +237,7 @@ bot.start(async (ctx) => {
             [Markup.button.url("📢 КАНАЛ", "https://t.me/neural_pulse_news")]
         ])
     }).catch((err) => {
-        console.error("[BOT ERROR] Photo reply failed, sending text only:", err.message);
+        console.error("[BOT ERROR] Reply error:", err.message);
         ctx.reply(`<b>Neural Pulse | Terminal</b>`, {
             parse_mode: 'HTML',
             ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])
@@ -249,23 +252,23 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 app.listen(PORT, '0.0.0.0', async () => {
     console.log(`--- [SERVER] Listening on ${DOMAIN} (Port: ${PORT}) ---`);
     try {
-        console.log('[DB] Connecting to Postgres...');
+        console.log('[DB] Connecting...');
         await sequelize.authenticate();
-        console.log('[DB] Connection has been established successfully.');
+        console.log('[DB] Success.');
         
         await sequelize.sync({ alter: true }); 
-        console.log('[DB] Models synced.');
+        console.log('[DB] Sync done.');
 
         await startAdmin();
 
-        console.log('[BOT] Setting Telegram webhook...');
+        console.log('[BOT] Webhook setting...');
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
-        console.log('[BOT] Webhook is set.');
+        console.log('[BOT] Webhook OK.');
         
         setInterval(collectMetrics, 15 * 60 * 1000); 
         collectMetrics();
 
-        console.log(`🚀 [SYSTEM ONLINE] Initialization complete.`);
+        console.log(`🚀 [SYSTEM ONLINE]`);
     } catch (err) { 
         console.error("!!! [STARTUP FAILURE] !!!", err); 
     }
