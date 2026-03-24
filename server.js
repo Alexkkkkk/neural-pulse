@@ -67,6 +67,8 @@ const sessionOptions = {
 };
 
 app.use(session(sessionOptions));
+
+// Раздача статики (папка static должна быть в корне)
 app.use(express.static(path.join(__dirname, 'static')));
 
 // --- MODELS ---
@@ -126,7 +128,6 @@ app.get('/api/user/:id', async (req, res) => {
         const lastSeen = new Date(user.last_seen);
         const secondsOffline = Math.floor((now - lastSeen) / 1000);
 
-        // Офлайн прибыль (максимум за 24 часа)
         if (secondsOffline > 60 && user.profit > 0) {
             const farmTime = Math.min(secondsOffline, 86400); 
             const earned = (user.profit / 3600) * farmTime; 
@@ -153,7 +154,7 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).send("Save Error"); }
 });
 
-// --- ADMIN PANEL (v7) ---
+// --- ADMIN PANEL ---
 const startAdmin = async () => {
     try {
         const adminJs = new AdminJS({
@@ -166,7 +167,6 @@ const startAdmin = async () => {
             branding: { companyName: 'Neural Pulse Control', withMadeWithLove: false }
         });
 
-        // В AdminJS v7+ билд роутера требует передачи app и sessionOptions
         AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
                 if (email === '1' && password === '1') return { email: 'admin@pulse.com' };
@@ -208,7 +208,7 @@ bot.start(async (ctx) => {
                 const referrer = await User.findByPk(refId);
                 if (referrer) {
                     referredBy = refId;
-                    startBalance = 5000; // Бонус новому игроку
+                    startBalance = 5000;
                     await referrer.update({ 
                         balance: referrer.balance + 10000, 
                         referrals: referrer.referrals + 1 
@@ -248,6 +248,7 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
         await bot.telegram.deleteWebhook().catch(() => {});
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
+        // Интервалы
         setInterval(collectMetrics, 15 * 60 * 1000);
         setTimeout(collectMetrics, 5000); 
         
