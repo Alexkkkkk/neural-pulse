@@ -19,7 +19,6 @@ const __dirname = path.dirname(__filename);
 AdminJS.registerAdapter(AdminJSSequelize);
 
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
-// НОВАЯ БАЗА ДАННЫХ ПОДКЛЮЧЕНА:
 const PG_URI = "postgresql://bothost_db_130943b4f3f6:oY6CieQ5aohyTLgU9i23M6w80naZt9_1mJ4V6roejTs@node1.pghost.ru:32834/bothost_db_130943b4f3f6";
 const DOMAIN = "https://np.bothost.tech"; 
 const PORT = 3000;
@@ -43,7 +42,7 @@ const sequelize = new Sequelize(PG_URI, {
     dialectOptions: { ssl: false } 
 });
 
-// --- МОДЕЛИ (С ИСПРАВЛЕНИЕМ PRIMARY KEY) ---
+// --- МОДЕЛИ ---
 const User = sequelize.define('users', {
     id: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: false },
     username: { type: DataTypes.STRING },
@@ -92,9 +91,12 @@ const collectMetrics = async () => {
     } catch (e) { console.error("Metrics error:", e); }
 };
 
-// --- ADMIN JS (Dashboard включен) ---
+// --- ADMIN JS ---
 const startAdmin = async () => {
     try {
+        // Фикс для корректного бандлинга компонента
+        const dashboardComponent = AdminJS.bundle('./dashboard-component.jsx');
+
         const adminJs = new AdminJS({
             resources: [
                 { resource: User, options: { navigation: { name: 'Система', icon: 'User' } } },
@@ -113,7 +115,7 @@ const startAdmin = async () => {
             },
             dashboard: {
                 handler: async () => {
-                    const totalUsers = await User.count();
+                    const totalUsers = await User.count() || 0;
                     const lastStat = await Stats.findOne({ order: [['timestamp', 'DESC']] });
                     return {
                         totalUsers,
@@ -122,7 +124,7 @@ const startAdmin = async () => {
                         cpu: lastStat?.server_load || 0
                     }
                 },
-                component: AdminJS.bundle('./dashboard-component.jsx')
+                component: dashboardComponent // Используем подготовленную переменную
             }
         });
 
@@ -139,7 +141,7 @@ const startAdmin = async () => {
     } catch (e) { console.error(`[ERR ADMIN]`, e); }
 };
 
-// --- API ЭНДПОИНТЫ ---
+// --- API ---
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     const { username, photo_url } = req.query;
@@ -195,7 +197,7 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 app.listen(PORT, async () => {
     try {
         await sequelize.authenticate();
-        await sequelize.sync({ alter: true }); // Автоматически создаст таблицы в новой базе
+        await sequelize.sync({ alter: true });
         await startAdmin();
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
