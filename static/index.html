@@ -24,7 +24,6 @@
         .top-info { display: flex; align-items: center; }
         .loading { text-align: center; padding: 20px; color: cyan; animation: pulse 1.5s infinite; }
         
-        /* Анимация всплывающих цифр при тапе */
         .pop {
             position: absolute;
             color: cyan;
@@ -37,6 +36,20 @@
         @keyframes moveUp {
             0% { transform: translateY(0); opacity: 1; }
             100% { transform: translateY(-100px); opacity: 0; }
+        }
+
+        /* Стиль для блока ИИ ответов */
+        .ai-terminal {
+            background: rgba(0, 20, 20, 0.6);
+            border: 1px solid cyan;
+            padding: 15px;
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 13px;
+            color: #0ff;
+            margin: 10px 0;
+            line-height: 1.4;
+            min-height: 80px;
         }
     </style>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -79,6 +92,7 @@
                 <img src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'">
             </div>
             <div class="side-menu">
+                <button onclick="ui.openM('ai')">🤖 AI ADVISOR</button>
                 <button onclick="ui.openM('wallet')">👛 WALLET</button>
                 <button onclick="ui.openM('friends')">🤝 FRIENDS</button>
                 <button onclick="ui.openM('bonus')">🎁 BONUS</button>
@@ -172,20 +186,9 @@
                 const cost = this.getCost(type);
                 if(this.data.balance >= cost) {
                     this.data.balance -= cost;
-                    if(type === 'tap') { 
-                        this.data.tap_lvl++; 
-                        this.data.tap += 1; 
-                    }
-                    if(type === 'energy') { 
-                        this.data.energy_lvl++; 
-                        this.data.max_energy += 500; 
-                        this.data.energy = this.data.max_energy; 
-                    }
-                    if(type === 'mine') { 
-                        this.data.mine_lvl++; 
-                        this.data.profit += 150; 
-                    }
-                    
+                    if(type === 'tap') { this.data.tap_lvl++; this.data.tap += 1; }
+                    if(type === 'energy') { this.data.energy_lvl++; this.data.max_energy += 500; this.data.energy = this.data.max_energy; }
+                    if(type === 'mine') { this.data.mine_lvl++; this.data.profit += 150; }
                     ui.render();
                     await this.save(); 
                     ui.openM(type === 'mine' ? 'mine' : 'boost');
@@ -195,7 +198,6 @@
             },
 
             async claimTask(reward, taskId) {
-                // В реальности тут должен быть запрос к серверу для проверки выполнения
                 this.data.balance += reward;
                 ui.render();
                 tg.showAlert(`Миссия выполнена! +${reward} NP`);
@@ -206,13 +208,12 @@
             async save() {
                 if(!this.isLoaded || !this.data.id) return;
                 try {
-                    const response = await fetch('/api/save', {
+                    await fetch('/api/save', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify(this.data)
                     });
-                    if(!response.ok) console.error("Save failed");
-                } catch(e) { console.error("Network error during save", e); }
+                } catch(e) { console.error("Save error", e); }
             },
 
             loop() {
@@ -225,7 +226,6 @@
                     }
                     ui.render();
                 }, 1000);
-                
                 setInterval(() => this.save(), 20000);
             }
         };
@@ -274,22 +274,18 @@
                 
                 if(type === 'boost') {
                     b.innerHTML = `<h2>🚀 BOOSTERS</h2>
-                    <div class="top-item" onclick="game.upgrade('tap')">
-                        <span>Multitap (Lvl ${game.data.tap_lvl})</span>
-                        <b>${game.getCost('tap')} NP</b>
-                    </div>
-                    <div class="top-item" onclick="game.upgrade('energy')">
-                        <span>Energy Cap (Lvl ${game.data.energy_lvl})</span>
-                        <b>${game.getCost('energy')} NP</b>
-                    </div>`;
+                    <div class="top-item" onclick="game.upgrade('tap')"><span>Multitap (Lvl ${game.data.tap_lvl})</span><b>${game.getCost('tap')} NP</b></div>
+                    <div class="top-item" onclick="game.upgrade('energy')"><span>Energy Cap (Lvl ${game.data.energy_lvl})</span><b>${game.getCost('energy')} NP</b></div>`;
                 }
                 else if(type === 'mine') {
                     b.innerHTML = `<h2>⛏️ MINING</h2>
-                    <div class="top-item" onclick="game.upgrade('mine')">
-                        <span>Neural Processor (Lvl ${game.data.mine_lvl})</span>
-                        <b>${game.getCost('mine')} NP</b>
-                    </div>
+                    <div class="top-item" onclick="game.upgrade('mine')"><span>Neural Processor (Lvl ${game.data.mine_lvl})</span><b>${game.getCost('mine')} NP</b></div>
                     <p style="font-size:11px; color:cyan; text-align:center; margin-top:10px;">Increases profit by +150 NP/hour per level.</p>`;
+                }
+                else if(type === 'ai') {
+                    b.innerHTML = `<h2>🤖 NEURAL ADVISOR</h2>
+                    <div class="ai-terminal" id="ai-res">Инициализация нейронного интерфейса... Готов к анализу.</div>
+                    <button class="task-btn" style="width:100%" id="ai-btn" onclick="ui.askAI()">ПОЛУЧИТЬ СТРАТЕГИЮ</button>`;
                 }
                 else if(type === 'tasks') {
                     b.innerHTML = `<h2>📋 MISSIONS</h2>`;
@@ -298,19 +294,13 @@
                         const tasks = await r.json();
                         if(tasks.length === 0) b.innerHTML += `<p style="text-align:center">No tasks available</p>`;
                         tasks.forEach(t => {
-                            b.innerHTML += `<div class="task-item">
-                                <span>${t.title}</span>
-                                <button class="task-btn" onclick="tg.openLink('${t.url}'); game.claimTask(${t.reward}, ${t.id})">+${t.reward}</button>
-                            </div>`;
+                            b.innerHTML += `<div class="task-item"><span>${t.title}</span><button class="task-btn" onclick="tg.openLink('${t.url}'); game.claimTask(${t.reward}, ${t.id})">+${t.reward}</button></div>`;
                         });
                     } catch(e) { b.innerHTML += `<p>Error loading tasks</p>`; }
                 }
                 else if(type === 'friends') {
                     const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
-                    b.innerHTML = `<h2>🤝 FRIENDS</h2>
-                    <p style="text-align:center; font-size:12px;">Share your link and get referral bonuses!</p>
-                    <div class="ref-box" id="ref-url">${link}</div>
-                    <button class="task-btn" style="width:100%" onclick="ui.copyRef()">COPY REFERRAL LINK</button>`;
+                    b.innerHTML = `<h2>🤝 FRIENDS</h2><p style="text-align:center; font-size:12px;">Share your link and get referral bonuses!</p><div class="ref-box" id="ref-url">${link}</div><button class="task-btn" style="width:100%" onclick="ui.copyRef()">COPY REFERRAL LINK</button>`;
                 }
                 else if(type === 'top') {
                     b.innerHTML = `<h2>🏆 TOP AGENTS</h2>`;
@@ -318,13 +308,7 @@
                         const r = await fetch('/api/top');
                         const top = await r.json();
                         top.forEach((u, i) => {
-                            b.innerHTML += `<div class="top-item">
-                                <div class="top-info">
-                                    <img src="${u.photo_url || 'images/logo.png'}" class="top-avatar">
-                                    <span>${i+1}. ${u.username}</span>
-                                </div>
-                                <b>${Math.floor(u.balance).toLocaleString()}</b>
-                            </div>`;
+                            b.innerHTML += `<div class="top-item"><div class="top-info"><img src="${u.photo_url || 'images/logo.png'}" class="top-avatar"><span>${i+1}. ${u.username}</span></div><b>${Math.floor(u.balance).toLocaleString()}</b></div>`;
                         });
                     } catch(e) { b.innerHTML += `<p>Error loading leaderboard</p>`; }
                 }
@@ -333,24 +317,33 @@
                     if(tonConnectUI) tonConnectUI.renderButton({ container: document.getElementById('ton-btn') });
                 }
                 else if(type === 'bonus') {
-                    b.innerHTML = `<h2>🎁 DAILY BONUS</h2>
-                    <div style="text-align:center; padding:20px;">
-                        <h3>Reward: 500 NP</h3>
-                        <button class="task-btn" style="width:100%; margin-top:15px;" onclick="game.data.balance+=500; ui.render(); ui.closeM(); tg.showAlert('Reward Claimed!'); game.save();">CLAIM</button>
-                    </div>`;
+                    b.innerHTML = `<h2>🎁 DAILY BONUS</h2><div style="text-align:center; padding:20px;"><h3>Reward: 500 NP</h3><button class="task-btn" style="width:100%; margin-top:15px;" onclick="game.data.balance+=500; ui.render(); ui.closeM(); tg.showAlert('Reward Claimed!'); game.save();">CLAIM</button></div>`;
                 }
+            },
+
+            async askAI() {
+                const resDiv = document.getElementById('ai-res');
+                const btn = document.getElementById('ai-btn');
+                resDiv.innerHTML = `<div class="loading">ANALYZING PULSE...</div>`;
+                btn.disabled = true; btn.style.opacity = "0.5";
+                try {
+                    const r = await fetch('/api/ai-advice', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(game.data)
+                    });
+                    const res = await r.json();
+                    resDiv.innerText = res.text || "Связь прервана.";
+                } catch(e) { resDiv.innerText = "Ошибка нейросети. Попробуйте позже."; }
+                finally { btn.disabled = false; btn.style.opacity = "1"; }
             },
 
             copyRef() {
                 const text = document.getElementById('ref-url').innerText;
                 const el = document.createElement('textarea');
-                el.value = text;
-                document.body.appendChild(el);
+                el.value = text; document.body.appendChild(el);
                 el.select();
-                try {
-                    document.execCommand('copy');
-                    tg.showAlert('Link copied to clipboard!');
-                } catch(e) { tg.showAlert('Failed to copy'); }
+                try { document.execCommand('copy'); tg.showAlert('Link copied!'); } catch(e) { tg.showAlert('Failed'); }
                 document.body.removeChild(el);
             },
 
