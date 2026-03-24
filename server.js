@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
 import session from 'express-session';
-import { Sequelize, DataTypes, Op } from 'sequelize';
+import { Sequelize, DataTypes } from 'sequelize';
 import os from 'os';
 
 // Пакеты AdminJS
@@ -14,19 +14,6 @@ import * as AdminJSSequelize from '@adminjs/sequelize';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// --- ДИНАМИЧЕСКИЙ ИМПОРТ ХРАНИЛИЩА ---
-let connectSessionSequelize = null;
-async function loadSessionStore() {
-    try {
-        const mod = await import('connect-session-sequelize');
-        connectSessionSequelize = mod.default;
-        console.log('✅ [STORAGE] connect-session-sequelize detected.');
-    } catch (e) {
-        console.log('⚠️ [WARNING] connect-session-sequelize not found. Using MemoryStore.');
-    }
-}
-await loadSessionStore();
 
 AdminJS.registerAdapter(AdminJSSequelize);
 
@@ -38,19 +25,24 @@ const PORT = process.env.PORT || 3000;
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
-const sequelize = new Sequelize(PG_URI, { 
-    dialect: 'postgres', 
-    logging: false, 
-    dialectOptions: { ssl: false },
-    retry: { max: 5 } // Попытки переподключения при сбое БД
-});
+const sequelize = new Sequelize(PG_URI, { dialect: 'postgres', logging: false, dialectOptions: { ssl: false } });
 
-// --- SESSION CONFIG ---
+// --- БЕЗОПАСНАЯ ИНИЦИАЛИЗАЦИЯ ХРАНИЛИЩА ---
 let sessionStore = null;
-if (connectSessionSequelize) {
-    const SequelizeStore = connectSessionSequelize(session.Store);
-    sessionStore = new SequelizeStore({ db: sequelize, tableName: 'sessions' });
+
+async function initSession() {
+    try {
+        // Используем динамический импорт, чтобы избежать ошибки при запуске
+        const { default: connectSessionSequelize } = await import('connect-session-sequelize');
+        const SequelizeStore = connectSessionSequelize(session.Store);
+        sessionStore = new SequelizeStore({ db: sequelize, tableName: 'sessions' });
+        console.log('✅ [STORAGE] connect-session-sequelize loaded.');
+    } catch (e) {
+        console.log('⚠️ [WARNING] connect-session-sequelize not found. Using MemoryStore.');
+    }
 }
+
+await initSession();
 
 app.set('trust proxy', 1); 
 app.use(cors());
@@ -79,7 +71,6 @@ const User = sequelize.define('users', {
     max_energy: { type: DataTypes.INTEGER, defaultValue: 1000 },
     tap: { type: DataTypes.INTEGER, defaultValue: 1 },
     profit: { type: DataTypes.INTEGER, defaultValue: 0 }, 
-    level: { type: DataTypes.INTEGER, defaultValue: 1 }, // Добавлено: текущий уровень
     tap_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     mine_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     energy_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
@@ -104,15 +95,7 @@ const Stats = sequelize.define('stats', {
     mem_usage: { type: DataTypes.FLOAT }
 }, { timestamps: false });
 
-// --- UTILS ---
-const calculateLevel = (balance) => {
-    if (balance < 50000) return 1;
-    if (balance < 250000) return 2;
-    if (balance < 1000000) return 3;
-    return Math.floor(Math.log10(balance / 100000)) + 3;
-};
-
-// --- API (OFFLINE PROFIT & DATA) ---
+// --- API ---
 app.get('/api/user/:id', async (req, res) => {
     try {
         let user = await User.findByPk(req.params.id);
@@ -125,32 +108,25 @@ app.get('/api/user/:id', async (req, res) => {
         const lastSeen = new Date(user.last_seen);
         const secondsOffline = Math.floor((now - lastSeen) / 1000);
 
-        // Офлайн прибыль
         if (secondsOffline > 60 && user.profit > 0) {
             const farmTime = Math.min(secondsOffline, 86400); 
             const earned = (user.profit / 3600) * farmTime; 
             user.balance += parseFloat(earned.toFixed(2));
             user.last_seen = now;
-            console.log(`[FARM] User ${user.id} +${earned.toFixed(2)} NP`);
+            await user.save();
         }
-
-        // Авто-обновление уровня
-        user.level = calculateLevel(user.balance);
-        await user.save();
-
         res.json(user);
     } catch (e) { res.status(500).send("DB Error"); }
 });
 
 app.post('/api/save', async (req, res) => {
     try {
-        const { id, ...data } = req.body;
-        await User.update({ ...data, last_seen: new Date() }, { where: { id } });
+        await User.update({ ...req.body, last_seen: new Date() }, { where: { id: req.body.id } });
         res.json({ ok: true });
     } catch (e) { res.status(500).send("Save Error"); }
 });
 
-// --- ADMIN PANEL ---
+// --- ADMIN ---
 const startAdmin = async () => {
     try {
         const adminJs = new AdminJS({
@@ -173,7 +149,7 @@ const startAdmin = async () => {
         }, null, sessionOptions);
 
         app.use(adminJs.options.rootPath, adminRouter);
-        console.log(`🚀 [ADMIN] Panel active at ${DOMAIN}/admin`);
+        console.log(`🚀 [ADMIN] Panel active`);
     } catch (e) { console.error(`[ADMIN ERROR]`, e); }
 };
 
@@ -189,7 +165,7 @@ const collectMetrics = async () => {
     } catch (e) { console.log("Metrics collection skipped."); }
 };
 
-// --- BOT START & REFERRALS ---
+// --- BOT ---
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
     const refId = ctx.startPayload ? parseInt(ctx.startPayload) : null;
@@ -206,37 +182,25 @@ bot.start(async (ctx) => {
                 if (referrer) {
                     referredBy = refId;
                     startBalance = 5000;
-                    await referrer.update({ 
-                        balance: referrer.balance + 10000, 
-                        referrals: referrer.referrals + 1 
-                    });
-                    bot.telegram.sendMessage(refId, `💎 <b>Новый Агент!</b>\nПо вашей ссылке зашел участник. Вам начислено +10,000 NP.`, { parse_mode: 'HTML' }).catch(() => {});
+                    await referrer.update({ balance: referrer.balance + 10000, referrals: referrer.referrals + 1 });
+                    bot.telegram.sendMessage(refId, `💎 <b>Новый Агент!</b>\n+10,000 NP.`, { parse_mode: 'HTML' }).catch(() => {});
                 }
             }
-            
-            user = await User.create({ 
-                id: userId, 
-                username: ctx.from.username || 'AGENT', 
-                balance: startBalance, 
-                referred_by: referredBy 
-            });
+            user = await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: startBalance, referred_by: referredBy });
         }
 
         ctx.replyWithPhoto({ source: photoPath }, {
-            caption: `<b>Neural Pulse | Terminal</b>\n\nДобро пожаловать, Агент. Твоя нейросеть готова к работе.\n\n🎁 Твоя реф. ссылка:\n<code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`,
+            caption: `<b>Neural Pulse | Terminal</b>\n\nДобро пожаловать. Твоя нейросеть готова к работе.\n\n🎁 Реф. ссылка:\n<code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`,
             parse_mode: 'HTML',
             ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])
         });
-    } catch (e) { 
-        console.error(e);
-        ctx.reply("System Online", Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])); 
-    }
+    } catch (e) { ctx.reply("System Online."); }
 });
 
 const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
 app.use(bot.webhookCallback(WEBHOOK_PATH));
 
-// --- SERVER RUN ---
+// --- RUN ---
 app.listen(PORT, '0.0.0.0', async () => {
     try {
         await sequelize.authenticate();
