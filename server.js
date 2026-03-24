@@ -57,7 +57,7 @@ const User = sequelize.define('users', {
 
 const Task = sequelize.define('tasks', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    title: { type: DataTypes.STRING, allowNull: false },
+    title: { type: DataTypes.STRING, allowNull: false, unique: true },
     reward: { type: DataTypes.INTEGER, defaultValue: 1000 },
     url: { type: DataTypes.STRING }
 }, { timestamps: false });
@@ -94,8 +94,13 @@ const collectMetrics = async () => {
 // --- ADMIN JS ---
 const startAdmin = async () => {
     try {
-        // Фикс для корректного бандлинга компонента
-        const dashboardComponent = AdminJS.bundle('./dashboard-component.jsx');
+        // Безопасный бандлинг: если файла нет, админка просто загрузит стандартный дашборд
+        let dashboardComponent;
+        try {
+            dashboardComponent = AdminJS.bundle('./dashboard-component.jsx');
+        } catch (bundleErr) {
+            console.warn("Dashboard component bundle failed, using default.");
+        }
 
         const adminJs = new AdminJS({
             resources: [
@@ -124,7 +129,7 @@ const startAdmin = async () => {
                         cpu: lastStat?.server_load || 0
                     }
                 },
-                component: dashboardComponent // Используем подготовленную переменную
+                component: dashboardComponent 
             }
         });
 
