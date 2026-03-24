@@ -27,7 +27,7 @@ const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// --- ВАЖНО: Настройки прокси для корректных куки ---
+// --- СЕТЕВЫЕ НАСТРОЙКИ (Важно для Bothost/Proxy) ---
 app.set('trust proxy', 1); 
 app.use(cors());
 app.use(express.json());
@@ -38,21 +38,22 @@ app.use((req, res, next) => {
     next();
 });
 
-// Настройка основной сессии
-app.use(session({
+// --- ЕДИНАЯ НАСТРОЙКА СЕССИЙ ---
+const sessionMiddleware = session({
     secret: 'neural_pulse_ultra_secret_2026',
-    resave: true,               // Изменено на true для стабильности
-    saveUninitialized: true,    // Изменено на true
+    resave: true,
+    saveUninitialized: true,
     proxy: true,
     name: 'neural_pulse_sid',
     cookie: { 
         secure: true, 
         httpOnly: true, 
-        sameSite: 'none',       // Позволяет работать внутри Telegram WebApp
+        sameSite: 'none', // Для работы в Telegram iframe и через прокси
         maxAge: 24 * 60 * 60 * 1000 
     }
-}));
+});
 
+app.use(sessionMiddleware);
 app.use(express.static(path.join(__dirname, 'static')));
 
 const sequelize = new Sequelize(PG_URI, { 
@@ -129,20 +130,21 @@ const startAdmin = async () => {
             branding: { companyName: 'Neural Pulse Control', withMadeWithLove: false }
         });
 
+        // Используем общую сессию для аутентификации
         const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
                 if (email === '1' && password === '1') {
-                    console.log(`[ADMIN] User ${email} authenticated.`);
+                    console.log(`[ADMIN] User ${email} authenticated successfully.`);
                     return { email: 'admin@pulse.com' };
                 }
                 return null;
             },
             cookieName: 'adminjs_session',
             cookiePassword: 'secure-cookie-password-2026-v2',
-        }, null, { 
+        }, sessionMiddleware, { // Передаем общую middleware сессии сюда
             resave: true, 
             saveUninitialized: true, 
-            secret: 'session_secret_admin', 
+            secret: 'neural_pulse_ultra_secret_2026', 
             proxy: true, 
             cookie: { 
                 secure: true,
@@ -167,13 +169,14 @@ const collectMetrics = async () => {
             mem_usage: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2)),
             db_response_time: dbTime
         });
-        console.log(`[METRICS] Saved`);
+        console.log(`[METRICS] Saved | RAM: ${(process.memoryUsage().rss / 1024 / 1024).toFixed(2)}MB`);
     } catch (e) { console.log("Metrics error"); }
 };
 
 // --- BOT ---
 bot.start(async (ctx) => {
-    ctx.replyWithPhoto({ source: path.join(__dirname, 'static/images/logo.png') }, {
+    const photoPath = path.join(__dirname, 'static/images/logo.png');
+    ctx.replyWithPhoto({ source: photoPath }, {
         caption: `<b>Neural Pulse | Terminal</b>\n\nДобро пожаловать, Агент. Твоя нейросеть готова к работе.`,
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])
