@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v5.5.6</title>
+    <title>Neural Pulse v5.5.7</title>
     <link rel="stylesheet" href="style.css">
     <style>
         @keyframes pulse { 0% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.1); } 100% { opacity: 0.5; transform: scale(1); } }
@@ -18,8 +18,10 @@
             justify-content: space-between;
             align-items: center;
         }
-        .task-btn { background: cyan; color: black; border: none; padding: 5px 10px; border-radius: 5px; font-weight: bold; }
-        .ref-box { background: #000; border: 1px dashed cyan; padding: 10px; border-radius: 8px; margin: 10px 0; word-break: break-all; font-family: monospace; }
+        .task-btn { background: cyan; color: black; border: none; padding: 5px 10px; border-radius: 5px; font-weight: bold; cursor: pointer; }
+        .ref-box { background: #000; border: 1px dashed cyan; padding: 10px; border-radius: 8px; margin: 10px 0; word-break: break-all; font-family: monospace; font-size: 12px; }
+        .top-avatar { width: 30px; height: 30px; border-radius: 50%; margin-right: 10px; border: 1px solid cyan; }
+        .top-info { display: flex; align-items: center; }
     </style>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
@@ -106,20 +108,21 @@
 
             async init() {
                 ui.startLoader();
-                const u = tg.initDataUnsafe.user || { id: 476014374, first_name: 'Agent' };
+                const u = tg.initDataUnsafe.user || { id: 476014374, first_name: 'Agent', photo_url: '' };
                 
                 try {
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                        manifestUrl: 'https://neural-pulse.bothost.ru/tonconnect-manifest.json'
+                        manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json'
                     });
                 } catch(e) {}
 
-                // Загрузка данных
+                // Загрузка данных с сервера
                 try {
-                    const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
+                    const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(u.username || u.first_name)}&photo_url=${encodeURIComponent(u.photo_url || '')}`);
                     if (r.ok) {
                         const db = await r.json();
                         Object.assign(this.data, db);
+                        if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
                     }
                 } catch(e) { this.data.id = u.id; }
 
@@ -130,7 +133,6 @@
                 ui.render();
             },
 
-            // ТВОЯ МАТЕМАТИКА ПРОГРЕССИИ
             getCost(type) {
                 const lvl = this.data[type + '_lvl'] || 1;
                 if(type === 'tap') return Math.floor(450 * Math.pow(1.7, lvl - 1));
@@ -153,18 +155,18 @@
                 if(this.data.balance >= cost) {
                     this.data.balance -= cost;
                     if(type === 'tap') { this.data.tap_lvl++; this.data.tap += 1; }
-                    if(type === 'energy') { this.data.energy_lvl++; this.data.max_energy += 500; }
+                    if(type === 'energy') { this.data.energy_lvl++; this.data.max_energy += 500; this.data.energy = this.data.max_energy; }
                     if(type === 'mine') { this.data.mine_lvl++; this.data.profit += 150; }
                     this.save();
                     ui.render();
-                    ui.openM(type === 'mine' ? 'mine' : 'boost'); // Обновить окно
+                    ui.openM(type === 'mine' ? 'mine' : 'boost');
                 } else {
                     tg.showAlert("НЕДОСТАТОЧНО NP");
                 }
             },
 
             async save() {
-                if(!this.isLoaded) return;
+                if(!this.isLoaded || !this.data.id) return;
                 fetch('/api/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -174,7 +176,6 @@
 
             loop() {
                 setInterval(() => {
-                    // Регенерация + пассивный доход (твоя логика /3600)
                     if(this.data.energy < this.data.max_energy) this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1);
                     if(this.data.profit > 0) this.data.balance += (this.data.profit / 3600);
                     ui.render();
@@ -202,9 +203,9 @@
                 document.getElementById('ui-tap').innerText = `+${d.tap}`;
                 document.getElementById('ui-profit').innerText = Math.floor(d.profit);
                 
-                const rank = d.balance < 10000 ? "NODE AGENT" : d.balance < 100000 ? "CYBER MANTIS" : "NEURAL LORD";
+                const rank = d.balance < 50000 ? "NODE AGENT" : d.balance < 250000 ? "CYBER MANTIS" : "NEURAL LORD";
                 document.getElementById('ui-rank').innerText = rank;
-                document.getElementById('my-lvl').innerText = `LVL ${Math.floor(d.balance / 5000) + 1}`;
+                document.getElementById('my-lvl').innerText = `LVL ${Math.floor(d.balance / 10000) + 1}`;
             },
 
             pop(e, p) {
@@ -219,6 +220,7 @@
             async openM(type) {
                 const b = document.getElementById('m-body');
                 document.getElementById('modal').classList.add('active');
+                b.innerHTML = `<div class="loading">SYNCING...</div>`;
                 
                 if(type === 'boost') {
                     b.innerHTML = `<h2>🚀 BOOSTERS</h2>
@@ -227,28 +229,49 @@
                 }
                 else if(type === 'mine') {
                     b.innerHTML = `<h2>⛏️ MINING</h2>
-                    <div class="top-item" onclick="game.upgrade('mine')"><span>Neural Processor (+150/h)</span><b>${game.getCost('mine')}</b></div>`;
+                    <div class="top-item" onclick="game.upgrade('mine')"><span>Neural Processor (Lvl ${game.data.mine_lvl})</span><b>${game.getCost('mine')}</b></div>
+                    <p style="font-size:10px; opacity:0.6; margin-top:10px;">Each level adds +150 NP/hour to your passive income.</p>`;
                 }
                 else if(type === 'tasks') {
-                    b.innerHTML = `<h2>📋 MISSIONS</h2>
-                    <div class="task-item"><span>Join Community</span><button class="task-btn" onclick="tg.openTelegramLink('https://t.me/neural_pulse')">+5000</button></div>
-                    <div class="task-item"><span>Follow X</span><button class="task-btn" onclick="tg.openLink('https://x.com/')">+3000</button></div>`;
+                    b.innerHTML = `<h2>📋 MISSIONS</h2>`;
+                    try {
+                        const r = await fetch('/api/tasks');
+                        const tasks = await r.json();
+                        tasks.forEach(t => {
+                            b.innerHTML += `<div class="task-item">
+                                <span>${t.title}</span>
+                                <button class="task-btn" onclick="tg.openLink('${t.url}')">+${t.reward}</button>
+                            </div>`;
+                        });
+                        if(tasks.length === 0) b.innerHTML += `<p>No tasks available</p>`;
+                    } catch(e) { b.innerHTML += `<p>Error loading tasks</p>`; }
                 }
                 else if(type === 'friends') {
                     const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
                     b.innerHTML = `<h2>🤝 FRIENDS</h2>
-                    <p>Get 10% from friend's activity!</p>
-                    <div class="ref-box">${link}</div>
-                    <button class="task-btn" style="width:100%" onclick="window.navigator.clipboard.writeText('${link}'); tg.showAlert('Copied!')">COPY LINK</button>`;
+                    <p>Invite friends and get bonuses!</p>
+                    <div class="ref-box" id="ref-url">${link}</div>
+                    <button class="task-btn" style="width:100%" onclick="ui.copyRef()">COPY LINK</button>`;
+                }
+                else if(type === 'top') {
+                    b.innerHTML = `<h2>🏆 TOP AGENTS</h2>`;
+                    try {
+                        const r = await fetch('/api/top');
+                        const top = await r.json();
+                        top.forEach((u, i) => {
+                            b.innerHTML += `<div class="top-item">
+                                <div class="top-info">
+                                    <img src="${u.photo_url || 'images/logo.png'}" class="top-avatar">
+                                    <span>${i+1}. ${u.username}</span>
+                                </div>
+                                <b>${Math.floor(u.balance).toLocaleString()}</b>
+                            </div>`;
+                        });
+                    } catch(e) { b.innerHTML += `<p>Error loading leaderboard</p>`; }
                 }
                 else if(type === 'wallet') {
                     b.innerHTML = `<h2>👛 WALLET</h2><div id="ton-btn" style="display:flex; justify-content:center; padding:20px;"></div>`;
                     if(tonConnectUI) tonConnectUI.renderButton({ container: document.getElementById('ton-btn') });
-                }
-                else if(type === 'top') {
-                    b.innerHTML = `<h2>🏆 TOP AGENTS</h2>
-                    <div class="top-item"><span>1. ${document.getElementById('my-name').innerText}</span><b>${Math.floor(game.data.balance)}</b></div>
-                    <div class="top-item" style="opacity:0.5"><span>2. Unknown_Agent</span><b>1200</b></div>`;
                 }
                 else if(type === 'bonus') {
                     b.innerHTML = `<h2>🎁 DAILY BONUS</h2>
@@ -257,6 +280,17 @@
                         <button class="task-btn" style="width:100%; margin-top:15px;" onclick="game.data.balance+=500; ui.render(); ui.closeM(); tg.showAlert('Reward Claimed!');">CLAIM</button>
                     </div>`;
                 }
+            },
+
+            copyRef() {
+                const text = document.getElementById('ref-url').innerText;
+                const el = document.createElement('textarea');
+                el.value = text;
+                document.body.appendChild(el);
+                el.select();
+                document.execCommand('copy');
+                document.body.removeChild(el);
+                tg.showAlert('Ref link copied!');
             },
 
             closeM() { document.getElementById('modal').classList.remove('active'); }
