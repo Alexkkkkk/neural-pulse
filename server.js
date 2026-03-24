@@ -42,7 +42,7 @@ const sequelize = new Sequelize(PG_URI, {
     dialectOptions: { ssl: false } 
 });
 
-// --- МОДЕЛИ ---
+// --- МОДЕЛИ (Добавлены уровни) ---
 const User = sequelize.define('users', {
     id: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: false },
     username: { type: DataTypes.STRING },
@@ -52,6 +52,10 @@ const User = sequelize.define('users', {
     max_energy: { type: DataTypes.INTEGER, defaultValue: 1000 },
     tap: { type: DataTypes.INTEGER, defaultValue: 1 },
     profit: { type: DataTypes.INTEGER, defaultValue: 0 },
+    // Добавляем сохранение уровней, чтобы математика не сбивалась
+    tap_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
+    mine_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
+    energy_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: false });
 
@@ -94,14 +98,6 @@ const collectMetrics = async () => {
 // --- ADMIN JS ---
 const startAdmin = async () => {
     try {
-        // Безопасный бандлинг: если файла нет, админка просто загрузит стандартный дашборд
-        let dashboardComponent;
-        try {
-            dashboardComponent = AdminJS.bundle('./dashboard-component.jsx');
-        } catch (bundleErr) {
-            console.warn("Dashboard component bundle failed, using default.");
-        }
-
         const adminJs = new AdminJS({
             resources: [
                 { resource: User, options: { navigation: { name: 'Система', icon: 'User' } } },
@@ -109,27 +105,12 @@ const startAdmin = async () => {
                 { resource: Stats, options: { 
                     navigation: { name: 'Аналитика', icon: 'Activity' },
                     listProperties: ['timestamp', 'user_count', 'server_load', 'mem_usage', 'db_response_time'],
-                    editProperties: [] 
                 } }
             ],
             rootPath: '/admin',
             branding: { 
                 companyName: 'Neural Pulse Control',
-                softwareBrothers: false,
                 logo: '/images/logo.png' 
-            },
-            dashboard: {
-                handler: async () => {
-                    const totalUsers = await User.count() || 0;
-                    const lastStat = await Stats.findOne({ order: [['timestamp', 'DESC']] });
-                    return {
-                        totalUsers,
-                        currentMem: lastStat?.mem_usage || 0,
-                        dbLatency: lastStat?.db_response_time || 0,
-                        cpu: lastStat?.server_load || 0
-                    }
-                },
-                component: dashboardComponent 
             }
         });
 
@@ -151,41 +132,51 @@ app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     const { username, photo_url } = req.query;
     try {
-        let result = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
-        if (result.rows.length === 0) {
-            const newUser = await pool.query(
-                `INSERT INTO users (id, username, photo_url) VALUES ($1, $2, $3) RETURNING *`,
-                [userId, username || 'AGENT', photo_url || '']
-            );
-            return res.json(newUser.rows[0]);
+        // Используем Sequelize для поиска, чтобы гарантировать наличие всех полей
+        let user = await User.findByPk(userId);
+        if (!user) {
+            user = await User.create({
+                id: userId,
+                username: username || 'AGENT',
+                photo_url: photo_url || ''
+            });
         }
-        res.json(result.rows[0]);
+        res.json(user);
     } catch (e) { res.status(500).send("DB Error"); }
 });
 
 app.post('/api/save', async (req, res) => {
     const d = req.body;
     try {
-        await pool.query(
-            `UPDATE users SET balance=$2, energy=$3, tap=$4, profit=$5, last_seen=NOW() WHERE id=$1`, 
-            [d.userId, d.balance, d.energy, d.tap, d.profit]
-        );
+        // ВАЖНО: Синхронизируем имена полей с фронтендом (id) и сохраняем уровни
+        await User.update({
+            balance: d.balance,
+            energy: d.energy,
+            max_energy: d.max_energy,
+            tap: d.tap,
+            profit: d.profit,
+            tap_lvl: d.tap_lvl,
+            mine_lvl: d.mine_lvl,
+            energy_lvl: d.energy_lvl,
+            last_seen: new Date()
+        }, { where: { id: d.id } });
+        
         res.json({ ok: true });
-    } catch (e) { res.status(500).send("Save Error"); }
+    } catch (e) { 
+        console.error("Save Error:", e);
+        res.status(500).send("Save Error"); 
+    }
 });
 
 app.get('/api/top', async (req, res) => {
     try {
-        const result = await pool.query('SELECT username, balance, photo_url FROM users ORDER BY balance DESC LIMIT 50');
-        res.json(result.rows);
+        const topUsers = await User.findAll({
+            order: [['balance', 'DESC']],
+            limit: 50,
+            attributes: ['username', 'balance', 'photo_url']
+        });
+        res.json(topUsers);
     } catch (e) { res.status(500).send("Top Error"); }
-});
-
-app.get('/api/tasks', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM tasks');
-        res.json(result.rows);
-    } catch (e) { res.status(500).send("Tasks Error"); }
 });
 
 // --- BOT ---
@@ -202,13 +193,13 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 app.listen(PORT, async () => {
     try {
         await sequelize.authenticate();
-        await sequelize.sync({ alter: true });
+        await sequelize.sync({ alter: true }); // Это само добавит новые колонки в таблицу
         await startAdmin();
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
         setInterval(collectMetrics, 15 * 60 * 1000); 
         collectMetrics();
 
-        console.log(`🚀 [MAX-MODE] System Online on New DB`);
+        console.log(`🚀 [MAX-MODE] System Online`);
     } catch (err) { console.error("Startup Error:", err); }
 });
