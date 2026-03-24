@@ -25,21 +25,10 @@ const logger = {
 };
 
 // --- CONFIG ---
-// const OPENAI_API_KEY = "ЗАКОММЕНТИРОВАНО"; 
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const PG_URI = "postgresql://bothost_db_130943b4f3f6:oY6CieQ5aohyTLgU9i23M6w80naZt9_1mJ4V6roejTs@node1.pghost.ru:32834/bothost_db_130943b4f3f6";
 const DOMAIN = "https://np.bothost.tech"; 
 const PORT = process.env.PORT || 3000;
-
-// Инициализация OpenAI закомментирована
-/*
-let openai;
-try {
-    openai = new OpenAI({ apiKey: OPENAI_API_KEY });
-} catch (e) {
-    logger.error("OpenAI Init Failed", e);
-}
-*/
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
@@ -106,10 +95,11 @@ const calculateLevel = (b) => b < 10000 ? 1 : b < 100000 ? 2 : b < 500000 ? 3 : 
 
 app.get('/api/user/:id', async (req, res) => {
     try {
-        const user = await User.findByPk(req.params.id);
+        const userId = BigInt(req.params.id);
+        const user = await User.findByPk(userId);
         if (!user) {
             const newUser = await User.create({ 
-                id: req.params.id, 
+                id: userId, 
                 username: req.query.username || 'AGENT',
                 last_bonus: 0 
             });
@@ -137,19 +127,30 @@ app.post('/api/save', async (req, res) => {
     try {
         const { id, ...data } = req.body;
         if (!id) return res.status(400).json({ error: "ID Missing" });
+
+        const userId = BigInt(id); // Конвертация для больших ID
+
         if (data.balance !== undefined) data.level = calculateLevel(data.balance);
         
-        await User.update({ ...data, last_seen: new Date() }, { where: { id } });
+        const [updated] = await User.update(
+            { ...data, last_seen: new Date() }, 
+            { where: { id: userId } }
+        );
+
+        if (updated === 0) {
+            // Если пользователя нет, создаем (на всякий случай)
+            await User.create({ id: userId, ...data });
+        }
+
         res.json({ ok: true });
     } catch (e) {
-        logger.error("Save Error", e);
-        res.status(500).json({ error: "DB Error" });
+        logger.error("SAVE FAILURE", e);
+        res.status(500).json({ error: "DB Error", details: e.message });
     }
 });
 
 // --- AI ADVICE ENGINE (ЗАГЛУШКА) ---
 app.post('/api/ai-advice', async (req, res) => {
-    // Временно отключено обращение к OpenAI для стабильности
     res.json({ 
         text: "Внимание: Нейросеть переведена в режим автономного накопления. Протоколы оптимизации стабильны. Продолжайте экспансию, Агент." 
     });
