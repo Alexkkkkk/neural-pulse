@@ -29,7 +29,6 @@ const logger = {
 };
 
 // --- CONFIG ---
-// ВАЖНО: Твой новый ключ вставлен здесь. 
 const OPENAI_API_KEY = "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";
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const PG_URI = "postgresql://bothost_db_130943b4f3f6:oY6CieQ5aohyTLgU9i23M6w80naZt9_1mJ4V6roejTs@node1.pghost.ru:32834/bothost_db_130943b4f3f6";
@@ -37,7 +36,7 @@ const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
 const ADMIN_ID = 1774360651;
 
-// Инициализация ИИ с твоим ключом
+// Инициализация ИИ
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
 const bot = new Telegraf(BOT_TOKEN);
@@ -172,6 +171,34 @@ const calculateLevel = (balance) => {
 };
 
 // --- API ---
+
+// Эндпоинт для ИИ-советника в приложении
+app.post('/api/ai-advice', async (req, res) => {
+    try {
+        const userData = req.body;
+        logger.ai(`Generating advice for Agent ${userData.id}`);
+        
+        const completion = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+                { 
+                    role: "system", 
+                    content: "Ты — ИИ-советник терминала Neural Pulse. Дай краткий, дерзкий совет игроку на основе его статов. Используй киберпанк сленг. Максимум 2 предложения." 
+                },
+                { 
+                    role: "user", 
+                    content: `Статы: Баланс ${userData.balance}, Доход в час ${userData.profit}, Сила тапа ${userData.tap}.` 
+                }
+            ]
+        });
+
+        res.json({ text: completion.choices[0].message.content });
+    } catch (e) {
+        logger.error("Advice fail", e);
+        res.status(500).json({ text: "Нейросеть перегружена. Жди синхронизации." });
+    }
+});
+
 app.get('/api/user/:id', async (req, res) => {
     try {
         let user = await User.findByPk(req.params.id);
@@ -304,7 +331,6 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
         await startAdmin();
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
-        // Фоновые ИИ-процессы
         setInterval(async () => {
             const userCount = await User.count();
             const metrics = {
