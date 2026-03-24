@@ -42,14 +42,13 @@ app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 
-// Мгновенная статика с жестким кэшированием
 app.use(express.static(path.join(__dirname, 'static'), { 
     maxAge: '30d', 
     immutable: true,
     lastModified: false
 }));
 
-// --- БАЗА ДАННЫХ (ОПТИМИЗИРОВАННЫЙ ПУЛ) ---
+// --- БАЗА ДАННЫХ ---
 const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
     logging: false, 
@@ -73,6 +72,7 @@ const User = sequelize.define('users', {
     energy_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     referrals: { type: DataTypes.INTEGER, defaultValue: 0 },
     referred_by: { type: DataTypes.BIGINT, allowNull: true },
+    last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 }, // Добавлено для бонусов
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: false });
 
@@ -93,11 +93,10 @@ const Stats = sequelize.define('stats', {
 
 const calculateLevel = (b) => b < 10000 ? 1 : b < 100000 ? 2 : b < 500000 ? 3 : b < 2000000 ? 4 : 5;
 
-// --- API ДЛЯ ИГРЫ (СВЕРХЗВУКОВАЯ ОБРАБОТКА) ---
+// --- API GAME CORE ---
 
 app.get('/api/user/:id', async (req, res) => {
     try {
-        // raw: true значительно ускоряет выборку
         const user = await User.findByPk(req.params.id, { raw: true });
         if (!user) {
             const newUser = await User.create({ id: req.params.id, username: req.query.username || 'AGENT' });
@@ -112,14 +111,12 @@ app.get('/api/user/:id', async (req, res) => {
             user.balance += parseFloat(earned.toFixed(2));
             user.last_seen = now;
             user.level = calculateLevel(user.balance);
-            // Асинхронное обновление без await, чтобы не задерживать ответ
             User.update(user, { where: { id: user.id } }).catch(()=>{});
         }
         res.json(user);
     } catch (e) { res.status(500).send("AI_CORE_OFFLINE"); }
 });
 
-// Fire-and-Forget Save System
 app.post('/api/save', (req, res) => {
     res.status(202).json({ ok: true }); 
     const { id, ...data } = req.body;
@@ -129,33 +126,44 @@ app.post('/api/save', (req, res) => {
     }
 });
 
-// Кэширование ТОПа в памяти
-let topCache = null;
-let lastTopUpdate = 0;
-app.get('/api/top', async (req, res) => {
-    const now = Date.now();
-    if (topCache && (now - lastTopUpdate < 180000)) return res.json(topCache);
-    
+// --- AI ADVICE ENGINE ---
+app.post('/api/ai-advice', async (req, res) => {
     try {
-        topCache = await User.findAll({ 
+        const { id, balance, levels } = req.body;
+        
+        const prompt = `
+            Ты — терминал "Neural Pulse". Проанализируй данные Агента и дай краткий совет (1-2 предложения).
+            Статус: Баланс ${Math.floor(balance)} NP, Тап-уровень ${levels.tap}, Майнинг-уровень ${levels.mine}.
+            Тон: Технологичный, киберпанк, немного дерзкий. Используй слова: "протокол", "синхронизация", "мощности".
+            Если майнинг (mine) меньше тапа, посоветуй пассивный доход.
+        `;
+
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [{ role: "system", content: "Ты — бортовой ИИ." }, { role: "user", content: prompt }],
+            max_tokens: 80
+        });
+
+        res.json({ text: response.choices[0].message.content.trim() });
+    } catch (e) {
+        logger.error("AI Advice Failure", e);
+        res.json({ text: "Анализ прерван: Нейросеть перегружена. Увеличивай мощность узлов самостоятельно, Агент." });
+    }
+});
+
+app.get('/api/top', async (req, res) => {
+    try {
+        const users = await User.findAll({ 
             limit: 50, 
             order: [['balance', 'DESC']], 
             attributes: ['username', 'balance', 'level', 'photo_url'], 
             raw: true 
         });
-        lastTopUpdate = now;
-        res.json(topCache);
+        res.json(users);
     } catch (e) { res.json([]); }
 });
 
-app.get('/api/tasks', async (req, res) => {
-    try {
-        const tasks = await Task.findAll({ raw: true });
-        res.json(tasks);
-    } catch (e) { res.json([]); }
-});
-
-// --- АДМИНКА (ИЗОЛИРОВАННЫЕ СЕССИИ) ---
+// --- АДМИНКА ---
 const startAdmin = async () => {
     try {
         const { default: connectSessionSequelize } = await import('connect-session-sequelize');
@@ -166,8 +174,7 @@ const startAdmin = async () => {
             resources: [{ resource: User }, { resource: Task }, { resource: Stats }],
             rootPath: '/admin',
             branding: { companyName: 'Neural Pulse Hub', logo: false },
-            bundler: { enabled: false }, 
-            assets: { globals: { fonts: false, icons: false } }
+            bundler: { enabled: false }
         });
 
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
@@ -187,7 +194,7 @@ const startAdmin = async () => {
     } catch (e) { logger.error("Admin System Error", e); }
 };
 
-// --- TELEGRAM BOT CORE ---
+// --- TELEGRAM BOT ---
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
     const refId = ctx.startPayload ? parseInt(ctx.startPayload) : null;
@@ -199,9 +206,7 @@ bot.start(async (ctx) => {
             let startBal = 0; let refBy = null;
             if (refId && refId !== userId) {
                 refBy = refId; startBal = 5000;
-                User.increment({ balance: 10000, referrals: 1 }, { where: { id: refId } }).then(() => {
-                    bot.telegram.sendMessage(refId, `✅ <b>Система:</b> Новый агент! +10,000 NP.`, { parse_mode: 'HTML' }).catch(()=>{});
-                }).catch(()=>{});
+                User.increment({ balance: 10000, referrals: 1 }, { where: { id: refId } }).catch(()=>{});
             }
             await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: startBal, referred_by: refBy });
         }
@@ -222,13 +227,9 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
     try {
         await sequelize.authenticate();
         await sequelize.sync({ alter: false });
-        
-        // Параллельный запуск админки
         startAdmin(); 
-        
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
-        // Сбор метрик каждые 15 минут
         setInterval(async () => {
             Stats.create({
                 user_count: await User.count(),
