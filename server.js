@@ -6,7 +6,7 @@ import cors from 'cors';
 import session from 'express-session';
 import { Sequelize, DataTypes, Op } from 'sequelize';
 import os from 'os';
-import OpenAI from 'openai';
+// import OpenAI from 'openai'; // OpenAI временно отключен
 
 // AdminJS (v7+)
 import AdminJS from 'adminjs';
@@ -25,20 +25,21 @@ const logger = {
 };
 
 // --- CONFIG ---
-// ВНИМАНИЕ: Используй новый рабочий ключ. 
-const OPENAI_API_KEY = "ТВОЙ_НОВЫЙ_КЛЮЧ"; 
+// const OPENAI_API_KEY = "ЗАКОММЕНТИРОВАНО"; 
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const PG_URI = "postgresql://bothost_db_130943b4f3f6:oY6CieQ5aohyTLgU9i23M6w80naZt9_1mJ4V6roejTs@node1.pghost.ru:32834/bothost_db_130943b4f3f6";
 const DOMAIN = "https://np.bothost.tech"; 
 const PORT = process.env.PORT || 3000;
 
-// Инициализация OpenAI с обработкой ошибок
+// Инициализация OpenAI закомментирована
+/*
 let openai;
 try {
     openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 } catch (e) {
     logger.error("OpenAI Init Failed", e);
 }
+*/
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
@@ -146,32 +147,12 @@ app.post('/api/save', async (req, res) => {
     }
 });
 
-// --- УЛУЧШЕННЫЙ AI ADVICE ENGINE ---
+// --- AI ADVICE ENGINE (ЗАГЛУШКА) ---
 app.post('/api/ai-advice', async (req, res) => {
-    try {
-        if (!openai) throw new Error("OpenAI not initialized");
-        
-        const { balance, levels } = req.body;
-        
-        let focus = "оптимизации протоколов";
-        if (levels.mine <= levels.tap) focus = "наращивания пассивного майнинга";
-        if (balance < 5000) focus = "первичного накопления NP";
-
-        const response = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [
-                { role: "system", content: "Ты — бортовой ИИ терминала Neural Pulse. Стиль: Киберпанк, холодный, 1-2 предложения." }, 
-                { role: "user", content: `Статус: Баланс ${balance} NP. Уровни: Тап ${levels.tap}, Майнинг ${levels.mine}. Анализ требует: ${focus}. Дай директиву.` }
-            ],
-            max_tokens: 100,
-            temperature: 0.8
-        });
-
-        res.json({ text: response.choices[0].message.content.trim() });
-    } catch (e) {
-        logger.error("AI Error", e);
-        res.json({ text: "Синхронизация с ИИ прервана. Наращивайте мощности вручную, Агент." });
-    }
+    // Временно отключено обращение к OpenAI для стабильности
+    res.json({ 
+        text: "Внимание: Нейросеть переведена в режим автономного накопления. Протоколы оптимизации стабильны. Продолжайте экспансию, Агент." 
+    });
 });
 
 app.get('/api/top', async (req, res) => {
