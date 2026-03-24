@@ -7,7 +7,7 @@ import session from 'express-session';
 import { Sequelize, DataTypes } from 'sequelize';
 import os from 'os';
 
-// Пакеты AdminJS
+// Пакеты AdminJS (Версия 7+)
 import AdminJS from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
@@ -120,7 +120,6 @@ app.get('/api/user/:id', async (req, res) => {
         const lastSeen = new Date(user.last_seen);
         const secondsOffline = Math.floor((now - lastSeen) / 1000);
 
-        // Офлайн прибыль
         if (secondsOffline > 60 && user.profit > 0) {
             const farmTime = Math.min(secondsOffline, 86400); 
             const earned = (user.profit / 3600) * farmTime; 
@@ -136,13 +135,18 @@ app.get('/api/user/:id', async (req, res) => {
 app.post('/api/save', async (req, res) => {
     try {
         const { id, ...data } = req.body;
-        if (data.balance) data.level = calculateLevel(data.balance);
+        if (!id) return res.status(400).send("ID required");
+        
+        if (data.balance !== undefined) {
+            data.level = calculateLevel(data.balance);
+        }
+        
         await User.update({ ...data, last_seen: new Date() }, { where: { id } });
         res.json({ ok: true });
     } catch (e) { res.status(500).send("Save Error"); }
 });
 
-// --- ADMIN PANEL ---
+// --- ADMIN PANEL (v7 Compatible) ---
 const startAdmin = async () => {
     try {
         const adminJs = new AdminJS({
@@ -155,6 +159,7 @@ const startAdmin = async () => {
             branding: { companyName: 'Neural Pulse Control', withMadeWithLove: false }
         });
 
+        // В AdminJS v7+ роутер подключается через app напрямую
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
                 if (email === '1' && password === '1') return { email: 'admin@pulse.com' };
@@ -162,10 +167,9 @@ const startAdmin = async () => {
             },
             cookieName: 'adminjs_session',
             cookiePassword: 'secure-cookie-password-2026-final',
-        }, null, sessionOptions);
+        }, app, sessionOptions); // Передаем app третьим аргументом
 
-        app.use(adminJs.options.rootPath, adminRouter);
-        console.log(`🚀 [ADMIN] Panel active at ${DOMAIN}/admin`);
+        console.log(`🚀 [ADMIN] Panel ready at ${DOMAIN}/admin`);
     } catch (e) { console.error(`[ADMIN ERROR]`, e); }
 };
 
@@ -198,7 +202,10 @@ bot.start(async (ctx) => {
                 if (referrer) {
                     referredBy = refId;
                     startBalance = 5000;
-                    await referrer.update({ balance: referrer.balance + 10000, referrals: referrer.referrals + 1 });
+                    await referrer.update({ 
+                        balance: referrer.balance + 10000, 
+                        referrals: referrer.referrals + 1 
+                    });
                     bot.telegram.sendMessage(refId, `💎 <b>Новый Агент!</b>\nВам начислено +10,000 NP.`, { parse_mode: 'HTML' }).catch(() => {});
                 }
             }
@@ -225,6 +232,9 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
         if (sessionStore) await sessionStore.sync().catch(() => {});
         await sequelize.sync({ alter: true }); 
         await startAdmin();
+        
+        // Переустановка вебхука для чистоты запуска
+        await bot.telegram.deleteWebhook();
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
         setInterval(collectMetrics, 15 * 60 * 1000);
