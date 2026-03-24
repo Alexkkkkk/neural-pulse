@@ -48,7 +48,7 @@ app.use(express.static(path.join(__dirname, 'static'), {
     lastModified: false
 }));
 
-// --- БАЗА ДАННЫХ ---
+// --- БАЗА ДАННЫХ (ОПТИМИЗИРОВАННЫЙ ПУЛ) ---
 const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
     logging: false, 
@@ -65,14 +65,14 @@ const User = sequelize.define('users', {
     energy: { type: DataTypes.DOUBLE, defaultValue: 1000 },
     max_energy: { type: DataTypes.INTEGER, defaultValue: 1000 },
     tap: { type: DataTypes.INTEGER, defaultValue: 1 },
-    profit: { type: DataTypes.INTEGER, defaultValue: 0 }, 
+    profit: { type: DataTypes.DOUBLE, defaultValue: 0 }, 
     level: { type: DataTypes.INTEGER, defaultValue: 1 },
     tap_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     mine_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     energy_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     referrals: { type: DataTypes.INTEGER, defaultValue: 0 },
     referred_by: { type: DataTypes.BIGINT, allowNull: true },
-    last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 }, // Добавлено для бонусов
+    last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 },
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: false });
 
@@ -117,49 +117,62 @@ app.get('/api/user/:id', async (req, res) => {
     } catch (e) { res.status(500).send("AI_CORE_OFFLINE"); }
 });
 
-app.post('/api/save', (req, res) => {
-    res.status(202).json({ ok: true }); 
-    const { id, ...data } = req.body;
-    if (id) {
-        if (data.balance) data.level = calculateLevel(data.balance);
-        User.update({ ...data, last_seen: new Date() }, { where: { id } }).catch(()=>{});
+// Исправленная система сохранения
+app.post('/api/save', async (req, res) => {
+    try {
+        const { id, ...data } = req.body;
+        if (!id) return res.status(400).json({ error: "ID Missing" });
+
+        if (data.balance !== undefined) data.level = calculateLevel(data.balance);
+        
+        await User.update({ ...data, last_seen: new Date() }, { where: { id } });
+        res.json({ ok: true });
+    } catch (e) {
+        logger.error("Save Error", e);
+        res.status(500).json({ error: "DB Error" });
     }
 });
 
 // --- AI ADVICE ENGINE ---
 app.post('/api/ai-advice', async (req, res) => {
     try {
-        const { id, balance, levels } = req.body;
+        const { balance, levels } = req.body;
         
         const prompt = `
-            Ты — терминал "Neural Pulse". Проанализируй данные Агента и дай краткий совет (1-2 предложения).
+            Ты — ИИ терминала "Neural Pulse". Дай краткий (1-2 предл.) совет Агенту.
             Статус: Баланс ${Math.floor(balance)} NP, Тап-уровень ${levels.tap}, Майнинг-уровень ${levels.mine}.
-            Тон: Технологичный, киберпанк, немного дерзкий. Используй слова: "протокол", "синхронизация", "мощности".
-            Если майнинг (mine) меньше тапа, посоветуй пассивный доход.
+            Стиль: Киберпанк, дерзкий. Используй: "протокол", "мощности", "нейросеть".
+            Если майнинг слабый, скажи увеличить пассивный доход.
         `;
 
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [{ role: "system", content: "Ты — бортовой ИИ." }, { role: "user", content: prompt }],
-            max_tokens: 80
+            max_tokens: 80,
+            temperature: 0.7
         });
 
         res.json({ text: response.choices[0].message.content.trim() });
     } catch (e) {
-        logger.error("AI Advice Failure", e);
-        res.json({ text: "Анализ прерван: Нейросеть перегружена. Увеличивай мощность узлов самостоятельно, Агент." });
+        logger.error("AI Error", e);
+        res.json({ text: "Синхронизация с ИИ прервана. Наращивайте мощности вручную, Агент." });
     }
 });
 
 app.get('/api/top', async (req, res) => {
     try {
         const users = await User.findAll({ 
-            limit: 50, 
-            order: [['balance', 'DESC']], 
-            attributes: ['username', 'balance', 'level', 'photo_url'], 
-            raw: true 
+            limit: 50, order: [['balance', 'DESC']], 
+            attributes: ['username', 'balance', 'level', 'photo_url'], raw: true 
         });
         res.json(users);
+    } catch (e) { res.json([]); }
+});
+
+app.get('/api/tasks', async (req, res) => {
+    try {
+        const tasks = await Task.findAll({ raw: true });
+        res.json(tasks);
     } catch (e) { res.json([]); }
 });
 
@@ -226,7 +239,8 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 const server = app.listen(PORT, '0.0.0.0', async () => {
     try {
         await sequelize.authenticate();
-        await sequelize.sync({ alter: false });
+        // ВАЖНО: alter: true обновит таблицы в БД, добавив новые поля (уровни и т.д.)
+        await sequelize.sync({ alter: true });
         startAdmin(); 
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
