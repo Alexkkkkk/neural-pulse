@@ -27,7 +27,7 @@ const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// --- СЕТЕВЫЕ НАСТРОЙКИ (Важно для Bothost/Proxy) ---
+// --- СЕТЕВЫЕ НАСТРОЙКИ (Критично для работы через прокси Bothost) ---
 app.set('trust proxy', 1); 
 app.use(cors());
 app.use(express.json());
@@ -39,7 +39,7 @@ app.use((req, res, next) => {
 });
 
 // --- ЕДИНАЯ НАСТРОЙКА СЕССИЙ ---
-const sessionMiddleware = session({
+const sessionOptions = {
     secret: 'neural_pulse_ultra_secret_2026',
     resave: true,
     saveUninitialized: true,
@@ -48,11 +48,12 @@ const sessionMiddleware = session({
     cookie: { 
         secure: true, 
         httpOnly: true, 
-        sameSite: 'none', // Для работы в Telegram iframe и через прокси
+        sameSite: 'none', // Обязательно для Telegram WebApp и прокси
         maxAge: 24 * 60 * 60 * 1000 
     }
-});
+};
 
+const sessionMiddleware = session(sessionOptions);
 app.use(sessionMiddleware);
 app.use(express.static(path.join(__dirname, 'static')));
 
@@ -130,31 +131,29 @@ const startAdmin = async () => {
             branding: { companyName: 'Neural Pulse Control', withMadeWithLove: false }
         });
 
-        // Используем общую сессию для аутентификации
-        const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
-            authenticate: async (email, password) => {
-                if (email === '1' && password === '1') {
-                    console.log(`[ADMIN] User ${email} authenticated successfully.`);
-                    return { email: 'admin@pulse.com' };
-                }
-                return null;
-            },
-            cookieName: 'adminjs_session',
-            cookiePassword: 'secure-cookie-password-2026-v2',
-        }, sessionMiddleware, { // Передаем общую middleware сессии сюда
-            resave: true, 
-            saveUninitialized: true, 
-            secret: 'neural_pulse_ultra_secret_2026', 
-            proxy: true, 
-            cookie: { 
-                secure: true,
-                sameSite: 'none' 
-            } 
-        });
+        // ИСПРАВЛЕНО: передаем express третьим аргументом
+        const adminRouter = AdminJSExpress.buildAuthenticatedRouter(
+            adminJs, 
+            {
+                authenticate: async (email, password) => {
+                    if (email === '1' && password === '1') {
+                        console.log(`[ADMIN] User authenticated successfully.`);
+                        return { email: 'admin@pulse.com' };
+                    }
+                    return null;
+                },
+                cookieName: 'adminjs_session',
+                cookiePassword: 'secure-cookie-password-2026-v2',
+            }, 
+            express, // Обязательный аргумент для актуальных версий
+            sessionOptions // Используем общие настройки сессии
+        );
 
-        app.use(adminJs.options.rootPath, router);
+        app.use(adminJs.options.rootPath, adminRouter);
         console.log(`--- [ADMIN] AdminJS panel ready ---`);
-    } catch (e) { console.error(`[ADMIN ERROR]`, e); }
+    } catch (e) { 
+        console.error(`[ADMIN ERROR]`, e); 
+    }
 };
 
 // --- MONITORING ---
