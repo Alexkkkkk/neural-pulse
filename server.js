@@ -19,7 +19,8 @@ const __dirname = path.dirname(__filename);
 AdminJS.registerAdapter(AdminJSSequelize);
 
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
-const PG_URI = "postgresql://bothost_db_db5b342fc026:gwp3jv20PY7JtERt4cNIvSpReq8YpLYzlH99BY5vyc4@node1.pghost.ru:32867/bothost_db_db5b342fc026";
+// НОВАЯ БАЗА ДАННЫХ ПОДКЛЮЧЕНА:
+const PG_URI = "postgresql://bothost_db_130943b4f3f6:oY6CieQ5aohyTLgU9i23M6w80naZt9_1mJ4V6roejTs@node1.pghost.ru:32834/bothost_db_130943b4f3f6";
 const DOMAIN = "https://np.bothost.tech"; 
 const PORT = 3000;
 
@@ -42,9 +43,8 @@ const sequelize = new Sequelize(PG_URI, {
     dialectOptions: { ssl: false } 
 });
 
-// --- МОДЕЛИ (ИСПРАВЛЕНО) ---
+// --- МОДЕЛИ (С ИСПРАВЛЕНИЕМ PRIMARY KEY) ---
 const User = sequelize.define('users', {
-    // Исправлено: добавлен primaryKey: true для корректного запуска
     id: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: false },
     username: { type: DataTypes.STRING },
     photo_url: { type: DataTypes.TEXT },
@@ -57,7 +57,7 @@ const User = sequelize.define('users', {
 }, { timestamps: false });
 
 const Task = sequelize.define('tasks', {
-    id: { type: DataTypes.INTEGER, primary_key: true, primaryKey: true, autoIncrement: true },
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     title: { type: DataTypes.STRING, allowNull: false },
     reward: { type: DataTypes.INTEGER, defaultValue: 1000 },
     url: { type: DataTypes.STRING }
@@ -92,7 +92,7 @@ const collectMetrics = async () => {
     } catch (e) { console.error("Metrics error:", e); }
 };
 
-// --- ADMIN JS (МАКСИМАЛЬНЫЙ ТЮНИНГ) ---
+// --- ADMIN JS (Dashboard включен) ---
 const startAdmin = async () => {
     try {
         const adminJs = new AdminJS({
@@ -139,7 +139,7 @@ const startAdmin = async () => {
     } catch (e) { console.error(`[ERR ADMIN]`, e); }
 };
 
-// --- API ---
+// --- API ЭНДПОИНТЫ ---
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     const { username, photo_url } = req.query;
@@ -181,7 +181,7 @@ app.get('/api/tasks', async (req, res) => {
     } catch (e) { res.status(500).send("Tasks Error"); }
 });
 
-// --- ЗАПУСК ---
+// --- BOT ---
 bot.start((ctx) => {
     ctx.reply(`<b>Neural Pulse | Terminal</b>`, {
         parse_mode: 'HTML',
@@ -195,13 +195,13 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 app.listen(PORT, async () => {
     try {
         await sequelize.authenticate();
-        await sequelize.sync({ alter: true });
+        await sequelize.sync({ alter: true }); // Автоматически создаст таблицы в новой базе
         await startAdmin();
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
         setInterval(collectMetrics, 15 * 60 * 1000); 
         collectMetrics();
 
-        console.log(`🚀 [MAX-MODE] System Online`);
-    } catch (err) { console.error(err); }
+        console.log(`🚀 [MAX-MODE] System Online on New DB`);
+    } catch (err) { console.error("Startup Error:", err); }
 });
