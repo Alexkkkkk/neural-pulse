@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
 import session from 'express-session';
-import { Sequelize, DataTypes } from 'sequelize';
+import { Sequelize, DataTypes, Op } from 'sequelize';
 import os from 'os';
 
 // Пакеты AdminJS
@@ -25,14 +25,17 @@ const PORT = process.env.PORT || 3000;
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
-const sequelize = new Sequelize(PG_URI, { dialect: 'postgres', logging: false, dialectOptions: { ssl: false } });
+const sequelize = new Sequelize(PG_URI, { 
+    dialect: 'postgres', 
+    logging: false, 
+    dialectOptions: { ssl: false },
+    pool: { max: 5, min: 0, acquire: 30000, idle: 10000 }
+});
 
 // --- БЕЗОПАСНАЯ ИНИЦИАЛИЗАЦИЯ ХРАНИЛИЩА ---
 let sessionStore = null;
-
 async function initSession() {
     try {
-        // Используем динамический импорт, чтобы избежать ошибки при запуске
         const { default: connectSessionSequelize } = await import('connect-session-sequelize');
         const SequelizeStore = connectSessionSequelize(session.Store);
         sessionStore = new SequelizeStore({ db: sequelize, tableName: 'sessions' });
@@ -41,7 +44,6 @@ async function initSession() {
         console.log('⚠️ [WARNING] connect-session-sequelize not found. Using MemoryStore.');
     }
 }
-
 await initSession();
 
 app.set('trust proxy', 1); 
@@ -71,6 +73,7 @@ const User = sequelize.define('users', {
     max_energy: { type: DataTypes.INTEGER, defaultValue: 1000 },
     tap: { type: DataTypes.INTEGER, defaultValue: 1 },
     profit: { type: DataTypes.INTEGER, defaultValue: 0 }, 
+    level: { type: DataTypes.INTEGER, defaultValue: 1 }, // Новое поле
     tap_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     mine_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     energy_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
@@ -95,6 +98,15 @@ const Stats = sequelize.define('stats', {
     mem_usage: { type: DataTypes.FLOAT }
 }, { timestamps: false });
 
+// --- UTILS ---
+const calculateLevel = (balance) => {
+    if (balance < 10000) return 1;
+    if (balance < 50000) return 2;
+    if (balance < 200000) return 3;
+    if (balance < 1000000) return 4;
+    return 5;
+};
+
 // --- API ---
 app.get('/api/user/:id', async (req, res) => {
     try {
@@ -113,6 +125,8 @@ app.get('/api/user/:id', async (req, res) => {
             const earned = (user.profit / 3600) * farmTime; 
             user.balance += parseFloat(earned.toFixed(2));
             user.last_seen = now;
+            // Обновляем уровень при начислении прибыли
+            user.level = calculateLevel(user.balance);
             await user.save();
         }
         res.json(user);
@@ -121,7 +135,11 @@ app.get('/api/user/:id', async (req, res) => {
 
 app.post('/api/save', async (req, res) => {
     try {
-        await User.update({ ...req.body, last_seen: new Date() }, { where: { id: req.body.id } });
+        const { id, ...updateData } = req.body;
+        if (updateData.balance) {
+            updateData.level = calculateLevel(updateData.balance);
+        }
+        await User.update({ ...updateData, last_seen: new Date() }, { where: { id } });
         res.json({ ok: true });
     } catch (e) { res.status(500).send("Save Error"); }
 });
@@ -149,7 +167,7 @@ const startAdmin = async () => {
         }, null, sessionOptions);
 
         app.use(adminJs.options.rootPath, adminRouter);
-        console.log(`🚀 [ADMIN] Panel active`);
+        console.log(`🚀 [ADMIN] Panel active at ${DOMAIN}/admin`);
     } catch (e) { console.error(`[ADMIN ERROR]`, e); }
 };
 
@@ -183,25 +201,25 @@ bot.start(async (ctx) => {
                     referredBy = refId;
                     startBalance = 5000;
                     await referrer.update({ balance: referrer.balance + 10000, referrals: referrer.referrals + 1 });
-                    bot.telegram.sendMessage(refId, `💎 <b>Новый Агент!</b>\n+10,000 NP.`, { parse_mode: 'HTML' }).catch(() => {});
+                    bot.telegram.sendMessage(refId, `💎 <b>Новый Агент!</b>\n+10,000 NP за приглашение.`, { parse_mode: 'HTML' }).catch(() => {});
                 }
             }
             user = await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: startBalance, referred_by: referredBy });
         }
 
         ctx.replyWithPhoto({ source: photoPath }, {
-            caption: `<b>Neural Pulse | Terminal</b>\n\nДобро пожаловать. Твоя нейросеть готова к работе.\n\n🎁 Реф. ссылка:\n<code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`,
+            caption: `<b>Neural Pulse | Terminal</b>\n\nДобро пожаловать, Агент. Твоя нейросеть готова к работе.\n\n🎁 Реф. ссылка:\n<code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`,
             parse_mode: 'HTML',
             ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])
         });
-    } catch (e) { ctx.reply("System Online."); }
+    } catch (e) { ctx.reply("System Online.", Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])); }
 });
 
 const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
 app.use(bot.webhookCallback(WEBHOOK_PATH));
 
 // --- RUN ---
-app.listen(PORT, '0.0.0.0', async () => {
+const server = app.listen(PORT, '0.0.0.0', async () => {
     try {
         await sequelize.authenticate();
         if (sessionStore) await sessionStore.sync().catch(() => {});
@@ -214,4 +232,12 @@ app.listen(PORT, '0.0.0.0', async () => {
         
         console.log(`🚀 [SYSTEM ONLINE]`);
     } catch (err) { console.error("Startup Failure:", err); }
+});
+
+// Бережное закрытие при остановке
+process.on('SIGTERM', () => {
+    server.close(async () => {
+        await sequelize.close();
+        process.exit(0);
+    });
 });
