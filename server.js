@@ -7,22 +7,23 @@ import session from 'express-session';
 import { Sequelize, DataTypes } from 'sequelize';
 import os from 'os';
 
-// --- ДИНАМИЧЕСКИЙ ИМПОРТ ХРАНИЛИЩА ---
-let connectSessionSequelize;
-try {
-    const mod = await import('connect-session-sequelize');
-    connectSessionSequelize = mod.default;
-    console.log('--- [STORAGE] connect-session-sequelize detected ---');
-} catch (e) {
-    console.log('--- [WARNING] connect-session-sequelize not found. Using MemoryStore. ---');
-}
-
+// Пакеты AdminJS
 import AdminJS from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// --- ДИНАМИЧЕСКИЙ ИМПОРТ ХРАНИЛИЩА (БЕЗОПАСНЫЙ) ---
+let connectSessionSequelize = null;
+try {
+    const mod = await import('connect-session-sequelize');
+    connectSessionSequelize = mod.default;
+    console.log('✅ [STORAGE] connect-session-sequelize detected.');
+} catch (e) {
+    console.log('⚠️ [WARNING] connect-session-sequelize not found. Using MemoryStore.');
+}
 
 AdminJS.registerAdapter(AdminJSSequelize);
 
@@ -36,16 +37,11 @@ const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 const sequelize = new Sequelize(PG_URI, { dialect: 'postgres', logging: false, dialectOptions: { ssl: false } });
 
-// --- SESSION STORE ---
+// --- SESSION CONFIG ---
 let sessionStore = null;
 if (connectSessionSequelize) {
     const SequelizeStore = connectSessionSequelize(session.Store);
-    sessionStore = new SequelizeStore({ 
-        db: sequelize, 
-        tableName: 'sessions',
-        checkExpirationInterval: 15 * 60 * 1000,
-        expiration: 24 * 60 * 60 * 1000 
-    });
+    sessionStore = new SequelizeStore({ db: sequelize, tableName: 'sessions' });
 }
 
 app.set('trust proxy', 1); 
@@ -79,7 +75,7 @@ const User = sequelize.define('users', {
     mine_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     energy_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     referrals: { type: DataTypes.INTEGER, defaultValue: 0 },
-    referred_by: { type: DataTypes.BIGINT, allowNull: true }, // КТО пригласил
+    referred_by: { type: DataTypes.BIGINT, allowNull: true },
     last_bonus: { type: DataTypes.DATE },
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: false });
@@ -96,11 +92,10 @@ const Stats = sequelize.define('stats', {
     timestamp: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
     user_count: { type: DataTypes.INTEGER },
     server_load: { type: DataTypes.FLOAT },
-    mem_usage: { type: DataTypes.FLOAT },
-    db_response_time: { type: DataTypes.INTEGER }
+    mem_usage: { type: DataTypes.FLOAT }
 }, { timestamps: false });
 
-// --- API С ЛОГИКОЙ ОФЛАЙН-ПРИБЫЛИ ---
+// --- API (OFFLINE PROFIT) ---
 app.get('/api/user/:id', async (req, res) => {
     try {
         let user = await User.findByPk(req.params.id);
@@ -114,14 +109,13 @@ app.get('/api/user/:id', async (req, res) => {
         const secondsOffline = Math.floor((now - lastSeen) / 1000);
 
         if (secondsOffline > 60 && user.profit > 0) {
-            const farmTime = Math.min(secondsOffline, 86400); 
+            const farmTime = Math.min(secondsOffline, 86400); // Лимит 24 часа
             const earned = (user.profit / 3600) * farmTime; 
-            
             user.balance += parseFloat(earned.toFixed(2));
             user.last_seen = now;
             await user.save();
+            console.log(`[FARM] User ${user.id} earned ${earned.toFixed(2)}`);
         }
-
         res.json(user);
     } catch (e) { res.status(500).send("DB Error"); }
 });
@@ -131,10 +125,6 @@ app.post('/api/save', async (req, res) => {
         await User.update({ ...req.body, last_seen: new Date() }, { where: { id: req.body.id } });
         res.json({ ok: true });
     } catch (e) { res.status(500).send("Save Error"); }
-});
-
-app.get('/api/tasks', async (req, res) => {
-    try { res.json(await Task.findAll()); } catch (e) { res.status(500).send("Error"); }
 });
 
 // --- ADMIN ---
@@ -160,7 +150,7 @@ const startAdmin = async () => {
         }, null, sessionOptions);
 
         app.use(adminJs.options.rootPath, adminRouter);
-        console.log(`--- [ADMIN] AdminJS panel ready at /admin ---`);
+        console.log(`--- [ADMIN] AdminJS panel ready ---`);
     } catch (e) { console.error(`[ADMIN ERROR]`, e); }
 };
 
@@ -171,13 +161,12 @@ const collectMetrics = async () => {
         await Stats.create({
             user_count: userCount,
             server_load: parseFloat((os.loadavg()[0] * 10).toFixed(2)),
-            mem_usage: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2)),
-            db_response_time: 0
+            mem_usage: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2))
         });
-    } catch (e) { console.log("Metrics collection skipped."); }
+    } catch (e) { console.log("Metrics skip..."); }
 };
 
-// --- BOT LOGIC (REFERRALS) ---
+// --- BOT START (REFERRALS) ---
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
     const refId = ctx.startPayload ? parseInt(ctx.startPayload) : null;
@@ -185,9 +174,7 @@ bot.start(async (ctx) => {
 
     try {
         let user = await User.findByPk(userId);
-        
         if (!user) {
-            // Новый пользователь
             let startBalance = 0;
             let referredBy = null;
 
@@ -195,36 +182,20 @@ bot.start(async (ctx) => {
                 const referrer = await User.findByPk(refId);
                 if (referrer) {
                     referredBy = refId;
-                    startBalance = 5000; // Бонус новичку
-                    
-                    // Начисляем бонус пригласившему
-                    await referrer.update({
-                        balance: referrer.balance + 10000,
-                        referrals: referrer.referrals + 1
-                    });
-                    
-                    bot.telegram.sendMessage(refId, `💎 <b>Новый Агент!</b>\nПо вашей ссылке зашел новый участник. Вам начислено 10,000 NP.`, { parse_mode: 'HTML' }).catch(() => {});
+                    startBalance = 5000;
+                    await referrer.update({ balance: referrer.balance + 10000, referrals: referrer.referrals + 1 });
+                    bot.telegram.sendMessage(refId, `💎 <b>Новый Агент!</b>\nПо вашей ссылке зашел участник. +10,000 NP.`, { parse_mode: 'HTML' }).catch(() => {});
                 }
             }
-
-            user = await User.create({
-                id: userId,
-                username: ctx.from.username || 'AGENT',
-                balance: startBalance,
-                referred_by: referredBy
-            });
+            user = await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: startBalance, referred_by: referredBy });
         }
 
         ctx.replyWithPhoto({ source: photoPath }, {
-            caption: `<b>Neural Pulse | Terminal</b>\n\nДобро пожаловать, Агент. Твоя нейросеть готова к работе.\n\n🎁 Твоя реф. ссылка:\n<code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`,
+            caption: `<b>Neural Pulse | Terminal</b>\n\nДобро пожаловать, Агент. Твоя нейросеть готова к работе.\n\n🎁 Реф. ссылка:\n<code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`,
             parse_mode: 'HTML',
             ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])
         });
-
-    } catch (e) {
-        console.error(e);
-        ctx.reply("System Error. Try again later.");
-    }
+    } catch (e) { ctx.reply("System Error."); }
 });
 
 const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
