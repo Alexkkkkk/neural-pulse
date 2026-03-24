@@ -25,17 +25,25 @@ const logger = {
 };
 
 // --- CONFIG ---
-const OPENAI_API_KEY = "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";
+// ВНИМАНИЕ: Используй новый рабочий ключ. 
+const OPENAI_API_KEY = "ТВОЙ_НОВЫЙ_КЛЮЧ"; 
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const PG_URI = "postgresql://bothost_db_130943b4f3f6:oY6CieQ5aohyTLgU9i23M6w80naZt9_1mJ4V6roejTs@node1.pghost.ru:32834/bothost_db_130943b4f3f6";
 const DOMAIN = "https://np.bothost.tech"; 
 const PORT = process.env.PORT || 3000;
 
-const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+// Инициализация OpenAI с обработкой ошибок
+let openai;
+try {
+    openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+} catch (e) {
+    logger.error("OpenAI Init Failed", e);
+}
+
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// --- УЛЬТРА ОПТИМИЗАЦИЯ EXPRESS ---
+// --- ОПТИМИЗАЦИЯ EXPRESS ---
 app.disable('x-powered-by'); 
 app.disable('etag'); 
 app.set('trust proxy', 1);
@@ -72,7 +80,7 @@ const User = sequelize.define('users', {
     energy_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     referrals: { type: DataTypes.INTEGER, defaultValue: 0 },
     referred_by: { type: DataTypes.BIGINT, allowNull: true },
-    last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 }, // Исправлено на BIGINT
+    last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 }, 
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: false });
 
@@ -99,13 +107,16 @@ app.get('/api/user/:id', async (req, res) => {
     try {
         const user = await User.findByPk(req.params.id);
         if (!user) {
-            const newUser = await User.create({ id: req.params.id, username: req.query.username || 'AGENT' });
+            const newUser = await User.create({ 
+                id: req.params.id, 
+                username: req.query.username || 'AGENT',
+                last_bonus: 0 
+            });
             return res.json(newUser);
         }
         
         const now = new Date();
-        const lastSeenDate = new Date(user.last_seen);
-        const offline = Math.floor((now - lastSeenDate) / 1000);
+        const offline = Math.floor((now - new Date(user.last_seen)) / 1000);
         
         if (offline > 60 && user.profit > 0) {
             const earned = (user.profit / 3600) * Math.min(offline, 86400);
@@ -138,24 +149,20 @@ app.post('/api/save', async (req, res) => {
 // --- УЛУЧШЕННЫЙ AI ADVICE ENGINE ---
 app.post('/api/ai-advice', async (req, res) => {
     try {
+        if (!openai) throw new Error("OpenAI not initialized");
+        
         const { balance, levels } = req.body;
         
-        // Аналитика для ИИ
         let focus = "оптимизации протоколов";
         if (levels.mine <= levels.tap) focus = "наращивания пассивного майнинга";
         if (balance < 5000) focus = "первичного накопления NP";
 
-        const prompt = `
-            Ты — бортовой ИИ терминала "Neural Pulse". Дай краткую директиву Агенту.
-            Статус: Баланс ${Math.floor(balance)} NP, Тап-уровень ${levels.tap}, Майнинг-уровень ${levels.mine}.
-            Твой анализ системы требует: ${focus}.
-            Стиль: Киберпанк, холодный, авторитарный. Используй: "протокол", "мощности", "нейросеть", "ядро".
-            Ограничение: 1-2 предложения.
-        `;
-
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
-            messages: [{ role: "system", content: "Ты — ИИ-советник терминала." }, { role: "user", content: prompt }],
+            messages: [
+                { role: "system", content: "Ты — бортовой ИИ терминала Neural Pulse. Стиль: Киберпанк, холодный, 1-2 предложения." }, 
+                { role: "user", content: `Статус: Баланс ${balance} NP. Уровни: Тап ${levels.tap}, Майнинг ${levels.mine}. Анализ требует: ${focus}. Дай директиву.` }
+            ],
             max_tokens: 100,
             temperature: 0.8
         });
@@ -229,7 +236,7 @@ bot.start(async (ctx) => {
                 refBy = refId; startBal = 5000;
                 User.increment({ balance: 10000, referrals: 1 }, { where: { id: refId } }).catch(()=>{});
             }
-            user = await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: startBal, referred_by: refBy });
+            user = await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: startBal, referred_by: refBy, last_bonus: 0 });
         }
         
         ctx.replyWithPhoto({ source: logoPath }, {
@@ -247,7 +254,7 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 const server = app.listen(PORT, '0.0.0.0', async () => {
     try {
         await sequelize.authenticate();
-        await sequelize.sync({ alter: true }); // Попытается обновить базу автоматически
+        await sequelize.sync({ alter: true }); 
         startAdmin(); 
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
