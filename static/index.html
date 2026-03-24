@@ -23,6 +23,21 @@
         .top-avatar { width: 30px; height: 30px; border-radius: 50%; margin-right: 10px; border: 1px solid cyan; }
         .top-info { display: flex; align-items: center; }
         .loading { text-align: center; padding: 20px; color: cyan; animation: pulse 1.5s infinite; }
+        
+        /* Анимация всплывающих цифр при тапе */
+        .pop {
+            position: absolute;
+            color: cyan;
+            font-weight: bold;
+            font-size: 24px;
+            pointer-events: none;
+            animation: moveUp 0.6s ease-out forwards;
+            z-index: 9999;
+        }
+        @keyframes moveUp {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-100px); opacity: 0; }
+        }
     </style>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
@@ -118,12 +133,10 @@
                     });
                 } catch(e) { console.log("TonConnect Error", e); }
 
-                // Полная загрузка данных
                 try {
                     const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(u.username || u.first_name)}&photo_url=${encodeURIComponent(u.photo_url || '')}`);
                     if (r.ok) {
                         const db = await r.json();
-                        // Важно: сливаем данные из БД с дефолтными
                         this.data = { ...this.data, ...db };
                         if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
                     }
@@ -174,11 +187,20 @@
                     }
                     
                     ui.render();
-                    await this.save(); // Принудительное сохранение после покупки
+                    await this.save(); 
                     ui.openM(type === 'mine' ? 'mine' : 'boost');
                 } else {
                     tg.showAlert("НЕДОСТАТОЧНО NP");
                 }
+            },
+
+            async claimTask(reward, taskId) {
+                // В реальности тут должен быть запрос к серверу для проверки выполнения
+                this.data.balance += reward;
+                ui.render();
+                tg.showAlert(`Миссия выполнена! +${reward} NP`);
+                await this.save();
+                ui.openM('tasks'); 
             },
 
             async save() {
@@ -195,18 +217,15 @@
 
             loop() {
                 setInterval(() => {
-                    // Регенерация энергии
                     if(this.data.energy < this.data.max_energy) {
                         this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1.5);
                     }
-                    // Пассивный доход
                     if(this.data.profit > 0) {
                         this.data.balance += (this.data.profit / 3600);
                     }
                     ui.render();
                 }, 1000);
                 
-                // Авто-сохранение каждые 20 секунд
                 setInterval(() => this.save(), 20000);
             }
         };
@@ -281,7 +300,7 @@
                         tasks.forEach(t => {
                             b.innerHTML += `<div class="task-item">
                                 <span>${t.title}</span>
-                                <button class="task-btn" onclick="tg.openLink('${t.url}')">+${t.reward}</button>
+                                <button class="task-btn" onclick="tg.openLink('${t.url}'); game.claimTask(${t.reward}, ${t.id})">+${t.reward}</button>
                             </div>`;
                         });
                     } catch(e) { b.innerHTML += `<p>Error loading tasks</p>`; }
