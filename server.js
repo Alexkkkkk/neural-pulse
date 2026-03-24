@@ -7,7 +7,7 @@ import session from 'express-session';
 import { Sequelize, DataTypes } from 'sequelize';
 import os from 'os';
 
-// --- ДИНАМИЧЕСКИЙ ИМПОРТ ---
+// --- ДИНАМИЧЕСКИЙ ИМПОРТ ХРАНИЛИЩА ---
 let connectSessionSequelize;
 try {
     const mod = await import('connect-session-sequelize');
@@ -74,11 +74,12 @@ const User = sequelize.define('users', {
     energy: { type: DataTypes.DOUBLE, defaultValue: 1000 },
     max_energy: { type: DataTypes.INTEGER, defaultValue: 1000 },
     tap: { type: DataTypes.INTEGER, defaultValue: 1 },
-    profit: { type: DataTypes.INTEGER, defaultValue: 0 }, // Прибыль в секунду (или в час, смотря как настроишь)
+    profit: { type: DataTypes.INTEGER, defaultValue: 0 }, 
     tap_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     mine_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     energy_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     referrals: { type: DataTypes.INTEGER, defaultValue: 0 },
+    referred_by: { type: DataTypes.BIGINT, allowNull: true }, // КТО пригласил
     last_bonus: { type: DataTypes.DATE },
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: false });
@@ -108,21 +109,17 @@ app.get('/api/user/:id', async (req, res) => {
             return res.json(user);
         }
 
-        // РАСЧЕТ ОФЛАЙН ДОХОДА
         const now = new Date();
         const lastSeen = new Date(user.last_seen);
         const secondsOffline = Math.floor((now - lastSeen) / 1000);
 
         if (secondsOffline > 60 && user.profit > 0) {
-            // Ограничиваем фарм 24 часами (86400 сек)
             const farmTime = Math.min(secondsOffline, 86400); 
-            const earned = (user.profit / 3600) * farmTime; // Если profit указан "в час"
+            const earned = (user.profit / 3600) * farmTime; 
             
             user.balance += parseFloat(earned.toFixed(2));
             user.last_seen = now;
             await user.save();
-            
-            console.log(`[FARM] User ${user.id} earned ${earned.toFixed(2)} while offline`);
         }
 
         res.json(user);
@@ -180,14 +177,54 @@ const collectMetrics = async () => {
     } catch (e) { console.log("Metrics collection skipped."); }
 };
 
-// --- BOT ---
+// --- BOT LOGIC (REFERRALS) ---
 bot.start(async (ctx) => {
+    const userId = ctx.from.id;
+    const refId = ctx.startPayload ? parseInt(ctx.startPayload) : null;
     const photoPath = path.join(__dirname, 'static/images/logo.png');
-    ctx.replyWithPhoto({ source: photoPath }, {
-        caption: `<b>Neural Pulse | Terminal</b>\n\nДобро пожаловать, Агент. Твоя нейросеть готова к работе.`,
-        parse_mode: 'HTML',
-        ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])
-    }).catch(() => ctx.reply("System Online", Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])));
+
+    try {
+        let user = await User.findByPk(userId);
+        
+        if (!user) {
+            // Новый пользователь
+            let startBalance = 0;
+            let referredBy = null;
+
+            if (refId && refId !== userId) {
+                const referrer = await User.findByPk(refId);
+                if (referrer) {
+                    referredBy = refId;
+                    startBalance = 5000; // Бонус новичку
+                    
+                    // Начисляем бонус пригласившему
+                    await referrer.update({
+                        balance: referrer.balance + 10000,
+                        referrals: referrer.referrals + 1
+                    });
+                    
+                    bot.telegram.sendMessage(refId, `💎 <b>Новый Агент!</b>\nПо вашей ссылке зашел новый участник. Вам начислено 10,000 NP.`, { parse_mode: 'HTML' }).catch(() => {});
+                }
+            }
+
+            user = await User.create({
+                id: userId,
+                username: ctx.from.username || 'AGENT',
+                balance: startBalance,
+                referred_by: referredBy
+            });
+        }
+
+        ctx.replyWithPhoto({ source: photoPath }, {
+            caption: `<b>Neural Pulse | Terminal</b>\n\nДобро пожаловать, Агент. Твоя нейросеть готова к работе.\n\n🎁 Твоя реф. ссылка:\n<code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`,
+            parse_mode: 'HTML',
+            ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])
+        });
+
+    } catch (e) {
+        console.error(e);
+        ctx.reply("System Error. Try again later.");
+    }
 });
 
 const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
@@ -197,18 +234,13 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 app.listen(PORT, '0.0.0.0', async () => {
     try {
         await sequelize.authenticate();
-        console.log('--- [DB] Connection established ---');
-
-        if (sessionStore) {
-            await sessionStore.sync().catch(e => console.log("Session sync skip"));
-        }
-        
+        if (sessionStore) await sessionStore.sync().catch(() => {});
         await sequelize.sync({ alter: true }); 
         await startAdmin();
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
         setInterval(collectMetrics, 15 * 60 * 1000);
-        setTimeout(collectMetrics, 10000); 
+        setTimeout(collectMetrics, 5000); 
         
         console.log(`🚀 [SYSTEM ONLINE]`);
     } catch (err) { console.error("Startup Failure:", err); }
