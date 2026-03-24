@@ -7,7 +7,7 @@ import session from 'express-session';
 import { Sequelize, DataTypes } from 'sequelize';
 import os from 'os';
 
-// Пакеты AdminJS (Версия 7+)
+// Пакеты AdminJS (v7+)
 import AdminJS from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
@@ -15,7 +15,7 @@ import * as AdminJSSequelize from '@adminjs/sequelize';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Регистрация адаптера для работы AdminJS с Sequelize
+// Регистрация адаптера
 AdminJS.registerAdapter(AdminJSSequelize);
 
 // --- CONFIG ---
@@ -42,7 +42,7 @@ async function initSession() {
         sessionStore = new SequelizeStore({ db: sequelize, tableName: 'sessions' });
         console.log('✅ [STORAGE] Session store initialized.');
     } catch (e) {
-        console.log('⚠️ [WARNING] Could not init SequelizeStore. Using MemoryStore.');
+        console.log('⚠️ [WARNING] SessionStore init failed. Admin access might be unstable.');
     }
 }
 await initSession();
@@ -67,8 +67,6 @@ const sessionOptions = {
 };
 
 app.use(session(sessionOptions));
-
-// Раздача статики (папка static должна быть в корне)
 app.use(express.static(path.join(__dirname, 'static')));
 
 // --- MODELS ---
@@ -144,11 +142,7 @@ app.post('/api/save', async (req, res) => {
     try {
         const { id, ...data } = req.body;
         if (!id) return res.status(400).send("ID required");
-        
-        if (data.balance !== undefined) {
-            data.level = calculateLevel(data.balance);
-        }
-        
+        if (data.balance !== undefined) data.level = calculateLevel(data.balance);
         await User.update({ ...data, last_seen: new Date() }, { where: { id } });
         res.json({ ok: true });
     } catch (e) { res.status(500).send("Save Error"); }
@@ -164,20 +158,23 @@ const startAdmin = async () => {
                 { resource: Stats, options: { navigation: { name: 'Метрики' } } }
             ],
             rootPath: '/admin',
-            branding: { companyName: 'Neural Pulse Control', withMadeWithLove: false }
+            branding: { companyName: 'Neural Pulse Control', withMadeWithLove: false },
+            // Отключаем динамический билд для стабильности на хостинге
+            bundler: { enabled: false }
         });
 
-        AdminJSExpress.buildAuthenticatedRouter(adminJs, {
+        const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
                 if (email === '1' && password === '1') return { email: 'admin@pulse.com' };
                 return null;
             },
             cookieName: 'adminjs_session',
             cookiePassword: 'secure-cookie-password-2026-final',
-        }, app, sessionOptions); 
+        }, null, sessionOptions);
 
-        console.log(`🚀 [ADMIN] Panel active at ${DOMAIN}/admin`);
-    } catch (e) { console.error(`[ADMIN ERROR]`, e); }
+        app.use(adminJs.options.rootPath, adminRouter);
+        console.log(`🚀 [ADMIN] Panel ready at ${DOMAIN}/admin`);
+    } catch (e) { console.error(`❌ [ADMIN ERROR]`, e); }
 };
 
 // --- MONITORING ---
@@ -216,12 +213,7 @@ bot.start(async (ctx) => {
                     bot.telegram.sendMessage(refId, `💎 <b>Новый Агент!</b>\nВам начислено +10,000 NP.`, { parse_mode: 'HTML' }).catch(() => {});
                 }
             }
-            user = await User.create({ 
-                id: userId, 
-                username: ctx.from.username || 'AGENT', 
-                balance: startBalance, 
-                referred_by: referredBy 
-            });
+            user = await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: startBalance, referred_by: referredBy });
         }
 
         ctx.replyWithPhoto({ source: photoPath }, {
@@ -243,12 +235,13 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
         await sequelize.authenticate();
         if (sessionStore) await sessionStore.sync().catch(() => {});
         await sequelize.sync({ alter: true }); 
+        
+        // Сначала запускаем админку, потом вебхук
         await startAdmin();
         
         await bot.telegram.deleteWebhook().catch(() => {});
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
-        // Интервалы
         setInterval(collectMetrics, 15 * 60 * 1000);
         setTimeout(collectMetrics, 5000); 
         
