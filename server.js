@@ -41,11 +41,13 @@ const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
+
+// ОПТИМИЗАЦИЯ БД: logging: false для скорости и увеличенный пул соединений
 const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
-    logging: (msg) => logger.info(`[DB] ${msg.substring(0, 100)}...`),
-    dialectOptions: { ssl: false },
-    pool: { max: 10, min: 2, acquire: 30000, idle: 10000 }
+    logging: false, // Отключено для ускорения обработки запросов
+    dialectOptions: { ssl: false, connectTimeout: 60000 },
+    pool: { max: 20, min: 5, acquire: 30000, idle: 10000 }
 });
 
 // --- СИСТЕМА СЕССИЙ ---
@@ -62,20 +64,11 @@ async function initSession() {
 }
 await initSession();
 
-// ВАЖНО: Доверяем прокси Bothost для работы куки
 app.set('trust proxy', 1); 
 app.use(cors());
 app.use(express.json());
 
-// Логирование трафика
-app.use((req, res, next) => {
-    if (!req.url.startsWith('/admin')) {
-        logger.info(`TRAFFIC: ${req.method} ${req.url}`);
-    }
-    next();
-});
-
-// Настройки сессии исправлены для стабильного входа
+// Настройки сессии
 const sessionOptions = {
     secret: 'neural_pulse_ultra_secret_2026',
     store: sessionStore, 
@@ -84,7 +77,7 @@ const sessionOptions = {
     proxy: true,
     name: 'neural_pulse_sid',
     cookie: { 
-        secure: false, // Изменено на false для корректной работы на Bothost
+        secure: false, 
         httpOnly: true, 
         sameSite: 'lax', 
         maxAge: 24 * 60 * 60 * 1000 
@@ -92,7 +85,9 @@ const sessionOptions = {
 };
 
 app.use(session(sessionOptions));
-app.use(express.static(path.join(__dirname, 'static')));
+
+// ОПТИМИЗАЦИЯ СТАТИКИ: кэширование на стороне браузера (1 день)
+app.use(express.static(path.join(__dirname, 'static'), { maxAge: '1d' }));
 
 // --- MODELS ---
 const User = sequelize.define('users', {
@@ -130,45 +125,6 @@ const Stats = sequelize.define('stats', {
     mem_usage: { type: DataTypes.FLOAT }
 }, { timestamps: false });
 
-// --- AI CORE & MODERATION ---
-const AIEngine = {
-    async getGlobalReport() {
-        try {
-            const count = await User.count();
-            const top = await User.findAll({ limit: 10, order: [['balance', 'DESC']] });
-            const suspects = await User.count({ where: { status: 'suspected' } });
-            
-            logger.ai('Executing Deep Analysis...');
-            const completion = await openai.chat.completions.create({
-                model: "gpt-4o-mini",
-                messages: [
-                    { role: "system", content: "Ты — Центральный Процессор Neural Pulse. Сделай краткий технический аудит системы. Используй термины: ликвидность, аномалии, прогноз." },
-                    { role: "user", content: `Игроков: ${count}. Подозрительных: ${suspects}. Данные топа: ${JSON.stringify(top)}` }
-                ]
-            });
-            return completion.choices[0].message.content;
-        } catch (e) { 
-            logger.error("AI Report Fail", e);
-            return "Аналитический модуль недоступен."; 
-        }
-    },
-    async scanSuspects() {
-        logger.ai('Scanning for neural anomalies (Anti-Cheat)...');
-        const suspiciousUsers = await User.findAll({
-            where: {
-                [Op.or]: [
-                    { balance: { [Op.gt]: 5000000 }, level: { [Op.lt]: 3 } }, 
-                    { tap: { [Op.gt]: 100 } } 
-                ]
-            }
-        });
-        for (let u of suspiciousUsers) {
-            await u.update({ status: 'suspected' });
-            logger.warn(`AI FLAG: User ${u.id} marked as SUSPECTED.`);
-        }
-    }
-};
-
 const calculateLevel = (balance) => {
     if (balance < 10000) return 1;
     if (balance < 100000) return 2;
@@ -182,26 +138,16 @@ const calculateLevel = (balance) => {
 app.post('/api/ai-advice', async (req, res) => {
     try {
         const userData = req.body;
-        logger.ai(`Generating advice for Agent ${userData.id}`);
-        
         const completion = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [
-                { 
-                    role: "system", 
-                    content: "Ты — ИИ-советник терминала Neural Pulse. Дай краткий, дерзкий совет игроку на основе его статов. Используй киберпанк сленг. Максимум 2 предложения." 
-                },
-                { 
-                    role: "user", 
-                    content: `Статы: Баланс ${userData.balance}, Доход в час ${userData.profit}, Сила тапа ${userData.tap}.` 
-                }
+                { role: "system", content: "Ты — ИИ-советник терминала Neural Pulse. Дай краткий, дерзкий совет игроку на основе его статов. Используй киберпанк сленг. Максимум 2 предложения." },
+                { role: "user", content: `Статы: Баланс ${userData.balance}, Доход в час ${userData.profit}, Сила тапа ${userData.tap}.` }
             ]
         });
-
         res.json({ text: completion.choices[0].message.content });
     } catch (e) {
-        logger.error("Advice fail", e);
-        res.status(500).json({ text: "Нейросеть перегружена. Жди синхронизации." });
+        res.status(500).json({ text: "Нейросеть перегружена." });
     }
 });
 
@@ -223,7 +169,6 @@ app.get('/api/user/:id', async (req, res) => {
             user.last_seen = now;
             user.level = calculateLevel(user.balance);
             await user.save();
-            logger.info(`AI Offline Farm: User ${user.id} +${earned.toFixed(2)} NP.`);
         }
         res.json(user);
     } catch (e) { res.status(500).send("AI_CORE_ERROR"); }
@@ -253,7 +198,7 @@ app.get('/api/tasks', async (req, res) => {
     } catch (e) { res.status(500).json([]); }
 });
 
-// --- ADMIN ---
+// --- ADMIN (ОПТИМИЗИРОВАНО) ---
 const startAdmin = async () => {
     try {
         const adminJs = new AdminJS({
@@ -264,10 +209,10 @@ const startAdmin = async () => {
             ],
             rootPath: '/admin',
             branding: { companyName: 'Neural Pulse Hub', logo: false },
-            bundler: { enabled: false }
+            bundler: { enabled: false }, // ОТКЛЮЧЕН БИЛД ДЛЯ СКОРОСТИ
+            assets: { globals: { fonts: false } }
         });
 
-        // Создаем защищенный роутер с исправленными куками
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => (email === '1' && password === '1') ? { email: 'admin@pulse.tech' } : null,
             cookieName: 'adminjs_session',
@@ -294,65 +239,47 @@ bot.start(async (ctx) => {
                 if (referrer) {
                     referredBy = refId; startBalance = 5000;
                     await referrer.update({ balance: referrer.balance + 10000, referrals: referrer.referrals + 1 });
-                    bot.telegram.sendMessage(refId, `✅ <b>Система:</b> Новый агент в вашей сети! +10k NP.`, { parse_mode: 'HTML' }).catch(() => {});
+                    bot.telegram.sendMessage(refId, `✅ <b>Система:</b> Новый агент! +10k NP.`, { parse_mode: 'HTML' }).catch(() => {});
                 }
             }
             user = await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: startBalance, referred_by: referredBy });
         }
 
         ctx.replyWithPhoto({ source: photoPath }, {
-            caption: `<b>Neural Pulse | Terminal</b>\n\nИдентификация пройдена.\nМайнинг доступен.\n\n🔗 Протокол связи:\n<code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`,
+            caption: `<b>Neural Pulse | Terminal</b>\n\nИдентификация пройдена.\n🔗 <code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`,
             parse_mode: 'HTML',
             ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ТЕРМИНАЛ", DOMAIN)]])
         }).catch(() => ctx.reply("System Online.", Markup.inlineKeyboard([[Markup.button.webApp("⚡ ТЕРМИНАЛ", DOMAIN)]])));
     } catch (e) { logger.error(`Bot Fail`, e); }
 });
 
-bot.command('ai_report', async (ctx) => {
-    if (ctx.from.id !== ADMIN_ID) return;
-    ctx.reply("⌛ Запрашиваю отчет у ядра...");
-    const report = await AIEngine.getGlobalReport();
-    ctx.reply(`📊 <b>AUDIT REPORT:</b>\n\n${report}`, { parse_mode: 'HTML' });
-});
-
-bot.on('text', async (ctx) => {
-    if (ctx.message.text.startsWith('/')) return;
-    try {
-        await ctx.sendChatAction('typing');
-        const response = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [{ role: "system", content: "Ты ИИ Neural Pulse. Твой стиль: киберпанк, краткий. Ты помогаешь игрокам." }, { role: "user", content: ctx.message.text }]
-        });
-        ctx.reply(`📟 AI: ${response.choices[0].message.content}`);
-    } catch (e) { 
-        logger.error("AI Chat Fail", e);
-    }
-});
-
 const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
 app.use(bot.webhookCallback(WEBHOOK_PATH));
 
-// --- RUN ---
+// --- RUN (СУПЕР БЫСТРЫЙ СТАРТ) ---
 const server = app.listen(PORT, '0.0.0.0', async () => {
     try {
         await sequelize.authenticate();
         if (sessionStore) await sessionStore.sync().catch(() => {});
-        await sequelize.sync({ alter: true }); 
-        await startAdmin();
+        
+        // alter: false ускоряет запуск, так как не проверяет таблицы каждый раз
+        await sequelize.sync({ alter: false }); 
+        
+        // Запускаем админку параллельно, не блокируя основной поток
+        startAdmin(); 
+        
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
+        // Интервалы
         setInterval(async () => {
-            const userCount = await User.count();
             const metrics = {
-                user_count: userCount,
+                user_count: await User.count(),
                 server_load: parseFloat((os.loadavg()[0] * 10).toFixed(2)),
                 mem_usage: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2))
             };
-            Stats.create(metrics);
+            Stats.create(metrics).catch(() => {});
         }, 15 * 60 * 1000);
 
-        setInterval(() => AIEngine.scanSuspects(), 60 * 60 * 1000);
-        
         logger.system(`Neural Pulse Core Online [Port ${PORT}]`);
     } catch (err) { logger.error("CRITICAL", err); }
 });
