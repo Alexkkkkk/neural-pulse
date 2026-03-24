@@ -26,13 +26,24 @@ const PORT = 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
+// ФИКС ОШИБКИ trust is not a function:
+// Обазательно до использования сессий!
+app.set('trust proxy', 1); 
+
 app.use(cors());
 app.use(express.json());
+
+// Обновленные настройки сессии для работы через прокси
 app.use(session({
     secret: 'neural_pulse_ultra_secret_2026',
     resave: false,
-    saveUninitialized: true
+    saveUninitialized: true,
+    cookie: { 
+        secure: true, // Включаем, так как np.bothost.tech работает через HTTPS
+        maxAge: 24 * 60 * 60 * 1000 
+    }
 }));
+
 app.use(express.static(path.join(__dirname, 'static')));
 
 const sequelize = new Sequelize(PG_URI, { 
@@ -54,8 +65,8 @@ const User = sequelize.define('users', {
     tap_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     mine_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     energy_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
-    referrals: { type: DataTypes.INTEGER, defaultValue: 0 }, // Добавлено для друзей
-    last_bonus: { type: DataTypes.DATE }, // Добавлено для бонусов
+    referrals: { type: DataTypes.INTEGER, defaultValue: 0 },
+    last_bonus: { type: DataTypes.DATE },
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: false });
 
@@ -77,7 +88,6 @@ const Stats = sequelize.define('stats', {
 
 // --- API ---
 
-// Загрузка или создание пользователя
 app.get('/api/user/:id', async (req, res) => {
     const userId = req.params.id;
     const { username, photo_url } = req.query;
@@ -97,11 +107,9 @@ app.get('/api/user/:id', async (req, res) => {
     }
 });
 
-// Сохранение прогресса
 app.post('/api/save', async (req, res) => {
     const d = req.body;
     if (!d.id) return res.status(400).send("No ID");
-    
     try {
         await User.update({
             balance: d.balance,
@@ -115,7 +123,6 @@ app.post('/api/save', async (req, res) => {
             last_bonus: d.last_bonus,
             last_seen: new Date()
         }, { where: { id: d.id } });
-        
         res.json({ ok: true });
     } catch (e) { 
         console.error("Save Error:", e);
@@ -160,7 +167,7 @@ const startAdmin = async () => {
 
         const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                if (email === 'admin@pulse.com' && password === 'Kander3132001574') return { email };
+                if (email === '1' && password === '1') return { email };
                 return null;
             },
             cookieName: 'adminjs_session',
@@ -169,7 +176,10 @@ const startAdmin = async () => {
             resave: false, 
             saveUninitialized: true, 
             secret: 'session_secret',
-            cookie: { maxAge: 24 * 60 * 60 * 1000 }
+            cookie: { 
+                secure: true, // Обязательно true для работы за прокси с SSL
+                maxAge: 24 * 60 * 60 * 1000 
+            }
         });
 
         app.use(adminJs.options.rootPath, router);
@@ -197,13 +207,12 @@ const collectMetrics = async () => {
 // --- БОТ ЛОГИКА ---
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
-    const startPayload = ctx.startPayload; // Реферальный ID из ссылки ?start=ID
+    const startPayload = ctx.startPayload;
 
     if (startPayload && startPayload != userId) {
         try {
             const referrer = await User.findByPk(startPayload);
             if (referrer) {
-                // Бонус пригласившему (например, +5000 NP)
                 await User.update(
                     { balance: referrer.balance + 5000, referrals: referrer.referrals + 1 },
                     { where: { id: startPayload } }
@@ -220,7 +229,6 @@ bot.start(async (ctx) => {
             [Markup.button.url("📢 КАНАЛ", "https://t.me/neural_pulse_news")]
         ])
     }).catch(() => {
-        // Если картинки нет, шлем просто текст
         ctx.reply(`<b>Neural Pulse | Terminal</b>`, {
             parse_mode: 'HTML',
             ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])
@@ -235,7 +243,6 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 app.listen(PORT, async () => {
     try {
         await sequelize.authenticate();
-        // alter: true добавит новые колонки (referrals, last_bonus), если их нет в Postgres
         await sequelize.sync({ alter: true }); 
         await startAdmin();
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
