@@ -42,9 +42,10 @@ const sequelize = new Sequelize(PG_URI, {
     dialectOptions: { ssl: false } 
 });
 
-// --- МОДЕЛИ ---
+// --- МОДЕЛИ (ИСПРАВЛЕНО) ---
 const User = sequelize.define('users', {
-    id: { type: DataTypes.BIGINT, primary_key: true },
+    // Исправлено: добавлен primaryKey: true для корректного запуска
+    id: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: false },
     username: { type: DataTypes.STRING },
     photo_url: { type: DataTypes.TEXT },
     balance: { type: DataTypes.DOUBLE, defaultValue: 0 },
@@ -56,14 +57,14 @@ const User = sequelize.define('users', {
 }, { timestamps: false });
 
 const Task = sequelize.define('tasks', {
-    id: { type: DataTypes.INTEGER, primary_key: true, autoIncrement: true },
+    id: { type: DataTypes.INTEGER, primary_key: true, primaryKey: true, autoIncrement: true },
     title: { type: DataTypes.STRING, allowNull: false },
     reward: { type: DataTypes.INTEGER, defaultValue: 1000 },
     url: { type: DataTypes.STRING }
 }, { timestamps: false });
 
 const Stats = sequelize.define('stats', {
-    id: { type: DataTypes.INTEGER, primary_key: true, autoIncrement: true },
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     timestamp: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
     user_count: { type: DataTypes.INTEGER },
     total_ton_deposits: { type: DataTypes.DOUBLE, defaultValue: 0 },
@@ -110,7 +111,6 @@ const startAdmin = async () => {
                 softwareBrothers: false,
                 logo: '/images/logo.png' 
             },
-            // Настройка Dashboard
             dashboard: {
                 handler: async () => {
                     const totalUsers = await User.count();
@@ -167,6 +167,20 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).send("Save Error"); }
 });
 
+app.get('/api/top', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT username, balance, photo_url FROM users ORDER BY balance DESC LIMIT 50');
+        res.json(result.rows);
+    } catch (e) { res.status(500).send("Top Error"); }
+});
+
+app.get('/api/tasks', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM tasks');
+        res.json(result.rows);
+    } catch (e) { res.status(500).send("Tasks Error"); }
+});
+
 // --- ЗАПУСК ---
 bot.start((ctx) => {
     ctx.reply(`<b>Neural Pulse | Terminal</b>`, {
@@ -185,7 +199,7 @@ app.listen(PORT, async () => {
         await startAdmin();
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
-        setInterval(collectMetrics, 15 * 60 * 1000); // Раз в 15 минут
+        setInterval(collectMetrics, 15 * 60 * 1000); 
         collectMetrics();
 
         console.log(`🚀 [MAX-MODE] System Online`);
