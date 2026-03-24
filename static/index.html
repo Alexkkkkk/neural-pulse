@@ -145,7 +145,7 @@
 
         const game = {
             data: { 
-                id: 0, balance: 0, energy: 1000, max_energy: 1000, 
+                id: "0", balance: 0, energy: 1000, max_energy: 1000, 
                 tap: 1, profit: 0, tap_lvl: 1, mine_lvl: 1, 
                 energy_lvl: 1, last_bonus: 0 
             },
@@ -155,7 +155,7 @@
             async init() {
                 ui.startLoader();
                 const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
-                this.data.id = u.id;
+                this.data.id = String(u.id); // Безопасное хранение ID как строки
 
                 try {
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
@@ -164,10 +164,10 @@
                 } catch(e) { console.warn("TON Connect UI error"); }
 
                 try {
-                    const r = await fetch(`/api/user/${u.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
+                    const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
                     if (r.ok) {
                         const db = await r.json();
-                        this.data = { ...this.data, ...db };
+                        this.data = { ...this.data, ...db, id: String(u.id) };
                         if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
                     }
                 } catch(e) { console.error("DB Sync Error"); }
@@ -328,7 +328,7 @@
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({
-                            id: game.data.id,
+                            id: String(game.data.id),
                             balance: game.data.balance,
                             levels: { tap: game.data.tap_lvl, mine: game.data.mine_lvl, energy: game.data.energy_lvl }
                         })
@@ -336,17 +336,16 @@
                     const res = await r.json();
                     const fullText = res.text || "Analysis complete: Keep mining, Agent.";
                     
-                    // Эффект печатающегося текста
                     resDiv.innerText = "";
                     let i = 0;
-                    const speed = 30; // Скорость печати
+                    const speed = 30; 
                     
                     function typeWriter() {
                         if (i < fullText.length) {
                             resDiv.innerText += fullText.charAt(i);
                             i++;
                             setTimeout(typeWriter, speed);
-                            resDiv.scrollTop = resDiv.scrollHeight; // Автоскролл вниз
+                            resDiv.scrollTop = resDiv.scrollHeight;
                         }
                     }
                     typeWriter();
