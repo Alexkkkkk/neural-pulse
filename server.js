@@ -26,20 +26,21 @@ const PORT = 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// ФИКС ОШИБКИ trust is not a function:
-// Обазательно до использования сессий!
-app.set('trust proxy', 1); 
+// --- СЕРВЕРНЫЕ НАСТРОЙКИ (ФИКС ОШИБКИ TRUST) ---
+app.set('trust proxy', true); 
 
 app.use(cors());
 app.use(express.json());
 
-// Обновленные настройки сессии для работы через прокси
+// Настройка сессий (необходима для работы AdminJS)
 app.use(session({
     secret: 'neural_pulse_ultra_secret_2026',
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
+    proxy: true,
     cookie: { 
-        secure: true, // Включаем, так как np.bothost.tech работает через HTTPS
+        secure: true, 
+        httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000 
     }
 }));
@@ -167,19 +168,18 @@ const startAdmin = async () => {
 
         const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                if (email === '1' && password === '1') return { email };
+                // ВХОД: email = 1, password = 1
+                if (email === '1' && password === '1') return { email: 'admin@pulse.com' };
                 return null;
             },
             cookieName: 'adminjs_session',
             cookiePassword: 'secure-cookie-password-2026-v2',
-        }, app, { 
+        }, null, { 
             resave: false, 
-            saveUninitialized: true, 
+            saveUninitialized: false, 
             secret: 'session_secret',
-            cookie: { 
-                secure: true, // Обязательно true для работы за прокси с SSL
-                maxAge: 24 * 60 * 60 * 1000 
-            }
+            proxy: true,
+            cookie: { secure: true }
         });
 
         app.use(adminJs.options.rootPath, router);
