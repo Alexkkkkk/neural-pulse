@@ -19,7 +19,7 @@ const __dirname = path.dirname(__filename);
 // Регистрация адаптера
 AdminJS.registerAdapter(AdminJSSequelize);
 
-// --- КУСТОМНОЕ ЛОГИРОВАНИЕ (Глаза ИИ) ---
+// --- КУСТОМНОЕ ЛОГИРОВАНИЕ ---
 const logger = {
     info: (msg) => console.log(`[${new Date().toISOString()}] 🔵 INFO: ${msg}`),
     warn: (msg) => console.log(`[${new Date().toISOString()}] 🟡 WARN: ${msg}`),
@@ -29,14 +29,16 @@ const logger = {
 };
 
 // --- CONFIG ---
+// ВАЖНО: Твой новый ключ вставлен здесь. 
+const OPENAI_API_KEY = "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";
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const PG_URI = "postgresql://bothost_db_130943b4f3f6:oY6CieQ5aohyTLgU9i23M6w80naZt9_1mJ4V6roejTs@node1.pghost.ru:32834/bothost_db_130943b4f3f6";
 const DOMAIN = "https://np.bothost.tech"; 
 const PORT = process.env.PORT || 3000;
 const ADMIN_ID = 1774360651;
 
-// Инициализация ИИ
-const openai = new OpenAI({ apiKey: 'YOUR_OPENAI_API_KEY' }); // Убедись, что ключ вставлен
+// Инициализация ИИ с твоим ключом
+const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
@@ -140,6 +142,7 @@ const AIEngine = {
             });
             return completion.choices[0].message.content;
         } catch (e) { 
+            logger.error("AI Report Fail", e);
             return "Аналитический модуль недоступен."; 
         }
     },
@@ -148,8 +151,8 @@ const AIEngine = {
         const suspiciousUsers = await User.findAll({
             where: {
                 [Op.or]: [
-                    { balance: { [Op.gt]: 5000000 }, level: { [Op.lt]: 3 } }, // Много денег на малом уровне
-                    { tap: { [Op.gt]: 100 } } // Нереальный урон за тап
+                    { balance: { [Op.gt]: 5000000 }, level: { [Op.lt]: 3 } }, 
+                    { tap: { [Op.gt]: 100 } } 
                 ]
             }
         });
@@ -284,7 +287,9 @@ bot.on('text', async (ctx) => {
             messages: [{ role: "system", content: "Ты ИИ Neural Pulse. Твой стиль: киберпанк, краткий. Ты помогаешь игрокам." }, { role: "user", content: ctx.message.text }]
         });
         ctx.reply(`📟 AI: ${response.choices[0].message.content}`);
-    } catch (e) { }
+    } catch (e) { 
+        logger.error("AI Chat Fail", e);
+    }
 });
 
 const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
@@ -300,8 +305,8 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         
         // Фоновые ИИ-процессы
-        setInterval(() => {
-            const userCount = User.count();
+        setInterval(async () => {
+            const userCount = await User.count();
             const metrics = {
                 user_count: userCount,
                 server_load: parseFloat((os.loadavg()[0] * 10).toFixed(2)),
