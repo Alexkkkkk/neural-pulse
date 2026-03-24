@@ -126,6 +126,7 @@ app.get('/api/user/:id', async (req, res) => {
         const lastSeen = new Date(user.last_seen);
         const secondsOffline = Math.floor((now - lastSeen) / 1000);
 
+        // Офлайн прибыль (максимум за 24 часа)
         if (secondsOffline > 60 && user.profit > 0) {
             const farmTime = Math.min(secondsOffline, 86400); 
             const earned = (user.profit / 3600) * farmTime; 
@@ -142,7 +143,11 @@ app.post('/api/save', async (req, res) => {
     try {
         const { id, ...data } = req.body;
         if (!id) return res.status(400).send("ID required");
-        if (data.balance !== undefined) data.level = calculateLevel(data.balance);
+        
+        if (data.balance !== undefined) {
+            data.level = calculateLevel(data.balance);
+        }
+        
         await User.update({ ...data, last_seen: new Date() }, { where: { id } });
         res.json({ ok: true });
     } catch (e) { res.status(500).send("Save Error"); }
@@ -161,6 +166,7 @@ const startAdmin = async () => {
             branding: { companyName: 'Neural Pulse Control', withMadeWithLove: false }
         });
 
+        // В AdminJS v7+ билд роутера требует передачи app и sessionOptions
         AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
                 if (email === '1' && password === '1') return { email: 'admin@pulse.com' };
@@ -202,7 +208,7 @@ bot.start(async (ctx) => {
                 const referrer = await User.findByPk(refId);
                 if (referrer) {
                     referredBy = refId;
-                    startBalance = 5000;
+                    startBalance = 5000; // Бонус новому игроку
                     await referrer.update({ 
                         balance: referrer.balance + 10000, 
                         referrals: referrer.referrals + 1 
