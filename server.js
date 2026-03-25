@@ -10,7 +10,7 @@ import OpenAI from 'openai';
 import session from 'express-session';
 import ConnectSessionSequelize from 'connect-session-sequelize';
 
-// AdminJS (v7+) - Критически важные импорты для ESM
+// AdminJS (v7+)
 import AdminJS, { ComponentLoader } from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
@@ -18,18 +18,26 @@ import * as AdminJSSequelize from '@adminjs/sequelize';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Регистрация адаптера БД
 AdminJS.registerAdapter(AdminJSSequelize);
 
-// --- ИНИЦИАЛИЗАЦИЯ COMPONENT LOADER ---
 const componentLoader = new ComponentLoader();
 const dashboardPath = path.join(__dirname, 'dashboard.jsx');
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', dashboardPath);
 
-// --- СУПЕР-ЛОГГЕР ---
+// --- ОБНОВЛЕННЫЙ СУПЕР-ЛОГГЕР С ВИЗУАЛИЗАЦИЕЙ ---
 const logger = {
     info: (msg, meta = '') => console.log(`[${new Date().toLocaleString()}] 🔵 INFO: ${msg}`, meta),
-    system: (msg) => console.log(`[${new Date().toLocaleString()}] 🚀 SYSTEM: ${msg}`),
+    // Визуальный прогресс-бар для терминала
+    progress: (step, total) => {
+        const percent = Math.round((step / total) * 100);
+        const bar = '█'.repeat(step) + '░'.repeat(total - step);
+        console.log(`[${new Date().toLocaleString()}] ⚙️ LOADING: [${bar}] ${percent}%`);
+    },
+    system: (msg) => {
+        console.log(`\n` + `═`.repeat(50));
+        console.log(`[${new Date().toLocaleString()}] 🚀 SYSTEM: ${msg}`);
+        console.log(`═`.repeat(50) + `\n`);
+    },
     warn: (msg, meta = '') => console.log(`[${new Date().toLocaleString()}] 🟡 WARN: ${msg}`, meta),
     error: (msg, err) => {
         console.error(`[${new Date().toLocaleString()}] 🔴 ERROR: ${msg}`);
@@ -38,14 +46,13 @@ const logger = {
     http: (req, res, next) => {
         const requestId = uuidv4().split('-')[0];
         const start = Date.now();
-        if (req.url.startsWith('/api')) logger.info(`REQ [${requestId}] ${req.method} ${req.url}`);
-        res.on('finish', () => {
-            if (req.url.startsWith('/api')) {
+        if (req.url.startsWith('/api')) {
+            res.on('finish', () => {
                 const duration = Date.now() - start;
                 const statusColor = res.statusCode >= 400 ? '🔴' : '🟢';
-                console.log(`[${new Date().toLocaleString()}] ${statusColor} RES [${requestId}] ${res.statusCode} | ${duration}ms`);
-            }
-        });
+                console.log(`[${new Date().toLocaleString()}] ${statusColor} API [${requestId}] ${req.method} ${req.url} ${res.statusCode} | ${duration}ms`);
+            });
+        }
         next();
     }
 };
@@ -61,13 +68,6 @@ const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 const openai = new OpenAI({ apiKey: OPENAI_KEY });
 
-// Глобальный перехват ошибок
-process.on('unhandledRejection', (reason) => logger.error('Unhandled Rejection', reason));
-process.on('uncaughtException', (err) => {
-    logger.error('Uncaught Exception', err);
-    setTimeout(() => process.exit(1), 1000);
-});
-
 // --- БАЗА ДАННЫХ ---
 const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
@@ -76,7 +76,6 @@ const sequelize = new Sequelize(PG_URI, {
     pool: { max: 30, min: 5 }
 });
 
-// Настройка хранилища сессий для AdminJS
 const SequelizeStore = ConnectSessionSequelize(session.Store);
 const sessionStore = new SequelizeStore({ db: sequelize });
 
@@ -100,7 +99,6 @@ const User = sequelize.define('users', {
     wallet: { type: DataTypes.STRING, allowNull: true },
     last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 }, 
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
-    // Разрешаем NULL для корректной миграции старых данных
     createdAt: { type: DataTypes.DATE, allowNull: true },
     updatedAt: { type: DataTypes.DATE, allowNull: true }
 }, { timestamps: true });
@@ -120,19 +118,13 @@ const Stats = sequelize.define('stats', {
     timestamp: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: false });
 
-const calculateLevel = (b) => b < 50000 ? 1 : b < 500000 ? 2 : 3;
-
 // --- MIDDLEWARES ---
 app.disable('x-powered-by'); 
 app.set('trust proxy', 1);
 app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(logger.http); 
-
-app.use(express.static(path.join(__dirname, 'static'), { 
-    maxAge: '30d', 
-    immutable: true
-}));
+app.use(express.static(path.join(__dirname, 'static')));
 
 // --- API ---
 app.get('/api/top', async (req, res) => {
@@ -154,7 +146,10 @@ app.get('/api/user/:id', async (req, res) => {
 app.post('/api/save', async (req, res) => {
     try {
         const { id, ...data } = req.body;
-        if (data.balance !== undefined) data.level = calculateLevel(data.balance);
+        if (data.balance !== undefined) {
+            const b = data.balance;
+            data.level = b < 50000 ? 1 : b < 500000 ? 2 : 3;
+        }
         await User.update({ ...data, last_seen: new Date() }, { where: { id: BigInt(id) } });
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: "SAVE_ERROR" }); }
@@ -174,19 +169,10 @@ const startAdmin = async () => {
             branding: { companyName: 'Neural Pulse Hub', logo: false, softwareBrothers: false },
             dashboard: {
                 handler: async () => {
-                    const start = Date.now();
-                    await sequelize.query('SELECT 1');
-                    const latency = Date.now() - start;
                     const totalUsers = await User.count();
-                    const last24h = await User.count({
-                        where: { createdAt: { [Op.gt]: new Date(Date.now() - 24 * 60 * 60 * 1000) } }
-                    });
-
                     return {
                         totalUsers,
-                        newUsers24h: last24h,
                         currentMem: (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2),
-                        dbLatency: latency,
                         cpu: (os.loadavg()[0] * 10).toFixed(1)
                     };
                 },
@@ -198,11 +184,9 @@ const startAdmin = async () => {
             authenticate: async (e, p) => (e === '1' && p === '1') ? { email: 'admin' } : null,
             cookiePassword: 'secure-pass-2026-pulse',
         }, null, {
-            resave: false, 
-            saveUninitialized: false, 
-            secret: 'neural_pulse_secret_2026',
+            resave: false, saveUninitialized: false, secret: 'neural_pulse_secret_2026',
             store: sessionStore,
-            cookie: { maxAge: 86400000, secure: false }
+            cookie: { maxAge: 86400000 }
         });
         
         app.use(adminJs.options.rootPath, adminRouter);
@@ -215,9 +199,7 @@ bot.start(async (ctx) => {
     const logoPath = path.join(__dirname, 'static/images/logo.png');
     try {
         let user = await User.findByPk(userId);
-        if (!user) {
-            user = await User.create({ id: userId, username: ctx.from.username || 'AGENT' });
-        }
+        if (!user) user = await User.create({ id: userId, username: ctx.from.username || 'AGENT' });
         ctx.replyWithPhoto({ source: logoPath }, {
             caption: `<b>Neural Pulse | Terminal</b>\n\nИдентификация пройдена.\nАгент: <code>${ctx.from.username || userId}</code>`,
             parse_mode: 'HTML',
@@ -226,41 +208,39 @@ bot.start(async (ctx) => {
     } catch (e) { logger.error(`Bot Error`, e); }
 });
 
-const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
-app.use(bot.webhookCallback(WEBHOOK_PATH));
+app.use(bot.webhookCallback(`/telegraf/${BOT_TOKEN}`));
 
-// --- ENGINE START ---
+// --- ENGINE START С ВИЗУАЛИЗАЦИЕЙ ШАГОВ ---
 const server = app.listen(PORT, '0.0.0.0', async () => {
     try {
-        logger.system('--- NEURAL PULSE ENGINE STARTING ---');
+        logger.system('--- NEURAL PULSE ENGINE BOOTSTRAP ---');
+        
+        logger.progress(2, 10);
         await sequelize.authenticate();
-        
-        // Синхронизируем сначала сессии, потом остальную базу
+        logger.info("Database connection: ESTABLISHED");
+
+        logger.progress(4, 10);
         await sessionStore.sync();
-        await sequelize.sync({ alter: true }).catch(err => {
-            logger.warn("Sync Alter failed, trying simple sync", err.message);
-            return sequelize.sync();
-        });
+        await sequelize.sync({ alter: true });
+        logger.info("Database synchronization: COMPLETED");
 
-        await startAdmin(); 
+        logger.progress(6, 10);
+        await startAdmin();
+        logger.info("AdminJS interface: DEPLOYED");
+
+        logger.progress(8, 10);
+        await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`);
+        logger.info("Telegram Webhook: LINKED");
+
+        logger.progress(10, 10);
+        logger.system(`ENGINE STATUS: ONLINE (Port ${PORT})`);
         
-        setInterval(async () => {
-            try {
-                const uCount = await User.count();
-                await Stats.create({
-                    user_count: uCount,
-                    server_load: os.loadavg()[0],
-                    mem_usage: (os.totalmem() - os.freemem()) / 1024 / 1024 / 1024
-                });
-            } catch (e) { console.log("Stats error"); }
-        }, 900000);
-
-        await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
-        logger.system(`ENGINE: READY (Port ${PORT})`);
-    } catch (err) { logger.error("CRITICAL ENGINE BOOTSTRAP FAILURE", err); }
+    } catch (err) { 
+        logger.error("CRITICAL ENGINE FAILURE", err); 
+        process.exit(1);
+    }
 });
 
-// Завершение работы
 const shutdown = async () => {
     logger.info("Shutdown signal received");
     server.close(async () => { 
