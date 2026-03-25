@@ -106,7 +106,9 @@ const User = sequelize.define('users', {
     wallet: { type: DataTypes.STRING, allowNull: true },
     last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 }, 
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
-    createdAt: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
+    // Системные колонки для корректной работы Timestamps в PostgreSQL
+    createdAt: { type: DataTypes.DATE, defaultValue: Sequelize.NOW, allowNull: true },
+    updatedAt: { type: DataTypes.DATE, defaultValue: Sequelize.NOW, allowNull: true }
 }, { timestamps: true });
 
 const Task = sequelize.define('tasks', {
@@ -147,7 +149,8 @@ app.post('/api/save', async (req, res) => {
     try {
         const { id, ...data } = req.body;
         if (data.balance !== undefined) data.level = calculateLevel(data.balance);
-        await User.update({ ...data, last_seen: new Date() }, { where: { id: BigInt(id) } });
+        // Обновляем данные и помечаем updatedAt
+        await User.update({ ...data, last_seen: new Date(), updatedAt: new Date() }, { where: { id: BigInt(id) } });
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: "SAVE_ERROR" }); }
 });
@@ -223,7 +226,13 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
     try {
         logger.system('--- NEURAL PULSE ENGINE STARTING ---');
         await sequelize.authenticate();
-        await sequelize.sync({ alter: true }); 
+        
+        // Синхронизация с обработкой существующих данных
+        await sequelize.sync({ alter: true }).catch(err => {
+            logger.warn("Sync Alter failed, trying simple sync", err.message);
+            return sequelize.sync();
+        });
+
         await startAdmin(); 
         
         setInterval(async () => {
@@ -244,6 +253,7 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
 
 // Завершение работы
 const shutdown = async () => {
+    logger.info("Shutdown signal received");
     server.close(async () => { 
         await sequelize.close(); 
         process.exit(0); 
