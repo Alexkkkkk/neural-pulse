@@ -59,7 +59,7 @@ export const User = sequelize.define('users', {
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { 
     timestamps: true,
-    underscored: true // Это создает колонки created_at и updated_at
+    underscored: true // created_at вместо createdAt
 });
 
 // --- МОДЕЛЬ: МИССИИ (TASK) ---
@@ -91,12 +91,13 @@ User.hasMany(User, { as: 'Referrals', foreignKey: 'referred_by' });
 export const initDB = async () => {
     try {
         await sequelize.authenticate();
+        console.log('--- DATABASE CONNECTED ---');
         
-        // ВНИМАНИЕ: force: true полностью ПЕРЕСОЗДАСТ таблицы (удалит старых юзеров)
-        // Это исправит ошибку "column created_at contains null values"
+        // ПЕРВАЯ ИНИЦИАЛИЗАЦИЯ: force: true удаляет старое и создает чистое.
+        // ПОСЛЕ УСПЕШНОГО ЗАПУСКА: замени на { alter: true }
         await sequelize.sync({ force: true }); 
         
-        console.log('--- DATABASE RE-INITIALIZED (FORCE) ---');
+        console.log('--- DATABASE RE-INITIALIZED (FORCE SUCCESS) ---');
         return true;
     } catch (error) {
         console.error('Database Init Error:', error);
