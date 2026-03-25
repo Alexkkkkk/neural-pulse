@@ -52,7 +52,7 @@ const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const PG_URI = "postgresql://bothost_db_130943b4f3f6:oY6CieQ5aohyTLgU9i23M6w80naZt9_1mJ4V6roejTs@node1.pghost.ru:32834/bothost_db_130943b4f3f6";
 const DOMAIN = "https://np.bothost.tech"; 
 const PORT = process.env.PORT || 3000;
-const OPENAI_KEY = "твой_ключ_здесь"; // Вставь свой ключ OpenAI
+const OPENAI_KEY = "твой_ключ_здесь"; 
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
@@ -122,11 +122,11 @@ const Stats = sequelize.define('stats', {
     timestamp: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: false });
 
-const calculateLevel = (b) => b < 10000 ? 1 : b < 100000 ? 2 : b < 500000 ? 3 : b < 2000000 ? 4 : 5;
+// Логика уровней: 1 (0-50k), 2 (50k-500k), 3 (500k+)
+const calculateLevel = (b) => b < 50000 ? 1 : b < 500000 ? 2 : 3;
 
 // --- API GAME CORE ---
 
-// 1. Лидерборд (обязательно ПЕРЕД /api/user/:id)
 app.get('/api/top', async (req, res) => {
     try {
         const topUsers = await User.findAll({
@@ -142,7 +142,6 @@ app.get('/api/top', async (req, res) => {
     }
 });
 
-// 2. Список заданий
 app.get('/api/tasks', async (req, res) => {
     try {
         const tasks = await Task.findAll();
@@ -153,7 +152,6 @@ app.get('/api/tasks', async (req, res) => {
     }
 });
 
-// 3. Загрузка/регистрация юзера
 app.get('/api/user/:id', async (req, res) => {
     try {
         const userId = BigInt(req.params.id);
@@ -185,14 +183,17 @@ app.get('/api/user/:id', async (req, res) => {
     }
 });
 
-// 4. Сохранение данных
 app.post('/api/save', async (req, res) => {
     try {
         const { id, ...data } = req.body;
         if (!id) return res.status(400).json({ error: "ID_REQUIRED" });
         const userId = BigInt(id);
-        if (data.balance !== undefined) data.level = calculateLevel(data.balance);
         
+        if (data.balance !== undefined) {
+            data.level = calculateLevel(data.balance);
+        }
+        
+        // Обновляем все поля, пришедшие с фронта (включая wallet)
         await User.update({ ...data, last_seen: new Date() }, { where: { id: userId } });
         res.json({ ok: true });
     } catch (e) {
@@ -218,22 +219,6 @@ app.post('/api/ai-advice', async (req, res) => {
         res.json({ text: advice });
     } catch (e) {
         res.json({ text: "System link unstable. Re-routing data..." });
-    }
-});
-
-// --- PAYMENTS ---
-app.post('/api/confirm-payment', async (req, res) => {
-    try {
-        const { id, txHash } = req.body;
-        const user = await User.findByPk(BigInt(id));
-        if (user) {
-            user.balance += 1000000; 
-            await user.save();
-            logger.info(`PAYMENT: User ${id} | TX: ${txHash}`);
-            res.json({ ok: true });
-        }
-    } catch (e) {
-        res.status(500).json({ error: "PAYMENT_FAULT" });
     }
 });
 
@@ -308,6 +293,15 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
         await sequelize.authenticate();
         await sequelize.sync({ alter: true }); 
         await startAdmin(); 
+        
+        // Сбор начальной статистики
+        const uCount = await User.count();
+        await Stats.create({
+            user_count: uCount,
+            server_load: os.loadavg()[0],
+            mem_usage: (os.totalmem() - os.freemem()) / 1024 / 1024 / 1024
+        });
+
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         logger.system(`ENGINE: READY (Port ${PORT})`);
     } catch (err) { logger.error("CRITICAL ENGINE BOOTSTRAP FAILURE", err); }
