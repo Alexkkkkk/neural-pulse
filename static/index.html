@@ -6,9 +6,10 @@
     <title>Neural Pulse v5.5.9 | Terminal</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        /* Твои спецификации анимаций */
+        /* Анимации и системные стили */
         @keyframes pulse { 0% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.1); } 100% { opacity: 0.5; transform: scale(1); } }
         .modal-bg.active { display: flex; }
+        
         .task-item, .top-item {
             background: rgba(255,255,255,0.05);
             border: 1px solid rgba(0,255,255,0.2);
@@ -19,23 +20,28 @@
             justify-content: space-between;
             align-items: center;
         }
-        .task-btn { background: cyan; color: black; border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        
+        .task-btn { 
+            background: cyan; color: black; border: none; padding: 8px 12px; 
+            border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; 
+        }
         .task-btn:active { transform: scale(0.95); }
         .task-btn:disabled { background: #555; color: #888; cursor: not-allowed; }
         
-        .ref-box { background: #000; border: 1px dashed cyan; padding: 10px; border-radius: 8px; margin: 10px 0; word-break: break-all; font-family: monospace; font-size: 11px; color: #0ff; }
+        .ref-box { 
+            background: #000; border: 1px dashed cyan; padding: 10px; 
+            border-radius: 8px; margin: 10px 0; word-break: break-all; 
+            font-family: monospace; font-size: 11px; color: #0ff; 
+        }
+        
         .loading { text-align: center; padding: 20px; color: cyan; animation: pulse 1.5s infinite; font-family: monospace; }
         
         .pop {
-            position: absolute;
-            color: cyan;
-            font-weight: bold;
-            font-size: 26px;
-            pointer-events: none;
-            animation: moveUp 0.6s ease-out forwards;
-            z-index: 9999;
-            text-shadow: 0 0 10px rgba(0,255,255,0.5);
+            position: absolute; color: cyan; font-weight: bold; font-size: 26px;
+            pointer-events: none; animation: moveUp 0.6s ease-out forwards;
+            z-index: 9999; text-shadow: 0 0 10px rgba(0,255,255,0.5);
         }
+        
         @keyframes moveUp {
             0% { transform: translateY(0) scale(1); opacity: 1; }
             100% { transform: translateY(-120px) scale(1.2); opacity: 0; }
@@ -162,7 +168,7 @@
                     });
                 } catch(e) { console.warn("TON Connect UI error"); }
 
-                // Загрузка данных
+                // Загрузка данных пользователя
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
                     if (r.ok) {
