@@ -6,7 +6,6 @@ import cors from 'cors';
 import session from 'express-session';
 import { Sequelize, DataTypes, Op } from 'sequelize';
 import os from 'os';
-// import OpenAI from 'openai'; // OpenAI временно отключен
 
 // AdminJS (v7+)
 import AdminJS from 'adminjs';
@@ -17,11 +16,22 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 AdminJS.registerAdapter(AdminJSSequelize);
 
-// --- СИСТЕМА ЛОГИРОВАНИЯ ---
+// --- УЛУЧШЕННАЯ СИСТЕМА ЛОГИРОВАНИЯ ---
 const logger = {
-    info: (msg) => console.log(`[${new Date().toISOString()}] 🔵 INFO: ${msg}`),
-    system: (msg) => console.log(`[${new Date().toISOString()}] 🚀 SYSTEM: ${msg}`),
-    error: (msg, err) => console.error(`[${new Date().toISOString()}] 🔴 ERROR: ${msg}`, err || '')
+    info: (msg) => console.log(`[${new Date().toLocaleString()}] 🔵 INFO: ${msg}`),
+    system: (msg) => console.log(`[${new Date().toLocaleString()}] 🚀 SYSTEM: ${msg}`),
+    warn: (msg) => console.log(`[${new Date().toLocaleString()}] 🟡 WARN: ${msg}`),
+    error: (msg, err) => {
+        console.error(`[${new Date().toLocaleString()}] 🔴 ERROR: ${msg}`);
+        if (err) console.error(err);
+    },
+    http: (req, res, next) => {
+        // Логируем только API запросы, чтобы не забивать консоль статикой
+        if (req.url.startsWith('/api')) {
+            console.log(`[${new Date().toLocaleString()}] 🌐 HTTP: ${req.method} ${req.url} - IP: ${req.ip}`);
+        }
+        next();
+    }
 };
 
 // --- CONFIG ---
@@ -33,23 +43,26 @@ const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// --- ОПТИМИЗАЦИЯ EXPRESS ---
+// --- MIDDLEWARES & ОПТИМИЗАЦИЯ ---
 app.disable('x-powered-by'); 
 app.disable('etag'); 
 app.set('trust proxy', 1);
-app.use(cors());
+app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '1mb' }));
+app.use(logger.http); // Подключаем логирование HTTP запросов
 
 app.use(express.static(path.join(__dirname, 'static'), { 
     maxAge: '30d', 
-    immutable: true,
-    lastModified: false
+    immutable: true
 }));
 
 // --- БАЗА ДАННЫХ ---
 const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
-    logging: false, 
+    logging: (msg) => {
+        // Логируем медленные запросы или ошибки SQL, если нужно
+        if (msg.includes('ERROR')) logger.error('SQL Error', msg);
+    },
     dialectOptions: { ssl: false, connectTimeout: 15000 },
     pool: { max: 30, min: 5, acquire: 30000, idle: 10000 }
 });
@@ -97,7 +110,9 @@ app.get('/api/user/:id', async (req, res) => {
     try {
         const userId = BigInt(req.params.id);
         const user = await User.findByPk(userId);
+        
         if (!user) {
+            logger.info(`New user registration attempt: ${userId}`);
             const newUser = await User.create({ 
                 id: userId, 
                 username: req.query.username || 'AGENT',
@@ -114,11 +129,12 @@ app.get('/api/user/:id', async (req, res) => {
             user.balance += parseFloat(earned.toFixed(2));
             user.last_seen = now;
             user.level = calculateLevel(user.balance);
-            await user.save().catch(()=>{});
+            await user.save().catch(e => logger.error('Failed to save user offline profit', e));
+            logger.info(`User ${userId} earned ${earned.toFixed(2)} offline`);
         }
         res.json(user);
     } catch (e) { 
-        logger.error("User Sync Error", e);
+        logger.error(`API Sync error for user ${req.params.id}`, e);
         res.status(500).send("AI_CORE_OFFLINE"); 
     }
 });
@@ -128,49 +144,26 @@ app.post('/api/save', async (req, res) => {
         const { id, ...data } = req.body;
         if (!id) return res.status(400).json({ error: "ID Missing" });
 
-        const userId = BigInt(id); // Конвертация для больших ID
-
+        const userId = BigInt(id);
         if (data.balance !== undefined) data.level = calculateLevel(data.balance);
         
+        delete data.id;
+
         const [updated] = await User.update(
             { ...data, last_seen: new Date() }, 
             { where: { id: userId } }
         );
 
         if (updated === 0) {
-            // Если пользователя нет, создаем (на всякий случай)
+            logger.warn(`Save triggered for non-existent user ${userId}, creating...`);
             await User.create({ id: userId, ...data });
         }
 
         res.json({ ok: true });
     } catch (e) {
-        logger.error("SAVE FAILURE", e);
-        res.status(500).json({ error: "DB Error", details: e.message });
+        logger.error(`SAVE FAILURE for user ${req.body?.id}`, e);
+        res.status(500).json({ error: "DB Error" });
     }
-});
-
-// --- AI ADVICE ENGINE (ЗАГЛУШКА) ---
-app.post('/api/ai-advice', async (req, res) => {
-    res.json({ 
-        text: "Внимание: Нейросеть переведена в режим автономного накопления. Протоколы оптимизации стабильны. Продолжайте экспансию, Агент." 
-    });
-});
-
-app.get('/api/top', async (req, res) => {
-    try {
-        const users = await User.findAll({ 
-            limit: 50, order: [['balance', 'DESC']], 
-            attributes: ['username', 'balance', 'level', 'photo_url'], raw: true 
-        });
-        res.json(users);
-    } catch (e) { res.json([]); }
-});
-
-app.get('/api/tasks', async (req, res) => {
-    try {
-        const tasks = await Task.findAll({ raw: true });
-        res.json(tasks);
-    } catch (e) { res.json([]); }
 });
 
 // --- АДМИНКА ---
@@ -207,26 +200,39 @@ const startAdmin = async () => {
 // --- TELEGRAM BOT ---
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
-    const refId = ctx.startPayload ? parseInt(ctx.startPayload) : null;
+    const refIdRaw = ctx.startPayload ? ctx.startPayload : null;
     const logoPath = path.join(__dirname, 'static/images/logo.png');
+
+    logger.info(`Bot /start from ${userId} (username: ${ctx.from.username})`);
 
     try {
         let user = await User.findByPk(userId);
         if (!user) {
-            let startBal = 0; let refBy = null;
-            if (refId && refId !== userId) {
-                refBy = refId; startBal = 5000;
-                User.increment({ balance: 10000, referrals: 1 }, { where: { id: refId } }).catch(()=>{});
+            let startBal = 0; 
+            let refBy = null;
+            
+            if (refIdRaw && BigInt(refIdRaw) !== BigInt(userId)) {
+                refBy = BigInt(refIdRaw); 
+                startBal = 5000;
+                logger.info(`Referral detected: ${userId} invited by ${refBy}`);
+                await User.increment({ balance: 10000, referrals: 1 }, { where: { id: refBy } }).catch(e => logger.error('Ref bonus fail', e));
             }
-            user = await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: startBal, referred_by: refBy, last_bonus: 0 });
+            
+            user = await User.create({ 
+                id: userId, 
+                username: ctx.from.username || ctx.from.first_name || 'AGENT', 
+                balance: startBal, 
+                referred_by: refBy, 
+                last_bonus: 0 
+            });
         }
         
         ctx.replyWithPhoto({ source: logoPath }, {
             caption: `<b>Neural Pulse | Terminal</b>\n\nИдентификация пройдена.\nАгент: <code>${ctx.from.username || userId}</code>`,
             parse_mode: 'HTML',
             ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", DOMAIN)]])
-        }).catch(() => ctx.reply("Система онлайн.", Markup.inlineKeyboard([[Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", DOMAIN)]])));
-    } catch (e) { logger.error("Bot Logic Crash", e); }
+        });
+    } catch (e) { logger.error(`Bot Logic Crash for user ${userId}`, e); }
 });
 
 const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
@@ -235,24 +241,38 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 // --- ENGINE START ---
 const server = app.listen(PORT, '0.0.0.0', async () => {
     try {
+        logger.system('Initializing Engine components...');
         await sequelize.authenticate();
+        logger.system('Database connected.');
+        
         await sequelize.sync({ alter: true }); 
+        logger.system('Models synchronized.');
+
         startAdmin(); 
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
+        logger.system(`Webhook set to: ${DOMAIN}${WEBHOOK_PATH}`);
         
         setInterval(async () => {
-            Stats.create({
-                user_count: await User.count(),
-                server_load: parseFloat((os.loadavg()[0] * 10).toFixed(2)),
-                mem_usage: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2))
-            }).catch(()=>{});
-        }, 900000);
+            try {
+                const uCount = await User.count();
+                const load = parseFloat((os.loadavg()[0] * 10).toFixed(2));
+                const mem = parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2));
+                
+                await Stats.create({
+                    user_count: uCount,
+                    server_load: load,
+                    mem_usage: mem
+                });
+                logger.info(`Stats updated: Users: ${uCount}, Load: ${load}, Mem: ${mem}MB`);
+            } catch (err) { logger.error('Stats interval failed', err); }
+        }, 900000); 
 
         logger.system(`Neural Pulse ULTRA-SPEED Online [Port ${PORT}]`);
     } catch (err) { logger.error("CRITICAL ENGINE FAILURE", err); }
 });
 
 process.on('SIGTERM', () => server.close(async () => { 
+    logger.system('SIGTERM received. Shutting down...');
     await sequelize.close(); 
     process.exit(0); 
 }));
