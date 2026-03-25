@@ -3,7 +3,6 @@ import { Telegraf, Markup } from 'telegraf';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
-import session from 'express-session';
 import { Sequelize, DataTypes, Op } from 'sequelize';
 import os from 'os';
 import { v4 as uuidv4 } from 'uuid';
@@ -22,8 +21,6 @@ AdminJS.registerAdapter(AdminJSSequelize);
 
 // --- ИНИЦИАЛИЗАЦИЯ COMPONENT LOADER ---
 const componentLoader = new ComponentLoader();
-
-// Исправлено: используем абсолютный путь через path.join
 const dashboardPath = path.join(__dirname, 'dashboard.jsx');
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', dashboardPath);
 
@@ -35,9 +32,6 @@ const logger = {
     error: (msg, err) => {
         console.error(`[${new Date().toLocaleString()}] 🔴 ERROR: ${msg}`);
         if (err) console.error("--- Stack Trace Start ---\n", err, "\n--- Stack Trace End ---");
-    },
-    ai: (userId, response, tokens) => {
-        console.log(`[${new Date().toLocaleString()}] 🤖 AI_LOG: User: ${userId} | Tokens: ${tokens}`);
     },
     http: (req, res, next) => {
         const requestId = uuidv4().split('-')[0];
@@ -248,13 +242,13 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
     } catch (err) { logger.error("CRITICAL ENGINE BOOTSTRAP FAILURE", err); }
 });
 
-// Корректное завершение
-process.on('SIGTERM', () => server.close(async () => { 
-    await sequelize.close(); 
-    process.exit(0); 
-}));
+// Завершение работы
+const shutdown = async () => {
+    server.close(async () => { 
+        await sequelize.close(); 
+        process.exit(0); 
+    });
+};
 
-process.on('SIGINT', () => server.close(async () => { 
-    await sequelize.close(); 
-    process.exit(0); 
-}));
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
