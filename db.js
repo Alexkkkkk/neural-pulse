@@ -11,14 +11,14 @@ export const sequelize = new Sequelize(PG_URI, {
     dialectOptions: { 
         ssl: false 
     },
-    // Настройки пула для предотвращения разрыва соединений на Bothost
+    // Настройки пула для стабильности на Bothost (предотвращает разрывы)
     pool: { 
         max: 30, 
         min: 5,
         acquire: 60000,
         idle: 10000 
     },
-    timezone: '+00:00' // Гарантирует правильную работу с датами
+    timezone: '+00:00' // Гарантирует правильную работу с датами (UTC)
 });
 
 const SequelizeStore = ConnectSessionSequelize(session.Store);
@@ -96,11 +96,11 @@ export const initDB = async () => {
         console.log('--- [DB] CONNECTED TO POSTGRES ---');
         
         // ВНИМАНИЕ: force: true полностью ПЕРЕСОЗДАСТ таблицы.
-        // Это уберет ошибку "created_at contains null values", удалив старые проблемные записи.
+        // Это исправит ошибку "created_at contains null values", так как старые данные будут удалены.
         await sequelize.sync({ force: true }); 
         console.log('--- [DB] TABLES RE-CREATED (FORCE SUCCESS) ---');
 
-        // Сразу создаем базовые задания, чтобы проект не был пустым
+        // Создаем базовые задания для Neural Pulse
         await Task.bulkCreate([
             { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
             { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
