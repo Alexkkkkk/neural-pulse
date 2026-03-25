@@ -9,14 +9,21 @@ import os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import OpenAI from 'openai';
 
-// AdminJS (v7+)
-import AdminJS from 'adminjs';
+// AdminJS (v7+) - Критически важные импорты для ESM
+import AdminJS, { ComponentLoader } from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Регистрация адаптера БД
 AdminJS.registerAdapter(AdminJSSequelize);
+
+// --- ИНИЦИАЛИЗАЦИЯ COMPONENT LOADER ---
+// В AdminJS v7+ это единственный способ подключить кастомный dashboard.jsx
+const componentLoader = new ComponentLoader();
+const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', './dashboard.jsx');
 
 // --- СУПЕР-ЛОГГЕР ---
 const logger = {
@@ -102,8 +109,9 @@ const User = sequelize.define('users', {
     completed_tasks: { type: DataTypes.JSONB, defaultValue: [] },
     wallet: { type: DataTypes.STRING, allowNull: true },
     last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 }, 
-    last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
-}, { timestamps: false });
+    last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
+    createdAt: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
+}, { timestamps: true }); // Включили timestamps для графиков
 
 const Task = sequelize.define('tasks', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
@@ -148,13 +156,9 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "SAVE_ERROR" }); }
 });
 
-// --- ADMINJS (С ГРАФИКАМИ) ---
+// --- ADMINJS ---
 const startAdmin = async () => {
     try {
-        const { default: connectSessionSequelize } = await import('connect-session-sequelize');
-        const SequelizeStore = connectSessionSequelize(session.Store);
-        const sessionStore = new SequelizeStore({ db: sequelize, tableName: 'sessions' });
-        
         const adminJs = new AdminJS({
             resources: [
                 { resource: User, options: { navigation: { name: 'Агенты', icon: 'User' } } }, 
@@ -162,6 +166,7 @@ const startAdmin = async () => {
                 { resource: Stats, options: { navigation: { name: 'Система', icon: 'Settings' } } }
             ],
             rootPath: '/admin',
+            componentLoader, // Передаем загрузчик
             branding: { companyName: 'Neural Pulse Hub', logo: false, softwareBrothers: false },
             dashboard: {
                 handler: async () => {
@@ -169,26 +174,30 @@ const startAdmin = async () => {
                     await sequelize.query('SELECT 1');
                     const latency = Date.now() - start;
                     const totalUsers = await User.count();
-                    const cpuLoad = (os.loadavg()[0] * 100 / os.cpus().length).toFixed(1);
+                    
+                    // Считаем новых за 24 часа
+                    const last24h = await User.count({
+                        where: { createdAt: { [Op.gt]: new Date(Date.now() - 24 * 60 * 60 * 1000) } }
+                    });
 
                     return {
                         totalUsers,
+                        newUsers24h: last24h,
                         currentMem: (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2),
                         dbLatency: latency,
-                        cpu: cpuLoad
+                        cpu: (os.loadavg()[0] * 10).toFixed(1)
                     };
                 },
-                component: AdminJS.bundle('./dashboard.jsx'),
-            },
-            bundler: { enabled: true }
+                component: DASHBOARD_COMPONENT,
+            }
         });
 
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (e, p) => (e === '1' && p === '1') ? { email: 'admin' } : null,
             cookiePassword: 'secure-pass-2026-pulse',
         }, null, {
-            store: sessionStore, secret: 'neural_pulse_secret_2026', resave: false, saveUninitialized: false,
-            proxy: true, cookie: { maxAge: 86400000, secure: false }
+            resave: false, saveUninitialized: false, secret: 'neural_pulse_secret_2026',
+            cookie: { maxAge: 86400000, secure: false }
         });
         
         app.use(adminJs.options.rootPath, adminRouter);
@@ -223,7 +232,6 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
         await sequelize.sync({ alter: true }); 
         await startAdmin(); 
         
-        // Фоновый сбор статистики каждые 15 минут
         setInterval(async () => {
             try {
                 const uCount = await User.count();
@@ -240,4 +248,8 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
     } catch (err) { logger.error("CRITICAL ENGINE BOOTSTRAP FAILURE", err); }
 });
 
-process.on('SIGTERM', () => server.close(async () => { await sequelize.close(); process.exit(0); }));
+// Корректное завершение
+process.on('SIGTERM', () => server.close(async () => { 
+    await sequelize.close(); 
+    process.exit(0); 
+}));
