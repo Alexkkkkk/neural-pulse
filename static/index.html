@@ -84,7 +84,7 @@
 
     <div id="app" style="display: none; flex-direction: column; height: 100vh;">
         <header>
-            <div class="u-avatar"><img id="my-avatar" src="images/logo.png"></div>
+            <div class="u-avatar"><img id="my-avatar" src="images/logo.png" onerror="this.src='images/logo.png'"></div>
             <div class="u-info">
                 <b id="my-name">AGENT</b><br>
                 <small id="ui-rank">SCANNING...</small>
@@ -196,11 +196,10 @@
             async sendTransaction() {
                 if (!tonConnectUI.connected) { tg.showAlert("Connect wallet first!"); return; }
                 
-                // 1 TON = 1,000,000,000 nanoTON
                 const transaction = {
                     validUntil: Math.floor(Date.now() / 1000) + 60,
                     messages: [{ 
-                        address: "UQC_ВАШ_АДРЕС_ПРИЕМНИК", // ЗАМЕНИ НА СВОЙ TON АДРЕС
+                        address: "UQC_ВАШ_АДРЕС_ПРИЕМНИК", // ЗАМЕНИТЬ НА ВАШ АДРЕС
                         amount: "1000000000" 
                     }]
                 };
@@ -229,9 +228,17 @@
                     tg.HapticFeedback.notificationOccurred('error'); 
                     return; 
                 }
-                this.data.balance += this.data.tap;
-                this.data.energy -= 1;
-                ui.pop(e, this.data.tap);
+                
+                // Обработка мультитача
+                const touches = e.changedTouches;
+                for(let i=0; i < touches.length; i++) {
+                    if(this.data.energy >= 1) {
+                        this.data.balance += this.data.tap;
+                        this.data.energy -= 1;
+                        ui.pop(touches[i], this.data.tap);
+                    }
+                }
+
                 ui.render();
                 tg.HapticFeedback.impactOccurred('medium');
             },
@@ -247,7 +254,6 @@
                     ui.render();
                     tg.HapticFeedback.notificationOccurred('success');
                     await this.save(); 
-                    // Мгновенное обновление модалки
                     ui.openM(type === 'mine' ? 'mine' : 'boost');
                 } else { 
                     tg.showAlert("НЕДОСТАТОЧНО NP ДЛЯ АПГРЕЙДА"); 
@@ -266,13 +272,12 @@
                     tg.openTelegramLink(link); 
                 }
 
-                // Задержка проверки, чтобы пользователь успел перейти
                 setTimeout(async () => {
                     this.data.balance += reward;
                     if(!this.data.completed_tasks) this.data.completed_tasks = [];
                     this.data.completed_tasks.push(id);
                     ui.render(); 
-                    ui.openM('tasks'); // Обновляем список задач
+                    ui.openM('tasks');
                     tg.showAlert(`Verified! +${reward.toLocaleString()} NP`);
                     await this.save();
                 }, 3000);
@@ -296,18 +301,15 @@
 
             startLoops() {
                 setInterval(() => {
-                    // Регенерация энергии
                     if(this.data.energy < this.data.max_energy) {
                         this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1.2);
                     }
-                    // Пассивный доход
                     if(this.data.profit > 0) {
                         this.data.balance += (this.data.profit / 3600);
                     }
                     ui.render();
                 }, 1000);
                 
-                // Автосохранение каждые 15 сек
                 setInterval(() => this.save(), 15000);
             }
         };
@@ -336,17 +338,15 @@
                 document.getElementById('ui-tap').innerText = `+${d.tap}`;
                 document.getElementById('ui-profit').innerText = Math.floor(d.profit).toLocaleString();
                 
-                // Динамический ранг
                 const rank = d.balance < 50000 ? "NODE AGENT" : d.balance < 500000 ? "CYBER MANTIS" : "NEURAL LORD";
                 document.getElementById('ui-rank').innerText = rank;
                 document.getElementById('my-lvl').innerText = `LVL ${Math.floor(d.balance / 20000) + 1}`;
             },
 
-            pop(e, p) {
-                const t = (e.touches && e.touches[0]) || e;
+            pop(touch, p) {
                 const div = document.createElement('div');
                 div.className = 'pop'; div.innerText = `+${p}`;
-                div.style.left = (t.clientX - 10)+'px'; div.style.top = (t.clientY - 20)+'px';
+                div.style.left = (touch.clientX - 10)+'px'; div.style.top = (touch.clientY - 20)+'px';
                 document.body.appendChild(div);
                 setTimeout(() => div.remove(), 600);
             },
