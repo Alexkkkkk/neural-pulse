@@ -9,7 +9,7 @@ export const sequelize = new Sequelize(PG_URI, {
     dialect: 'postgres', 
     logging: false,
     dialectOptions: { 
-        ssl: false // На Bothost обычно SSL не требуется для внутренних нод
+        ssl: false 
     },
     pool: { 
         max: 30, 
@@ -32,8 +32,8 @@ export const User = sequelize.define('users', {
     photo_url: { type: DataTypes.TEXT },
     
     // Экономика токена
-    balance: { type: DataTypes.DECIMAL(20, 2), defaultValue: 0 }, // Точность для $NPULSE
-    profit: { type: DataTypes.DECIMAL(20, 2), defaultValue: 0 },  // Пассивный доход
+    balance: { type: DataTypes.DECIMAL(20, 2), defaultValue: 0 }, 
+    profit: { type: DataTypes.DECIMAL(20, 2), defaultValue: 0 },  
     
     // Игровые механики
     energy: { type: DataTypes.DOUBLE, defaultValue: 1000 },
@@ -59,7 +59,7 @@ export const User = sequelize.define('users', {
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { 
     timestamps: true,
-    underscored: true // created_at вместо createdAt (стандарт Postgres)
+    underscored: true // Это создает колонки created_at и updated_at
 });
 
 // --- МОДЕЛЬ: МИССИИ (TASK) ---
@@ -91,8 +91,12 @@ User.hasMany(User, { as: 'Referrals', foreignKey: 'referred_by' });
 export const initDB = async () => {
     try {
         await sequelize.authenticate();
-        // alter: true позволяет добавлять новые колонки без удаления старых данных
-        await sequelize.sync({ alter: true }); 
+        
+        // ВНИМАНИЕ: force: true полностью ПЕРЕСОЗДАСТ таблицы (удалит старых юзеров)
+        // Это исправит ошибку "column created_at contains null values"
+        await sequelize.sync({ force: true }); 
+        
+        console.log('--- DATABASE RE-INITIALIZED (FORCE) ---');
         return true;
     } catch (error) {
         console.error('Database Init Error:', error);
