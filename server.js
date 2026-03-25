@@ -6,7 +6,8 @@ import cors from 'cors';
 import session from 'express-session';
 import { Sequelize, DataTypes, Op } from 'sequelize';
 import os from 'os';
-import { v4 as uuidv4 } from 'uuid'; // Нужно добавить в package.json: npm install uuid
+import { v4 as uuidv4 } from 'uuid';
+import OpenAI from 'openai'; // Добавлено для будущих ИИ функций
 
 // AdminJS (v7+)
 import AdminJS from 'adminjs';
@@ -17,7 +18,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 AdminJS.registerAdapter(AdminJSSequelize);
 
-// --- ГЛУБОКАЯ СИСТЕМА ЛОГИРОВАНИЯ ---
+// --- СУПЕР-ЛОГГЕР ---
 const logger = {
     info: (msg, meta = '') => console.log(`[${new Date().toLocaleString()}] 🔵 INFO: ${msg}`, meta),
     system: (msg) => console.log(`[${new Date().toLocaleString()}] 🚀 SYSTEM: ${msg}`),
@@ -26,16 +27,17 @@ const logger = {
         console.error(`[${new Date().toLocaleString()}] 🔴 ERROR: ${msg}`);
         if (err) console.error("--- Stack Trace Start ---\n", err, "\n--- Stack Trace End ---");
     },
-    // Middleware для детального трекинга HTTP
+    // Логирование ИИ запросов
+    ai: (prompt, response, tokens) => {
+        console.log(`[${new Date().toLocaleString()}] 🤖 AI_LOG: Prompt: ${prompt.substring(0, 50)}... | Tokens: ${tokens}`);
+    },
     http: (req, res, next) => {
-        const requestId = uuidv4().split('-')[0]; // Короткий ID для связи логов
+        const requestId = uuidv4().split('-')[0];
         const start = Date.now();
         
         if (req.url.startsWith('/api')) {
             logger.info(`REQ [${requestId}] ${req.method} ${req.url} | IP: ${req.ip}`);
-            if (req.method === 'POST') {
-                console.log(`    ⤷ Payload [${requestId}]:`, JSON.stringify(req.body));
-            }
+            if (req.method === 'POST') console.log(`    ⤷ Payload [${requestId}]:`, JSON.stringify(req.body));
         }
 
         res.on('finish', () => {
@@ -58,6 +60,16 @@ const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
+// Глобальный перехват «невидимых» ошибок
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled Rejection at Promise', reason);
+});
+process.on('uncaughtException', (err) => {
+    logger.error('Uncaught Exception thrown', err);
+    // Даем серверу время записать логи перед выходом
+    setTimeout(() => process.exit(1), 1000);
+});
+
 // --- MIDDLEWARES ---
 app.disable('x-powered-by'); 
 app.set('trust proxy', 1);
@@ -74,8 +86,8 @@ app.use(express.static(path.join(__dirname, 'static'), {
 const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
     logging: (sql, timing) => {
-        // Логируем только если запрос выполняется дольше 100мс или содержит ошибку
-        if (timing > 100) logger.warn(`Slow Query (${timing}ms): ${sql}`);
+        // Логируем медленные запросы (дольше 150мс)
+        if (timing > 150) logger.warn(`Slow Query (${timing}ms): ${sql}`);
     },
     benchmark: true,
     dialectOptions: { ssl: false, connectTimeout: 15000 },
@@ -120,14 +132,13 @@ const Stats = sequelize.define('stats', {
 const calculateLevel = (b) => b < 10000 ? 1 : b < 100000 ? 2 : b < 500000 ? 3 : b < 2000000 ? 4 : 5;
 
 // --- API GAME CORE ---
-
 app.get('/api/user/:id', async (req, res) => {
     try {
         const userId = BigInt(req.params.id);
         const user = await User.findByPk(userId);
         
         if (!user) {
-            logger.info(`User ${userId} not found, initiating creation.`);
+            logger.info(`User ${userId} creation flow started.`);
             const newUser = await User.create({ 
                 id: userId, 
                 username: req.query.username || 'AGENT',
@@ -145,7 +156,7 @@ app.get('/api/user/:id', async (req, res) => {
             user.last_seen = now;
             user.level = calculateLevel(user.balance);
             await user.save();
-            logger.info(`Sync: User ${userId} processed offline profit: +${earned.toFixed(2)}`);
+            logger.info(`Sync: User ${userId} | Offline: ${offline}s | Profit: +${earned.toFixed(2)}`);
         }
         res.json(user);
     } catch (e) { 
@@ -161,7 +172,6 @@ app.post('/api/save', async (req, res) => {
 
         const userId = BigInt(id);
         if (data.balance !== undefined) data.level = calculateLevel(data.balance);
-        
         delete data.id;
 
         const [updated] = await User.update(
@@ -170,7 +180,7 @@ app.post('/api/save', async (req, res) => {
         );
 
         if (updated === 0) {
-            logger.warn(`Save mismatch: User ${userId} missing during update. Force creating.`);
+            logger.warn(`Save mismatch for User ${userId}. Force creating...`);
             await User.create({ id: userId, ...data });
         }
         res.json({ ok: true });
@@ -207,8 +217,8 @@ const startAdmin = async () => {
         });
         
         app.use(adminJs.options.rootPath, adminRouter);
-        logger.system('Admin Security Shield Active.');
-    } catch (e) { logger.error("Admin Boot Error", e); }
+        logger.system('Admin Panel Security Shield: ACTIVE');
+    } catch (e) { logger.error("Admin System Boot Failure", e); }
 };
 
 // --- TELEGRAM BOT ---
@@ -217,37 +227,35 @@ bot.start(async (ctx) => {
     const refIdRaw = ctx.startPayload ? ctx.startPayload : null;
     const logoPath = path.join(__dirname, 'static/images/logo.png');
 
-    logger.info(`BOT_START: ${userId} (@${ctx.from.username || 'no_name'})`);
+    logger.info(`BOT_START: ${userId} (@${ctx.from.username || 'anonymous'})`);
 
     try {
         let user = await User.findByPk(userId);
         if (!user) {
-            let startBal = 0; 
-            let refBy = null;
+            let startBal = 0, refBy = null;
             
             if (refIdRaw && BigInt(refIdRaw) !== BigInt(userId)) {
                 refBy = BigInt(refIdRaw); 
                 startBal = 5000;
-                logger.info(`REF_LINK: New user ${userId} via ${refBy}`);
-                await User.increment({ balance: 10000, referrals: 1 }, { where: { id: refBy } }).catch(e => logger.error('Ref Increment Error', e));
+                logger.info(`REF_EVENT: User ${userId} invited by ${refBy}`);
+                await User.increment({ balance: 10000, referrals: 1 }, { where: { id: refBy } }).catch(e => logger.error('Ref Bonus Update Error', e));
             }
             
             user = await User.create({ 
                 id: userId, 
                 username: ctx.from.username || ctx.from.first_name || 'AGENT', 
                 balance: startBal, 
-                referred_by: refBy, 
-                last_bonus: 0 
+                referred_by: refBy 
             });
-            logger.system(`DATABASE: Registered new agent ${userId}`);
+            logger.system(`DATABASE: Agent ${userId} registered.`);
         }
         
         ctx.replyWithPhoto({ source: logoPath }, {
             caption: `<b>Neural Pulse | Terminal</b>\n\nИдентификация пройдена.\nАгент: <code>${ctx.from.username || userId}</code>`,
             parse_mode: 'HTML',
             ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", DOMAIN)]])
-        }).catch(e => logger.error(`Telegram UI Error (Photo send fail) for ${userId}`, e));
-    } catch (e) { logger.error(`Bot Start Logic Crash [User: ${userId}]`, e); }
+        }).catch(e => logger.error(`Telegram UI Render Error for ${userId}`, e));
+    } catch (e) { logger.error(`Bot Core Crash for ${userId}`, e); }
 });
 
 const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
@@ -256,17 +264,18 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 // --- ENGINE START ---
 const server = app.listen(PORT, '0.0.0.0', async () => {
     try {
-        logger.system('--- NEURAL PULSE ENGINE BOOT ---');
+        logger.system('--- NEURAL PULSE ENGINE STARTING ---');
         await sequelize.authenticate();
-        logger.system('Database: CONNECTION_ESTABLISHED');
+        logger.system('Database Connection: OK');
         
         await sequelize.sync({ alter: true }); 
-        logger.system('Database: SCHEMA_SYNC_OK');
+        logger.system('Schema Synchronization: OK');
 
         await startAdmin(); 
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
-        logger.system(`Network: Webhook online at ${DOMAIN}`);
+        logger.system(`Webhook Network: ${DOMAIN}${WEBHOOK_PATH}`);
         
+        // Цикл мониторинга ресурсов
         setInterval(async () => {
             try {
                 const uCount = await User.count();
@@ -274,16 +283,16 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
                 const mem = parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2));
                 
                 await Stats.create({ user_count: uCount, server_load: load, mem_usage: mem });
-                logger.info(`SERVER_MONITOR: Users: ${uCount} | CPU: ${load}% | RAM: ${mem}MB`);
-            } catch (err) { logger.error('Monitoring Interval Error', err); }
+                logger.info(`MONITOR: Users: ${uCount} | Load: ${load}% | Mem: ${mem}MB`);
+            } catch (err) { logger.error('Monitoring Heartbeat Failed', err); }
         }, 900000); 
 
-        logger.system(`ENGINE: STATUS_READY on Port ${PORT}`);
-    } catch (err) { logger.error("CRITICAL BOOT FAILURE", err); }
+        logger.system(`ENGINE: READY (Port ${PORT})`);
+    } catch (err) { logger.error("CRITICAL ENGINE BOOTSTRAP FAILURE", err); }
 });
 
 process.on('SIGTERM', () => server.close(async () => { 
-    logger.system('SHUTDOWN: SIGTERM Received. Closing DB connections...');
+    logger.system('SIGTERM detected. Graceful shutdown in progress...');
     await sequelize.close(); 
     process.exit(0); 
 }));
