@@ -59,7 +59,7 @@ export const User = sequelize.define('users', {
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { 
     timestamps: true,
-    underscored: true // created_at вместо createdAt
+    underscored: true 
 });
 
 // --- МОДЕЛЬ: МИССИИ (TASK) ---
@@ -91,16 +91,21 @@ User.hasMany(User, { as: 'Referrals', foreignKey: 'referred_by' });
 export const initDB = async () => {
     try {
         await sequelize.authenticate();
-        console.log('--- DATABASE CONNECTED ---');
+        console.log('--- [DB] CONNECTED TO POSTGRES ---');
         
-        // ПЕРВАЯ ИНИЦИАЛИЗАЦИЯ: force: true удаляет старое и создает чистое.
-        // ПОСЛЕ УСПЕШНОГО ЗАПУСКА: замени на { alter: true }
+        // ВАЖНО: force: true один раз очистит базу от ошибок структуры
         await sequelize.sync({ force: true }); 
-        
-        console.log('--- DATABASE RE-INITIALIZED (FORCE SUCCESS) ---');
+        console.log('--- [DB] TABLES RE-CREATED (FORCE SUCCESS) ---');
+
+        // Сразу создаем базовые задания, чтобы база не была пустой
+        await Task.bulkCreate([
+            { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
+            { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' }
+        ], { ignoreDuplicates: true });
+
         return true;
     } catch (error) {
-        console.error('Database Init Error:', error);
+        console.error('--- [DB] FATAL INIT ERROR:', error);
         return false;
     }
 };
