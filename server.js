@@ -7,6 +7,8 @@ import { Sequelize, DataTypes, Op } from 'sequelize';
 import os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import OpenAI from 'openai';
+import session from 'express-session';
+import ConnectSessionSequelize from 'connect-session-sequelize';
 
 // AdminJS (v7+) - Критически важные импорты для ESM
 import AdminJS, { ComponentLoader } from 'adminjs';
@@ -66,18 +68,6 @@ process.on('uncaughtException', (err) => {
     setTimeout(() => process.exit(1), 1000);
 });
 
-// --- MIDDLEWARES ---
-app.disable('x-powered-by'); 
-app.set('trust proxy', 1);
-app.use(cors({ origin: '*' }));
-app.use(express.json({ limit: '1mb' }));
-app.use(logger.http); 
-
-app.use(express.static(path.join(__dirname, 'static'), { 
-    maxAge: '30d', 
-    immutable: true
-}));
-
 // --- БАЗА ДАННЫХ ---
 const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
@@ -85,6 +75,10 @@ const sequelize = new Sequelize(PG_URI, {
     dialectOptions: { ssl: false },
     pool: { max: 30, min: 5 }
 });
+
+// Настройка хранилища сессий для AdminJS
+const SequelizeStore = ConnectSessionSequelize(session.Store);
+const sessionStore = new SequelizeStore({ db: sequelize });
 
 // --- MODELS ---
 const User = sequelize.define('users', {
@@ -106,9 +100,9 @@ const User = sequelize.define('users', {
     wallet: { type: DataTypes.STRING, allowNull: true },
     last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 }, 
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
-    // Системные колонки для корректной работы Timestamps в PostgreSQL
-    createdAt: { type: DataTypes.DATE, defaultValue: Sequelize.NOW, allowNull: true },
-    updatedAt: { type: DataTypes.DATE, defaultValue: Sequelize.NOW, allowNull: true }
+    // Разрешаем NULL для корректной миграции старых данных
+    createdAt: { type: DataTypes.DATE, allowNull: true },
+    updatedAt: { type: DataTypes.DATE, allowNull: true }
 }, { timestamps: true });
 
 const Task = sequelize.define('tasks', {
@@ -127,6 +121,18 @@ const Stats = sequelize.define('stats', {
 }, { timestamps: false });
 
 const calculateLevel = (b) => b < 50000 ? 1 : b < 500000 ? 2 : 3;
+
+// --- MIDDLEWARES ---
+app.disable('x-powered-by'); 
+app.set('trust proxy', 1);
+app.use(cors({ origin: '*' }));
+app.use(express.json({ limit: '1mb' }));
+app.use(logger.http); 
+
+app.use(express.static(path.join(__dirname, 'static'), { 
+    maxAge: '30d', 
+    immutable: true
+}));
 
 // --- API ---
 app.get('/api/top', async (req, res) => {
@@ -149,8 +155,7 @@ app.post('/api/save', async (req, res) => {
     try {
         const { id, ...data } = req.body;
         if (data.balance !== undefined) data.level = calculateLevel(data.balance);
-        // Обновляем данные и помечаем updatedAt
-        await User.update({ ...data, last_seen: new Date(), updatedAt: new Date() }, { where: { id: BigInt(id) } });
+        await User.update({ ...data, last_seen: new Date() }, { where: { id: BigInt(id) } });
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: "SAVE_ERROR" }); }
 });
@@ -193,7 +198,10 @@ const startAdmin = async () => {
             authenticate: async (e, p) => (e === '1' && p === '1') ? { email: 'admin' } : null,
             cookiePassword: 'secure-pass-2026-pulse',
         }, null, {
-            resave: false, saveUninitialized: false, secret: 'neural_pulse_secret_2026',
+            resave: false, 
+            saveUninitialized: false, 
+            secret: 'neural_pulse_secret_2026',
+            store: sessionStore,
             cookie: { maxAge: 86400000, secure: false }
         });
         
@@ -227,7 +235,8 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
         logger.system('--- NEURAL PULSE ENGINE STARTING ---');
         await sequelize.authenticate();
         
-        // Синхронизация с обработкой существующих данных
+        // Синхронизируем сначала сессии, потом остальную базу
+        await sessionStore.sync();
         await sequelize.sync({ alter: true }).catch(err => {
             logger.warn("Sync Alter failed, trying simple sync", err.message);
             return sequelize.sync();
