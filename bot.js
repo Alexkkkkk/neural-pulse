@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import cors from 'cors';
 import os from 'os';
 import OpenAI from 'openai';
+import { createProxyMiddleware } from 'http-proxy-middleware'; // Для проброса админки
 import { sequelize, User, Stats } from './db.js';
 import { logger } from './logger.js';
 
@@ -20,17 +21,35 @@ const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 const openai = new OpenAI({ apiKey: OPENAI_KEY });
 
+// --- КОНФИГУРАЦИЯ СЕРВЕРА ---
 app.disable('x-powered-by'); 
 app.set('trust proxy', 1);
 app.use(cors({ origin: '*' }));
+
+// --- ПРОКСИ ДЛЯ АДМИНКИ (ВАЖНО!) ---
+// Все запросы на /admin будут перенаправлены на порт 3001, где запущен AdminJS
+app.use('/admin', createProxyMiddleware({
+    target: 'http://127.0.0.1:3001',
+    changeOrigin: true,
+    ws: true, // Поддержка сокетов для живых графиков
+    logLevel: 'silent'
+}));
+
 app.use(express.json({ limit: '1mb' }));
 app.use(logger.http); 
-app.use(express.static(path.join(__dirname, 'static'))); // Папка static с твоим дизайном и index.html
 
-// --- API ---
+// Раздача статики (дизайн, картинки, index.html)
+app.use(express.static(path.join(__dirname, 'static')));
+
+// --- API ЭНДПОИНТЫ ---
 app.get('/api/top', async (req, res) => {
     try {
-        const topUsers = await User.findAll({ limit: 50, order: [['balance', 'DESC']], attributes: ['username', 'balance', 'level', 'photo_url'], raw: true });
+        const topUsers = await User.findAll({ 
+            limit: 50, 
+            order: [['balance', 'DESC']], 
+            attributes: ['username', 'balance', 'level', 'photo_url'], 
+            raw: true 
+        });
         res.json(topUsers);
     } catch (e) { res.status(500).json([]); }
 });
@@ -39,7 +58,12 @@ app.get('/api/user/:id', async (req, res) => {
     try {
         const userId = BigInt(req.params.id);
         let user = await User.findByPk(userId);
-        if (!user) user = await User.create({ id: userId, username: req.query.username || 'AGENT' });
+        if (!user) {
+            user = await User.create({ 
+                id: userId, 
+                username: req.query.username || 'AGENT' 
+            });
+        }
         res.json(user);
     } catch (e) { res.status(500).json({ error: "CORE_ERROR" }); }
 });
@@ -49,6 +73,7 @@ app.post('/api/save', async (req, res) => {
         const { id, ...data } = req.body;
         if (data.balance !== undefined) {
             const b = data.balance;
+            // Логика уровней Neural Pulse
             data.level = b < 50000 ? 1 : b < 500000 ? 2 : 3;
         }
         await User.update({ ...data, last_seen: new Date() }, { where: { id: BigInt(id) } });
@@ -56,7 +81,7 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "SAVE_ERROR" }); }
 });
 
-// --- AUTO-STATS ---
+// --- АВТО-СБОР СТАТИСТИКИ ---
 setInterval(async () => {
     try {
         const startDb = Date.now();
@@ -69,34 +94,56 @@ setInterval(async () => {
             mem_usage: (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2),
             db_latency: dbLatency
         });
-        logger.info("System metrics saved to Stats");
+        logger.info("System metrics synchronized with database");
     } catch (e) { logger.warn("Failed to save auto-stats"); }
-}, 30 * 60 * 1000);
+}, 15 * 60 * 1000); // Сохраняем каждые 15 минут
 
-// --- TELEGRAM BOT ---
+// --- ЛОГИКА ТЕЛЕГРАМ БОТА ---
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
-    const logoPath = path.join(__dirname, 'static/images/logo.png'); // Твои картинки
+    const logoPath = path.join(__dirname, 'static/images/logo.png');
+    
     try {
         let user = await User.findByPk(userId);
-        if (!user) user = await User.create({ id: userId, username: ctx.from.username || 'AGENT' });
-        ctx.replyWithPhoto({ source: logoPath }, {
-            caption: `<b>Neural Pulse | Terminal</b>\n\nИдентификация пройдена.\nАгент: <code>${ctx.from.username || userId}</code>`,
+        if (!user) {
+            user = await User.create({ 
+                id: userId, 
+                username: ctx.from.username || 'AGENT' 
+            });
+        }
+
+        const keyboard = Markup.inlineKeyboard([
+            [Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", DOMAIN)]
+        ]);
+
+        await ctx.replyWithPhoto({ source: logoPath }, {
+            caption: `<b>Neural Pulse | Terminal</b>\n\nИдентификация пройдена.\nАгент: <code>${ctx.from.username || userId}</code>\nСтатус: <b>ONLINE</b>`,
             parse_mode: 'HTML',
-            ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", DOMAIN)]])
+            ...keyboard
         });
-    } catch (e) { logger.error(`Bot Error`, e); }
+    } catch (e) { 
+        logger.error(`Bot Start Error`, e);
+        ctx.reply("⚠️ Ошибка инициализации терминала.");
+    }
 });
 
+// Обработка вебхука
 app.use(bot.webhookCallback(`/telegraf/${BOT_TOKEN}`));
 
-const server = app.listen(PORT, '0.0.0.0', async () => {
-    logger.info(`API & BOT ONLINE on port ${PORT}`);
+// Запуск сервера
+const server = app.listen(PORT, '0.0.0.0', () => {
+    logger.system(`API & BOT: ACTIVE on port ${PORT}`);
+    logger.info(`Admin Proxy: ${DOMAIN}/admin -> PORT 3001`);
 });
 
+// Мягкое завершение
 const shutdown = async () => {
-    logger.info("Bot shutdown signal received");
-    server.close(() => process.exit(0));
+    logger.warn("Bot core shutdown signal received");
+    server.close(() => {
+        logger.info("Process terminated safely.");
+        process.exit(0);
+    });
 };
+
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
