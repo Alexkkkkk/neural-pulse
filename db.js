@@ -59,7 +59,7 @@ export const User = sequelize.define('users', {
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { 
     timestamps: true,
-    underscored: true 
+    underscored: true // created_at вместо createdAt
 });
 
 // --- МОДЕЛЬ: МИССИИ (TASK) ---
@@ -94,13 +94,15 @@ export const initDB = async () => {
         console.log('--- [DB] CONNECTED TO POSTGRES ---');
         
         // ВАЖНО: force: true один раз очистит базу от ошибок структуры
+        // Это исправит ошибку "contains null values", так как таблица будет создана с нуля
         await sequelize.sync({ force: true }); 
         console.log('--- [DB] TABLES RE-CREATED (FORCE SUCCESS) ---');
 
-        // Сразу создаем базовые задания, чтобы база не была пустой
+        // Создаем базовые задания, чтобы проект не был пустым
         await Task.bulkCreate([
             { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
-            { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' }
+            { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
+            { title: 'Подключить TON кошелек', reward: 2500, url: '', icon: 'Wallet' }
         ], { ignoreDuplicates: true });
 
         return true;
