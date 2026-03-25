@@ -24,10 +24,9 @@ const componentLoader = new ComponentLoader();
 const dashboardPath = path.join(__dirname, 'dashboard.jsx');
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', dashboardPath);
 
-// --- ОБНОВЛЕННЫЙ СУПЕР-ЛОГГЕР С ВИЗУАЛИЗАЦИЕЙ ---
+// --- СУПЕР-ЛОГГЕР ---
 const logger = {
     info: (msg, meta = '') => console.log(`[${new Date().toLocaleString()}] 🔵 INFO: ${msg}`, meta),
-    // Визуальный прогресс-бар для терминала
     progress: (step, total) => {
         const percent = Math.round((step / total) * 100);
         const bar = '█'.repeat(step) + '░'.repeat(total - step);
@@ -98,9 +97,7 @@ const User = sequelize.define('users', {
     completed_tasks: { type: DataTypes.JSONB, defaultValue: [] },
     wallet: { type: DataTypes.STRING, allowNull: true },
     last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 }, 
-    last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
-    createdAt: { type: DataTypes.DATE, allowNull: true },
-    updatedAt: { type: DataTypes.DATE, allowNull: true }
+    last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: true });
 
 const Task = sequelize.define('tasks', {
@@ -115,6 +112,7 @@ const Stats = sequelize.define('stats', {
     user_count: { type: DataTypes.INTEGER },
     server_load: { type: DataTypes.FLOAT },
     mem_usage: { type: DataTypes.FLOAT },
+    db_latency: { type: DataTypes.INTEGER },
     timestamp: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: false });
 
@@ -137,8 +135,8 @@ app.get('/api/top', async (req, res) => {
 app.get('/api/user/:id', async (req, res) => {
     try {
         const userId = BigInt(req.params.id);
-        const user = await User.findByPk(userId);
-        if (!user) return res.json(await User.create({ id: userId, username: req.query.username || 'AGENT' }));
+        let user = await User.findByPk(userId);
+        if (!user) user = await User.create({ id: userId, username: req.query.username || 'AGENT' });
         res.json(user);
     } catch (e) { res.status(500).json({ error: "CORE_ERROR" }); }
 });
@@ -166,12 +164,27 @@ const startAdmin = async () => {
             ],
             rootPath: '/admin',
             componentLoader,
-            branding: { companyName: 'Neural Pulse Hub', logo: false, softwareBrothers: false },
+            branding: { 
+                companyName: 'Neural Pulse Hub', 
+                logo: false, 
+                softwareBrothers: false,
+                theme: { colors: { primary100: '#00f2fe' } }
+            },
             dashboard: {
                 handler: async () => {
+                    const startDb = Date.now();
+                    await sequelize.query('SELECT 1');
+                    const dbLatency = Date.now() - startDb;
+
                     const totalUsers = await User.count();
+                    const newUsers24h = await User.count({
+                        where: { createdAt: { [Op.gt]: new Date(Date.now() - 24 * 60 * 60 * 1000) } }
+                    });
+
                     return {
                         totalUsers,
+                        newUsers24h,
+                        dbLatency,
                         currentMem: (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2),
                         cpu: (os.loadavg()[0] * 10).toFixed(1)
                     };
@@ -193,6 +206,23 @@ const startAdmin = async () => {
     } catch (e) { logger.error("Admin Boot Failure", e); }
 };
 
+// --- AUTO-STATS (Запись метрик каждые 30 мин) ---
+setInterval(async () => {
+    try {
+        const startDb = Date.now();
+        await sequelize.query('SELECT 1');
+        const dbLatency = Date.now() - startDb;
+
+        await Stats.create({
+            user_count: await User.count(),
+            server_load: (os.loadavg()[0] * 10).toFixed(1),
+            mem_usage: (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2),
+            db_latency: dbLatency
+        });
+        logger.info("System metrics saved to Stats");
+    } catch (e) { logger.warn("Failed to save auto-stats"); }
+}, 30 * 60 * 1000);
+
 // --- TELEGRAM BOT ---
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
@@ -210,7 +240,7 @@ bot.start(async (ctx) => {
 
 app.use(bot.webhookCallback(`/telegraf/${BOT_TOKEN}`));
 
-// --- ENGINE START С ВИЗУАЛИЗАЦИЕЙ ШАГОВ ---
+// --- ENGINE START ---
 const server = app.listen(PORT, '0.0.0.0', async () => {
     try {
         logger.system('--- NEURAL PULSE ENGINE BOOTSTRAP ---');
