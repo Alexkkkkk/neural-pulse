@@ -21,9 +21,11 @@ const __dirname = path.dirname(__filename);
 AdminJS.registerAdapter(AdminJSSequelize);
 
 // --- ИНИЦИАЛИЗАЦИЯ COMPONENT LOADER ---
-// В AdminJS v7+ это единственный способ подключить кастомный dashboard.jsx
 const componentLoader = new ComponentLoader();
-const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', './dashboard.jsx');
+
+// Исправлено: используем абсолютный путь через path.join
+const dashboardPath = path.join(__dirname, 'dashboard.jsx');
+const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', dashboardPath);
 
 // --- СУПЕР-ЛОГГЕР ---
 const logger = {
@@ -111,7 +113,7 @@ const User = sequelize.define('users', {
     last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 }, 
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
     createdAt: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
-}, { timestamps: true }); // Включили timestamps для графиков
+}, { timestamps: true });
 
 const Task = sequelize.define('tasks', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
@@ -166,7 +168,7 @@ const startAdmin = async () => {
                 { resource: Stats, options: { navigation: { name: 'Система', icon: 'Settings' } } }
             ],
             rootPath: '/admin',
-            componentLoader, // Передаем загрузчик
+            componentLoader,
             branding: { companyName: 'Neural Pulse Hub', logo: false, softwareBrothers: false },
             dashboard: {
                 handler: async () => {
@@ -174,8 +176,6 @@ const startAdmin = async () => {
                     await sequelize.query('SELECT 1');
                     const latency = Date.now() - start;
                     const totalUsers = await User.count();
-                    
-                    // Считаем новых за 24 часа
                     const last24h = await User.count({
                         where: { createdAt: { [Op.gt]: new Date(Date.now() - 24 * 60 * 60 * 1000) } }
                     });
@@ -250,6 +250,11 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
 
 // Корректное завершение
 process.on('SIGTERM', () => server.close(async () => { 
+    await sequelize.close(); 
+    process.exit(0); 
+}));
+
+process.on('SIGINT', () => server.close(async () => { 
     await sequelize.close(); 
     process.exit(0); 
 }));
