@@ -158,7 +158,7 @@
                 const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
                 this.data.id = String(u.id);
 
-                // TON Connect Initialization
+                // TON Connect Initialization (Simplified: Connect/Disconnect only)
                 try {
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
                         manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json'
@@ -169,11 +169,11 @@
                             this.data.wallet = wallet.account.address;
                             const addr = wallet.account.address;
                             document.getElementById('wallet-btn-label').innerText = "👛 " + addr.slice(0,4) + ".." + addr.slice(-4);
-                            this.save();
                         } else {
                             this.data.wallet = null;
                             document.getElementById('wallet-btn-label').innerText = "👛 WALLET";
                         }
+                        this.save();
                     });
                 } catch(e) { console.warn("TON Error"); }
 
@@ -193,28 +193,6 @@
                 ui.render();
             },
 
-            async sendTransaction() {
-                if (!tonConnectUI.connected) { tg.showAlert("Connect wallet first!"); return; }
-                
-                const transaction = {
-                    validUntil: Math.floor(Date.now() / 1000) + 60,
-                    messages: [{ 
-                        address: "UQC_ВАШ_АДРЕС_ПРИЕМНИК", // ЗАМЕНИТЬ НА ВАШ АДРЕС
-                        amount: "1000000000" 
-                    }]
-                };
-                
-                try {
-                    await tonConnectUI.sendTransaction(transaction);
-                    tg.showAlert("Success! Pulse connection established. +1,000,000 NP");
-                    this.data.balance += 1000000;
-                    ui.render();
-                    await this.save();
-                } catch (e) { 
-                    tg.showAlert("Transaction cancelled or failed."); 
-                }
-            },
-
             getCost(type) {
                 const lvl = this.data[type + '_lvl'] || 1;
                 if(type === 'tap') return Math.floor(500 * Math.pow(1.8, lvl - 1));
@@ -229,7 +207,6 @@
                     return; 
                 }
                 
-                // Обработка мультитача
                 const touches = e.changedTouches;
                 for(let i=0; i < touches.length; i++) {
                     if(this.data.energy >= 1) {
@@ -370,9 +347,10 @@
                     const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
                     b.innerHTML = `<h2>🤝 REFERRALS</h2><div class="ref-box" id="ref-url">${link}</div><button class="task-btn" style="width:100%" onclick="ui.copyRef()">COPY INVITE LINK</button>`;
                 } else if(type === 'wallet') {
-                    const isConn = tonConnectUI && tonConnectUI.connected;
-                    b.innerHTML = `<h2>👛 TON WALLET</h2><div id="ton-btn" style="display:flex; justify-content:center; padding:10px;"></div>
-                    ${isConn ? `<button class="task-btn" style="width:100%; margin-top:10px; height:50px; background:#0088cc; color:white;" onclick="game.sendTransaction()">DEPOSIT 1 TON → 1M NP</button>` : ''}`;
+                    // Только кнопка подключения/отключения
+                    b.innerHTML = `<h2>👛 TON WALLET</h2>
+                    <p style="font-size:12px; color:gray; text-align:center; margin-bottom:10px;">Connect your TON wallet to sync your identity.</p>
+                    <div id="ton-btn" style="display:flex; justify-content:center; padding:10px;"></div>`;
                     setTimeout(() => tonConnectUI.renderButton({ container: document.getElementById('ton-btn') }), 50);
                 } else if(type === 'bonus') {
                     const last = game.data.last_bonus || 0;
