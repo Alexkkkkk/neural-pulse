@@ -61,7 +61,7 @@ export const User = sequelize.define('users', {
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { 
     timestamps: true,
-    underscored: true // Это создаст колонки created_at и updated_at автоматически
+    underscored: true // created_at вместо createdAt
 });
 
 // --- МОДЕЛЬ: МИССИИ (TASK) ---
@@ -95,7 +95,7 @@ export const initDB = async () => {
         await sequelize.authenticate();
         console.log('--- [DB] CONNECTED TO POSTGRES ---');
         
-        // ВАЖНО: force: true полностью ПЕРЕСОЗДАСТ таблицы.
+        // ВНИМАНИЕ: force: true полностью ПЕРЕСОЗДАСТ таблицы.
         // Это уберет ошибку "created_at contains null values", удалив старые проблемные записи.
         await sequelize.sync({ force: true }); 
         console.log('--- [DB] TABLES RE-CREATED (FORCE SUCCESS) ---');
