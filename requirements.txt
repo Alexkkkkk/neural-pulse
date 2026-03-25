@@ -1,0 +1,16 @@
+express
+telegraf
+sequelize
+pg
+pg-hstore
+cors
+express-session
+uuid
+openai
+adminjs
+@adminjs/express
+@adminjs/sequelize
+@adminjs/design-system
+react
+react-dom
+styled-components
