@@ -16,7 +16,6 @@ const __dirname = path.dirname(__filename);
 AdminJS.registerAdapter(AdminJSSequelize);
 const componentLoader = new ComponentLoader();
 
-// --- ПРОВЕРКА ДАШБОРДА ---
 const dashboardPath = path.join(__dirname, 'static', 'dashboard.jsx');
 let DASHBOARD_COMPONENT = null;
 
@@ -49,20 +48,17 @@ const startAdmin = async () => {
                 companyName: 'Neural Pulse Hub', 
                 logo: false, 
                 softwareBrothers: false,
-                // --- ПОЛНАЯ ТЕМНАЯ ТЕМА ---
                 theme: {
                     colors: {
                         primary100: '#00f2fe',
-                        bg: '#0b0e14',        // Фон страниц
-                        border: '#1a1f29',    // Границы
-                        text: '#ffffff',      // Основной текст
-                        container: '#141923', // Фон блоков
-                        filterBg: '#141923',  // Фон фильтров
+                        bg: '#0b0e14',        
+                        border: '#1a1f29',    
+                        text: '#ffffff',      
+                        container: '#141923', 
+                        filterBg: '#141923',  
                         inputBorder: '#2d333f'
                     },
-                    shadows: {
-                        card: '0 4px 12px rgba(0,0,0,0.5)',
-                    }
+                    shadows: { card: '0 4px 12px rgba(0,0,0,0.5)' }
                 }
             }
         };
@@ -77,11 +73,8 @@ const startAdmin = async () => {
                     const newUsers24h = await User.count({
                         where: { createdAt: { [Op.gt]: new Date(Date.now() - 24 * 60 * 60 * 1000) } }
                     });
-
                     return {
-                        totalUsers, 
-                        newUsers24h, 
-                        dbLatency,
+                        totalUsers, newUsers24h, dbLatency,
                         currentMem: (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2),
                         cpu: (os.loadavg()[0] * 10).toFixed(1)
                     };
