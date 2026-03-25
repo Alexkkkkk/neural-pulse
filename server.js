@@ -1,3 +1,4 @@
+
 import express from 'express';
 import { Telegraf, Markup } from 'telegraf';
 import path from 'path';
@@ -33,9 +34,7 @@ const logger = {
     http: (req, res, next) => {
         const requestId = uuidv4().split('-')[0];
         const start = Date.now();
-        if (req.url.startsWith('/api')) {
-            logger.info(`REQ [${requestId}] ${req.method} ${req.url}`);
-        }
+        if (req.url.startsWith('/api')) logger.info(`REQ [${requestId}] ${req.method} ${req.url}`);
         res.on('finish', () => {
             if (req.url.startsWith('/api')) {
                 const duration = Date.now() - start;
@@ -122,107 +121,35 @@ const Stats = sequelize.define('stats', {
     timestamp: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: false });
 
-// Логика уровней: 1 (0-50k), 2 (50k-500k), 3 (500k+)
 const calculateLevel = (b) => b < 50000 ? 1 : b < 500000 ? 2 : 3;
 
-// --- API GAME CORE ---
-
+// --- API ---
 app.get('/api/top', async (req, res) => {
     try {
-        const topUsers = await User.findAll({
-            limit: 50,
-            order: [['balance', 'DESC']],
-            attributes: ['username', 'balance', 'level', 'photo_url'],
-            raw: true
-        });
+        const topUsers = await User.findAll({ limit: 50, order: [['balance', 'DESC']], attributes: ['username', 'balance', 'level', 'photo_url'], raw: true });
         res.json(topUsers);
-    } catch (e) {
-        logger.error(`API TOP Error`, e);
-        res.status(500).json([]);
-    }
-});
-
-app.get('/api/tasks', async (req, res) => {
-    try {
-        const tasks = await Task.findAll();
-        res.json(tasks);
-    } catch (e) {
-        logger.error("API Tasks Error", e);
-        res.status(500).json([]);
-    }
+    } catch (e) { res.status(500).json([]); }
 });
 
 app.get('/api/user/:id', async (req, res) => {
     try {
         const userId = BigInt(req.params.id);
         const user = await User.findByPk(userId);
-        
-        if (!user) {
-            const newUser = await User.create({ 
-                id: userId, 
-                username: req.query.username || 'AGENT'
-            });
-            return res.json(newUser);
-        }
-        
-        const now = new Date();
-        const offline = Math.floor((now - new Date(user.last_seen)) / 1000);
-        
-        if (offline > 60 && user.profit > 0) {
-            const earned = (user.profit / 3600) * Math.min(offline, 86400);
-            user.balance += parseFloat(earned.toFixed(2));
-            user.last_seen = now;
-            user.level = calculateLevel(user.balance);
-            await user.save();
-            logger.info(`Sync: User ${userId} | Profit: +${earned.toFixed(2)}`);
-        }
+        if (!user) return res.json(await User.create({ id: userId, username: req.query.username || 'AGENT' }));
         res.json(user);
-    } catch (e) { 
-        logger.error(`API Sync Error`, e);
-        res.status(500).json({ error: "INTERNAL_CORE_FAULT" }); 
-    }
+    } catch (e) { res.status(500).json({ error: "CORE_ERROR" }); }
 });
 
 app.post('/api/save', async (req, res) => {
     try {
         const { id, ...data } = req.body;
-        if (!id) return res.status(400).json({ error: "ID_REQUIRED" });
-        const userId = BigInt(id);
-        
-        if (data.balance !== undefined) {
-            data.level = calculateLevel(data.balance);
-        }
-        
-        // Обновляем все поля, пришедшие с фронта (включая wallet)
-        await User.update({ ...data, last_seen: new Date() }, { where: { id: userId } });
+        if (data.balance !== undefined) data.level = calculateLevel(data.balance);
+        await User.update({ ...data, last_seen: new Date() }, { where: { id: BigInt(id) } });
         res.json({ ok: true });
-    } catch (e) {
-        logger.error(`Save Failed`, e);
-        res.status(500).json({ error: "STORAGE_FAULT" });
-    }
+    } catch (e) { res.status(500).json({ error: "SAVE_ERROR" }); }
 });
 
-// --- AI ADVISOR ---
-app.post('/api/ai-advice', async (req, res) => {
-    try {
-        const { id, balance, levels } = req.body;
-        const completion = await openai.chat.completions.create({
-            model: "gpt-3.5-turbo",
-            messages: [
-                { role: "system", content: "Ты - ИИ терминала Neural Pulse. Говори кратко, технично, в стиле киберпанка. Давай советы по прокачке." },
-                { role: "user", content: `Баланс: ${balance} NP. Уровни: Tap ${levels.tap}, Mine ${levels.mine}. Что проапгрейдить?` }
-            ],
-            max_tokens: 80
-        });
-        const advice = completion.choices[0].message.content;
-        logger.ai(id, advice, completion.usage.total_tokens);
-        res.json({ text: advice });
-    } catch (e) {
-        res.json({ text: "System link unstable. Re-routing data..." });
-    }
-});
-
-// --- АДМИНКА ---
+// --- ADMINJS (С ГРАФИКАМИ) ---
 const startAdmin = async () => {
     try {
         const { default: connectSessionSequelize } = await import('connect-session-sequelize');
@@ -230,22 +157,39 @@ const startAdmin = async () => {
         const sessionStore = new SequelizeStore({ db: sequelize, tableName: 'sessions' });
         
         const adminJs = new AdminJS({
-            resources: [{ resource: User }, { resource: Task }, { resource: Stats }],
+            resources: [
+                { resource: User, options: { navigation: { name: 'Агенты', icon: 'User' } } }, 
+                { resource: Task, options: { navigation: { name: 'Миссии', icon: 'Task' } } }, 
+                { resource: Stats, options: { navigation: { name: 'Система', icon: 'Settings' } } }
+            ],
             rootPath: '/admin',
-            branding: { companyName: 'Neural Pulse Hub', logo: false },
-            bundler: { enabled: false }
+            branding: { companyName: 'Neural Pulse Hub', logo: false, softwareBrothers: false },
+            dashboard: {
+                handler: async () => {
+                    const start = Date.now();
+                    await sequelize.query('SELECT 1');
+                    const latency = Date.now() - start;
+                    const totalUsers = await User.count();
+                    const cpuLoad = (os.loadavg()[0] * 100 / os.cpus().length).toFixed(1);
+
+                    return {
+                        totalUsers,
+                        currentMem: (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2),
+                        dbLatency: latency,
+                        cpu: cpuLoad
+                    };
+                },
+                component: AdminJS.bundle('./dashboard.jsx'),
+            },
+            bundler: { enabled: true }
         });
 
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (e, p) => (e === '1' && p === '1') ? { email: 'admin' } : null,
             cookiePassword: 'secure-pass-2026-pulse',
         }, null, {
-            store: sessionStore, 
-            secret: 'neural_pulse_secret_2026', 
-            resave: false, 
-            saveUninitialized: false,
-            proxy: true,
-            cookie: { maxAge: 86400000, secure: false }
+            store: sessionStore, secret: 'neural_pulse_secret_2026', resave: false, saveUninitialized: false,
+            proxy: true, cookie: { maxAge: 86400000, secure: false }
         });
         
         app.use(adminJs.options.rootPath, adminRouter);
@@ -255,26 +199,12 @@ const startAdmin = async () => {
 // --- TELEGRAM BOT ---
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
-    const refIdRaw = ctx.startPayload;
     const logoPath = path.join(__dirname, 'static/images/logo.png');
-
     try {
         let user = await User.findByPk(userId);
         if (!user) {
-            let startBal = 0, refBy = null;
-            if (refIdRaw && BigInt(refIdRaw) !== BigInt(userId)) {
-                refBy = BigInt(refIdRaw); 
-                startBal = 5000;
-                await User.increment({ balance: 10000, referrals: 1 }, { where: { id: refBy } });
-            }
-            user = await User.create({ 
-                id: userId, 
-                username: ctx.from.username || ctx.from.first_name || 'AGENT', 
-                balance: startBal, 
-                referred_by: refBy 
-            });
+            user = await User.create({ id: userId, username: ctx.from.username || 'AGENT' });
         }
-        
         ctx.replyWithPhoto({ source: logoPath }, {
             caption: `<b>Neural Pulse | Terminal</b>\n\nИдентификация пройдена.\nАгент: <code>${ctx.from.username || userId}</code>`,
             parse_mode: 'HTML',
@@ -294,20 +224,21 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
         await sequelize.sync({ alter: true }); 
         await startAdmin(); 
         
-        // Сбор начальной статистики
-        const uCount = await User.count();
-        await Stats.create({
-            user_count: uCount,
-            server_load: os.loadavg()[0],
-            mem_usage: (os.totalmem() - os.freemem()) / 1024 / 1024 / 1024
-        });
+        // Фоновый сбор статистики каждые 15 минут
+        setInterval(async () => {
+            try {
+                const uCount = await User.count();
+                await Stats.create({
+                    user_count: uCount,
+                    server_load: os.loadavg()[0],
+                    mem_usage: (os.totalmem() - os.freemem()) / 1024 / 1024 / 1024
+                });
+            } catch (e) { console.log("Stats error"); }
+        }, 900000);
 
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
         logger.system(`ENGINE: READY (Port ${PORT})`);
     } catch (err) { logger.error("CRITICAL ENGINE BOOTSTRAP FAILURE", err); }
 });
 
-process.on('SIGTERM', () => server.close(async () => { 
-    await sequelize.close(); 
-    process.exit(0); 
-}));
+process.on('SIGTERM', () => server.close(async () => { await sequelize.close(); process.exit(0); }));
