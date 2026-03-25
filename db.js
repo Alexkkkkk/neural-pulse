@@ -11,12 +11,14 @@ export const sequelize = new Sequelize(PG_URI, {
     dialectOptions: { 
         ssl: false 
     },
+    // Настройки пула для предотвращения разрыва соединений на Bothost
     pool: { 
         max: 30, 
         min: 5,
-        acquire: 30000,
+        acquire: 60000,
         idle: 10000 
-    }
+    },
+    timezone: '+00:00' // Гарантирует правильную работу с датами
 });
 
 const SequelizeStore = ConnectSessionSequelize(session.Store);
@@ -59,7 +61,7 @@ export const User = sequelize.define('users', {
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { 
     timestamps: true,
-    underscored: true // created_at вместо createdAt
+    underscored: true // Это создаст колонки created_at и updated_at автоматически
 });
 
 // --- МОДЕЛЬ: МИССИИ (TASK) ---
@@ -93,12 +95,12 @@ export const initDB = async () => {
         await sequelize.authenticate();
         console.log('--- [DB] CONNECTED TO POSTGRES ---');
         
-        // ВАЖНО: force: true один раз очистит базу от ошибок структуры
-        // Это исправит ошибку "contains null values", так как таблица будет создана с нуля
+        // ВАЖНО: force: true полностью ПЕРЕСОЗДАСТ таблицы.
+        // Это уберет ошибку "created_at contains null values", удалив старые проблемные записи.
         await sequelize.sync({ force: true }); 
         console.log('--- [DB] TABLES RE-CREATED (FORCE SUCCESS) ---');
 
-        // Создаем базовые задания, чтобы проект не был пустым
+        // Сразу создаем базовые задания, чтобы проект не был пустым
         await Task.bulkCreate([
             { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
             { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
