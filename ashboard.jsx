@@ -2,7 +2,8 @@ import React from 'react'
 import { Box, H2, H5, Text, Illustration, Section, Card, Icon, Badge } from '@adminjs/design-system'
 
 const Dashboard = (props) => {
-  const { totalUsers, newUsers24h, currentMem, dbLatency, cpu } = props.data
+  // Извлекаем данные из обработчика handler в server.js
+  const { totalUsers, newUsers24h, currentMem, dbLatency, cpu } = props.data || {}
 
   return (
     <Box variant="grey" padding="xl">
@@ -21,8 +22,8 @@ const Dashboard = (props) => {
         <Box width={[1, 1/2, 1/4]} padding="sm">
           <Card padding="md">
             <H5 color="primary100"><Icon icon="Users" /> Игроков</H5>
-            <H2>{totalUsers}</H2>
-            <Text size="sm" color="success">+{newUsers24h} за 24 часа</Text>
+            <H2>{totalUsers || 0}</H2>
+            <Text size="sm" color="success">+{newUsers24h || 0} за 24 часа</Text>
           </Card>
         </Box>
 
@@ -30,7 +31,7 @@ const Dashboard = (props) => {
         <Box width={[1, 1/2, 1/4]} padding="sm">
           <Card padding="md">
             <H5 color="success"><Icon icon="Cpu" /> Нагрузка CPU</H5>
-            <H2>{cpu}%</H2>
+            <H2>{cpu || 0}%</H2>
             <Text size="sm">Среднее значение (1m)</Text>
           </Card>
         </Box>
@@ -39,7 +40,7 @@ const Dashboard = (props) => {
         <Box width={[1, 1/2, 1/4]} padding="sm">
           <Card padding="md">
             <H5 color="info"><Icon icon="Activity" /> RAM (Memory)</H5>
-            <H2>{currentMem} MB</H2>
+            <H2>{currentMem || 0} MB</H2>
             <Text size="sm">Heap Usage</Text>
           </Card>
         </Box>
@@ -48,7 +49,7 @@ const Dashboard = (props) => {
         <Box width={[1, 1/2, 1/4]} padding="sm">
           <Card padding="md">
             <H5 color={dbLatency < 100 ? "success" : "danger"}><Icon icon="Database" /> Latency</H5>
-            <H2>{dbLatency} ms</H2>
+            <H2>{dbLatency || 0} ms</H2>
             <Text size="sm">Отклик PostgreSQL</Text>
           </Card>
         </Box>
