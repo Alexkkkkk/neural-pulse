@@ -27,24 +27,20 @@ const logger = {
         console.error(`[${new Date().toLocaleString()}] 🔴 ERROR: ${msg}`);
         if (err) console.error("--- Stack Trace Start ---\n", err, "\n--- Stack Trace End ---");
     },
-    // Логирование ИИ запросов (пригодится для контроля токенов)
-    ai: (prompt, response, tokens) => {
-        console.log(`[${new Date().toLocaleString()}] 🤖 AI_LOG: Prompt: ${prompt.substring(0, 50)}... | Tokens: ${tokens}`);
+    ai: (userId, response, tokens) => {
+        console.log(`[${new Date().toLocaleString()}] 🤖 AI_LOG: User: ${userId} | Tokens: ${tokens}`);
     },
     http: (req, res, next) => {
         const requestId = uuidv4().split('-')[0];
         const start = Date.now();
-        
         if (req.url.startsWith('/api')) {
-            logger.info(`REQ [${requestId}] ${req.method} ${req.url} | IP: ${req.ip}`);
-            if (req.method === 'POST') console.log(`    ⤷ Payload [${requestId}]:`, JSON.stringify(req.body));
+            logger.info(`REQ [${requestId}] ${req.method} ${req.url}`);
         }
-
         res.on('finish', () => {
             if (req.url.startsWith('/api')) {
                 const duration = Date.now() - start;
                 const statusColor = res.statusCode >= 400 ? '🔴' : '🟢';
-                console.log(`[${new Date().toLocaleString()}] ${statusColor} RES [${requestId}] ${res.statusCode} | Time: ${duration}ms`);
+                console.log(`[${new Date().toLocaleString()}] ${statusColor} RES [${requestId}] ${res.statusCode} | ${duration}ms`);
             }
         });
         next();
@@ -56,9 +52,11 @@ const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const PG_URI = "postgresql://bothost_db_130943b4f3f6:oY6CieQ5aohyTLgU9i23M6w80naZt9_1mJ4V6roejTs@node1.pghost.ru:32834/bothost_db_130943b4f3f6";
 const DOMAIN = "https://np.bothost.tech"; 
 const PORT = process.env.PORT || 3000;
+const OPENAI_KEY = "твой_ключ_здесь"; // Вставь свой ключ OpenAI
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
+const openai = new OpenAI({ apiKey: OPENAI_KEY });
 
 // Глобальный перехват ошибок
 process.on('unhandledRejection', (reason) => logger.error('Unhandled Rejection', reason));
@@ -82,12 +80,9 @@ app.use(express.static(path.join(__dirname, 'static'), {
 // --- БАЗА ДАННЫХ ---
 const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
-    logging: (sql, timing) => {
-        if (timing > 150) logger.warn(`Slow Query (${timing}ms): ${sql}`);
-    },
-    benchmark: true,
-    dialectOptions: { ssl: false, connectTimeout: 15000 },
-    pool: { max: 30, min: 5, acquire: 30000, idle: 10000 }
+    logging: false,
+    dialectOptions: { ssl: false },
+    pool: { max: 30, min: 5 }
 });
 
 // --- MODELS ---
@@ -106,6 +101,8 @@ const User = sequelize.define('users', {
     energy_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     referrals: { type: DataTypes.INTEGER, defaultValue: 0 },
     referred_by: { type: DataTypes.BIGINT, allowNull: true },
+    completed_tasks: { type: DataTypes.JSONB, defaultValue: [] }, // Храним ID выполненных заданий
+    wallet: { type: DataTypes.STRING, allowNull: true }, // Адрес TON кошелька
     last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 }, 
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: false });
@@ -134,7 +131,6 @@ app.get('/api/user/:id', async (req, res) => {
         const user = await User.findByPk(userId);
         
         if (!user) {
-            logger.info(`User ${userId} creation flow started.`);
             const newUser = await User.create({ 
                 id: userId, 
                 username: req.query.username || 'AGENT'
@@ -151,28 +147,12 @@ app.get('/api/user/:id', async (req, res) => {
             user.last_seen = now;
             user.level = calculateLevel(user.balance);
             await user.save();
-            logger.info(`Sync: User ${userId} | Offline: ${offline}s | Profit: +${earned.toFixed(2)}`);
+            logger.info(`Sync: User ${userId} | Profit: +${earned.toFixed(2)}`);
         }
         res.json(user);
     } catch (e) { 
-        logger.error(`CRITICAL API Sync Error [ID: ${req.params.id}]`, e);
+        logger.error(`API Sync Error`, e);
         res.status(500).json({ error: "INTERNAL_CORE_FAULT" }); 
-    }
-});
-
-// Роут для таблицы лидеров (то, чего не хватало в логах)
-app.get('/api/top', async (req, res) => {
-    try {
-        const topUsers = await User.findAll({
-            limit: 50,
-            order: [['balance', 'DESC']],
-            attributes: ['username', 'balance', 'level', 'photo_url'],
-            raw: true
-        });
-        res.json(topUsers);
-    } catch (e) {
-        logger.error(`API TOP Error`, e);
-        res.status(500).json([]);
     }
 });
 
@@ -180,24 +160,53 @@ app.post('/api/save', async (req, res) => {
     try {
         const { id, ...data } = req.body;
         if (!id) return res.status(400).json({ error: "ID_REQUIRED" });
-
         const userId = BigInt(id);
         if (data.balance !== undefined) data.level = calculateLevel(data.balance);
-        delete data.id;
-
-        const [updated] = await User.update(
-            { ...data, last_seen: new Date() }, 
-            { where: { id: userId } }
-        );
-
-        if (updated === 0) {
-            logger.warn(`Save mismatch for User ${userId}. Force creating...`);
-            await User.create({ id: userId, ...data });
-        }
+        
+        await User.update({ ...data, last_seen: new Date() }, { where: { id: userId } });
         res.json({ ok: true });
     } catch (e) {
-        logger.error(`Save Transaction Failed for User ${req.body?.id}`, e);
+        logger.error(`Save Failed`, e);
         res.status(500).json({ error: "STORAGE_FAULT" });
+    }
+});
+
+// --- AI ADVISOR ENDPOINT ---
+app.post('/api/ai-advice', async (req, res) => {
+    try {
+        const { id, balance, levels } = req.body;
+        const completion = await openai.chat.completions.create({
+            model: "gpt-3.5-turbo",
+            messages: [
+                { role: "system", content: "Ты - ИИ терминала Neural Pulse. Говори кратко, технично, в стиле киберпанка. Давай советы по прокачке." },
+                { role: "user", content: `Баланс: ${balance} NP. Уровни: Tap ${levels.tap}, Mine ${levels.mine}. Что проапгрейдить?` }
+            ],
+            max_tokens: 80
+        });
+
+        const advice = completion.choices[0].message.content;
+        logger.ai(id, advice, completion.usage.total_tokens);
+        res.json({ text: advice });
+    } catch (e) {
+        logger.error("AI Error", e);
+        res.json({ text: "System link unstable. Re-routing data..." });
+    }
+});
+
+// --- PAYMENT CONFIRMATION ---
+app.post('/api/confirm-payment', async (req, res) => {
+    try {
+        const { id, txHash, amount } = req.body;
+        // В реальном проекте тут идет проверка через TonCenter API
+        const user = await User.findByPk(BigInt(id));
+        if (user) {
+            user.balance += 1000000; // Начисляем 1М за покупку
+            await user.save();
+            logger.info(`PAYMENT: User ${id} | TX: ${txHash} | +1,000,000 NP`);
+            res.json({ ok: true });
+        }
+    } catch (e) {
+        res.status(500).json({ error: "PAYMENT_FAULT" });
     }
 });
 
@@ -228,17 +237,14 @@ const startAdmin = async () => {
         });
         
         app.use(adminJs.options.rootPath, adminRouter);
-        logger.system('Admin Panel Security Shield: ACTIVE');
-    } catch (e) { logger.error("Admin System Boot Failure", e); }
+    } catch (e) { logger.error("Admin Boot Failure", e); }
 };
 
 // --- TELEGRAM BOT ---
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
-    const refIdRaw = ctx.startPayload ? ctx.startPayload : null;
+    const refIdRaw = ctx.startPayload;
     const logoPath = path.join(__dirname, 'static/images/logo.png');
-
-    logger.info(`BOT_START: ${userId} (@${ctx.from.username || 'anonymous'})`);
 
     try {
         let user = await User.findByPk(userId);
@@ -247,8 +253,7 @@ bot.start(async (ctx) => {
             if (refIdRaw && BigInt(refIdRaw) !== BigInt(userId)) {
                 refBy = BigInt(refIdRaw); 
                 startBal = 5000;
-                logger.info(`REF_EVENT: User ${userId} invited by ${refBy}`);
-                await User.increment({ balance: 10000, referrals: 1 }, { where: { id: refBy } }).catch(e => logger.error('Ref Bonus Error', e));
+                await User.increment({ balance: 10000, referrals: 1 }, { where: { id: refBy } });
             }
             user = await User.create({ 
                 id: userId, 
@@ -256,15 +261,14 @@ bot.start(async (ctx) => {
                 balance: startBal, 
                 referred_by: refBy 
             });
-            logger.system(`DATABASE: Agent ${userId} registered.`);
         }
         
         ctx.replyWithPhoto({ source: logoPath }, {
             caption: `<b>Neural Pulse | Terminal</b>\n\nИдентификация пройдена.\nАгент: <code>${ctx.from.username || userId}</code>`,
             parse_mode: 'HTML',
             ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", DOMAIN)]])
-        }).catch(e => logger.error(`Telegram UI Render Error`, e));
-    } catch (e) { logger.error(`Bot Core Crash`, e); }
+        });
+    } catch (e) { logger.error(`Bot Error`, e); }
 });
 
 const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
@@ -276,26 +280,13 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
         logger.system('--- NEURAL PULSE ENGINE STARTING ---');
         await sequelize.authenticate();
         await sequelize.sync({ alter: true }); 
-
         await startAdmin(); 
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
-        
-        setInterval(async () => {
-            try {
-                const uCount = await User.count();
-                const load = parseFloat((os.loadavg()[0] * 10).toFixed(2));
-                const mem = parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2));
-                await Stats.create({ user_count: uCount, server_load: load, mem_usage: mem });
-                logger.info(`MONITOR: Users: ${uCount} | Load: ${load}% | Mem: ${mem}MB`);
-            } catch (err) { logger.error('Monitoring Heartbeat Failed', err); }
-        }, 900000); 
-
         logger.system(`ENGINE: READY (Port ${PORT})`);
     } catch (err) { logger.error("CRITICAL ENGINE BOOTSTRAP FAILURE", err); }
 });
 
 process.on('SIGTERM', () => server.close(async () => { 
-    logger.system('SIGTERM detected. Closing DB connections...');
     await sequelize.close(); 
     process.exit(0); 
 }));
