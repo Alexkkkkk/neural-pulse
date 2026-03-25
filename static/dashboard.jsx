@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react'
-import { Box, H2, H4, H5, Text, Section, Card, Icon, Badge, Button } from '@adminjs/design-system'
+import { Box, H2, H4, H5, Text, Card, Icon, Badge, Button } from '@adminjs/design-system'
 import { ApiClient } from 'adminjs'
 import { 
   XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, AreaChart, Area,
-  PieChart, Pie, Cell, BarChart, Bar
+  PieChart, Pie, Cell
 } from 'recharts'
 
 const api = new ApiClient()
 
+// Цветовая палитра Neural Pulse "Overdrive"
 const CYBER = {
   bg: '#05070a',
   card: '#0d1117',
@@ -33,7 +34,7 @@ const Dashboard = (props) => {
   const [scanPos, setScanPos] = useState(0)
   const [logs, setLogs] = useState(['> Инициализация ядра...', '> Подключение к TON Mainnet...'])
 
-  const addLog = (msg) => setLogs(prev => [`> ${msg}`, ...prev].slice(0, 5))
+  const addLog = (msg) => setLogs(prev => [`> [${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 7))
 
   const fetchStats = async () => {
     try {
@@ -70,7 +71,7 @@ const Dashboard = (props) => {
           <Box>
             <Box display="flex" alignItems="center" gap="10px">
               <Badge style={{ background: CYBER.success, color: '#000', fontWeight: 'bold' }}>CORE_V1.2.0_ACTIVE</Badge>
-              <Text color="grey60">Uptime: {Math.floor(process.uptime?.() / 3600 || 0)}h 12m</Text>
+              <Text color="grey60">System: Operational</Text>
             </Box>
             <H2 style={{ color: CYBER.primary, marginTop: '10px', textShadow: `0 0 15px ${CYBER.primary}66`, letterSpacing: '2px' }}>
               <Icon icon="Cpu" /> NEURAL PULSE // OVERSEER
@@ -111,7 +112,6 @@ const Dashboard = (props) => {
 
       {/* --- ГРАФИКИ И ТЕРМИНАЛ --- */}
       <Box display="flex" flexDirection="row" flexWrap="wrap" marginTop="xl">
-        {/* Главный график потока данных */}
         <Box width={[1, 2/3]} paddingRight={['0', 'sm']}>
           <Box padding="lg" borderRadius="xl" style={{ backgroundColor: CYBER.card, height: '400px', border: `1px solid #30363d` }}>
             <H5 mb="xl" color={CYBER.primary}>REAL-TIME NEURAL TELEMETRY</H5>
@@ -134,13 +134,12 @@ const Dashboard = (props) => {
           </Box>
         </Box>
 
-        {/* Мини-терминал логов */}
         <Box width={[1, 1/3]} paddingLeft={['0', 'sm']} mt={['xl', '0']}>
           <Box padding="lg" borderRadius="xl" style={{ backgroundColor: '#000', height: '400px', border: `1px solid ${CYBER.success}33` }}>
             <H5 mb="md" color={CYBER.success}><Icon icon="Terminal" /> LIVE_LOGS</H5>
-            <Box style={{ fontFamily: 'monospace', fontSize: '12px' }}>
+            <Box style={{ fontFamily: 'monospace', fontSize: '11px', overflowY: 'hidden', height: '220px' }}>
               {logs.map((log, i) => (
-                <Text key={i} color={i === 0 ? CYBER.success : 'grey60'} mb="sm">{log}</Text>
+                <Text key={i} color={i === 0 ? CYBER.success : 'grey60'} mb="xs">{log}</Text>
               ))}
             </Box>
             <Box mt="xl" pt="xl" style={{ borderTop: '1px solid #1f242c' }}>
@@ -154,10 +153,9 @@ const Dashboard = (props) => {
 
       {/* --- ТОКЕНОМИКА И РОАДМАП --- */}
       <Box display="flex" flexDirection="row" flexWrap="wrap" marginTop="xl">
-        {/* Распределение токенов */}
         <Box width={[1, 1/3]} paddingRight={['0', 'sm']}>
-          <Card style={{ backgroundColor: CYBER.card, height: '350px' }}>
-            <H5 p="lg" color={CYBER.secondary}>TOKENOMICS DISTRIBUTION</H5>
+          <Box padding="lg" borderRadius="xl" style={{ backgroundColor: CYBER.card, height: '350px', border: `1px solid #30363d` }}>
+            <H5 mb="md" color={CYBER.secondary}>TOKENOMICS DISTRIBUTION</H5>
             <ResponsiveContainer width="100%" height="70%">
               <PieChart>
                 <Pie data={TOKENOMICS_DATA} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
@@ -168,37 +166,36 @@ const Dashboard = (props) => {
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>
-            <Box display="flex" justifyContent="center" gap="sm" pb="md">
+            <Box display="flex" justifyContent="center" gap="sm" flexWrap="wrap">
                {TOKENOMICS_DATA.map(d => <Badge key={d.name} style={{ fontSize: '8px', background: '#000', color: d.color }}>{d.name}</Badge>)}
             </Box>
-          </Card>
+          </Box>
         </Box>
 
-        {/* Прогресс TON */}
         <Box width={[1, 2/3]} paddingLeft={['0', 'sm']} mt={['xl', '0']}>
           <Box padding="xl" borderRadius="xl" style={{ backgroundColor: CYBER.card, height: '350px', border: `1px solid ${CYBER.secondary}44` }}>
             <H4 color="#fff">TON BLOCKCHAIN DEPLOYMENT</H4>
-            <Text color="grey60" mb="xl">Target: 102,700,000,000 $NPULSE</Text>
+            <Text color="grey60" mb="xl">Target: 102.7B $NPULSE (Notcoin standard)</Text>
             
             <Box mt="xl">
               <Box display="flex" justifyContent="space-between" mb="sm">
                 <Text size="sm">Smart Contract Audit</Text>
-                <Text size="sm" color={CYBER.success}>90%</Text>
+                <Badge variant="success">90%</Badge>
               </Box>
-              <Box height="8px" bg="#000" borderRadius="xl"><Box width="90%" height="100%" bg={CYBER.success} /></Box>
+              <Box height="8px" bg="#000" borderRadius="xl"><Box width="90%" height="100%" bg={CYBER.success} style={{ boxShadow: `0 0 10px ${CYBER.success}` }} /></Box>
             </Box>
 
             <Box mt="xl">
               <Box display="flex" justifyContent="space-between" mb="sm">
                 <Text size="sm">Jetton Minting Process</Text>
-                <Text size="sm" color={CYBER.primary}>30%</Text>
+                <Badge style={{ background: CYBER.primary, color: '#000' }}>30%</Badge>
               </Box>
-              <Box height="8px" bg="#000" borderRadius="xl"><Box width="30%" height="100%" bg={CYBER.primary} /></Box>
+              <Box height="8px" bg="#000" borderRadius="xl"><Box width="30%" height="100%" bg={CYBER.primary} style={{ boxShadow: `0 0 10px ${CYBER.primary}` }} /></Box>
             </Box>
 
             <Box mt="xl" display="flex" gap="md">
-               <Button size="sm" variant="primary" style={{ flex: 1 }}>INITIATE MINT</Button>
-               <Button size="sm" style={{ flex: 1, background: 'transparent', border: `1px solid ${CYBER.secondary}` }}>VIEW ON TONSCAN</Button>
+               <Button size="sm" variant="primary" style={{ flex: 1, boxShadow: `0 0 10px ${CYBER.primary}44` }} onClick={() => addLog('MINTING INITIATED')}>INITIATE MINT</Button>
+               <Button size="sm" style={{ flex: 1, background: 'transparent', border: `1px solid ${CYBER.secondary}`, color: '#fff' }}>VIEW ON TONSCAN</Button>
             </Box>
           </Box>
         </Box>
