@@ -1,34 +1,57 @@
 import { fork } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { sequelize } from './db.js';
+import { sequelize, sessionStore } from './db.js';
+import { logger } from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-console.log(`\n` + `═`.repeat(50));
-console.log(`[${new Date().toLocaleString()}] 🚀 SYSTEM: NEURAL PULSE DUAL-CORE BOOTSTRAP`);
-console.log(`═`.repeat(50) + `\n`);
+const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
+const DOMAIN = "https://np.bothost.tech";
 
-const startSystems = async () => {
+const startEngine = async () => {
+    logger.system('--- NEURAL PULSE ENGINE BOOTSTRAP ---');
+
     try {
-        console.log('⚙️ LOADING: Synchronizing Database...');
+        logger.progress(2, 10);
         await sequelize.authenticate();
-        await sequelize.sync({ alter: true }); // Создаст таблицы, если их нет
-        console.log('🟢 INFO: Database synchronized.');
+        logger.info("Database connection: ESTABLISHED");
 
-        // Запуск бота
+        logger.progress(4, 10);
+        await sessionStore.sync();
+        await sequelize.sync({ alter: true });
+        logger.info("Database synchronization: COMPLETED");
+
+        logger.progress(6, 10);
         const botProcess = fork(path.join(__dirname, 'bot.js'));
-        botProcess.on('exit', (code) => console.log(`🔴 BOT CRASHED with code ${code}`));
-
-        // Запуск админки
         const adminProcess = fork(path.join(__dirname, 'admin.js'));
-        adminProcess.on('exit', (code) => console.log(`🔴 ADMIN CRASHED with code ${code}`));
 
-    } catch (err) {
-        console.error('🔴 CRITICAL: Failed to start systems', err);
+        botProcess.on('exit', (code) => logger.error(`Bot crashed with code ${code}`));
+        adminProcess.on('exit', (code) => logger.error(`Admin crashed with code ${code}`));
+
+        logger.progress(8, 10);
+        // Мы вызываем webhook тут разово через fetch, чтобы не импортировать Telegraf в диспетчер
+        fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${DOMAIN}/telegraf/${BOT_TOKEN}`)
+            .then(() => logger.info("Telegram Webhook: LINKED"))
+            .catch(e => logger.warn("Failed to link webhook automatically"));
+
+        logger.progress(10, 10);
+        logger.system(`ENGINE STATUS: DUAL-CORE ONLINE`);
+
+    } catch (err) { 
+        logger.error("CRITICAL ENGINE FAILURE", err); 
         process.exit(1);
     }
 };
 
-startSystems();
+const shutdown = async () => {
+    logger.info("System shutdown signal received");
+    await sequelize.close(); 
+    process.exit(0); 
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
+startEngine();
