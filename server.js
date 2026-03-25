@@ -6,6 +6,7 @@ import cors from 'cors';
 import session from 'express-session';
 import { Sequelize, DataTypes, Op } from 'sequelize';
 import os from 'os';
+import { v4 as uuidv4 } from 'uuid'; // Нужно добавить в package.json: npm install uuid
 
 // AdminJS (v7+)
 import AdminJS from 'adminjs';
@@ -16,20 +17,34 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 AdminJS.registerAdapter(AdminJSSequelize);
 
-// --- УЛУЧШЕННАЯ СИСТЕМА ЛОГИРОВАНИЯ ---
+// --- ГЛУБОКАЯ СИСТЕМА ЛОГИРОВАНИЯ ---
 const logger = {
-    info: (msg) => console.log(`[${new Date().toLocaleString()}] 🔵 INFO: ${msg}`),
+    info: (msg, meta = '') => console.log(`[${new Date().toLocaleString()}] 🔵 INFO: ${msg}`, meta),
     system: (msg) => console.log(`[${new Date().toLocaleString()}] 🚀 SYSTEM: ${msg}`),
-    warn: (msg) => console.log(`[${new Date().toLocaleString()}] 🟡 WARN: ${msg}`),
+    warn: (msg, meta = '') => console.log(`[${new Date().toLocaleString()}] 🟡 WARN: ${msg}`, meta),
     error: (msg, err) => {
         console.error(`[${new Date().toLocaleString()}] 🔴 ERROR: ${msg}`);
-        if (err) console.error(err);
+        if (err) console.error("--- Stack Trace Start ---\n", err, "\n--- Stack Trace End ---");
     },
+    // Middleware для детального трекинга HTTP
     http: (req, res, next) => {
-        // Логируем только API запросы, чтобы не забивать консоль статикой
+        const requestId = uuidv4().split('-')[0]; // Короткий ID для связи логов
+        const start = Date.now();
+        
         if (req.url.startsWith('/api')) {
-            console.log(`[${new Date().toLocaleString()}] 🌐 HTTP: ${req.method} ${req.url} - IP: ${req.ip}`);
+            logger.info(`REQ [${requestId}] ${req.method} ${req.url} | IP: ${req.ip}`);
+            if (req.method === 'POST') {
+                console.log(`    ⤷ Payload [${requestId}]:`, JSON.stringify(req.body));
+            }
         }
+
+        res.on('finish', () => {
+            if (req.url.startsWith('/api')) {
+                const duration = Date.now() - start;
+                const statusColor = res.statusCode >= 400 ? '🔴' : '🟢';
+                console.log(`[${new Date().toLocaleString()}] ${statusColor} RES [${requestId}] ${res.statusCode} | Time: ${duration}ms`);
+            }
+        });
         next();
     }
 };
@@ -43,13 +58,12 @@ const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// --- MIDDLEWARES & ОПТИМИЗАЦИЯ ---
+// --- MIDDLEWARES ---
 app.disable('x-powered-by'); 
-app.disable('etag'); 
 app.set('trust proxy', 1);
 app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '1mb' }));
-app.use(logger.http); // Подключаем логирование HTTP запросов
+app.use(logger.http); 
 
 app.use(express.static(path.join(__dirname, 'static'), { 
     maxAge: '30d', 
@@ -59,10 +73,11 @@ app.use(express.static(path.join(__dirname, 'static'), {
 // --- БАЗА ДАННЫХ ---
 const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
-    logging: (msg) => {
-        // Логируем медленные запросы или ошибки SQL, если нужно
-        if (msg.includes('ERROR')) logger.error('SQL Error', msg);
+    logging: (sql, timing) => {
+        // Логируем только если запрос выполняется дольше 100мс или содержит ошибку
+        if (timing > 100) logger.warn(`Slow Query (${timing}ms): ${sql}`);
     },
+    benchmark: true,
     dialectOptions: { ssl: false, connectTimeout: 15000 },
     pool: { max: 30, min: 5, acquire: 30000, idle: 10000 }
 });
@@ -112,7 +127,7 @@ app.get('/api/user/:id', async (req, res) => {
         const user = await User.findByPk(userId);
         
         if (!user) {
-            logger.info(`New user registration attempt: ${userId}`);
+            logger.info(`User ${userId} not found, initiating creation.`);
             const newUser = await User.create({ 
                 id: userId, 
                 username: req.query.username || 'AGENT',
@@ -129,20 +144,20 @@ app.get('/api/user/:id', async (req, res) => {
             user.balance += parseFloat(earned.toFixed(2));
             user.last_seen = now;
             user.level = calculateLevel(user.balance);
-            await user.save().catch(e => logger.error('Failed to save user offline profit', e));
-            logger.info(`User ${userId} earned ${earned.toFixed(2)} offline`);
+            await user.save();
+            logger.info(`Sync: User ${userId} processed offline profit: +${earned.toFixed(2)}`);
         }
         res.json(user);
     } catch (e) { 
-        logger.error(`API Sync error for user ${req.params.id}`, e);
-        res.status(500).send("AI_CORE_OFFLINE"); 
+        logger.error(`CRITICAL API Sync Error [ID: ${req.params.id}]`, e);
+        res.status(500).json({ error: "INTERNAL_CORE_FAULT" }); 
     }
 });
 
 app.post('/api/save', async (req, res) => {
     try {
         const { id, ...data } = req.body;
-        if (!id) return res.status(400).json({ error: "ID Missing" });
+        if (!id) return res.status(400).json({ error: "ID_REQUIRED" });
 
         const userId = BigInt(id);
         if (data.balance !== undefined) data.level = calculateLevel(data.balance);
@@ -155,14 +170,13 @@ app.post('/api/save', async (req, res) => {
         );
 
         if (updated === 0) {
-            logger.warn(`Save triggered for non-existent user ${userId}, creating...`);
+            logger.warn(`Save mismatch: User ${userId} missing during update. Force creating.`);
             await User.create({ id: userId, ...data });
         }
-
         res.json({ ok: true });
     } catch (e) {
-        logger.error(`SAVE FAILURE for user ${req.body?.id}`, e);
-        res.status(500).json({ error: "DB Error" });
+        logger.error(`Save Transaction Failed for User ${req.body?.id}`, e);
+        res.status(500).json({ error: "STORAGE_FAULT" });
     }
 });
 
@@ -193,8 +207,8 @@ const startAdmin = async () => {
         });
         
         app.use(adminJs.options.rootPath, adminRouter);
-        logger.system('Admin Panel Security Layer Active.');
-    } catch (e) { logger.error("Admin System Error", e); }
+        logger.system('Admin Security Shield Active.');
+    } catch (e) { logger.error("Admin Boot Error", e); }
 };
 
 // --- TELEGRAM BOT ---
@@ -203,7 +217,7 @@ bot.start(async (ctx) => {
     const refIdRaw = ctx.startPayload ? ctx.startPayload : null;
     const logoPath = path.join(__dirname, 'static/images/logo.png');
 
-    logger.info(`Bot /start from ${userId} (username: ${ctx.from.username})`);
+    logger.info(`BOT_START: ${userId} (@${ctx.from.username || 'no_name'})`);
 
     try {
         let user = await User.findByPk(userId);
@@ -214,8 +228,8 @@ bot.start(async (ctx) => {
             if (refIdRaw && BigInt(refIdRaw) !== BigInt(userId)) {
                 refBy = BigInt(refIdRaw); 
                 startBal = 5000;
-                logger.info(`Referral detected: ${userId} invited by ${refBy}`);
-                await User.increment({ balance: 10000, referrals: 1 }, { where: { id: refBy } }).catch(e => logger.error('Ref bonus fail', e));
+                logger.info(`REF_LINK: New user ${userId} via ${refBy}`);
+                await User.increment({ balance: 10000, referrals: 1 }, { where: { id: refBy } }).catch(e => logger.error('Ref Increment Error', e));
             }
             
             user = await User.create({ 
@@ -225,14 +239,15 @@ bot.start(async (ctx) => {
                 referred_by: refBy, 
                 last_bonus: 0 
             });
+            logger.system(`DATABASE: Registered new agent ${userId}`);
         }
         
         ctx.replyWithPhoto({ source: logoPath }, {
             caption: `<b>Neural Pulse | Terminal</b>\n\nИдентификация пройдена.\nАгент: <code>${ctx.from.username || userId}</code>`,
             parse_mode: 'HTML',
             ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", DOMAIN)]])
-        });
-    } catch (e) { logger.error(`Bot Logic Crash for user ${userId}`, e); }
+        }).catch(e => logger.error(`Telegram UI Error (Photo send fail) for ${userId}`, e));
+    } catch (e) { logger.error(`Bot Start Logic Crash [User: ${userId}]`, e); }
 });
 
 const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
@@ -241,16 +256,16 @@ app.use(bot.webhookCallback(WEBHOOK_PATH));
 // --- ENGINE START ---
 const server = app.listen(PORT, '0.0.0.0', async () => {
     try {
-        logger.system('Initializing Engine components...');
+        logger.system('--- NEURAL PULSE ENGINE BOOT ---');
         await sequelize.authenticate();
-        logger.system('Database connected.');
+        logger.system('Database: CONNECTION_ESTABLISHED');
         
         await sequelize.sync({ alter: true }); 
-        logger.system('Models synchronized.');
+        logger.system('Database: SCHEMA_SYNC_OK');
 
-        startAdmin(); 
+        await startAdmin(); 
         await bot.telegram.setWebhook(`${DOMAIN}${WEBHOOK_PATH}`);
-        logger.system(`Webhook set to: ${DOMAIN}${WEBHOOK_PATH}`);
+        logger.system(`Network: Webhook online at ${DOMAIN}`);
         
         setInterval(async () => {
             try {
@@ -258,21 +273,17 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
                 const load = parseFloat((os.loadavg()[0] * 10).toFixed(2));
                 const mem = parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2));
                 
-                await Stats.create({
-                    user_count: uCount,
-                    server_load: load,
-                    mem_usage: mem
-                });
-                logger.info(`Stats updated: Users: ${uCount}, Load: ${load}, Mem: ${mem}MB`);
-            } catch (err) { logger.error('Stats interval failed', err); }
+                await Stats.create({ user_count: uCount, server_load: load, mem_usage: mem });
+                logger.info(`SERVER_MONITOR: Users: ${uCount} | CPU: ${load}% | RAM: ${mem}MB`);
+            } catch (err) { logger.error('Monitoring Interval Error', err); }
         }, 900000); 
 
-        logger.system(`Neural Pulse ULTRA-SPEED Online [Port ${PORT}]`);
-    } catch (err) { logger.error("CRITICAL ENGINE FAILURE", err); }
+        logger.system(`ENGINE: STATUS_READY on Port ${PORT}`);
+    } catch (err) { logger.error("CRITICAL BOOT FAILURE", err); }
 });
 
 process.on('SIGTERM', () => server.close(async () => { 
-    logger.system('SIGTERM received. Shutting down...');
+    logger.system('SHUTDOWN: SIGTERM Received. Closing DB connections...');
     await sequelize.close(); 
     process.exit(0); 
 }));
