@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { Op } from 'sequelize';
 import os from 'os';
-import fs from 'fs'; // Добавил проверку файлов
+import fs from 'fs'; 
 import AdminJS, { ComponentLoader } from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
@@ -20,7 +20,6 @@ const componentLoader = new ComponentLoader();
 const dashboardPath = path.join(__dirname, 'static', 'dashboard.jsx');
 let DASHBOARD_COMPONENT = null;
 
-// Если файл существует, подключаем его, если нет — используем стандартный вид
 if (fs.existsSync(dashboardPath)) {
     DASHBOARD_COMPONENT = componentLoader.add('Dashboard', dashboardPath);
     logger.info("Custom Dashboard: FOUND and LOADED");
@@ -50,11 +49,24 @@ const startAdmin = async () => {
                 companyName: 'Neural Pulse Hub', 
                 logo: false, 
                 softwareBrothers: false,
-                theme: { colors: { primary100: '#00f2fe' } }
+                // --- ПОЛНАЯ ТЕМНАЯ ТЕМА ---
+                theme: {
+                    colors: {
+                        primary100: '#00f2fe',
+                        bg: '#0b0e14',        // Фон страниц
+                        border: '#1a1f29',    // Границы
+                        text: '#ffffff',      // Основной текст
+                        container: '#141923', // Фон блоков
+                        filterBg: '#141923',  // Фон фильтров
+                        inputBorder: '#2d333f'
+                    },
+                    shadows: {
+                        card: '0 4px 12px rgba(0,0,0,0.5)',
+                    }
+                }
             }
         };
 
-        // Добавляем дашборд только если файл физически существует
         if (DASHBOARD_COMPONENT) {
             adminOptions.dashboard = {
                 handler: async () => {
@@ -82,7 +94,6 @@ const startAdmin = async () => {
 
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                // Твои доступы: логин "1", пароль "1"
                 if (email === '1' && password === '1') {
                     return { email: 'admin@neuralpulse.tech' };
                 }
@@ -100,7 +111,7 @@ const startAdmin = async () => {
         app.use(adminJs.options.rootPath, adminRouter);
         
         app.listen(3001, '0.0.0.0', () => {
-            logger.info("AdminJS interface: DEPLOYED on port 3001");
+            logger.system("AdminJS interface: ONLINE (Dark Mode) on port 3001");
         });
 
     } catch (e) { 
