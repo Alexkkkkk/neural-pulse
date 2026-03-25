@@ -101,8 +101,8 @@ const User = sequelize.define('users', {
     energy_lvl: { type: DataTypes.INTEGER, defaultValue: 1 },
     referrals: { type: DataTypes.INTEGER, defaultValue: 0 },
     referred_by: { type: DataTypes.BIGINT, allowNull: true },
-    completed_tasks: { type: DataTypes.JSONB, defaultValue: [] }, // Храним ID выполненных заданий
-    wallet: { type: DataTypes.STRING, allowNull: true }, // Адрес TON кошелька
+    completed_tasks: { type: DataTypes.JSONB, defaultValue: [] },
+    wallet: { type: DataTypes.STRING, allowNull: true },
     last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 }, 
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: false });
@@ -125,6 +125,35 @@ const Stats = sequelize.define('stats', {
 const calculateLevel = (b) => b < 10000 ? 1 : b < 100000 ? 2 : b < 500000 ? 3 : b < 2000000 ? 4 : 5;
 
 // --- API GAME CORE ---
+
+// 1. Лидерборд (обязательно ПЕРЕД /api/user/:id)
+app.get('/api/top', async (req, res) => {
+    try {
+        const topUsers = await User.findAll({
+            limit: 50,
+            order: [['balance', 'DESC']],
+            attributes: ['username', 'balance', 'level', 'photo_url'],
+            raw: true
+        });
+        res.json(topUsers);
+    } catch (e) {
+        logger.error(`API TOP Error`, e);
+        res.status(500).json([]);
+    }
+});
+
+// 2. Список заданий
+app.get('/api/tasks', async (req, res) => {
+    try {
+        const tasks = await Task.findAll();
+        res.json(tasks);
+    } catch (e) {
+        logger.error("API Tasks Error", e);
+        res.status(500).json([]);
+    }
+});
+
+// 3. Загрузка/регистрация юзера
 app.get('/api/user/:id', async (req, res) => {
     try {
         const userId = BigInt(req.params.id);
@@ -156,6 +185,7 @@ app.get('/api/user/:id', async (req, res) => {
     }
 });
 
+// 4. Сохранение данных
 app.post('/api/save', async (req, res) => {
     try {
         const { id, ...data } = req.body;
@@ -171,7 +201,7 @@ app.post('/api/save', async (req, res) => {
     }
 });
 
-// --- AI ADVISOR ENDPOINT ---
+// --- AI ADVISOR ---
 app.post('/api/ai-advice', async (req, res) => {
     try {
         const { id, balance, levels } = req.body;
@@ -183,26 +213,23 @@ app.post('/api/ai-advice', async (req, res) => {
             ],
             max_tokens: 80
         });
-
         const advice = completion.choices[0].message.content;
         logger.ai(id, advice, completion.usage.total_tokens);
         res.json({ text: advice });
     } catch (e) {
-        logger.error("AI Error", e);
         res.json({ text: "System link unstable. Re-routing data..." });
     }
 });
 
-// --- PAYMENT CONFIRMATION ---
+// --- PAYMENTS ---
 app.post('/api/confirm-payment', async (req, res) => {
     try {
-        const { id, txHash, amount } = req.body;
-        // В реальном проекте тут идет проверка через TonCenter API
+        const { id, txHash } = req.body;
         const user = await User.findByPk(BigInt(id));
         if (user) {
-            user.balance += 1000000; // Начисляем 1М за покупку
+            user.balance += 1000000; 
             await user.save();
-            logger.info(`PAYMENT: User ${id} | TX: ${txHash} | +1,000,000 NP`);
+            logger.info(`PAYMENT: User ${id} | TX: ${txHash}`);
             res.json({ ok: true });
         }
     } catch (e) {
