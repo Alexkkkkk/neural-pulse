@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  neural-pulse:
+    build: .
+    container_name: neural_pulse_app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://bothost_db_130943b4f3f6:oY6CieQ5aohyTLgU9i23M6w80naZt9_1mJ4V6roejTs@node1.pghost.ru:32834/bothost_db_130943b4f3f6
+      - BOT_TOKEN=8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  default:
+    name: neural_pulse_network
