@@ -28,6 +28,15 @@ const TOKENOMICS_DATA = [
   { name: 'Liquidity', value: 10, color: '#fbc02d' },
 ];
 
+// Вспомогательный компонент для безопасного рендеринга иконок
+const SafeIcon = ({ name, ...props }) => {
+  try {
+    return <Icon icon={name} {...props} />
+  } catch (e) {
+    return <span style={{ marginRight: '8px' }}>•</span> 
+  }
+}
+
 const Dashboard = (props) => {
   const [stats, setStats] = useState(props.data || {})
   const [history, setHistory] = useState([])
@@ -39,7 +48,7 @@ const Dashboard = (props) => {
   const fetchStats = async () => {
     try {
       const response = await api.getDashboard()
-      const d = response.data
+      const d = response.data || {}
       setStats(d)
       setHistory(prev => [...prev, {
         time: new Date().toLocaleTimeString().slice(0, 5),
@@ -74,12 +83,12 @@ const Dashboard = (props) => {
               <Text color="grey60">System: Operational</Text>
             </Box>
             <H2 style={{ color: CYBER.primary, marginTop: '10px', textShadow: `0 0 15px ${CYBER.primary}66`, letterSpacing: '2px' }}>
-              <Icon icon="Cpu" /> NEURAL PULSE // OVERSEER
+               NEURAL PULSE // OVERSEER
             </H2>
           </Box>
           <Box display="flex" gap="md">
-            <Button variant="danger" size="sm" onClick={() => addLog('CORE REBOOT INITIATED')}><Icon icon="RefreshCcw" /> REBOOT</Button>
-            <Button variant="primary" size="sm" onClick={() => addLog('SYNCING WITH TON...')}><Icon icon="Share2" /> SYNC TON</Button>
+            <Button variant="danger" size="sm" onClick={() => addLog('CORE REBOOT INITIATED')}>REBOOT</Button>
+            <Button variant="primary" size="sm" onClick={() => addLog('SYNCING WITH TON...')}>SYNC TON</Button>
           </Box>
         </Box>
       </Box>
@@ -88,15 +97,15 @@ const Dashboard = (props) => {
       <Box display="flex" flexDirection="row" flexWrap="wrap" margin="-sm">
         {[
           { label: 'NETWORK AGENTS', val: stats.totalUsers, icon: 'Users', color: CYBER.primary, trend: '+12%' },
-          { label: 'CPU INTELLECT', val: `${stats.cpu}%`, icon: 'Activity', color: CYBER.success, trend: 'STABLE' },
-          { label: 'MEMORY BUFFER', val: `${stats.currentMem}MB`, icon: 'Layers', color: CYBER.secondary, trend: 'OPTIMIZED' },
-          { label: 'DATABASE PING', val: `${stats.dbLatency}ms`, icon: 'Database', color: CYBER.warning, trend: 'FAST' }
+          { label: 'CPU INTELLECT', val: `${stats.cpu || 0}%`, icon: 'Activity', color: CYBER.success, trend: 'STABLE' },
+          { label: 'MEMORY BUFFER', val: `${stats.currentMem || 0}MB`, icon: 'Layers', color: CYBER.secondary, trend: 'OPTIMIZED' },
+          { label: 'DATABASE PING', val: `${stats.dbLatency || 0}ms`, icon: 'Database', color: CYBER.warning, trend: 'FAST' }
         ].map((item, i) => (
           <Box key={i} width={[1, 1/2, 1/4]} padding="sm">
             <Card style={{ backgroundColor: CYBER.card, border: `1px solid ${item.color}33`, borderRadius: '16px', position: 'relative' }}>
               <Box p="md">
                 <Box display="flex" justifyContent="space-between" mb="md">
-                  <Icon icon={item.icon} color={item.color} />
+                  <SafeIcon name={item.icon} color={item.color} />
                   <Text size="xs" color={item.color}>{item.trend}</Text>
                 </Box>
                 <Text size="xs" style={{ color: 'grey60', textTransform: 'uppercase', letterSpacing: '1px' }}>{item.label}</Text>
@@ -136,7 +145,7 @@ const Dashboard = (props) => {
 
         <Box width={[1, 1/3]} paddingLeft={['0', 'sm']} mt={['xl', '0']}>
           <Box padding="lg" borderRadius="xl" style={{ backgroundColor: '#000', height: '400px', border: `1px solid ${CYBER.success}33` }}>
-            <H5 mb="md" color={CYBER.success}><Icon icon="Terminal" /> LIVE_LOGS</H5>
+            <H5 mb="md" color={CYBER.success}>LIVE_LOGS</H5>
             <Box style={{ fontFamily: 'monospace', fontSize: '11px', overflowY: 'hidden', height: '220px' }}>
               {logs.map((log, i) => (
                 <Text key={i} color={i === 0 ? CYBER.success : 'grey60'} mb="xs">{log}</Text>
