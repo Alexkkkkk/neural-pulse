@@ -47,7 +47,6 @@
             100% { transform: translateY(-120px) scale(1.2); opacity: 0; }
         }
 
-        /* Дизайн терминала ИИ */
         .ai-terminal {
             background: rgba(0, 20, 20, 0.9);
             border: 1px solid cyan;
@@ -65,10 +64,7 @@
             white-space: pre-wrap;
             position: relative;
         }
-        .ai-terminal::after {
-            content: '_';
-            animation: blink 1s infinite;
-        }
+        .ai-terminal::after { content: '_'; animation: blink 1s infinite; }
         @keyframes blink { 50% { opacity: 0; } }
     </style>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -112,7 +108,7 @@
             </div>
             <div class="side-menu">
                 <button onclick="ui.openM('ai')">🤖 AI ADVISOR</button>
-                <button onclick="ui.openM('wallet')">👛 WALLET</button>
+                <button id="wallet-btn-label" onclick="ui.openM('wallet')">👛 WALLET</button>
                 <button onclick="ui.openM('friends')">🤝 FRIENDS</button>
                 <button onclick="ui.openM('bonus')">🎁 BONUS</button>
             </div>
@@ -152,7 +148,7 @@
             data: { 
                 id: "0", balance: 0, energy: 1000, max_energy: 1000, 
                 tap: 1, profit: 0, tap_lvl: 1, mine_lvl: 1, 
-                energy_lvl: 1, last_bonus: 0 
+                energy_lvl: 1, last_bonus: 0, wallet: null 
             },
             isLoaded: false,
             isSaving: false,
@@ -162,9 +158,23 @@
                 const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
                 this.data.id = String(u.id);
 
+                // Инициализация TON Connect
                 try {
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
                         manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json'
+                    });
+
+                    // Следим за состоянием кошелька
+                    tonConnectUI.onStatusChange(wallet => {
+                        if (wallet) {
+                            this.data.wallet = wallet.account.address;
+                            const shortAddr = wallet.account.address.slice(0,4) + ".." + wallet.account.address.slice(-4);
+                            document.getElementById('wallet-btn-label').innerText = "👛 " + shortAddr;
+                            this.save();
+                        } else {
+                            this.data.wallet = null;
+                            document.getElementById('wallet-btn-label').innerText = "👛 WALLET";
+                        }
                     });
                 } catch(e) { console.warn("TON Connect UI error"); }
 
@@ -182,6 +192,34 @@
                 this.isLoaded = true;
                 this.startLoops();
                 ui.render();
+            },
+
+            async sendTransaction() {
+                if (!tonConnectUI.connected) {
+                    tg.showAlert("Connect wallet first!");
+                    return;
+                }
+                const transaction = {
+                    validUntil: Math.floor(Date.now() / 1000) + 60,
+                    messages: [{
+                        address: "ВАШ_АДРЕС_КОШЕЛЬКА", // ЗАМЕНИТЕ НА СВОЙ
+                        amount: "1000000000" // 1 TON
+                    }]
+                };
+                try {
+                    const result = await tonConnectUI.sendTransaction(transaction);
+                    tg.showAlert("Success! Verification in progress...");
+                    // Отправка BOC на сервер для проверки
+                    fetch('/api/verify-payment', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ id: this.data.id, boc: result.boc })
+                    });
+                    this.data.balance += 1000000;
+                    ui.render();
+                } catch (e) {
+                    tg.showAlert("Transaction cancelled.");
+                }
             },
 
             getCost(type) {
@@ -213,7 +251,6 @@
                     if(type === 'tap') { this.data.tap_lvl++; this.data.tap += 1; }
                     else if(type === 'energy') { this.data.energy_lvl++; this.data.max_energy += 500; this.data.energy = this.data.max_energy; }
                     else if(type === 'mine') { this.data.mine_lvl++; this.data.profit += 120; }
-                    
                     ui.render();
                     tg.HapticFeedback.notificationOccurred('success');
                     await this.save(); 
@@ -273,7 +310,6 @@
                 document.getElementById('e-fill').style.width = (d.energy/d.max_energy*100)+'%';
                 document.getElementById('ui-tap').innerText = `+${d.tap}`;
                 document.getElementById('ui-profit').innerText = Math.floor(d.profit).toLocaleString();
-                
                 const rank = d.balance < 50000 ? "NODE AGENT" : d.balance < 500000 ? "CYBER MANTIS" : "NEURAL LORD";
                 document.getElementById('ui-rank').innerText = rank;
                 document.getElementById('my-lvl').innerText = `LVL ${Math.floor(d.balance / 20000) + 1}`;
@@ -314,7 +350,15 @@
                     <button class="task-btn" style="width:100%" onclick="ui.copyRef()">COPY LINK</button>`;
                 }
                 else if(type === 'wallet') {
-                    b.innerHTML = `<h2>👛 TON WALLET</h2><div id="ton-btn" style="display:flex; justify-content:center; padding:10px;"></div>`;
+                    const connected = tonConnectUI && tonConnectUI.connected;
+                    b.innerHTML = `<h2>👛 TON GATEWAY</h2>
+                    <div id="ton-btn" style="display:flex; justify-content:center; padding:10px;"></div>
+                    ${connected ? `
+                        <div class="task-item" style="margin-top:15px; flex-direction:column; gap:10px;">
+                            <span style="font-size:12px; color:cyan;">PREMIUM STATUS AVAILABLE</span>
+                            <button class="task-btn" style="width:100%" onclick="game.sendTransaction()">BUY 1M NP (1 TON)</button>
+                        </div>
+                    ` : ''}`;
                     if(tonConnectUI) tonConnectUI.renderButton({ container: document.getElementById('ton-btn') });
                 }
                 else if(type === 'bonus') {
@@ -353,7 +397,6 @@
                 const btn = document.getElementById('ai-btn');
                 resDiv.innerHTML = `<div class="loading">CONSULTING NEURAL NETWORK...</div>`;
                 btn.disabled = true;
-                
                 try {
                     const r = await fetch('/api/ai-advice', {
                         method: 'POST',
@@ -366,7 +409,6 @@
                     });
                     const res = await r.json();
                     const text = res.text || "Keep scanning, Agent. Profit is imminent.";
-                    
                     resDiv.innerText = "";
                     let charIdx = 0;
                     const typeWriter = () => {
