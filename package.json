@@ -17,10 +17,11 @@
     "connect-session-sequelize": "^7.1.7",
     "adminjs": "^7.8.1",
     "@adminjs/express": "^6.1.0",
-    "@adminjs/sequelize": "^5.0.0",
+    "@adminjs/sequelize": "^4.0.0",
     "cors": "^2.8.5",
     "openai": "^4.33.0",
-    "tslib": "^2.6.2"
+    "tslib": "^2.6.2",
+    "uuid": "^9.0.1"
   },
   "engines": {
     "node": ">=18.0.0"
