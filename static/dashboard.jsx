@@ -28,7 +28,7 @@ const Dashboard = (props) => {
   const [logs, setLogs] = useState(['> SYSTEM_READY', '> ENCRYPTED_CONNECTION_ESTABLISHED'])
 
   const addLog = (msg) => {
-    setLogs(prev => [`> [${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 10))
+    setLogs(prev => [`> [${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 12))
   }
 
   const fetchStats = async () => {
@@ -44,12 +44,12 @@ const Dashboard = (props) => {
         const newPoint = {
           time: new Date().toLocaleTimeString().slice(0, 5),
           cpu: cpuVal,
-          ram: memVal,
+          ram: (memVal / 1024).toFixed(1), // перевод в ГБ если нужно, или оставь в МБ
         }
         return [...prev, newPoint].slice(-15)
       })
     } catch (e) { 
-      addLog('TELEMETRY_LINK_LOST')
+      addLog('TELEMETRY_LINK_LOST...')
     }
   }
 
@@ -57,7 +57,10 @@ const Dashboard = (props) => {
     addLog('INITIATING_CORE_REBOOT...')
     setTimeout(() => addLog('CLEARING_CACHE...'), 1000)
     setTimeout(() => addLog('RE-SYNCHRONIZING_NODES...'), 2500)
-    setTimeout(() => addLog('SYSTEM_STABLE_V1.2.0'), 4000)
+    setTimeout(() => {
+        addLog('SYSTEM_STABLE_V1.2.0');
+        fetchStats();
+    }, 4000)
   }
 
   useEffect(() => {
@@ -95,7 +98,7 @@ const Dashboard = (props) => {
           { label: 'ACTIVE_AGENTS', val: stats.totalUsers, color: CYBER.primary, unit: '' },
           { label: 'CPU_LOAD', val: stats.cpu, color: CYBER.success, unit: '%' },
           { label: 'MEM_USAGE', val: stats.currentMem, color: CYBER.secondary, unit: 'MB' },
-          { label: 'DB_LATENCY', val: stats.dbLatency, color: CYBER.warning, unit: 'ms' }
+          { label: 'SYSTEM_LOAD', val: (stats.cpu * 0.8).toFixed(1), color: CYBER.warning, unit: 'idx' }
         ].map((item, i) => (
           <Box key={i} width={[1, 1/2, 1/4]} padding="sm">
             <Card style={{ backgroundColor: CYBER.card, border: `1px solid ${item.color}33`, borderRadius: '8px' }}>
@@ -127,7 +130,7 @@ const Dashboard = (props) => {
                 <CartesianGrid strokeDasharray="3 3" stroke="#1f242c" vertical={false} />
                 <XAxis dataKey="time" stroke="#484f58" tick={{fontSize: 10}} />
                 <YAxis stroke="#484f58" tick={{fontSize: 10}} domain={[0, 100]} />
-                <Tooltip contentStyle={{ backgroundColor: CYBER.card, border: `1px solid ${CYBER.primary}`, borderRadius: '8px' }} />
+                <Tooltip contentStyle={{ backgroundColor: CYBER.card, border: `1px solid ${CYBER.primary}`, borderRadius: '8px', color: '#fff' }} />
                 <Area type="monotone" dataKey="cpu" stroke={CYBER.primary} fillOpacity={1} fill="url(#colorCpu)" strokeWidth={2} isAnimationActive={false} />
               </AreaChart>
             </ResponsiveContainer>
@@ -138,13 +141,15 @@ const Dashboard = (props) => {
         <Box width={[1, 1/3]} paddingLeft={['0', 'md']}>
           <Box padding="lg" borderRadius="xl" style={{ backgroundColor: '#000', height: '420px', border: `1px solid ${CYBER.success}33`, overflow: 'hidden' }}>
             <H5 mb="md" style={{ color: CYBER.success }}>CONSOLE_OUTPUT</H5>
-            {logs.map((log, i) => (
-              <Text key={i} size="xs" mb="xs" style={{ 
-                color: i === 0 ? CYBER.success : '#30363d', 
-                fontFamily: 'monospace',
-                textShadow: i === 0 ? `0 0 5px ${CYBER.success}` : 'none'
-              }}>{log}</Text>
-            ))}
+            <Box>
+                {logs.map((log, i) => (
+                <Text key={i} size="xs" mb="xs" style={{ 
+                    color: i === 0 ? CYBER.success : '#30363d', 
+                    fontFamily: 'monospace',
+                    textShadow: i === 0 ? `0 0 5px ${CYBER.success}` : 'none'
+                }}>{log}</Text>
+                ))}
+            </Box>
           </Box>
         </Box>
       </Box>
