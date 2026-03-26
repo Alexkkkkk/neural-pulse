@@ -74,8 +74,10 @@ const startAdmin = async () => {
                     }
                 },
                 customCSS: `
-                    /* Общий фон и скроллбары */
-                    body, #adminjs { background: #05070a !important; }
+                    /* Глобальное переопределение фона */
+                    body, #adminjs, section[data-testid="sidebar"], .adminjs_Sidebar { 
+                        background: #05070a !important; 
+                    }
                     
                     /* Стилизация страницы входа */
                     [data-testid="login"] { 
@@ -86,75 +88,3 @@ const startAdmin = async () => {
                         border-right: 2px solid #00f2fe !important; 
                         box-shadow: 10px 0 30px rgba(0, 242, 254, 0.1) !important;
                     }
-                    [data-testid="login"] h2 { 
-                        color: #00f2fe !important; 
-                        font-family: 'Courier New', monospace !important; 
-                        text-transform: uppercase; 
-                        letter-spacing: 2px;
-                    }
-                    
-                    /* Кнопки и интерактивные элементы */
-                    .sc-fubCfw.button.is-primary, [data-testid="login"] button { 
-                        background: #00f2fe !important; 
-                        color: #000 !important; 
-                        font-weight: bold !important; 
-                        border: none !important;
-                        transition: all 0.3s ease;
-                        text-transform: uppercase;
-                    }
-                    .sc-fubCfw.button.is-primary:hover { 
-                        opacity: 0.8; 
-                        box-shadow: 0 0 15px rgba(0, 242, 254, 0.4); 
-                    }
-                    
-                    /* Поля ввода */
-                    input { 
-                        background: #0d1117 !important; 
-                        color: #00f2fe !important; 
-                        border: 1px solid #1a222d !important; 
-                    }
-                    
-                    /* Сайдбар */
-                    section[data-testid="sidebar"] { 
-                        background: #0a0a0a !important; 
-                        border-right: 1px solid #1a222d !important; 
-                    }
-                `
-            },
-            bundler: { 
-                minify: true, 
-                force: true // Принудительная пересборка фронтенда для применения дизайна
-            },
-            assets: { scripts: ['https://unpkg.com/recharts/umd/Recharts.js'] }
-        };
-
-        const adminJs = new AdminJS(adminOptions);
-
-        const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
-            authenticate: async (email, password) => {
-                if (email === '1' && password === '1') return { email: 'admin@neuralpulse.tech' };
-                return null;
-            },
-            cookiePassword: 'secure-pass-2026-pulse-ultra-secret-32-chars',
-        }, null, {
-            resave: false, 
-            saveUninitialized: false, 
-            secret: 'neural_pulse_secret_2026',
-            store: sessionStore,
-            cookie: { maxAge: 86400000, path: '/admin', httpOnly: true, secure: false }
-        });
-        
-        app.use(adminJs.options.rootPath, adminRouter);
-        
-        const INTERNAL_PORT = 3001;
-        app.listen(INTERNAL_PORT, '0.0.0.0', () => {
-            logger.info(`AdminJS Engine: INTERNAL ONLINE on port ${INTERNAL_PORT}`);
-            if (process.send) process.send('ready');
-        });
-
-    } catch (e) { 
-        logger.error("Admin Boot Failure:", e); 
-    }
-};
-
-startAdmin();
