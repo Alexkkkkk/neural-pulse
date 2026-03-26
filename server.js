@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 // --- КОНФИГУРАЦИЯ ---
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const DOMAIN = "https://np.bothost.tech";
-const PORT = 3000; // Оба процесса должны знать основной порт хостинга
+const PORT = 3000; 
 
 const launchProcess = (fileName, customEnv = {}) => {
     const processPath = path.join(__dirname, fileName);
@@ -45,23 +45,23 @@ const startEngine = async () => {
 
         logger.progress(6, 10);
         
-        // ЗАПУСК АДМИНКИ (на порту 3000)
-        launchProcess('admin.js', { PORT: PORT }); 
+        // 1. ЗАПУСК АДМИНКИ на внутреннем порту 3001
+        launchProcess('admin.js', { PORT: 3001 }); 
         
-        // ЗАПУСК БОТА (с небольшой задержкой)
+        // 2. ЗАПУСК БОТА (GATEWAY) на основном порту 3000
         setTimeout(() => {
             launchProcess('bot.js', { PORT: PORT });
         }, 2000);
 
         logger.progress(8, 10);
         
-        // ПРИВЯЗКА ВЕБХУКА
-        // Если бот работает через Telegraf Webhook внутри AdminJS, 
-        // путь должен совпадать с тем, что в admin.js
-        const webhookUrl = `${DOMAIN}/admin/telegraf/${BOT_TOKEN}`; 
+        // 3. ПРИВЯЗКА ВЕБХУКА
+        // КРИТИЧНО: Убираем /admin, чтобы путь был https://np.bothost.tech/telegraf/...
+        const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`; 
         
         setTimeout(async () => {
             try {
+                logger.info(`Setting Webhook to: ${webhookUrl}`);
                 const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${webhookUrl}&drop_pending_updates=true`);
                 const result = await response.json();
                 
@@ -84,6 +84,14 @@ const startEngine = async () => {
     }
 };
 
-// ... (обработка SIGTERM/SIGINT остается без изменений)
+// Сигналы завершения
+const shutdown = async () => {
+    logger.warn("Stopping Engine...");
+    try { await sequelize.close(); } catch (e) {}
+    process.exit(0);
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
 
 startEngine();
