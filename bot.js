@@ -22,6 +22,12 @@ const app = express();
 app.disable('x-powered-by'); 
 app.set('trust proxy', 1);
 
+// --- [ROOT CHECK] ---
+// Для того, чтобы Nginx Bothost сразу видел, что сервер поднялся
+app.get('/', (req, res) => {
+    res.status(200).send("NEURAL_PULSE_GATEWAY: ONLINE");
+});
+
 // --- [SUPREME NEURAL DIAGNOSTICS HUD] ---
 app.get('/api/health', async (req, res) => {
     const start = Date.now();
@@ -33,10 +39,10 @@ app.get('/api/health', async (req, res) => {
         dbStatus = 'STABLE'; 
     } catch(e) { dbStatus = 'CRITICAL'; }
 
-    // 2. Проверка Админки (Порт 3001) с коротким таймаутом, чтобы не вешать HUD
+    // 2. Проверка Админки (Порт 3001)
     try { 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const timeoutId = setTimeout(() => controller.abort(), 1500);
         const aRes = await fetch('http://127.0.0.1:3001/admin', { 
             method: 'HEAD', 
             signal: controller.signal 
@@ -95,7 +101,7 @@ app.get('/api/health', async (req, res) => {
     `);
 });
 
-// 1. ВЕБХУК (Мгновенный ответ для предотвращения дублей от Telegram)
+// 1. ВЕБХУК
 app.post(`/telegraf/${BOT_TOKEN}`, express.json(), (req, res) => {
     res.sendStatus(200); 
     bot.handleUpdate(req.body);
@@ -106,20 +112,20 @@ app.use(cors({ origin: '*' }));
 app.use('/api', express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'static')));
 
-// 3. УМНЫЙ ПРОКСИ (Исправлено: добавлены таймауты для борьбы с 504)
+// 3. УМНЫЙ ПРОКСИ
 app.use('/admin', createProxyMiddleware({
     target: 'http://127.0.0.1:3001',
     changeOrigin: true,
     ws: true,
-    proxyTimeout: 30000, // 30 секунд ожидания от админки
-    timeout: 30000,
+    proxyTimeout: 40000, 
+    timeout: 40000,
     onError: (err, req, res) => {
         logger.error(`[PROXY_ERR] ${err.message}`);
         res.status(502).set('Content-Type', 'text/html').send(`
             <div style="background:#05070a; color:#00f2fe; padding:40px; font-family: monospace; border: 2px solid #00f2fe; text-align: center; margin: 50px;">
                 <h2>> SYSTEM_LOAD: BUNDLING_INTERFACE</h2>
-                <p style="color: #ff3366;">[!] АДМИН-ПАНЕЛЬ В ПРОЦЕССЕ СБОРКИ ИЛИ ПЕРЕГРУЖЕНА</p>
-                <p>Пожалуйста, подождите 30-60 секунд...</p>
+                <p style="color: #ff3366;">[!] ИНТЕРФЕЙС ГЕНЕРИРУЕТСЯ</p>
+                <p>Пожалуйста, подождите...</p>
                 <script>setTimeout(() => location.reload(), 5000);</script>
             </div>
         `);
@@ -162,6 +168,7 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "SAVE_ERROR" }); }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+// УДАЛЕН '0.0.0.0' ДЛЯ ЛУЧШЕЙ СОВМЕСТИМОСТИ С BOTHOST
+app.listen(PORT, () => {
     logger.system(`ШЛЮЗ АКТИВИРОВАН: Port ${PORT}`);
 });
