@@ -1,37 +1,36 @@
-# Используем стабильную версию Node.js (20-slim — легкая и быстрая)
+# Используем Node.js 20-slim
 FROM node:20-slim
 
-# Устанавливаем системные зависимости для сборки (нужны для AdminJS и Sequelize)
+# Устанавливаем зависимости для сборки
 RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Создаем рабочую директорию внутри контейнера
 WORKDIR /app
 
-# Устанавливаем переменную окружения для оптимизации библиотек
+# Переменные окружения
 ENV NODE_ENV=production
+# Увеличиваем лимит памяти для сборки фронтенда AdminJS
+ENV NODE_OPTIONS="--max-old-space-size=1024"
 
-# Сначала копируем только файлы зависимостей (для быстрого кэширования слоев)
 COPY package*.json ./
 
-# Устанавливаем зависимости + Recharts для графиков в админке
-RUN npm install --production && npm install recharts && npm cache clean --force
+# Установка всех зависимостей (включая dev для сборки, если нужно)
+RUN npm install --production && npm cache clean --force
 
-# Копируем весь остальной код проекта
 COPY . .
 
-# Очистка и подготовка кэша AdminJS (решает проблему с "розовой ошибкой")
-RUN rm -rf .adminjs && mkdir -p .adminjs && chmod -R 777 .adminjs
+# Подготовка папок для кэша AdminJS
+RUN mkdir -p .adminjs && chmod -R 777 .adminjs
+RUN mkdir -p static/.adminjs && chmod -R 777 static/.adminjs
 
-# Удаляем дубликат компонента из корня, если он там остался
-RUN rm -f dashboard-component.jsx 
+# Проверка наличия директории с картинками
+RUN mkdir -p static/images
 
-# Открываем порты: 3000 (основной бот/API) и 3001 (панель администратора)
 EXPOSE 3000
 EXPOSE 3001
 
-# ГЛАВНАЯ КОМАНДА: Запуск через твой основной файл server.js
 CMD ["node", "server.js"]
