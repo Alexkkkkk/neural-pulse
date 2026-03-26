@@ -10,110 +10,56 @@ import { logger } from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
-const DOMAIN = "https://np.bothost.tech"; 
 const PORT = process.env.PORT || 3000;
+
+logger.info(`[BOT_INIT] Запуск на порту ${PORT}...`);
 
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-app.disable('x-powered-by'); 
-app.set('trust proxy', 1);
-
-// --- ВЕБХУК (Ставим первым, чтобы не блокировался другими запросами) ---
-app.use(`/telegraf/${BOT_TOKEN}`, (req, res, next) => {
-    // Telegraf обработает запрос, мы просто передаем управление
-    return bot.webhookCallback(`/telegraf/${BOT_TOKEN}`)(req, res, next);
+// Логгер входящих HTTP запросов
+app.use((req, res, next) => {
+    if (!req.url.includes('telegraf')) logger.info(`[HTTP] ${req.method} ${req.url}`);
+    next();
 });
 
-// --- НАСТРОЙКИ СЕРВЕРА ---
+app.use(`/telegraf/${BOT_TOKEN}`, (req, res, next) => {
+    logger.info(`[TG_WEBHOOK] Получено обновление от Telegram`);
+    bot.webhookCallback(`/telegraf/${BOT_TOKEN}`)(req, res, next);
+});
+
 app.use(cors({ origin: '*' }));
-app.use('/api', express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use('/api', express.json());
 app.use(express.static(path.join(__dirname, 'static')));
 
-// --- PROXY ДЛЯ АДМИНКИ ---
+// ПРОКСИ ЛОГЕР
 app.use('/admin', createProxyMiddleware({
     target: 'http://127.0.0.1:3001',
     changeOrigin: true,
-    ws: true,
-    proxyTimeout: 30000, 
-    timeout: 30000,
+    proxyTimeout: 45000,
+    onProxyReq: (proxyReq, req) => logger.info(`[PROXY] Перенаправление в админку: ${req.url}`),
     onError: (err, req, res) => {
-        logger.warn(`Proxy missed AdminJS on 3001. Booting up...`);
-        if (!res.headersSent) {
-            res.status(502).set('Content-Type', 'text/html').send(`
-                <div style="background:#05070a; color:#00f2fe; padding:40px; font-family: Courier New, monospace; border: 2px solid #00f2fe; max-width: 600px; margin: 50px auto; text-align: center;">
-                    <h2>> NEURAL_PULSE: SYSTEM BOOT</h2>
-                    <p style="color: #ff3366;">[!] ИНТЕРФЕЙС УПРАВЛЕНИЯ ЗАГРУЖАЕТСЯ</p>
-                    <p>Сервер поднимает админ-панель. Подождите 10 секунд и обновите.</p>
-                    <button onclick="location.reload()" style="background:#00f2fe; color:black; padding:10px; font-weight:bold; cursor:pointer;">ОБНОВИТЬ СОЕДИНЕНИЕ</button>
-                </div>
-            `);
-        }
+        logger.warn(`[PROXY_FAIL] Админка на 3001 еще не готова или упала: ${err.message}`);
+        res.status(502).send('<h1>SYSTEM_BOOT: Подождите 30 сек, идет сборка AdminJS...</h1>');
     }
 }));
 
-// --- БОТ ЛОГИКА ---
 bot.start(async (ctx) => {
-    const userId = ctx.from.id;
-    const startPayload = ctx.payload; 
-    const logoPath = path.join(__dirname, 'static/images/logo.png');
-    
+    logger.info(`[BOT_CMD] Пользователь ${ctx.from.id} нажал /start`);
     try {
-        let photo_url = null;
-        try {
-            const photos = await ctx.getUserProfilePhotos(userId, 0, 1);
-            if (photos.total_count > 0) {
-                const fileId = photos.photos[0][0].file_id;
-                photo_url = (await ctx.telegram.getFileLink(fileId)).href;
-            }
-        } catch (e) {}
-
         const [user, created] = await User.findOrCreate({ 
-            where: { id: BigInt(userId) }, 
-            defaults: { 
-                username: ctx.from.username || 'AGENT',
-                photo_url: photo_url,
-                referred_by: (startPayload && !isNaN(startPayload)) ? BigInt(startPayload) : null
-            } 
+            where: { id: BigInt(ctx.from.id) },
+            defaults: { username: ctx.from.username || 'AGENT' }
         });
-
-        if (created && user.referred_by) {
-            User.increment('referrals', { where: { id: user.referred_by } }).catch(e => logger.error(e));
-        }
-
-        const keyboard = Markup.inlineKeyboard([[Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", DOMAIN)]]);
-        const caption = `<b>Neural Pulse | Terminal</b>\n\nАгент: <code>${ctx.from.username || userId}</code>\nСтатус: <b>ONLINE</b>`;
-
-        if (fs.existsSync(logoPath)) {
-            await ctx.replyWithPhoto({ source: logoPath }, { caption, parse_mode: 'HTML', ...keyboard });
-        } else {
-            await ctx.reply(caption, { parse_mode: 'HTML', ...keyboard });
-        }
-    } catch (e) { 
-        logger.error(`Bot Start Error`, e); 
-        await ctx.reply("Система временно перегружена. Повторите запрос.").catch(()=>{});
+        logger.info(`[DB_OP] Пользователь ${ctx.from.id}: ${created ? 'СОЗДАН' : 'НАЙДЕН'}`);
+        
+        await ctx.reply("⚡ NEURAL PULSE ONLINE");
+    } catch (e) {
+        logger.error(`[BOT_ERR] Ошибка в команде start: ${e.message}`);
     }
 });
 
-// --- API ---
-app.get('/api/top', async (req, res) => {
-    try {
-        const top = await User.findAll({ limit: 50, order: [['balance', 'DESC']], raw: true });
-        res.json(top);
-    } catch (e) { res.status(500).json([]); }
-});
-
-app.post('/api/save', async (req, res) => {
-    try {
-        const { id, ...data } = req.body;
-        await User.update({ ...data, last_seen: new Date() }, { where: { id: BigInt(id) } });
-        res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: "SAVE_ERROR" }); }
-});
-
-const server = app.listen(PORT, '0.0.0.0', () => {
-    logger.system(`GATEWAY ONLINE: Port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    logger.system(`[GATEWAY] Слушает порт ${PORT}. Готов к работе.`);
 });
