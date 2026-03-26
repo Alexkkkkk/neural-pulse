@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
 import fs from 'fs';
+import os from 'os';
 import AdminJS from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
@@ -24,23 +25,63 @@ AdminJS.registerAdapter(AdminJSSequelize);
 
 const startEngine = async () => {
     logger.system('══════════════════════════════════════════════════');
-    logger.system('🚀 NEURAL PULSE: МОНОЛИТНАЯ СИНХРОНИЗАЦИЯ...');
+    logger.system('🚀 NEURAL PULSE: FULL MONOLITH ACTIVATED');
     logger.system('══════════════════════════════════════════════════');
 
     try {
-        // 1. БД
+        // 1. Инициализация Базы Данных
         await initDB();
         logger.info("CORE_DB: ПОДКЛЮЧЕНО");
 
         const app = express();
         app.set('trust proxy', 1);
         app.use(cors());
+        
+        // Парсинг JSON важен для вебхуков
         app.use(express.json());
         
         // Статика
         app.use('/static', express.static(path.join(__dirname, 'static')));
 
-        // 2. Инициализация AdminJS (внутри того же процесса)
+        // --- 2. HUD ДИАГНОСТИКА (Самодиагностика) ---
+        app.get('/api/health', async (req, res) => {
+            const start = Date.now();
+            let dbStatus = 'OFFLINE';
+            try { await sequelize.authenticate(); dbStatus = 'STABLE'; } catch(e) { dbStatus = 'CRITICAL'; }
+            
+            const mem = process.memoryUsage();
+            const load = os.loadavg()[0] * 10;
+
+            res.send(`
+            <!DOCTYPE html>
+            <html lang="ru">
+            <head>
+                <meta charset="UTF-8"><title>NP_CORE_HUD</title>
+                <style>
+                    body { background: #05070a; color: #00f2fe; font-family: monospace; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+                    .hud { border: 2px solid #00f2fe; padding: 25px; width: 400px; box-shadow: 0 0 20px rgba(0, 242, 254, 0.2); background: rgba(0, 242, 254, 0.02); }
+                    h2 { border-bottom: 1px solid #00f2fe; padding-bottom: 10px; font-size: 16px; margin: 0 0 15px 0; }
+                    .row { display: flex; justify-content: space-between; margin: 10px 0; font-size: 13px; }
+                    .ok { color: #33ff66; text-shadow: 0 0 5px #33ff66; }
+                    .warn { color: #ff3366; animation: blink 1s infinite; }
+                    @keyframes blink { 50% { opacity: 0.3; } }
+                </style>
+                <script>setTimeout(() => location.reload(), 5000);</script>
+            </head>
+            <body>
+                <div class="hud">
+                    <h2>> SYSTEM_MONITOR_V3</h2>
+                    <div class="row"><span>DATABASE</span><span class="${dbStatus === 'STABLE' ? 'ok' : 'warn'}">${dbStatus}</span></div>
+                    <div class="row"><span>CPU_LOAD</span><span>${load.toFixed(1)}%</span></div>
+                    <div class="row"><span>MEMORY_RSS</span><span>${(mem.rss / 1024 / 1024).toFixed(1)} MB</span></div>
+                    <div class="row"><span>UPTIME</span><span>${(process.uptime() / 60).toFixed(1)} MIN</span></div>
+                    <div class="row"><span>LATENCY</span><span>${Date.now() - start}ms</span></div>
+                    <div style="font-size:9px; margin-top:15px; opacity:0.4;">ID: bot_1774547194_7500 | MODE: MONOLITH</div>
+                </div>
+            </body></html>`);
+        });
+
+        // --- 3. ADMINJS (Панель управления) ---
         const adminJs = new AdminJS({
             resources: [
                 { resource: User, options: { navigation: { name: 'Агенты' } } },
@@ -56,7 +97,6 @@ const startEngine = async () => {
             bundler: { minify: true, force: false }
         });
 
-        // Билдим админку
         await adminJs.initialize();
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (e, p) => (e === '1' && p === '1') ? { email: 'admin' } : null,
@@ -65,7 +105,7 @@ const startEngine = async () => {
 
         app.use(adminJs.options.rootPath, adminRouter);
 
-        // 3. Инициализация Бота
+        // --- 4. TELEGRAM BOT (Логика и обработка) ---
         const bot = new Telegraf(BOT_TOKEN);
         
         bot.start(async (ctx) => {
@@ -84,21 +124,25 @@ const startEngine = async () => {
             } catch (e) { logger.error(`Bot Error: ${e.message}`); }
         });
 
-        // Хендлер вебхука (теперь напрямую в app)
+        // Эндпоинт для приема вебхуков от Telegram
         app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => {
             bot.handleUpdate(req.body);
             res.sendStatus(200);
         });
 
-        // 4. Запуск единого сервера
+        // --- 5. ЗАПУСК СЕРВЕРА ---
         app.listen(PORT, async () => {
             logger.system(`✅ МОНОЛИТ АКТИВИРОВАН: Port ${PORT}`);
             
-            // Установка Webhook
+            // Установка Webhook через API Telegram
             try {
                 const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`;
-                await bot.telegram.setWebhook(webhookUrl);
+                await bot.telegram.setWebhook(webhookUrl, { drop_pending_updates: true });
                 logger.system(`📡 WEBHOOK УСТАНОВЛЕН -> ${webhookUrl}`);
+                
+                // Проверка токена
+                const me = await bot.telegram.getMe();
+                logger.info(`🤖 БОТ: @${me.username} готов к работе`);
             } catch (e) {
                 logger.error(`Webhook Fail: ${e.message}`);
             }
