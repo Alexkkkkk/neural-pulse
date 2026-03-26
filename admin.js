@@ -34,15 +34,8 @@ const startAdmin = async () => {
                 component: DASHBOARD_COMPONENT,
                 handler: async () => {
                     const totalUsers = await User.count();
-                    let botHealth = 'OPERATIONAL';
-                    try {
-                        const bCheck = await fetch('http://127.0.0.1:3000/api/top');
-                        if (!bCheck.ok) botHealth = 'UNSTABLE';
-                    } catch(e) { botHealth = 'DISCONNECTED'; }
-
                     return { 
                         totalUsers, 
-                        botHealth, 
                         currentMem: (process.memoryUsage().rss / 1024 / 1024).toFixed(1), 
                         cpu: (os.loadavg()[0]).toFixed(2)
                     };
@@ -77,6 +70,7 @@ const startAdmin = async () => {
         app.use(adminJs.options.rootPath, adminRouter);
         app.listen(3001, '0.0.0.0', () => {
             logger.info(`AdminJS Engine: INTERNAL ONLINE (3001)`);
+            // Сигнализируем ядру, что панель полностью готова
             if (process.send) process.send('ready');
         });
     } catch (e) { logger.error("Admin Boot Failure:", e); }
