@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 AdminJS.registerAdapter(AdminJSSequelize);
 
 const componentLoader = new ComponentLoader();
-// Важно: проверь наличие файла static/dashboard.jsx
+// Файл dashboard.jsx должен находиться в папке static
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
 
 const app = express();
@@ -62,6 +62,7 @@ const startAdmin = async () => {
                 companyName: 'Neural Pulse Hub', 
                 softwareBrothers: false, 
                 logo: '/static/images/logo.png',
+                withMadeWithLove: false,
                 theme: {
                     colors: {
                         primary100: '#00f2fe',
@@ -73,14 +74,57 @@ const startAdmin = async () => {
                     }
                 },
                 customCSS: `
-                    [data-testid="login"] { background: radial-gradient(circle, #0d1117 0%, #05070a 100%) !important; }
-                    [data-testid="login"] > div:first-child { background: #0a0a0a !important; border-right: 2px solid #00f2fe !important; }
-                    [data-testid="login"] h2 { color: #00f2fe !important; font-family: 'Courier New', monospace; text-transform: uppercase; }
-                    .sc-fubCfw.button.is-primary { background: #00f2fe !important; color: #000 !important; font-weight: bold; }
-                    input { background: #0d1117 !important; color: #00f2fe !important; border: 1px solid #1a222d !important; }
+                    /* Общий фон и скроллбары */
+                    body, #adminjs { background: #05070a !important; }
+                    
+                    /* Стилизация страницы входа */
+                    [data-testid="login"] { 
+                        background: radial-gradient(circle, #0d1117 0%, #05070a 100%) !important; 
+                    }
+                    [data-testid="login"] > div:first-child { 
+                        background: #0a0a0a !important; 
+                        border-right: 2px solid #00f2fe !important; 
+                        box-shadow: 10px 0 30px rgba(0, 242, 254, 0.1) !important;
+                    }
+                    [data-testid="login"] h2 { 
+                        color: #00f2fe !important; 
+                        font-family: 'Courier New', monospace !important; 
+                        text-transform: uppercase; 
+                        letter-spacing: 2px;
+                    }
+                    
+                    /* Кнопки и интерактивные элементы */
+                    .sc-fubCfw.button.is-primary, [data-testid="login"] button { 
+                        background: #00f2fe !important; 
+                        color: #000 !important; 
+                        font-weight: bold !important; 
+                        border: none !important;
+                        transition: all 0.3s ease;
+                        text-transform: uppercase;
+                    }
+                    .sc-fubCfw.button.is-primary:hover { 
+                        opacity: 0.8; 
+                        box-shadow: 0 0 15px rgba(0, 242, 254, 0.4); 
+                    }
+                    
+                    /* Поля ввода */
+                    input { 
+                        background: #0d1117 !important; 
+                        color: #00f2fe !important; 
+                        border: 1px solid #1a222d !important; 
+                    }
+                    
+                    /* Сайдбар */
+                    section[data-testid="sidebar"] { 
+                        background: #0a0a0a !important; 
+                        border-right: 1px solid #1a222d !important; 
+                    }
                 `
             },
-            bundler: { minify: true, force: false },
+            bundler: { 
+                minify: true, 
+                force: true // Принудительная пересборка фронтенда для применения дизайна
+            },
             assets: { scripts: ['https://unpkg.com/recharts/umd/Recharts.js'] }
         };
 
@@ -103,7 +147,6 @@ const startAdmin = async () => {
         app.use(adminJs.options.rootPath, adminRouter);
         
         const INTERNAL_PORT = 3001;
-        // Слушаем на 0.0.0.0 чтобы быть доступными внутри сети
         app.listen(INTERNAL_PORT, '0.0.0.0', () => {
             logger.info(`AdminJS Engine: INTERNAL ONLINE on port ${INTERNAL_PORT}`);
             if (process.send) process.send('ready');
