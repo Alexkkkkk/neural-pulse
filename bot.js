@@ -26,26 +26,17 @@ app.get('/debug-proxy', async (req, res) => {
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 3000);
-        // Используем 127.0.0.1 для внутренней сети контейнера
         const response = await fetch('http://127.0.0.1:3001/admin/login', { 
             signal: controller.signal
         });
         clearTimeout(timeoutId);
-        res.json({ 
-            status: 'success', 
-            admin_port_3001: 'reachable', 
-            http_code: response.status 
-        });
+        res.json({ status: 'success', admin_port_3001: 'reachable', http_code: response.status });
     } catch (err) {
-        res.json({ 
-            status: 'error', 
-            admin_port_3001: 'UNREACHABLE', 
-            reason: err.message
-        });
+        res.json({ status: 'error', reason: err.message, tip: "Wait 60s for AdminJS bundle." });
     }
 });
 
-// 1. ВЕБХУК (Ставим ПЕРЕД прокси)
+// 1. ВЕБХУК
 app.use(bot.webhookCallback(`/telegraf/${BOT_TOKEN}`));
 
 // 2. НАСТРОЙКИ
@@ -54,29 +45,29 @@ app.use('/api', express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'static')));
 
-// 3. [FIXED PROXY]
+// 3. [PROXIED ADMIN] - С ГИГАНТСКИМ ТАЙМАУТОМ
 app.use('/admin', createProxyMiddleware({
     target: 'http://127.0.0.1:3001',
     changeOrigin: true,
     ws: true,
     xfwd: true,
-    onProxyReq: (proxyReq, req, res) => {
-        proxyReq.setHeader('host', 'localhost:3001');
-    },
+    proxyTimeout: 600000, // 10 минут (хватит на любую сборку)
+    timeout: 600000,
+    onProxyReq: (proxyReq) => proxyReq.setHeader('host', 'localhost:3001'),
     onError: (err, req, res) => {
-        logger.error(`[PROXY_FATAL] AdminJS offline.`);
+        logger.error(`[PROXY_504_PREVENT] AdminJS is still bundling...`);
         res.status(502).set('Content-Type', 'text/html').send(`
             <div style="background:#05070a; color:#00f2fe; padding:40px; font-family: monospace; border: 2px solid #00f2fe; max-width: 600px; margin: 50px auto; text-align: center;">
-                <h2>> NEURAL_PULSE: ADMIN_OFFLINE</h2>
-                <p style="color: #ff3366;">[!] СИСТЕМА ЕЩЕ ЗАГРУЖАЕТСЯ</p>
-                <p>Админка собирает бандлы. Обновите через 30-60 секунд.</p>
-                <button onclick="location.reload()" style="background:#00f2fe; color:black; padding:10px; cursor:pointer;">ОБНОВИТЬ</button>
+                <h2>> NEURAL_PULSE: SYSTEM_BOOT</h2>
+                <p style="color: #ff3366;">[!] ИДЕТ СБОРКА ИНТЕРФЕЙСА (BUNDLING)</p>
+                <p>Пожалуйста, подождите 60-90 секунд. Это происходит только при первом запуске.</p>
+                <button onclick="location.reload()" style="background:#00f2fe; color:black; padding:10px; cursor:pointer; font-weight:bold;">ПРОВЕРИТЬ ГОТОВНОСТЬ</button>
             </div>
         `);
     }
 }));
 
-// --- ЛОГИКА БОТА ---
+// --- БОТ ЛОГИКА ---
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
     const startPayload = ctx.payload; 
@@ -91,7 +82,7 @@ bot.start(async (ctx) => {
                 const link = await ctx.telegram.getFileLink(fileId);
                 photo_url = link.href;
             }
-        } catch (e) { }
+        } catch (e) {}
 
         const [user, created] = await User.findOrCreate({ 
             where: { id: BigInt(userId) }, 
@@ -102,69 +93,39 @@ bot.start(async (ctx) => {
             } 
         });
 
-        if (created && user.referred_by) {
-            await User.increment('referrals', { where: { id: user.referred_by } });
-        }
+        if (created && user.referred_by) await User.increment('referrals', { where: { id: user.referred_by } });
 
-        const keyboard = Markup.inlineKeyboard([[
-            Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", DOMAIN)
-        ]]);
-
+        const keyboard = Markup.inlineKeyboard([[Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", DOMAIN)]]);
         const caption = `<b>Neural Pulse | Terminal</b>\n\nАгент: <code>${ctx.from.username || userId}</code>\nСтатус: <b>ONLINE</b>`;
 
-        if (fs.existsSync(logoPath)) {
-            await ctx.replyWithPhoto({ source: logoPath }, { caption, parse_mode: 'HTML', ...keyboard });
-        } else {
-            await ctx.reply(caption, { parse_mode: 'HTML', ...keyboard });
-        }
-    } catch (e) { 
-        logger.error(`Bot Start Error`, e);
-    }
+        if (fs.existsSync(logoPath)) await ctx.replyWithPhoto({ source: logoPath }, { caption, parse_mode: 'HTML', ...keyboard });
+        else await ctx.reply(caption, { parse_mode: 'HTML', ...keyboard });
+    } catch (e) { logger.error(`Bot Start Error`, e); }
 });
 
 // --- API ---
 app.get('/api/top', async (req, res) => {
     try {
-        const topUsers = await User.findAll({ 
-            limit: 50, order: [['balance', 'DESC']], 
-            attributes: ['username', 'balance', 'level', 'photo_url'], raw: true 
-        });
-        res.json(topUsers);
+        const top = await User.findAll({ limit: 50, order: [['balance', 'DESC']], raw: true });
+        res.json(top);
     } catch (e) { res.status(500).json([]); }
 });
 
 app.post('/api/save', async (req, res) => {
     try {
         const { id, ...data } = req.body;
-        if (!id) return res.status(400).json({ error: "NO_ID" });
         await User.update({ ...data, last_seen: new Date() }, { where: { id: BigInt(id) } });
         res.json({ ok: true });
-    } catch (e) { 
-        res.status(500).json({ error: "SAVE_ERROR" }); 
-    }
+    } catch (e) { res.status(500).json({ error: "SAVE_ERROR" }); }
 });
 
-// ФИНАЛЬНЫЙ ЗАПУСК С ОБРАБОТКОЙ ОШИБОК ПОРТА
 const startListening = () => {
     const server = app.listen(PORT, '0.0.0.0', () => {
         logger.system(`GATEWAY ONLINE: Port ${PORT}`);
     }).on('error', (err) => {
         if (err.code === 'EADDRINUSE') {
-            logger.error(`Port ${PORT} is busy. Retrying in 5s...`);
-            setTimeout(() => {
-                server.close();
-                startListening();
-            }, 5000);
-        } else {
-            logger.error('Server error:', err);
+            setTimeout(() => { server.close(); startListening(); }, 5000);
         }
     });
-
-    const shutdown = async () => {
-        server.close(() => process.exit(0));
-    };
-    process.on('SIGTERM', shutdown);
-    process.on('SIGINT', shutdown);
 };
-
 startListening();
