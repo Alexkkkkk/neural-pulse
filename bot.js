@@ -21,15 +21,25 @@ const app = express();
 
 app.disable('x-powered-by'); 
 app.set('trust proxy', 1);
-app.use(cors({ origin: '*' }));
 
-// 1. ЛОГИРОВАНИЕ ОБНОВЛЕНИЙ (Добавь это сразу после инициализации бота)
-bot.use(async (ctx, next) => {
-    logger.info(`--- [TELEGRAM] Входящее обновление: ${ctx.updateType} ---`);
-    return next();
+// --- ДИАГНОСТИКА: ВИДИМ ЛИ МЫ ТРАФИК? ---
+app.use((req, res, next) => {
+    if (req.url.includes('telegraf')) {
+        logger.info(`[NETWORK] Incoming Webhook POST: ${req.url} from ${req.ip}`);
+    }
+    next();
 });
 
-// 2. ПРОКСИ ДЛЯ ADMINJS (Должен быть ПЕРВЫМ)
+// 1. ОБРАБОТЧИК ВЕБХУКА (ТЕПЕРЬ САМЫЙ ПЕРВЫЙ)
+// Это гарантирует, что Telegraf получит "чистый" поток данных
+app.use(bot.webhookCallback(`/telegraf/${BOT_TOKEN}`));
+
+// 2. ОСТАЛЬНЫЕ НАСТРОЙКИ
+app.use(cors({ origin: '*' }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.static(path.join(__dirname, 'static')));
+
+// 3. ПРОКСИ ДЛЯ ADMINJS
 app.use('/admin', createProxyMiddleware({
     target: 'http://127.0.0.1:3001',
     changeOrigin: true,
@@ -37,12 +47,39 @@ app.use('/admin', createProxyMiddleware({
     logLevel: 'error'
 }));
 
-// 3. ОБРАБОТЧИК ВЕБХУКА (До express.json и static, чтобы исключить конфликты)
-// Убедись, что в server.js привязка идет именно на этот URL: ${DOMAIN}/telegraf/${BOT_TOKEN}
-app.use(bot.webhookCallback(`/telegraf/${BOT_TOKEN}`));
+// --- ЛОГИКА БОТА ---
+bot.use(async (ctx, next) => {
+    logger.info(`--- [TELEGRAM] Обработка обновления: ${ctx.updateType} ---`);
+    return next();
+});
 
-app.use(express.json({ limit: '1mb' }));
-app.use(express.static(path.join(__dirname, 'static')));
+bot.start(async (ctx) => {
+    const userId = ctx.from.id;
+    const logoPath = path.join(__dirname, 'static/images/logo.png');
+    
+    logger.info(`[CORE] Команда /start исполняется для: ${userId}`);
+
+    try {
+        await User.findOrCreate({ 
+            where: { id: BigInt(userId) }, 
+            defaults: { username: ctx.from.username || 'AGENT' } 
+        });
+
+        const keyboard = Markup.inlineKeyboard([[
+            Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", DOMAIN)
+        ]]);
+
+        const caption = `<b>Neural Pulse | Terminal</b>\n\nИдентификация пройдена.\nАгент: <code>${ctx.from.username || userId}</code>\nСтатус: <b>ONLINE</b>`;
+
+        if (fs.existsSync(logoPath)) {
+            await ctx.replyWithPhoto({ source: logoPath }, { caption, parse_mode: 'HTML', ...keyboard });
+        } else {
+            await ctx.reply(caption, { parse_mode: 'HTML', ...keyboard });
+        }
+    } catch (e) { 
+        logger.error(`Bot Start Error`, e);
+    }
+});
 
 // --- API ЭНДПОИНТЫ ---
 app.get('/api/top', async (req, res) => {
@@ -76,35 +113,6 @@ app.post('/api/save', async (req, res) => {
         await User.update({ ...data, last_seen: new Date() }, { where: { id: BigInt(id) } });
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: "SAVE_ERROR" }); }
-});
-
-// --- ЛОГИКА БОТА ---
-bot.start(async (ctx) => {
-    const userId = ctx.from.id;
-    const logoPath = path.join(__dirname, 'static/images/logo.png');
-    
-    logger.info(`Команда /start от пользователя: ${userId}`);
-
-    try {
-        await User.findOrCreate({ 
-            where: { id: BigInt(userId) }, 
-            defaults: { username: ctx.from.username || 'AGENT' } 
-        });
-
-        const keyboard = Markup.inlineKeyboard([[
-            Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", DOMAIN)
-        ]]);
-
-        const caption = `<b>Neural Pulse | Terminal</b>\n\nИдентификация пройдена.\nАгент: <code>${ctx.from.username || userId}</code>\nСтатус: <b>ONLINE</b>`;
-
-        if (fs.existsSync(logoPath)) {
-            await ctx.replyWithPhoto({ source: logoPath }, { caption, parse_mode: 'HTML', ...keyboard });
-        } else {
-            await ctx.reply(caption, { parse_mode: 'HTML', ...keyboard });
-        }
-    } catch (e) { 
-        logger.error(`Bot Start Error`, e);
-    }
 });
 
 const server = app.listen(PORT, '0.0.0.0', () => {
