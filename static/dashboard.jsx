@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react'
 import { Box, H2, H5, Text, Card, Badge, Button } from '@adminjs/design-system'
 import { ApiClient } from 'adminjs'
-import { 
+import * as Recharts from 'recharts' // Импортируем всё сразу для стабильности
+
+const { 
   XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, AreaChart, Area 
-} from 'recharts'
+} = Recharts
 
 const api = new ApiClient()
 
-// Цветовая схема Neural Pulse (Cyberpunk Edition)
 const CYBER = {
   bg: '#05070a',
   card: '#0d1117',
@@ -21,9 +22,8 @@ const CYBER = {
 };
 
 const Dashboard = (props) => {
-  // Состояния для телеметрии и логов
   const [stats, setStats] = useState(props.data || { totalUsers: 0, cpu: 0, currentMem: 0, dbLatency: 0 })
-  const [history, setHistory] = useState([])
+  const [history, setHistory] = useState([{ time: '00:00', cpu: 0 }]) // Начальная точка, чтобы не было undefined
   const [scanPos, setScanPos] = useState(0)
   const [logs, setLogs] = useState(['> Инициализация ядра...', '> Подключение к TON Mainnet...'])
 
@@ -37,7 +37,6 @@ const Dashboard = (props) => {
       const d = response.data || {}
       setStats(d)
       
-      // Добавляем точку на график только если есть данные
       const cpuVal = parseFloat(d.cpu || 0)
       const memVal = parseFloat(d.currentMem || 0)
 
@@ -47,21 +46,16 @@ const Dashboard = (props) => {
           cpu: cpuVal,
           ram: memVal,
         };
-        // Держим последние 20 записей для плавности
         return [...prev, newPoint].slice(-20)
       })
     } catch (e) { 
       console.error('Pulse Telemetry Error:', e)
-      addLog('КРИТИЧЕСКАЯ ОШИБКА СЕТИ')
     }
   }
 
   useEffect(() => {
-    // Опрос API раз в 5 секунд
     const interval = setInterval(fetchStats, 5000)
-    // Эффект "бегущего луча" сканера
     const anim = setInterval(() => setScanPos(p => (p + 1.5) % 100), 60)
-    
     return () => { 
       clearInterval(interval)
       clearInterval(anim)
@@ -71,7 +65,7 @@ const Dashboard = (props) => {
   return (
     <Box padding="xl" style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: '"Courier New", monospace' }}>
       
-      {/* HEADER: СТАТУС СИСТЕМЫ */}
+      {/* HEADER */}
       <Box padding="xl" marginBottom="xl" borderRadius="xl" 
            style={{ backgroundColor: CYBER.card, border: `1px solid ${CYBER.primary}44`, position: 'relative', overflow: 'hidden' }}>
         <Box style={{ 
@@ -91,7 +85,7 @@ const Dashboard = (props) => {
         </Box>
       </Box>
 
-      {/* STATS CARDS: ГРИД ПОКАЗАТЕЛЕЙ */}
+      {/* STATS CARDS */}
       <Box display="flex" flexDirection="row" flexWrap="wrap" margin="-sm">
         {[
           { label: 'ACTIVE_AGENTS', val: stats.totalUsers, color: CYBER.primary, unit: '' },
@@ -116,7 +110,7 @@ const Dashboard = (props) => {
       </Box>
 
       <Box display="flex" flexDirection="row" flexWrap="wrap" marginTop="xl">
-        {/* ГРАФИК ТЕЛЕМЕТРИИ */}
+        {/* GRAPH */}
         <Box width={[1, 2/3]} paddingRight={['0', 'sm']}>
           <Box padding="lg" borderRadius="xl" style={{ backgroundColor: CYBER.card, height: '400px', border: '1px solid #1a222d' }}>
             <H5 mb="xl" style={{ color: CYBER.primary, letterSpacing: '1px' }}>OS_PULSE_MONITOR</H5>
@@ -143,7 +137,7 @@ const Dashboard = (props) => {
           </Box>
         </Box>
 
-        {/* ЖИВОЙ ТЕРМИНАЛ ЛОГОВ */}
+        {/* TERMINAL */}
         <Box width={[1, 1/3]} paddingLeft={['0', 'sm']}>
           <Box padding="lg" borderRadius="xl" 
                style={{ 
