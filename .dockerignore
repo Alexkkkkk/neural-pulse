@@ -1,0 +1,15 @@
+# Зависимости (их установит сам Docker внутри образа)
+node_modules
+npm-debug.log
+
+# Кэш AdminJS (чтобы не тянуть старый билд)
+.adminjs
+
+# Скрытые файлы Git и системные мусорные файлы
+.git
+.gitignore
+.env
+.DS_Store
+
+# Лишние файлы документации
+README.md
