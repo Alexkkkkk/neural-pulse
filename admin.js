@@ -11,18 +11,14 @@ import { logger } from './logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Регистрация адаптера для работы с Sequelize
 AdminJS.registerAdapter(AdminJSSequelize);
 
 const componentLoader = new ComponentLoader();
-// Указываем путь к кастомному дашборду. Путь должен быть идентичен тому, что в Dockerfile.
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
 
 const app = express();
 app.set('trust proxy', 1);
 app.use(express.json());
-
-// Раздача статики (логотипы, стили)
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
 const startAdmin = async () => {
@@ -37,81 +33,53 @@ const startAdmin = async () => {
             componentLoader,
             dashboard: {
                 component: DASHBOARD_COMPONENT,
-                handler: async () => {
-                    const totalUsers = await User.count();
-                    return { 
-                        totalUsers, 
-                        currentMem: (process.memoryUsage().rss / 1024 / 1024).toFixed(1), 
-                        cpu: (os.loadavg()[0]).toFixed(2)
-                    };
-                }
+                handler: async () => ({
+                    totalUsers: await User.count(),
+                    currentMem: (process.memoryUsage().rss / 1024 / 1024).toFixed(1), 
+                    cpu: (os.loadavg()[0]).toFixed(2)
+                })
             },
             branding: { 
                 companyName: 'Neural Pulse Hub', 
                 logo: '/static/images/logo.png',
-                softwareBrothers: false, // Убираем логотип разработчиков AdminJS
+                softwareBrothers: false,
                 theme: {
                     id: 'np-dark',
-                    colors: { 
-                        primary100: '#00f2fe', 
-                        bg: '#05070a', 
-                        text: '#ffffff', 
-                        container: '#0d1117' 
-                    }
+                    colors: { primary100: '#00f2fe', bg: '#05070a', text: '#ffffff', container: '#0d1117' }
                 },
                 customCSS: `
                     :root { --colors-bg: #05070a !important; --colors-primary100: #00f2fe !important; }
                     body, #adminjs, section[data-testid="sidebar"] { background: #05070a !important; }
-                    [data-testid="login"] > div:first-child { background: #0a0a0a !important; border-right: 2px solid #00f2fe !important; }
-                    /* Скрытие лишних элементов для ускорения рендеринга */
-                    button[data-testid="button-fingerprint"] { display: none; }
                 `
             },
-            // --- КРИТИЧЕСКАЯ СЕКЦИЯ ОПТИМИЗАЦИИ ---
             bundler: { 
                 minify: true, 
-                force: false, // ВАЖНО: false заставляет использовать уже собранный бандл из Docker-слоя
-                babelConfig: {
-                    compact: true,
-                    presets: [
-                        ['@babel/preset-react', { runtime: 'automatic' }],
-                        ['@babel/preset-env', { targets: { node: 'current' } }]
-                    ]
-                }
+                force: false 
             }
         };
 
         const adminJs = new AdminJS(adminOptions);
+        
+        // ВАЖНО: Ждем, пока AdminJS прожует бандл и настроит ресурсы
+        logger.info("AdminJS Engine: Подготовка интерфейса...");
+        await adminJs.initialize();
 
-        // Настройка авторизации
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                // Простая проверка (в будущем можно заменить на поиск в БД)
-                if (email === '1' && password === '1') {
-                    return { email: 'admin@np.tech' };
-                }
+                if (email === '1' && password === '1') return { email: 'admin@np.tech' };
                 return null;
             },
             cookiePassword: 'secure-pass-2026-pulse-ultra-secret-32-chars',
         }, null, {
-            resave: false, 
-            saveUninitialized: false, 
-            secret: 'np_secret', 
-            store: sessionStore,
-            cookie: { 
-                maxAge: 86400000, // 24 часа
-                path: '/admin', 
-                httpOnly: true, 
-                secure: false // Bothost использует прокси, оставляем false если нет прямого SSL на ноде
-            }
+            resave: false, saveUninitialized: false, secret: 'np_secret', store: sessionStore,
+            cookie: { maxAge: 86400000, path: '/admin', httpOnly: true, secure: false }
         });
         
         app.use(adminJs.options.rootPath, adminRouter);
 
-        // Запуск сервера на внутреннем порту 3001
         app.listen(3001, '0.0.0.0', () => {
             logger.info(`AdminJS Engine: INTERNAL ONLINE (3001)`);
-            // Отправка сигнала "ready" родительскому процессу (server.js)
+            // ОТПРАВЛЯЕМ СИГНАЛ ЯДРУ (server.js)
             if (process.send) {
                 process.send('ready');
             }
@@ -119,6 +87,7 @@ const startAdmin = async () => {
 
     } catch (e) {
         logger.error("Admin Boot Failure:", e);
+        process.exit(1);
     }
 };
 
