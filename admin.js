@@ -13,7 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --- ПРЕДУСТАНОВКА СИСТЕМЫ ---
-// Удаляем старый билд фронтенда, чтобы AdminJS пересобрал UI с новыми стилями
+// Очистка кэша фронтенда для принудительного обновления дизайна
 const adminCachePath = path.join(process.cwd(), '.adminjs');
 if (fs.existsSync(adminCachePath)) {
     try {
@@ -27,7 +27,7 @@ if (fs.existsSync(adminCachePath)) {
 AdminJS.registerAdapter(AdminJSSequelize);
 
 const componentLoader = new ComponentLoader();
-// Подключаем кастомный дашборд (убедись, что файл существует в /static)
+// Регистрация киберпанк-дашборда
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
 
 const app = express();
@@ -36,16 +36,14 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Обслуживание статических файлов проекта (логотип, манифест и др.)
+// Раздача статики (логотипы, картинки, стили)
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
-// --- ИСПРАВЛЕНИЕ ОШИБОК РОУТИНГА (GET ERRORS) ---
-// Редирект с корня на админку
+// --- РОУТИНГ ---
 app.get('/', (req, res) => {
     res.redirect('/admin');
 });
 
-// Фикс ошибки "Cannot GET /logout"
 app.get('/logout', (req, res) => {
     res.redirect('/admin/logout');
 });
@@ -103,30 +101,25 @@ const startAdmin = async () => {
                         border: '#1a222d'
                     }
                 },
-                // ПРИМЕНЕНИЕ КИБЕРПАНК-ДИЗАЙНА
                 custom: {
                     style: `
                         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-
                         body, #adminjs-app {
                             background: radial-gradient(circle at center, #0a111a 0%, #05070a 100%) !important;
                             font-family: 'Inter', sans-serif !important;
                         }
-
                         section[data-testid="login"] {
                             background: #0d1117 !important;
                             border: 1px solid #00f2fe !important;
                             box-shadow: 0 0 30px rgba(0, 242, 254, 0.2) !important;
                             border-radius: 16px !important;
                         }
-
                         input {
                             background: #161b22 !important;
                             border: 1px solid #30363d !important;
                             color: #ffffff !important;
                             border-radius: 8px !important;
                         }
-
                         button[type="submit"] {
                             background: #00f2fe !important;
                             color: #000000 !important;
@@ -134,19 +127,22 @@ const startAdmin = async () => {
                             text-transform: uppercase !important;
                             letter-spacing: 1px !important;
                             border-radius: 8px !important;
-                            transition: all 0.3s ease !important;
                         }
-
                         button[type="submit"]:hover {
                             background: #ffffff !important;
                             box-shadow: 0 0 20px #00f2fe !important;
-                            transform: translateY(-2px);
                         }
                     `
                 }
             },
             bundler: {
                 minify: true 
+            },
+            // ВАЖНО: Подгрузка внешних скриптов для работы графиков Recharts
+            assets: {
+                scripts: [
+                    'https://unpkg.com/recharts/umd/Recharts.js'
+                ]
             }
         };
 
@@ -175,8 +171,6 @@ const startAdmin = async () => {
         
         app.use(adminJs.options.rootPath, adminRouter);
         
-        // Запуск на порту 3001. Если Bothost использует прокси, убедись, 
-        // что основной процесс перенаправляет запросы именно сюда.
         app.listen(3001, '0.0.0.0', () => {
             logger.info("AdminJS Engine: ONLINE on port 3001");
         });
