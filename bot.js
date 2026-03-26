@@ -12,6 +12,7 @@ import { logger } from './logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Конфигурация из окружения
 const BOT_TOKEN = process.env.BOT_TOKEN || "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const DOMAIN = process.env.DOMAIN || "https://np.bothost.tech"; 
 const PORT = process.env.PORT || 3000;
@@ -22,10 +23,7 @@ const app = express();
 app.disable('x-powered-by'); 
 app.set('trust proxy', 1);
 
-app.get('/', (req, res) => {
-    res.status(200).send("NEURAL_PULSE_GATEWAY: ONLINE");
-});
-
+// --- 1. ДИАГНОСТИКА (Dashboard Health) ---
 app.get('/api/health', async (req, res) => {
     const start = Date.now();
     let adminStatus = 'OFFLINE', dbStatus = 'OFFLINE', botApi = 'ERROR';
@@ -38,6 +36,7 @@ app.get('/api/health', async (req, res) => {
     try { 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 1500);
+        // Проверяем внутренний порт админки
         const aRes = await fetch('http://127.0.0.1:3001/admin', { 
             method: 'HEAD', 
             signal: controller.signal 
@@ -95,21 +94,22 @@ app.get('/api/health', async (req, res) => {
     `);
 });
 
+// --- 2. TELEGRAM WEBHOOK HANDLER ---
 app.post(`/telegraf/${BOT_TOKEN}`, express.json(), (req, res) => {
     res.sendStatus(200); 
-    bot.handleUpdate(req.body);
+    bot.handleUpdate(req.body).catch(err => logger.error(`[TELEGRAF_ERROR] ${err.message}`));
 });
 
+// --- 3. MIDDLEWARE & STATIC ---
 app.use(cors({ origin: '*' }));
 app.use('/api', express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'static')));
 
+// --- 4. ADMIN PANEL PROXY ---
 app.use('/admin', createProxyMiddleware({
     target: 'http://127.0.0.1:3001',
     changeOrigin: true,
     ws: true,
-    proxyTimeout: 40000, 
-    timeout: 40000,
     onError: (err, req, res) => {
         logger.error(`[PROXY_ERR] ${err.message}`);
         if (!res.headersSent) {
@@ -125,6 +125,7 @@ app.use('/admin', createProxyMiddleware({
     }
 }));
 
+// --- 5. BOT LOGIC ---
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
     const logoPath = path.join(__dirname, 'static/images/logo.png');
@@ -144,6 +145,7 @@ bot.start(async (ctx) => {
     } catch (e) { logger.error(`Bot Start Error: ${e.message}`); }
 });
 
+// --- 6. API ENDPOINTS ---
 app.get('/api/top', async (req, res) => {
     try {
         const top = await User.findAll({ limit: 50, order: [['balance', 'DESC']], raw: true });
@@ -154,11 +156,22 @@ app.get('/api/top', async (req, res) => {
 app.post('/api/save', async (req, res) => {
     try {
         const { id, ...data } = req.body;
+        if (!id) return res.status(400).json({ error: "NO_ID" });
         await User.update({ ...data, last_seen: new Date() }, { where: { id: BigInt(id) } });
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: "SAVE_ERROR" }); }
 });
 
-app.listen(PORT, () => {
+// --- 7. SERVER START & WEBHOOK INIT ---
+app.listen(PORT, async () => {
     logger.system(`ШЛЮЗ АКТИВИРОВАН: Port ${PORT}`);
+    
+    try {
+        // Ключевой момент: устанавливаем вебхук в Telegram
+        const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`;
+        await bot.telegram.setWebhook(webhookUrl);
+        logger.info(`📡 TELEGRAM WEBHOOK: КАНАЛ УСТАНОВЛЕН -> ${webhookUrl}`);
+    } catch (e) {
+        logger.error(`[CRITICAL] Webhook setup failed: ${e.message}`);
+    }
 });
