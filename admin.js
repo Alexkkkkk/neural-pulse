@@ -15,7 +15,6 @@ const __dirname = path.dirname(__filename);
 AdminJS.registerAdapter(AdminJSSequelize);
 
 const componentLoader = new ComponentLoader();
-// Убедись, что файл static/dashboard.jsx существует!
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
 
 const app = express();
@@ -69,14 +68,62 @@ const startAdmin = async () => {
                         bg: '#05070a',        
                         text: '#ffffff',      
                         container: '#0d1117',
-                        border: '#1a222d'
+                        border: '#1a222d',
+                        loginBg: '#05070a'
                     }
-                }
+                },
+                // --- СТИЛИЗАЦИЯ ПОД КИБЕРПАНК ---
+                customCSS: `
+                    /* Общий фон страницы логина */
+                    [data-testid="login"] {
+                        background: radial-gradient(circle, #0d1117 0%, #05070a 100%) !important;
+                    }
+                    /* Левая панель (которая была синей) */
+                    [data-testid="login"] > div:first-child {
+                        background: #0a0a0a !important;
+                        border-right: 2px solid #00f2fe !important;
+                        box-shadow: 10px 0 20px rgba(0, 242, 254, 0.15);
+                    }
+                    /* Текст Welcome */
+                    [data-testid="login"] h2 {
+                        color: #00f2fe !important;
+                        font-family: 'Courier New', monospace;
+                        text-transform: uppercase;
+                        letter-spacing: 3px;
+                        text-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
+                    }
+                    /* Кнопка входа */
+                    .sc-fubCfw.button.is-primary {
+                        background: #00f2fe !important;
+                        color: #000 !important;
+                        border: none !important;
+                        font-weight: bold;
+                        text-transform: uppercase;
+                        transition: all 0.3s ease;
+                    }
+                    .sc-fubCfw.button.is-primary:hover {
+                        box-shadow: 0 0 20px #00f2fe;
+                        transform: scale(1.02);
+                    }
+                    /* Поля ввода */
+                    input {
+                        background: #0d1117 !important;
+                        border: 1px solid #1a222d !important;
+                        color: #00f2fe !important;
+                    }
+                    input:focus {
+                        border-color: #00f2fe !important;
+                        box-shadow: 0 0 5px rgba(0, 242, 254, 0.3) !important;
+                    }
+                    /* Убираем лишние подписи */
+                    [data-testid="login"] p {
+                        color: #666 !important;
+                    }
+                `
             },
-            // ОПТИМИЗАЦИЯ ДЛЯ BOTHOST
             bundler: { 
                 minify: true,
-                force: false // НЕ пересобирать, если уже есть бандл
+                force: false 
             },
             assets: {
                 scripts: ['https://unpkg.com/recharts/umd/Recharts.js']
