@@ -11,32 +11,38 @@ const __dirname = path.dirname(__filename);
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const DOMAIN = "https://np.bothost.tech";
 
+/**
+ * Функция безопасного запуска дочерних процессов
+ */
 const launchProcess = (fileName) => {
     const processPath = path.join(__dirname, fileName);
     
-    // stdio: 'inherit' позволяет видеть консоль дочерних процессов в главном окне
+    // stdio: 'inherit' позволяет видеть логи бота и админки в основной консоли
     const child = fork(processPath, { stdio: 'inherit' });
 
     child.on('exit', (code) => {
         if (code !== 0 && code !== null) {
-            logger.error(`[CRASH] ${fileName} завершился с кодом ${code}. Рестарт через 5с...`);
+            logger.error(`[CRASH] ${fileName} упал (код ${code}). Рестарт через 5с...`);
             setTimeout(() => launchProcess(fileName), 5000);
         }
     });
 
     child.on('error', (err) => {
-        logger.error(`[ERROR] Не удалось запустить ${fileName}:`, err);
+        logger.error(`[ERROR] Ошибка запуска ${fileName}:`, err);
     });
 
     return child;
 };
 
+/**
+ * Запуск двигателя Neural Pulse
+ */
 const startEngine = async () => {
     logger.system('--- NEURAL PULSE ENGINE BOOTSTRAP ---');
 
     try {
         logger.progress(2, 10);
-        // Инициализация базы данных из db.js
+        // Инициализация базы данных
         const dbReady = await initDB();
         
         if (!dbReady) throw new Error("Database initialization failed.");
@@ -45,7 +51,7 @@ const startEngine = async () => {
         logger.progress(6, 10);
         logger.info("Starting Dual-Core Processes...");
         
-        // Запуск бота и AdminJS как отдельных веток
+        // Запуск бота и административной панели
         launchProcess('bot.js');
         launchProcess('admin.js');
 
@@ -53,7 +59,7 @@ const startEngine = async () => {
         const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`;
         
         try {
-            // Установка вебхука с очисткой старых обновлений
+            // Установка вебхука с принудительной очисткой старых обновлений
             const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${webhookUrl}&drop_pending_updates=true`);
             const result = await response.json();
             
@@ -67,9 +73,9 @@ const startEngine = async () => {
         }
 
         logger.progress(10, 10);
-        logger.system(`ENGINE STATUS: DUAL-CORE ONLINE`);
-        logger.info(`Main App URL: ${DOMAIN}`);
-        logger.info(`Admin Access: ${DOMAIN}/admin`);
+        logger.system(`ENGINE STATUS: ONLINE`);
+        logger.info(`App URL: ${DOMAIN}`);
+        logger.info(`Admin: ${DOMAIN}/admin`);
 
     } catch (err) { 
         logger.error("CRITICAL ENGINE FAILURE", err); 
@@ -77,13 +83,16 @@ const startEngine = async () => {
     }
 };
 
+/**
+ * Грейсфульное завершение
+ */
 const shutdown = async () => {
-    logger.warn("Получен сигнал остановки системы. Закрытие ресурсов...");
+    logger.warn("Сигнал остановки. Закрытие ресурсов...");
     try {
         await sequelize.close();
-        logger.info("Соединения с базой данных закрыты.");
+        logger.info("БД отключена.");
     } catch (e) {
-        logger.error("Ошибка при закрытии базы данных", e);
+        logger.error("Ошибка при закрытии БД:", e);
     }
     process.exit(0); 
 };
