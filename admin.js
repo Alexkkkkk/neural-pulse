@@ -13,18 +13,22 @@ import { logger } from './logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// КРИТИЧЕСКИ ВАЖНО: Очищаем старый кеш фронтенда перед запуском
+// --- ИНИЦИАЛИЗАЦИЯ И ОЧИСТКА ---
 const adminCachePath = path.join(process.cwd(), '.adminjs');
 if (fs.existsSync(adminCachePath)) {
-    fs.rmSync(adminCachePath, { recursive: true, force: true });
+    try {
+        fs.rmSync(adminCachePath, { recursive: true, force: true });
+        logger.info("AdminJS: Static cache cleared for fresh build.");
+    } catch (e) {
+        logger.warn("AdminJS: Failed to clear cache, but continuing...");
+    }
 }
 
 AdminJS.registerAdapter(AdminJSSequelize);
 
 const componentLoader = new ComponentLoader();
-const dashboardPath = path.join(__dirname, 'static', 'dashboard.jsx');
-
-// Регистрируем компонент
+// Указываем путь к твоему JSX компоненту (согласно структуре в корне)
+const dashboardPath = path.join(__dirname, 'dashboard-component.jsx');
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', dashboardPath);
 
 const app = express();
@@ -58,6 +62,9 @@ const startAdmin = async () => {
                         const dbLatency = Date.now() - startDb;
                         const totalUsers = await User.count();
                         
+                        // Логируем запрос к телеметрии (опционально)
+                        // logger.info(`Admin Dashboard: Stats updated (${dbLatency}ms)`);
+
                         return {
                             totalUsers,
                             dbLatency,
@@ -65,6 +72,7 @@ const startAdmin = async () => {
                             cpu: (os.loadavg()[0] * 10).toFixed(1)
                         };
                     } catch (err) {
+                        logger.error("Admin Dashboard: Telemetry failed", err);
                         return { error: 'Telemetry unavailable' };
                     }
                 }
@@ -83,7 +91,6 @@ const startAdmin = async () => {
                     }
                 }
             },
-            // Настройка сборщика
             bundler: {
                 minify: process.env.NODE_ENV === 'production'
             }
@@ -94,8 +101,10 @@ const startAdmin = async () => {
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
                 if (email === '1' && password === '1') {
+                    logger.system(`AdminJS: Successful login by ${email}`);
                     return { email: 'admin@neuralpulse.tech' };
                 }
+                logger.warn(`AdminJS: Failed login attempt with email: ${email}`);
                 return null;
             },
             cookiePassword: 'secure-pass-2026-pulse-ultra-secret',
