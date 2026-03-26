@@ -21,8 +21,8 @@ const CYBER = {
 };
 
 const Dashboard = (props) => {
-  // Начальные данные из пропсов или пустые значения
-  const [stats, setStats] = useState(props.data || {})
+  // Состояния для телеметрии и логов
+  const [stats, setStats] = useState(props.data || { totalUsers: 0, cpu: 0, currentMem: 0, dbLatency: 0 })
   const [history, setHistory] = useState([])
   const [scanPos, setScanPos] = useState(0)
   const [logs, setLogs] = useState(['> Инициализация ядра...', '> Подключение к TON Mainnet...'])
@@ -37,25 +37,30 @@ const Dashboard = (props) => {
       const d = response.data || {}
       setStats(d)
       
-      // Обновляем историю для графика (храним последние 20 точек)
-      if (d.cpu !== undefined) {
-        setHistory(prev => [...prev, {
+      // Добавляем точку на график только если есть данные
+      const cpuVal = parseFloat(d.cpu || 0)
+      const memVal = parseFloat(d.currentMem || 0)
+
+      setHistory(prev => {
+        const newPoint = {
           time: new Date().toLocaleTimeString().slice(0, 5),
-          cpu: parseFloat(d.cpu || 0),
-          ram: parseFloat(d.currentMem || 0),
-        }].slice(-20))
-      }
+          cpu: cpuVal,
+          ram: memVal,
+        };
+        // Держим последние 20 записей для плавности
+        return [...prev, newPoint].slice(-20)
+      })
     } catch (e) { 
-      console.error('Pulse Error:', e)
-      addLog('ОШИБКА ПОЛУЧЕНИЯ ТЕЛЕМЕТРИИ')
+      console.error('Pulse Telemetry Error:', e)
+      addLog('КРИТИЧЕСКАЯ ОШИБКА СЕТИ')
     }
   }
 
   useEffect(() => {
-    // Опрос API каждые 5 секунд
+    // Опрос API раз в 5 секунд
     const interval = setInterval(fetchStats, 5000)
-    // Анимация сканирующей линии (эффект терминала)
-    const anim = setInterval(() => setScanPos(p => (p + 1) % 100), 50)
+    // Эффект "бегущего луча" сканера
+    const anim = setInterval(() => setScanPos(p => (p + 1.5) % 100), 60)
     
     return () => { 
       clearInterval(interval)
@@ -64,44 +69,45 @@ const Dashboard = (props) => {
   }, [])
 
   return (
-    <Box padding="xl" style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace' }}>
+    <Box padding="xl" style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: '"Courier New", monospace' }}>
       
-      {/* HEADER: КИБЕР-ТЕРМИНАЛ */}
+      {/* HEADER: СТАТУС СИСТЕМЫ */}
       <Box padding="xl" marginBottom="xl" borderRadius="xl" 
            style={{ backgroundColor: CYBER.card, border: `1px solid ${CYBER.primary}44`, position: 'relative', overflow: 'hidden' }}>
         <Box style={{ 
             position: 'absolute', top: 0, left: `${scanPos}%`, 
-            width: '2px', height: '100%', 
-            background: CYBER.primary, boxShadow: `0 0 15px ${CYBER.primary}`, opacity: 0.4 
+            width: '3px', height: '100%', 
+            background: `linear-gradient(to bottom, transparent, ${CYBER.primary}, transparent)`, 
+            boxShadow: `0 0 20px ${CYBER.primary}`, opacity: 0.5 
         }} />
         <Box display="flex" justifyContent="space-between" alignItems="center">
           <Box>
-            <Badge style={{ background: CYBER.success, color: '#000', fontWeight: 'bold' }}>CORE_V1.2.0_ACTIVE</Badge>
-            <H2 style={{ color: CYBER.primary, marginTop: '10px', letterSpacing: '2px' }}>NEURAL PULSE // TERMINAL</H2>
+            <Badge variant="success" style={{ background: CYBER.success, color: '#000', fontWeight: 'bold' }}>SYSTEM_STABLE</Badge>
+            <H2 style={{ color: CYBER.primary, marginTop: '10px', letterSpacing: '3px', fontWeight: '900' }}>NEURAL PULSE // HUD</H2>
           </Box>
           <Box display="flex" gap="md">
-            <Button variant="danger" size="sm" onClick={() => addLog('CORE REBOOT INITIATED')}>SYSTEM_REBOOT</Button>
+            <Button variant="danger" size="sm" onClick={() => addLog('CORE REBOOT REQUESTED')}>FORCE_REBOOT</Button>
           </Box>
         </Box>
       </Box>
 
-      {/* STATS CARDS: ГЛАВНЫЕ ПОКАЗАТЕЛИ */}
+      {/* STATS CARDS: ГРИД ПОКАЗАТЕЛЕЙ */}
       <Box display="flex" flexDirection="row" flexWrap="wrap" margin="-sm">
         {[
-          { label: 'AGENTS (USERS)', val: stats.totalUsers, color: CYBER.primary },
-          { label: 'CPU LOAD', val: `${stats.cpu || 0}%`, color: CYBER.success },
-          { label: 'RAM USAGE', val: `${stats.currentMem || 0}MB`, color: CYBER.secondary },
-          { label: 'DB LATENCY', val: `${stats.dbLatency || 0}ms`, color: CYBER.warning }
+          { label: 'ACTIVE_AGENTS', val: stats.totalUsers, color: CYBER.primary, unit: '' },
+          { label: 'CPU_UTILIZATION', val: stats.cpu, color: CYBER.success, unit: '%' },
+          { label: 'MEMORY_ALLOCATED', val: stats.currentMem, color: CYBER.secondary, unit: ' MB' },
+          { label: 'DATABASE_LATENCY', val: stats.dbLatency, color: CYBER.warning, unit: ' ms' }
         ].map((item, i) => (
           <Box key={i} width={[1, 1/2, 1/4]} padding="sm">
-            <Card style={{ backgroundColor: CYBER.card, border: `1px solid ${item.color}33`, borderRadius: '16px' }}>
+            <Card style={{ backgroundColor: CYBER.card, border: `1px solid ${item.color}33`, borderRadius: '12px' }}>
               <Box p="md">
-                <Text size="xs" color="grey60" style={{ letterSpacing: '1px' }}>{item.label}</Text>
-                <H2 style={{ color: '#fff', margin: '10px 0' }}>{item.val || 0}</H2>
-                <Box width="100%" height="4px" bg="#000" mt="md" borderRadius="2px">
-                    <Box width={`${Math.min(parseInt(item.val) || 10, 100)}%`} 
+                <Text size="xs" color="grey60" style={{ letterSpacing: '1px', fontWeight: 'bold' }}>{item.label}</Text>
+                <H2 style={{ color: '#fff', margin: '10px 0', fontSize: '28px' }}>{item.val || 0}{item.unit}</H2>
+                <Box width="100%" height="2px" bg="#000" mt="md">
+                    <Box width={`${Math.min(parseFloat(item.val) || 0, 100)}%`} 
                          height="100%" 
-                         style={{ background: item.color, boxShadow: `0 0 10px ${item.color}` }} />
+                         style={{ background: item.color, boxShadow: `0 0 10px ${item.color}`, transition: 'width 1s ease' }} />
                 </Box>
               </Box>
             </Card>
@@ -110,17 +116,17 @@ const Dashboard = (props) => {
       </Box>
 
       <Box display="flex" flexDirection="row" flexWrap="wrap" marginTop="xl">
-        {/* ЧАРТ: ТЕЛЕМЕТРИЯ В РЕАЛЬНОМ ВРЕМЕНИ */}
+        {/* ГРАФИК ТЕЛЕМЕТРИИ */}
         <Box width={[1, 2/3]} paddingRight={['0', 'sm']}>
-          <Box padding="lg" borderRadius="xl" style={{ backgroundColor: CYBER.card, height: '400px', border: '1px solid #30363d' }}>
-            <H5 mb="xl" style={{ color: CYBER.primary }}>SYSTEM_TELEMETRY_STREAM</H5>
+          <Box padding="lg" borderRadius="xl" style={{ backgroundColor: CYBER.card, height: '400px', border: '1px solid #1a222d' }}>
+            <H5 mb="xl" style={{ color: CYBER.primary, letterSpacing: '1px' }}>OS_PULSE_MONITOR</H5>
             <ResponsiveContainer width="100%" height="85%">
               <AreaChart data={history}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1f242c" />
+                <CartesianGrid strokeDasharray="2 2" stroke="#1f242c" vertical={false} />
                 <XAxis dataKey="time" stroke="#484f58" tick={{ fontSize: 10 }} />
-                <YAxis stroke="#484f58" tick={{ fontSize: 10 }} />
+                <YAxis stroke="#484f58" tick={{ fontSize: 10 }} domain={[0, 100]} />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: CYBER.card, border: `1px solid ${CYBER.primary}`, color: '#fff' }}
+                  contentStyle={{ backgroundColor: CYBER.card, border: `1px solid ${CYBER.primary}`, borderRadius: '8px' }}
                   itemStyle={{ color: CYBER.primary }}
                 />
                 <Area 
@@ -128,36 +134,36 @@ const Dashboard = (props) => {
                   dataKey="cpu" 
                   stroke={CYBER.primary} 
                   fill={CYBER.primary} 
-                  fillOpacity={0.1} 
-                  animationDuration={300}
+                  fillOpacity={0.05} 
+                  strokeWidth={3}
+                  isAnimationActive={false}
                 />
               </AreaChart>
             </ResponsiveContainer>
           </Box>
         </Box>
 
-        {/* ЛОГИ: ЖИВОЙ ПОТОК */}
+        {/* ЖИВОЙ ТЕРМИНАЛ ЛОГОВ */}
         <Box width={[1, 1/3]} paddingLeft={['0', 'sm']}>
           <Box padding="lg" borderRadius="xl" 
                style={{ 
                  backgroundColor: '#000', 
                  height: '400px', 
-                 border: `1px solid ${CYBER.success}33`, 
-                 overflow: 'hidden',
-                 boxShadow: `inset 0 0 20px ${CYBER.success}11`
+                 border: `1px solid ${CYBER.success}22`, 
+                 position: 'relative',
+                 boxShadow: `inset 0 0 15px #000`
                }}>
-            <H5 mb="md" style={{ color: CYBER.success }}>LIVE_LOG_STREAM</H5>
-            <Box>
+            <H5 mb="md" style={{ color: CYBER.success }}>TERMINAL_OUTPUT</H5>
+            <Box style={{ overflowY: 'hidden' }}>
               {logs.map((log, i) => (
                 <Text key={i} 
-                      color={i === 0 ? CYBER.success : 'grey60'} 
                       size="xs" 
                       mb="xs" 
                       style={{ 
-                        whiteSpace: 'nowrap', 
-                        textShadow: i === 0 ? `0 0 5px ${CYBER.success}` : 'none',
-                        borderLeft: i === 0 ? `2px solid ${CYBER.success}` : 'none',
-                        paddingLeft: '5px'
+                        color: i === 0 ? CYBER.success : '#484f58',
+                        fontFamily: 'monospace',
+                        textShadow: i === 0 ? `0 0 8px ${CYBER.success}66` : 'none',
+                        opacity: 1 - (i * 0.1) 
                       }}>
                   {log}
                 </Text>
