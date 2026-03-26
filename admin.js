@@ -13,22 +13,23 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --- ПРЕДУСТАНОВКА СИСТЕМЫ ---
-// Очистка кеша фронтенда перед сборкой, чтобы избежать ошибок отображения (розовый экран)
+// Очистка кеша фронтенда (розовый экран — враг прогресса)
 const adminCachePath = path.join(process.cwd(), '.adminjs');
 if (fs.existsSync(adminCachePath)) {
     try {
         fs.rmSync(adminCachePath, { recursive: true, force: true });
         logger.info("AdminJS: Static cache purged successfully.");
     } catch (e) {
-        logger.warn("AdminJS: Cache purge skipped or failed.");
+        logger.warn("AdminJS: Cache purge skipped.");
     }
 }
 
 AdminJS.registerAdapter(AdminJSSequelize);
 
 const componentLoader = new ComponentLoader();
-// Путь к файлу в корне (согласно твоей структуре на скриншоте)
-const dashboardPath = path.join(__dirname, 'dashboard-component.jsx');
+
+// КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Путь к твоему новому файлу в папке static
+const dashboardPath = path.join(__dirname, 'static', 'dashboard.jsx');
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', dashboardPath);
 
 const app = express();
@@ -57,10 +58,13 @@ const startAdmin = async () => {
                 handler: async () => {
                     try {
                         const startDb = Date.now();
+                        // Проверка пинга базы данных
                         await sequelize.query('SELECT 1');
                         const dbLatency = Date.now() - startDb;
+                        
                         const totalUsers = await User.count();
                         
+                        // Собираем телеметрию для киберпанк-графиков
                         return {
                             totalUsers,
                             dbLatency,
@@ -69,7 +73,7 @@ const startAdmin = async () => {
                         };
                     } catch (err) {
                         logger.error("Admin Telemetry Error:", err);
-                        return { error: 'Telemetry Offline' };
+                        return { error: 'Telemetry Offline', totalUsers: 0 };
                     }
                 }
             },
@@ -78,7 +82,7 @@ const startAdmin = async () => {
                 softwareBrothers: false,
                 theme: {
                     colors: {
-                        primary100: '#00f2fe', // Кибер-голубой
+                        primary100: '#00f2fe',
                         bg: '#05070a',        
                         text: '#ffffff',      
                         container: '#0d1117'
@@ -86,7 +90,8 @@ const startAdmin = async () => {
                 }
             },
             bundler: {
-                minify: process.env.NODE_ENV === 'production'
+                // Всегда минифицируем в проде на Bothost для скорости
+                minify: true 
             }
         };
 
@@ -113,6 +118,7 @@ const startAdmin = async () => {
         
         app.use(adminJs.options.rootPath, adminRouter);
         
+        // Запуск на порту 3001 ( Bothost проксирует /admin сюда )
         app.listen(3001, '0.0.0.0', () => {
             logger.system("AdminJS interface: ONLINE on port 3001");
         });
