@@ -13,13 +13,18 @@ import { logger } from './logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// КРИТИЧЕСКИ ВАЖНО: Очищаем старый кеш фронтенда перед запуском
+const adminCachePath = path.join(process.cwd(), '.adminjs');
+if (fs.existsSync(adminCachePath)) {
+    fs.rmSync(adminCachePath, { recursive: true, force: true });
+}
+
 AdminJS.registerAdapter(AdminJSSequelize);
 
-// 1. Инициализируем загрузчик компонентов
 const componentLoader = new ComponentLoader();
 const dashboardPath = path.join(__dirname, 'static', 'dashboard.jsx');
 
-// 2. Регистрируем дашборд (ID должен совпадать с тем, что в dashboard.component)
+// Регистрируем компонент
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', dashboardPath);
 
 const app = express();
@@ -47,7 +52,6 @@ const startAdmin = async () => {
             dashboard: {
                 component: DASHBOARD_COMPONENT,
                 handler: async () => {
-                    // Сбор данных для фронтенда (передаются в props.data)
                     try {
                         const startDb = Date.now();
                         await sequelize.query('SELECT 1');
@@ -61,13 +65,12 @@ const startAdmin = async () => {
                             cpu: (os.loadavg()[0] * 10).toFixed(1)
                         };
                     } catch (err) {
-                        return { error: 'Backend telemetery fail' };
+                        return { error: 'Telemetry unavailable' };
                     }
                 }
             },
             branding: { 
                 companyName: 'Neural Pulse Hub', 
-                logo: false, 
                 softwareBrothers: false,
                 theme: {
                     colors: {
@@ -79,6 +82,10 @@ const startAdmin = async () => {
                         inputBorder: '#2d333f'
                     }
                 }
+            },
+            // Настройка сборщика
+            bundler: {
+                minify: process.env.NODE_ENV === 'production'
             }
         };
 
