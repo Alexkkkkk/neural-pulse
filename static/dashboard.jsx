@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Box, H2, H5, Text, Card, Badge, Button } from '@adminjs/design-system'
 import { ApiClient } from 'adminjs'
-import * as Recharts from 'recharts' // Импортируем всё сразу для стабильности
+import * as Recharts from 'recharts'
 
 const { 
   XAxis, YAxis, CartesianGrid, 
@@ -23,9 +23,9 @@ const CYBER = {
 
 const Dashboard = (props) => {
   const [stats, setStats] = useState(props.data || { totalUsers: 0, cpu: 0, currentMem: 0, dbLatency: 0 })
-  const [history, setHistory] = useState([{ time: '00:00', cpu: 0 }]) // Начальная точка, чтобы не было undefined
+  const [history, setHistory] = useState([{ time: '00:00', cpu: 0, ram: 0 }])
   const [scanPos, setScanPos] = useState(0)
-  const [logs, setLogs] = useState(['> Инициализация ядра...', '> Подключение к TON Mainnet...'])
+  const [logs, setLogs] = useState(['> SYSTEM_READY', '> ENCRYPTED_CONNECTION_ESTABLISHED'])
 
   const addLog = (msg) => {
     setLogs(prev => [`> [${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 10))
@@ -37,25 +37,32 @@ const Dashboard = (props) => {
       const d = response.data || {}
       setStats(d)
       
-      const cpuVal = parseFloat(d.cpu || 0)
-      const memVal = parseFloat(d.currentMem || 0)
+      const cpuVal = parseFloat(d.cpu) || 0
+      const memVal = parseFloat(d.currentMem) || 0
 
       setHistory(prev => {
         const newPoint = {
           time: new Date().toLocaleTimeString().slice(0, 5),
           cpu: cpuVal,
           ram: memVal,
-        };
-        return [...prev, newPoint].slice(-20)
+        }
+        return [...prev, newPoint].slice(-15)
       })
     } catch (e) { 
-      console.error('Pulse Telemetry Error:', e)
+      addLog('TELEMETRY_LINK_LOST')
     }
+  }
+
+  const handleReboot = () => {
+    addLog('INITIATING_CORE_REBOOT...')
+    setTimeout(() => addLog('CLEARING_CACHE...'), 1000)
+    setTimeout(() => addLog('RE-SYNCHRONIZING_NODES...'), 2500)
+    setTimeout(() => addLog('SYSTEM_STABLE_V1.2.0'), 4000)
   }
 
   useEffect(() => {
     const interval = setInterval(fetchStats, 5000)
-    const anim = setInterval(() => setScanPos(p => (p + 1.5) % 100), 60)
+    const anim = setInterval(() => setScanPos(p => (p + 1.2) % 100), 50)
     return () => { 
       clearInterval(interval)
       clearInterval(anim)
@@ -65,43 +72,38 @@ const Dashboard = (props) => {
   return (
     <Box padding="xl" style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: '"Courier New", monospace' }}>
       
-      {/* HEADER */}
+      {/* HEADER: NEON SCANNER */}
       <Box padding="xl" marginBottom="xl" borderRadius="xl" 
            style={{ backgroundColor: CYBER.card, border: `1px solid ${CYBER.primary}44`, position: 'relative', overflow: 'hidden' }}>
         <Box style={{ 
             position: 'absolute', top: 0, left: `${scanPos}%`, 
-            width: '3px', height: '100%', 
-            background: `linear-gradient(to bottom, transparent, ${CYBER.primary}, transparent)`, 
-            boxShadow: `0 0 20px ${CYBER.primary}`, opacity: 0.5 
+            width: '2px', height: '100%', 
+            background: CYBER.primary, boxShadow: `0 0 15px ${CYBER.primary}`, opacity: 0.6 
         }} />
         <Box display="flex" justifyContent="space-between" alignItems="center">
           <Box>
-            <Badge variant="success" style={{ background: CYBER.success, color: '#000', fontWeight: 'bold' }}>SYSTEM_STABLE</Badge>
-            <H2 style={{ color: CYBER.primary, marginTop: '10px', letterSpacing: '3px', fontWeight: '900' }}>NEURAL PULSE // HUD</H2>
+            <Badge style={{ background: CYBER.success, color: '#000', fontWeight: '900' }}>NEURAL_PULSE_OS</Badge>
+            <H2 style={{ color: CYBER.primary, marginTop: '10px', letterSpacing: '4px', textShadow: `0 0 10px ${CYBER.primary}44` }}>ADMIN_HUD_V1.2</H2>
           </Box>
-          <Box display="flex" gap="md">
-            <Button variant="danger" size="sm" onClick={() => addLog('CORE REBOOT REQUESTED')}>FORCE_REBOOT</Button>
-          </Box>
+          <Button variant="danger" size="sm" onClick={handleReboot} style={{ border: `1px solid ${CYBER.danger}` }}>SYSTEM_RELOAD</Button>
         </Box>
       </Box>
 
-      {/* STATS CARDS */}
+      {/* STATS GRID */}
       <Box display="flex" flexDirection="row" flexWrap="wrap" margin="-sm">
         {[
           { label: 'ACTIVE_AGENTS', val: stats.totalUsers, color: CYBER.primary, unit: '' },
-          { label: 'CPU_UTILIZATION', val: stats.cpu, color: CYBER.success, unit: '%' },
-          { label: 'MEMORY_ALLOCATED', val: stats.currentMem, color: CYBER.secondary, unit: ' MB' },
-          { label: 'DATABASE_LATENCY', val: stats.dbLatency, color: CYBER.warning, unit: ' ms' }
+          { label: 'CPU_LOAD', val: stats.cpu, color: CYBER.success, unit: '%' },
+          { label: 'MEM_USAGE', val: stats.currentMem, color: CYBER.secondary, unit: 'MB' },
+          { label: 'DB_LATENCY', val: stats.dbLatency, color: CYBER.warning, unit: 'ms' }
         ].map((item, i) => (
           <Box key={i} width={[1, 1/2, 1/4]} padding="sm">
-            <Card style={{ backgroundColor: CYBER.card, border: `1px solid ${item.color}33`, borderRadius: '12px' }}>
+            <Card style={{ backgroundColor: CYBER.card, border: `1px solid ${item.color}33`, borderRadius: '8px' }}>
               <Box p="md">
-                <Text size="xs" color="grey60" style={{ letterSpacing: '1px', fontWeight: 'bold' }}>{item.label}</Text>
-                <H2 style={{ color: '#fff', margin: '10px 0', fontSize: '28px' }}>{item.val || 0}{item.unit}</H2>
-                <Box width="100%" height="2px" bg="#000" mt="md">
-                    <Box width={`${Math.min(parseFloat(item.val) || 0, 100)}%`} 
-                         height="100%" 
-                         style={{ background: item.color, boxShadow: `0 0 10px ${item.color}`, transition: 'width 1s ease' }} />
+                <Text size="xs" style={{ color: '#484f58', fontWeight: 'bold' }}>{item.label}</Text>
+                <H2 style={{ color: '#fff', margin: '8px 0' }}>{item.val || 0}<span style={{fontSize: '14px', color: item.color}}>{item.unit}</span></H2>
+                <Box width="100%" height="3px" bg="#000">
+                  <Box width={`${Math.min(item.val, 100)}%`} height="100%" style={{ background: item.color, boxShadow: `0 0 8px ${item.color}`, transition: 'width 0.8s ease' }} />
                 </Box>
               </Box>
             </Card>
@@ -110,59 +112,39 @@ const Dashboard = (props) => {
       </Box>
 
       <Box display="flex" flexDirection="row" flexWrap="wrap" marginTop="xl">
-        {/* GRAPH */}
-        <Box width={[1, 2/3]} paddingRight={['0', 'sm']}>
-          <Box padding="lg" borderRadius="xl" style={{ backgroundColor: CYBER.card, height: '400px', border: '1px solid #1a222d' }}>
-            <H5 mb="xl" style={{ color: CYBER.primary, letterSpacing: '1px' }}>OS_PULSE_MONITOR</H5>
-            <ResponsiveContainer width="100%" height="85%">
+        {/* GRAPH MONITOR */}
+        <Box width={[1, 2/3]} paddingRight={['0', 'md']}>
+          <Box padding="lg" borderRadius="xl" style={{ backgroundColor: CYBER.card, height: '420px', border: '1px solid #1a222d' }}>
+            <H5 mb="xl" style={{ color: CYBER.primary }}>REALTIME_OS_TELEMETRY</H5>
+            <ResponsiveContainer width="100%" height="80%">
               <AreaChart data={history}>
-                <CartesianGrid strokeDasharray="2 2" stroke="#1f242c" vertical={false} />
-                <XAxis dataKey="time" stroke="#484f58" tick={{ fontSize: 10 }} />
-                <YAxis stroke="#484f58" tick={{ fontSize: 10 }} domain={[0, 100]} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: CYBER.card, border: `1px solid ${CYBER.primary}`, borderRadius: '8px' }}
-                  itemStyle={{ color: CYBER.primary }}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="cpu" 
-                  stroke={CYBER.primary} 
-                  fill={CYBER.primary} 
-                  fillOpacity={0.05} 
-                  strokeWidth={3}
-                  isAnimationActive={false}
-                />
+                <defs>
+                  <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={CYBER.primary} stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor={CYBER.primary} stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1f242c" vertical={false} />
+                <XAxis dataKey="time" stroke="#484f58" tick={{fontSize: 10}} />
+                <YAxis stroke="#484f58" tick={{fontSize: 10}} domain={[0, 100]} />
+                <Tooltip contentStyle={{ backgroundColor: CYBER.card, border: `1px solid ${CYBER.primary}` }} />
+                <Area type="monotone" dataKey="cpu" stroke={CYBER.primary} fillOpacity={1} fill="url(#colorCpu)" strokeWidth={2} isAnimationActive={false} />
               </AreaChart>
             </ResponsiveContainer>
           </Box>
         </Box>
 
-        {/* TERMINAL */}
-        <Box width={[1, 1/3]} paddingLeft={['0', 'sm']}>
-          <Box padding="lg" borderRadius="xl" 
-               style={{ 
-                 backgroundColor: '#000', 
-                 height: '400px', 
-                 border: `1px solid ${CYBER.success}22`, 
-                 position: 'relative',
-                 boxShadow: `inset 0 0 15px #000`
-               }}>
-            <H5 mb="md" style={{ color: CYBER.success }}>TERMINAL_OUTPUT</H5>
-            <Box style={{ overflowY: 'hidden' }}>
-              {logs.map((log, i) => (
-                <Text key={i} 
-                      size="xs" 
-                      mb="xs" 
-                      style={{ 
-                        color: i === 0 ? CYBER.success : '#484f58',
-                        fontFamily: 'monospace',
-                        textShadow: i === 0 ? `0 0 8px ${CYBER.success}66` : 'none',
-                        opacity: 1 - (i * 0.1) 
-                      }}>
-                  {log}
-                </Text>
-              ))}
-            </Box>
+        {/* TERMINAL LOGS */}
+        <Box width={[1, 1/3]} paddingLeft={['0', 'md']}>
+          <Box padding="lg" borderRadius="xl" style={{ backgroundColor: '#000', height: '420px', border: `1px solid ${CYBER.success}33`, overflow: 'hidden' }}>
+            <H5 mb="md" style={{ color: CYBER.success }}>CONSOLE_OUTPUT</H5>
+            {logs.map((log, i) => (
+              <Text key={i} size="xs" mb="xs" style={{ 
+                color: i === 0 ? CYBER.success : '#30363d', 
+                fontFamily: 'monospace',
+                textShadow: i === 0 ? `0 0 5px ${CYBER.success}` : 'none'
+              }}>{log}</Text>
+            ))}
           </Box>
         </Box>
       </Box>
