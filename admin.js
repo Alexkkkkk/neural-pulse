@@ -1,7 +1,6 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import os from 'os';
 import AdminJS, { ComponentLoader } from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
@@ -12,81 +11,45 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 AdminJS.registerAdapter(AdminJSSequelize);
-
 const componentLoader = new ComponentLoader();
-const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
-
-const app = express();
-app.set('trust proxy', 1);
-app.use(express.json());
-app.use('/static', express.static(path.join(__dirname, 'static')));
+const DASHBOARD = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
 
 const startAdmin = async () => {
     try {
-        const adminOptions = {
+        const adminJs = new AdminJS({
             resources: [
-                { resource: User, options: { navigation: { name: 'Агенты', icon: 'User' } } }, 
-                { resource: Task, options: { navigation: { name: 'Миссии', icon: 'Task' } } }, 
-                { resource: Stats, options: { navigation: { name: 'Система', icon: 'Settings' } } }
+                { resource: User, options: { navigation: { name: 'Агенты' } } },
+                { resource: Task, options: { navigation: { name: 'Миссии' } } },
+                { resource: Stats, options: { navigation: { name: 'Система' } } }
             ],
             rootPath: '/admin',
             componentLoader,
-            dashboard: {
-                component: DASHBOARD_COMPONENT,
-                handler: async () => ({
-                    totalUsers: await User.count(),
-                    currentMem: (process.memoryUsage().rss / 1024 / 1024).toFixed(1), 
-                    cpu: (os.loadavg()[0]).toFixed(2)
-                })
-            },
+            dashboard: { component: DASHBOARD },
             branding: { 
                 companyName: 'Neural Pulse Hub', 
                 logo: '/static/images/logo.png',
                 softwareBrothers: false,
-                theme: {
-                    id: 'np-dark',
-                    colors: { primary100: '#00f2fe', bg: '#05070a', text: '#ffffff', container: '#0d1117' }
-                },
-                customCSS: `
-                    :root { --colors-bg: #05070a !important; --colors-primary100: #00f2fe !important; }
-                    body, #adminjs, section[data-testid="sidebar"] { background: #05070a !important; }
-                `
+                theme: { colors: { primary100: '#00f2fe', bg: '#05070a' } }
             },
-            bundler: { 
-                minify: true, 
-                force: false 
-            }
-        };
-
-        const adminJs = new AdminJS(adminOptions);
-        
-        // ВАЖНО: Ждем, пока AdminJS прожует бандл и настроит ресурсы
-        logger.info("AdminJS Engine: Подготовка интерфейса...");
-        await adminJs.initialize();
-
-        const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
-            authenticate: async (email, password) => {
-                if (email === '1' && password === '1') return { email: 'admin@np.tech' };
-                return null;
-            },
-            cookiePassword: 'secure-pass-2026-pulse-ultra-secret-32-chars',
-        }, null, {
-            resave: false, saveUninitialized: false, secret: 'np_secret', store: sessionStore,
-            cookie: { maxAge: 86400000, path: '/admin', httpOnly: true, secure: false }
-        });
-        
-        app.use(adminJs.options.rootPath, adminRouter);
-
-        app.listen(3001, '0.0.0.0', () => {
-            logger.info(`AdminJS Engine: INTERNAL ONLINE (3001)`);
-            // ОТПРАВЛЯЕМ СИГНАЛ ЯДРУ (server.js)
-            if (process.send) {
-                process.send('ready');
-            }
+            bundler: { minify: true, force: false }
         });
 
+        logger.info("AdminJS: Инициализация компонентов...");
+        await adminJs.initialize(); 
+
+        const app = express();
+        const router = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
+            authenticate: async (e, p) => (e === '1' && p === '1') ? { email: 'admin' } : null,
+            cookiePassword: 'secure-pass-2026-pulse-ultra-32-chars',
+        }, null, { resave: false, saveUninitialized: false, secret: 'np_secret', store: sessionStore });
+
+        app.use(adminJs.options.rootPath, router);
+        app.listen(3001, () => {
+            logger.info("AdminJS: Внутренний порт 3001 открыт");
+            if (process.send) process.send('ready'); // Посылаем сигнал Ядру
+        });
     } catch (e) {
-        logger.error("Admin Boot Failure:", e);
+        logger.error("Admin Fail", e);
         process.exit(1);
     }
 };
