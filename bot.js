@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
 import os from 'os';
-import fs from 'fs'; // Добавил для проверки файлов
+import fs from 'fs'; 
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { sequelize, User, Stats } from './db.js';
 import { logger } from './logger.js';
@@ -23,14 +23,23 @@ app.disable('x-powered-by');
 app.set('trust proxy', 1);
 app.use(cors({ origin: '*' }));
 
-// --- ПРОКСИ ДЛЯ ADMINJS ---
-// Важно: ставим ДО express.json(), чтобы прокси работал корректно
+// 1. ЛОГИРОВАНИЕ ОБНОВЛЕНИЙ (Добавь это сразу после инициализации бота)
+bot.use(async (ctx, next) => {
+    logger.info(`--- [TELEGRAM] Входящее обновление: ${ctx.updateType} ---`);
+    return next();
+});
+
+// 2. ПРОКСИ ДЛЯ ADMINJS (Должен быть ПЕРВЫМ)
 app.use('/admin', createProxyMiddleware({
     target: 'http://127.0.0.1:3001',
     changeOrigin: true,
     ws: true,
     logLevel: 'error'
 }));
+
+// 3. ОБРАБОТЧИК ВЕБХУКА (До express.json и static, чтобы исключить конфликты)
+// Убедись, что в server.js привязка идет именно на этот URL: ${DOMAIN}/telegraf/${BOT_TOKEN}
+app.use(bot.webhookCallback(`/telegraf/${BOT_TOKEN}`));
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'static')));
@@ -74,6 +83,8 @@ bot.start(async (ctx) => {
     const userId = ctx.from.id;
     const logoPath = path.join(__dirname, 'static/images/logo.png');
     
+    logger.info(`Команда /start от пользователя: ${userId}`);
+
     try {
         await User.findOrCreate({ 
             where: { id: BigInt(userId) }, 
@@ -95,9 +106,6 @@ bot.start(async (ctx) => {
         logger.error(`Bot Start Error`, e);
     }
 });
-
-// Хендлер вебхука (путь должен совпадать с тем, что шлет server.js)
-app.use(bot.webhookCallback(`/telegraf/${BOT_TOKEN}`));
 
 const server = app.listen(PORT, '0.0.0.0', () => {
     logger.system(`GATEWAY ONLINE: Port ${PORT}`);
