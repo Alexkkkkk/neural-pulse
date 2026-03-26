@@ -3,8 +3,7 @@ import { Box, H2, H4, H5, Text, Card, Icon, Badge, Button } from '@adminjs/desig
 import { ApiClient } from 'adminjs'
 import { 
   XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, AreaChart, Area,
-  PieChart, Pie, Cell
+  Tooltip, ResponsiveContainer, AreaChart, Area
 } from 'recharts'
 
 const api = new ApiClient()
@@ -20,14 +19,8 @@ const CYBER = {
   text: '#e6edf3'
 };
 
-const TOKENOMICS_DATA = [
-  { name: 'Public Sale', value: 40, color: '#00f2fe' },
-  { name: 'Ecosystem', value: 30, color: '#7000ff' },
-  { name: 'Team', value: 20, color: '#39ff14' },
-  { name: 'Liquidity', value: 10, color: '#fbc02d' },
-];
-
 const Dashboard = (props) => {
+  // Данные из handler приходят в props.data
   const [stats, setStats] = useState(props.data || {})
   const [history, setHistory] = useState([])
   const [scanPos, setScanPos] = useState(0)
@@ -44,7 +37,6 @@ const Dashboard = (props) => {
         time: new Date().toLocaleTimeString().slice(0, 5),
         cpu: parseFloat(d.cpu || 0),
         ram: parseFloat(d.currentMem || 0),
-        db: parseFloat(d.dbLatency || 0),
       }].slice(-20))
     } catch (e) { console.error('Pulse Error:', e) }
   }
@@ -76,10 +68,10 @@ const Dashboard = (props) => {
       {/* STATS CARDS */}
       <Box display="flex" flexDirection="row" flexWrap="wrap" margin="-sm">
         {[
-          { label: 'AGENTS', val: stats.totalUsers, icon: 'Users', color: CYBER.primary },
-          { label: 'CPU', val: `${stats.cpu || 0}%`, icon: 'Activity', color: CYBER.success },
-          { label: 'RAM', val: `${stats.currentMem || 0}MB`, icon: 'Layers', color: CYBER.secondary },
-          { label: 'DB PING', val: `${stats.dbLatency || 0}ms`, icon: 'Database', color: CYBER.warning }
+          { label: 'AGENTS', val: stats.totalUsers, color: CYBER.primary },
+          { label: 'CPU', val: `${stats.cpu || 0}%`, color: CYBER.success },
+          { label: 'RAM', val: `${stats.currentMem || 0}MB`, color: CYBER.secondary },
+          { label: 'DB PING', val: `${stats.dbLatency || 0}ms`, color: CYBER.warning }
         ].map((item, i) => (
           <Box key={i} width={[1, 1/2, 1/4]} padding="sm">
             <Card style={{ backgroundColor: CYBER.card, border: `1px solid ${item.color}33`, borderRadius: '16px' }}>
@@ -93,7 +85,7 @@ const Dashboard = (props) => {
         ))}
       </Box>
 
-      {/* CHARTS */}
+      {/* CHARTS & LOGS */}
       <Box display="flex" flexDirection="row" flexWrap="wrap" marginTop="xl">
         <Box width={[1, 2/3]} paddingRight={['0', 'sm']}>
           <Box padding="lg" borderRadius="xl" style={{ backgroundColor: CYBER.card, height: '400px', border: '1px solid #30363d' }}>
