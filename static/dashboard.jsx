@@ -85,7 +85,7 @@ const Dashboard = (props) => {
             <Badge style={{ background: CYBER.success, color: '#000', fontWeight: '900' }}>NEURAL_PULSE_OS</Badge>
             <H2 style={{ color: CYBER.primary, marginTop: '10px', letterSpacing: '4px', textShadow: `0 0 10px ${CYBER.primary}44` }}>ADMIN_HUD_V1.2</H2>
           </Box>
-          <Button variant="danger" size="sm" onClick={handleReboot} style={{ border: `1px solid ${CYBER.danger}` }}>SYSTEM_RELOAD</Button>
+          <Button variant="danger" size="sm" onClick={handleReboot} style={{ border: `1px solid ${CYBER.danger}`, fontWeight: 'bold' }}>SYSTEM_RELOAD</Button>
         </Box>
       </Box>
 
@@ -113,7 +113,7 @@ const Dashboard = (props) => {
 
       <Box display="flex" flexDirection="row" flexWrap="wrap" marginTop="xl">
         {/* GRAPH MONITOR */}
-        <Box width={[1, 2/3]} paddingRight={['0', 'md']}>
+        <Box width={[1, 2/3]} paddingRight={['0', 'md']} marginBottom="xl">
           <Box padding="lg" borderRadius="xl" style={{ backgroundColor: CYBER.card, height: '420px', border: '1px solid #1a222d' }}>
             <H5 mb="xl" style={{ color: CYBER.primary }}>REALTIME_OS_TELEMETRY</H5>
             <ResponsiveContainer width="100%" height="80%">
@@ -127,7 +127,7 @@ const Dashboard = (props) => {
                 <CartesianGrid strokeDasharray="3 3" stroke="#1f242c" vertical={false} />
                 <XAxis dataKey="time" stroke="#484f58" tick={{fontSize: 10}} />
                 <YAxis stroke="#484f58" tick={{fontSize: 10}} domain={[0, 100]} />
-                <Tooltip contentStyle={{ backgroundColor: CYBER.card, border: `1px solid ${CYBER.primary}` }} />
+                <Tooltip contentStyle={{ backgroundColor: CYBER.card, border: `1px solid ${CYBER.primary}`, borderRadius: '8px' }} />
                 <Area type="monotone" dataKey="cpu" stroke={CYBER.primary} fillOpacity={1} fill="url(#colorCpu)" strokeWidth={2} isAnimationActive={false} />
               </AreaChart>
             </ResponsiveContainer>
