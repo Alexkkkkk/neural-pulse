@@ -102,11 +102,6 @@ const startAdmin = async () => {
                             border: 1px solid #00f2fe !important;
                             box-shadow: 0 0 30px rgba(0, 242, 254, 0.2) !important;
                         }
-                        input {
-                            background: #161b22 !important;
-                            border: 1px solid #30363d !important;
-                            color: #ffffff !important;
-                        }
                         button[type="submit"] {
                             background: #00f2fe !important;
                             color: #000000 !important;
@@ -142,9 +137,11 @@ const startAdmin = async () => {
         
         app.use(adminJs.options.rootPath, adminRouter);
         
-        // ВАЖНО: Порт 3000 для Bothost
-        app.listen(3000, '0.0.0.0', () => {
-            logger.info("AdminJS Engine: ONLINE on port 3000");
+        // --- ПОРТ 3001 ---
+        // Используем 127.0.0.1, чтобы админка была видна только боту-прокси
+        const INTERNAL_PORT = 3001;
+        app.listen(INTERNAL_PORT, '127.0.0.1', () => {
+            logger.info(`AdminJS Engine: INTERNAL ONLINE on port ${INTERNAL_PORT}`);
         });
 
     } catch (e) { 
