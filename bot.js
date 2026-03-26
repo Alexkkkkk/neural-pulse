@@ -21,62 +21,68 @@ const app = express();
 app.disable('x-powered-by'); 
 app.set('trust proxy', 1);
 
-// --- [НОВОЕ] ПРОВЕРКА ДОСТУПНОСТИ: Открой в браузере np.bothost.tech/ping ---
+// --- ДИАГНОСТИКА СВЯЗИ ---
 app.get('/ping', (req, res) => {
-    logger.info(`[PING] Проверка связи из ${req.ip}`);
+    logger.info(`[PING] Запрос от: ${req.ip}`);
     res.send('PONG - Neural Pulse Gateway is Alive');
 });
 
-// 1. ОБРАБОТЧИК ВЕБХУКА (СТРОГО ДО express.json)
-// Telegraf сам должен парсить входящий поток (Raw Body)
+// 1. ВЕБХУК (ПЕРВЫМ)
 app.use(bot.webhookCallback(`/telegraf/${BOT_TOKEN}`));
 
-// 2. ДИАГНОСТИКА ТРАФИКА
-app.use((req, res, next) => {
-    if (req.url.includes('telegraf')) {
-        logger.info(`[NETWORK] Incoming Webhook POST: ${req.url} from ${req.ip}`);
-    }
-    next();
-});
-
-// 3. ОСТАЛЬНЫЕ НАСТРОЙКИ
+// 2. ОСТАЛЬНЫЕ НАСТРОЙКИ
 app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'static')));
 
-// 4. ПРОКСИ ДЛЯ ADMINJS
+// 3. УЛУЧШЕННЫЙ ПРОКСИ ДЛЯ ADMINJS
+// Добавлен вывод ошибки в браузер, если порт 3001 еще спит
 app.use('/admin', createProxyMiddleware({
     target: 'http://127.0.0.1:3001',
     changeOrigin: true,
     ws: true,
     logLevel: 'error',
     onError: (err, req, res) => {
-        logger.error('Proxy Error:', err);
-        res.status(502).send('Admin Panel is starting...');
+        logger.error('[PROXY] AdminJS не отвечает. Возможно, идет сборка фронтенда...');
+        res.status(502).send(`
+            <div style="background:#000;color:#0ff;padding:20px;font-family:monospace;border:2px solid #0ff;">
+                <h3>[SYSTEM] ADMIN PANEL INITIALIZING...</h3>
+                <p>Панель управления еще загружается. Пожалуйста, подождите 30 секунд.</p>
+                <small>Internal Error: ${err.message}</small>
+            </div>
+        `);
     }
 }));
 
 // --- ЛОГИКА БОТА ---
 bot.use(async (ctx, next) => {
-    logger.info(`--- [TELEGRAM] Входящий пакет: ${ctx.updateType} ---`);
-    try {
-        await next();
-    } catch (err) {
-        logger.error(`Update Error:`, err);
+    if (ctx.updateType === 'message') {
+        logger.info(`--- [TELEGRAM] Пакет от ${ctx.from.id}: ${ctx.message.text || 'media'} ---`);
     }
+    return next();
 });
 
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
+    const startPayload = ctx.payload; // Параметр из ссылки: t.me/bot?start=123
     const logoPath = path.join(__dirname, 'static/images/logo.png');
     
-    logger.info(`[CORE] Выполнение /start для: ${userId}`);
+    logger.info(`[CORE] /start для: ${userId} (Ref: ${startPayload || 'none'})`);
 
     try {
-        await User.findOrCreate({ 
+        const [user, created] = await User.findOrCreate({ 
             where: { id: BigInt(userId) }, 
-            defaults: { username: ctx.from.username || 'AGENT' } 
+            defaults: { 
+                username: ctx.from.username || 'AGENT',
+                referred_by: (startPayload && !isNaN(startPayload)) ? BigInt(startPayload) : null
+            } 
         });
+
+        // Если юзер новый и есть реферер - обновляем счетчик рефералов у пригласившего
+        if (created && user.referred_by) {
+            await User.increment('referrals', { where: { id: user.referred_by } });
+            logger.info(`[REF] Агент ${userId} прикреплен к ${user.referred_by}`);
+        }
 
         const keyboard = Markup.inlineKeyboard([[
             Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", DOMAIN)
@@ -89,13 +95,12 @@ bot.start(async (ctx) => {
         } else {
             await ctx.reply(caption, { parse_mode: 'HTML', ...keyboard });
         }
-        logger.info(`[CORE] Ответ отправлен пользователю ${userId}`);
     } catch (e) { 
         logger.error(`Bot Start Error`, e);
     }
 });
 
-// --- API ЭНДПОИНТЫ ---
+// --- API ---
 app.get('/api/top', async (req, res) => {
     try {
         const topUsers = await User.findAll({ 
@@ -106,24 +111,13 @@ app.get('/api/top', async (req, res) => {
     } catch (e) { res.status(500).json([]); }
 });
 
-app.get('/api/user/:id', async (req, res) => {
-    try {
-        const userId = BigInt(req.params.id);
-        let user = await User.findByPk(userId);
-        if (!user) {
-            user = await User.create({ id: userId, username: req.query.username || 'AGENT' });
-        }
-        res.json(user);
-    } catch (e) { res.status(500).json({ error: "CORE_ERROR" }); }
-});
-
 app.post('/api/save', async (req, res) => {
     try {
         const { id, ...data } = req.body;
         if (!id) return res.status(400).json({ error: "NO_ID" });
 
         if (data.balance !== undefined) {
-            const b = data.balance;
+            const b = parseFloat(data.balance);
             data.level = b < 50000 ? 1 : b < 500000 ? 2 : 3;
         }
         
