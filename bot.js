@@ -33,11 +33,17 @@ app.get('/api/health', async (req, res) => {
         dbStatus = 'STABLE'; 
     } catch(e) { dbStatus = 'CRITICAL'; }
 
-    // 2. Проверка Админки (Порт 3001)
+    // 2. Проверка Админки (Порт 3001) с коротким таймаутом, чтобы не вешать HUD
     try { 
-        const aRes = await fetch('http://127.0.0.1:3001/admin', { method: 'HEAD' });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const aRes = await fetch('http://127.0.0.1:3001/admin', { 
+            method: 'HEAD', 
+            signal: controller.signal 
+        });
+        clearTimeout(timeoutId);
         adminStatus = aRes.ok ? 'OPERATIONAL' : 'BUNDLING...';
-    } catch(e) { adminStatus = 'STARTING'; }
+    } catch(e) { adminStatus = 'STARTING/LOADING'; }
 
     // 3. Проверка API Бота
     try { 
@@ -47,7 +53,7 @@ app.get('/api/health', async (req, res) => {
 
     const latency = Date.now() - start;
     const mem = process.memoryUsage();
-    const load = os.loadavg()[0] * 10; // Примерная нагрузка в %
+    const load = os.loadavg()[0] * 10; 
 
     res.send(`
     <!DOCTYPE html>
@@ -89,7 +95,7 @@ app.get('/api/health', async (req, res) => {
     `);
 });
 
-// 1. ВЕБХУК
+// 1. ВЕБХУК (Мгновенный ответ для предотвращения дублей от Telegram)
 app.post(`/telegraf/${BOT_TOKEN}`, express.json(), (req, res) => {
     res.sendStatus(200); 
     bot.handleUpdate(req.body);
@@ -100,16 +106,20 @@ app.use(cors({ origin: '*' }));
 app.use('/api', express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'static')));
 
-// 3. УМНЫЙ ПРОКСИ
+// 3. УМНЫЙ ПРОКСИ (Исправлено: добавлены таймауты для борьбы с 504)
 app.use('/admin', createProxyMiddleware({
     target: 'http://127.0.0.1:3001',
     changeOrigin: true,
     ws: true,
+    proxyTimeout: 30000, // 30 секунд ожидания от админки
+    timeout: 30000,
     onError: (err, req, res) => {
+        logger.error(`[PROXY_ERR] ${err.message}`);
         res.status(502).set('Content-Type', 'text/html').send(`
             <div style="background:#05070a; color:#00f2fe; padding:40px; font-family: monospace; border: 2px solid #00f2fe; text-align: center; margin: 50px;">
                 <h2>> SYSTEM_LOAD: BUNDLING_INTERFACE</h2>
-                <p style="color: #ff3366;">[!] АДМИН-ПАНЕЛЬ В ПРОЦЕССЕ СБОРКИ</p>
+                <p style="color: #ff3366;">[!] АДМИН-ПАНЕЛЬ В ПРОЦЕССЕ СБОРКИ ИЛИ ПЕРЕГРУЖЕНА</p>
+                <p>Пожалуйста, подождите 30-60 секунд...</p>
                 <script>setTimeout(() => location.reload(), 5000);</script>
             </div>
         `);
@@ -142,6 +152,14 @@ app.get('/api/top', async (req, res) => {
         const top = await User.findAll({ limit: 50, order: [['balance', 'DESC']], raw: true });
         res.json(top);
     } catch (e) { res.status(500).json([]); }
+});
+
+app.post('/api/save', async (req, res) => {
+    try {
+        const { id, ...data } = req.body;
+        await User.update({ ...data, last_seen: new Date() }, { where: { id: BigInt(id) } });
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: "SAVE_ERROR" }); }
 });
 
 app.listen(PORT, '0.0.0.0', () => {
