@@ -32,12 +32,18 @@ const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', path.join(__dirname
 
 const app = express();
 
-// --- МИДЛВАРЫ (Решают проблему Cannot POST /login) ---
+// --- МИДЛВАРЫ ---
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Раздача статики (логотипы, картинки)
+// Раздача статики (логотипы, картинки, манифесты)
 app.use('/static', express.static(path.join(__dirname, 'static')));
+
+// РЕШЕНИЕ ОШИБКИ "Cannot GET /"
+// Перенаправляем пользователя в админку при заходе на корень сайта
+app.get('/', (req, res) => {
+    res.redirect('/admin');
+});
 
 const startAdmin = async () => {
     try {
@@ -82,7 +88,7 @@ const startAdmin = async () => {
             branding: { 
                 companyName: 'Neural Pulse Hub', 
                 softwareBrothers: false,
-                logo: '/static/logo.png', // Логотип из корня static
+                logo: '/static/logo.png', // Логотип из папки static
                 theme: {
                     colors: {
                         primary100: '#00f2fe',
