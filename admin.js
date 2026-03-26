@@ -52,8 +52,9 @@ const startAdmin = async () => {
                 `
             },
             bundler: { 
-                minify: true, 
-                force: false // ВАЖНО: false ускоряет рестарт в 10 раз!
+                // САМАЯ ВАЖНАЯ СТРОЧКА ДЛЯ BOTHOST:
+                minify: false, // Отключает тяжелую компиляцию, спасает CPU и RAM
+                force: false   
             }
         };
 
