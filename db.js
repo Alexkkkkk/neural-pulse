@@ -19,6 +19,7 @@ export const sessionStore = new SequelizeStore({
     tableName: 'sessions' 
 });
 
+// --- МОДЕЛИ ---
 export const User = sequelize.define('users', {
     id: { type: DataTypes.BIGINT, primaryKey: true },
     username: { type: DataTypes.STRING, index: true },
@@ -59,20 +60,26 @@ export const Stats = sequelize.define('stats', {
 
 User.hasMany(User, { as: 'Referrals', foreignKey: 'referred_by' });
 
+// --- ИНИЦИАЛИЗАЦИЯ ---
 export const initDB = async () => {
     try {
         await sequelize.authenticate();
         console.log('--- [DB] CONNECTED TO POSTGRES ---');
         
-        // ВАЖНО: При первом запуске мы полностью пересоздаем таблицы
-        await sequelize.sync({ force: true }); 
-        console.log('--- [DB] TABLES RE-CREATED (FORCE SUCCESS) ---');
+        // ВАЖНО: alter вместо force сохраняет данные юзеров при рестарте бота
+        await sequelize.sync({ alter: true }); 
+        console.log('--- [DB] TABLES SYNCED (DATA PRESERVED) ---');
 
-        await Task.bulkCreate([
-            { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
-            { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
-            { title: 'Подключить TON кошелек', reward: 2500, url: '', icon: 'Wallet' }
-        ], { ignoreDuplicates: true });
+        // Создаем задачи только если их еще нет
+        const count = await Task.count();
+        if (count === 0) {
+            await Task.bulkCreate([
+                { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
+                { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
+                { title: 'Подключить TON кошелек', reward: 2500, url: '', icon: 'Wallet' }
+            ]);
+            console.log('--- [DB] INITIAL TASKS CREATED ---');
+        }
 
         return true;
     } catch (error) {
