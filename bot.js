@@ -12,8 +12,8 @@ import { logger } from './logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
-const DOMAIN = "https://np.bothost.tech"; 
+const BOT_TOKEN = process.env.BOT_TOKEN || "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
+const DOMAIN = process.env.DOMAIN || "https://np.bothost.tech"; 
 const PORT = process.env.PORT || 3000;
 
 const bot = new Telegraf(BOT_TOKEN);
@@ -22,24 +22,19 @@ const app = express();
 app.disable('x-powered-by'); 
 app.set('trust proxy', 1);
 
-// --- [ROOT CHECK] ---
-// Для того, чтобы Nginx Bothost сразу видел, что сервер поднялся
 app.get('/', (req, res) => {
     res.status(200).send("NEURAL_PULSE_GATEWAY: ONLINE");
 });
 
-// --- [SUPREME NEURAL DIAGNOSTICS HUD] ---
 app.get('/api/health', async (req, res) => {
     const start = Date.now();
     let adminStatus = 'OFFLINE', dbStatus = 'OFFLINE', botApi = 'ERROR';
     
-    // 1. Проверка Базы Данных
     try { 
         await sequelize.authenticate(); 
         dbStatus = 'STABLE'; 
     } catch(e) { dbStatus = 'CRITICAL'; }
 
-    // 2. Проверка Админки (Порт 3001)
     try { 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 1500);
@@ -51,7 +46,6 @@ app.get('/api/health', async (req, res) => {
         adminStatus = aRes.ok ? 'OPERATIONAL' : 'BUNDLING...';
     } catch(e) { adminStatus = 'STARTING/LOADING'; }
 
-    // 3. Проверка API Бота
     try { 
         const count = await User.count();
         botApi = count >= 0 ? 'ONLINE' : 'ERR'; 
@@ -101,18 +95,15 @@ app.get('/api/health', async (req, res) => {
     `);
 });
 
-// 1. ВЕБХУК
 app.post(`/telegraf/${BOT_TOKEN}`, express.json(), (req, res) => {
     res.sendStatus(200); 
     bot.handleUpdate(req.body);
 });
 
-// 2. НАСТРОЙКИ
 app.use(cors({ origin: '*' }));
 app.use('/api', express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'static')));
 
-// 3. УМНЫЙ ПРОКСИ
 app.use('/admin', createProxyMiddleware({
     target: 'http://127.0.0.1:3001',
     changeOrigin: true,
@@ -121,18 +112,19 @@ app.use('/admin', createProxyMiddleware({
     timeout: 40000,
     onError: (err, req, res) => {
         logger.error(`[PROXY_ERR] ${err.message}`);
-        res.status(502).set('Content-Type', 'text/html').send(`
-            <div style="background:#05070a; color:#00f2fe; padding:40px; font-family: monospace; border: 2px solid #00f2fe; text-align: center; margin: 50px;">
-                <h2>> SYSTEM_LOAD: BUNDLING_INTERFACE</h2>
-                <p style="color: #ff3366;">[!] ИНТЕРФЕЙС ГЕНЕРИРУЕТСЯ</p>
-                <p>Пожалуйста, подождите...</p>
-                <script>setTimeout(() => location.reload(), 5000);</script>
-            </div>
-        `);
+        if (!res.headersSent) {
+            res.status(502).set('Content-Type', 'text/html').send(`
+                <div style="background:#05070a; color:#00f2fe; padding:40px; font-family: monospace; border: 2px solid #00f2fe; text-align: center; margin: 50px;">
+                    <h2>> SYSTEM_LOAD: BUNDLING_INTERFACE</h2>
+                    <p style="color: #ff3366;">[!] ИНТЕРФЕЙС ГЕНЕРИРУЕТСЯ ИЛИ СЕРВЕР ПЕРЕЗАГРУЖАЕТСЯ</p>
+                    <p>Пожалуйста, подождите...</p>
+                    <script>setTimeout(() => location.reload(), 5000);</script>
+                </div>
+            `);
+        }
     }
 }));
 
-// --- ЛОГИКА БОТА ---
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
     const logoPath = path.join(__dirname, 'static/images/logo.png');
@@ -152,7 +144,6 @@ bot.start(async (ctx) => {
     } catch (e) { logger.error(`Bot Start Error: ${e.message}`); }
 });
 
-// --- API ---
 app.get('/api/top', async (req, res) => {
     try {
         const top = await User.findAll({ limit: 50, order: [['balance', 'DESC']], raw: true });
@@ -168,7 +159,6 @@ app.post('/api/save', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "SAVE_ERROR" }); }
 });
 
-// УДАЛЕН '0.0.0.0' ДЛЯ ЛУЧШЕЙ СОВМЕСТИМОСТИ С BOTHOST
 app.listen(PORT, () => {
     logger.system(`ШЛЮЗ АКТИВИРОВАН: Port ${PORT}`);
 });
