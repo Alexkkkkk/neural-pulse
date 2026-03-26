@@ -2,7 +2,6 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import os from 'os';
-import fs from 'fs'; 
 import AdminJS, { ComponentLoader } from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
@@ -15,6 +14,7 @@ const __dirname = path.dirname(__filename);
 AdminJS.registerAdapter(AdminJSSequelize);
 
 const componentLoader = new ComponentLoader();
+// Важно: проверь наличие файла static/dashboard.jsx
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
 
 const app = express();
@@ -73,63 +73,22 @@ const startAdmin = async () => {
                     }
                 },
                 customCSS: `
-                    [data-testid="login"] {
-                        background: radial-gradient(circle, #0d1117 0%, #05070a 100%) !important;
-                    }
-                    [data-testid="login"] > div:first-child {
-                        background: #0a0a0a !important;
-                        border-right: 2px solid #00f2fe !important;
-                        box-shadow: 10px 0 20px rgba(0, 242, 254, 0.15);
-                    }
-                    [data-testid="login"] h2 {
-                        color: #00f2fe !important;
-                        font-family: 'Courier New', monospace;
-                        text-transform: uppercase;
-                        letter-spacing: 3px;
-                        text-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
-                    }
-                    .sc-fubCfw.button.is-primary {
-                        background: #00f2fe !important;
-                        color: #000 !important;
-                        border: none !important;
-                        font-weight: bold;
-                        text-transform: uppercase;
-                        transition: all 0.3s ease;
-                    }
-                    .sc-fubCfw.button.is-primary:hover {
-                        box-shadow: 0 0 20px #00f2fe;
-                        transform: scale(1.02);
-                    }
-                    input {
-                        background: #0d1117 !important;
-                        border: 1px solid #1a222d !important;
-                        color: #00f2fe !important;
-                    }
-                    input:focus {
-                        border-color: #00f2fe !important;
-                        box-shadow: 0 0 5px rgba(0, 242, 254, 0.3) !important;
-                    }
-                    [data-testid="login"] p {
-                        color: #666 !important;
-                    }
+                    [data-testid="login"] { background: radial-gradient(circle, #0d1117 0%, #05070a 100%) !important; }
+                    [data-testid="login"] > div:first-child { background: #0a0a0a !important; border-right: 2px solid #00f2fe !important; }
+                    [data-testid="login"] h2 { color: #00f2fe !important; font-family: 'Courier New', monospace; text-transform: uppercase; }
+                    .sc-fubCfw.button.is-primary { background: #00f2fe !important; color: #000 !important; font-weight: bold; }
+                    input { background: #0d1117 !important; color: #00f2fe !important; border: 1px solid #1a222d !important; }
                 `
             },
-            bundler: { 
-                minify: true,
-                force: false 
-            },
-            assets: {
-                scripts: ['https://unpkg.com/recharts/umd/Recharts.js']
-            }
+            bundler: { minify: true, force: false },
+            assets: { scripts: ['https://unpkg.com/recharts/umd/Recharts.js'] }
         };
 
         const adminJs = new AdminJS(adminOptions);
 
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                if (email === '1' && password === '1') {
-                    return { email: 'admin@neuralpulse.tech' };
-                }
+                if (email === '1' && password === '1') return { email: 'admin@neuralpulse.tech' };
                 return null;
             },
             cookiePassword: 'secure-pass-2026-pulse-ultra-secret-32-chars',
@@ -138,20 +97,15 @@ const startAdmin = async () => {
             saveUninitialized: false, 
             secret: 'neural_pulse_secret_2026',
             store: sessionStore,
-            cookie: { 
-                maxAge: 86400000, 
-                path: '/admin',
-                httpOnly: true,
-                secure: false 
-            }
+            cookie: { maxAge: 86400000, path: '/admin', httpOnly: true, secure: false }
         });
         
         app.use(adminJs.options.rootPath, adminRouter);
         
         const INTERNAL_PORT = 3001;
+        // Слушаем на 0.0.0.0 чтобы быть доступными внутри сети
         app.listen(INTERNAL_PORT, '0.0.0.0', () => {
             logger.info(`AdminJS Engine: INTERNAL ONLINE on port ${INTERNAL_PORT}`);
-            // Сигнализируем мастер-процессу, что мы готовы
             if (process.send) process.send('ready');
         });
 
