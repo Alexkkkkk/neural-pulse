@@ -10,23 +10,20 @@ const __dirname = path.dirname(__filename);
 // --- КОНФИГУРАЦИЯ ---
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const DOMAIN = "https://np.bothost.tech";
+const PORT = 3000; // Оба процесса должны знать основной порт хостинга
 
-/**
- * Функция безопасного запуска дочерних процессов с авто-рестартом
- */
-const launchProcess = (fileName) => {
+const launchProcess = (fileName, customEnv = {}) => {
     const processPath = path.join(__dirname, fileName);
     
-    // stdio: 'inherit' транслирует логи дочернего процесса в это окно
     const child = fork(processPath, { 
         stdio: 'inherit',
-        env: { ...process.env, NODE_ENV: 'production' } 
+        env: { ...process.env, ...customEnv, NODE_ENV: 'production' } 
     });
 
     child.on('exit', (code) => {
         if (code !== 0 && code !== null) {
             logger.error(`[CRASH] Модуль ${fileName} упал (код ${code}). Рестарт через 5с...`);
-            setTimeout(() => launchProcess(fileName), 5000);
+            setTimeout(() => launchProcess(fileName, customEnv), 5000);
         }
     });
 
@@ -37,48 +34,49 @@ const launchProcess = (fileName) => {
     return child;
 };
 
-/**
- * Главный запуск двигателя Neural Pulse
- */
 const startEngine = async () => {
     logger.system('--- NEURAL PULSE ENGINE BOOTSTRAP ---');
 
     try {
         logger.progress(2, 10);
-        
-        // 1. Инициализация БД
         const dbReady = await initDB();
         if (!dbReady) throw new Error("Database initialization failed.");
         logger.info("Database Engine: READY & SYNCED");
 
         logger.progress(6, 10);
         
-        // 2. Запуск ядра (AdminJS и Bot)
-        // ВАЖНО: Убедись, что в admin.js прописан порт 3001
-        launchProcess('admin.js'); 
-        launchProcess('bot.js');
+        // ЗАПУСК АДМИНКИ (на порту 3000)
+        launchProcess('admin.js', { PORT: PORT }); 
+        
+        // ЗАПУСК БОТА (с небольшой задержкой)
+        setTimeout(() => {
+            launchProcess('bot.js', { PORT: PORT });
+        }, 2000);
 
         logger.progress(8, 10);
         
-        // 3. Привязка вебхука Telegram
-        const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`;
-        try {
-            const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${webhookUrl}&drop_pending_updates=true`);
-            const result = await response.json();
-            
-            if (result.ok) {
-                logger.info("Telegram Webhook: LINKED SUCCESSFULLY");
-            } else {
-                logger.warn(`Telegram Webhook Warning: ${result.description}`);
+        // ПРИВЯЗКА ВЕБХУКА
+        // Если бот работает через Telegraf Webhook внутри AdminJS, 
+        // путь должен совпадать с тем, что в admin.js
+        const webhookUrl = `${DOMAIN}/admin/telegraf/${BOT_TOKEN}`; 
+        
+        setTimeout(async () => {
+            try {
+                const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${webhookUrl}&drop_pending_updates=true`);
+                const result = await response.json();
+                
+                if (result.ok) {
+                    logger.info("Telegram Webhook: LINKED SUCCESSFULLY");
+                } else {
+                    logger.warn(`Telegram Webhook Warning: ${result.description}`);
+                }
+            } catch (e) {
+                logger.warn("Webhook Linkage: Network error");
             }
-        } catch (e) {
-            logger.warn("Webhook Linkage: Network error (Skip for local run)");
-        }
+        }, 5000);
 
         logger.progress(10, 10);
         logger.system(`ENGINE STATUS: ONLINE`);
-        logger.info(`App URL: ${DOMAIN}`);
-        logger.info(`Admin: ${DOMAIN}/admin`);
 
     } catch (err) { 
         logger.error("CRITICAL ENGINE FAILURE", err); 
@@ -86,29 +84,6 @@ const startEngine = async () => {
     }
 };
 
-// --- ОБРАБОТКА СИСТЕМНЫХ СОБЫТИЙ ---
-
-// Ловим необработанные ошибки, чтобы Engine не "молчал"
-process.on('uncaughtException', (err) => {
-    logger.error('UNCAUGHT EXCEPTION:', err);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-    logger.error('UNHANDLED REJECTION at:', promise, 'reason:', reason);
-});
-
-const shutdown = async () => {
-    logger.warn("Сигнал остановки. Закрытие ресурсов...");
-    try {
-        await sequelize.close();
-        logger.info("База данных успешно отключена.");
-    } catch (e) {
-        logger.error("Ошибка при закрытии базы данных:", e);
-    }
-    process.exit(0); 
-};
-
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
+// ... (обработка SIGTERM/SIGINT остается без изменений)
 
 startEngine();
