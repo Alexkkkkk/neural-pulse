@@ -1,7 +1,6 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { Op } from 'sequelize';
 import os from 'os';
 import fs from 'fs'; 
 import AdminJS, { ComponentLoader } from 'adminjs';
@@ -13,21 +12,22 @@ import { logger } from './logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- ИНИЦИАЛИЗАЦИЯ И ОЧИСТКА ---
+// --- ПРЕДУСТАНОВКА СИСТЕМЫ ---
+// Очистка кеша фронтенда перед сборкой, чтобы избежать ошибок отображения (розовый экран)
 const adminCachePath = path.join(process.cwd(), '.adminjs');
 if (fs.existsSync(adminCachePath)) {
     try {
         fs.rmSync(adminCachePath, { recursive: true, force: true });
-        logger.info("AdminJS: Static cache cleared for fresh build.");
+        logger.info("AdminJS: Static cache purged successfully.");
     } catch (e) {
-        logger.warn("AdminJS: Failed to clear cache, but continuing...");
+        logger.warn("AdminJS: Cache purge skipped or failed.");
     }
 }
 
 AdminJS.registerAdapter(AdminJSSequelize);
 
 const componentLoader = new ComponentLoader();
-// Указываем путь к твоему JSX компоненту (согласно структуре в корне)
+// Путь к файлу в корне (согласно твоей структуре на скриншоте)
 const dashboardPath = path.join(__dirname, 'dashboard-component.jsx');
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', dashboardPath);
 
@@ -43,8 +43,7 @@ const startAdmin = async () => {
                         navigation: { name: 'Агенты', icon: 'User' },
                         properties: { 
                             last_seen: { isVisible: { list: true, edit: false, filter: true } },
-                            createdAt: { isVisible: { list: true, filter: true, show: true, edit: false } },
-                            updatedAt: { isVisible: false }
+                            createdAt: { isVisible: { list: true, filter: true, show: true, edit: false } }
                         }
                     } 
                 }, 
@@ -62,9 +61,6 @@ const startAdmin = async () => {
                         const dbLatency = Date.now() - startDb;
                         const totalUsers = await User.count();
                         
-                        // Логируем запрос к телеметрии (опционально)
-                        // logger.info(`Admin Dashboard: Stats updated (${dbLatency}ms)`);
-
                         return {
                             totalUsers,
                             dbLatency,
@@ -72,8 +68,8 @@ const startAdmin = async () => {
                             cpu: (os.loadavg()[0] * 10).toFixed(1)
                         };
                     } catch (err) {
-                        logger.error("Admin Dashboard: Telemetry failed", err);
-                        return { error: 'Telemetry unavailable' };
+                        logger.error("Admin Telemetry Error:", err);
+                        return { error: 'Telemetry Offline' };
                     }
                 }
             },
@@ -82,12 +78,10 @@ const startAdmin = async () => {
                 softwareBrothers: false,
                 theme: {
                     colors: {
-                        primary100: '#00f2fe',
+                        primary100: '#00f2fe', // Кибер-голубой
                         bg: '#05070a',        
                         text: '#ffffff',      
-                        container: '#0d1117', 
-                        filterBg: '#0d1117',  
-                        inputBorder: '#2d333f'
+                        container: '#0d1117'
                     }
                 }
             },
@@ -98,13 +92,14 @@ const startAdmin = async () => {
 
         const adminJs = new AdminJS(adminOptions);
 
+        // Настройка авторизации (Логин: 1, Пароль: 1)
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
                 if (email === '1' && password === '1') {
-                    logger.system(`AdminJS: Successful login by ${email}`);
+                    logger.system(`AdminJS: Authorized access by root`);
                     return { email: 'admin@neuralpulse.tech' };
                 }
-                logger.warn(`AdminJS: Failed login attempt with email: ${email}`);
+                logger.warn(`AdminJS: Unauthorized login attempt: ${email}`);
                 return null;
             },
             cookiePassword: 'secure-pass-2026-pulse-ultra-secret',
@@ -123,7 +118,7 @@ const startAdmin = async () => {
         });
 
     } catch (e) { 
-        logger.error("Admin Boot Failure", e); 
+        logger.error("Admin Boot Failure:", e); 
     }
 };
 
