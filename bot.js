@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import cors from 'cors';
 import fs from 'fs'; 
 import { createProxyMiddleware } from 'http-proxy-middleware';
-import { sequelize, User, Stats } from './db.js';
+import { sequelize, User, Task, Stats } from './db.js'; // Добавил Task, пригодится
 import { logger } from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -21,12 +21,16 @@ const app = express();
 app.disable('x-powered-by'); 
 app.set('trust proxy', 1);
 
-// --- [DIAGNOSTICS] Эндпоинт для проверки доступности админки изнутри ---
+// --- [DIAGNOSTICS] Исправленная проверка ---
 app.get('/debug-proxy', async (req, res) => {
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
-        const response = await fetch('http://127.0.0.1:3001/admin/login', { signal: controller.signal });
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        // Используем localhost - это надежнее внутри NL2
+        const response = await fetch('http://localhost:3001/admin/login', { 
+            signal: controller.signal,
+            headers: { 'host': 'localhost:3001' }
+        });
         clearTimeout(timeoutId);
         res.json({ 
             status: 'success', 
@@ -37,7 +41,8 @@ app.get('/debug-proxy', async (req, res) => {
         res.json({ 
             status: 'error', 
             admin_port_3001: 'UNREACHABLE', 
-            reason: err.message 
+            reason: err.message,
+            tip: "Попробуй подождать 30 секунд, пока AdminJS собирает фронтенд."
         });
     }
 });
@@ -47,39 +52,31 @@ app.use(bot.webhookCallback(`/telegraf/${BOT_TOKEN}`));
 
 // 2. НАСТРОЙКИ
 app.use(cors({ origin: '*' }));
-app.use(express.json({ limit: '1mb' }));
+// express.json только для API, чтобы не мешать проксированию админки
+app.use('/api', express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'static')));
 
-// 3. [FULL DIAGNOSTIC PROXY]
+// 3. [FIXED PROXY]
 app.use('/admin', createProxyMiddleware({
-    target: 'http://127.0.0.1:3001',
+    target: 'http://localhost:3001', // Сменили 127.0.0.1 на localhost
     changeOrigin: true,
     ws: true,
-    // Включаем подробное логирование прокси
+    xfwd: true, // Пробрасываем заголовки forward
     onProxyReq: (proxyReq, req, res) => {
-        logger.info(`[PROXY_REQ] ${req.method} ${req.url} -> AdminJS`);
-    },
-    onProxyRes: (proxyRes, req, res) => {
-        if (proxyRes.statusCode >= 400) {
-            logger.warn(`[PROXY_RES] AdminJS вернул статус: ${proxyRes.statusCode} для ${req.url}`);
-        }
+        // Принудительно ставим правильный Host, чтобы AdminJS не путался
+        proxyReq.setHeader('host', 'localhost:3001');
+        logger.info(`[PROXY] ${req.method} ${req.url}`);
     },
     onError: (err, req, res) => {
-        logger.error(`[PROXY_FATAL] Ошибка соединения с AdminJS на порту 3001!`);
-        logger.error(`Детали: ${err.stack}`);
-        
+        logger.error(`[PROXY_FATAL] AdminJS на порту 3001 недоступен.`);
         res.status(502).set('Content-Type', 'text/html').send(`
-            <div style="background:#0a0a0a; color:#00ffcc; padding:30px; font-family: 'Courier New', monospace; border: 1px solid #00ffcc; border-radius: 8px; max-width: 600px; margin: 50px auto; box-shadow: 0 0 20px rgba(0,255,204,0.2);">
-                <h2 style="border-bottom: 1px solid #00ffcc; padding-bottom: 10px;">> NEURAL_PULSE: PROXY_ERROR</h2>
-                <p style="color: #ff3366;">[!] STATUS: ADMIN_PANEL_OFFLINE</p>
-                <p>Возможные причины:</p>
-                <ul style="line-height: 1.6;">
-                    <li>Файл <b>admin.js</b> еще не закончил сборку фронтенда.</li>
-                    <li>Процесс на порту <b>3001</b> упал или не запустился.</li>
-                    <li>Ошибка инициализации базы данных в админке.</li>
-                </ul>
-                <p style="font-size: 0.8em; color: #666;">Техническая ошибка: ${err.message}</p>
-                <button onclick="location.reload()" style="background: transparent; border: 1px solid #00ffcc; color: #00ffcc; padding: 10px 20px; cursor: pointer; margin-top: 10px;">ПОПЫТКА_ПЕРЕПОДКЛЮЧЕНИЯ</button>
+            <div style="background:#05070a; color:#00f2fe; padding:40px; font-family: monospace; border: 2px solid #00f2fe; max-width: 600px; margin: 50px auto; text-align: center;">
+                <h2>> NEURAL_PULSE: ADMIN_OFFLINE</h2>
+                <p style="color: #ff3366;">[!] СИСТЕМА ЕЩЕ ЗАГРУЖАЕТСЯ</p>
+                <p>Админка собирает файлы (bundling). Это занимает до 40 секунд при первом запуске.</p>
+                <hr style="border: 0; border-top: 1px solid #1a222d; margin: 20px 0;">
+                <button onclick="location.reload()" style="background:#00f2fe; color:#000; border:none; padding:10px 20px; cursor:pointer; font-weight:bold;">ОБНОВИТЬ ТЕРМИНАЛ</button>
             </div>
         `);
     }
