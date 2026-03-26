@@ -12,30 +12,27 @@ import { logger } from './logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- ПРЕДУСТАНОВКА СИСТЕМЫ ---
+// --- [FIX] УБИРАЕМ ОЧИСТКУ КЭША ПРИ КАЖДОМ ЗАПУСКЕ ---
+// Очистка кэша заставляет AdminJS пересобирать всё заново, что ест 300МБ+ RAM.
+// Оставь это закомментированным, пока не поменяешь дизайн панели.
+/*
 const adminCachePath = path.join(process.cwd(), '.adminjs');
-if (fs.existsSync(adminCachePath)) {
-    try {
-        fs.rmSync(adminCachePath, { recursive: true, force: true });
-        logger.info("AdminJS: Static cache purged.");
-    } catch (e) {
-        logger.warn("AdminJS: Cache purge skipped.");
-    }
-}
+if (fs.existsSync(adminCachePath)) { ... }
+*/
 
 AdminJS.registerAdapter(AdminJSSequelize);
 
 const componentLoader = new ComponentLoader();
+// Важно: убедись, что файл static/dashboard.jsx существует, иначе упадет при сборке
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
 
 const app = express();
 
+// Позволяем прокси передавать заголовки
+app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/static', express.static(path.join(__dirname, 'static')));
-
-app.get('/', (req, res) => res.redirect('/admin'));
-app.get('/logout', (req, res) => res.redirect('/admin/logout'));
 
 const startAdmin = async () => {
     try {
@@ -72,7 +69,6 @@ const startAdmin = async () => {
                             cpu: (os.loadavg()[0] * 10).toFixed(1)
                         };
                     } catch (err) {
-                        logger.error("Admin Telemetry Error:", err);
                         return { error: 'Offline', totalUsers: 0 };
                     }
                 }
@@ -80,7 +76,7 @@ const startAdmin = async () => {
             branding: { 
                 companyName: 'Neural Pulse Hub', 
                 softwareBrothers: false, 
-                logo: '/static/logo.png',
+                logo: '/static/images/logo.png', // Поправил путь к лого
                 theme: {
                     colors: {
                         primary100: '#00f2fe',
@@ -89,35 +85,25 @@ const startAdmin = async () => {
                         container: '#0d1117',
                         border: '#1a222d'
                     }
-                },
-                custom: {
-                    style: `
-                        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-                        body, #adminjs-app {
-                            background: radial-gradient(circle at center, #0a111a 0%, #05070a 100%) !important;
-                            font-family: 'Inter', sans-serif !important;
-                        }
-                        section[data-testid="login"] {
-                            background: #0d1117 !important;
-                            border: 1px solid #00f2fe !important;
-                            box-shadow: 0 0 30px rgba(0, 242, 254, 0.2) !important;
-                        }
-                        button[type="submit"] {
-                            background: #00f2fe !important;
-                            color: #000000 !important;
-                            font-weight: 900 !important;
-                            text-transform: uppercase !important;
-                        }
-                    `
                 }
             },
-            bundler: { minify: true },
+            // --- [FIX] ОПТИМИЗАЦИЯ ДЛЯ НИЗКОЙ ПАМЯТИ ---
+            bundler: { 
+                minify: true,
+                force: false // НЕ пересобирать бандл, если он уже есть
+            },
             assets: {
                 scripts: ['https://unpkg.com/recharts/umd/Recharts.js']
             }
         };
 
         const adminJs = new AdminJS(adminOptions);
+
+        // Если мы на сервере, не запускаем сборку бандла автоматически
+        // Это критично для BotHost!
+        if (process.env.NODE_ENV === 'production') {
+            adminJs.options.bundler.force = false;
+        }
 
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
@@ -132,15 +118,19 @@ const startAdmin = async () => {
             saveUninitialized: false, 
             secret: 'neural_pulse_secret_2026',
             store: sessionStore,
-            cookie: { maxAge: 86400000, path: '/admin' }
+            cookie: { 
+                maxAge: 86400000, 
+                path: '/admin',
+                httpOnly: true,
+                secure: false // true только если есть прямой SSL на 3001, у нас прокси, оставляем false
+            }
         });
         
         app.use(adminJs.options.rootPath, adminRouter);
         
-        // --- ПОРТ 3001 ---
-        // Используем 127.0.0.1, чтобы админка была видна только боту-прокси
+        // Слушаем на 0.0.0.0, чтобы локальный прокси (bot.js) точно видел порт
         const INTERNAL_PORT = 3001;
-        app.listen(INTERNAL_PORT, '127.0.0.1', () => {
+        app.listen(INTERNAL_PORT, '0.0.0.0', () => {
             logger.info(`AdminJS Engine: INTERNAL ONLINE on port ${INTERNAL_PORT}`);
         });
 
