@@ -11,7 +11,6 @@ const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const DOMAIN = "https://np.bothost.tech";
 const PORT = 3000; 
 
-// Флаг, чтобы не запустить бота дважды
 let isBotStarted = false;
 
 const launchProcess = (fileName, customEnv = {}) => {
@@ -32,7 +31,6 @@ const launchProcess = (fileName, customEnv = {}) => {
     return child;
 };
 
-// Функция безопасного запуска бота
 const startBotOnce = () => {
     if (isBotStarted) return;
     isBotStarted = true;
@@ -40,7 +38,6 @@ const startBotOnce = () => {
     logger.system("🚀 Starting Bot Gateway on Port 3000...");
     launchProcess('bot.js', { PORT: PORT });
 
-    // ПРИВЯЗКА ВЕБХУКА
     const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`; 
     setTimeout(async () => {
         try {
@@ -50,7 +47,7 @@ const startBotOnce = () => {
         } catch (e) {
             logger.error("Webhook Linkage Error");
         }
-    }, 5000);
+    }, 10000); // Увеличил до 10с, чтобы бот успел прогрузить базу
 };
 
 const startEngine = async () => {
@@ -63,25 +60,19 @@ const startEngine = async () => {
         if (!dbReady) throw new Error("Database initialization failed.");
         logger.info("Database Engine: READY");
 
-        // 1. ЗАПУСК АДМИНКИ (порт 3001)
-        logger.info("Initializing AdminJS (3001)... Please wait for bundling.");
+        // ПАРАЛЛЕЛЬНЫЙ ЗАПУСК
+        // 1. Сразу запускаем бота, чтобы он отвечал пользователям
+        startBotOnce();
+
+        // 2. Запускаем админку в фоне
+        logger.info("Initializing AdminJS (3001)... Bundling started.");
         const adminChild = launchProcess('admin.js', { PORT: 3001 });
 
-        // Ждем сообщения 'ready' от admin.js
         adminChild.on('message', (msg) => {
             if (msg === 'ready') {
                 logger.system("✅ AdminJS is ONLINE.");
-                startBotOnce();
             }
         });
-
-        // ПРЕДОХРАНИТЕЛЬ: Если админка не ответила за 60 сек, запускаем бота принудительно
-        setTimeout(() => {
-            if (!isBotStarted) {
-                logger.warn("AdminJS taking too long to bundle. Forcing Bot start as fallback...");
-                startBotOnce();
-            }
-        }, 60000);
 
     } catch (err) { 
         logger.error("CRITICAL ENGINE FAILURE", err); 
