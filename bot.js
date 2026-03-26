@@ -21,7 +21,17 @@ const app = express();
 app.disable('x-powered-by'); 
 app.set('trust proxy', 1);
 
-// --- ДИАГНОСТИКА: ВИДИМ ЛИ МЫ ТРАФИК? ---
+// --- [НОВОЕ] ПРОВЕРКА ДОСТУПНОСТИ: Открой в браузере np.bothost.tech/ping ---
+app.get('/ping', (req, res) => {
+    logger.info(`[PING] Проверка связи из ${req.ip}`);
+    res.send('PONG - Neural Pulse Gateway is Alive');
+});
+
+// 1. ОБРАБОТЧИК ВЕБХУКА (СТРОГО ДО express.json)
+// Telegraf сам должен парсить входящий поток (Raw Body)
+app.use(bot.webhookCallback(`/telegraf/${BOT_TOKEN}`));
+
+// 2. ДИАГНОСТИКА ТРАФИКА
 app.use((req, res, next) => {
     if (req.url.includes('telegraf')) {
         logger.info(`[NETWORK] Incoming Webhook POST: ${req.url} from ${req.ip}`);
@@ -29,15 +39,12 @@ app.use((req, res, next) => {
     next();
 });
 
-// 1. ОБРАБОТЧИК ВЕБХУКА (САМЫЙ ПЕРВЫЙ)
-app.use(bot.webhookCallback(`/telegraf/${BOT_TOKEN}`));
-
-// 2. ОСТАЛЬНЫЕ НАСТРОЙКИ
+// 3. ОСТАЛЬНЫЕ НАСТРОЙКИ
 app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'static')));
 
-// 3. ПРОКСИ ДЛЯ ADMINJS
+// 4. ПРОКСИ ДЛЯ ADMINJS
 app.use('/admin', createProxyMiddleware({
     target: 'http://127.0.0.1:3001',
     changeOrigin: true,
@@ -51,7 +58,7 @@ app.use('/admin', createProxyMiddleware({
 
 // --- ЛОГИКА БОТА ---
 bot.use(async (ctx, next) => {
-    logger.info(`--- [TELEGRAM] Обновление: ${ctx.updateType} ---`);
+    logger.info(`--- [TELEGRAM] Входящий пакет: ${ctx.updateType} ---`);
     try {
         await next();
     } catch (err) {
@@ -63,7 +70,7 @@ bot.start(async (ctx) => {
     const userId = ctx.from.id;
     const logoPath = path.join(__dirname, 'static/images/logo.png');
     
-    logger.info(`[CORE] /start для: ${userId}`);
+    logger.info(`[CORE] Выполнение /start для: ${userId}`);
 
     try {
         await User.findOrCreate({ 
@@ -82,6 +89,7 @@ bot.start(async (ctx) => {
         } else {
             await ctx.reply(caption, { parse_mode: 'HTML', ...keyboard });
         }
+        logger.info(`[CORE] Ответ отправлен пользователю ${userId}`);
     } catch (e) { 
         logger.error(`Bot Start Error`, e);
     }
@@ -127,7 +135,6 @@ app.post('/api/save', async (req, res) => {
     }
 });
 
-// --- ГЛОБАЛЬНЫЙ ОБРАБОТЧИК ОШИБОК EXPRESS ---
 app.use((err, req, res, next) => {
     logger.error('Express Error:', err);
     res.status(500).send('Internal Server Error');
