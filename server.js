@@ -45,14 +45,16 @@ const launchProcess = (fileName, customEnv = {}) => {
     return child;
 };
 
-const startBotOnce = () => {
+// Функция активации бота (вызывается только по сигналу от админки)
+const activateBotGateway = () => {
     if (isBotStarted) return;
     isBotStarted = true;
     
-    logger.system("🚀 Запуск Магистрального Шлюза (Port 3000)...");
+    logger.system("🚀 СИГНАЛ ПОЛУЧЕН: Запуск Магистрального Шлюза (Port 3000)...");
     launchProcess('bot.js', { PORT: PORT });
 
     const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`; 
+    // Небольшая пауза, чтобы bot.js успел поднять express-сервер
     setTimeout(async () => {
         try {
             const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${webhookUrl}&drop_pending_updates=true`);
@@ -65,7 +67,7 @@ const startBotOnce = () => {
         } catch (e) { 
             logger.error("Ошибка линковки Webhook (Network Error)"); 
         }
-    }, 15000);
+    }, 5000);
 };
 
 const startEngine = async () => {
@@ -78,14 +80,16 @@ const startEngine = async () => {
         if (!dbReady) throw new Error("Database initialization failed.");
         logger.info("Ядро Базы Данных: СТАБИЛЬНО");
 
-        startBotOnce();
-
+        // 1. Сначала запускаем только админку
         logger.info("Инициализация AdminJS (3001)... Подготовка бандла.");
         const adminChild = launchProcess('admin.js', { PORT: 3001 });
 
+        // 2. Слушаем сообщение от админки
         adminChild.on('message', (msg) => {
             if (msg === 'ready') {
                 logger.system("✅ АДМИН-ПАНЕЛЬ: ДОСТУП ОТКРЫТ");
+                // 3. Только теперь запускаем бота
+                activateBotGateway();
             }
         });
 
@@ -98,7 +102,6 @@ const startEngine = async () => {
 const handleShutdown = () => {
     logger.system("🛑 ОСТАНОВКА СИСТЕМЫ: ЗАВЕРШЕНИЕ ПРОЦЕССОВ...");
     for (const [name, child] of children) {
-        logger.info(`Убийство процесса: ${name}`);
         child.kill('SIGTERM');
     }
     process.exit(0);
