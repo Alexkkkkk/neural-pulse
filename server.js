@@ -12,13 +12,11 @@ const DOMAIN = "https://np.bothost.tech";
 const PORT = 3000; 
 
 let isBotStarted = false;
-const children = new Map(); // Хранилище ссылок на активные процессы
+const children = new Map();
 
-// Универсальный менеджер процессов с авто-регенерацией
 const launchProcess = (fileName, customEnv = {}) => {
     const processPath = path.join(__dirname, fileName);
     
-    // Если процесс уже запущен, не дублируем (защита от утечек)
     if (children.has(fileName)) {
         children.get(fileName).kill();
     }
@@ -54,7 +52,6 @@ const startBotOnce = () => {
     logger.system("🚀 Запуск Магистрального Шлюза (Port 3000)...");
     launchProcess('bot.js', { PORT: PORT });
 
-    // Установка Вебхука с задержкой 15с (даем время на запуск Express)
     const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`; 
     setTimeout(async () => {
         try {
@@ -77,19 +74,15 @@ const startEngine = async () => {
     logger.system('══════════════════════════════════════════════════');
 
     try {
-        // 1. Инициализация БД
         const dbReady = await initDB();
         if (!dbReady) throw new Error("Database initialization failed.");
         logger.info("Ядро Базы Данных: СТАБИЛЬНО");
 
-        // 2. Запуск основного шлюза (Бот + API)
         startBotOnce();
 
-        // 3. Запуск админки на порту 3001
         logger.info("Инициализация AdminJS (3001)... Подготовка бандла.");
         const adminChild = launchProcess('admin.js', { PORT: 3001 });
 
-        // Слушаем сигнал "ready" от процесса админки
         adminChild.on('message', (msg) => {
             if (msg === 'ready') {
                 logger.system("✅ АДМИН-ПАНЕЛЬ: ДОСТУП ОТКРЫТ");
@@ -102,8 +95,6 @@ const startEngine = async () => {
     }
 };
 
-// --- ГРАЦИОЗНОЕ ЗАВЕРШЕНИЕ ---
-// Важно для Bothost, чтобы не оставалось "висящих" процессов
 const handleShutdown = () => {
     logger.system("🛑 ОСТАНОВКА СИСТЕМЫ: ЗАВЕРШЕНИЕ ПРОЦЕССОВ...");
     for (const [name, child] of children) {
@@ -116,5 +107,4 @@ const handleShutdown = () => {
 process.on('SIGTERM', handleShutdown);
 process.on('SIGINT', handleShutdown);
 
-// Запуск двигателя
 startEngine();
