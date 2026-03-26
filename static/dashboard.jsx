@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Box, H2, H4, H5, Text, Card, Icon, Badge, Button } from '@adminjs/design-system'
+import { Box, H2, H5, Text, Card, Badge, Button } from '@adminjs/design-system'
 import { ApiClient } from 'adminjs'
 import { 
   XAxis, YAxis, CartesianGrid, 
@@ -20,7 +20,6 @@ const CYBER = {
 };
 
 const Dashboard = (props) => {
-  // Данные из handler приходят в props.data
   const [stats, setStats] = useState(props.data || {})
   const [history, setHistory] = useState([])
   const [scanPos, setScanPos] = useState(0)
@@ -33,11 +32,13 @@ const Dashboard = (props) => {
       const response = await api.getDashboard()
       const d = response.data || {}
       setStats(d)
-      setHistory(prev => [...prev, {
-        time: new Date().toLocaleTimeString().slice(0, 5),
-        cpu: parseFloat(d.cpu || 0),
-        ram: parseFloat(d.currentMem || 0),
-      }].slice(-20))
+      if (d.cpu) {
+        setHistory(prev => [...prev, {
+          time: new Date().toLocaleTimeString().slice(0, 5),
+          cpu: parseFloat(d.cpu || 0),
+          ram: parseFloat(d.currentMem || 0),
+        }].slice(-20))
+      }
     } catch (e) { console.error('Pulse Error:', e) }
   }
 
@@ -78,15 +79,17 @@ const Dashboard = (props) => {
               <Box p="md">
                 <Text size="xs" color="grey60">{item.label}</Text>
                 <H2 style={{ color: '#fff' }}>{item.val || 0}</H2>
-                <Box width="100%" height="4px" bg="#000" mt="md"><Box width="60%" height="100%" bg={item.color} /></Box>
+                <Box width="100%" height="4px" bg="#000" mt="md">
+                    <Box width={`${parseInt(item.val) > 100 ? 100 : parseInt(item.val) || 10}%`} height="100%" bg={item.color} />
+                </Box>
               </Box>
             </Card>
           </Box>
         ))}
       </Box>
 
-      {/* CHARTS & LOGS */}
       <Box display="flex" flexDirection="row" flexWrap="wrap" marginTop="xl">
+        {/* CHART */}
         <Box width={[1, 2/3]} paddingRight={['0', 'sm']}>
           <Box padding="lg" borderRadius="xl" style={{ backgroundColor: CYBER.card, height: '400px', border: '1px solid #30363d' }}>
             <H5 mb="xl" color={CYBER.primary}>TELEMETRY HISTORY</H5>
@@ -95,18 +98,19 @@ const Dashboard = (props) => {
                 <CartesianGrid strokeDasharray="3 3" stroke="#1f242c" />
                 <XAxis dataKey="time" stroke="#484f58" />
                 <YAxis stroke="#484f58" />
-                <Tooltip contentStyle={{ backgroundColor: CYBER.card }} />
+                <Tooltip contentStyle={{ backgroundColor: CYBER.card, border: '1px solid #00f2fe' }} />
                 <Area type="monotone" dataKey="cpu" stroke={CYBER.primary} fill={CYBER.primary} fillOpacity={0.1} />
               </AreaChart>
             </ResponsiveContainer>
           </Box>
         </Box>
 
+        {/* LOGS */}
         <Box width={[1, 1/3]} paddingLeft={['0', 'sm']}>
-          <Box padding="lg" borderRadius="xl" style={{ backgroundColor: '#000', height: '400px', border: `1px solid ${CYBER.success}33` }}>
+          <Box padding="lg" borderRadius="xl" style={{ backgroundColor: '#000', height: '400px', border: `1px solid ${CYBER.success}33`, overflow: 'hidden' }}>
             <H5 mb="md" color={CYBER.success}>LIVE_LOGS</H5>
             {logs.map((log, i) => (
-              <Text key={i} color={i === 0 ? CYBER.success : 'grey60'} size="xs" mb="xs">{log}</Text>
+              <Text key={i} color={i === 0 ? CYBER.success : 'grey60'} size="xs" mb="xs" style={{ whiteSpace: 'nowrap' }}>{log}</Text>
             ))}
           </Box>
         </Box>
