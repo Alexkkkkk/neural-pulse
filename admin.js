@@ -13,12 +13,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --- ПРЕДУСТАНОВКА СИСТЕМЫ ---
-// Очистка кэша фронтенда для принудительного обновления дизайна
 const adminCachePath = path.join(process.cwd(), '.adminjs');
 if (fs.existsSync(adminCachePath)) {
     try {
         fs.rmSync(adminCachePath, { recursive: true, force: true });
-        logger.info("AdminJS: Static cache purged successfully.");
+        logger.info("AdminJS: Static cache purged.");
     } catch (e) {
         logger.warn("AdminJS: Cache purge skipped.");
     }
@@ -27,26 +26,16 @@ if (fs.existsSync(adminCachePath)) {
 AdminJS.registerAdapter(AdminJSSequelize);
 
 const componentLoader = new ComponentLoader();
-// Регистрация киберпанк-дашборда
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
 
 const app = express();
 
-// --- МИДЛВАРЫ ---
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Раздача статики (логотипы, картинки, стили)
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
-// --- РОУТИНГ ---
-app.get('/', (req, res) => {
-    res.redirect('/admin');
-});
-
-app.get('/logout', (req, res) => {
-    res.redirect('/admin/logout');
-});
+app.get('/', (req, res) => res.redirect('/admin'));
+app.get('/logout', (req, res) => res.redirect('/admin/logout'));
 
 const startAdmin = async () => {
     try {
@@ -84,7 +73,7 @@ const startAdmin = async () => {
                         };
                     } catch (err) {
                         logger.error("Admin Telemetry Error:", err);
-                        return { error: 'Telemetry Offline', totalUsers: 0 };
+                        return { error: 'Offline', totalUsers: 0 };
                     }
                 }
             },
@@ -112,37 +101,24 @@ const startAdmin = async () => {
                             background: #0d1117 !important;
                             border: 1px solid #00f2fe !important;
                             box-shadow: 0 0 30px rgba(0, 242, 254, 0.2) !important;
-                            border-radius: 16px !important;
                         }
                         input {
                             background: #161b22 !important;
                             border: 1px solid #30363d !important;
                             color: #ffffff !important;
-                            border-radius: 8px !important;
                         }
                         button[type="submit"] {
                             background: #00f2fe !important;
                             color: #000000 !important;
                             font-weight: 900 !important;
                             text-transform: uppercase !important;
-                            letter-spacing: 1px !important;
-                            border-radius: 8px !important;
-                        }
-                        button[type="submit"]:hover {
-                            background: #ffffff !important;
-                            box-shadow: 0 0 20px #00f2fe !important;
                         }
                     `
                 }
             },
-            bundler: {
-                minify: true 
-            },
-            // ВАЖНО: Подгрузка внешних скриптов для работы графиков Recharts
+            bundler: { minify: true },
             assets: {
-                scripts: [
-                    'https://unpkg.com/recharts/umd/Recharts.js'
-                ]
+                scripts: ['https://unpkg.com/recharts/umd/Recharts.js']
             }
         };
 
@@ -151,10 +127,8 @@ const startAdmin = async () => {
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
                 if (email === '1' && password === '1') {
-                    logger.info(`AdminJS: Authorized access granted to root`);
                     return { email: 'admin@neuralpulse.tech' };
                 }
-                logger.warn(`AdminJS: Failed login attempt: ${email}`);
                 return null;
             },
             cookiePassword: 'secure-pass-2026-pulse-ultra-secret-32-chars',
@@ -163,16 +137,14 @@ const startAdmin = async () => {
             saveUninitialized: false, 
             secret: 'neural_pulse_secret_2026',
             store: sessionStore,
-            cookie: { 
-                maxAge: 86400000,
-                path: '/admin'
-            }
+            cookie: { maxAge: 86400000, path: '/admin' }
         });
         
         app.use(adminJs.options.rootPath, adminRouter);
         
-        app.listen(3001, '0.0.0.0', () => {
-            logger.info("AdminJS Engine: ONLINE on port 3001");
+        // ВАЖНО: Порт 3000 для Bothost
+        app.listen(3000, '0.0.0.0', () => {
+            logger.info("AdminJS Engine: ONLINE on port 3000");
         });
 
     } catch (e) { 
