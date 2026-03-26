@@ -2,7 +2,6 @@ import { Sequelize, DataTypes } from 'sequelize';
 import session from 'express-session';
 import ConnectSessionSequelize from 'connect-session-sequelize';
 
-// Твой рабочий URI базы данных
 const PG_URI = "postgresql://bothost_db_130943b4f3f6:oY6CieQ5aohyTLgU9i23M6w80naZt9_1mJ4V6roejTs@node1.pghost.ru:32834/bothost_db_130943b4f3f6";
 
 export const sequelize = new Sequelize(PG_URI, { 
@@ -66,11 +65,12 @@ export const initDB = async () => {
         await sequelize.authenticate();
         console.log('--- [DB] CONNECTED TO POSTGRES ---');
         
-        // ВАЖНО: alter вместо force сохраняет данные юзеров при рестарте бота
+        // Создаем таблицу сессий вручную, если её нет
+        await sessionStore.sync(); 
+        
         await sequelize.sync({ alter: true }); 
         console.log('--- [DB] TABLES SYNCED (DATA PRESERVED) ---');
 
-        // Создаем задачи только если их еще нет
         const count = await Task.count();
         if (count === 0) {
             await Task.bulkCreate([
@@ -80,7 +80,6 @@ export const initDB = async () => {
             ]);
             console.log('--- [DB] INITIAL TASKS CREATED ---');
         }
-
         return true;
     } catch (error) {
         console.error('--- [DB] FATAL INIT ERROR:', error);
