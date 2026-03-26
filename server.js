@@ -7,19 +7,27 @@ import { logger } from './logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Константы проекта Neural Pulse
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const DOMAIN = "https://np.bothost.tech";
 
 const launchProcess = (fileName) => {
     const processPath = path.join(__dirname, fileName);
-    const child = fork(processPath);
+    
+    // stdio: 'inherit' позволяет видеть консоль дочерних процессов в главном окне
+    const child = fork(processPath, { stdio: 'inherit' });
 
     child.on('exit', (code) => {
         if (code !== 0 && code !== null) {
-            logger.error(`${fileName} crashed with code ${code}. Restarting in 5s...`);
+            logger.error(`[CRASH] ${fileName} завершился с кодом ${code}. Рестарт через 5с...`);
             setTimeout(() => launchProcess(fileName), 5000);
         }
     });
+
+    child.on('error', (err) => {
+        logger.error(`[ERROR] Не удалось запустить ${fileName}:`, err);
+    });
+
     return child;
 };
 
@@ -28,6 +36,7 @@ const startEngine = async () => {
 
     try {
         logger.progress(2, 10);
+        // Инициализация базы данных из db.js
         const dbReady = await initDB();
         
         if (!dbReady) throw new Error("Database initialization failed.");
@@ -35,6 +44,8 @@ const startEngine = async () => {
 
         logger.progress(6, 10);
         logger.info("Starting Dual-Core Processes...");
+        
+        // Запуск бота и AdminJS как отдельных веток
         launchProcess('bot.js');
         launchProcess('admin.js');
 
@@ -42,9 +53,10 @@ const startEngine = async () => {
         const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`;
         
         try {
-            // Используем встроенный в Node 18+ fetch
-            const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${webhookUrl}`);
+            // Установка вебхука с очисткой старых обновлений
+            const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${webhookUrl}&drop_pending_updates=true`);
             const result = await response.json();
+            
             if (result.ok) {
                 logger.info("Telegram Webhook: LINKED SUCCESSFULLY");
             } else {
@@ -66,12 +78,12 @@ const startEngine = async () => {
 };
 
 const shutdown = async () => {
-    logger.warn("System shutdown signal received. Closing resources...");
+    logger.warn("Получен сигнал остановки системы. Закрытие ресурсов...");
     try {
         await sequelize.close();
-        logger.info("Database connections closed safely.");
+        logger.info("Соединения с базой данных закрыты.");
     } catch (e) {
-        logger.error("Error during database shutdown", e);
+        logger.error("Ошибка при закрытии базы данных", e);
     }
     process.exit(0); 
 };
