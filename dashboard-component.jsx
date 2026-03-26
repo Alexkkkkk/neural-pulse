@@ -2,7 +2,7 @@ import React from 'react'
 import { Box, H2, H5, Text, Illustration, Section, Card, Icon } from '@adminjs/design-system'
 
 const Dashboard = (props) => {
-  // Защита от пустых данных: если props.data еще не пришел, используем 0
+  // Защита от пустых данных: если данные еще не получены, ставим 0
   const { 
     totalUsers = 0, 
     currentMem = 0, 
@@ -62,5 +62,5 @@ const Dashboard = (props) => {
   )
 }
 
-// Экспорт должен быть строго по умолчанию для корректной работы AdminJS
+// Экспорт по умолчанию обязателен
 export default Dashboard
