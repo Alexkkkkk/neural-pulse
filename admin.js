@@ -14,12 +14,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 AdminJS.registerAdapter(AdminJSSequelize);
-const componentLoader = new ComponentLoader();
 
-// Путь к твоему JSX файлу
+// 1. Инициализируем загрузчик компонентов
+const componentLoader = new ComponentLoader();
 const dashboardPath = path.join(__dirname, 'static', 'dashboard.jsx');
 
-// Регистрируем компонент через Loader (ЭТО ВАЖНО)
+// 2. Регистрируем дашборд (ID должен совпадать с тем, что в dashboard.component)
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', dashboardPath);
 
 const app = express();
@@ -34,7 +34,8 @@ const startAdmin = async () => {
                         navigation: { name: 'Агенты', icon: 'User' },
                         properties: { 
                             last_seen: { isVisible: { list: true, edit: false, filter: true } },
-                            createdAt: { isVisible: { list: true, filter: true, show: true, edit: false } }
+                            createdAt: { isVisible: { list: true, filter: true, show: true, edit: false } },
+                            updatedAt: { isVisible: false }
                         }
                     } 
                 }, 
@@ -42,31 +43,27 @@ const startAdmin = async () => {
                 { resource: Stats, options: { navigation: { name: 'Система', icon: 'Settings' } } }
             ],
             rootPath: '/admin',
-            componentLoader, // Обязательно передаем лоадер сюда
+            componentLoader,
             dashboard: {
-                component: DASHBOARD_COMPONENT, // Ссылка на зарегистрированный ID
+                component: DASHBOARD_COMPONENT,
                 handler: async () => {
-                    // Сбор данных для графиков
+                    // Сбор данных для фронтенда (передаются в props.data)
                     try {
                         const startDb = Date.now();
                         await sequelize.query('SELECT 1');
                         const dbLatency = Date.now() - startDb;
                         const totalUsers = await User.count();
-                        const newUsers24h = await User.count({
-                            where: { createdAt: { [Op.gt]: new Date(Date.now() - 24 * 60 * 60 * 1000) } }
-                        });
                         
                         return {
-                            totalUsers, 
-                            newUsers24h, 
+                            totalUsers,
                             dbLatency,
                             currentMem: (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2),
                             cpu: (os.loadavg()[0] * 10).toFixed(1)
                         };
                     } catch (err) {
-                        return { error: 'Data Fetch Error' };
+                        return { error: 'Backend telemetery fail' };
                     }
-                },
+                }
             },
             branding: { 
                 companyName: 'Neural Pulse Hub', 
@@ -76,7 +73,6 @@ const startAdmin = async () => {
                     colors: {
                         primary100: '#00f2fe',
                         bg: '#05070a',        
-                        border: '#1a1f29',    
                         text: '#ffffff',      
                         container: '#0d1117', 
                         filterBg: '#0d1117',  
@@ -107,7 +103,7 @@ const startAdmin = async () => {
         app.use(adminJs.options.rootPath, adminRouter);
         
         app.listen(3001, '0.0.0.0', () => {
-            logger.system("AdminJS interface: ONLINE (Cyber Dashboard) on port 3001");
+            logger.system("AdminJS interface: ONLINE on port 3001");
         });
 
     } catch (e) { 
