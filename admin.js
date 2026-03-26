@@ -34,6 +34,13 @@ const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', dashboardPath);
 
 const app = express();
 
+// --- ВАЖНО: ОБРАБОТКА ДАННЫХ ФОРМ (Решает проблему Cannot POST /login) ---
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Подключаем папку static для доступа к картинкам и манифесту
+app.use('/static', express.static(path.join(__dirname, 'static')));
+
 const startAdmin = async () => {
     try {
         const adminOptions = {
@@ -58,13 +65,10 @@ const startAdmin = async () => {
                 handler: async () => {
                     try {
                         const startDb = Date.now();
-                        // Проверка пинга базы данных
                         await sequelize.query('SELECT 1');
                         const dbLatency = Date.now() - startDb;
-                        
                         const totalUsers = await User.count();
                         
-                        // Собираем телеметрию для киберпанк-графиков
                         return {
                             totalUsers,
                             dbLatency,
@@ -90,7 +94,6 @@ const startAdmin = async () => {
                 }
             },
             bundler: {
-                // Всегда минифицируем в проде на Bothost для скорости
                 minify: true 
             }
         };
@@ -113,12 +116,14 @@ const startAdmin = async () => {
             saveUninitialized: false, 
             secret: 'neural_pulse_secret_2026',
             store: sessionStore,
-            cookie: { maxAge: 86400000 }
+            cookie: { 
+                maxAge: 86400000,
+                path: '/admin' // Указываем путь для корректной работы кук
+            }
         });
         
         app.use(adminJs.options.rootPath, adminRouter);
         
-        // Запуск на порту 3001 ( Bothost проксирует /admin сюда )
         app.listen(3001, '0.0.0.0', () => {
             logger.system("AdminJS interface: ONLINE on port 3001");
         });
