@@ -13,7 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --- ПРЕДУСТАНОВКА СИСТЕМЫ ---
-// Очистка кеша фронтенда для избежания "розового экрана" при обновлении JSX
+// Очистка кеша фронтенда для актуализации дизайна и устранения "розового экрана"
 const adminCachePath = path.join(process.cwd(), '.adminjs');
 if (fs.existsSync(adminCachePath)) {
     try {
@@ -27,7 +27,7 @@ if (fs.existsSync(adminCachePath)) {
 AdminJS.registerAdapter(AdminJSSequelize);
 
 const componentLoader = new ComponentLoader();
-// Путь к твоему киберпанк-дашборду в папке static
+// Загрузка киберпанк-дашборда из папки static
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
 
 const app = express();
@@ -36,13 +36,18 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Раздача статики (логотипы, картинки, манифесты)
+// Раздача статики (логотипы, картинки, стили)
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
-// РЕШЕНИЕ ОШИБКИ "Cannot GET /"
-// Перенаправляем пользователя в админку при заходе на корень сайта
+// --- РОУТИНГ (Решение ошибок GET) ---
+// Редирект с главной на админку
 app.get('/', (req, res) => {
     res.redirect('/admin');
+});
+
+// Решение ошибки "Cannot GET /logout" - перенаправляем на системный логаут AdminJS
+app.get('/logout', (req, res) => {
+    res.redirect('/admin/logout');
 });
 
 const startAdmin = async () => {
@@ -87,8 +92,8 @@ const startAdmin = async () => {
             },
             branding: { 
                 companyName: 'Neural Pulse Hub', 
-                softwareBrothers: false,
-                logo: '/static/logo.png', // Логотип из папки static
+                softwareBrothers: false, // Отключает стандартные подписи
+                logo: '/static/logo.png',
                 theme: {
                     colors: {
                         primary100: '#00f2fe',
@@ -98,7 +103,7 @@ const startAdmin = async () => {
                         border: '#1a222d'
                     }
                 },
-                // КИБЕРПАНК-СТИЛИЗАЦИЯ СТРАНИЦЫ ВХОДА
+                // КИБЕРПАНК-СТИЛИЗАЦИЯ
                 custom: {
                     style: `
                         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
@@ -152,7 +157,6 @@ const startAdmin = async () => {
 
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                // Доступы 1 / 1
                 if (email === '1' && password === '1') {
                     logger.info(`AdminJS: Authorized access granted to root`);
                     return { email: 'admin@neuralpulse.tech' };
@@ -174,6 +178,7 @@ const startAdmin = async () => {
         
         app.use(adminJs.options.rootPath, adminRouter);
         
+        // ВАЖНО: Используем 0.0.0.0 для корректной работы в Docker/Bothost
         app.listen(3001, '0.0.0.0', () => {
             logger.info("AdminJS Engine: ONLINE on port 3001");
         });
