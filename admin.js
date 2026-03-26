@@ -29,16 +29,18 @@ AdminJS.registerAdapter(AdminJSSequelize);
 const componentLoader = new ComponentLoader();
 
 // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Путь к твоему новому файлу в папке static
+// Убедись, что файл называется именно dashboard.jsx
 const dashboardPath = path.join(__dirname, 'static', 'dashboard.jsx');
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', dashboardPath);
 
 const app = express();
 
-// --- ВАЖНО: ОБРАБОТКА ДАННЫХ ФОРМ (Решает проблему Cannot POST /login) ---
+// --- ВАЖНО: ОБРАБОТКА ДАННЫХ ФОРМ ---
+// Эти строки исправляют ошибку "Cannot POST /login"
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Подключаем папку static для доступа к картинкам и манифесту
+// Подключаем папку static для доступа к логотипам и стилям
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
 const startAdmin = async () => {
@@ -94,6 +96,7 @@ const startAdmin = async () => {
                 }
             },
             bundler: {
+                // Минификация важна для корректной работы JSX в браузере
                 minify: true 
             }
         };
@@ -118,12 +121,15 @@ const startAdmin = async () => {
             store: sessionStore,
             cookie: { 
                 maxAge: 86400000,
-                path: '/admin' // Указываем путь для корректной работы кук
+                path: '/admin', // Корректный путь кук для Bothost
+                secure: false   // Установи в true, если используешь только HTTPS
             }
         });
         
+        // Подключаем админку к приложению
         app.use(adminJs.options.rootPath, adminRouter);
         
+        // Слушаем порт 3001
         app.listen(3001, '0.0.0.0', () => {
             logger.system("AdminJS interface: ONLINE on port 3001");
         });
