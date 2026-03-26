@@ -109,8 +109,7 @@ const startAdmin = async () => {
         app.use(adminJs.options.rootPath, adminRouter);
 
         // Запуск сервера на внутреннем порту 3001
-        // Используем 127.0.0.1, так как доступ идет только через прокси в bot.js
-        app.listen(3001, '127.0.0.1', () => {
+        app.listen(3001, '0.0.0.0', () => {
             logger.info(`AdminJS Engine: INTERNAL ONLINE (3001)`);
             // Отправка сигнала "ready" родительскому процессу (server.js)
             if (process.send) {
@@ -118,4 +117,9 @@ const startAdmin = async () => {
             }
         });
 
-    } catch (e)
+    } catch (e) {
+        logger.error("Admin Boot Failure:", e);
+    }
+};
+
+startAdmin();
