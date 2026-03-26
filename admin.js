@@ -28,8 +28,7 @@ AdminJS.registerAdapter(AdminJSSequelize);
 
 const componentLoader = new ComponentLoader();
 // Путь к твоему киберпанк-дашборду в папке static
-const dashboardPath = path.join(__dirname, 'static', 'dashboard.jsx');
-const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', dashboardPath);
+const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
 
 const app = express();
 
@@ -83,8 +82,7 @@ const startAdmin = async () => {
             branding: { 
                 companyName: 'Neural Pulse Hub', 
                 softwareBrothers: false,
-                // Путь к логотипу из твоей папки static/images
-                logo: '/static/images/logo.png',
+                logo: '/static/logo.png', // Логотип из корня static
                 theme: {
                     colors: {
                         primary100: '#00f2fe',
@@ -108,28 +106,16 @@ const startAdmin = async () => {
                         section[data-testid="login"] {
                             background: #0d1117 !important;
                             border: 1px solid #00f2fe !important;
-                            box-shadow: 0 0 30px rgba(0, 242, 254, 0.25) !important;
-                            border-radius: 20px !important;
-                            overflow: hidden;
+                            box-shadow: 0 0 30px rgba(0, 242, 254, 0.2) !important;
+                            border-radius: 16px !important;
                         }
 
-                        /* Левая декоративная панель */
-                        section[data-testid="login"] > div:first-child {
-                            background: linear-gradient(135deg, #001a1d 0%, #00f2fe 100%) !important;
-                        }
-
-                        /* Поля ввода (Email/Password) */
+                        /* Поля ввода */
                         input {
                             background: #161b22 !important;
                             border: 1px solid #30363d !important;
                             color: #ffffff !important;
-                            border-radius: 10px !important;
-                            padding: 12px !important;
-                        }
-
-                        input:focus {
-                            border-color: #00f2fe !important;
-                            box-shadow: 0 0 10px rgba(0, 242, 254, 0.5) !important;
+                            border-radius: 8px !important;
                         }
 
                         /* Кнопка входа */
@@ -138,26 +124,15 @@ const startAdmin = async () => {
                             color: #000000 !important;
                             font-weight: 900 !important;
                             text-transform: uppercase !important;
-                            letter-spacing: 2px !important;
-                            border-radius: 10px !important;
-                            height: 50px !important;
-                            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+                            letter-spacing: 1px !important;
+                            border-radius: 8px !important;
+                            transition: all 0.3s ease !important;
                         }
 
                         button[type="submit"]:hover {
                             background: #ffffff !important;
-                            box-shadow: 0 0 25px #00f2fe !important;
-                            transform: translateY(-3px) scale(1.02);
-                        }
-
-                        /* Названия полей и заголовки */
-                        p, label, h3 {
-                            color: #ffffff !important;
-                        }
-                        
-                        /* Стилизация логотипа */
-                        img {
-                            filter: drop-shadow(0 0 5px #00f2fe);
+                            box-shadow: 0 0 20px #00f2fe !important;
+                            transform: translateY(-2px);
                         }
                     `
                 }
@@ -171,15 +146,15 @@ const startAdmin = async () => {
 
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                // Твои доступы 1 / 1
+                // Доступы 1 / 1
                 if (email === '1' && password === '1') {
-                    logger.system(`AdminJS: Authorized access granted to root`);
+                    logger.info(`AdminJS: Authorized access granted to root`);
                     return { email: 'admin@neuralpulse.tech' };
                 }
-                logger.warn(`AdminJS: Failed login attempt for user: ${email}`);
+                logger.warn(`AdminJS: Failed login attempt: ${email}`);
                 return null;
             },
-            cookiePassword: 'secure-pass-2026-pulse-ultra-secret',
+            cookiePassword: 'secure-pass-2026-pulse-ultra-secret-32-chars',
         }, null, {
             resave: false, 
             saveUninitialized: false, 
@@ -193,9 +168,8 @@ const startAdmin = async () => {
         
         app.use(adminJs.options.rootPath, adminRouter);
         
-        // Запуск на порту 3001
         app.listen(3001, '0.0.0.0', () => {
-            logger.system("AdminJS Engine: ONLINE on port 3001");
+            logger.info("AdminJS Engine: ONLINE on port 3001");
         });
 
     } catch (e) { 
