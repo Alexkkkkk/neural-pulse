@@ -15,7 +15,7 @@ const __dirname = path.dirname(__filename);
 AdminJS.registerAdapter(AdminJSSequelize);
 
 const componentLoader = new ComponentLoader();
-// Указываем путь к кастомному дашборду
+// Указываем путь к кастомному дашборду. Путь должен быть идентичен тому, что в Dockerfile.
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
 
 const app = express();
@@ -49,7 +49,7 @@ const startAdmin = async () => {
             branding: { 
                 companyName: 'Neural Pulse Hub', 
                 logo: '/static/images/logo.png',
-                softwareBrothers: false, // Убираем лишние ссылки
+                softwareBrothers: false, // Убираем логотип разработчиков AdminJS
                 theme: {
                     id: 'np-dark',
                     colors: { 
@@ -67,10 +67,10 @@ const startAdmin = async () => {
                     button[data-testid="button-fingerprint"] { display: none; }
                 `
             },
-            // --- СЕКЦИЯ ОПТИМИЗАЦИИ ДЛЯ BOTHOST ---
+            // --- КРИТИЧЕСКАЯ СЕКЦИЯ ОПТИМИЗАЦИИ ---
             bundler: { 
                 minify: true, 
-                force: false, // Не пересобирать, если файлы не менялись
+                force: false, // ВАЖНО: false заставляет использовать уже собранный бандл из Docker-слоя
                 babelConfig: {
                     compact: true,
                     presets: [
@@ -86,7 +86,7 @@ const startAdmin = async () => {
         // Настройка авторизации
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                // Простая проверка (можно заменить на проверку из БД)
+                // Простая проверка (в будущем можно заменить на поиск в БД)
                 if (email === '1' && password === '1') {
                     return { email: 'admin@np.tech' };
                 }
@@ -99,17 +99,18 @@ const startAdmin = async () => {
             secret: 'np_secret', 
             store: sessionStore,
             cookie: { 
-                maxAge: 86400000, 
+                maxAge: 86400000, // 24 часа
                 path: '/admin', 
                 httpOnly: true, 
-                secure: false // Установите true, если используете чистый HTTPS без прокси
+                secure: false // Bothost использует прокси, оставляем false если нет прямого SSL на ноде
             }
         });
         
         app.use(adminJs.options.rootPath, adminRouter);
 
         // Запуск сервера на внутреннем порту 3001
-        app.listen(3001, '0.0.0.0', () => {
+        // Используем 127.0.0.1, так как доступ идет только через прокси в bot.js
+        app.listen(3001, '127.0.0.1', () => {
             logger.info(`AdminJS Engine: INTERNAL ONLINE (3001)`);
             // Отправка сигнала "ready" родительскому процессу (server.js)
             if (process.send) {
@@ -117,9 +118,4 @@ const startAdmin = async () => {
             }
         });
 
-    } catch (e) { 
-        logger.error("Admin Boot Failure:", e); 
-    }
-};
-
-startAdmin();
+    } catch (e)
