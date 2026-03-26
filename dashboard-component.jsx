@@ -2,7 +2,13 @@ import React from 'react'
 import { Box, H2, H5, Text, Illustration, Section, Card, Icon } from '@adminjs/design-system'
 
 const Dashboard = (props) => {
-  const { totalUsers, currentMem, dbLatency, cpu } = props.data
+  // Защита от пустых данных: если props.data еще не пришел, используем 0
+  const { 
+    totalUsers = 0, 
+    currentMem = 0, 
+    dbLatency = 0, 
+    cpu = 0 
+  } = props.data || {}
 
   return (
     <Box variant="grey" padding="xl">
@@ -24,7 +30,7 @@ const Dashboard = (props) => {
           <Card padding="md">
             <H5 color="success"><Icon icon="Cpu" /> Нагрузка CPU</H5>
             <H2>{cpu}%</H2>
-            <Text size="sm">Загрузка процессора NL2</Text>
+            <Text size="sm">Загрузка процессора</Text>
           </Card>
         </Box>
 
@@ -40,7 +46,7 @@ const Dashboard = (props) => {
           <Card padding="md">
             <H5 color={dbLatency < 100 ? "success" : "danger"}><Icon icon="Database" /> Latency</H5>
             <H2>{dbLatency} ms</H2>
-            <Text size="sm">Скорость работы базы</Text>
+            <Text size="sm">Отклик базы данных</Text>
           </Card>
         </Box>
       </Box>
@@ -49,11 +55,12 @@ const Dashboard = (props) => {
         <Box variant="white" padding="xl" boxShadow="card">
             <Illustration variant="Rocket" width="80px" />
             <H5>Интеграция TON</H5>
-            <Text>Блокчейн-графики будут активированы после настройки TonConnect.</Text>
+            <Text>Функции блокчейна будут доступны после завершения настройки TonConnect.</Text>
         </Box>
       </Section>
     </Box>
   )
 }
 
+// Экспорт должен быть строго по умолчанию для корректной работы AdminJS
 export default Dashboard
