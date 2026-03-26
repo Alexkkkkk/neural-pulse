@@ -9,13 +9,9 @@ const __dirname = path.dirname(__filename);
 
 const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const DOMAIN = "https://np.bothost.tech";
-const PORT = 3000; 
-
-let isBotStarted = false;
 
 const launchProcess = (fileName, customEnv = {}) => {
     const processPath = path.join(__dirname, fileName);
-    
     const child = fork(processPath, { 
         stdio: 'inherit',
         env: { ...process.env, ...customEnv, NODE_ENV: 'production' } 
@@ -23,31 +19,11 @@ const launchProcess = (fileName, customEnv = {}) => {
 
     child.on('exit', (code) => {
         if (code !== 0 && code !== null) {
-            logger.error(`[CRASH] Модуль ${fileName} упал (код ${code}). Рестарт через 7с...`);
-            setTimeout(() => launchProcess(fileName, customEnv), 7000);
+            logger.error(`[CRASH] ${fileName} упал (код ${code}). Рестарт через 5с...`);
+            setTimeout(() => launchProcess(fileName, customEnv), 5000);
         }
     });
-
     return child;
-};
-
-const startBotOnce = () => {
-    if (isBotStarted) return;
-    isBotStarted = true;
-
-    logger.system("🚀 Starting Bot Gateway on Port 3000...");
-    launchProcess('bot.js', { PORT: PORT });
-
-    const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`; 
-    setTimeout(async () => {
-        try {
-            const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${webhookUrl}&drop_pending_updates=true`);
-            const result = await response.json();
-            if (result.ok) logger.system("📡 TELEGRAM WEBHOOK: ACTIVE");
-        } catch (e) {
-            logger.error("Webhook Linkage Error");
-        }
-    }, 10000); // Увеличил до 10с, чтобы бот успел прогрузить базу
 };
 
 const startEngine = async () => {
@@ -60,19 +36,28 @@ const startEngine = async () => {
         if (!dbReady) throw new Error("Database initialization failed.");
         logger.info("Database Engine: READY");
 
-        // ПАРАЛЛЕЛЬНЫЙ ЗАПУСК
-        // 1. Сразу запускаем бота, чтобы он отвечал пользователям
-        startBotOnce();
+        // 1. ЗАПУСКАЕМ БОТА ПЕРВЫМ (Порт 3000)
+        logger.system("🚀 Starting Bot Gateway (Port 3000)...");
+        launchProcess('bot.js', { PORT: 3000 });
 
-        // 2. Запускаем админку в фоне
-        logger.info("Initializing AdminJS (3001)... Bundling started.");
-        const adminChild = launchProcess('admin.js', { PORT: 3001 });
-
-        adminChild.on('message', (msg) => {
-            if (msg === 'ready') {
-                logger.system("✅ AdminJS is ONLINE.");
+        // 2. Устанавливаем Webhook для Telegram
+        const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`; 
+        setTimeout(async () => {
+            try {
+                const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${webhookUrl}&drop_pending_updates=true`);
+                const result = await response.json();
+                if (result.ok) logger.system("📡 TELEGRAM WEBHOOK: ACTIVE");
+            } catch (e) {
+                logger.error("Webhook Linkage Error");
             }
-        });
+        }, 3000);
+
+        // 3. ЗАПУСКАЕМ АДМИНКУ ВТОРЫМ ЭТАПОМ (Порт 3001)
+        // Ждем 5 секунд, чтобы бот успел занять порт и прогреть кэш
+        setTimeout(() => {
+            logger.info("Initializing AdminJS (3001)...");
+            launchProcess('admin.js', { PORT: 3001 });
+        }, 5000);
 
     } catch (err) { 
         logger.error("CRITICAL ENGINE FAILURE", err); 
