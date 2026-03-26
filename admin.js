@@ -13,7 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --- ПРЕДУСТАНОВКА СИСТЕМЫ ---
-// Очистка кеша фронтенда для актуализации дизайна и устранения "розового экрана"
+// Удаляем старый билд фронтенда, чтобы AdminJS пересобрал UI с новыми стилями
 const adminCachePath = path.join(process.cwd(), '.adminjs');
 if (fs.existsSync(adminCachePath)) {
     try {
@@ -27,7 +27,7 @@ if (fs.existsSync(adminCachePath)) {
 AdminJS.registerAdapter(AdminJSSequelize);
 
 const componentLoader = new ComponentLoader();
-// Загрузка киберпанк-дашборда из папки static
+// Подключаем кастомный дашборд (убедись, что файл существует в /static)
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
 
 const app = express();
@@ -36,16 +36,16 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Раздача статики (логотипы, картинки, стили)
+// Обслуживание статических файлов проекта (логотип, манифест и др.)
 app.use('/static', express.static(path.join(__dirname, 'static')));
 
-// --- РОУТИНГ (Решение ошибок GET) ---
-// Редирект с главной на админку
+// --- ИСПРАВЛЕНИЕ ОШИБОК РОУТИНГА (GET ERRORS) ---
+// Редирект с корня на админку
 app.get('/', (req, res) => {
     res.redirect('/admin');
 });
 
-// Решение ошибки "Cannot GET /logout" - перенаправляем на системный логаут AdminJS
+// Фикс ошибки "Cannot GET /logout"
 app.get('/logout', (req, res) => {
     res.redirect('/admin/logout');
 });
@@ -92,7 +92,7 @@ const startAdmin = async () => {
             },
             branding: { 
                 companyName: 'Neural Pulse Hub', 
-                softwareBrothers: false, // Отключает стандартные подписи
+                softwareBrothers: false, 
                 logo: '/static/logo.png',
                 theme: {
                     colors: {
@@ -103,7 +103,7 @@ const startAdmin = async () => {
                         border: '#1a222d'
                     }
                 },
-                // КИБЕРПАНК-СТИЛИЗАЦИЯ
+                // ПРИМЕНЕНИЕ КИБЕРПАНК-ДИЗАЙНА
                 custom: {
                     style: `
                         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
@@ -113,7 +113,6 @@ const startAdmin = async () => {
                             font-family: 'Inter', sans-serif !important;
                         }
 
-                        /* Карточка логина */
                         section[data-testid="login"] {
                             background: #0d1117 !important;
                             border: 1px solid #00f2fe !important;
@@ -121,7 +120,6 @@ const startAdmin = async () => {
                             border-radius: 16px !important;
                         }
 
-                        /* Поля ввода */
                         input {
                             background: #161b22 !important;
                             border: 1px solid #30363d !important;
@@ -129,7 +127,6 @@ const startAdmin = async () => {
                             border-radius: 8px !important;
                         }
 
-                        /* Кнопка входа */
                         button[type="submit"] {
                             background: #00f2fe !important;
                             color: #000000 !important;
@@ -178,7 +175,8 @@ const startAdmin = async () => {
         
         app.use(adminJs.options.rootPath, adminRouter);
         
-        // ВАЖНО: Используем 0.0.0.0 для корректной работы в Docker/Bothost
+        // Запуск на порту 3001. Если Bothost использует прокси, убедись, 
+        // что основной процесс перенаправляет запросы именно сюда.
         app.listen(3001, '0.0.0.0', () => {
             logger.info("AdminJS Engine: ONLINE on port 3001");
         });
