@@ -1,7 +1,15 @@
-import { fork } from 'child_process';
+import express from 'express';
+import { Telegraf, Markup } from 'telegraf';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { initDB } from './db.js';
+import cors from 'cors';
+import fs from 'fs';
+import AdminJS from 'adminjs';
+import AdminJSExpress from '@adminjs/express';
+import * as AdminJSSequelize from '@adminjs/sequelize';
+
+// Импорты твоих модулей БД и логов
+import { sequelize, User, Task, Stats, sessionStore, initDB } from './db.js';
 import { logger } from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -10,86 +18,96 @@ const __dirname = path.dirname(__filename);
 // --- КОНФИГУРАЦИЯ ---
 const BOT_TOKEN = "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
 const DOMAIN = "https://np.bothost.tech";
-const PORT = 3000; 
+const PORT = process.env.PORT || 3000;
 
-const children = new Map();
-let isBotStarted = false;
+AdminJS.registerAdapter(AdminJSSequelize);
 
-/**
- * Запуск дочернего процесса
- */
-const launch = (file, env = {}) => {
-    const child = fork(path.join(__dirname, file), {
-        stdio: 'inherit',
-        env: { ...process.env, ...env, BOT_TOKEN, DOMAIN }
-    });
-    children.set(file, child);
-    return child;
-};
-
-/**
- * Инициализация Ядра
- */
 const startEngine = async () => {
     logger.system('══════════════════════════════════════════════════');
-    logger.system('🚀 NEURAL PULSE: ПОДГОТОВКА СРЕДЫ...');
+    logger.system('🚀 NEURAL PULSE: МОНОЛИТНАЯ СИНХРОНИЗАЦИЯ...');
     logger.system('══════════════════════════════════════════════════');
 
     try {
-        // 1. Инициализация базы данных
+        // 1. БД
         await initDB();
         logger.info("CORE_DB: ПОДКЛЮЧЕНО");
 
-        // 2. Запуск только Админки (Внутренний порт 3001)
-        const admin = launch('admin.js', { PORT: 3001 });
+        const app = express();
+        app.set('trust proxy', 1);
+        app.use(cors());
+        app.use(express.json());
+        
+        // Статика
+        app.use('/static', express.static(path.join(__dirname, 'static')));
 
-        admin.on('message', (msg) => {
-            // Ждем сигнала готовности от AdminJS
-            if (msg === 'ready' && !isBotStarted) {
-                isBotStarted = true;
-                
-                logger.system("⏳ ADMIN_INTERNAL: OK. ОЖИДАНИЕ СБОРКИ БАНДЛА (20 сек)...");
+        // 2. Инициализация AdminJS (внутри того же процесса)
+        const adminJs = new AdminJS({
+            resources: [
+                { resource: User, options: { navigation: { name: 'Агенты' } } },
+                { resource: Task, options: { navigation: { name: 'Миссии' } } },
+                { resource: Stats, options: { navigation: { name: 'Система' } } }
+            ],
+            rootPath: '/admin',
+            branding: { 
+                companyName: 'Neural Pulse Hub', 
+                logo: '/static/images/logo.png',
+                softwareBrothers: false 
+            },
+            bundler: { minify: true, force: false }
+        });
 
-                // 3. ПАУЗА 20 СЕКУНД
-                // Это время нужно Node.js, чтобы завершить компиляцию JSX в папке .adminjs
-                setTimeout(() => {
-                    logger.system("✅ СБОРКА ЗАВЕРШЕНА. ЗАПУСК МАГИСТРАЛЬНОГО ШЛЮЗА...");
-                    
-                    // 4. Запуск Шлюза (Основной порт 3000 для Bothost)
-                    launch('bot.js', { PORT: PORT });
+        // Билдим админку
+        await adminJs.initialize();
+        const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
+            authenticate: async (e, p) => (e === '1' && p === '1') ? { email: 'admin' } : null,
+            cookiePassword: 'secure-pass-2026-pulse-ultra-32-chars',
+        }, null, { resave: false, saveUninitialized: false, secret: 'np_secret', store: sessionStore });
 
-                    // 5. Установка Webhook Telegram (через 10 секунд после запуска шлюза)
-                    setTimeout(async () => {
-                        try {
-                            const url = `${DOMAIN}/telegraf/${BOT_TOKEN}`;
-                            const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${url}&drop_pending_updates=true`);
-                            const data = await res.json();
-                            if (data.ok) {
-                                logger.system("📡 TELEGRAM_WEBHOOK: ПОЛНАЯ ГОТОВНОСТЬ");
-                            } else {
-                                logger.error(`Ошибка Webhook: ${data.description}`);
-                            }
-                        } catch (e) { 
-                            logger.error(`Сбой активации Webhook: ${e.message}`); 
-                        }
-                    }, 10000);
+        app.use(adminJs.options.rootPath, adminRouter);
 
-                }, 20000); // 20 секунд задержки
+        // 3. Инициализация Бота
+        const bot = new Telegraf(BOT_TOKEN);
+        
+        bot.start(async (ctx) => {
+            const userId = ctx.from.id;
+            const keyboard = Markup.inlineKeyboard([[Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", DOMAIN)]]);
+            const caption = `<b>Neural Pulse | Terminal</b>\n\nАгент: <code>${ctx.from.username || 'AGENT'}</code>\nСтатус: <b>ONLINE</b>`;
+            const logoPath = path.join(__dirname, 'static/images/logo.png');
+
+            try {
+                await User.findOrCreate({ where: { id: BigInt(userId) }, defaults: { username: ctx.from.username || 'AGENT' } });
+                if (fs.existsSync(logoPath)) {
+                    await ctx.replyWithPhoto({ source: logoPath }, { caption, parse_mode: 'HTML', ...keyboard });
+                } else {
+                    await ctx.reply(caption, { parse_mode: 'HTML', ...keyboard });
+                }
+            } catch (e) { logger.error(`Bot Error: ${e.message}`); }
+        });
+
+        // Хендлер вебхука (теперь напрямую в app)
+        app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => {
+            bot.handleUpdate(req.body);
+            res.sendStatus(200);
+        });
+
+        // 4. Запуск единого сервера
+        app.listen(PORT, async () => {
+            logger.system(`✅ МОНОЛИТ АКТИВИРОВАН: Port ${PORT}`);
+            
+            // Установка Webhook
+            try {
+                const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`;
+                await bot.telegram.setWebhook(webhookUrl);
+                logger.system(`📡 WEBHOOK УСТАНОВЛЕН -> ${webhookUrl}`);
+            } catch (e) {
+                logger.error(`Webhook Fail: ${e.message}`);
             }
         });
 
-        // Обработка критического падения админки
-        admin.on('exit', (code) => {
-            logger.error(`[!] КРИТИЧЕСКИЙ СБОЙ: AdminJS вышел с кодом ${code}`);
-            logger.system("Перезапуск системы через 5 секунд...");
-            setTimeout(() => process.exit(1), 5000);
-        });
-
     } catch (err) {
-        logger.error("КРИТИЧЕСКИЙ СБОЙ ЯДРА ПРИ СТАРТЕ", err);
+        logger.error("КРИТИЧЕСКИЙ СБОЙ МОНОЛИТА", err);
         process.exit(1);
     }
 };
 
-// Запуск двигателя
 startEngine();
