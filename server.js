@@ -11,6 +11,9 @@ const BOT_TOKEN = "8745333905:AAFd9lupbNYDSTAjboN3o-vMYZlv5b_YXtA";
 const DOMAIN = "https://np.bothost.tech";
 const PORT = 3000; 
 
+// Флаг, чтобы не запустить бота дважды
+let isBotStarted = false;
+
 const launchProcess = (fileName, customEnv = {}) => {
     const processPath = path.join(__dirname, fileName);
     
@@ -29,6 +32,27 @@ const launchProcess = (fileName, customEnv = {}) => {
     return child;
 };
 
+// Функция безопасного запуска бота
+const startBotOnce = () => {
+    if (isBotStarted) return;
+    isBotStarted = true;
+
+    logger.system("🚀 Starting Bot Gateway on Port 3000...");
+    launchProcess('bot.js', { PORT: PORT });
+
+    // ПРИВЯЗКА ВЕБХУКА
+    const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`; 
+    setTimeout(async () => {
+        try {
+            const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${webhookUrl}&drop_pending_updates=true`);
+            const result = await response.json();
+            if (result.ok) logger.system("📡 TELEGRAM WEBHOOK: ACTIVE");
+        } catch (e) {
+            logger.error("Webhook Linkage Error");
+        }
+    }, 5000);
+};
+
 const startEngine = async () => {
     logger.system('══════════════════════════════════════════════════');
     logger.system('🚀 NEURAL PULSE ENGINE: BOOTSTRAP STARTING...');
@@ -39,37 +63,23 @@ const startEngine = async () => {
         if (!dbReady) throw new Error("Database initialization failed.");
         logger.info("Database Engine: READY");
 
-        // 1. ЗАПУСК АДМИНКИ
+        // 1. ЗАПУСК АДМИНКИ (порт 3001)
         logger.info("Initializing AdminJS (3001)... Please wait for bundling.");
         const adminChild = launchProcess('admin.js', { PORT: 3001 });
 
         // Ждем сообщения 'ready' от admin.js
         adminChild.on('message', (msg) => {
             if (msg === 'ready') {
-                logger.system("✅ AdminJS is ONLINE. Starting Gateway...");
-                
-                // 2. ЗАПУСК БОТА только после готовности админки
-                launchProcess('bot.js', { PORT: PORT });
-
-                // 3. ПРИВЯЗКА ВЕБХУКА
-                const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`; 
-                setTimeout(async () => {
-                    try {
-                        const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${webhookUrl}&drop_pending_updates=true`);
-                        const result = await response.json();
-                        if (result.ok) logger.system("📡 TELEGRAM WEBHOOK: ACTIVE");
-                    } catch (e) {
-                        logger.error("Webhook Linkage Error");
-                    }
-                }, 5000);
+                logger.system("✅ AdminJS is ONLINE.");
+                startBotOnce();
             }
         });
 
         // ПРЕДОХРАНИТЕЛЬ: Если админка не ответила за 60 сек, запускаем бота принудительно
         setTimeout(() => {
-            if (adminChild.connected) {
-                logger.warn("AdminJS taking too long. Forcing Gateway start...");
-                launchProcess('bot.js', { PORT: PORT });
+            if (!isBotStarted) {
+                logger.warn("AdminJS taking too long to bundle. Forcing Bot start as fallback...");
+                startBotOnce();
             }
         }, 60000);
 
