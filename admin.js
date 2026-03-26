@@ -64,6 +64,7 @@ const startAdmin = async () => {
                 logo: '/static/images/logo.png',
                 withMadeWithLove: false,
                 theme: {
+                    id: 'neural-pulse-dark-v1', // Уникальный ID заставляет AdminJS обновить кэш
                     colors: {
                         primary100: '#00f2fe',
                         bg: '#05070a',        
@@ -74,32 +75,44 @@ const startAdmin = async () => {
                     }
                 },
                 customCSS: `
-                    body, #adminjs, section[data-testid="sidebar"], .adminjs_Sidebar { 
+                    /* Прямое переопределение фона для всех элементов */
+                    :root {
+                        --colors-bg: #05070a !important;
+                        --colors-primary100: #00f2fe !important;
+                    }
+
+                    body, #adminjs, [data-testid="login"], section[data-testid="sidebar"] { 
                         background: #05070a !important; 
+                        background-color: #05070a !important;
                     }
-                    [data-testid="login"] { 
-                        background: radial-gradient(circle, #0d1117 0%, #05070a 100%) !important; 
-                    }
+
+                    /* Стилизация блока логина */
                     [data-testid="login"] > div:first-child { 
                         background: #0a0a0a !important; 
                         border-right: 2px solid #00f2fe !important; 
                         box-shadow: 10px 0 30px rgba(0, 242, 254, 0.1) !important;
                     }
+
                     [data-testid="login"] h2 { 
                         color: #00f2fe !important; 
                         font-family: 'Courier New', monospace !important; 
                         text-transform: uppercase; 
+                        letter-spacing: 2px;
                     }
+
+                    /* Кнопки */
                     .sc-fubCfw.button.is-primary, [data-testid="login"] button { 
                         background: #00f2fe !important; 
                         color: #000 !important; 
                         font-weight: bold !important; 
+                        border: none !important;
+                        text-transform: uppercase;
                     }
                 `
             },
             bundler: { 
                 minify: true, 
-                force: true 
+                force: true // Принудительная сборка фронтенда
             },
             assets: { scripts: ['https://unpkg.com/recharts/umd/Recharts.js'] }
         };
