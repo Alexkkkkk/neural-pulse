@@ -37,13 +37,13 @@ const startEngine = async () => {
         app.set('trust proxy', 1);
         app.use(cors());
         
-        // Парсинг JSON важен для вебхуков
-        app.use(express.json());
+        // Важно для приема обновлений от Telegram
+        app.use(express.json({ limit: '5mb' }));
         
         // Статика
         app.use('/static', express.static(path.join(__dirname, 'static')));
 
-        // --- 2. HUD ДИАГНОСТИКА (Самодиагностика) ---
+        // --- 2. HUD ДИАГНОСТИКА ---
         app.get('/api/health', async (req, res) => {
             const start = Date.now();
             let dbStatus = 'OFFLINE';
@@ -76,12 +76,12 @@ const startEngine = async () => {
                     <div class="row"><span>MEMORY_RSS</span><span>${(mem.rss / 1024 / 1024).toFixed(1)} MB</span></div>
                     <div class="row"><span>UPTIME</span><span>${(process.uptime() / 60).toFixed(1)} MIN</span></div>
                     <div class="row"><span>LATENCY</span><span>${Date.now() - start}ms</span></div>
-                    <div style="font-size:9px; margin-top:15px; opacity:0.4;">ID: bot_1774547194_7500 | MODE: MONOLITH</div>
+                    <div style="font-size:9px; margin-top:15px; opacity:0.4;">ID: neural-pulse | MODE: MONOLITH</div>
                 </div>
             </body></html>`);
         });
 
-        // --- 3. ADMINJS (Панель управления) ---
+        // --- 3. ADMINJS ---
         const adminJs = new AdminJS({
             resources: [
                 { resource: User, options: { navigation: { name: 'Агенты' } } },
@@ -105,7 +105,7 @@ const startEngine = async () => {
 
         app.use(adminJs.options.rootPath, adminRouter);
 
-        // --- 4. TELEGRAM BOT (Логика и обработка) ---
+        // --- 4. TELEGRAM BOT ---
         const bot = new Telegraf(BOT_TOKEN);
         
         bot.start(async (ctx) => {
@@ -124,28 +124,29 @@ const startEngine = async () => {
             } catch (e) { logger.error(`Bot Error: ${e.message}`); }
         });
 
-        // Эндпоинт для приема вебхуков от Telegram
+        // Прием вебхуков
         app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => {
             bot.handleUpdate(req.body);
             res.sendStatus(200);
         });
 
-        // --- 5. ЗАПУСК СЕРВЕРА ---
+        // --- 5. ЗАПУСК ---
         app.listen(PORT, async () => {
             logger.system(`✅ МОНОЛИТ АКТИВИРОВАН: Port ${PORT}`);
             
-            // Установка Webhook через API Telegram
-            try {
-                const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`;
-                await bot.telegram.setWebhook(webhookUrl, { drop_pending_updates: true });
-                logger.system(`📡 WEBHOOK УСТАНОВЛЕН -> ${webhookUrl}`);
-                
-                // Проверка токена
-                const me = await bot.telegram.getMe();
-                logger.info(`🤖 БОТ: @${me.username} готов к работе`);
-            } catch (e) {
-                logger.error(`Webhook Fail: ${e.message}`);
-            }
+            // Задержка перед установкой вебхука для стабильности порта
+            setTimeout(async () => {
+                try {
+                    const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`;
+                    await bot.telegram.setWebhook(webhookUrl, { drop_pending_updates: true });
+                    logger.system(`📡 WEBHOOK УСТАНОВЛЕН -> ${webhookUrl}`);
+                    
+                    const me = await bot.telegram.getMe();
+                    logger.info(`🤖 БОТ: @${me.username} В СЕТИ`);
+                } catch (e) {
+                    logger.error(`Webhook Fail: ${e.message}`);
+                }
+            }, 5000);
         });
 
     } catch (err) {
