@@ -22,8 +22,9 @@ const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
 const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'YOUR_OPENAI_API_KEY' });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'sk-...' });
 
+// --- УТИЛИТЫ ---
 const calculateLevel = (balance) => {
     const b = parseFloat(balance);
     if (b < 10000) return 1;
@@ -33,15 +34,14 @@ const calculateLevel = (balance) => {
     return 5;
 };
 
-// --- ЛОГИКА РАЗДЕЛЕНИЯ ПРОЦЕССОВ ---
+// --- ЛОГИКА РАЗДЕЛЕНИЯ ПРОЦЕССОВ (CLUSTER) ---
 if (cluster.isPrimary) {
     logger.system('══════════════════════════════════════════════════');
     logger.system('🚀 NEURAL PULSE: CLUSTER MODE ACTIVE (V6.0)');
+    logger.system('⚙️ CPU CORES: 1 (OPTIMIZED FOR 2 WORKERS)');
     logger.system('══════════════════════════════════════════════════');
 
-    // Запускаем ровно 2 воркера
-    // Worker 1: AdminJS + Webhook Setter
-    // Worker 2: Bot Logic + API
+    // Запускаем 2 независимых процесса
     for (let i = 0; i < 2; i++) {
         cluster.fork();
     }
@@ -50,6 +50,10 @@ if (cluster.isPrimary) {
         logger.error(`🚨 WORKER ${worker.process.pid} DIED. RESTARTING...`);
         cluster.fork();
     });
+
+    // Запуск мониторинга системы в главном процессе
+    setInterval(() => logSystemStats(), 60000); 
+
 } else {
     startWorkerEngine();
 }
@@ -70,7 +74,7 @@ async function startWorkerEngine() {
         await initDB();
         bot = new Telegraf(BOT_TOKEN);
 
-        // Роут для вебхука (должен быть на обоих воркерах для приема трафика)
+        // Общий прием обновлений Webhook на обоих воркерах
         app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => {
             bot.handleUpdate(req.body, res).catch(err => {
                 if (!res.headersSent) res.sendStatus(200);
@@ -78,34 +82,34 @@ async function startWorkerEngine() {
         });
 
         if (workerId === 1) {
-            // --- WORKER 1: ТОЛЬКО АДМИНКА И СИСТЕМНЫЕ ЗАДАЧИ ---
-            logger.system(`🛠 [Worker 1] Инициализация AdminJS...`);
+            // --- WORKER 1: ADMINJS & WEBHOOK CONTROL ---
+            logger.system(`🛠 [Worker 1] Initializing AdminJS Hub...`);
             await setupAdminPanel(app);
             
-            // Установка вебхука только из одного процесса
+            // Ставим вебхук только один раз
             setTimeout(() => {
                 bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`, { drop_pending_updates: true })
-                    .then(() => logger.system(`📡 [Worker 1] WEBHOOK OPERATIONAL`));
-            }, 2000);
+                    .then(() => logger.system(`📡 [Worker 1] WEBHOOK OPERATIONAL`))
+                    .catch(e => logger.error("Webhook fail", e));
+            }, 3000);
 
         } else {
-            // --- WORKER 2: ТОЛЬКО ЛОГИКА БОТА И API ---
-            logger.system(`⚡ [Worker 2] Запуск Bot Logic & API...`);
+            // --- WORKER 2: BOT ENGINE & GAME API ---
+            logger.system(`⚡ [Worker 2] Launching Neural Bot Engine...`);
             setupBotHandlers(bot);
             setupAPIRoutes(app);
         }
 
         app.listen(PORT, '0.0.0.0', () => {
-            logger.system(`✅ Worker ${workerId} listening on port ${PORT}`);
+            logger.system(`✅ Worker ${workerId} [PID: ${process.pid}] Online on Port ${PORT}`);
         });
 
     } catch (err) {
-        logger.error(`🚨 CRITICAL ERROR ON WORKER ${workerId}`, err);
+        logger.error(`🚨 CRITICAL WORKER ERROR`, err);
     }
 }
 
-// --- ФУНКЦИОНАЛЬНЫЕ МОДУЛИ ---
-
+// --- МОДУЛЬ 1: ОБРАБОТКА ТЕЛЕГРАМ ---
 function setupBotHandlers(bot) {
     bot.start(async (ctx) => {
         const userId = ctx.from.id;
@@ -118,6 +122,7 @@ function setupBotHandlers(bot) {
             if (!user) {
                 let startBalance = 0;
                 let referredBy = (refId && refId !== userId) ? refId : null;
+
                 if (referredBy) {
                     const referrer = await User.findByPk(referredBy);
                     if (referrer) {
@@ -126,26 +131,32 @@ function setupBotHandlers(bot) {
                             balance: parseFloat(referrer.balance) + 10000, 
                             referrals: referrer.referrals + 1 
                         });
-                        bot.telegram.sendMessage(referredBy, `✅ <b>Система:</b> Новый агент! +10,000 NP.`, { parse_mode: 'HTML' }).catch(() => {});
+                        bot.telegram.sendMessage(referredBy, `✅ <b>Система:</b> Новый агент в сети! +10,000 NP.`, { parse_mode: 'HTML' }).catch(() => {});
                     }
                 }
                 user = await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: startBalance, referred_by: referredBy });
             }
-            const caption = `<b>Neural Pulse | Terminal</b>\n\nАгент: <code>${user.username}</code>\nБаланс: <b>${user.balance} NP</b>\n\n🔗 Реф. ссылка:\n<code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`;
+
+            const caption = `<b>Neural Pulse | Terminal</b>\n\nАгент: <code>${user.username}</code>\nБаланс: <b>${user.balance.toLocaleString()} NP</b>\n\n🔗 Реф. ссылка:\n<code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`;
             const logoPath = path.join(__dirname, 'static/images/logo.png');
+
             if (fs.existsSync(logoPath)) await ctx.replyWithPhoto({ source: logoPath }, { caption, parse_mode: 'HTML', ...keyboard });
             else await ctx.reply(caption, { parse_mode: 'HTML', ...keyboard });
         } catch (e) { logger.error(`Bot Fail`, e); }
     });
 }
 
+// --- МОДУЛЬ 2: API ДЛЯ WEBAPP ---
 function setupAPIRoutes(app) {
     app.get('/api/user/:id', async (req, res) => {
         try {
             const user = await User.findByPk(req.params.id);
             if (!user) return res.status(404).send();
+
             const now = new Date();
             const diff = Math.floor((now - new Date(user.last_seen)) / 1000);
+            
+            // Пассивный доход (Profit per hour)
             if (diff > 60 && user.profit > 0) {
                 const earned = (user.profit / 3600) * Math.min(diff, 86400);
                 user.balance = parseFloat(user.balance) + earned;
@@ -171,6 +182,7 @@ function setupAPIRoutes(app) {
     });
 }
 
+// --- МОДУЛЬ 3: АДМИН-ПАНЕЛЬ ---
 async function setupAdminPanel(app) {
     try {
         const { default: AdminJS, ComponentLoader } = await import('adminjs');
@@ -183,7 +195,7 @@ async function setupAdminPanel(app) {
         
         const adminJs = new AdminJS({
             resources: [
-                { resource: User, options: { navigation: { name: 'Агенты' } } },
+                { resource: User, options: { navigation: { name: 'Агенты' }, properties: { balance: { type: 'number' } } } },
                 { resource: Task, options: { navigation: { name: 'Контракты' } } },
                 { resource: Stats, options: { navigation: { name: 'Система' } } }
             ],
@@ -194,13 +206,17 @@ async function setupAdminPanel(app) {
                 handler: async () => {
                     const totalUsers = await User.count();
                     const historyData = await Stats.findAll({ limit: 20, order: [['createdAt', 'DESC']] });
-                    return { totalUsers, history: historyData.reverse().map(s => ({
-                        time: new Date(s.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                        cpu: s.server_load, mem: s.mem_usage
-                    }))};
+                    return { 
+                        totalUsers, 
+                        history: historyData.reverse().map(s => ({
+                            time: new Date(s.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            cpu: s.server_load, 
+                            mem: s.mem_usage
+                        }))
+                    };
                 }
             },
-            branding: { companyName: 'Neural Pulse Hub' },
+            branding: { companyName: 'Neural Pulse Hub', softwareBrothers: false },
             bundler: { minify: false, force: true }
         });
 
@@ -211,6 +227,6 @@ async function setupAdminPanel(app) {
 
         app.use(adminJs.options.rootPath, adminRouter);
         await adminJs.initialize();
-        logger.system("🛠 ADMIN PANEL READY ON WORKER 1");
+        logger.system("🛠 ADMIN PANEL READY [DARK-CORE V6]");
     } catch (err) { logger.error("AdminJS fail", err); }
 }
