@@ -21,12 +21,13 @@ const PORT = process.env.PORT || 3000;
 
 const openai = new OpenAI({ apiKey: 'YOUR_OPENAI_API_KEY' });
 
-// Глобальная переменная для бота, чтобы роут видел его сразу
+// Глобальная переменная для бота
 let bot;
 
 const startEngine = async () => {
     logger.system('══════════════════════════════════════════════════');
-    logger.system('🚀 NEURAL PULSE: CORE V5.4 STABLE');
+    logger.system('🚀 NEURAL PULSE: CORE V5.6 (DEBUG MODE)');
+    logger.system('📝 ADMINJS DISABLED FOR TESTING');
     logger.system('══════════════════════════════════════════════════');
 
     const app = express();
@@ -35,10 +36,9 @@ const startEngine = async () => {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '5mb' }));
 
-    // --- 1. ПРИОРИТЕТНЫЕ МАРШРУТЫ (МГНОВЕННЫЙ ОТВЕТ) ---
+    // --- 1. ПРИОРИТЕТНЫЕ МАРШРУТЫ ---
     app.get('/api/health', (req, res) => res.status(200).json({ status: 'online', uptime: process.uptime() }));
 
-    // КРИТИЧЕСКИЙ ПРАВКА: Вебхук ловит запросы СРАЗУ
     app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => {
         if (bot) {
             bot.handleUpdate(req.body, res).catch(err => {
@@ -46,7 +46,6 @@ const startEngine = async () => {
                 if (!res.headersSent) res.sendStatus(200);
             });
         } else {
-            // Если бот еще грузится, просто говорим Telegram "Принято", чтобы не было 504
             res.sendStatus(200);
         }
     });
@@ -98,7 +97,7 @@ const startEngine = async () => {
             } catch (e) { logger.error(`Bot Start Error`, e); }
         });
 
-        // --- 5. АСИНХРОННЫЙ ADMINJS ---
+        /* --- 5. АСИНХРОННЫЙ ADMINJS (ЗАКОММЕНТИРОВАНО ДЛЯ ТЕСТА) ---
         const { default: AdminJS, ComponentLoader } = await import('adminjs');
         const { default: AdminJSExpress } = await import('@adminjs/express');
         const AdminJSSequelize = await import('@adminjs/sequelize');
@@ -128,6 +127,7 @@ const startEngine = async () => {
 
         app.use(adminJs.options.rootPath, adminRouter);
         adminJs.initialize().then(() => logger.system("🛠 ADMIN PANEL READY (ASYNC)"));
+        */
 
         // --- 6. УСТАНОВКА ВЕБХУКА ---
         setTimeout(async () => {
@@ -136,7 +136,7 @@ const startEngine = async () => {
                 await bot.telegram.setWebhook(webhookUrl, { drop_pending_updates: true });
                 logger.system(`📡 WEBHOOK SECURELY ACTIVE`);
             } catch (e) { logger.error("Webhook Error", e); }
-        }, 5000); 
+        }, 2000); // Сократил до 2 секунд, так как без админки всё взлетает мигом
 
     } catch (err) {
         logger.error("🚨 BOOT ERROR", err);
