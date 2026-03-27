@@ -52,10 +52,10 @@ if (cluster.isPrimary) {
 
     cluster.on('exit', (worker) => {
         logger.error(`🚨 WORKER ${worker.process.pid} DIED. RESTARTING IN 10s...`);
-        // Рестарт упавшего воркера тоже с задержкой 10 сек
         setTimeout(() => cluster.fork(), 10000);
     });
 
+    // Мониторинг системы (запускается в мастере, пишет через db.js)
     setInterval(() => logSystemStats(), 60000); 
 
 } else {
@@ -78,6 +78,7 @@ async function startWorkerEngine() {
         await initDB();
         bot = new Telegraf(BOT_TOKEN);
 
+        // Общий прием обновлений Webhook
         app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => {
             bot.handleUpdate(req.body, res).catch(err => {
                 if (!res.headersSent) res.sendStatus(200);
@@ -85,7 +86,7 @@ async function startWorkerEngine() {
         });
 
         if (workerId === 1) {
-            // --- WORKER 1: ADMINJS & WEBHOOK ---
+            // --- WORKER 1: ADMINJS & WEBHOOK CONTROL ---
             logger.system(`🛠 [Worker 1] Initializing AdminJS Hub...`);
             await setupAdminPanel(app);
             
@@ -96,7 +97,7 @@ async function startWorkerEngine() {
             }, 3000);
 
         } else {
-            // --- WORKER 2: BOT LOGIC & API ---
+            // --- WORKER 2: BOT LOGIC & GAME API ---
             logger.system(`⚡ [Worker 2] Launching Neural Bot Engine...`);
             setupBotHandlers(bot);
             setupAPIRoutes(app);
@@ -111,6 +112,7 @@ async function startWorkerEngine() {
     }
 }
 
+// --- МОДУЛЬ 1: ОБРАБОТКА ТЕЛЕГРАМ ---
 function setupBotHandlers(bot) {
     bot.start(async (ctx) => {
         const userId = ctx.from.id;
@@ -147,6 +149,7 @@ function setupBotHandlers(bot) {
     });
 }
 
+// --- МОДУЛЬ 2: API ДЛЯ WEBAPP ---
 function setupAPIRoutes(app) {
     app.get('/api/user/:id', async (req, res) => {
         try {
@@ -181,6 +184,7 @@ function setupAPIRoutes(app) {
     });
 }
 
+// --- МОДУЛЬ 3: АДМИН-ПАНЕЛЬ ---
 async function setupAdminPanel(app) {
     try {
         const { default: AdminJS, ComponentLoader } = await import('adminjs');
@@ -203,9 +207,16 @@ async function setupAdminPanel(app) {
                 component: DASHBOARD,
                 handler: async () => {
                     const totalUsers = await User.count();
-                    const historyData = await Stats.findAll({ limit: 20, order: [['createdAt', 'DESC']] });
+                    const historyData = await Stats.findAll({ limit: 30, order: [['createdAt', 'DESC']] });
+                    
+                    // Берем последние данные для виджетов
+                    const latest = historyData[0] || {};
+
                     return { 
-                        totalUsers, 
+                        totalUsers,
+                        cpu: latest.server_load || 0,
+                        currentMem: latest.mem_usage || 0,
+                        dbLatency: latest.db_latency || 0,
                         history: historyData.reverse().map(s => ({
                             time: new Date(s.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                             cpu: s.server_load, 
