@@ -152,7 +152,7 @@ const startEngine = async () => {
             res.json(tasks);
         });
 
-        // --- 4. ADMINJS + CYBER HUD ---
+        // --- 4. ADMINJS + CYBER HUD (DYNAMIC REPAIR) ---
         setImmediate(async () => {
             try {
                 const { default: AdminJS, ComponentLoader } = await import('adminjs');
@@ -162,7 +162,7 @@ const startEngine = async () => {
                 AdminJS.registerAdapter(AdminJSSequelize);
                 const componentLoader = new ComponentLoader();
                 
-                // Регистрация твоего дизайна
+                // Регистрация кастомного дашборда
                 const DASHBOARD = componentLoader.add('Dashboard', DASHBOARD_COMPONENT);
                 
                 const adminJs = new AdminJS({
@@ -178,11 +178,13 @@ const startEngine = async () => {
                         handler: async () => {
                             const totalUsers = await User.count();
                             const lastStat = await Stats.findOne({ order: [['createdAt', 'DESC']] });
+                            const allStats = await Stats.findAll({ limit: 10, order: [['createdAt', 'DESC']] });
+
                             return {
                                 totalUsers,
-                                cpu: lastStat ? lastStat.server_load : (os.loadavg()[0] * 10).toFixed(1),
-                                currentMem: lastStat ? lastStat.mem_usage : (process.memoryUsage().rss / 1024 / 1024).toFixed(1),
-                                dbLatency: Math.floor(Math.random() * 20) + 5
+                                cpu: lastStat ? lastStat.server_load : 0,
+                                currentMem: lastStat ? lastStat.mem_usage : 0,
+                                history: allStats.reverse() // Данные для отрисовки графиков
                             };
                         }
                     },
@@ -193,7 +195,10 @@ const startEngine = async () => {
                             colors: { primary100: '#00f2fe', bg: '#05070a', text: '#e6edf3' }
                         }
                     },
-                    bundler: { minify: true, force: false }
+                    bundler: { 
+                        minify: false, 
+                        force: true // ПРИНУДИТЕЛЬНО ПЕРЕСОБИРАЕМ ФРОНТЕНД ДЛЯ ГРАФИКОВ
+                    }
                 });
 
                 const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
@@ -203,11 +208,11 @@ const startEngine = async () => {
 
                 app.use(adminJs.options.rootPath, adminRouter);
                 await adminJs.initialize();
-                logger.system("🛠 NEURAL_PULSE_HUD: ONLINE");
+                logger.system("🛠 NEURAL_PULSE_HUD: OPERATIONAL");
             } catch (err) { logger.error("AdminJS fail", err); }
         });
 
-        // Статистика
+        // Статистика (сбор данных каждые 10 минут)
         setInterval(async () => {
             try {
                 await Stats.create({
