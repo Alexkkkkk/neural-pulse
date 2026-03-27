@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import cors from 'cors';
 import fs from 'fs';
 import os from 'os';
-import AdminJS from 'adminjs';
+import AdminJS, { ComponentLoader } from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
 
@@ -23,9 +23,13 @@ const PORT = process.env.PORT || 3000;
 
 AdminJS.registerAdapter(AdminJSSequelize);
 
+// Инициализация загрузчика компонентов для кастомного дашборда
+const componentLoader = new ComponentLoader();
+const DASHBOARD = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
+
 const startEngine = async () => {
     logger.system('══════════════════════════════════════════════════');
-    logger.system('🚀 NEURAL PULSE: FULL MONOLITH ACTIVATED');
+    logger.system('🚀 NEURAL PULSE: ULTIMATE MONOLITH ACTIVATED');
     logger.system('══════════════════════════════════════════════════');
 
     try {
@@ -34,13 +38,10 @@ const startEngine = async () => {
         logger.info("CORE_DB: ПОДКЛЮЧЕНО");
 
         const app = express();
+        app.disable('x-powered-by');
         app.set('trust proxy', 1);
-        app.use(cors());
-        
-        // Важно для приема обновлений от Telegram
+        app.use(cors({ origin: '*' }));
         app.use(express.json({ limit: '5mb' }));
-        
-        // Статика
         app.use('/static', express.static(path.join(__dirname, 'static')));
 
         // --- 2. HUD ДИАГНОСТИКА ---
@@ -70,18 +71,18 @@ const startEngine = async () => {
             </head>
             <body>
                 <div class="hud">
-                    <h2>> SYSTEM_MONITOR_V3</h2>
+                    <h2>> SYSTEM_MONITOR_V4</h2>
                     <div class="row"><span>DATABASE</span><span class="${dbStatus === 'STABLE' ? 'ok' : 'warn'}">${dbStatus}</span></div>
                     <div class="row"><span>CPU_LOAD</span><span>${load.toFixed(1)}%</span></div>
                     <div class="row"><span>MEMORY_RSS</span><span>${(mem.rss / 1024 / 1024).toFixed(1)} MB</span></div>
                     <div class="row"><span>UPTIME</span><span>${(process.uptime() / 60).toFixed(1)} MIN</span></div>
                     <div class="row"><span>LATENCY</span><span>${Date.now() - start}ms</span></div>
-                    <div style="font-size:9px; margin-top:15px; opacity:0.4;">ID: neural-pulse | MODE: MONOLITH</div>
+                    <div style="font-size:9px; margin-top:15px; opacity:0.4;">ID: neural-pulse | MODE: FULL_MONOLITH</div>
                 </div>
             </body></html>`);
         });
 
-        // --- 3. ADMINJS ---
+        // --- 3. ADMINJS ИНТЕГРАЦИЯ ---
         const adminJs = new AdminJS({
             resources: [
                 { resource: User, options: { navigation: { name: 'Агенты' } } },
@@ -89,10 +90,13 @@ const startEngine = async () => {
                 { resource: Stats, options: { navigation: { name: 'Система' } } }
             ],
             rootPath: '/admin',
+            componentLoader,
+            dashboard: { component: DASHBOARD },
             branding: { 
                 companyName: 'Neural Pulse Hub', 
                 logo: '/static/images/logo.png',
-                softwareBrothers: false 
+                softwareBrothers: false,
+                theme: { colors: { primary100: '#00f2fe', bg: '#05070a' } }
             },
             bundler: { minify: true, force: false }
         });
@@ -105,17 +109,20 @@ const startEngine = async () => {
 
         app.use(adminJs.options.rootPath, adminRouter);
 
-        // --- 4. TELEGRAM BOT ---
+        // --- 4. TELEGRAM BOT (WEBHOOK) ---
         const bot = new Telegraf(BOT_TOKEN);
         
         bot.start(async (ctx) => {
-            const userId = ctx.from.id;
             const keyboard = Markup.inlineKeyboard([[Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", DOMAIN)]]);
             const caption = `<b>Neural Pulse | Terminal</b>\n\nАгент: <code>${ctx.from.username || 'AGENT'}</code>\nСтатус: <b>ONLINE</b>`;
             const logoPath = path.join(__dirname, 'static/images/logo.png');
 
             try {
-                await User.findOrCreate({ where: { id: BigInt(userId) }, defaults: { username: ctx.from.username || 'AGENT' } });
+                await User.findOrCreate({ 
+                    where: { id: BigInt(ctx.from.id) }, 
+                    defaults: { username: ctx.from.username || 'AGENT' } 
+                });
+                
                 if (fs.existsSync(logoPath)) {
                     await ctx.replyWithPhoto({ source: logoPath }, { caption, parse_mode: 'HTML', ...keyboard });
                 } else {
@@ -124,17 +131,17 @@ const startEngine = async () => {
             } catch (e) { logger.error(`Bot Error: ${e.message}`); }
         });
 
-        // Прием вебхуков
+        // Хендлер вебхука
         app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => {
-            bot.handleUpdate(req.body);
+            bot.handleUpdate(req.body).catch(err => logger.error(`[BOT_ERR] ${err.message}`));
             res.sendStatus(200);
         });
 
-        // --- 5. ЗАПУСК ---
+        // --- 5. ЗАПУСК ЕДИНОГО ШЛЮЗА ---
         app.listen(PORT, async () => {
-            logger.system(`✅ МОНОЛИТ АКТИВИРОВАН: Port ${PORT}`);
+            logger.system(`✅ ШЛЮЗ АКТИВИРОВАН: Port ${PORT}`);
             
-            // Задержка перед установкой вебхука для стабильности порта
+            // Установка Webhook с небольшой задержкой для готовности порта
             setTimeout(async () => {
                 try {
                     const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`;
@@ -142,7 +149,7 @@ const startEngine = async () => {
                     logger.system(`📡 WEBHOOK УСТАНОВЛЕН -> ${webhookUrl}`);
                     
                     const me = await bot.telegram.getMe();
-                    logger.info(`🤖 БОТ: @${me.username} В СЕТИ`);
+                    logger.info(`🤖 БОТ: @${me.username} ГОТОВ`);
                 } catch (e) {
                     logger.error(`Webhook Fail: ${e.message}`);
                 }
