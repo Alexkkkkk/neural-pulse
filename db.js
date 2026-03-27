@@ -3,6 +3,7 @@ import session from 'express-session';
 import ConnectSessionSequelize from 'connect-session-sequelize';
 import os from 'os';
 
+// URI базы данных
 const PG_URI = "postgresql://bothost_db_130943b4f3f6:oY6CieQ5aohyTLgU9i23M6w80naZt9_1mJ4V6roejTs@node1.pghost.ru:32834/bothost_db_130943b4f3f6";
 
 export const sequelize = new Sequelize(PG_URI, { 
@@ -10,8 +11,8 @@ export const sequelize = new Sequelize(PG_URI, {
     logging: false,
     dialectOptions: { ssl: false },
     pool: { 
-        max: 5, 
-        min: 0, 
+        max: 10, // Увеличил до 10 для стабильности под нагрузкой
+        min: 2, 
         acquire: 60000, 
         idle: 10000 
     },
@@ -25,9 +26,11 @@ export const sessionStore = new SequelizeStore({
 });
 
 // --- МОДЕЛИ ---
+
+// Модель Пользователя
 export const User = sequelize.define('users', {
     id: { type: DataTypes.BIGINT, primaryKey: true },
-    username: { type: DataTypes.STRING, index: true },
+    username: { type: DataTypes.STRING },
     photo_url: { type: DataTypes.TEXT },
     balance: { type: DataTypes.DECIMAL(20, 2), defaultValue: 0 }, 
     profit: { type: DataTypes.DECIMAL(20, 2), defaultValue: 0 },  
@@ -41,11 +44,20 @@ export const User = sequelize.define('users', {
     referrals: { type: DataTypes.INTEGER, defaultValue: 0 },
     referred_by: { type: DataTypes.BIGINT, allowNull: true },
     completed_tasks: { type: DataTypes.JSONB, defaultValue: [] },
-    wallet: { type: DataTypes.STRING, allowNull: true, index: true },
+    wallet: { type: DataTypes.STRING, allowNull: true },
     last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 }, 
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
-}, { timestamps: true, underscored: true });
+}, { 
+    timestamps: true, 
+    underscored: true,
+    indexes: [
+        { fields: ['username'] },
+        { fields: ['wallet'] },
+        { fields: ['referred_by'] }
+    ]
+});
 
+// Модель Задач (Контрактов)
 export const Task = sequelize.define('tasks', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     title: { type: DataTypes.STRING, unique: true },
@@ -54,6 +66,7 @@ export const Task = sequelize.define('tasks', {
     icon: { type: DataTypes.STRING, defaultValue: 'Task' }
 }, { timestamps: false });
 
+// Модель Системной Статистики
 export const Stats = sequelize.define('stats', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     user_count: { type: DataTypes.INTEGER },
@@ -63,7 +76,9 @@ export const Stats = sequelize.define('stats', {
     timestamp: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: false, tableName: 'system_stats' });
 
-User.hasMany(User, { as: 'Referrals', foreignKey: 'referred_by' });
+// --- СВЯЗИ ---
+User.hasMany(User, { as: 'ReferralList', foreignKey: 'referred_by' });
+User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
 // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 export const logSystemStats = async () => {
@@ -80,7 +95,9 @@ export const logSystemStats = async () => {
             mem_usage: parseFloat(mem),
             db_latency: latency
         });
-    } catch (e) { /* Игнорируем ошибки при старте */ }
+    } catch (e) {
+        console.error('Stats error:', e.message);
+    }
 };
 
 // --- ИНИЦИАЛИЗАЦИЯ (БЕЗОПАСНАЯ) ---
@@ -89,14 +106,13 @@ export const initDB = async () => {
         await sequelize.authenticate();
         console.log('--- [DB] CONNECTED ---');
 
-        // ВМЕСТО HARD WIPE ИСПОЛЬЗУЕМ alter: true
-        // Это обновит таблицы без удаления данных пользователей
+        // Используем alter: true. Это изменит базу без удаления данных.
         await sequelize.sync({ alter: true });
         console.log('--- [DB] SCHEMA SYNCED (SAFE MODE) ---');
 
         await sessionStore.sync(); 
         
-        // Проверяем, есть ли уже задачи в базе, чтобы не дублировать их
+        // Автоматическое наполнение задач, если база пуста
         const taskCount = await Task.count();
         if (taskCount === 0) {
             await Task.bulkCreate([
@@ -107,6 +123,7 @@ export const initDB = async () => {
             console.log('--- [DB] INITIAL TASKS CREATED ---');
         }
 
+        // Запуск логов статистики каждые 5 минут
         setInterval(logSystemStats, 5 * 60 * 1000);
         return true;
     } catch (error) {
