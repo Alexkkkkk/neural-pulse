@@ -184,19 +184,26 @@ const startEngine = async () => {
                         softwareBrothers: false,
                         theme: {
                             colors: {
-                                // ПРИНУДИТЕЛЬНЫЙ ТЕМНЫЙ КИБЕРПАНК
-                                bg: '#0b0e14',        // Глубокий темный фон
-                                container: '#161b22', // Фон карточек
-                                border: '#30363d',    // Границы
-                                text: '#ffffff',      // Чистый белый текст
-                                title: '#00f2fe',     // Заголовки (голубой неон)
+                                // ФИКС ТЕМНОЙ ТЕМЫ
+                                bg: '#0b0e14',
+                                container: '#161b22',
+                                border: '#30363d',
+                                text: '#ffffff',
+                                title: '#00f2fe',
                                 primary100: '#00f2fe',
                                 
-                                // Вспомогательные цвета для навигации
+                                // Цвета для боковой панели и навигации
+                                sidebar: '#0b0e14',
+                                navbar: '#161b22',
                                 grey100: '#ffffff',
                                 grey80: '#e6edf3',
                                 grey60: '#8b949e',
-                                grey40: '#484f58'
+                                grey40: '#484f58',
+                                
+                                // Цвета для графиков
+                                success: '#00f2fe',
+                                error: '#ff4444',
+                                info: '#33b5e5'
                             }
                         }
                     },
@@ -211,7 +218,7 @@ const startEngine = async () => {
 
                 app.use(adminJs.options.rootPath, adminRouter);
                 await adminJs.initialize();
-                logger.system("🛠 NEURAL_PULSE_HUD: ONLINE (DARK MODE ACTIVE)");
+                logger.system("🛠 NEURAL_PULSE_HUD: ONLINE (V6.0 DARK-CORE)");
             } catch (err) { logger.error("AdminJS fail", err); }
         });
 
