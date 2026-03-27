@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url';
 import cors from 'cors';
 import fs from 'fs';
 import cluster from 'cluster';
-import os from 'os';
 import OpenAI from 'openai';
 import { DataTypes, Op } from 'sequelize'; 
 
@@ -33,29 +32,23 @@ const calculateLevel = (balance) => {
     return 5;
 };
 
-// --- ЛОГИКА РАЗДЕЛЕНИЯ ПРОЦЕССОВ (CLUSTER) С ТАЙМИНГОМ ---
+// --- CLUSTER MANAGER ---
 if (cluster.isPrimary) {
     logger.system('══════════════════════════════════════════════════');
-    logger.system('🚀 NEURAL PULSE: CLUSTER MODE ACTIVE (V6.0)');
-    logger.system('⏳ СТУПЕНЧАТЫЙ ЗАПУСК: ИНТЕРВАЛ 20 СЕКУНД');
+    logger.system('🚀 NEURAL PULSE: CLUSTER MODE ACTIVE (V7.0)');
+    logger.system('⏳ СТУПЕНЧАТЫЙ ЗАПУСК С ОПТИМИЗАЦИЕЙ РЕСУРСОВ');
     logger.system('══════════════════════════════════════════════════');
 
-    // 1. Сначала запускаем только AdminJS (Worker 1)
-    logger.system('🛠 [Master] Запуск Worker 1 (AdminJS)...');
-    cluster.fork(); 
-    
-    // 2. Ждем 20 секунд, пока AdminJS соберет ресурсы и стабилизирует память
-    setTimeout(() => {
-        logger.system('⚡ [Master] 20 секунд прошло. Запуск Worker 2 (Bot Engine)...');
-        cluster.fork(); 
-    }, 20000); 
+    // Запускаем 2 воркера. Воркер 1 — приоритет на Админку, Воркер 2 — на Бота.
+    for (let i = 0; i < 2; i++) {
+        setTimeout(() => cluster.fork(), i * 15000); // 15 сек разрыв
+    }
 
     cluster.on('exit', (worker) => {
-        logger.error(`🚨 WORKER ${worker.process.pid} DIED. RESTARTING IN 10s...`);
-        setTimeout(() => cluster.fork(), 10000);
+        logger.error(`🚨 WORKER ${worker.process.pid} DIED. RESTARTING...`);
+        setTimeout(() => cluster.fork(), 5000);
     });
 
-    // Мониторинг системы (запускается в мастере, пишет через db.js)
     setInterval(() => logSystemStats(), 60000); 
 
 } else {
@@ -66,49 +59,71 @@ async function startWorkerEngine() {
     const workerId = cluster.worker.id;
     const app = express();
     
+    // --- ГЛОБАЛЬНЫЕ МИДДЛВАРЫ (Доступны везде) ---
     app.disable('x-powered-by');
     app.set('trust proxy', 1);
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '5mb' }));
+    
+    // Глобальная статика (логотипы, стили)
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
-    let bot;
+    // ✅ ИСПРАВЛЕНИЕ: Глобальный Health Check (теперь /api/health будет работать всегда)
+    app.get('/api/health', (req, res) => {
+        res.status(200).json({ 
+            status: 'pulse_online', 
+            worker: workerId, 
+            memory: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB' 
+        });
+    });
 
     try {
         await initDB();
-        bot = new Telegraf(BOT_TOKEN);
+        const bot = new Telegraf(BOT_TOKEN);
 
-        // Общий прием обновлений Webhook
+        // ✅ ИСПРАВЛЕНИЕ: Webhook эндпоинт на всех воркерах
         app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => {
-            bot.handleUpdate(req.body, res).catch(err => {
+            bot.handleUpdate(req.body, res).catch(() => {
                 if (!res.headersSent) res.sendStatus(200);
             });
         });
 
+        // 🛠 Настройка маршрутов в зависимости от воркера
         if (workerId === 1) {
-            // --- WORKER 1: ADMINJS & WEBHOOK CONTROL ---
-            logger.system(`🛠 [Worker 1] Initializing AdminJS Hub...`);
+            // Worker 1: Полный фарш (Admin + API)
+            logger.system(`🛠 [Worker 1] Initializing Primary Admin Hub...`);
+            setupAPIRoutes(app); 
             await setupAdminPanel(app);
             
+            // Только первый воркер ставит вебхук
             setTimeout(() => {
                 bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`, { drop_pending_updates: true })
-                    .then(() => logger.system(`📡 [Worker 1] WEBHOOK OPERATIONAL`))
+                    .then(() => logger.system(`📡 WEBHOOK SET BY WORKER 1`))
                     .catch(e => logger.error("Webhook fail", e));
-            }, 3000);
-
+            }, 5000);
         } else {
-            // --- WORKER 2: BOT LOGIC & GAME API ---
+            // Worker 2: High-Performance API & Bot handlers
             logger.system(`⚡ [Worker 2] Launching Neural Bot Engine...`);
             setupBotHandlers(bot);
             setupAPIRoutes(app);
+            // Мы не запускаем AdminJS тут, чтобы сэкономить 150MB RAM
         }
 
+        // Финальный 404 (если запрос не попал ни в один роут)
+        app.use((req, res, next) => {
+            if (req.path.startsWith('/admin')) {
+                // Если мы на воркере без админки, перенаправляем (опционально) или просто поясняем
+                return res.status(404).send('Admin Panel is hosted on Worker 1. Try refreshing or check load balancer.');
+            }
+            res.status(404).json({ error: "Route not found" });
+        });
+
         app.listen(PORT, '0.0.0.0', () => {
-            logger.system(`✅ Worker ${workerId} [PID: ${process.pid}] Online on Port ${PORT}`);
+            logger.system(`✅ Worker ${workerId} Online [Port: ${PORT}]`);
         });
 
     } catch (err) {
-        logger.error(`🚨 CRITICAL WORKER ERROR`, err);
+        logger.error(`🚨 WORKER ${workerId} CRITICAL ERROR`, err);
     }
 }
 
@@ -116,31 +131,15 @@ async function startWorkerEngine() {
 function setupBotHandlers(bot) {
     bot.start(async (ctx) => {
         const userId = ctx.from.id;
-        const refId = ctx.startPayload ? parseInt(ctx.startPayload) : null;
         const webAppUrl = `${DOMAIN}/static/index.html`;
         const keyboard = Markup.inlineKeyboard([[Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", webAppUrl)]]);
 
         try {
             let user = await User.findByPk(userId);
             if (!user) {
-                let startBalance = 0;
-                let referredBy = (refId && refId !== userId) ? refId : null;
-
-                if (referredBy) {
-                    const referrer = await User.findByPk(referredBy);
-                    if (referrer) {
-                        startBalance = 5000;
-                        await referrer.update({ 
-                            balance: parseFloat(referrer.balance) + 10000, 
-                            referrals: referrer.referrals + 1 
-                        });
-                        bot.telegram.sendMessage(referredBy, `✅ <b>Система:</b> Новый агент в сети! +10,000 NP.`, { parse_mode: 'HTML' }).catch(() => {});
-                    }
-                }
-                user = await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: startBalance, referred_by: referredBy });
+                user = await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: 0 });
             }
-
-            const caption = `<b>Neural Pulse | Terminal</b>\n\nАгент: <code>${user.username}</code>\nБаланс: <b>${user.balance.toLocaleString()} NP</b>\n\n🔗 Реф. ссылка:\n<code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`;
+            const caption = `<b>Neural Pulse | Terminal</b>\n\nАгент: <code>${user.username}</code>\nБаланс: <b>${user.balance.toLocaleString()} NP</b>`;
             const logoPath = path.join(__dirname, 'static/images/logo.png');
 
             if (fs.existsSync(logoPath)) await ctx.replyWithPhoto({ source: logoPath }, { caption, parse_mode: 'HTML', ...keyboard });
@@ -154,18 +153,7 @@ function setupAPIRoutes(app) {
     app.get('/api/user/:id', async (req, res) => {
         try {
             const user = await User.findByPk(req.params.id);
-            if (!user) return res.status(404).send();
-
-            const now = new Date();
-            const diff = Math.floor((now - new Date(user.last_seen)) / 1000);
-            
-            if (diff > 60 && user.profit > 0) {
-                const earned = (user.profit / 3600) * Math.min(diff, 86400);
-                user.balance = parseFloat(user.balance) + earned;
-                user.last_seen = now;
-                user.level = calculateLevel(user.balance);
-                await user.save();
-            }
+            if (!user) return res.status(404).json({ error: 'Not found' });
             res.json(user);
         } catch (e) { res.status(500).send(); }
     });
@@ -184,7 +172,7 @@ function setupAPIRoutes(app) {
     });
 }
 
-// --- МОДУЛЬ 3: АДМИН-ПАНЕЛЬ ---
+// --- МОДУЛЬ 3: ОПТИМИЗИРОВАННАЯ АДМИН-ПАНЕЛЬ ---
 async function setupAdminPanel(app) {
     try {
         const { default: AdminJS, ComponentLoader } = await import('adminjs');
@@ -197,7 +185,7 @@ async function setupAdminPanel(app) {
         
         const adminJs = new AdminJS({
             resources: [
-                { resource: User, options: { navigation: { name: 'Агенты' }, properties: { balance: { type: 'number' } } } },
+                { resource: User, options: { navigation: { name: 'Агенты' } } },
                 { resource: Task, options: { navigation: { name: 'Контракты' } } },
                 { resource: Stats, options: { navigation: { name: 'Система' } } }
             ],
@@ -207,35 +195,30 @@ async function setupAdminPanel(app) {
                 component: DASHBOARD,
                 handler: async () => {
                     const totalUsers = await User.count();
-                    const historyData = await Stats.findAll({ limit: 30, order: [['createdAt', 'DESC']] });
-                    
-                    // Берем последние данные для виджетов
-                    const latest = historyData[0] || {};
-
-                    return { 
-                        totalUsers,
-                        cpu: latest.server_load || 0,
-                        currentMem: latest.mem_usage || 0,
-                        dbLatency: latest.db_latency || 0,
-                        history: historyData.reverse().map(s => ({
-                            time: new Date(s.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                            cpu: s.server_load, 
-                            mem: s.mem_usage
-                        }))
-                    };
+                    const latest = (await Stats.findOne({ order: [['createdAt', 'DESC']] })) || {};
+                    return { totalUsers, cpu: latest.server_load || 0, currentMem: latest.mem_usage || 0 };
                 }
             },
-            branding: { companyName: 'Neural Pulse Hub', softwareBrothers: false },
-            bundler: { minify: false, force: true }
+            branding: { 
+                companyName: 'Neural Pulse Hub', 
+                theme: { colors: { primary100: '#00f2ff' } } 
+            },
+            // ⚡ ОПТИМИЗАЦИЯ: Отключаем лишние проверки в рантайме
+            bundler: { minify: true, force: false } 
         });
 
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
-            authenticate: async (e, p) => (e === '1' && p === '1') ? { email: 'admin' } : null,
-            cookiePassword: 'secure-pass-2026-pulse-ultra-v6-full',
-        }, null, { resave: false, saveUninitialized: false, secret: 'np_secret', store: sessionStore });
+            authenticate: async (e, p) => (e === 'admin' && p === 'neural2026') ? { email: 'admin' } : null,
+            cookiePassword: 'secure-pass-fixed-v7',
+        }, null, { 
+            resave: false, 
+            saveUninitialized: false, 
+            secret: 'np_secret', 
+            store: sessionStore 
+        });
 
         app.use(adminJs.options.rootPath, adminRouter);
         await adminJs.initialize();
-        logger.system("🛠 ADMIN PANEL READY [DARK-CORE V6]");
+        logger.system("🛠 ADMIN PANEL READY ON WORKER 1");
     } catch (err) { logger.error("AdminJS fail", err); }
 }
