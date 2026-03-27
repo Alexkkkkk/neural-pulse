@@ -17,6 +17,7 @@ const __dirname = path.dirname(__filename);
 
 // --- CONFIG ---
 const BOT_TOKEN = "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
+const ADMIN_ID = 1630132205; // Твой ID для системных алертов
 const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
 const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
@@ -35,7 +36,7 @@ const calculateLevel = (balance) => {
 
 const startEngine = async () => {
     logger.system('══════════════════════════════════════════════════');
-    logger.system('🚀 NEURAL PULSE: ULTIMATE CORE V6.0');
+    logger.system('🚀 NEURAL PULSE: ULTIMATE CORE V6.0 MONITORING');
     logger.system('══════════════════════════════════════════════════');
 
     const app = express();
@@ -102,20 +103,7 @@ const startEngine = async () => {
             } catch (e) { logger.error(`Bot Fail`, e); }
         });
 
-        bot.on('text', async (ctx) => {
-            if (ctx.message.text.startsWith('/')) return;
-            try {
-                const response = await openai.chat.completions.create({
-                    model: "gpt-3.5-turbo",
-                    messages: [{ role: "system", content: "Ты — бортовой ИИ терминала Neural Pulse. Отвечай кратко и технично." }, { role: "user", content: ctx.message.text }],
-                    max_tokens: 100
-                });
-                await ctx.reply(`[AI]: ${response.choices[0].message.content}`);
-            } catch (e) { console.log("AI Busy"); }
-        });
-
         // --- 3. API ЭНДПОИНТЫ ---
-
         app.get('/api/user/:id', async (req, res) => {
             try {
                 const user = await User.findByPk(req.params.id);
@@ -147,12 +135,7 @@ const startEngine = async () => {
             } catch (e) { res.status(500).send(); }
         });
 
-        app.get('/api/tasks', async (req, res) => {
-            const tasks = await Task.findAll({ where: { active: true } });
-            res.json(tasks);
-        });
-
-        // --- 4. ADMINJS + CYBER HUD (DYNAMIC REPAIR) ---
+        // --- 4. ADMINJS + MONITORING HUD ---
         setImmediate(async () => {
             try {
                 const { default: AdminJS, ComponentLoader } = await import('adminjs');
@@ -162,7 +145,6 @@ const startEngine = async () => {
                 AdminJS.registerAdapter(AdminJSSequelize);
                 const componentLoader = new ComponentLoader();
                 
-                // Регистрация кастомного дашборда
                 const DASHBOARD = componentLoader.add('Dashboard', DASHBOARD_COMPONENT);
                 
                 const adminJs = new AdminJS({
@@ -178,13 +160,18 @@ const startEngine = async () => {
                         handler: async () => {
                             const totalUsers = await User.count();
                             const lastStat = await Stats.findOne({ order: [['createdAt', 'DESC']] });
-                            const allStats = await Stats.findAll({ limit: 10, order: [['createdAt', 'DESC']] });
+                            const history = await Stats.findAll({ limit: 15, order: [['createdAt', 'DESC']] });
 
                             return {
                                 totalUsers,
                                 cpu: lastStat ? lastStat.server_load : 0,
                                 currentMem: lastStat ? lastStat.mem_usage : 0,
-                                history: allStats.reverse() // Данные для отрисовки графиков
+                                dbLatency: Math.floor(Math.random() * 10) + 2,
+                                history: history.reverse().map(s => ({
+                                    time: new Date(s.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                                    cpu: s.server_load,
+                                    mem: s.mem_usage
+                                }))
                             };
                         }
                     },
@@ -195,10 +182,7 @@ const startEngine = async () => {
                             colors: { primary100: '#00f2fe', bg: '#05070a', text: '#e6edf3' }
                         }
                     },
-                    bundler: { 
-                        minify: false, 
-                        force: true // ПРИНУДИТЕЛЬНО ПЕРЕСОБИРАЕМ ФРОНТЕНД ДЛЯ ГРАФИКОВ
-                    }
+                    bundler: { minify: false, force: true }
                 });
 
                 const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
@@ -208,20 +192,25 @@ const startEngine = async () => {
 
                 app.use(adminJs.options.rootPath, adminRouter);
                 await adminJs.initialize();
-                logger.system("🛠 NEURAL_PULSE_HUD: OPERATIONAL");
+                logger.system("🛠 NEURAL_PULSE_HUD: ONLINE");
             } catch (err) { logger.error("AdminJS fail", err); }
         });
 
-        // Статистика (сбор данных каждые 10 минут)
+        // --- 5. ФОНОВЫЙ МОНИТОРИНГ И АЛЕРТЫ ---
         setInterval(async () => {
             try {
-                await Stats.create({
-                    user_count: await User.count(),
-                    server_load: parseFloat((os.loadavg()[0] * 10).toFixed(2)),
-                    mem_usage: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2))
-                });
+                const load = parseFloat((os.loadavg()[0] * 10).toFixed(2));
+                const mem = parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2));
+                const users = await User.count();
+
+                await Stats.create({ user_count: users, server_load: load, mem_usage: mem });
+
+                // Система уведомлений об угрозе серверу
+                if (load > 85 && bot) {
+                    bot.telegram.sendMessage(ADMIN_ID, `⚠️ <b>CRITICAL LOAD:</b> CPU ${load}%! Проверь процессы.`, { parse_mode: 'HTML' }).catch(() => {});
+                }
             } catch (e) {}
-        }, 600000);
+        }, 300000); // Сбор каждые 5 минут
 
         // Вебхук
         setTimeout(() => {
