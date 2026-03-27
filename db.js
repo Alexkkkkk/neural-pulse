@@ -9,7 +9,12 @@ export const sequelize = new Sequelize(PG_URI, {
     dialect: 'postgres', 
     logging: false,
     dialectOptions: { ssl: false },
-    pool: { max: 10, min: 2, acquire: 60000, idle: 10000 }, // Снизил пул для стабильности при очистке
+    pool: { 
+        max: 5,        // Минимум соединений для стабильности при сбросе
+        min: 0, 
+        acquire: 60000, 
+        idle: 10000 
+    },
     timezone: '+00:00'
 });
 
@@ -64,9 +69,8 @@ User.hasMany(User, { as: 'Referrals', foreignKey: 'referred_by' });
 export const logSystemStats = async () => {
     try {
         const start = Date.now();
-        await sequelize.authenticate();
-        const latency = Date.now() - start;
         const userCount = await User.count();
+        const latency = Date.now() - start;
         const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
         const load = (os.loadavg()[0] * 10).toFixed(2);
 
@@ -76,23 +80,35 @@ export const logSystemStats = async () => {
             mem_usage: parseFloat(mem),
             db_latency: latency
         });
-    } catch (e) { console.error('[STATS_ERR]', e.message); }
+    } catch (e) { /* Игнорируем ошибки статистики при сбросе */ }
 };
 
-// --- ИНИЦИАЛИЗАЦИЯ С ПОЛНОЙ ОЧИСТКОЙ ---
+// --- ИНИЦИАЛИЗАЦИЯ С ЖЕСТКИМ СБРОСОМ ---
 export const initDB = async () => {
     try {
         await sequelize.authenticate();
-        console.log('--- [DB] CONNECTED TO POSTGRES ---');
-        
-        // ⚡ ВНИМАНИЕ: force: true УДАЛЯЕТ ВСЁ. 
-        // Используй это только для сброса. После успешного запуска смени обратно на { alter: true }
-        await sequelize.sync({ force: true }); 
-        console.log('--- [DB] DATABASE WIPED & RECREATED (FORCE MODE) ---');
+        console.log('--- [DB] CONNECTED ---');
+
+        // 💣 ЖЕСТКАЯ ОЧИСТКА ВСЕГО (DROP ALL TABLES)
+        console.log('--- [DB] STARTING HARD WIPE... ---');
+        await sequelize.query(`
+            DO $$ DECLARE
+                r RECORD;
+            BEGIN
+                FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+                    EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
+                END LOOP;
+            END $$;
+        `);
+        console.log('--- [DB] ALL TABLES DROPPED ---');
+
+        // Создание новой структуры
+        await sequelize.sync({ force: true });
+        console.log('--- [DB] NEW SCHEMA CREATED ---');
 
         await sessionStore.sync(); 
         
-        // Пересоздаем задачи после очистки
+        // Пересоздаем задачи
         await Task.bulkCreate([
             { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
             { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
@@ -101,8 +117,6 @@ export const initDB = async () => {
         console.log('--- [DB] INITIAL DATA RESTORED ---');
 
         setInterval(logSystemStats, 5 * 60 * 1000);
-        logSystemStats();
-
         return true;
     } catch (error) {
         console.error('--- [DB] FATAL INIT ERROR:', error);
