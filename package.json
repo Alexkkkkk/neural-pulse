@@ -7,16 +7,8 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch --env-file=.env server.js",
-    "build": "npm run clean && npm run build:admin && npm run type-check",
-    "build:admin": "node ./scripts/build-admin.js",
-    "build:ui": "adminjs bundle",
-    "clean": "rm -rf .adminjs static/.adminjs coverage dist logs/*.log data/*.log .parcel-cache",
-    "lint": "eslint . --ext .js,.jsx --fix && prettier --write .",
-    "type-check": "tsc --allowJs --checkJs --noEmit --target es2022 --module esnext",
-    "doctor": "npm audit fix && npm outdated",
-    "prestart": "npm run clean",
+    "start": "node --expose-gc server.js",
+    "clean": "rm -rf .adminjs static/.adminjs data/*.log logs/*.log",
     "prepare": "echo '--- [ NEURAL PULSE SYSTEM CORE ONLINE ] ---'"
   },
   "dependencies": {
@@ -26,7 +18,6 @@
     "@adminjs/design-system": "^4.1.0",
     "express": "^4.18.2",
     "telegraf": "^4.16.3",
-    "@telegraf/session": "^2.0.0",
     "sequelize": "^6.37.1",
     "pg": "^8.11.3",
     "pg-hstore": "^2.3.4",
@@ -40,42 +31,15 @@
     "react-dom": "^18.2.0",
     "recharts": "^2.12.0",
     "styled-components": "^6.1.8",
-    "tslib": "^2.6.2",
-    "babel-loader": "^9.1.3",
-    "dotenv": "^16.4.5",
-    "pino": "^8.19.0",
-    "pino-pretty": "^10.3.1",
     "helmet": "^7.1.0",
     "compression": "^1.7.4",
     "express-rate-limit": "^7.1.5",
-    "dayjs": "^1.11.10"
-  },
-  "devDependencies": {
-    "@babel/core": "^7.24.0",
-    "@babel/preset-env": "^7.24.0",
-    "@babel/preset-react": "^7.24.0",
-    "babel-plugin-styled-components": "^2.1.4",
-    "nodemon": "^3.1.0",
-    "eslint": "^8.57.0",
-    "eslint-plugin-react": "^7.34.0",
-    "eslint-config-prettier": "^9.1.0",
-    "prettier": "^3.2.5",
-    "typescript": "^5.3.3"
+    "dayjs": "^1.11.10",
+    "pino": "^8.19.0",
+    "pino-pretty": "^10.3.1",
+    "dotenv": "^16.4.5"
   },
   "engines": {
-    "node": ">=20.0.0",
-    "npm": ">=10.0.0"
-  },
-  "nodemonConfig": {
-    "watch": ["server.js", "db.js", "logger.js", "static/", "models/"],
-    "ignore": [".adminjs/*", "static/.adminjs/*", "data/*", "logs/*", "node_modules"],
-    "ext": "js,jsx,json,html,css",
-    "delay": 1000,
-    "legacyWatch": true
-  },
-  "browserslist": [
-    "> 0.5%",
-    "last 2 versions",
-    "not dead"
-  ]
+    "node": ">=18.0.0"
+  }
 }
