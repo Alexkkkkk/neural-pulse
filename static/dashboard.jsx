@@ -5,7 +5,7 @@ import * as Recharts from 'recharts'
 
 const { 
   XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, AreaChart, Area 
+  Tooltip, ResponsiveContainer, AreaChart, Area, Legend 
 } = Recharts
 
 const api = new ApiClient()
@@ -22,13 +22,14 @@ const CYBER = {
 };
 
 const Dashboard = (props) => {
-  const [stats, setStats] = useState(props.data || { totalUsers: 0, cpu: 0, currentMem: 0, dbLatency: 0 })
-  const [history, setHistory] = useState([{ time: '00:00', cpu: 0, ram: 0 }])
+  // Инициализация из пропсов сервера (чтобы не было пустоты при загрузке)
+  const [stats, setStats] = useState(props.data || { totalUsers: 0, cpu: 0, currentMem: 0, dbLatency: 5 })
+  const [history, setHistory] = useState(props.data?.history || [])
   const [scanPos, setScanPos] = useState(0)
-  const [logs, setLogs] = useState(['> SYSTEM_READY', '> ENCRYPTED_CONNECTION_ESTABLISHED'])
+  const [logs, setLogs] = useState(['> SYSTEM_READY', '> TELEMETRY_LINK_ESTABLISHED'])
 
   const addLog = (msg) => {
-    setLogs(prev => [`> [${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 12))
+    setLogs(prev => [`> [${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 14))
   }
 
   const fetchStats = async () => {
@@ -37,17 +38,14 @@ const Dashboard = (props) => {
       const d = response.data || {}
       setStats(d)
       
-      const cpuVal = parseFloat(d.cpu) || 0
-      const memVal = parseFloat(d.currentMem) || 0
+      // Обновляем историю из базы данных сервера
+      if (d.history && d.history.length > 0) {
+        setHistory(d.history)
+      }
 
-      setHistory(prev => {
-        const newPoint = {
-          time: new Date().toLocaleTimeString().slice(0, 5),
-          cpu: cpuVal,
-          ram: (memVal / 1024).toFixed(1), // перевод в ГБ если нужно, или оставь в МБ
-        }
-        return [...prev, newPoint].slice(-15)
-      })
+      // Умные логи на основе метрик
+      if (d.cpu > 70) addLog('WARNING: HIGH_CPU_DETECTED');
+      if (d.currentMem > 450) addLog('OPTIMIZING: MEMORY_CLEANUP_REQUIRED');
     } catch (e) { 
       addLog('TELEMETRY_LINK_LOST...')
     }
@@ -55,17 +53,20 @@ const Dashboard = (props) => {
 
   const handleReboot = () => {
     addLog('INITIATING_CORE_REBOOT...')
-    setTimeout(() => addLog('CLEARING_CACHE...'), 1000)
+    setTimeout(() => addLog('FLUSHING_VIRTUAL_MEMORY...'), 1000)
     setTimeout(() => addLog('RE-SYNCHRONIZING_NODES...'), 2500)
     setTimeout(() => {
-        addLog('SYSTEM_STABLE_V1.2.0');
+        addLog('SYSTEM_STABLE_V6.0.0');
         fetchStats();
     }, 4000)
   }
 
   useEffect(() => {
+    // Интервал запроса данных каждые 5 секунд
     const interval = setInterval(fetchStats, 5000)
+    // Анимация сканирующей линии
     const anim = setInterval(() => setScanPos(p => (p + 1.2) % 100), 50)
+    
     return () => { 
       clearInterval(interval)
       clearInterval(anim)
@@ -86,7 +87,7 @@ const Dashboard = (props) => {
         <Box display="flex" justifyContent="space-between" alignItems="center">
           <Box>
             <Badge style={{ background: CYBER.success, color: '#000', fontWeight: '900' }}>NEURAL_PULSE_OS</Badge>
-            <H2 style={{ color: CYBER.primary, marginTop: '10px', letterSpacing: '4px', textShadow: `0 0 10px ${CYBER.primary}44` }}>ADMIN_HUD_V1.2</H2>
+            <H2 style={{ color: CYBER.primary, marginTop: '10px', letterSpacing: '4px', textShadow: `0 0 10px ${CYBER.primary}44` }}>ADMIN_HUD_V6.0</H2>
           </Box>
           <Button variant="danger" size="sm" onClick={handleReboot} style={{ border: `1px solid ${CYBER.danger}`, fontWeight: 'bold' }}>SYSTEM_RELOAD</Button>
         </Box>
@@ -98,7 +99,7 @@ const Dashboard = (props) => {
           { label: 'ACTIVE_AGENTS', val: stats.totalUsers, color: CYBER.primary, unit: '' },
           { label: 'CPU_LOAD', val: stats.cpu, color: CYBER.success, unit: '%' },
           { label: 'MEM_USAGE', val: stats.currentMem, color: CYBER.secondary, unit: 'MB' },
-          { label: 'SYSTEM_LOAD', val: (stats.cpu * 0.8).toFixed(1), color: CYBER.warning, unit: 'idx' }
+          { label: 'DB_LATENCY', val: stats.dbLatency || 5, color: CYBER.warning, unit: 'ms' }
         ].map((item, i) => (
           <Box key={i} width={[1, 1/2, 1/4]} padding="sm">
             <Card style={{ backgroundColor: CYBER.card, border: `1px solid ${item.color}33`, borderRadius: '8px' }}>
@@ -115,23 +116,29 @@ const Dashboard = (props) => {
       </Box>
 
       <Box display="flex" flexDirection="row" flexWrap="wrap" marginTop="xl">
-        {/* GRAPH MONITOR */}
+        {/* GRAPH MONITOR: DUAL VIEW (CPU & RAM) */}
         <Box width={[1, 2/3]} paddingRight={['0', 'md']} marginBottom="xl">
           <Box padding="lg" borderRadius="xl" style={{ backgroundColor: CYBER.card, height: '420px', border: '1px solid #1a222d' }}>
-            <H5 mb="xl" style={{ color: CYBER.primary }}>REALTIME_OS_TELEMETRY</H5>
-            <ResponsiveContainer width="100%" height="80%">
+            <H5 mb="xl" style={{ color: CYBER.primary }}>REALTIME_SYSTEM_TELEMETRY</H5>
+            <ResponsiveContainer width="100%" height="85%">
               <AreaChart data={history}>
                 <defs>
                   <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={CYBER.primary} stopOpacity={0.3}/>
                     <stop offset="95%" stopColor={CYBER.primary} stopOpacity={0}/>
                   </linearGradient>
+                  <linearGradient id="colorMem" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={CYBER.secondary} stopOpacity={0.2}/>
+                    <stop offset="95%" stopColor={CYBER.secondary} stopOpacity={0}/>
+                  </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1f242c" vertical={false} />
                 <XAxis dataKey="time" stroke="#484f58" tick={{fontSize: 10}} />
-                <YAxis stroke="#484f58" tick={{fontSize: 10}} domain={[0, 100]} />
+                <YAxis stroke="#484f58" tick={{fontSize: 10}} />
                 <Tooltip contentStyle={{ backgroundColor: CYBER.card, border: `1px solid ${CYBER.primary}`, borderRadius: '8px', color: '#fff' }} />
-                <Area type="monotone" dataKey="cpu" stroke={CYBER.primary} fillOpacity={1} fill="url(#colorCpu)" strokeWidth={2} isAnimationActive={false} />
+                <Legend iconType="circle" wrapperStyle={{paddingTop: '10px'}} />
+                <Area name="CPU (%)" type="monotone" dataKey="cpu" stroke={CYBER.primary} fillOpacity={1} fill="url(#colorCpu)" strokeWidth={2} isAnimationActive={false} />
+                <Area name="RAM (MB)" type="monotone" dataKey="mem" stroke={CYBER.secondary} fillOpacity={1} fill="url(#colorMem)" strokeWidth={2} isAnimationActive={false} />
               </AreaChart>
             </ResponsiveContainer>
           </Box>
@@ -140,7 +147,7 @@ const Dashboard = (props) => {
         {/* TERMINAL LOGS */}
         <Box width={[1, 1/3]} paddingLeft={['0', 'md']}>
           <Box padding="lg" borderRadius="xl" style={{ backgroundColor: '#000', height: '420px', border: `1px solid ${CYBER.success}33`, overflow: 'hidden' }}>
-            <H5 mb="md" style={{ color: CYBER.success }}>CONSOLE_OUTPUT</H5>
+            <H5 mb="md" style={{ color: CYBER.success }}>TERMINAL_STREAM</H5>
             <Box>
                 {logs.map((log, i) => (
                 <Text key={i} size="xs" mb="xs" style={{ 
