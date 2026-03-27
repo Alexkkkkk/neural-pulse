@@ -6,7 +6,6 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- НАСТРОЙКИ (ПРОВЕРЬТЕ ТОКЕН!) ---
 const BOT_TOKEN = "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
 const DOMAIN = "https://np.bothost.tech"; 
 const PORT = process.env.PORT || 3000;
@@ -14,54 +13,39 @@ const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// Логирование запросов для отладки
 app.use(express.json());
-app.use((req, res, next) => {
-    if (req.url.includes('telegraf')) {
-        console.log(`[${new Date().toISOString()}] 📥 Входящий запрос от Telegram`);
-    }
-    next();
-});
-
-// Раздача статики (ваши картинки и дизайн)
 app.use(express.static(path.join(__dirname, 'static')));
+
+// --- ТЕСТОВЫЙ МАРШРУТ ДЛЯ БРАУЗЕРА ---
+// Зайди на https://np.bothost.tech/test , если увидишь "OK", значит сервер доступен извне
+app.get('/test', (req, res) => res.send("<h1>SERVER IS ALIVE!</h1>"));
 
 // --- ЛОГИКА БОТА ---
 bot.start(async (ctx) => {
-    const userId = ctx.from.id;
-    const photoPath = path.join(__dirname, 'static/images/logo.png');
-
-    console.log(`[LOG] Пользователь ${userId} нажал START`);
-
+    console.log("!!! ПОЛУЧЕН СТАРТ !!!");
     try {
-        await ctx.replyWithPhoto({ source: photoPath }, {
-            caption: `<b>Neural Pulse | Terminal</b>\n\nСистема инициализирована через Webhook.\n\nВаш ID: <code>${userId}</code>`,
-            parse_mode: 'HTML',
-            ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]])
-        });
+        await ctx.reply("Система Neural Pulse активирована!");
     } catch (e) {
-        console.error("Ошибка при отправке фото, отправляю текст:", e.message);
-        await ctx.reply("System Online.", Markup.inlineKeyboard([[Markup.button.webApp("⚡ ЗАПУСТИТЬ", DOMAIN)]]));
+        console.error("Ошибка ответа:", e);
     }
 });
 
-// --- НАСТРОЙКА WEBHOOK ---
-const WEBHOOK_PATH = `/telegraf/${BOT_TOKEN}`;
-
-// Это связывает Express и Telegraf
-app.post(WEBHOOK_PATH, (req, res) => {
+// --- ВЕБХУК НА КОРНЕВОЙ ПУТЬ ---
+// Ставим вебхук просто на домен, без сложных путей
+app.post('/', (req, res) => {
+    console.log("📥 [ВХОДЯЩИЙ POST] Telegram стучится в дверь...");
     bot.handleUpdate(req.body, res);
 });
 
-// Запуск сервера
 app.listen(PORT, '0.0.0.0', async () => {
     try {
-        const fullWebhookUrl = `${DOMAIN}${WEBHOOK_PATH}`;
-        await bot.telegram.setWebhook(fullWebhookUrl);
+        // Очищаем и ставим на корень /
+        await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+        await bot.telegram.setWebhook(`${DOMAIN}/`);
         
-        console.log(`🚀 SYSTEM: Сервер запущен на порту ${PORT}`);
-        console.log(`🔗 WEBHOOK: Установлен на ${fullWebhookUrl}`);
+        console.log(`🚀 SYSTEM: Online on port ${PORT}`);
+        console.log(`🔗 WEBHOOK: ${DOMAIN}/`);
     } catch (err) {
-        console.error("❌ КРИТИЧЕСКАЯ ОШИБКА ПРИ СТАРТЕ:", err);
+        console.error("STARTUP ERROR:", err);
     }
 });
