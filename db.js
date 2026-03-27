@@ -10,7 +10,7 @@ export const sequelize = new Sequelize(PG_URI, {
     logging: false,
     dialectOptions: { ssl: false },
     pool: { 
-        max: 5,        // Минимум соединений для стабильности при сбросе
+        max: 5, 
         min: 0, 
         acquire: 60000, 
         idle: 10000 
@@ -80,41 +80,32 @@ export const logSystemStats = async () => {
             mem_usage: parseFloat(mem),
             db_latency: latency
         });
-    } catch (e) { /* Игнорируем ошибки статистики при сбросе */ }
+    } catch (e) { /* Игнорируем ошибки при старте */ }
 };
 
-// --- ИНИЦИАЛИЗАЦИЯ С ЖЕСТКИМ СБРОСОМ ---
+// --- ИНИЦИАЛИЗАЦИЯ (БЕЗОПАСНАЯ) ---
 export const initDB = async () => {
     try {
         await sequelize.authenticate();
         console.log('--- [DB] CONNECTED ---');
 
-        // 💣 ЖЕСТКАЯ ОЧИСТКА ВСЕГО (DROP ALL TABLES)
-        console.log('--- [DB] STARTING HARD WIPE... ---');
-        await sequelize.query(`
-            DO $$ DECLARE
-                r RECORD;
-            BEGIN
-                FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
-                    EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
-                END LOOP;
-            END $$;
-        `);
-        console.log('--- [DB] ALL TABLES DROPPED ---');
-
-        // Создание новой структуры
-        await sequelize.sync({ force: true });
-        console.log('--- [DB] NEW SCHEMA CREATED ---');
+        // ВМЕСТО HARD WIPE ИСПОЛЬЗУЕМ alter: true
+        // Это обновит таблицы без удаления данных пользователей
+        await sequelize.sync({ alter: true });
+        console.log('--- [DB] SCHEMA SYNCED (SAFE MODE) ---');
 
         await sessionStore.sync(); 
         
-        // Пересоздаем задачи
-        await Task.bulkCreate([
-            { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
-            { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
-            { title: 'Подключить TON кошелек', reward: 2500, url: '', icon: 'Wallet' }
-        ]);
-        console.log('--- [DB] INITIAL DATA RESTORED ---');
+        // Проверяем, есть ли уже задачи в базе, чтобы не дублировать их
+        const taskCount = await Task.count();
+        if (taskCount === 0) {
+            await Task.bulkCreate([
+                { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
+                { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
+                { title: 'Подключить TON кошелек', reward: 2500, url: '', icon: 'Wallet' }
+            ]);
+            console.log('--- [DB] INITIAL TASKS CREATED ---');
+        }
 
         setInterval(logSystemStats, 5 * 60 * 1000);
         return true;
