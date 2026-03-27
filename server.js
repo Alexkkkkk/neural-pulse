@@ -7,7 +7,7 @@ import fs from 'fs';
 import os from 'os';
 import OpenAI from 'openai';
 
-// 1. Импортируем типы напрямую из библиотеки sequelize (исправляет SyntaxError)
+// 1. Импортируем типы напрямую из библиотеки sequelize
 import { DataTypes, Op } from 'sequelize'; 
 
 // 2. Импорты модулей БД и логов
@@ -48,7 +48,7 @@ const startEngine = async () => {
     app.use(express.json({ limit: '5mb' }));
     app.use(express.urlencoded({ extended: true }));
 
-    // --- 1. МГНОВЕННЫЙ HEALTH-CHECK (Против 504) ---
+    // --- 1. МГНОВЕННЫЙ HEALTH-CHECK ---
     app.get('/api/health', (req, res) => {
         res.send(`<html><body style="background:#05070a;color:#00f2fe;font-family:monospace;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;">
             <div style="border:2px solid #00f2fe;padding:20px;box-shadow:0 0 15px #00f2fe;">
@@ -60,7 +60,7 @@ const startEngine = async () => {
 
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
-    // --- 2. СТАРТ ПОРТА (Сразу!) ---
+    // --- 2. СТАРТ ПОРТА ---
     const server = app.listen(PORT, '0.0.0.0', () => {
         logger.system(`✅ PORT ${PORT} OPEN. INITIALIZING CORE...`);
     });
@@ -70,7 +70,7 @@ const startEngine = async () => {
         await initDB();
         logger.info("CORE_DB: CONNECTED");
 
-        // --- 4. TELEGRAM BOT + ЛОГИКА РЕФЕРАЛОВ ---
+        // --- 4. TELEGRAM BOT ---
         const bot = new Telegraf(BOT_TOKEN);
 
         app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => {
@@ -96,7 +96,6 @@ const startEngine = async () => {
                         if (referrer) {
                             referredBy = refId;
                             startBalance = 5000;
-                            // Исправлено: принудительное приведение к числу
                             await referrer.update({ 
                                 balance: parseFloat(referrer.balance) + 10000, 
                                 referrals: referrer.referrals + 1 
@@ -139,13 +138,15 @@ const startEngine = async () => {
             } catch (e) { res.status(500).send("API_ERR"); }
         });
 
-        // --- 6. ADMINJS (Динамическая подгрузка) ---
+        // --- 6. ADMINJS (ИСПРАВЛЕННЫЙ БЛОК) ---
         const { default: AdminJS } = await import('adminjs');
         const { default: AdminJSExpress } = await import('@adminjs/express');
         const AdminJSSequelize = await import('@adminjs/sequelize');
-        const { ComponentLoader } = AdminJS;
 
+        // В v7 ComponentLoader берется напрямую из AdminJS
+        const ComponentLoader = AdminJS.ComponentLoader; 
         AdminJS.registerAdapter(AdminJSSequelize);
+        
         const componentLoader = new ComponentLoader();
         const DASHBOARD = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
 
@@ -170,7 +171,7 @@ const startEngine = async () => {
 
         app.use(adminJs.options.rootPath, adminRouter);
 
-        // --- 7. ФОНОВЫЕ ПРОЦЕССЫ (Anti-Cheat & Webhook) ---
+        // --- 7. ФОНОВЫЕ ПРОЦЕССЫ ---
         setInterval(async () => {
             try {
                 const metrics = {
