@@ -48,7 +48,7 @@ const startEngine = async () => {
     app.use(express.json({ limit: '5mb' }));
     app.use(express.urlencoded({ extended: true }));
 
-    // --- 1. МГНОВЕННЫЙ HEALTH-CHECK ---
+    // --- 1. МГНОВЕННЫЙ HEALTH-CHECK (Защита от 504 при запуске) ---
     app.get('/api/health', (req, res) => {
         res.send(`<html><body style="background:#05070a;color:#00f2fe;font-family:monospace;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;">
             <div style="border:2px solid #00f2fe;padding:20px;box-shadow:0 0 15px #00f2fe;">
@@ -138,17 +138,21 @@ const startEngine = async () => {
             } catch (e) { res.status(500).send("API_ERR"); }
         });
 
-        // --- 6. ADMINJS (ИСПРАВЛЕННЫЙ БЛОК) ---
-        const { default: AdminJS } = await import('adminjs');
+        // --- 6. ADMINJS (ИСПРАВЛЕННЫЙ ИМПОРТ ДЛЯ v7+) ---
+        const { default: AdminJS, ComponentLoader } = await import('adminjs');
         const { default: AdminJSExpress } = await import('@adminjs/express');
         const AdminJSSequelize = await import('@adminjs/sequelize');
 
-        // В v7 ComponentLoader берется напрямую из AdminJS
-        const ComponentLoader = AdminJS.ComponentLoader; 
         AdminJS.registerAdapter(AdminJSSequelize);
         
         const componentLoader = new ComponentLoader();
-        const DASHBOARD = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
+        
+        // Безопасная инициализация дашборда
+        const dashboardPath = path.join(__dirname, 'static', 'dashboard.jsx');
+        let DASHBOARD_COMPONENT = null;
+        if (fs.existsSync(dashboardPath)) {
+            DASHBOARD_COMPONENT = componentLoader.add('Dashboard', dashboardPath);
+        }
 
         const adminJs = new AdminJS({
             resources: [
@@ -158,8 +162,12 @@ const startEngine = async () => {
             ],
             rootPath: '/admin',
             componentLoader,
-            dashboard: { component: DASHBOARD },
-            branding: { companyName: 'Neural Pulse Hub', logo: '/static/images/logo.png', softwareBrothers: false },
+            dashboard: DASHBOARD_COMPONENT ? { component: DASHBOARD_COMPONENT } : {},
+            branding: { 
+                companyName: 'Neural Pulse Hub', 
+                logo: '/static/images/logo.png', 
+                softwareBrothers: false 
+            },
             bundler: { minify: true, force: false }
         });
 
