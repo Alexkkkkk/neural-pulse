@@ -9,7 +9,7 @@ export const sequelize = new Sequelize(PG_URI, {
     dialect: 'postgres', 
     logging: false,
     dialectOptions: { ssl: false },
-    pool: { max: 30, min: 5, acquire: 60000, idle: 10000 },
+    pool: { max: 10, min: 2, acquire: 60000, idle: 10000 }, // Снизил пул для стабильности при очистке
     timezone: '+00:00'
 });
 
@@ -58,18 +58,14 @@ export const Stats = sequelize.define('stats', {
     timestamp: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: false, tableName: 'system_stats' });
 
-// Связи
 User.hasMany(User, { as: 'Referrals', foreignKey: 'referred_by' });
 
 // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
-
-// Функция для записи системного лога в таблицу Stats
 export const logSystemStats = async () => {
     try {
         const start = Date.now();
         await sequelize.authenticate();
         const latency = Date.now() - start;
-        
         const userCount = await User.count();
         const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
         const load = (os.loadavg()[0] * 10).toFixed(2);
@@ -80,36 +76,31 @@ export const logSystemStats = async () => {
             mem_usage: parseFloat(mem),
             db_latency: latency
         });
-    } catch (e) {
-        console.error('[STATS_ERR]', e.message);
-    }
+    } catch (e) { console.error('[STATS_ERR]', e.message); }
 };
 
-// --- ИНИЦИАЛИЗАЦИЯ ---
+// --- ИНИЦИАЛИЗАЦИЯ С ПОЛНОЙ ОЧИСТКОЙ ---
 export const initDB = async () => {
     try {
         await sequelize.authenticate();
         console.log('--- [DB] CONNECTED TO POSTGRES ---');
         
-        // Синхронизация таблиц
+        // ⚡ ВНИМАНИЕ: force: true УДАЛЯЕТ ВСЁ. 
+        // Используй это только для сброса. После успешного запуска смени обратно на { alter: true }
+        await sequelize.sync({ force: true }); 
+        console.log('--- [DB] DATABASE WIPED & RECREATED (FORCE MODE) ---');
+
         await sessionStore.sync(); 
-        await sequelize.sync({ alter: true }); 
-        console.log('--- [DB] TABLES SYNCED ---');
+        
+        // Пересоздаем задачи после очистки
+        await Task.bulkCreate([
+            { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
+            { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
+            { title: 'Подключить TON кошелек', reward: 2500, url: '', icon: 'Wallet' }
+        ]);
+        console.log('--- [DB] INITIAL DATA RESTORED ---');
 
-        // Дефолтные задачи
-        const count = await Task.count();
-        if (count === 0) {
-            await Task.bulkCreate([
-                { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
-                { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
-                { title: 'Подключить TON кошелек', reward: 2500, url: '', icon: 'Wallet' }
-            ]);
-            console.log('--- [DB] INITIAL TASKS CREATED ---');
-        }
-
-        // Запускаем сбор статистики каждые 5 минут
         setInterval(logSystemStats, 5 * 60 * 1000);
-        // Первый запуск сразу
         logSystemStats();
 
         return true;
