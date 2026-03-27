@@ -7,7 +7,7 @@ import fs from 'fs';
 import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
-import dayjs from 'dayjs'; // Для форматирования времени на графике
+import dayjs from 'dayjs';
 
 // Ресурсы ядра (БД и логи)
 import { sequelize, User, Task, Stats, sessionStore, initDB, logSystemStats } from './db.js';
@@ -48,7 +48,7 @@ async function startNeuralOS() {
     try {
         console.clear();
         logger.system('╔══════════════════════════════════════════════════╗');
-        logger.system('║      NEURAL PULSE: SINGLE-CORE TITAN v12.0       ║');
+        logger.system('║      NEURAL PULSE: SINGLE-CORE TITAN v12.1       ║');
         logger.system('║   OPTIMIZED FOR BOTH HOST | MODE: STABLE-FLOW    ║');
         logger.system('╚══════════════════════════════════════════════════╝');
 
@@ -63,9 +63,10 @@ async function startNeuralOS() {
         // ✅ FAIL-SAFE WEBHOOK GATEWAY
         app.post(`/telegraf/${BOT_TOKEN}`, async (req, res) => {
             try {
-                if (req.body && Object.keys(req.body).length > 0) {
-                    await bot.handleUpdate(req.body, res);
+                if (!req.body || Object.keys(req.body).length === 0) {
+                    return res.sendStatus(200);
                 }
+                await bot.handleUpdate(req.body, res);
             } catch (err) {
                 logger.error("⚡ Gate Error", err);
             } finally {
@@ -78,21 +79,31 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SMART CLEANUP & TELEMETRY (Раз в 2 минуты) ---
+        // --- 🩺 SMART CLEANUP & TELEMETRY ---
         setInterval(() => {
             const memory = process.memoryUsage().rss / 1024 / 1024;
-            if (memory > 230) {
-                logger.system(`♻️ Memory Guard: ${Math.round(memory)}MB usage. Cleaning...`);
+            if (memory > 220) {
+                logger.system(`♻️ Memory Guard: ${Math.round(memory)}MB. Cleaning...`);
                 if (global.gc) global.gc();
             }
             logSystemStats();
         }, 120000);
 
-        // --- 🌐 СТАРТ ---
-        app.listen(PORT, '0.0.0.0', () => {
+        // --- 🌐 СТАРТ С ЗАЩИТОЙ ОТ ПАДЕНИЙ ---
+        const server = app.listen(PORT, '0.0.0.0', () => {
             logger.system(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`);
         });
 
+        const shutdown = (signal) => {
+            logger.system(`⚠️ ${signal} received. Closing connections...`);
+            server.close(() => {
+                logger.system('🛑 Server closed.');
+                process.exit(0);
+            });
+        };
+
+        process.on('SIGTERM', () => shutdown('SIGTERM'));
+        process.on('SIGINT', () => shutdown('SIGINT'));
         process.on('uncaughtException', (e) => logger.error('☢️ UNCAUGHT', e));
         process.on('unhandledRejection', (e) => logger.error('☢️ REJECTION', e));
 
@@ -106,11 +117,10 @@ async function startNeuralOS() {
 function setupAPIRoutes(app) {
     const clickLimit = rateLimit({
         windowMs: 1000,
-        max: 10,
+        max: 12,
         handler: (req, res) => res.status(429).json({ error: "Pulse overload" })
     });
 
-    // Мониторинг здоровья системы
     app.get('/api/health', async (req, res) => {
         try {
             await sequelize.authenticate();
@@ -199,7 +209,6 @@ async function setupAdminPanel(app) {
             componentLoader,
             dashboard: { 
                 component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
-                // HANDLER: Поставляет данные для Dashboard.jsx
                 handler: async (request, response, context) => {
                     const totalUsers = await User.count();
                     const latestStats = await Stats.findAll({ limit: 15, order: [['createdAt', 'DESC']] });
