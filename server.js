@@ -25,7 +25,6 @@ AdminJS.registerAdapter(AdminJSSequelize);
 
 // --- Инициализация компонентов AdminJS ---
 const componentLoader = new ComponentLoader();
-// ВАЖНО: Убедись, что файл static/dashboard.jsx существует
 const DASHBOARD = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
 
 const startEngine = async () => {
@@ -43,13 +42,51 @@ const startEngine = async () => {
         app.set('trust proxy', 1);
         app.use(cors({ origin: '*' }));
         
-        // Важно для приема обновлений от Telegram (лимит 5мб для безопасности)
+        // ПАРСЕРЫ (Критично для Telegram)
         app.use(express.json({ limit: '5mb' }));
+        app.use(express.urlencoded({ extended: true }));
         
-        // Статика (логотипы, стили, манифест)
+        // СТАТИКА
         app.use('/static', express.static(path.join(__dirname, 'static')));
 
-        // --- 2. HUD ДИАГНОСТИКА (Объединенная версия) ---
+        // --- 2. TELEGRAM BOT (ПРИОРИТЕТНЫЙ РОУТ) ---
+        const bot = new Telegraf(BOT_TOKEN);
+
+        // Обработка вебхука ДО админки, чтобы избежать таймаутов
+        app.post(`/telegraf/${BOT_TOKEN}`, async (req, res) => {
+            try {
+                // Передаем res, чтобы Telegraf сам ответил Telegram вовремя
+                await bot.handleUpdate(req.body, res);
+            } catch (err) {
+                logger.error(`[BOT_UPDATE_ERR] ${err.message}`);
+                if (!res.headersSent) res.sendStatus(200); // Все равно отвечаем 200, чтобы Telegram не спамил
+            }
+        });
+
+        bot.start(async (ctx) => {
+            const userId = ctx.from.id;
+            // Ссылка именно на index.html в папке static
+            const webAppUrl = `${DOMAIN}/static/index.html`;
+            const keyboard = Markup.inlineKeyboard([[Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", webAppUrl)]]);
+            
+            const caption = `<b>Neural Pulse | Terminal</b>\n\nАгент: <code>${ctx.from.username || 'AGENT'}</code>\nСтатус: <b>ONLINE</b>`;
+            const logoPath = path.join(__dirname, 'static/images/logo.png');
+
+            try {
+                await User.findOrCreate({ 
+                    where: { id: BigInt(userId) }, 
+                    defaults: { username: ctx.from.username || 'AGENT' } 
+                });
+                
+                if (fs.existsSync(logoPath)) {
+                    await ctx.replyWithPhoto({ source: logoPath }, { caption, parse_mode: 'HTML', ...keyboard });
+                } else {
+                    await ctx.reply(caption, { parse_mode: 'HTML', ...keyboard });
+                }
+            } catch (e) { logger.error(`Bot Error: ${e.message}`); }
+        });
+
+        // --- 3. HUD ДИАГНОСТИКА ---
         app.get('/api/health', async (req, res) => {
             const start = Date.now();
             let dbStatus = 'OFFLINE';
@@ -69,25 +106,21 @@ const startEngine = async () => {
                     h2 { border-bottom: 1px solid #00f2fe; padding-bottom: 10px; font-size: 16px; margin: 0 0 15px 0; }
                     .row { display: flex; justify-content: space-between; margin: 10px 0; font-size: 13px; }
                     .ok { color: #33ff66; text-shadow: 0 0 5px #33ff66; }
-                    .warn { color: #ff3366; animation: blink 1s infinite; }
-                    @keyframes blink { 50% { opacity: 0.3; } }
                 </style>
                 <script>setTimeout(() => location.reload(), 5000);</script>
             </head>
             <body>
                 <div class="hud">
                     <h2>> SYSTEM_ULTIMATE_MONITOR</h2>
-                    <div class="row"><span>DATABASE</span><span class="${dbStatus === 'STABLE' ? 'ok' : 'warn'}">${dbStatus}</span></div>
+                    <div class="row"><span>DATABASE</span><span class="${dbStatus === 'STABLE' ? 'ok' : ''}">${dbStatus}</span></div>
                     <div class="row"><span>CPU_LOAD</span><span>${load}%</span></div>
-                    <div class="row"><span>MEMORY_RSS</span><span>${(mem.rss / 1024 / 1024).toFixed(1)} MB</span></div>
-                    <div class="row"><span>UPTIME</span><span>${(process.uptime() / 60).toFixed(1)} MIN</span></div>
+                    <div class="row"><span>MEMORY</span><span>${(mem.rss / 1024 / 1024).toFixed(1)} MB</span></div>
                     <div class="row"><span>LATENCY</span><span>${Date.now() - start}ms</span></div>
-                    <div style="font-size:9px; margin-top:15px; opacity:0.4;">MODE: MONOLITH_V4 | ID: bot_pulse_2026</div>
                 </div>
             </body></html>`);
         });
 
-        // --- 3. ADMINJS (С кастомным дашбордом и темой) ---
+        // --- 4. ADMINJS (Тяжелый блок в конце) ---
         const adminJs = new AdminJS({
             resources: [
                 { resource: User, options: { navigation: { name: 'Агенты' } } },
@@ -114,48 +147,22 @@ const startEngine = async () => {
 
         app.use(adminJs.options.rootPath, adminRouter);
 
-        // --- 4. TELEGRAM BOT (Логика и Вебхуки) ---
-        const bot = new Telegraf(BOT_TOKEN);
-        
-        bot.start(async (ctx) => {
-            const userId = ctx.from.id;
-            const keyboard = Markup.inlineKeyboard([[Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", DOMAIN)]]);
-            const caption = `<b>Neural Pulse | Terminal</b>\n\nАгент: <code>${ctx.from.username || 'AGENT'}</code>\nСтатус: <b>ONLINE</b>`;
-            const logoPath = path.join(__dirname, 'static/images/logo.png');
-
-            try {
-                await User.findOrCreate({ where: { id: BigInt(userId) }, defaults: { username: ctx.from.username || 'AGENT' } });
-                if (fs.existsSync(logoPath)) {
-                    await ctx.replyWithPhoto({ source: logoPath }, { caption, parse_mode: 'HTML', ...keyboard });
-                } else {
-                    await ctx.reply(caption, { parse_mode: 'HTML', ...keyboard });
-                }
-            } catch (e) { logger.error(`Bot Error: ${e.message}`); }
-        });
-
-        // Эндпоинт для приема вебхуков (с защитой от ошибок)
-        app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => {
-            bot.handleUpdate(req.body).catch(err => logger.error(`[BOT_ERR] ${err.message}`));
-            res.sendStatus(200);
-        });
-
-        // --- 5. ЗАПУСК ЕДИНОГО СЕРВЕРА ---
+        // --- 5. ЗАПУСК ---
         app.listen(PORT, async () => {
             logger.system(`✅ МОНОЛИТ АКТИВИРОВАН: Port ${PORT}`);
             
-            // Отложенная установка вебхука (5 сек) для стабильности
+            // Ждем 3 секунды и ставим вебхук
             setTimeout(async () => {
                 try {
                     const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`;
                     await bot.telegram.setWebhook(webhookUrl, { drop_pending_updates: true });
                     logger.system(`📡 WEBHOOK УСТАНОВЛЕН -> ${webhookUrl}`);
-                    
                     const me = await bot.telegram.getMe();
                     logger.info(`🤖 БОТ: @${me.username} ГОТОВ К РАБОТЕ`);
                 } catch (e) {
                     logger.error(`Webhook Fail: ${e.message}`);
                 }
-            }, 5000);
+            }, 3000);
         });
 
     } catch (err) {
