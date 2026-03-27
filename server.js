@@ -5,9 +5,6 @@ import { fileURLToPath } from 'url';
 import cors from 'cors';
 import fs from 'fs';
 import os from 'os';
-import AdminJS, { ComponentLoader } from 'adminjs';
-import AdminJSExpress from '@adminjs/express';
-import * as AdminJSSequelize from '@adminjs/sequelize';
 
 // Импорты модулей БД и логов
 import { sequelize, User, Task, Stats, sessionStore, initDB } from './db.js';
@@ -27,22 +24,25 @@ const startEngine = async () => {
 
     const app = express();
     
-    // --- 0. ПРИОРИТЕТНЫЕ НАСТРОЙКИ ---
+    // --- 0. БАЗОВЫЕ НАСТРОЙКИ (МГНОВЕННО) ---
     app.disable('x-powered-by');
     app.set('trust proxy', 1);
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '5mb' }));
     app.use(express.urlencoded({ extended: true }));
 
-    // --- 1. МГНОВЕННЫЙ HEALTH-CHECK (До всех тяжелых импортов) ---
+    // --- 1. ПРИОРИТЕТНЫЙ HEALTH-CHECK (До тяжелых импортов AdminJS) ---
     app.get('/api/health', (req, res) => {
         const mem = process.memoryUsage();
         res.send(`
         <html><body style="background:#05070a;color:#00f2fe;font-family:monospace;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;">
-            <div style="border:2px solid #00f2fe;padding:20px;">
-                <h2>> CORE_STATUS: ONLINE</h2>
-                <p>MEMORY: ${(mem.rss / 1024 / 1024).toFixed(1)} MB</p>
-                <p>UPTIME: ${Math.floor(process.uptime())}s</p>
+            <div style="border:2px solid #00f2fe;padding:30px;box-shadow: 0 0 20px #00f2fe;">
+                <h2 style="margin:0 0 15px 0;">> CORE_STATUS: ONLINE</h2>
+                <div style="font-size:14px;">
+                    <p>MEMORY: ${(mem.rss / 1024 / 1024).toFixed(1)} MB</p>
+                    <p>UPTIME: ${Math.floor(process.uptime())}s</p>
+                    <p style="color:#33ff66;">⚡ PORT OPENED: ${PORT}</p>
+                </div>
                 <script>setTimeout(() => location.reload(), 2000);</script>
             </div>
         </body></html>`);
@@ -51,19 +51,19 @@ const startEngine = async () => {
     // --- 2. СТАТИКА ---
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
-    // --- 3. ЗАПУСК ПОРТА (Блокирует 504) ---
+    // --- 3. ОТКРЫТИЕ ПОРТА (САМЫЙ ВАЖНЫЙ ШАГ) ---
     const server = app.listen(PORT, '0.0.0.0', () => {
-        logger.system(`✅ ПОРТ ${PORT} ОТКРЫТ. НАЧИНАЮ ЗАГРУЗКУ ЯДРА...`);
+        logger.system(`✅ ПОРТ ${PORT} ОТКРЫТ. ОЖИДАНИЕ ИНИЦИАЛИЗАЦИИ КОМПОНЕНТОВ...`);
     });
 
-    // Увеличиваем таймауты сервера
-    server.keepAliveTimeout = 65000;
-    server.headersTimeout = 66000;
+    // Настройки для предотвращения обрыва прокси
+    server.keepAliveTimeout = 70000;
+    server.headersTimeout = 71000;
 
     try {
-        // --- 4. ИНИЦИАЛИЗАЦИЯ БД ---
+        // --- 4. ИНИЦИАЛИЗАЦИЯ БД (ФОНОВАЯ) ---
         await initDB();
-        logger.info("CORE_DB: OK");
+        logger.info("CORE_DB: ПОДКЛЮЧЕНО");
 
         // --- 5. TELEGRAM BOT ---
         const bot = new Telegraf(BOT_TOKEN);
@@ -94,7 +94,12 @@ const startEngine = async () => {
             } catch (e) { logger.error(`Bot Error: ${e.message}`); }
         });
 
-        // --- 6. ADMINJS (Lazy Load) ---
+        // --- 6. ADMINJS (ДИНАМИЧЕСКИЙ ИМПОРТ) ---
+        // Импортируем только здесь, чтобы не тормозить запуск порта
+        const { default: AdminJS, ComponentLoader } = await import('adminjs');
+        const { default: AdminJSExpress } = await import('@adminjs/express');
+        const AdminJSSequelize = await import('@adminjs/sequelize');
+
         AdminJS.registerAdapter(AdminJSSequelize);
         const componentLoader = new ComponentLoader();
         const DASHBOARD = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
@@ -125,13 +130,13 @@ const startEngine = async () => {
 
         app.use(adminJs.options.rootPath, adminRouter);
 
-        // --- 7. FINAL STEPS ---
+        // --- 7. ФИНАЛЬНЫЙ WEBHOOK ---
         const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`;
         await bot.telegram.setWebhook(webhookUrl, { drop_pending_updates: true });
-        logger.system(`📡 МОНОЛИТ ПОЛНОСТЬЮ ГОТОВ`);
+        logger.system(`📡 МОНОЛИТ ПОЛНОСТЬЮ ГОТОВ. WEBHOOK: OK`);
 
     } catch (err) {
-        logger.error("КРИТИЧЕСКИЙ СБОЙ ПРИ ИНИЦИАЛИЗАЦИИ", err);
+        logger.error("КРИТИЧЕСКИЙ СБОЙ В ЦИКЛЕ ЗАГРУЗКИ", err);
     }
 };
 
