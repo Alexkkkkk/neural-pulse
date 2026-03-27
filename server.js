@@ -24,7 +24,6 @@ const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'sk-...' });
 
-// --- УТИЛИТЫ ---
 const calculateLevel = (balance) => {
     const b = parseFloat(balance);
     if (b < 10000) return 1;
@@ -34,24 +33,29 @@ const calculateLevel = (balance) => {
     return 5;
 };
 
-// --- ЛОГИКА РАЗДЕЛЕНИЯ ПРОЦЕССОВ (CLUSTER) ---
+// --- ЛОГИКА РАЗДЕЛЕНИЯ ПРОЦЕССОВ (CLUSTER) С ТАЙМИНГОМ ---
 if (cluster.isPrimary) {
     logger.system('══════════════════════════════════════════════════');
     logger.system('🚀 NEURAL PULSE: CLUSTER MODE ACTIVE (V6.0)');
-    logger.system('⚙️ CPU CORES: 1 (OPTIMIZED FOR 2 WORKERS)');
+    logger.system('⏳ СТУПЕНЧАТЫЙ ЗАПУСК: ИНТЕРВАЛ 20 СЕКУНД');
     logger.system('══════════════════════════════════════════════════');
 
-    // Запускаем 2 независимых процесса
-    for (let i = 0; i < 2; i++) {
-        cluster.fork();
-    }
+    // 1. Сначала запускаем только AdminJS (Worker 1)
+    logger.system('🛠 [Master] Запуск Worker 1 (AdminJS)...');
+    cluster.fork(); 
+    
+    // 2. Ждем 20 секунд, пока AdminJS соберет ресурсы и стабилизирует память
+    setTimeout(() => {
+        logger.system('⚡ [Master] 20 секунд прошло. Запуск Worker 2 (Bot Engine)...');
+        cluster.fork(); 
+    }, 20000); 
 
     cluster.on('exit', (worker) => {
-        logger.error(`🚨 WORKER ${worker.process.pid} DIED. RESTARTING...`);
-        cluster.fork();
+        logger.error(`🚨 WORKER ${worker.process.pid} DIED. RESTARTING IN 10s...`);
+        // Рестарт упавшего воркера тоже с задержкой 10 сек
+        setTimeout(() => cluster.fork(), 10000);
     });
 
-    // Запуск мониторинга системы в главном процессе
     setInterval(() => logSystemStats(), 60000); 
 
 } else {
@@ -74,7 +78,6 @@ async function startWorkerEngine() {
         await initDB();
         bot = new Telegraf(BOT_TOKEN);
 
-        // Общий прием обновлений Webhook на обоих воркерах
         app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => {
             bot.handleUpdate(req.body, res).catch(err => {
                 if (!res.headersSent) res.sendStatus(200);
@@ -82,11 +85,10 @@ async function startWorkerEngine() {
         });
 
         if (workerId === 1) {
-            // --- WORKER 1: ADMINJS & WEBHOOK CONTROL ---
+            // --- WORKER 1: ADMINJS & WEBHOOK ---
             logger.system(`🛠 [Worker 1] Initializing AdminJS Hub...`);
             await setupAdminPanel(app);
             
-            // Ставим вебхук только один раз
             setTimeout(() => {
                 bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`, { drop_pending_updates: true })
                     .then(() => logger.system(`📡 [Worker 1] WEBHOOK OPERATIONAL`))
@@ -94,7 +96,7 @@ async function startWorkerEngine() {
             }, 3000);
 
         } else {
-            // --- WORKER 2: BOT ENGINE & GAME API ---
+            // --- WORKER 2: BOT LOGIC & API ---
             logger.system(`⚡ [Worker 2] Launching Neural Bot Engine...`);
             setupBotHandlers(bot);
             setupAPIRoutes(app);
@@ -109,7 +111,6 @@ async function startWorkerEngine() {
     }
 }
 
-// --- МОДУЛЬ 1: ОБРАБОТКА ТЕЛЕГРАМ ---
 function setupBotHandlers(bot) {
     bot.start(async (ctx) => {
         const userId = ctx.from.id;
@@ -146,7 +147,6 @@ function setupBotHandlers(bot) {
     });
 }
 
-// --- МОДУЛЬ 2: API ДЛЯ WEBAPP ---
 function setupAPIRoutes(app) {
     app.get('/api/user/:id', async (req, res) => {
         try {
@@ -156,7 +156,6 @@ function setupAPIRoutes(app) {
             const now = new Date();
             const diff = Math.floor((now - new Date(user.last_seen)) / 1000);
             
-            // Пассивный доход (Profit per hour)
             if (diff > 60 && user.profit > 0) {
                 const earned = (user.profit / 3600) * Math.min(diff, 86400);
                 user.balance = parseFloat(user.balance) + earned;
@@ -182,7 +181,6 @@ function setupAPIRoutes(app) {
     });
 }
 
-// --- МОДУЛЬ 3: АДМИН-ПАНЕЛЬ ---
 async function setupAdminPanel(app) {
     try {
         const { default: AdminJS, ComponentLoader } = await import('adminjs');
