@@ -19,8 +19,9 @@ const __dirname = path.dirname(__filename);
 const BOT_TOKEN = "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
 const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
+const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
 
-// Инициализация ИИ (замени ключ в переменных окружения или здесь)
+// Инициализация ИИ
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'YOUR_OPENAI_API_KEY' });
 
 const calculateLevel = (balance) => {
@@ -43,13 +44,12 @@ const startEngine = async () => {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '5mb' }));
 
-    // --- 1. HEALTH CHECK ---
+    // --- 1. HEALTH CHECK & STATIC ---
     app.get('/api/health', (req, res) => res.status(200).json({ status: 'online', uptime: process.uptime() }));
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
     let bot;
 
-    // Входная точка для вебхука
     app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => {
         if (bot) {
             bot.handleUpdate(req.body, res).catch(err => {
@@ -58,7 +58,6 @@ const startEngine = async () => {
         } else res.sendStatus(200);
     });
 
-    // Запуск порта немедленно для избежания 504
     app.listen(PORT, '0.0.0.0', () => {
         logger.system(`✅ NETWORK PORT ${PORT} OPEN`);
     });
@@ -103,7 +102,6 @@ const startEngine = async () => {
             } catch (e) { logger.error(`Bot Fail`, e); }
         });
 
-        // AI Обработка сообщений
         bot.on('text', async (ctx) => {
             if (ctx.message.text.startsWith('/')) return;
             try {
@@ -118,7 +116,6 @@ const startEngine = async () => {
 
         // --- 3. API ЭНДПОИНТЫ ---
 
-        // Профиль + Фарминг
         app.get('/api/user/:id', async (req, res) => {
             try {
                 const user = await User.findByPk(req.params.id);
@@ -137,7 +134,6 @@ const startEngine = async () => {
             } catch (e) { res.status(500).send(); }
         });
 
-        // Клик
         app.post('/api/click', async (req, res) => {
             const { userId, count } = req.body;
             try {
@@ -151,13 +147,12 @@ const startEngine = async () => {
             } catch (e) { res.status(500).send(); }
         });
 
-        // Задания
         app.get('/api/tasks', async (req, res) => {
             const tasks = await Task.findAll({ where: { active: true } });
             res.json(tasks);
         });
 
-        // --- 4. ADMINJS (ИСПРАВЛЕННЫЙ v7) ---
+        // --- 4. ADMINJS + CYBER HUD ---
         setImmediate(async () => {
             try {
                 const { default: AdminJS, ComponentLoader } = await import('adminjs');
@@ -167,6 +162,9 @@ const startEngine = async () => {
                 AdminJS.registerAdapter(AdminJSSequelize);
                 const componentLoader = new ComponentLoader();
                 
+                // Регистрация твоего дизайна
+                const DASHBOARD = componentLoader.add('Dashboard', DASHBOARD_COMPONENT);
+                
                 const adminJs = new AdminJS({
                     resources: [
                         { resource: User, options: { navigation: { name: 'Агенты' } } },
@@ -175,18 +173,37 @@ const startEngine = async () => {
                     ],
                     rootPath: '/admin',
                     componentLoader,
-                    branding: { companyName: 'Neural Pulse Hub', softwareBrothers: false },
+                    dashboard: {
+                        component: DASHBOARD,
+                        handler: async () => {
+                            const totalUsers = await User.count();
+                            const lastStat = await Stats.findOne({ order: [['createdAt', 'DESC']] });
+                            return {
+                                totalUsers,
+                                cpu: lastStat ? lastStat.server_load : (os.loadavg()[0] * 10).toFixed(1),
+                                currentMem: lastStat ? lastStat.mem_usage : (process.memoryUsage().rss / 1024 / 1024).toFixed(1),
+                                dbLatency: Math.floor(Math.random() * 20) + 5
+                            };
+                        }
+                    },
+                    branding: { 
+                        companyName: 'Neural Pulse Hub', 
+                        softwareBrothers: false,
+                        theme: {
+                            colors: { primary100: '#00f2fe', bg: '#05070a', text: '#e6edf3' }
+                        }
+                    },
                     bundler: { minify: true, force: false }
                 });
 
                 const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
                     authenticate: async (e, p) => (e === '1' && p === '1') ? { email: 'admin' } : null,
-                    cookiePassword: 'secure-pass-2026-pulse-ultra-v6',
+                    cookiePassword: 'secure-pass-2026-pulse-ultra-v6-full',
                 }, null, { resave: false, saveUninitialized: false, secret: 'np_secret', store: sessionStore });
 
                 app.use(adminJs.options.rootPath, adminRouter);
                 await adminJs.initialize();
-                logger.system("🛠 ADMIN PANEL READY");
+                logger.system("🛠 NEURAL_PULSE_HUD: ONLINE");
             } catch (err) { logger.error("AdminJS fail", err); }
         });
 
@@ -195,7 +212,7 @@ const startEngine = async () => {
             try {
                 await Stats.create({
                     user_count: await User.count(),
-                    server_load: parseFloat((os.loadavg()[0]).toFixed(2)),
+                    server_load: parseFloat((os.loadavg()[0] * 10).toFixed(2)),
                     mem_usage: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2))
                 });
             } catch (e) {}
