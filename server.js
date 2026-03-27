@@ -4,161 +4,180 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
 import fs from 'fs';
-import OpenAI from 'openai';
 import helmet from 'helmet';
 import compression from 'compression';
+import rateLimit from 'express-rate-limit';
 
-// 1. Импорты БД и логов
+// Ресурсы ядра (БД и логи)
 import { sequelize, User, Task, Stats, sessionStore, initDB, logSystemStats } from './db.js';
 import { logger } from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- CONFIG ---
+// --- ⚙️ TITAN CONFIG ---
 const BOT_TOKEN = "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
 const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
 const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'sk-...' });
-
-// Оптимизированный расчет уровня
-const calculateLevel = (balance) => {
-    const b = parseFloat(balance);
-    if (b < 10000) return 1;
-    if (b < 100000) return 2;
-    if (b < 500000) return 3;
-    if (b < 2000000) return 4;
-    return 5;
-};
+// Статические множители (в памяти, для скорости)
+const MULTIPLIERS = [
+    { threshold: 2000000, multi: 3.5 },
+    { threshold: 500000, multi: 2.5 },
+    { threshold: 100000, multi: 2.0 },
+    { threshold: 10000, multi: 1.5 },
+    { threshold: 0, multi: 1.0 }
+];
 
 async function startNeuralOS() {
     const app = express();
 
-    // --- СИСТЕМНЫЙ СТЕК ---
-    app.use(helmet({ contentSecurityPolicy: false })); 
-    app.use(compression()); 
+    // --- 🛡️ ОПТИМИЗАЦИЯ ПОД 1 ЯДРО ---
+    app.use(helmet({ contentSecurityPolicy: false }));
+    app.use(compression({ level: 6 })); // Оптимально для CPU
     app.set('trust proxy', 1);
     app.use(cors({ origin: '*' }));
-    app.use(express.json({ limit: '1mb' })); // Защита от перегрузки памяти
-    
-    app.use('/static', express.static(path.join(__dirname, 'static')));
+    app.use(express.json({ limit: '32kb' })); // Чем меньше, тем быстрее парсинг
 
-    // ✅ МОНИТОРИНГ РЕСУРСОВ
-    app.get('/api/health', (req, res) => {
-        const memory = process.memoryUsage();
-        res.status(200).json({
-            status: 'pulse_online',
-            ram: `${Math.round(memory.rss / 1024 / 1024)}MB`,
-            uptime: `${Math.floor(process.uptime())}s`,
-            cpu_load: process.cpuUsage().system / 1000000
-        });
-    });
+    // Агрессивное кэширование статики
+    app.use('/static', express.static(path.join(__dirname, 'static'), {
+        maxAge: '1h',
+        etag: true
+    }));
 
     try {
-        logger.system('══════════════════════════════════════════════════');
-        logger.system('🚀 NEURAL PULSE: SINGLE CORE ENGINE ACTIVE');
-        logger.system('⚙️  MODE: FULL INTEGRATION (BOT + ADMIN + API)');
-        logger.system('══════════════════════════════════════════════════');
+        console.clear();
+        logger.system('╔══════════════════════════════════════════════════╗');
+        logger.system('║      NEURAL PULSE: SINGLE-CORE TITAN v12.0       ║');
+        logger.system('║   OPTIMIZED FOR BOTH HOST | MODE: STABLE-FLOW    ║');
+        logger.system('╚══════════════════════════════════════════════════╝');
 
         await initDB();
         const bot = new Telegraf(BOT_TOKEN);
 
-        // --- API МОДУЛЬ ---
+        // --- 🧬 МОДУЛИ ---
         setupAPIRoutes(app);
-
-        // --- АДМИН МОДУЛЬ ---
         await setupAdminPanel(app);
-
-        // --- БОТ МОДУЛЬ ---
         setupBotHandlers(bot);
 
-        // WEBHOOK (Один маршрут для всего)
-        app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => {
-            bot.handleUpdate(req.body, res).catch((err) => {
-                logger.error("Telegraf Error", err);
+        // ✅ FAIL-SAFE WEBHOOK GATEWAY
+        // Используем async/await для корректной обработки на одном ядре
+        app.post(`/telegraf/${BOT_TOKEN}`, async (req, res) => {
+            try {
+                await bot.handleUpdate(req.body, res);
+            } catch (err) {
+                logger.error("⚡ Gate Error", err);
+            } finally {
                 if (!res.headersSent) res.sendStatus(200);
-            });
+            }
         });
 
-        // Запуск Webhook в Telegram
-        await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`, { 
+        await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`, {
             drop_pending_updates: true,
             allowed_updates: ['message', 'callback_query']
         });
 
-        // Логи статистики
-        setInterval(() => logSystemStats(), 60000);
+        // --- 🩺 SMART CLEANUP (Раз в 2 минуты) ---
+        setInterval(() => {
+            const memory = process.memoryUsage().rss / 1024 / 1024;
+            if (memory > 230) { // Критическая отметка для 1 ядра на хостинге
+                logger.system(`♻️ Memory Guard: ${Math.round(memory)}MB usage. Cleaning...`);
+                if (global.gc) global.gc();
+            }
+            logSystemStats();
+        }, 120000);
 
-        // Обработка 404
-        app.use((req, res) => {
-            res.status(404).json({ error: "Neural Pulse: Interface not found" });
-        });
-
+        // --- 🌐 СТАРТ ---
         app.listen(PORT, '0.0.0.0', () => {
-            logger.system(`✅ CORE ONLINE ON PORT ${PORT}`);
+            logger.system(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`);
         });
+
+        // Защита от падения процесса
+        process.on('uncaughtException', (e) => logger.error('☢️ UNCAUGHT', e));
+        process.on('unhandledRejection', (e) => logger.error('☢️ REJECTION', e));
 
     } catch (err) {
-        logger.error(`🚨 CRITICAL SYSTEM FAILURE`, err);
+        logger.error(`🚨 BOOT FAILURE`, err);
         process.exit(1);
     }
 }
 
-// --- МОДУЛЬ API ---
+// --- 🛠️ API: ВЫСОКАЯ ПРОПУСКНАЯ СПОСОБНОСТЬ ---
 function setupAPIRoutes(app) {
-    app.get('/api/user/:id', async (req, res) => {
-        try {
-            const user = await User.findByPk(req.params.id);
-            if (!user) return res.status(404).json({ error: 'Agent not found' });
-            res.json(user);
-        } catch (e) { res.status(500).json({ error: 'Internal Error' }); }
+    const clickLimit = rateLimit({
+        windowMs: 1000,
+        max: 10, // 10 кликов в секунду - предел для честного игрока
+        handler: (req, res) => res.status(429).json({ error: "Pulse overload" })
     });
 
-    app.post('/api/click', async (req, res) => {
+    app.post('/api/click', clickLimit, async (req, res) => {
         const { userId, count } = req.body;
-        if (!userId || !count || count > 100) return res.status(400).send();
+        
+        // Валидация "на лету"
+        if (!userId || !count || count > 100 || count <= 0) return res.status(403).send();
+
         try {
-            const user = await User.findByPk(userId);
-            if (user) {
-                const power = 1 + (calculateLevel(user.balance) * 0.5);
-                const addValue = count * power;
-                
-                // ✅ Атомарное обновление через increment (предотвращает баги параллельных кликов)
-                await user.increment('balance', { by: addValue });
-                
-                // Возвращаем примерный новый баланс (БД обновится надежно)
-                res.json({ balance: parseFloat(user.balance) + addValue });
-            }
+            // Используем raw query или простой поиск для экономии ресурсов
+            const user = await User.findByPk(userId, { attributes: ['id', 'balance'] });
+            if (!user) return res.status(404).send();
+
+            // Быстрый расчет множителя без вызова тяжелых функций
+            const currentBalance = parseFloat(user.balance);
+            const multi = MULTIPLIERS.find(m => currentBalance >= m.threshold).multi;
+            const reward = Math.floor(count * multi);
+
+            // Атомарное обновление (increment — это SQL: SET balance = balance + X)
+            await User.increment({ balance: reward }, { where: { id: userId } });
+
+            // Мгновенный ответ
+            res.json({ s: 1, balance: currentBalance + reward });
+        } catch (e) {
+            res.status(500).json({ error: "DB Busy" });
+        }
+    });
+
+    app.get('/api/user/:id', async (req, res) => {
+        try {
+            const user = await User.findByPk(req.params.id, { 
+                attributes: ['id', 'username', 'balance'],
+                raw: true 
+            });
+            res.json(user || { error: 404 });
         } catch (e) { res.status(500).send(); }
     });
 }
 
-// --- МОДУЛЬ БОТА ---
+// --- 🤖 BOT: ИНТЕРФЕЙС СВЯЗИ ---
 function setupBotHandlers(bot) {
     bot.start(async (ctx) => {
-        const userId = ctx.from.id;
-        const webAppUrl = `${DOMAIN}/static/index.html`;
-        const keyboard = Markup.inlineKeyboard([[Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", webAppUrl)]]);
-
         try {
-            // Использование findOrCreate для стабильности
             const [user] = await User.findOrCreate({
-                where: { id: userId },
+                where: { id: ctx.from.id },
                 defaults: { username: ctx.from.username || 'AGENT', balance: 0 }
             });
 
-            const caption = `<b>Neural Pulse | Hub</b>\n\nАгент: <code>${user.username}</code>\nСтатус: <b>Active</b>\nБаланс: <b>${user.balance.toLocaleString()} NP</b>`;
-            const logoPath = path.join(__dirname, 'static/images/logo.png');
+            // Добавляем кэш-бастер к URL, чтобы WebApp всегда был свежим
+            const webAppUrl = `${DOMAIN}/static/index.html?v=${Date.now()}`;
+            
+            const keyboard = Markup.inlineKeyboard([
+                [Markup.button.webApp("⚡ ТЕРМИНАЛ: ВХОД", webAppUrl)],
+                [Markup.button.url("📢 КАНАЛ СВЯЗИ", "https://t.me/neural_pulse")]
+            ]);
 
-            if (fs.existsSync(logoPath)) await ctx.replyWithPhoto({ source: logoPath }, { caption, parse_mode: 'HTML', ...keyboard });
-            else await ctx.reply(caption, { parse_mode: 'HTML', ...keyboard });
-        } catch (e) { logger.error(`Bot Fail`, e); }
+            const text = `<b>[ NEURAL PULSE OS ]</b>\n\n<b>АГЕНТ:</b> <code>${user.username}</code>\n<b>БАЛАНС:</b> <code>${user.balance.toLocaleString()} NP</code>\n\n<i>Статус: Соединение стабильно.</i>`;
+            
+            const logo = path.join(__dirname, 'static/images/logo.png');
+            if (fs.existsSync(logo)) {
+                await ctx.replyWithPhoto({ source: logo }, { caption: text, parse_mode: 'HTML', ...keyboard });
+            } else {
+                await ctx.reply(text, { parse_mode: 'HTML', ...keyboard });
+            }
+        } catch (e) { logger.error("Bot.start fail", e); }
     });
 }
 
-// --- МОДУЛЬ АДМИНКИ ---
+// --- 🖥️ ADMIN: КОМАНДНЫЙ ЦЕНТР ---
 async function setupAdminPanel(app) {
     try {
         const { default: AdminJS, ComponentLoader } = await import('adminjs');
@@ -167,48 +186,34 @@ async function setupAdminPanel(app) {
 
         AdminJS.registerAdapter(AdminJSSequelize);
         const componentLoader = new ComponentLoader();
-        const DASHBOARD = componentLoader.add('Dashboard', DASHBOARD_COMPONENT);
         
         const adminJs = new AdminJS({
             resources: [
-                { resource: User, options: { navigation: { name: 'Персонал' } } },
-                { resource: Task, options: { navigation: { name: 'Миссии' } } },
-                { resource: Stats, options: { navigation: { name: 'Система' } } }
+                { resource: User, options: { navigation: { name: 'CORE' }, listProperties: ['id', 'username', 'balance'] } },
+                { resource: Task, options: { navigation: { name: 'OS' } } }
             ],
             rootPath: '/admin',
             componentLoader,
-            dashboard: {
-                component: DASHBOARD,
-                handler: async () => {
-                    const totalUsers = await User.count();
-                    const latest = (await Stats.findOne({ order: [['createdAt', 'DESC']] })) || {};
-                    return { totalUsers, cpu: latest.server_load || 0, currentMem: latest.mem_usage || 0 };
-                }
+            dashboard: { 
+                component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT) 
             },
             branding: { 
-                companyName: 'Neural Pulse Hub',
-                logo: '/static/images/logo.png',
+                companyName: 'NEURAL PULSE',
                 softwareBrothers: false,
                 theme: { colors: { primary100: '#00f2ff', bg: '#0b0e14' } }
             },
-            bundler: { minify: true, force: false } 
+            bundler: { minify: true } 
         });
 
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (e, p) => (e === 'admin' && p === 'neural2026') ? { email: 'admin' } : null,
-            cookiePassword: 'secure-session-pulse-unique-2026',
-        }, null, { 
-            resave: false, 
-            saveUninitialized: false, 
-            secret: 'np_secret_key_v7', 
-            store: sessionStore 
-        });
+            cookiePassword: 'np-titan-2026-secure',
+        }, null, { resave: false, saveUninitialized: false, secret: 'np_titan_secret', store: sessionStore });
 
         app.use(adminJs.options.rootPath, adminRouter);
         await adminJs.initialize();
-        logger.system("🛠 ADMIN INTERFACE READY");
+        logger.system("🛠 ADMIN TERMINAL ONLINE");
     } catch (err) { logger.error("AdminJS fail", err); }
 }
 
-// Запуск
 startNeuralOS();
