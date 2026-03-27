@@ -17,7 +17,7 @@ const __dirname = path.dirname(__filename);
 
 // --- CONFIG ---
 const BOT_TOKEN = "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
-const ADMIN_ID = 1630132205; // Твой ID для системных алертов
+const ADMIN_ID = 1630132205; 
 const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
 const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
@@ -66,7 +66,7 @@ const startEngine = async () => {
     try {
         await initDB();
 
-        // --- 2. TELEGRAM ENGINE + AI ---
+        // --- 2. TELEGRAM ENGINE ---
         bot = new Telegraf(BOT_TOKEN);
 
         bot.start(async (ctx) => {
@@ -145,6 +145,11 @@ const startEngine = async () => {
                 AdminJS.registerAdapter(AdminJSSequelize);
                 const componentLoader = new ComponentLoader();
                 
+                // Проверка файла перед добавлением
+                if (!fs.existsSync(DASHBOARD_COMPONENT)) {
+                    logger.error(`❌ ОШИБКА: Файл дашборда не найден по пути ${DASHBOARD_COMPONENT}`);
+                }
+
                 const DASHBOARD = componentLoader.add('Dashboard', DASHBOARD_COMPONENT);
                 
                 const adminJs = new AdminJS({
@@ -160,14 +165,14 @@ const startEngine = async () => {
                         handler: async () => {
                             const totalUsers = await User.count();
                             const lastStat = await Stats.findOne({ order: [['createdAt', 'DESC']] });
-                            const history = await Stats.findAll({ limit: 15, order: [['createdAt', 'DESC']] });
+                            const historyData = await Stats.findAll({ limit: 15, order: [['createdAt', 'DESC']] });
 
                             return {
                                 totalUsers,
                                 cpu: lastStat ? lastStat.server_load : 0,
                                 currentMem: lastStat ? lastStat.mem_usage : 0,
                                 dbLatency: Math.floor(Math.random() * 10) + 2,
-                                history: history.reverse().map(s => ({
+                                history: historyData.reverse().map(s => ({
                                     time: new Date(s.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                                     cpu: s.server_load,
                                     mem: s.mem_usage
@@ -182,7 +187,11 @@ const startEngine = async () => {
                             colors: { primary100: '#00f2fe', bg: '#05070a', text: '#e6edf3' }
                         }
                     },
-                    bundler: { minify: false, force: true }
+                    bundler: { 
+                        minify: false, 
+                        force: true // Принудительная пересборка фронтенда
+                    },
+                    watch: true // Слежение за изменениями в .jsx
                 });
 
                 const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
@@ -192,25 +201,24 @@ const startEngine = async () => {
 
                 app.use(adminJs.options.rootPath, adminRouter);
                 await adminJs.initialize();
-                logger.system("🛠 NEURAL_PULSE_HUD: ONLINE");
+                
+                logger.system("🛠 NEURAL_PULSE_HUD: ONLINE (V6.0 CUSTOM)");
             } catch (err) { logger.error("AdminJS fail", err); }
         });
 
-        // --- 5. ФОНОВЫЙ МОНИТОРИНГ И АЛЕРТЫ ---
+        // --- 5. ФОНОВЫЙ МОНИТОРИНГ ---
         setInterval(async () => {
             try {
                 const load = parseFloat((os.loadavg()[0] * 10).toFixed(2));
                 const mem = parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2));
                 const users = await User.count();
-
                 await Stats.create({ user_count: users, server_load: load, mem_usage: mem });
 
-                // Система уведомлений об угрозе серверу
                 if (load > 85 && bot) {
-                    bot.telegram.sendMessage(ADMIN_ID, `⚠️ <b>CRITICAL LOAD:</b> CPU ${load}%! Проверь процессы.`, { parse_mode: 'HTML' }).catch(() => {});
+                    bot.telegram.sendMessage(ADMIN_ID, `⚠️ <b>CRITICAL LOAD:</b> CPU ${load}%!`, { parse_mode: 'HTML' }).catch(() => {});
                 }
             } catch (e) {}
-        }, 300000); // Сбор каждые 5 минут
+        }, 300000); 
 
         // Вебхук
         setTimeout(() => {
