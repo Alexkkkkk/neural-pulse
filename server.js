@@ -20,9 +20,9 @@ const BOT_TOKEN = "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
 const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
 
-const openai = new OpenAI({ apiKey: 'YOUR_OPENAI_API_KEY' });
+// Инициализация ИИ (замени ключ в переменных окружения или здесь)
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'YOUR_OPENAI_API_KEY' });
 
-// Уровни агентов
 const calculateLevel = (balance) => {
     const b = parseFloat(balance);
     if (b < 10000) return 1;
@@ -34,7 +34,7 @@ const calculateLevel = (balance) => {
 
 const startEngine = async () => {
     logger.system('══════════════════════════════════════════════════');
-    logger.system('🚀 NEURAL PULSE: FULL OPERATIONAL CORE');
+    logger.system('🚀 NEURAL PULSE: ULTIMATE CORE V6.0');
     logger.system('══════════════════════════════════════════════════');
 
     const app = express();
@@ -43,32 +43,30 @@ const startEngine = async () => {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '5mb' }));
 
-    // --- 1. HEALTH & WEBHOOK ROUTE (МГНОВЕННЫЙ ОТВЕТ) ---
-    app.get('/api/health', (req, res) => res.status(200).json({ status: 'active', mem: (process.memoryUsage().rss / 1024 / 1024).toFixed(1) + 'MB' }));
+    // --- 1. HEALTH CHECK ---
+    app.get('/api/health', (req, res) => res.status(200).json({ status: 'online', uptime: process.uptime() }));
+    app.use('/static', express.static(path.join(__dirname, 'static')));
 
-    let bot; // Инициализируем позже
+    let bot;
 
+    // Входная точка для вебхука
     app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => {
         if (bot) {
             bot.handleUpdate(req.body, res).catch(err => {
                 if (!res.headersSent) res.sendStatus(200);
             });
-        } else {
-            res.sendStatus(200);
-        }
+        } else res.sendStatus(200);
     });
 
-    app.use('/static', express.static(path.join(__dirname, 'static')));
-
-    // --- 2. СТАРТ ПОРТА ---
+    // Запуск порта немедленно для избежания 504
     app.listen(PORT, '0.0.0.0', () => {
         logger.system(`✅ NETWORK PORT ${PORT} OPEN`);
     });
 
     try {
         await initDB();
-        
-        // --- 3. TELEGRAM ENGINE ---
+
+        // --- 2. TELEGRAM ENGINE + AI ---
         bot = new Telegraf(BOT_TOKEN);
 
         bot.start(async (ctx) => {
@@ -81,80 +79,93 @@ const startEngine = async () => {
                 let user = await User.findByPk(userId);
                 if (!user) {
                     let startBalance = 0;
-                    let referredBy = null;
+                    let referredBy = (refId && refId !== userId) ? refId : null;
 
-                    if (refId && refId !== userId) {
-                        const referrer = await User.findByPk(refId);
+                    if (referredBy) {
+                        const referrer = await User.findByPk(referredBy);
                         if (referrer) {
-                            referredBy = refId;
                             startBalance = 5000;
                             await referrer.update({ 
                                 balance: parseFloat(referrer.balance) + 10000, 
                                 referrals: referrer.referrals + 1 
                             });
-                            bot.telegram.sendMessage(refId, `✅ <b>Система:</b> Новый агент! +10k NP.`, { parse_mode: 'HTML' }).catch(() => {});
+                            bot.telegram.sendMessage(referredBy, `✅ <b>Система:</b> Новый агент! +10,000 NP.`, { parse_mode: 'HTML' }).catch(() => {});
                         }
                     }
                     user = await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: startBalance, referred_by: referredBy });
                 }
 
-                const caption = `<b>Neural Pulse | Terminal</b>\n\nАгент: <code>${user.username}</code>\nБаланс: <b>${user.balance} NP</b>\nУровень: <b>${user.level}</b>\n\n🔗 Реф. ссылка:\n<code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`;
+                const caption = `<b>Neural Pulse | Terminal</b>\n\nАгент: <code>${user.username}</code>\nБаланс: <b>${user.balance} NP</b>\n\n🔗 Реф. ссылка:\n<code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`;
                 const logoPath = path.join(__dirname, 'static/images/logo.png');
 
                 if (fs.existsSync(logoPath)) await ctx.replyWithPhoto({ source: logoPath }, { caption, parse_mode: 'HTML', ...keyboard });
                 else await ctx.reply(caption, { parse_mode: 'HTML', ...keyboard });
-            } catch (e) { logger.error(`Bot Start Error`, e); }
+            } catch (e) { logger.error(`Bot Fail`, e); }
         });
 
-        // --- 4. API ЭНДПОИНТЫ ДЛЯ WEBAPP ---
-        
-        // Получение данных пользователя + Авто-ферма
+        // AI Обработка сообщений
+        bot.on('text', async (ctx) => {
+            if (ctx.message.text.startsWith('/')) return;
+            try {
+                const response = await openai.chat.completions.create({
+                    model: "gpt-3.5-turbo",
+                    messages: [{ role: "system", content: "Ты — бортовой ИИ терминала Neural Pulse. Отвечай кратко и технично." }, { role: "user", content: ctx.message.text }],
+                    max_tokens: 100
+                });
+                await ctx.reply(`[AI]: ${response.choices[0].message.content}`);
+            } catch (e) { console.log("AI Busy"); }
+        });
+
+        // --- 3. API ЭНДПОИНТЫ ---
+
+        // Профиль + Фарминг
         app.get('/api/user/:id', async (req, res) => {
             try {
-                let user = await User.findByPk(req.params.id);
-                if (!user) return res.status(404).json({ error: "Not found" });
+                const user = await User.findByPk(req.params.id);
+                if (!user) return res.status(404).send();
 
                 const now = new Date();
-                const secondsOffline = Math.floor((now - new Date(user.last_seen)) / 1000);
-
-                // Если был офлайн больше минуты и есть доход в час
-                if (secondsOffline > 60 && user.profit > 0) {
-                    const farmTime = Math.min(secondsOffline, 86400); // Макс 24 часа
-                    const earned = (user.profit / 3600) * farmTime; 
-                    user.balance = parseFloat(user.balance) + parseFloat(earned.toFixed(2));
+                const diff = Math.floor((now - new Date(user.last_seen)) / 1000);
+                if (diff > 60 && user.profit > 0) {
+                    const earned = (user.profit / 3600) * Math.min(diff, 86400);
+                    user.balance = parseFloat(user.balance) + earned;
                     user.last_seen = now;
                     user.level = calculateLevel(user.balance);
                     await user.save();
                 }
                 res.json(user);
-            } catch (e) { res.status(500).json({ error: "DB Error" }); }
+            } catch (e) { res.status(500).send(); }
         });
 
-        // Клик (Тап)
+        // Клик
         app.post('/api/click', async (req, res) => {
             const { userId, count } = req.body;
             try {
                 const user = await User.findByPk(userId);
                 if (user) {
-                    const reward = count * (1 + (user.level * 0.2)); // Бонус за уровень
-                    user.balance = parseFloat(user.balance) + reward;
-                    user.last_seen = new Date();
+                    const power = 1 + (user.level * 0.5);
+                    user.balance = parseFloat(user.balance) + (count * power);
                     await user.save();
-                    return res.json({ balance: user.balance });
+                    res.json({ balance: user.balance });
                 }
-                res.status(404).send();
             } catch (e) { res.status(500).send(); }
         });
 
-        // --- 5. ADMINJS (В ФОНОВОМ РЕЖИМЕ) ---
+        // Задания
+        app.get('/api/tasks', async (req, res) => {
+            const tasks = await Task.findAll({ where: { active: true } });
+            res.json(tasks);
+        });
+
+        // --- 4. ADMINJS (ИСПРАВЛЕННЫЙ v7) ---
         setImmediate(async () => {
             try {
-                const { default: AdminJS } = await import('adminjs');
+                const { default: AdminJS, ComponentLoader } = await import('adminjs');
                 const { default: AdminJSExpress } = await import('@adminjs/express');
                 const AdminJSSequelize = await import('@adminjs/sequelize');
 
                 AdminJS.registerAdapter(AdminJSSequelize);
-                const componentLoader = new AdminJS.ComponentLoader();
+                const componentLoader = new ComponentLoader();
                 
                 const adminJs = new AdminJS({
                     resources: [
@@ -164,13 +175,13 @@ const startEngine = async () => {
                     ],
                     rootPath: '/admin',
                     componentLoader,
-                    branding: { companyName: 'Neural Pulse Hub', logo: '/static/images/logo.png', softwareBrothers: false },
+                    branding: { companyName: 'Neural Pulse Hub', softwareBrothers: false },
                     bundler: { minify: true, force: false }
                 });
 
                 const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
                     authenticate: async (e, p) => (e === '1' && p === '1') ? { email: 'admin' } : null,
-                    cookiePassword: 'secure-pass-2026-pulse-ultra-32-chars',
+                    cookiePassword: 'secure-pass-2026-pulse-ultra-v6',
                 }, null, { resave: false, saveUninitialized: false, secret: 'np_secret', store: sessionStore });
 
                 app.use(adminJs.options.rootPath, adminRouter);
@@ -179,23 +190,22 @@ const startEngine = async () => {
             } catch (err) { logger.error("AdminJS fail", err); }
         });
 
-        // --- 6. ФОНОВАЯ СТАТИСТИКА (Каждые 15 мин) ---
+        // Статистика
         setInterval(async () => {
             try {
                 await Stats.create({
                     user_count: await User.count(),
-                    server_load: parseFloat((os.loadavg()[0] * 10).toFixed(2)),
+                    server_load: parseFloat((os.loadavg()[0]).toFixed(2)),
                     mem_usage: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2))
                 });
-            } catch (e) { logger.error("Stats error", e); }
-        }, 900000);
+            } catch (e) {}
+        }, 600000);
 
-        // Установка вебхука
+        // Вебхук
         setTimeout(() => {
             bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`, { drop_pending_updates: true })
-                .then(() => logger.system(`📡 WEBHOOK OPERATIONAL`))
-                .catch(e => logger.error("Webhook error", e));
-        }, 3000);
+                .then(() => logger.system(`📡 WEBHOOK OPERATIONAL`));
+        }, 2000);
 
     } catch (err) {
         logger.error("🚨 CRITICAL CORE ERROR", err);
