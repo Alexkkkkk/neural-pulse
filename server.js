@@ -23,7 +23,6 @@ const PORT = process.env.PORT || 3000;
 
 AdminJS.registerAdapter(AdminJSSequelize);
 
-// --- Инициализация компонентов AdminJS ---
 const componentLoader = new ComponentLoader();
 const DASHBOARD = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
 
@@ -32,52 +31,47 @@ const startEngine = async () => {
     logger.system('🚀 NEURAL PULSE: ULTIMATE MONOLITH ACTIVATED');
     logger.system('══════════════════════════════════════════════════');
 
+    const app = express();
+    app.disable('x-powered-by');
+    app.set('trust proxy', 1);
+    app.use(cors({ origin: '*' }));
+    app.use(express.json({ limit: '5mb' }));
+    app.use(express.urlencoded({ extended: true }));
+    app.use('/static', express.static(path.join(__dirname, 'static')));
+
+    // --- 1. МГНОВЕННЫЙ ЗАПУСК ПОРТА (УБИВАЕТ 504 TIMEOUT) ---
+    const server = app.listen(PORT, () => {
+        logger.system(`✅ СЕРВЕР СЛУШАЕТ ПОРТ ${PORT} (ОЖИДАНИЕ ИНИЦИАЛИЗАЦИИ БД...)`);
+    });
+
     try {
-        // 1. Инициализация Базы Данных
-        await initDB();
-        logger.info("CORE_DB: ПОДКЛЮЧЕНО");
+        // --- 2. ИНИЦИАЛИЗАЦИЯ БД (ФОНОВАЯ) ---
+        await initDB(); 
+        logger.info("CORE_DB: ПОДКЛЮЧЕНО И ОЧИЩЕНО");
 
-        const app = express();
-        app.disable('x-powered-by');
-        app.set('trust proxy', 1);
-        app.use(cors({ origin: '*' }));
-        
-        // ПАРСЕРЫ (Критично для Telegram)
-        app.use(express.json({ limit: '5mb' }));
-        app.use(express.urlencoded({ extended: true }));
-        
-        // СТАТИКА
-        app.use('/static', express.static(path.join(__dirname, 'static')));
-
-        // --- 2. TELEGRAM BOT (ПРИОРИТЕТНЫЙ РОУТ) ---
+        // --- 3. TELEGRAM BOT ---
         const bot = new Telegraf(BOT_TOKEN);
 
-        // Обработка вебхука ДО админки, чтобы избежать таймаутов
         app.post(`/telegraf/${BOT_TOKEN}`, async (req, res) => {
             try {
-                // Передаем res, чтобы Telegraf сам ответил Telegram вовремя
                 await bot.handleUpdate(req.body, res);
             } catch (err) {
                 logger.error(`[BOT_UPDATE_ERR] ${err.message}`);
-                if (!res.headersSent) res.sendStatus(200); // Все равно отвечаем 200, чтобы Telegram не спамил
+                if (!res.headersSent) res.sendStatus(200);
             }
         });
 
         bot.start(async (ctx) => {
-            const userId = ctx.from.id;
-            // Ссылка именно на index.html в папке static
             const webAppUrl = `${DOMAIN}/static/index.html`;
             const keyboard = Markup.inlineKeyboard([[Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", webAppUrl)]]);
-            
             const caption = `<b>Neural Pulse | Terminal</b>\n\nАгент: <code>${ctx.from.username || 'AGENT'}</code>\nСтатус: <b>ONLINE</b>`;
             const logoPath = path.join(__dirname, 'static/images/logo.png');
 
             try {
                 await User.findOrCreate({ 
-                    where: { id: BigInt(userId) }, 
+                    where: { id: BigInt(ctx.from.id) }, 
                     defaults: { username: ctx.from.username || 'AGENT' } 
                 });
-                
                 if (fs.existsSync(logoPath)) {
                     await ctx.replyWithPhoto({ source: logoPath }, { caption, parse_mode: 'HTML', ...keyboard });
                 } else {
@@ -86,12 +80,11 @@ const startEngine = async () => {
             } catch (e) { logger.error(`Bot Error: ${e.message}`); }
         });
 
-        // --- 3. HUD ДИАГНОСТИКА ---
+        // --- 4. HUD ДИАГНОСТИКА ---
         app.get('/api/health', async (req, res) => {
             const start = Date.now();
             let dbStatus = 'OFFLINE';
             try { await sequelize.authenticate(); dbStatus = 'STABLE'; } catch(e) { dbStatus = 'CRITICAL'; }
-            
             const mem = process.memoryUsage();
             const load = (os.loadavg()[0] * 10).toFixed(1);
 
@@ -102,10 +95,9 @@ const startEngine = async () => {
                 <meta charset="UTF-8"><title>NP_CORE_HUD</title>
                 <style>
                     body { background: #05070a; color: #00f2fe; font-family: monospace; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-                    .hud { border: 2px solid #00f2fe; padding: 25px; width: 400px; box-shadow: 0 0 20px rgba(0, 242, 254, 0.2); background: rgba(0, 242, 254, 0.02); }
-                    h2 { border-bottom: 1px solid #00f2fe; padding-bottom: 10px; font-size: 16px; margin: 0 0 15px 0; }
-                    .row { display: flex; justify-content: space-between; margin: 10px 0; font-size: 13px; }
-                    .ok { color: #33ff66; text-shadow: 0 0 5px #33ff66; }
+                    .hud { border: 2px solid #00f2fe; padding: 25px; width: 400px; box-shadow: 0 0 20px rgba(0, 242, 254, 0.2); }
+                    .row { display: flex; justify-content: space-between; margin: 10px 0; }
+                    .ok { color: #33ff66; }
                 </style>
                 <script>setTimeout(() => location.reload(), 5000);</script>
             </head>
@@ -113,14 +105,12 @@ const startEngine = async () => {
                 <div class="hud">
                     <h2>> SYSTEM_ULTIMATE_MONITOR</h2>
                     <div class="row"><span>DATABASE</span><span class="${dbStatus === 'STABLE' ? 'ok' : ''}">${dbStatus}</span></div>
-                    <div class="row"><span>CPU_LOAD</span><span>${load}%</span></div>
-                    <div class="row"><span>MEMORY</span><span>${(mem.rss / 1024 / 1024).toFixed(1)} MB</span></div>
                     <div class="row"><span>LATENCY</span><span>${Date.now() - start}ms</span></div>
                 </div>
             </body></html>`);
         });
 
-        // --- 4. ADMINJS (Тяжелый блок в конце) ---
+        // --- 5. ADMINJS ---
         const adminJs = new AdminJS({
             resources: [
                 { resource: User, options: { navigation: { name: 'Агенты' } } },
@@ -147,27 +137,18 @@ const startEngine = async () => {
 
         app.use(adminJs.options.rootPath, adminRouter);
 
-        // --- 5. ЗАПУСК ---
-        app.listen(PORT, async () => {
-            logger.system(`✅ МОНОЛИТ АКТИВИРОВАН: Port ${PORT}`);
-            
-            // Ждем 3 секунды и ставим вебхук
-            setTimeout(async () => {
-                try {
-                    const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`;
-                    await bot.telegram.setWebhook(webhookUrl, { drop_pending_updates: true });
-                    logger.system(`📡 WEBHOOK УСТАНОВЛЕН -> ${webhookUrl}`);
-                    const me = await bot.telegram.getMe();
-                    logger.info(`🤖 БОТ: @${me.username} ГОТОВ К РАБОТЕ`);
-                } catch (e) {
-                    logger.error(`Webhook Fail: ${e.message}`);
-                }
-            }, 3000);
-        });
+        // --- 6. WEBHOOK ACTIVATION ---
+        setTimeout(async () => {
+            try {
+                const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`;
+                await bot.telegram.setWebhook(webhookUrl, { drop_pending_updates: true });
+                logger.system(`📡 WEBHOOK АКТИВЕН -> ${webhookUrl}`);
+            } catch (e) { logger.error(`Webhook Fail: ${e.message}`); }
+        }, 5000);
 
     } catch (err) {
-        logger.error("КРИТИЧЕСКИЙ СБОЙ МОНОЛИТА", err);
-        process.exit(1);
+        logger.error("КРИТИЧЕСКИЙ СБОЙ ПРИ ИНИЦИАЛИЗАЦИИ", err);
+        // Не выходим из процесса, чтобы сервер продолжал «висеть» на порту для диагностики
     }
 };
 
