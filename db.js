@@ -1,23 +1,22 @@
-import { Sequelize, DataTypes } from 'sequelize';
+import { Sequelize, DataTypes, Op } from 'sequelize';
 import session from 'express-session';
 import ConnectSessionSequelize from 'connect-session-sequelize';
 import os from 'os';
-import cluster from 'cluster'; // Добавлено для управления воркерами
+import cluster from 'cluster'; 
 
-// URI базы данных (Bothost/PGhost)
+// --- 🌐 CONFIG ---
 const PG_URI = "postgresql://bothost_db_130943b4f3f6:oY6CieQ5aohyTLgU9i23M6w80naZt9_1mJ4V6roejTs@node1.pghost.ru:32834/bothost_db_130943b4f3f6";
 
 export const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
     logging: false,
     dialectOptions: { 
-        ssl: false,
+        ssl: false, // Для PGhost обычно false, если не настроен сертификат
         connectTimeout: 60000 
     },
     pool: { 
-        // Суммарно 2 воркера откроют до 20 соединений (оптимально для pghost)
-        max: 10, 
-        min: 2,  
+        max: 8, // Немного снизил для 1 ядра, чтобы избежать перегрузки
+        min: 1,  
         acquire: 60000, 
         idle: 10000 
     },
@@ -30,9 +29,8 @@ export const sessionStore = new SequelizeStore({
     tableName: 'sessions' 
 });
 
-// --- МОДЕЛИ ---
+// --- 👤 МОДЕЛИ ---
 
-// Модель Пользователя
 export const User = sequelize.define('users', {
     id: { type: DataTypes.BIGINT, primaryKey: true },
     username: { type: DataTypes.STRING },
@@ -62,7 +60,6 @@ export const User = sequelize.define('users', {
     ]
 });
 
-// Модель Задач
 export const Task = sequelize.define('tasks', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     title: { type: DataTypes.STRING, unique: true },
@@ -71,7 +68,6 @@ export const Task = sequelize.define('tasks', {
     icon: { type: DataTypes.STRING, defaultValue: 'Task' }
 }, { timestamps: false });
 
-// Модель Системной Статистики
 export const Stats = sequelize.define('stats', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     user_count: { type: DataTypes.INTEGER },
@@ -83,14 +79,15 @@ export const Stats = sequelize.define('stats', {
     tableName: 'stats' 
 });
 
-// --- СВЯЗИ ---
+// --- 🔗 СВЯЗИ ---
 User.hasMany(User, { as: 'ReferralList', foreignKey: 'referred_by' });
 User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
-// --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+// --- 📊 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 export const logSystemStats = async () => {
-    // Пишем статистику ТОЛЬКО из Worker 1 (Админка), чтобы не дублировать записи
-    if (cluster.isWorker && cluster.worker.id !== 1) return;
+    // Проверка для кластера: пишем только из основного процесса или первого воркера
+    const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
+    if (!isPrimary) return;
 
     try {
         const start = Date.now();
@@ -105,21 +102,29 @@ export const logSystemStats = async () => {
             mem_usage: parseFloat(mem),
             db_latency: latency
         });
+        
+        // Самоочистка статистики (храним 200 записей)
+        const count = await Stats.count();
+        if (count > 200) {
+            const first = await Stats.findOne({ order: [['id', 'ASC']] });
+            if (first) await Stats.destroy({ where: { id: { [Op.lte]: first.id + (count - 200) } } });
+        }
     } catch (e) {
-        console.error('Stats logging error:', e.message);
+        console.error('--- [STATS] LOGGING ERROR:', e.message);
     }
 };
 
-// --- ИНИЦИАЛИЗАЦИЯ ---
+// --- 🚀 ИНИЦИАЛИЗАЦИЯ ---
 export const initDB = async () => {
     try {
         await sequelize.authenticate();
-        console.log('--- [DB] CONNECTED ---');
+        console.log('--- [DB] CONNECTION ESTABLISHED ---');
 
-        // Синхронизацию и начальные данные делает только Worker 1 (или Master)
-        if (!cluster.isWorker || cluster.worker.id === 1) {
+        const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
+
+        if (isPrimary) {
             await sequelize.sync({ alter: true });
-            console.log('--- [DB] SCHEMA SYNCED ---');
+            console.log('--- [DB] SCHEMA SYNCHRONIZED ---');
 
             await sessionStore.sync(); 
             
@@ -130,13 +135,19 @@ export const initDB = async () => {
                     { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
                     { title: 'Подключить TON кошелек', reward: 2500, url: '', icon: 'Wallet' }
                 ]);
+                console.log('--- [DB] DEFAULT TASKS CREATED ---');
             }
 
-            // Интервал сбора (раз в 5 минут) запускаем только здесь
+            // Интервал сбора (раз в 5 минут)
             setInterval(logSystemStats, 5 * 60 * 1000);
-            await logSystemStats(); // Первый запуск
+            await logSystemStats(); 
         }
 
         return true;
     } catch (error) {
-        console.error
+        console.error('--- [DB] CRITICAL ERROR during init:', error.message);
+        throw error; // Перебрасываем ошибку выше, чтобы сервер знал о сбое
+    }
+};
+
+export { Op };
