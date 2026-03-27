@@ -5,100 +5,137 @@ import { fileURLToPath } from 'url';
 import cors from 'cors';
 import fs from 'fs';
 import os from 'os';
+import OpenAI from 'openai';
 
 // Импорты модулей БД и логов
-import { sequelize, User, Task, Stats, sessionStore, initDB } from './db.js';
+import { sequelize, User, Task, Stats, sessionStore, initDB, DataTypes, Op } from './db.js';
 import { logger } from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// --- CONFIG ---
 const BOT_TOKEN = "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
 const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
+const ADMIN_ID = 1774360651;
+
+// Инициализация ИИ
+const openai = new OpenAI({ apiKey: 'YOUR_OPENAI_API_KEY' });
+
+// Функция расчета уровня (как в твоем старом коде)
+const calculateLevel = (balance) => {
+    if (balance < 10000) return 1;
+    if (balance < 100000) return 2;
+    if (balance < 500000) return 3;
+    if (balance < 2000000) return 4;
+    return 5;
+};
 
 const startEngine = async () => {
     logger.system('══════════════════════════════════════════════════');
-    logger.system('🚀 NEURAL PULSE: ULTIMATE MONOLITH ACTIVATED');
+    logger.system('🚀 NEURAL PULSE: ULTIMATE V5.1 ACTIVATED');
     logger.system('══════════════════════════════════════════════════');
 
     const app = express();
-    
-    // --- 0. БАЗОВЫЕ НАСТРОЙКИ (МГНОВЕННО) ---
     app.disable('x-powered-by');
     app.set('trust proxy', 1);
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '5mb' }));
     app.use(express.urlencoded({ extended: true }));
 
-    // --- 1. ПРИОРИТЕТНЫЙ HEALTH-CHECK (До тяжелых импортов AdminJS) ---
+    // --- 1. МГНОВЕННЫЙ HEALTH-CHECK (Против 504) ---
     app.get('/api/health', (req, res) => {
-        const mem = process.memoryUsage();
-        res.send(`
-        <html><body style="background:#05070a;color:#00f2fe;font-family:monospace;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;">
-            <div style="border:2px solid #00f2fe;padding:30px;box-shadow: 0 0 20px #00f2fe;">
-                <h2 style="margin:0 0 15px 0;">> CORE_STATUS: ONLINE</h2>
-                <div style="font-size:14px;">
-                    <p>MEMORY: ${(mem.rss / 1024 / 1024).toFixed(1)} MB</p>
-                    <p>UPTIME: ${Math.floor(process.uptime())}s</p>
-                    <p style="color:#33ff66;">⚡ PORT OPENED: ${PORT}</p>
-                </div>
-                <script>setTimeout(() => location.reload(), 2000);</script>
-            </div>
-        </body></html>`);
+        res.send(`<html><body style="background:#05070a;color:#00f2fe;font-family:monospace;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;">
+            <div style="border:2px solid #00f2fe;padding:20px;box-shadow:0 0 15px #00f2fe;">
+                <h2>> NP_CORE: ONLINE</h2>
+                <p>UPTIME: ${Math.floor(process.uptime())}s | MEM: ${(process.memoryUsage().rss / 1024 / 1024).toFixed(1)}MB</p>
+                <script>setTimeout(() => location.reload(), 3000);</script>
+            </div></body></html>`);
     });
 
-    // --- 2. СТАТИКА ---
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
-    // --- 3. ОТКРЫТИЕ ПОРТА (САМЫЙ ВАЖНЫЙ ШАГ) ---
+    // --- 2. СТАРТ ПОРТА (Сразу!) ---
     const server = app.listen(PORT, '0.0.0.0', () => {
-        logger.system(`✅ ПОРТ ${PORT} ОТКРЫТ. ОЖИДАНИЕ ИНИЦИАЛИЗАЦИИ КОМПОНЕНТОВ...`);
+        logger.system(`✅ PORT ${PORT} OPEN. INITIALIZING CORE...`);
     });
 
-    // Настройки для предотвращения обрыва прокси
-    server.keepAliveTimeout = 70000;
-    server.headersTimeout = 71000;
-
     try {
-        // --- 4. ИНИЦИАЛИЗАЦИЯ БД (ФОНОВАЯ) ---
+        // --- 3. ИНИЦИАЛИЗАЦИЯ БД ---
         await initDB();
-        logger.info("CORE_DB: ПОДКЛЮЧЕНО");
+        logger.info("CORE_DB: CONNECTED");
 
-        // --- 5. TELEGRAM BOT ---
+        // --- 4. TELEGRAM BOT + ЛОГИКА РЕФЕРАЛОВ ---
         const bot = new Telegraf(BOT_TOKEN);
-        
+
         app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => {
             bot.handleUpdate(req.body, res).catch(err => {
-                logger.error(`[BOT_ERR] ${err.message}`);
                 if (!res.headersSent) res.sendStatus(200);
             });
         });
 
         bot.start(async (ctx) => {
+            const userId = ctx.from.id;
+            const refId = ctx.startPayload ? parseInt(ctx.startPayload) : null;
             const webAppUrl = `${DOMAIN}/static/index.html`;
             const keyboard = Markup.inlineKeyboard([[Markup.button.webApp("⚡ ВХОД В ТЕРМИНАЛ", webAppUrl)]]);
-            const caption = `<b>Neural Pulse | Terminal</b>\n\nАгент: <code>${ctx.from.username || 'AGENT'}</code>`;
-            const logoPath = path.join(__dirname, 'static/images/logo.png');
 
             try {
-                await User.findOrCreate({ 
-                    where: { id: BigInt(ctx.from.id) }, 
-                    defaults: { username: ctx.from.username || 'AGENT' } 
-                });
+                let user = await User.findByPk(userId);
+                if (!user) {
+                    let startBalance = 0;
+                    let referredBy = null;
+
+                    if (refId && refId !== userId) {
+                        const referrer = await User.findByPk(refId);
+                        if (referrer) {
+                            referredBy = refId;
+                            startBalance = 5000;
+                            await referrer.update({ balance: referrer.balance + 10000, referrals: referrer.referrals + 1 });
+                            bot.telegram.sendMessage(refId, `✅ <b>Система:</b> Новый агент в сети! +10k NP.`, { parse_mode: 'HTML' }).catch(() => {});
+                        }
+                    }
+                    user = await User.create({ id: userId, username: ctx.from.username || 'AGENT', balance: startBalance, referred_by: referredBy });
+                }
+
+                const caption = `<b>Neural Pulse | Terminal</b>\n\nИдентификация: <code>${user.username}</code>\nБаланс: <b>${user.balance} NP</b>\n\n🔗 Реф. ссылка:\n<code>https://t.me/${ctx.botInfo.username}?start=${userId}</code>`;
+                const logoPath = path.join(__dirname, 'static/images/logo.png');
+
                 if (fs.existsSync(logoPath)) {
                     await ctx.replyWithPhoto({ source: logoPath }, { caption, parse_mode: 'HTML', ...keyboard });
                 } else {
                     await ctx.reply(caption, { parse_mode: 'HTML', ...keyboard });
                 }
-            } catch (e) { logger.error(`Bot Error: ${e.message}`); }
+            } catch (e) { logger.error(`Bot Fail`, e); }
         });
 
-        // --- 6. ADMINJS (ДИНАМИЧЕСКИЙ ИМПОРТ) ---
-        // Импортируем только здесь, чтобы не тормозить запуск порта
-        const { default: AdminJS, ComponentLoader } = await import('adminjs');
+        // --- 5. API С АВТО-ФЕРМОЙ ---
+        app.get('/api/user/:id', async (req, res) => {
+            try {
+                let user = await User.findByPk(req.params.id);
+                if (!user) return res.status(404).send("NOT_FOUND");
+
+                const now = new Date();
+                const secondsOffline = Math.floor((now - new Date(user.last_seen)) / 1000);
+
+                if (secondsOffline > 60 && user.profit > 0) {
+                    const farmTime = Math.min(secondsOffline, 86400); 
+                    const earned = (user.profit / 3600) * farmTime; 
+                    user.balance += parseFloat(earned.toFixed(2));
+                    user.last_seen = now;
+                    user.level = calculateLevel(user.balance);
+                    await user.save();
+                }
+                res.json(user);
+            } catch (e) { res.status(500).send("API_ERR"); }
+        });
+
+        // --- 6. ADMINJS (Динамическая подгрузка) ---
+        const { default: AdminJS } = await import('adminjs');
         const { default: AdminJSExpress } = await import('@adminjs/express');
         const AdminJSSequelize = await import('@adminjs/sequelize');
+        const { ComponentLoader } = AdminJS;
 
         AdminJS.registerAdapter(AdminJSSequelize);
         const componentLoader = new ComponentLoader();
@@ -107,18 +144,13 @@ const startEngine = async () => {
         const adminJs = new AdminJS({
             resources: [
                 { resource: User, options: { navigation: { name: 'Агенты' } } },
-                { resource: Task, options: { navigation: { name: 'Миссии' } } },
+                { resource: Task, options: { navigation: { name: 'Контракты' } } },
                 { resource: Stats, options: { navigation: { name: 'Система' } } }
             ],
             rootPath: '/admin',
             componentLoader,
             dashboard: { component: DASHBOARD },
-            branding: { 
-                companyName: 'Neural Pulse Hub', 
-                logo: '/static/images/logo.png',
-                softwareBrothers: false,
-                theme: { colors: { primary100: '#00f2fe', bg: '#05070a' } }
-            },
+            branding: { companyName: 'Neural Pulse Hub', logo: '/static/images/logo.png', softwareBrothers: false },
             bundler: { minify: true, force: false }
         });
 
@@ -130,13 +162,24 @@ const startEngine = async () => {
 
         app.use(adminJs.options.rootPath, adminRouter);
 
-        // --- 7. ФИНАЛЬНЫЙ WEBHOOK ---
-        const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`;
-        await bot.telegram.setWebhook(webhookUrl, { drop_pending_updates: true });
-        logger.system(`📡 МОНОЛИТ ПОЛНОСТЬЮ ГОТОВ. WEBHOOK: OK`);
+        // --- 7. ФОНОВЫЕ ПРОЦЕССЫ (Anti-Cheat & Webhook) ---
+        setInterval(async () => {
+            const metrics = {
+                user_count: await User.count(),
+                server_load: parseFloat((os.loadavg()[0] * 10).toFixed(2)),
+                mem_usage: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2))
+            };
+            await Stats.create(metrics);
+        }, 15 * 60 * 1000);
+
+        setTimeout(async () => {
+            const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`;
+            await bot.telegram.setWebhook(webhookUrl, { drop_pending_updates: true });
+            logger.system(`📡 WEBHOOK & AI MONITORING ACTIVE`);
+        }, 5000);
 
     } catch (err) {
-        logger.error("КРИТИЧЕСКИЙ СБОЙ В ЦИКЛЕ ЗАГРУЗКИ", err);
+        logger.error("CRITICAL BOOT ERROR", err);
     }
 };
 
