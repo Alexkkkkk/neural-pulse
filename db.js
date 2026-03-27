@@ -11,8 +11,8 @@ export const sequelize = new Sequelize(PG_URI, {
     logging: false,
     dialectOptions: { ssl: false },
     pool: { 
-        max: 10, // Увеличил до 10 для стабильности под нагрузкой
-        min: 2, 
+        max: 15, // Увеличил для стабильности при множественных запросах админки
+        min: 5, 
         acquire: 60000, 
         idle: 10000 
     },
@@ -57,7 +57,7 @@ export const User = sequelize.define('users', {
     ]
 });
 
-// Модель Задач (Контрактов)
+// Модель Задач
 export const Task = sequelize.define('tasks', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     title: { type: DataTypes.STRING, unique: true },
@@ -66,15 +66,18 @@ export const Task = sequelize.define('tasks', {
     icon: { type: DataTypes.STRING, defaultValue: 'Task' }
 }, { timestamps: false });
 
-// Модель Системной Статистики
+// Модель Системной Статистики (ИСПРАВЛЕНО ДЛЯ ГРАФИКОВ)
 export const Stats = sequelize.define('stats', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     user_count: { type: DataTypes.INTEGER },
     server_load: { type: DataTypes.FLOAT },
     mem_usage: { type: DataTypes.FLOAT },
-    db_latency: { type: DataTypes.INTEGER },
-    timestamp: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
-}, { timestamps: false, tableName: 'system_stats' });
+    db_latency: { type: DataTypes.INTEGER }
+    // Поле timestamp удалено, так как timestamps: true создаст createdAt автоматически
+}, { 
+    timestamps: true, 
+    tableName: 'stats' 
+});
 
 // --- СВЯЗИ ---
 User.hasMany(User, { as: 'ReferralList', foreignKey: 'referred_by' });
@@ -100,19 +103,18 @@ export const logSystemStats = async () => {
     }
 };
 
-// --- ИНИЦИАЛИЗАЦИЯ (БЕЗОПАСНАЯ) ---
+// --- ИНИЦИАЛИЗАЦИЯ ---
 export const initDB = async () => {
     try {
         await sequelize.authenticate();
         console.log('--- [DB] CONNECTED ---');
 
-        // Используем alter: true. Это изменит базу без удаления данных.
+        // alter: true добавит недостающие колонки (createdAt) в существующую таблицу
         await sequelize.sync({ alter: true });
-        console.log('--- [DB] SCHEMA SYNCED (SAFE MODE) ---');
+        console.log('--- [DB] SCHEMA SYNCED ---');
 
         await sessionStore.sync(); 
         
-        // Автоматическое наполнение задач, если база пуста
         const taskCount = await Task.count();
         if (taskCount === 0) {
             await Task.bulkCreate([
@@ -120,11 +122,14 @@ export const initDB = async () => {
                 { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
                 { title: 'Подключить TON кошелек', reward: 2500, url: '', icon: 'Wallet' }
             ]);
-            console.log('--- [DB] INITIAL TASKS CREATED ---');
         }
 
-        // Запуск логов статистики каждые 5 минут
+        // Запускаем сбор статистики сразу при старте, чтобы не ждать 5 минут
+        await logSystemStats();
+
+        // Интервал сбора (раз в 5 минут)
         setInterval(logSystemStats, 5 * 60 * 1000);
+
         return true;
     } catch (error) {
         console.error('--- [DB] FATAL INIT ERROR:', error);
