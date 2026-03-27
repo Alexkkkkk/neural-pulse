@@ -10,7 +10,7 @@ import OpenAI from 'openai';
 // 1. Импортируем типы напрямую из библиотеки sequelize (исправляет SyntaxError)
 import { DataTypes, Op } from 'sequelize'; 
 
-// 2. Импорты твоих модулей БД и логов
+// 2. Импорты модулей БД и логов
 import { sequelize, User, Task, Stats, sessionStore, initDB } from './db.js';
 import { logger } from './logger.js';
 
@@ -28,10 +28,11 @@ const openai = new OpenAI({ apiKey: 'YOUR_OPENAI_API_KEY' });
 
 // Функция расчета уровня
 const calculateLevel = (balance) => {
-    if (balance < 10000) return 1;
-    if (balance < 100000) return 2;
-    if (balance < 500000) return 3;
-    if (balance < 2000000) return 4;
+    const b = parseFloat(balance);
+    if (b < 10000) return 1;
+    if (b < 100000) return 2;
+    if (b < 500000) return 3;
+    if (b < 2000000) return 4;
     return 5;
 };
 
@@ -95,7 +96,11 @@ const startEngine = async () => {
                         if (referrer) {
                             referredBy = refId;
                             startBalance = 5000;
-                            await referrer.update({ balance: referrer.balance + 10000, referrals: referrer.referrals + 1 });
+                            // Исправлено: принудительное приведение к числу
+                            await referrer.update({ 
+                                balance: parseFloat(referrer.balance) + 10000, 
+                                referrals: referrer.referrals + 1 
+                            });
                             bot.telegram.sendMessage(refId, `✅ <b>Система:</b> Новый агент в сети! +10k NP.`, { parse_mode: 'HTML' }).catch(() => {});
                         }
                     }
@@ -125,7 +130,7 @@ const startEngine = async () => {
                 if (secondsOffline > 60 && user.profit > 0) {
                     const farmTime = Math.min(secondsOffline, 86400); 
                     const earned = (user.profit / 3600) * farmTime; 
-                    user.balance += parseFloat(earned.toFixed(2));
+                    user.balance = parseFloat(user.balance) + parseFloat(earned.toFixed(2));
                     user.last_seen = now;
                     user.level = calculateLevel(user.balance);
                     await user.save();
