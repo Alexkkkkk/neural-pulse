@@ -1,15 +1,116 @@
-# Зависимости (их установит сам Docker внутри образа)
-node_modules
-npm-debug.log
+# ==============================================================================
+# 🚀 NEURAL PULSE HUB: ULTIMATE PRODUCTION EXCLUSIONS
+# ==============================================================================
 
-# Кэш AdminJS (чтобы не тянуть старый билд)
-.adminjs
+# --- [ DEPENDENCIES & PACKAGE MANAGERS ] ---
+# Игнорируем всё, что связано с локальным окружением
+node_modules/
+jspm_packages/
+.npm/
+.eslintcache
+.stylelintcache
+.node_repl_history
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
-# Скрытые файлы Git и системные мусорные файлы
-.git
-.gitignore
+# --- [ ADMINJS & FRONTEND BUILD ARTIFACTS ] ---
+# Блокируем локальные билды, чтобы Docker собрал оптимизированный Bundle
+.adminjs/
+static/.adminjs/
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+dist/
+build/
+out/
+storybook-static/
+.serverless/
+
+# --- [ SYSTEM, SECRETS & CLOUD ] ---
+# Полная изоляция чувствительных данных
 .env
+.env.*
+!.env.example
+.git/
+.gitignore
+.dockerignore
+.gitattributes
+.git-logs/
+.svn/
+.hf/
 .DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
 
-# Лишние файлы документации
-README.md
+# --- [ DATA, LOGS & VOLUMES ] ---
+# БД и Логи должны жить только в Volume-монтировании
+data/
+logs/
+*.log
+*.sqlite
+*.db
+*.dump
+*.sql
+temp/
+tmp/
+.pids/
+
+# --- [ IDE, EDITORS & TOOLS ] ---
+# Убираем специфический мусор от всех популярных редакторов
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*~
+.project
+.classpath
+.settings/
+.factorypath
+
+# --- [ COMPILER & NATIVE BUILD TRASH ] ---
+# Если устанавливаются нативные зависимости (pg, argon2 и т.д.)
+build/Release/
+obj.target/
+*.target.mk
+Makefile
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# --- [ MEDIA & ASSETS SOURCE ] ---
+# Игнорируем исходники дизайна, оставляем только сжатые файлы в static/
+*.psd
+*.ai
+*.sketch
+*.fig
+*.xcf
+
+# --- [ CI/CD, TESTS & DOCS ] ---
+# Всё, что не нужно для работы сервера в рантайме
+README*
+CONTRIBUTING*
+LICENSE*
+CHANGELOG*
+docs/
+tests/
+spec/
+__tests__/
+coverage/
+.nyc_output/
+.travis.yml
+.github/
+.gitlab-ci.yml
