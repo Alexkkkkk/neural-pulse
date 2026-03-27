@@ -19,21 +19,14 @@ const BOT_TOKEN = "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
 const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
 
-// Инициализация ИИ
 const openai = new OpenAI({ apiKey: 'YOUR_OPENAI_API_KEY' });
 
-const calculateLevel = (balance) => {
-    const b = parseFloat(balance);
-    if (b < 10000) return 1;
-    if (b < 100000) return 2;
-    if (b < 500000) return 3;
-    if (b < 2000000) return 4;
-    return 5;
-};
+// Глобальная переменная для бота, чтобы роут видел его сразу
+let bot;
 
 const startEngine = async () => {
     logger.system('══════════════════════════════════════════════════');
-    logger.system('🚀 NEURAL PULSE: CORE V5.3 OPTIMIZED');
+    logger.system('🚀 NEURAL PULSE: CORE V5.4 STABLE');
     logger.system('══════════════════════════════════════════════════');
 
     const app = express();
@@ -42,15 +35,25 @@ const startEngine = async () => {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '5mb' }));
 
-    // --- 1. ПРИОРУТЕТНЫЙ HEALTH-CHECK ---
-    app.get('/api/health', (req, res) => {
-        res.status(200).json({ status: 'online', uptime: process.uptime() });
+    // --- 1. ПРИОРИТЕТНЫЕ МАРШРУТЫ (МГНОВЕННЫЙ ОТВЕТ) ---
+    app.get('/api/health', (req, res) => res.status(200).json({ status: 'online', uptime: process.uptime() }));
+
+    // КРИТИЧЕСКИЙ ПРАВКА: Вебхук ловит запросы СРАЗУ
+    app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => {
+        if (bot) {
+            bot.handleUpdate(req.body, res).catch(err => {
+                logger.error("Telegraf Fail", err);
+                if (!res.headersSent) res.sendStatus(200);
+            });
+        } else {
+            // Если бот еще грузится, просто говорим Telegram "Принято", чтобы не было 504
+            res.sendStatus(200);
+        }
     });
 
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
-    // --- 2. МГНОВЕННЫЙ ЗАПУСК СЕРВЕРА ---
-    // Мы открываем порт ДО инициализации тяжелых модулей
+    // --- 2. МГНОВЕННЫЙ ЗАПУСК ПОРТА ---
     app.listen(PORT, '0.0.0.0', () => {
         logger.system(`✅ NETWORK PORT ${PORT} OPEN (FAST START)`);
     });
@@ -60,15 +63,7 @@ const startEngine = async () => {
         await initDB();
         
         // --- 4. TELEGRAM BOT ENGINE ---
-        const bot = new Telegraf(BOT_TOKEN);
-
-        // Вебхук должен быть доступен сразу после initDB
-        app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => {
-            bot.handleUpdate(req.body, res).catch(err => {
-                logger.error("Telegraf Middleware Fail", err);
-                if (!res.headersSent) res.sendStatus(200);
-            });
-        });
+        bot = new Telegraf(BOT_TOKEN);
 
         bot.start(async (ctx) => {
             const userId = ctx.from.id;
@@ -104,7 +99,6 @@ const startEngine = async () => {
         });
 
         // --- 5. АСИНХРОННЫЙ ADMINJS ---
-        // Мы настраиваем его, но не ждем (await) завершения тяжелой инициализации
         const { default: AdminJS, ComponentLoader } = await import('adminjs');
         const { default: AdminJSExpress } = await import('@adminjs/express');
         const AdminJSSequelize = await import('@adminjs/sequelize');
@@ -133,8 +127,6 @@ const startEngine = async () => {
         }, null, { resave: false, saveUninitialized: false, secret: 'np_secret', store: sessionStore });
 
         app.use(adminJs.options.rootPath, adminRouter);
-
-        // Тяжелая инициализация в фоне
         adminJs.initialize().then(() => logger.system("🛠 ADMIN PANEL READY (ASYNC)"));
 
         // --- 6. УСТАНОВКА ВЕБХУКА ---
@@ -142,7 +134,7 @@ const startEngine = async () => {
             try {
                 const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`;
                 await bot.telegram.setWebhook(webhookUrl, { drop_pending_updates: true });
-                logger.system(`📡 WEBHOOK READY`);
+                logger.system(`📡 WEBHOOK SECURELY ACTIVE`);
             } catch (e) { logger.error("Webhook Error", e); }
         }, 5000); 
 
