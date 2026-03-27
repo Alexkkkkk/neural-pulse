@@ -7,8 +7,11 @@ import fs from 'fs';
 import os from 'os';
 import OpenAI from 'openai';
 
-// Импорты модулей БД и логов
-import { sequelize, User, Task, Stats, sessionStore, initDB, DataTypes, Op } from './db.js';
+// 1. Импортируем типы напрямую из библиотеки sequelize (исправляет SyntaxError)
+import { DataTypes, Op } from 'sequelize'; 
+
+// 2. Импорты твоих модулей БД и логов
+import { sequelize, User, Task, Stats, sessionStore, initDB } from './db.js';
 import { logger } from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -23,7 +26,7 @@ const ADMIN_ID = 1774360651;
 // Инициализация ИИ
 const openai = new OpenAI({ apiKey: 'YOUR_OPENAI_API_KEY' });
 
-// Функция расчета уровня (как в твоем старом коде)
+// Функция расчета уровня
 const calculateLevel = (balance) => {
     if (balance < 10000) return 1;
     if (balance < 100000) return 2;
@@ -164,12 +167,14 @@ const startEngine = async () => {
 
         // --- 7. ФОНОВЫЕ ПРОЦЕССЫ (Anti-Cheat & Webhook) ---
         setInterval(async () => {
-            const metrics = {
-                user_count: await User.count(),
-                server_load: parseFloat((os.loadavg()[0] * 10).toFixed(2)),
-                mem_usage: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2))
-            };
-            await Stats.create(metrics);
+            try {
+                const metrics = {
+                    user_count: await User.count(),
+                    server_load: parseFloat((os.loadavg()[0] * 10).toFixed(2)),
+                    mem_usage: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(2))
+                };
+                await Stats.create(metrics);
+            } catch (e) { logger.error("Stats fail", e); }
         }, 15 * 60 * 1000);
 
         setTimeout(async () => {
