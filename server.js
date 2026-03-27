@@ -48,7 +48,7 @@ const startEngine = async () => {
     app.use(express.json({ limit: '5mb' }));
     app.use(express.urlencoded({ extended: true }));
 
-    // --- 1. МГНОВЕННЫЙ HEALTH-CHECK (Защита от 504 при запуске) ---
+    // --- 1. HEALTH-CHECK (Твой спасательный круг) ---
     app.get('/api/health', (req, res) => {
         res.send(`<html><body style="background:#05070a;color:#00f2fe;font-family:monospace;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;">
             <div style="border:2px solid #00f2fe;padding:20px;box-shadow:0 0 15px #00f2fe;">
@@ -138,16 +138,14 @@ const startEngine = async () => {
             } catch (e) { res.status(500).send("API_ERR"); }
         });
 
-        // --- 6. ADMINJS (ИСПРАВЛЕННЫЙ ИМПОРТ ДЛЯ v7+) ---
+        // --- 6. ADMINJS (СТАБИЛЬНЫЙ БЛОК) ---
         const { default: AdminJS, ComponentLoader } = await import('adminjs');
         const { default: AdminJSExpress } = await import('@adminjs/express');
         const AdminJSSequelize = await import('@adminjs/sequelize');
 
         AdminJS.registerAdapter(AdminJSSequelize);
-        
         const componentLoader = new ComponentLoader();
         
-        // Безопасная инициализация дашборда
         const dashboardPath = path.join(__dirname, 'static', 'dashboard.jsx');
         let DASHBOARD_COMPONENT = null;
         if (fs.existsSync(dashboardPath)) {
@@ -163,11 +161,7 @@ const startEngine = async () => {
             rootPath: '/admin',
             componentLoader,
             dashboard: DASHBOARD_COMPONENT ? { component: DASHBOARD_COMPONENT } : {},
-            branding: { 
-                companyName: 'Neural Pulse Hub', 
-                logo: '/static/images/logo.png', 
-                softwareBrothers: false 
-            },
+            branding: { companyName: 'Neural Pulse Hub', logo: '/static/images/logo.png', softwareBrothers: false },
             bundler: { minify: true, force: false }
         });
 
@@ -175,11 +169,16 @@ const startEngine = async () => {
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (e, p) => (e === '1' && p === '1') ? { email: 'admin' } : null,
             cookiePassword: 'secure-pass-2026-pulse-ultra-32-chars',
-        }, null, { resave: false, saveUninitialized: false, secret: 'np_secret', store: sessionStore });
+        }, null, { 
+            resave: false, 
+            saveUninitialized: false, 
+            secret: 'np_secret', 
+            store: sessionStore // Используем наше хранилище из db.js
+        });
 
         app.use(adminJs.options.rootPath, adminRouter);
 
-        // --- 7. ФОНОВЫЕ ПРОЦЕССЫ ---
+        // --- 7. ФОНОВЫЕ ПРОЦЕССЫ И ВЕБХУК ---
         setInterval(async () => {
             try {
                 const metrics = {
@@ -191,11 +190,13 @@ const startEngine = async () => {
             } catch (e) { logger.error("Stats fail", e); }
         }, 15 * 60 * 1000);
 
+        // Даем серверу 10 секунд на полную готовность
         setTimeout(async () => {
             const webhookUrl = `${DOMAIN}/telegraf/${BOT_TOKEN}`;
+            // drop_pending_updates: true удалит старые зависшие сообщения
             await bot.telegram.setWebhook(webhookUrl, { drop_pending_updates: true });
-            logger.system(`📡 WEBHOOK & AI MONITORING ACTIVE`);
-        }, 5000);
+            logger.system(`📡 WEBHOOK ACTIVE & CLEANED`);
+        }, 10000);
 
     } catch (err) {
         logger.error("CRITICAL BOOT ERROR", err);
