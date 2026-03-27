@@ -2,17 +2,22 @@ import { Sequelize, DataTypes } from 'sequelize';
 import session from 'express-session';
 import ConnectSessionSequelize from 'connect-session-sequelize';
 import os from 'os';
+import cluster from 'cluster'; // Добавлено для управления воркерами
 
-// URI базы данных
+// URI базы данных (Bothost/PGhost)
 const PG_URI = "postgresql://bothost_db_130943b4f3f6:oY6CieQ5aohyTLgU9i23M6w80naZt9_1mJ4V6roejTs@node1.pghost.ru:32834/bothost_db_130943b4f3f6";
 
 export const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
     logging: false,
-    dialectOptions: { ssl: false },
+    dialectOptions: { 
+        ssl: false,
+        connectTimeout: 60000 
+    },
     pool: { 
-        max: 15, // Увеличил для стабильности при множественных запросах админки
-        min: 5, 
+        // Суммарно 2 воркера откроют до 20 соединений (оптимально для pghost)
+        max: 10, 
+        min: 2,  
         acquire: 60000, 
         idle: 10000 
     },
@@ -66,14 +71,13 @@ export const Task = sequelize.define('tasks', {
     icon: { type: DataTypes.STRING, defaultValue: 'Task' }
 }, { timestamps: false });
 
-// Модель Системной Статистики (ИСПРАВЛЕНО ДЛЯ ГРАФИКОВ)
+// Модель Системной Статистики
 export const Stats = sequelize.define('stats', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     user_count: { type: DataTypes.INTEGER },
     server_load: { type: DataTypes.FLOAT },
     mem_usage: { type: DataTypes.FLOAT },
     db_latency: { type: DataTypes.INTEGER }
-    // Поле timestamp удалено, так как timestamps: true создаст createdAt автоматически
 }, { 
     timestamps: true, 
     tableName: 'stats' 
@@ -85,6 +89,9 @@ User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
 // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 export const logSystemStats = async () => {
+    // Пишем статистику ТОЛЬКО из Worker 1 (Админка), чтобы не дублировать записи
+    if (cluster.isWorker && cluster.worker.id !== 1) return;
+
     try {
         const start = Date.now();
         const userCount = await User.count();
@@ -99,7 +106,7 @@ export const logSystemStats = async () => {
             db_latency: latency
         });
     } catch (e) {
-        console.error('Stats error:', e.message);
+        console.error('Stats logging error:', e.message);
     }
 };
 
@@ -109,30 +116,27 @@ export const initDB = async () => {
         await sequelize.authenticate();
         console.log('--- [DB] CONNECTED ---');
 
-        // alter: true добавит недостающие колонки (createdAt) в существующую таблицу
-        await sequelize.sync({ alter: true });
-        console.log('--- [DB] SCHEMA SYNCED ---');
+        // Синхронизацию и начальные данные делает только Worker 1 (или Master)
+        if (!cluster.isWorker || cluster.worker.id === 1) {
+            await sequelize.sync({ alter: true });
+            console.log('--- [DB] SCHEMA SYNCED ---');
 
-        await sessionStore.sync(); 
-        
-        const taskCount = await Task.count();
-        if (taskCount === 0) {
-            await Task.bulkCreate([
-                { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
-                { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
-                { title: 'Подключить TON кошелек', reward: 2500, url: '', icon: 'Wallet' }
-            ]);
+            await sessionStore.sync(); 
+            
+            const taskCount = await Task.count();
+            if (taskCount === 0) {
+                await Task.bulkCreate([
+                    { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
+                    { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
+                    { title: 'Подключить TON кошелек', reward: 2500, url: '', icon: 'Wallet' }
+                ]);
+            }
+
+            // Интервал сбора (раз в 5 минут) запускаем только здесь
+            setInterval(logSystemStats, 5 * 60 * 1000);
+            await logSystemStats(); // Первый запуск
         }
-
-        // Запускаем сбор статистики сразу при старте, чтобы не ждать 5 минут
-        await logSystemStats();
-
-        // Интервал сбора (раз в 5 минут)
-        setInterval(logSystemStats, 5 * 60 * 1000);
 
         return true;
     } catch (error) {
-        console.error('--- [DB] FATAL INIT ERROR:', error);
-        return false;
-    }
-};
+        console.error
