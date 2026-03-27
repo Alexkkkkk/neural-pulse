@@ -1,6 +1,7 @@
 import { Sequelize, DataTypes } from 'sequelize';
 import session from 'express-session';
 import ConnectSessionSequelize from 'connect-session-sequelize';
+import os from 'os';
 
 const PG_URI = "postgresql://bothost_db_130943b4f3f6:oY6CieQ5aohyTLgU9i23M6w80naZt9_1mJ4V6roejTs@node1.pghost.ru:32834/bothost_db_130943b4f3f6";
 
@@ -57,7 +58,32 @@ export const Stats = sequelize.define('stats', {
     timestamp: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { timestamps: false, tableName: 'system_stats' });
 
+// Связи
 User.hasMany(User, { as: 'Referrals', foreignKey: 'referred_by' });
+
+// --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+
+// Функция для записи системного лога в таблицу Stats
+export const logSystemStats = async () => {
+    try {
+        const start = Date.now();
+        await sequelize.authenticate();
+        const latency = Date.now() - start;
+        
+        const userCount = await User.count();
+        const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
+        const load = (os.loadavg()[0] * 10).toFixed(2);
+
+        await Stats.create({
+            user_count: userCount,
+            server_load: parseFloat(load),
+            mem_usage: parseFloat(mem),
+            db_latency: latency
+        });
+    } catch (e) {
+        console.error('[STATS_ERR]', e.message);
+    }
+};
 
 // --- ИНИЦИАЛИЗАЦИЯ ---
 export const initDB = async () => {
@@ -65,12 +91,12 @@ export const initDB = async () => {
         await sequelize.authenticate();
         console.log('--- [DB] CONNECTED TO POSTGRES ---');
         
-        // Создаем таблицу сессий вручную, если её нет
+        // Синхронизация таблиц
         await sessionStore.sync(); 
-        
         await sequelize.sync({ alter: true }); 
-        console.log('--- [DB] TABLES SYNCED (DATA PRESERVED) ---');
+        console.log('--- [DB] TABLES SYNCED ---');
 
+        // Дефолтные задачи
         const count = await Task.count();
         if (count === 0) {
             await Task.bulkCreate([
@@ -80,6 +106,12 @@ export const initDB = async () => {
             ]);
             console.log('--- [DB] INITIAL TASKS CREATED ---');
         }
+
+        // Запускаем сбор статистики каждые 5 минут
+        setInterval(logSystemStats, 5 * 60 * 1000);
+        // Первый запуск сразу
+        logSystemStats();
+
         return true;
     } catch (error) {
         console.error('--- [DB] FATAL INIT ERROR:', error);
