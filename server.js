@@ -145,9 +145,8 @@ const startEngine = async () => {
                 AdminJS.registerAdapter(AdminJSSequelize);
                 const componentLoader = new ComponentLoader();
                 
-                // Проверка файла перед добавлением
                 if (!fs.existsSync(DASHBOARD_COMPONENT)) {
-                    logger.error(`❌ ОШИБКА: Файл дашборда не найден по пути ${DASHBOARD_COMPONENT}`);
+                    logger.error(`❌ ОШИБКА: Файл дашборда не найден: ${DASHBOARD_COMPONENT}`);
                 }
 
                 const DASHBOARD = componentLoader.add('Dashboard', DASHBOARD_COMPONENT);
@@ -184,14 +183,25 @@ const startEngine = async () => {
                         companyName: 'Neural Pulse Hub', 
                         softwareBrothers: false,
                         theme: {
-                            colors: { primary100: '#00f2fe', bg: '#05070a', text: '#e6edf3' }
+                            colors: {
+                                // ПРИНУДИТЕЛЬНЫЙ ТЕМНЫЙ КИБЕРПАНК
+                                bg: '#0b0e14',        // Глубокий темный фон
+                                container: '#161b22', // Фон карточек
+                                border: '#30363d',    // Границы
+                                text: '#ffffff',      // Чистый белый текст
+                                title: '#00f2fe',     // Заголовки (голубой неон)
+                                primary100: '#00f2fe',
+                                
+                                // Вспомогательные цвета для навигации
+                                grey100: '#ffffff',
+                                grey80: '#e6edf3',
+                                grey60: '#8b949e',
+                                grey40: '#484f58'
+                            }
                         }
                     },
-                    bundler: { 
-                        minify: false, 
-                        force: true // Принудительная пересборка фронтенда
-                    },
-                    watch: true // Слежение за изменениями в .jsx
+                    bundler: { minify: false, force: true },
+                    watch: true 
                 });
 
                 const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
@@ -201,8 +211,7 @@ const startEngine = async () => {
 
                 app.use(adminJs.options.rootPath, adminRouter);
                 await adminJs.initialize();
-                
-                logger.system("🛠 NEURAL_PULSE_HUD: ONLINE (V6.0 CUSTOM)");
+                logger.system("🛠 NEURAL_PULSE_HUD: ONLINE (DARK MODE ACTIVE)");
             } catch (err) { logger.error("AdminJS fail", err); }
         });
 
