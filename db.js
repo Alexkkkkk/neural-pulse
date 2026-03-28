@@ -105,7 +105,13 @@ export const logSystemStats = async () => {
         const count = await Stats.count();
         if (count > 200) {
             const first = await Stats.findOne({ order: [['id', 'ASC']] });
-            if (first) await Stats.destroy({ where: { id: { [Op.lte]: first.id + (count - 200) } } });
+            if (first) {
+                await Stats.destroy({ 
+                    where: { 
+                        id: { [Op.lte]: first.id + (count - 200) } 
+                    } 
+                });
+            }
         }
     } catch (e) {
         console.error('--- [STATS] LOGGING ERROR:', e.message);
@@ -121,7 +127,7 @@ export const initDB = async () => {
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // alter: true бережно обновляет таблицу, если ты добавил новые поля
+            // alter: true обновляет таблицы без удаления данных
             await sequelize.sync({ alter: true });
             console.log('--- [DB] SCHEMA SYNCHRONIZED ---');
 
