@@ -55,7 +55,7 @@ async function startNeuralOS() {
         console.clear();
         logger.system('╔══════════════════════════════════════════════════╗');
         logger.system('║      NEURAL PULSE: TELEMETRY EDITION v12.4       ║');
-        logger.system('║    15-MIN GRAPH SYNC | STABLE DARK HUD           ║');
+        logger.system('║    15-MIN GRAPH SYNC | TOTAL DARK HUD            ║');
         logger.system('╚══════════════════════════════════════════════════╝');
 
         await initDB();
@@ -82,14 +82,14 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SYSTEM PULSE (Сбор статистики раз в 15 минут) ---
+        // --- 🩺 SYSTEM PULSE (15 минут) ---
         setInterval(async () => {
             const memory = process.memoryUsage().rss / 1024 / 1024;
             if (memory > 145 && global.gc) {
                 logger.system(`♻️ GC_CLEAN: ${Math.round(memory)}MB`);
                 global.gc();
             }
-            await logSystemStats(); // Запись точки на график
+            await logSystemStats(); 
         }, 15 * 60 * 1000); 
 
         const server = app.listen(PORT, '0.0.0.0', () => {
@@ -167,35 +167,22 @@ async function setupAdminPanel(app) {
             dashboard: { 
                 component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
                 handler: async () => {
-                    // --- СБОР ДАННЫХ ДЛЯ КИБЕР-ДАШБОРДА ---
                     const dayAgo = dayjs().subtract(24, 'hour').toDate();
-                    
                     const [totalUsers, dailyUsers, walletsLinked, sumBalance, historyData] = await Promise.all([
                         User.count(),
                         User.count({ where: { createdAt: { [Op.gte]: dayAgo } } }),
                         User.count({ where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } }),
                         User.sum('balance'),
-                        Stats.findAll({ 
-                            limit: 30, // Показываем последние 30 точек (около 7.5 часов истории)
-                            order: [['createdAt', 'DESC']] 
-                        })
+                        Stats.findAll({ limit: 30, order: [['createdAt', 'DESC']] })
                     ]);
-
-                    const totalTon = ((sumBalance || 0) / 1000000000).toFixed(2);
-
                     return { 
-                        totalUsers,
-                        dailyUsers,
-                        walletsLinked,
-                        totalTon,
-                        // Передаем полную историю для графиков в Dashboard.jsx
+                        totalUsers, dailyUsers, walletsLinked, 
+                        totalTon: ((sumBalance || 0) / 1000000000).toFixed(2),
                         history: historyData.reverse().map(s => ({ 
                             time: dayjs(s.createdAt).format('HH:mm'), 
                             user_count: s.user_count,
-                            active_wallets: s.active_wallets,
                             server_load: s.server_load, 
-                            mem_usage: s.mem_usage,
-                            db_latency: s.db_latency
+                            mem_usage: s.mem_usage
                         })) 
                     };
                 }
@@ -207,21 +194,55 @@ async function setupAdminPanel(app) {
                 theme: {
                     colors: {
                         primary100: '#00f2fe',
-                        accent: '#7000ff',
                         bg: '#0b0e14',
                         surface: '#161b22',
-                        error: '#ff3131',
-                        success: '#39ff14',
-                        border: '#30363d',
                         text: '#ffffff',
+                        border: '#30363d',
                     },
                     custom: `
-                        body, .adminjs_Box { background-color: #0b0e14 !important; color: #ffffff !important; font-family: 'monospace' !important; }
-                        .adminjs_Card { background: #161b22 !important; border: 1px solid #30363d !important; }
-                        .adminjs_Table, .adminjs_TableThead, .adminjs_TableTbody { background: #161b22 !important; }
+                        /* ГЛОБАЛЬНЫЙ ТЕМНЫЙ ФОН */
+                        body, html, #adminjs, .adminjs_Box { 
+                            background-color: #0b0e14 !important; 
+                            color: #ffffff !important; 
+                            font-family: 'monospace' !important; 
+                        }
+
+                        /* ФИКС БЕЛОЙ НАВИГАЦИИ И МОБИЛЬНОГО МЕНЮ */
+                        section[data-testid="sidebar"], 
+                        div[data-css="sidebar"], 
+                        aside, 
+                        .adminjs_Drawer,
+                        div[role="group"] { 
+                            background-color: #0b0e14 !important; 
+                            border-right: 1px solid #30363d !important; 
+                        }
+
+                        /* ШРИФТЫ И ССЫЛКИ В МЕНЮ */
+                        .adminjs_Label { color: #8b949e !important; text-transform: uppercase; font-size: 11px; }
+                        a[data-testid="sidebar-resource-link"] { color: #c9d1d9 !important; }
+                        a[data-testid="sidebar-resource-link"]:hover { background: #1c2128 !important; color: #00f2fe !important; }
+                        
+                        /* ВЕРХНЯЯ ПАНЕЛЬ (TOPBAR) */
+                        header[data-testid="topbar"] { 
+                            background: #0b0e14 !important; 
+                            border-bottom: 1px solid #30363d !important; 
+                        }
+
+                        /* КАРТОЧКИ И ТАБЛИЦЫ */
+                        .adminjs_Card, .adminjs_Table, .adminjs_TableThead, .adminjs_TableTbody { 
+                            background: #161b22 !important; 
+                            border-color: #30363d !important; 
+                        }
                         .adminjs_TableCell { color: #ffffff !important; border-bottom: 1px solid #30363d !important; }
+
+                        /* ИНПУТЫ */
                         input, select, textarea { background: #1c2128 !important; color: white !important; border: 1px solid #30363d !important; }
-                        section[data-testid="sidebar"] { background: #0b0e14 !important; border-right: 1px solid #30363d !important; }
+
+                        /* УДАЛЕНИЕ ФУТЕРА */
+                        footer, .adminjs_Footer { display: none !important; }
+                        
+                        /* ИКОНКИ */
+                        svg { fill: #8b949e !important; }
                     `,
                 }
             }
@@ -229,24 +250,14 @@ async function setupAdminPanel(app) {
 
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                if (email === '1' && password === '1') {
-                    return { email: 'admin@neural.os', title: 'CORE_ADMIN' };
-                }
+                if (email === '1' && password === '1') return { email: 'admin@neural.os', title: 'CORE_ADMIN' };
                 return null;
             },
             cookiePassword: 'np-titan-2026-secure-v2',
-        }, null, { 
-            resave: false, 
-            saveUninitialized: false, 
-            secret: 'np_titan_secret_v2', 
-            store: sessionStore 
-        });
+        }, null, { resave: false, saveUninitialized: false, secret: 'np_titan_secret_v2', store: sessionStore });
 
         app.use(adminJs.options.rootPath, adminRouter);
-        
-        adminJs.initialize().then(() => {
-            logger.system("🛠 DARK_HUD_TELEMETRY_READY [LOGIN: 1 / PASS: 1]");
-        });
+        adminJs.initialize().then(() => logger.system("🛠 DARK_HUD_TELEMETRY_READY [1/1]"));
 
     } catch (err) { logger.error("AdminJS fail", err); }
 }
