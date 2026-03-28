@@ -1,33 +1,32 @@
 # === STAGE 1: BUILDER ===
 FROM node:20-slim AS builder
 
-# Системные зависимости для сборки нативных модулей (pg, hstore)
+# Системные зависимости для сборки нативных модулей
 RUN apt-get update && apt-get install -y \
     python3 make g++ git curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# На этапе сборки нам нужны все зависимости
+# На этапе сборки разрешаем больше памяти для компиляции админки
 ENV NODE_ENV=development
-# Ограничиваем билд, чтобы не вылететь за лимиты хостинга
-ENV NODE_OPTIONS="--max-old-space-size=1536"
+ENV NODE_OPTIONS="--max-old-space-size=1024"
 
 COPY package*.json ./
-RUN npm install && npm cache clean --force
+# Используем ci для более стабильной установки зависимостей
+RUN npm ci
 
 COPY . .
 
-# МАГИЯ ПРЕДСБОРКИ: Генерируем статический бандл AdminJS
-# Мы выносим код в файл build-admin.js, чтобы избежать проблем с кавычками в shell
-RUN printf "import AdminJS, { ComponentLoader } from 'adminjs'; \
+# МАГИЯ ПРЕДСБОРКИ: Генерируем статический бандл AdminJS заранее
+# Мы создаем временный скрипт для инициализации бандлера
+RUN echo "import AdminJS, { ComponentLoader } from 'adminjs'; \
 import path from 'path'; \
 import fs from 'fs'; \
 async function build() { \
   console.log('--- ⚡ NEURAL PULSE: BUNDLING DASHBOARD ---'); \
   const componentLoader = new ComponentLoader(); \
   const dashPath = path.join(process.cwd(), 'static', 'dashboard.jsx'); \
-  if (fs.existsSync(dashPath)) componentLoader.add('Dashboard', dashPath); \
   const admin = new AdminJS({ \
     rootPath: '/admin', \
     componentLoader, \
@@ -41,40 +40,39 @@ async function build() { \
 build().catch(err => { console.error(err); process.exit(1); });" > build-admin.js && \
 node build-admin.js
 
-# Удаляем dev-зависимости перед финальной сборкой
+# Удаляем dev-зависимости, оставляем только продакшн
 RUN npm prune --production
 
 # === STAGE 2: RUNNER ===
 FROM node:20-slim
 
+# dumb-init необходим для корректной передачи сигналов завершения (SIGTERM)
 RUN apt-get update && apt-get install -y dumb-init && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV DATA_DIR=/app/data
-# Устанавливаем лимит памяти чуть ниже лимита тарифа (512MB), чтобы Node.js чистил себя сам
-# --expose-gc ОБЯЗАТЕЛЕН для работы твоего Memory Guard в server.js
-ENV NODE_OPTIONS="--max-old-space-size=450 --expose-gc"
+# КРИТИЧНО: --expose-gc позволяет твоему коду в server.js вызывать global.gc()
+# Устанавливаем лимит чуть ниже 159MB, чтобы Node.js был "агрессивнее" в чистке
+ENV NODE_OPTIONS="--max-old-space-size=140 --expose-gc"
 
-# Копируем артефакты
+# Копируем только то, что нужно для работы
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/.adminjs ./.adminjs
 COPY --from=builder /app/static ./static
 COPY --from=builder /app/*.js ./
-COPY --from=builder /app/models ./models 2>/dev/null || true
 
-# Права доступа (на Bothost лучше давать 777 на папку данных, если USER не root)
+# Настройка прав для записи (сессии, картинки, статика админки)
 RUN mkdir -p data static/images && \
-    chmod -R 777 data .adminjs static/images static/.adminjs && \
+    chmod -R 777 .adminjs static/images static/ && \
     chown -R node:node /app
 
-# Безопасный запуск от пользователя node
+# Запуск от не-root пользователя для безопасности
 USER node
 
 EXPOSE 3000
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
-# Запускаем через node напрямую с прокидкой флагов
+# Запуск через node напрямую с принудительным включением сборщика мусора
 CMD ["node", "--expose-gc", "server.js"]
