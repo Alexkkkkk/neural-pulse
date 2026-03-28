@@ -13,7 +13,7 @@ const CYBER = {
 };
 
 const Dashboard = (props) => {
-  // 1. Безопасное извлечение с проверкой на существование
+  // Безопасное извлечение компонентов из глобального объекта AdminJS
   const DS = window.AdminJSDesignSystem || {};
   const { Box, H2, H5, Text, Card, Badge, Button } = DS;
 
@@ -25,12 +25,11 @@ const Dashboard = (props) => {
   });
   
   const [scanPos, setScanPos] = useState(0);
-  const [logs, setLogs] = useState(['> SYSTEM_READY', '> NEURAL_PULSE_ENCRYPTION_ACTIVE']);
+  const [logs, setLogs] = useState(['> SYSTEM_READY', '> NEURAL_PULSE_LINK_ESTABLISHED']);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        // Проверка готовности API клиента
         if (!window.AdminJS || !window.AdminJS.ApiClient) return;
         const api = new window.AdminJS.ApiClient();
         const response = await api.getDashboard();
@@ -51,17 +50,21 @@ const Dashboard = (props) => {
     return () => { clearInterval(interval); clearInterval(anim); };
   }, []);
 
-  // 2. АВАРИЙНЫЙ ВЫХОД: Если дизайн-система не загрузилась, рендерим чистый HTML
-  // Это предотвращает "Element type is invalid"
-  if (!Box || !Card || !H2 || !Text || !Button) {
+  // ЗАЩИТА ОТ КРАША: Если дизайн-система еще грузится, показываем стильный терминал
+  if (!Box || !Card || !Button || !Text) {
     return (
       <div style={{ 
         background: CYBER.bg, color: CYBER.primary, padding: '50px', 
-        height: '100vh', fontFamily: 'monospace', fontSize: '18px' 
+        height: '100vh', fontFamily: 'monospace', display: 'flex', 
+        flexDirection: 'column', justifyContent: 'center', alignItems: 'center' 
       }}>
-        > BOOTING_NEURAL_PULSE_HUD...
-        <br/>
-        > LOADING_DEPENDENCIES...
+        <div style={{ border: `1px solid ${CYBER.primary}`, padding: '20px', boxShadow: `0 0 15px ${CYBER.primary}44` }}>
+          <div>{`> BOOTING_NEURAL_PULSE_HUD...`}</div>
+          <div style={{ marginTop: '10px', color: '#444' }}>{`> SYNCHRONIZING_DESIGN_RESOURCES...`}</div>
+          <div style={{ marginTop: '20px', width: '200px', height: '2px', background: '#222' }}>
+            <div style={{ width: '45%', height: '100%', background: CYBER.primary, boxShadow: `0 0 10px ${CYBER.primary}` }}></div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -69,28 +72,30 @@ const Dashboard = (props) => {
   return (
     <Box padding="xl" style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace', margin: '-20px' }}>
       
-      {/* 3. ГЛОБАЛЬНАЯ ИНЪЕКЦИЯ СТИЛЕЙ ДЛЯ ТЕМНОЙ ТЕМЫ */}
+      {/* ГЛОБАЛЬНЫЙ CSS ДЛЯ УДАЛЕНИЯ БЕЛЫХ ПЯТЕН */}
       <style>{`
-        /* Фон всей админки */
+        /* Основной фон и контейнеры */
         #adminjs, .adminjs_Box, body { background-color: ${CYBER.bg} !important; }
-
-        /* Перекрашиваем все таблицы, списки и карточки AdminJS */
+        
+        /* Таблицы, списки пользователей, карточки */
         .adminjs_Table, .adminjs_Table-Row, .adminjs_Table-Head, 
         .adminjs_Card, section[data-testid="property-list"],
-        div[data-testid="drawer-content"] {
+        div[data-testid="drawer-content"], .adminjs_Table-Cell,
+        .adminjs_Table-Body {
           background-color: ${CYBER.card} !important;
           color: ${CYBER.text} !important;
           border-color: ${CYBER.border} !important;
         }
 
-        /* Исправляем цвет в кнопках и навигации */
+        /* Кнопки */
         .adminjs_Button[variant="contained"] {
           background-color: ${CYBER.primary} !important;
           color: #000 !important;
           border: none !important;
+          font-weight: bold !important;
         }
-        
-        /* Убираем стандартный заголовок дашборда */
+
+        /* Убираем стандартный заголовок AdminJS */
         section[data-testid="dashboard"] > h1 { display: none; }
 
         @keyframes pulse-bars-cyber {
@@ -105,10 +110,10 @@ const Dashboard = (props) => {
         <Box style={{ position: 'absolute', top: 0, left: `${scanPos}%`, width: '2px', height: '100%', background: CYBER.primary, boxShadow: `0 0 15px ${CYBER.primary}`, opacity: 0.5 }} />
         <Box display="flex" justifyContent="space-between" alignItems="center">
           <Box>
-            <Badge style={{ background: CYBER.success, color: '#000', fontWeight: 'bold' }}>SYSTEM_OS_V12.3</Badge>
+            <Badge style={{ background: CYBER.success, color: '#000', fontWeight: 'bold' }}>NEURAL_OS_V12.3</Badge>
             <H2 style={{ color: CYBER.primary, marginTop: '10px', textShadow: `0 0 10px ${CYBER.primary}44` }}>CORE_TELEMETRY</H2>
           </Box>
-          <Button variant="danger" size="sm" onClick={() => window.location.reload()} style={{fontWeight: 'bold'}}>RELOAD_INTERFACE</Button>
+          <Button variant="danger" size="sm" onClick={() => window.location.reload()}>HARD_REBOOT</Button>
         </Box>
       </Box>
 
@@ -138,11 +143,11 @@ const Dashboard = (props) => {
         ))}
       </Box>
 
-      {/* LOWER PANELS */}
+      {/* VISUALS & LOGS */}
       <Box display="flex" flexDirection="row" flexWrap="wrap" marginTop="xl">
         <Box width={[1, 2/3]} paddingRight={['0', 'lg']} marginBottom="xl">
           <Box padding="xl" borderRadius="lg" style={{ backgroundColor: CYBER.card, height: '350px', border: `1px solid ${CYBER.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', position: 'relative' }}>
-            <Text style={{position: 'absolute', top: '20px', left: '20px', color: CYBER.primary, fontSize: '12px'}}>PULSE_STABILITY_MONITOR</Text>
+            <Text style={{position: 'absolute', top: '20px', left: '20px', color: CYBER.primary, fontSize: '10px', opacity: 0.5}}>PULSE_STABILITY_MONITOR</Text>
             {[...Array(20)].map((_, i) => (
               <Box key={i} style={{
                 width: '10px',
@@ -159,9 +164,9 @@ const Dashboard = (props) => {
           <Box padding="lg" borderRadius="lg" style={{ backgroundColor: '#000', height: '350px', border: `1px solid ${CYBER.success}44`, overflow: 'hidden' }}>
             <H5 mb="md" style={{ color: CYBER.success, letterSpacing: '2px' }}>TERMINAL_STREAM</H5>
             <Box>
-                {logs.concat(['> STATUS_OK', '> DATA_LINK_STABLE']).map((log, i) => (
+              {logs.concat(['> STATUS_OK', '> LINK_STABLE', '> ENCRYPTED']).map((log, i) => (
                 <Text key={i} size="xs" style={{ color: i === 0 ? CYBER.success : '#30363d', marginBottom: '6px' }}>{log}</Text>
-                ))}
+              ))}
             </Box>
           </Box>
         </Box>
