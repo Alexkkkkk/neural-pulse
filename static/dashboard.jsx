@@ -1,10 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Box, H2, H5, Text, Card, Badge, Button } from '@adminjs/design-system'
 import { ApiClient } from 'adminjs'
-import { 
-  XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, AreaChart, Area, Legend 
-} from 'recharts'
 
 const api = new ApiClient()
 
@@ -21,7 +17,6 @@ const CYBER = {
 
 const Dashboard = (props) => {
   const [stats, setStats] = useState(props.data || { totalUsers: 0, cpu: 0, currentMem: 0, dbLatency: 5 })
-  const [history, setHistory] = useState(props.data?.history || [])
   const [scanPos, setScanPos] = useState(0)
   const [logs, setLogs] = useState(['> SYSTEM_READY', '> TELEMETRY_LINK_ESTABLISHED'])
 
@@ -35,25 +30,20 @@ const Dashboard = (props) => {
       const d = response.data || {}
       setStats(d)
       
-      if (d.history && Array.isArray(d.history)) {
-        setHistory([...d.history])
-      }
-
       if (d.cpu > 80) addLog('CRITICAL: HIGH_CPU_LOAD');
-      if (d.currentMem > 450) addLog('MEMORY_SHIELD: ACTIVE');
+      if (d.currentMem > 200) addLog('MEMORY_SHIELD: ACTIVE');
     } catch (e) { 
-      // Молчаливое ожидание восстановления линка
+      // Ожидание линка
     }
   }
 
   const handleReboot = () => {
     addLog('INITIATING_CORE_REBOOT...')
     setTimeout(() => addLog('FLUSHING_VIRTUAL_MEMORY...'), 1000)
-    setTimeout(() => addLog('RE-SYNCHRONIZING_NODES...'), 2000)
     setTimeout(() => {
-        addLog('SYSTEM_STABLE_V6.0.0');
+        addLog('SYSTEM_STABLE_V12.3');
         fetchStats();
-    }, 3500)
+    }, 2500)
   }
 
   useEffect(() => {
@@ -79,7 +69,7 @@ const Dashboard = (props) => {
         <Box display="flex" justifyContent="space-between" alignItems="center">
           <Box>
             <Badge style={{ background: CYBER.success, color: '#000', fontWeight: '900' }}>NEURAL_PULSE_OS</Badge>
-            <H2 style={{ color: CYBER.primary, marginTop: '10px', letterSpacing: '3px' }}>ADMIN_HUD_V6.0</H2>
+            <H2 style={{ color: CYBER.primary, marginTop: '10px', letterSpacing: '3px' }}>ADMIN_HUD_V12.3</H2>
           </Box>
           <Button variant="danger" size="sm" onClick={handleReboot}>SYSTEM_RELOAD</Button>
         </Box>
@@ -99,7 +89,7 @@ const Dashboard = (props) => {
                 <Text size="xs" style={{ color: '#8b949e', fontWeight: 'bold' }}>{item.label}</Text>
                 <H2 style={{ color: '#fff', margin: '8px 0' }}>{item.val || 0}<span style={{fontSize: '14px', color: item.color}}>{item.unit}</span></H2>
                 <Box width="100%" height="3px" bg="#000">
-                  <Box width={`${Math.min(item.val, 100)}%`} height="100%" style={{ background: item.color, boxShadow: `0 0 8px ${item.color}` }} />
+                  <Box width={`${Math.min(item.val, 100)}%`} height="100%" style={{ background: item.color, boxShadow: `0 0 8px ${item.color}`, transition: 'width 1s ease-in-out' }} />
                 </Box>
               </Box>
             </Card>
@@ -107,30 +97,33 @@ const Dashboard = (props) => {
         ))}
       </Box>
 
-      {/* MAIN CONTENT: GRAPH AND LOGS */}
       <Box display="flex" flexDirection="row" flexWrap="wrap" marginTop="xl">
         
-        {/* TELEMETRY GRAPH */}
+        {/* VISUAL PULSE AREA (Вместо тяжелого Recharts) */}
         <Box width={[1, 2/3]} paddingRight={['0', 'md']} marginBottom="xl">
-          <Box padding="lg" borderRadius="xl" style={{ backgroundColor: CYBER.card, height: '420px', border: '1px solid #30363d' }}>
-            <H5 mb="xl" style={{ color: CYBER.primary }}>REALTIME_SYSTEM_TELEMETRY</H5>
-            <ResponsiveContainer width="100%" height="85%">
-              <AreaChart data={history}>
-                <defs>
-                  <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={CYBER.primary} stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor={CYBER.primary} stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#30363d" vertical={false} />
-                <XAxis dataKey="time" stroke="#8b949e" hide={history.length === 0} />
-                <YAxis stroke="#8b949e" />
-                <Tooltip contentStyle={{ backgroundColor: '#0d1117', border: `1px solid ${CYBER.primary}`, color: '#fff' }} />
-                <Legend />
-                <Area name="CPU (%)" type="monotone" dataKey="cpu" stroke={CYBER.primary} fill="url(#colorCpu)" strokeWidth={3} isAnimationActive={false} />
-                <Area name="RAM (MB)" type="monotone" dataKey="mem" stroke={CYBER.secondary} fill="transparent" strokeWidth={3} isAnimationActive={false} />
-              </AreaChart>
-            </ResponsiveContainer>
+          <Box padding="lg" borderRadius="xl" style={{ backgroundColor: CYBER.card, height: '420px', border: '1px solid #30363d', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+            <H5 mb="xl" style={{ color: CYBER.primary }}>CORE_STABILITY_MONITOR</H5>
+            
+            {/* Анимированный визуализатор пульса */}
+            <Box style={{ width: '80%', height: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                {[...Array(20)].map((_, i) => (
+                    <Box key={i} style={{
+                        width: '8px',
+                        background: stats.cpu > 70 ? CYBER.danger : CYBER.primary,
+                        height: `${20 + Math.random() * 60}%`,
+                        borderRadius: '4px',
+                        animation: `pulse 1.5s infinite ease-in-out ${i * 0.1}s`,
+                        boxShadow: `0 0 10px ${CYBER.primary}44`
+                    }} />
+                ))}
+            </Box>
+            <style>{`
+                @keyframes pulse {
+                    0%, 100% { height: 30%; opacity: 0.4; }
+                    50% { height: 80%; opacity: 1; }
+                }
+            `}</style>
+            <Text mt="xl" color="#8b949e">STATUS: DATA_FLOW_STABLE</Text>
           </Box>
         </Box>
 
