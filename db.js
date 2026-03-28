@@ -76,7 +76,7 @@ export const Task = sequelize.define('tasks', {
     icon: { type: DataTypes.STRING, defaultValue: 'Task' }
 }, { timestamps: false });
 
-// --- 📊 МОДЕЛЬ: STATS (Расширена для графиков) ---
+// --- 📊 МОДЕЛЬ: STATS (Для временных графиков в каждом окошке) ---
 export const Stats = sequelize.define('stats', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     user_count: { type: DataTypes.INTEGER, defaultValue: 0 },
@@ -96,13 +96,14 @@ User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
 // --- 📊 СБОР ТЕЛЕМЕТРИИ ---
 export const logSystemStats = async () => {
+    // Выполняем только на основном процессе
     const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
     if (!isPrimary) return;
 
     try {
         const start = Date.now();
         
-        // Считаем данные для дашборда
+        // Параллельный сбор данных для скорости
         const [userCount, walletCount, sumBalance] = await Promise.all([
             User.count(),
             User.count({ where: { wallet: { [Op.ne]: null } } }),
@@ -113,6 +114,7 @@ export const logSystemStats = async () => {
         const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
         const load = (os.loadavg()[0] * 10).toFixed(2);
 
+        // Создаем точку на графике
         await Stats.create({
             user_count: userCount,
             active_wallets: walletCount,
@@ -122,16 +124,17 @@ export const logSystemStats = async () => {
             db_latency: latency
         });
         
-        // Очистка старых логов (храним 200 последних точек)
+        // Храним последние 96 точек (это ровно 24 часа при интервале в 15 минут)
         const count = await Stats.count();
-        if (count > 200) {
+        if (count > 96) {
             const first = await Stats.findOne({ order: [['id', 'ASC']] });
             if (first) {
                 await Stats.destroy({ 
-                    where: { id: { [Op.lte]: first.id + (count - 200) } } 
+                    where: { id: { [Op.lte]: first.id + (count - 96) } } 
                 });
             }
         }
+        console.log(`--- [STATS] 15m Snapshot captured. Users: ${userCount}, Wallets: ${walletCount}`);
     } catch (e) {
         console.error('--- [STATS] LOGGING ERROR:', e.message);
     }
@@ -146,7 +149,7 @@ export const initDB = async () => {
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // alter: true обновит таблицу Stats новыми полями без потери данных
+            // Синхронизируем структуру (добавит новые поля для графиков автоматически)
             await sequelize.sync({ alter: true });
             console.log('--- [DB] SCHEMA SYNCHRONIZED ---');
 
@@ -162,8 +165,9 @@ export const initDB = async () => {
                 console.log('--- [DB] DEFAULT TASKS CREATED ---');
             }
 
-            setInterval(logSystemStats, 5 * 60 * 1000);
-            await logSystemStats(); 
+            // Устанавливаем интервал ровно в 15 минут
+            setInterval(logSystemStats, 15 * 60 * 1000);
+            await logSystemStats(); // Первый запуск сразу при старте
         }
 
         return true;
