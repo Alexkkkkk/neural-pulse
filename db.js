@@ -29,14 +29,21 @@ export const sessionStore = new SequelizeStore({
     tableName: 'sessions' 
 });
 
-// --- 👤 МОДЕЛИ ---
-
+// --- 👤 МОДЕЛЬ: USER ---
 export const User = sequelize.define('users', {
     id: { type: DataTypes.BIGINT, primaryKey: true },
-    username: { type: DataTypes.STRING },
+    username: { type: DataTypes.STRING, defaultValue: 'AGENT' },
     photo_url: { type: DataTypes.TEXT },
-    balance: { type: DataTypes.DECIMAL(20, 2), defaultValue: 0 }, 
-    profit: { type: DataTypes.DECIMAL(20, 2), defaultValue: 0 },  
+    balance: { 
+        type: DataTypes.DECIMAL(20, 2), 
+        defaultValue: 0,
+        get() { return parseFloat(this.getDataValue('balance') || 0); } 
+    }, 
+    profit: { 
+        type: DataTypes.DECIMAL(20, 2), 
+        defaultValue: 0,
+        get() { return parseFloat(this.getDataValue('profit') || 0); }
+    },  
     energy: { type: DataTypes.DOUBLE, defaultValue: 1000 },
     max_energy: { type: DataTypes.INTEGER, defaultValue: 1000 },
     tap: { type: DataTypes.INTEGER, defaultValue: 1 },
@@ -60,17 +67,21 @@ export const User = sequelize.define('users', {
     ]
 });
 
+// --- 📋 МОДЕЛЬ: TASK ---
 export const Task = sequelize.define('tasks', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     title: { type: DataTypes.STRING, unique: true },
     reward: { type: DataTypes.INTEGER, defaultValue: 1000 },
-    url: { type: DataTypes.STRING },
+    url: { type: DataTypes.STRING, defaultValue: '' },
     icon: { type: DataTypes.STRING, defaultValue: 'Task' }
 }, { timestamps: false });
 
+// --- 📊 МОДЕЛЬ: STATS (Расширена для графиков) ---
 export const Stats = sequelize.define('stats', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    user_count: { type: DataTypes.INTEGER },
+    user_count: { type: DataTypes.INTEGER, defaultValue: 0 },
+    active_wallets: { type: DataTypes.INTEGER, defaultValue: 0 },
+    total_balance: { type: DataTypes.FLOAT, defaultValue: 0 },
     server_load: { type: DataTypes.FLOAT },
     mem_usage: { type: DataTypes.FLOAT },
     db_latency: { type: DataTypes.INTEGER }
@@ -83,33 +94,41 @@ export const Stats = sequelize.define('stats', {
 User.hasMany(User, { as: 'ReferralList', foreignKey: 'referred_by' });
 User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
-// --- 📊 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+// --- 📊 СБОР ТЕЛЕМЕТРИИ ---
 export const logSystemStats = async () => {
     const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
     if (!isPrimary) return;
 
     try {
         const start = Date.now();
-        const userCount = await User.count();
+        
+        // Считаем данные для дашборда
+        const [userCount, walletCount, sumBalance] = await Promise.all([
+            User.count(),
+            User.count({ where: { wallet: { [Op.ne]: null } } }),
+            User.sum('balance')
+        ]);
+
         const latency = Date.now() - start;
         const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
         const load = (os.loadavg()[0] * 10).toFixed(2);
 
         await Stats.create({
             user_count: userCount,
+            active_wallets: walletCount,
+            total_balance: parseFloat(sumBalance || 0),
             server_load: parseFloat(load),
             mem_usage: parseFloat(mem),
             db_latency: latency
         });
         
+        // Очистка старых логов (храним 200 последних точек)
         const count = await Stats.count();
         if (count > 200) {
             const first = await Stats.findOne({ order: [['id', 'ASC']] });
             if (first) {
                 await Stats.destroy({ 
-                    where: { 
-                        id: { [Op.lte]: first.id + (count - 200) } 
-                    } 
+                    where: { id: { [Op.lte]: first.id + (count - 200) } } 
                 });
             }
         }
@@ -127,7 +146,7 @@ export const initDB = async () => {
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // alter: true обновляет таблицы без удаления данных
+            // alter: true обновит таблицу Stats новыми полями без потери данных
             await sequelize.sync({ alter: true });
             console.log('--- [DB] SCHEMA SYNCHRONIZED ---');
 
