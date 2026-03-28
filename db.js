@@ -11,11 +11,11 @@ export const sequelize = new Sequelize(PG_URI, {
     dialect: 'postgres', 
     logging: false,
     dialectOptions: { 
-        ssl: false, // Для PGhost обычно false, если не настроен сертификат
+        ssl: false, 
         connectTimeout: 60000 
     },
     pool: { 
-        max: 8, // Немного снизил для 1 ядра, чтобы избежать перегрузки
+        max: 8, 
         min: 1,  
         acquire: 60000, 
         idle: 10000 
@@ -85,7 +85,6 @@ User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
 // --- 📊 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 export const logSystemStats = async () => {
-    // Проверка для кластера: пишем только из основного процесса или первого воркера
     const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
     if (!isPrimary) return;
 
@@ -103,7 +102,6 @@ export const logSystemStats = async () => {
             db_latency: latency
         });
         
-        // Самоочистка статистики (храним 200 записей)
         const count = await Stats.count();
         if (count > 200) {
             const first = await Stats.findOne({ order: [['id', 'ASC']] });
@@ -123,6 +121,7 @@ export const initDB = async () => {
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
+            // alter: true бережно обновляет таблицу, если ты добавил новые поля
             await sequelize.sync({ alter: true });
             console.log('--- [DB] SCHEMA SYNCHRONIZED ---');
 
@@ -138,7 +137,6 @@ export const initDB = async () => {
                 console.log('--- [DB] DEFAULT TASKS CREATED ---');
             }
 
-            // Интервал сбора (раз в 5 минут)
             setInterval(logSystemStats, 5 * 60 * 1000);
             await logSystemStats(); 
         }
@@ -146,7 +144,7 @@ export const initDB = async () => {
         return true;
     } catch (error) {
         console.error('--- [DB] CRITICAL ERROR during init:', error.message);
-        throw error; // Перебрасываем ошибку выше, чтобы сервер знал о сбое
+        throw error;
     }
 };
 
