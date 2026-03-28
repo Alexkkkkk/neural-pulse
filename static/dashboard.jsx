@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
+// Цветовая схема Neural Pulse OS
 const CYBER = {
   bg: '#0b0e14',
   card: '#161b22',
@@ -13,11 +14,10 @@ const CYBER = {
   border: '#30363d'
 };
 
-// Вспомогательный компонент для отрисовки линии графика
+// Вспомогательный компонент для отрисовки линии графика внутри карточки
 const MiniChart = ({ data, color, height = 30 }) => {
   if (!data || data.length < 2) return <div style={{ height: height + 10 }} />;
   
-  // Очистка данных от NaN и бесконечности
   const cleanData = data.map(v => Number.isFinite(v) ? v : 0);
   const max = Math.max(...cleanData) || 1;
   const min = Math.min(...cleanData);
@@ -56,6 +56,7 @@ const Dashboard = (props) => {
   });
 
   useEffect(() => {
+    // Функция получения свежих данных от сервера
     const fetchStats = async () => {
       try {
         if (!window.AdminJS?.ApiClient) return;
@@ -78,13 +79,13 @@ const Dashboard = (props) => {
           latency: latest.db_latency || 5
         });
         
-        setLogs(l => [...l.slice(-9), `> SYNC_OK: ${new Date().toLocaleTimeString()}`]);
+        setLogs(l => [...l.slice(-8), `> SYNC_OK: ${new Date().toLocaleTimeString()}`]);
       } catch (e) { 
-        setLogs(l => [...l.slice(-5), '> TELEMETRY_LINK_LOST']);
+        setLogs(l => [...l.slice(-5), '> TELEMETRY_LINK_LOST: RETRYING...']);
       }
     };
 
-    // Симуляция загрузки системных ресурсов
+    // Анимация загрузки системных ресурсов
     const loader = setInterval(() => {
       setLoadingProgress(prev => {
         if (prev >= 100) {
@@ -94,17 +95,18 @@ const Dashboard = (props) => {
         }
         return prev + 5;
       });
-    }, 50);
+    }, 40);
 
-    const interval = setInterval(fetchStats, 10000); // Обновление раз в 10 сек
-    const anim = setInterval(() => setScanPos(p => (p + 1) % 100), 60);
+    // Основные интервалы: данные (10с) и сканирующая полоса (60мс)
+    const dataInterval = setInterval(fetchStats, 10000);
+    const animInterval = setInterval(() => setScanPos(p => (p + 1) % 100), 60);
     
-    fetchStats();
+    fetchStats(); // Первый запуск
     
     return () => { 
       clearInterval(loader); 
-      clearInterval(interval); 
-      clearInterval(anim); 
+      clearInterval(dataInterval); 
+      clearInterval(animInterval); 
     };
   }, []);
 
@@ -144,7 +146,7 @@ const Dashboard = (props) => {
     return (
       <div style={{ background: CYBER.bg, color: CYBER.primary, height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' }}>
         <div style={{ textAlign: 'center', border: `1px solid ${CYBER.primary}33`, padding: '40px', background: CYBER.card }}>
-          <div style={{ fontSize: '10px', letterSpacing: '5px', marginBottom: '20px' }}>NEURAL_PULSE_BOOT</div>
+          <div style={{ fontSize: '10px', letterSpacing: '5px', marginBottom: '20px' }}>NEURAL_PULSE_BOOTING...</div>
           <div style={{ fontSize: '48px', fontWeight: 'bold' }}>{loadingProgress}%</div>
           <div style={{ width: '200px', height: '2px', background: '#080a0f', margin: '20px auto' }}>
             <div style={{ width: `${loadingProgress}%`, height: '100%', background: CYBER.primary, boxShadow: `0 0 15px ${CYBER.primary}` }} />
@@ -189,8 +191,9 @@ const Dashboard = (props) => {
         <StatCard label="SIGNAL_LATENCY" value={stats.latency} unit="MS" color={CYBER.danger} historyKey="db_latency" />
       </div>
 
-      {/* НИЖНИЕ ПАНЕЛИ (ГРАФИК И ЛОГИ) */}
+      {/* НИЖНИЕ ПАНЕЛИ */}
       <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '20px', gap: '20px' }}>
+        {/* Анимация волны */}
         <div style={{ flex: '2 1 400px', background: CYBER.card, height: '250px', border: `1px solid ${CYBER.border}`, borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', position: 'relative' }}>
           <div style={{ position: 'absolute', top: '15px', left: '15px', color: CYBER.primary, fontSize: '10px', opacity: 0.5, letterSpacing: '2px' }}>NETWORK_WAVEFORM_MONITOR</div>
           {[...Array(40)].map((_, i) => (
@@ -201,6 +204,7 @@ const Dashboard = (props) => {
           ))}
         </div>
 
+        {/* Живые логи */}
         <div style={{ flex: '1 1 300px', background: '#05070a', height: '250px', border: `1px solid ${CYBER.border}`, padding: '20px', overflow: 'hidden', borderRadius: '4px' }}>
           <div style={{ color: CYBER.success, fontSize: '10px', marginBottom: '15px', borderBottom: `1px solid ${CYBER.border}`, paddingBottom: '8px', letterSpacing: '1px' }}>LIVE_SYSTEM_LOGS</div>
           <div style={{ fontSize: '10px', lineHeight: '1.6' }}>
@@ -209,7 +213,7 @@ const Dashboard = (props) => {
                 {log}
               </div>
             ))}
-            <div style={{ color: CYBER.primary }}>> LISTENING_TO_PULSE...</div>
+            <div style={{ color: CYBER.primary }}>> LISTENING_FOR_PULSE...</div>
           </div>
         </div>
       </div>
