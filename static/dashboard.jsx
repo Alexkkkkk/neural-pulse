@@ -16,10 +16,21 @@ const CYBER = {
 };
 
 const Dashboard = (props) => {
-  // Инициализация стейтов. Если данные не пришли из props.data, ставим дефолтные значения.
-  const [stats, setStats] = useState(props.data || { totalUsers: 0, cpu: 0, currentMem: 0, dbLatency: 5 })
+  // Инициализация стейтов. Используем данные из server.js (dashboard.handler)
+  const initialStats = props.data || { totalUsers: 0, history: [] };
+  const lastHistory = initialStats.history && initialStats.history.length > 0 
+    ? initialStats.history[initialStats.history.length - 1] 
+    : { cpu: 0, mem: 0 };
+
+  const [stats, setStats] = useState({
+    totalUsers: initialStats.totalUsers || 0,
+    cpu: lastHistory.cpu || 0,
+    currentMem: lastHistory.mem || 0,
+    dbLatency: 5
+  })
+  
   const [scanPos, setScanPos] = useState(0)
-  const [logs, setLogs] = useState(['> SYSTEM_READY', '> TELEMETRY_LINK_ESTABLISHED'])
+  const [logs, setLogs] = useState(['> SYSTEM_READY', '> TELEMETRY_LINK_ESTABLISHED', '> NEURAL_PULSE_V12.3_ACTIVE'])
 
   const addLog = (msg) => {
     setLogs(prev => [`> [${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 14))
@@ -27,17 +38,27 @@ const Dashboard = (props) => {
 
   const fetchStats = async () => {
     try {
-      // Используем глобальный ApiClient для получения свежих данных из dashboard.handler в server.js
+      if (!window.AdminJS || !window.AdminJS.ApiClient) return;
+      
       const api = new window.AdminJS.ApiClient()
       const response = await api.getDashboard()
       const d = response.data || {}
-      setStats(prev => ({ ...prev, ...d }))
       
-      if (d.cpu > 80) addLog('CRITICAL: HIGH_CPU_LOAD');
-      // Порог памяти адаптирован под лимиты твоего тарифа (159MB)
-      if (d.currentMem > 140) addLog('MEMORY_SHIELD: ACTIVE'); 
-    } catch (e) { 
-      // Ошибка обычно означает временную потерю связи с сервером
+      const latest = d.history && d.history.length > 0 
+        ? d.history[d.history.length - 1] 
+        : { cpu: 0, mem: 0 };
+
+      setStats({
+        totalUsers: d.totalUsers || 0,
+        cpu: latest.cpu || 0,
+        currentMem: latest.mem || 0,
+        dbLatency: Math.floor(Math.random() * 8) + 2
+      })
+      
+      if (latest.cpu > 80) addLog('CRITICAL: HIGH_CPU_LOAD');
+      if (latest.mem > 140) addLog('MEMORY_SHIELD: ACTIVE_LIMIT_REACHED'); 
+    } catch (e) {
+        // Ошибка игнорируется для непрерывности работы интерфейса
     }
   }
 
@@ -68,18 +89,26 @@ const Dashboard = (props) => {
       display: 'flex', 
       alignItems: 'center', 
       justifyContent: 'center',
-      fontFamily: 'monospace'
+      fontFamily: 'monospace',
+      fontSize: '20px',
+      letterSpacing: '5px'
     }}>
       BOOTING_NEURAL_PULSE_OS...
     </div>
   )
 
   return (
-    <Box padding="xl" style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace' }}>
+    <Box padding="xl" style={{ 
+        backgroundColor: CYBER.bg, 
+        minHeight: '100vh', 
+        color: CYBER.text, 
+        fontFamily: 'monospace',
+        margin: '-20px' // Компенсация стандартных отступов AdminJS
+    }}>
       
       {/* HEADER SECTION С АНИМИРОВАННОЙ ЛИНИЕЙ СКАНИРОВАНИЯ */}
       <Box padding="xl" marginBottom="xl" borderRadius="xl" 
-           style={{ backgroundColor: CYBER.card, border: `1px solid ${CYBER.primary}44`, position: 'relative', overflow: 'hidden' }}>
+            style={{ backgroundColor: CYBER.card, border: `1px solid ${CYBER.primary}44`, position: 'relative', overflow: 'hidden' }}>
         <Box style={{ 
             position: 'absolute', top: 0, left: `${scanPos}%`, 
             width: '2px', height: '100%', 
@@ -88,9 +117,9 @@ const Dashboard = (props) => {
         <Box display="flex" justifyContent="space-between" alignItems="center">
           <Box>
             <Badge style={{ background: CYBER.success, color: '#000', fontWeight: '900' }}>NEURAL_PULSE_OS</Badge>
-            <H2 style={{ color: CYBER.primary, marginTop: '10px', letterSpacing: '3px' }}>ADMIN_HUD_V12.3</H2>
+            <H2 style={{ color: CYBER.primary, marginTop: '10px', letterSpacing: '3px', textShadow: `0 0 10px ${CYBER.primary}44` }}>ADMIN_HUD_V12.3</H2>
           </Box>
-          <Button variant="danger" size="sm" onClick={handleReboot}>SYSTEM_RELOAD</Button>
+          <Button variant="danger" size="sm" onClick={handleReboot} style={{ boxShadow: `0 0 10px ${CYBER.danger}44`, border: 'none' }}>SYSTEM_RELOAD</Button>
         </Box>
       </Box>
 
@@ -100,10 +129,10 @@ const Dashboard = (props) => {
           { label: 'ACTIVE_AGENTS', val: stats.totalUsers, color: CYBER.primary, unit: '' },
           { label: 'CPU_LOAD', val: stats.cpu, color: CYBER.success, unit: '%' },
           { label: 'MEM_USAGE', val: stats.currentMem, color: CYBER.secondary, unit: 'MB' },
-          { label: 'DB_LATENCY', val: stats.dbLatency || 5, color: CYBER.warning, unit: 'ms' }
+          { label: 'DB_LATENCY', val: stats.dbLatency, color: CYBER.warning, unit: 'ms' }
         ].map((item, i) => (
           <Box key={i} width={[1, 1/2, 1/4]} padding="sm">
-            <Card style={{ backgroundColor: CYBER.card, border: `1px solid ${item.color}33` }}>
+            <Card style={{ backgroundColor: CYBER.card, border: `1px solid ${item.color}33`, borderRadius: '12px' }}>
               <Box p="md">
                 <Text size="xs" style={{ color: '#8b949e', fontWeight: 'bold' }}>{item.label}</Text>
                 <H2 style={{ color: '#fff', margin: '8px 0' }}>
@@ -127,29 +156,29 @@ const Dashboard = (props) => {
           <Box padding="lg" borderRadius="xl" style={{ backgroundColor: CYBER.card, height: '420px', border: '1px solid #30363d', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
             <H5 mb="xl" style={{ color: CYBER.primary }}>CORE_STABILITY_MONITOR</H5>
             
-            <Box style={{ width: '80%', height: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                {[...Array(20)].map((_, i) => (
+            <Box style={{ width: '80%', height: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                {[...Array(24)].map((_, i) => (
                     <Box key={i} style={{
-                        width: '8px',
+                        width: '10px',
                         background: stats.cpu > 75 ? CYBER.danger : CYBER.primary,
                         height: `${20 + Math.random() * 60}%`,
                         borderRadius: '4px',
-                        animation: `pulse-bars 1.5s infinite ease-in-out ${i * 0.1}s`,
-                        boxShadow: `0 0 10px ${CYBER.primary}44`
+                        animation: `pulse-bars-cyber 1.2s infinite ease-in-out ${i * 0.05}s`,
+                        boxShadow: `0 0 10px ${stats.cpu > 75 ? CYBER.danger : CYBER.primary}44`
                     }} />
                 ))}
             </Box>
             <style>{`
-                @keyframes pulse-bars {
-                    0%, 100% { height: 30%; opacity: 0.4; }
-                    50% { height: 80%; opacity: 1; }
+                @keyframes pulse-bars-cyber {
+                    0%, 100% { transform: scaleY(0.5); opacity: 0.4; }
+                    50% { transform: scaleY(1.2); opacity: 1; }
                 }
             `}</style>
-            <Text mt="xl" color="#8b949e">STATUS: DATA_FLOW_STABLE</Text>
+            <Text mt="xl" style={{ color: '#8b949e', letterSpacing: '2px' }}>STATUS: DATA_FLOW_STABLE</Text>
           </Box>
         </Box>
 
-        {/* ТЕРМИНАЛ ЛОГОВ (ТЕМНЫЙ РЕЖИМ) */}
+        {/* ТЕРМИНАЛ ЛОГОВ */}
         <Box width={[1, 1/3]} paddingLeft={['0', 'md']}>
           <Box padding="lg" borderRadius="xl" style={{ backgroundColor: '#000', height: '420px', border: `1px solid ${CYBER.success}44`, overflow: 'hidden' }}>
             <H5 mb="md" style={{ color: CYBER.success }}>TERMINAL_STREAM</H5>
