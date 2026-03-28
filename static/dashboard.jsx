@@ -29,7 +29,7 @@ const Dashboard = (props) => {
   useEffect(() => {
     const startTime = Date.now();
     
-    // 1. КОНТРОЛЛЕР ЗАГРУЗКИ (Логика процентов и логов)
+    // 1. КОНТРОЛЛЕР ЗАГРУЗКИ
     const loader = setInterval(() => {
       const elapsed = Date.now() - startTime;
       const dsLoaded = !!(window.AdminJSDesignSystem && window.AdminJSDesignSystem.Box);
@@ -43,10 +43,9 @@ const Dashboard = (props) => {
           }
           if (prev === 40) setLogs(l => [...l, '> ASSETS_LOADED_SUCCESSFULLY']);
           if (prev === 80) setLogs(l => [...l, '> CORE_SYSTEMS_LINKED']);
-          return prev + 10;
+          return prev + 15; // Ускоренная загрузка при наличии системы
         }
         
-        // КРИТИЧЕСКИЙ ТАЙМАУТ: 5 секунд
         if (elapsed > 5000) {
           clearInterval(loader);
           setForceMode(true);
@@ -131,7 +130,42 @@ const Dashboard = (props) => {
   return (
     <div style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace', padding: '20px', boxSizing: 'border-box' }}>
       <style>{`
-        #adminjs, .adminjs_Box, body { background-color: ${CYBER.bg} !important; }
+        /* ПРИНУДИТЕЛЬНЫЙ ТЕМНЫЙ ФОН ДЛЯ ВСЕХ ЭЛЕМЕНТОВ ADMINJS */
+        #adminjs, .adminjs_Box, body, html, [data-css="layout"], section[data-testid="dashboard"] { 
+          background-color: ${CYBER.bg} !important; 
+        }
+
+        /* ПОЛНАЯ ПЕРЕКРАСКА САЙДБАРА */
+        section[data-testid="sidebar"], div[data-css="sidebar"], aside {
+          background-color: ${CYBER.card} !important;
+          border-right: 1px solid ${CYBER.border} !important;
+        }
+        
+        /* ПОДМЕНА ЛОГОТИПА ВЕРХУ СЛЕВА */
+        section[data-testid="sidebar"] h1, section[data-testid="sidebar"] a[href*="admin"] > img {
+          display: none !important;
+        }
+        section[data-testid="sidebar"] a[href*="admin"]:first-of-type::before {
+          content: "";
+          display: block;
+          width: 150px;
+          height: 60px;
+          background: url('/static/images/logo.png') no-repeat center;
+          background-size: contain;
+          margin: 15px auto;
+        }
+
+        /* ТЕКСТ И ИКОНКИ В МЕНЮ */
+        section[data-testid="sidebar"] a, section[data-testid="sidebar"] span, section[data-testid="sidebar"] svg {
+          color: ${CYBER.text} !important;
+        }
+
+        /* ВЕРХНЯЯ ШАПКА АДМИНКИ */
+        header[data-css="top-bar"], .adminjs_TopBar {
+          background-color: ${CYBER.bg} !important;
+          border-bottom: 1px solid ${CYBER.border} !important;
+        }
+
         .adminjs_Table, .adminjs_Table-Row, .adminjs_Table-Head, .adminjs_Table-Cell, .adminjs_Table-Body,
         .adminjs_Card, section[data-testid="property-list"], div[data-testid="drawer-content"],
         .adminjs_TextArea, .adminjs_Input, .adminjs_Select {
@@ -139,14 +173,21 @@ const Dashboard = (props) => {
           color: ${CYBER.text} !important;
           border-color: ${CYBER.border} !important;
         }
+
         section[data-testid="dashboard"] > h1 { display: none; }
+        
         @keyframes cyber-pulse {
           0%, 100% { transform: scaleY(0.4); opacity: 0.4; }
           50% { transform: scaleY(1.3); opacity: 1; }
         }
+        @keyframes pulse {
+          0% { opacity: 1; }
+          50% { opacity: 0.3; }
+          100% { opacity: 1; }
+        }
       `}</style>
 
-      {/* HEADER */}
+      {/* HEADER HUD */}
       <div style={{ background: CYBER.card, padding: '25px', borderRadius: '4px', border: `1px solid ${CYBER.primary}44`, position: 'relative', overflow: 'hidden', marginBottom: '20px' }}>
         <div style={{ position: 'absolute', top: 0, left: `${scanPos}%`, width: '2px', height: '100%', background: CYBER.primary, boxShadow: `0 0 15px ${CYBER.primary}`, opacity: 0.5 }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -162,15 +203,15 @@ const Dashboard = (props) => {
         </div>
       </div>
 
-      {/* STATS */}
+      {/* STATS GRID */}
       <div style={{ display: 'flex', flexWrap: 'wrap', margin: '0 -10px' }}>
-        <StatCard label="TOTAL_USERS_COUNT" value={stats.totalUsers} unit="U" color={CYBER.primary} />
-        <StatCard label="CPU_UTILIZATION" value={stats.cpu} unit="%" color={CYBER.success} />
-        <StatCard label="MEMORY_RESERVE" value={stats.mem} unit="MB" color={CYBER.secondary} />
-        <StatCard label="SIGNAL_LATENCY" value={stats.latency} unit="MS" color={CYBER.warning} />
+        <StatCard label="TOTAL_AGENTS_ONLINE" value={stats.totalUsers} unit="U" color={CYBER.primary} />
+        <StatCard label="CORE_LOAD_STATUS" value={stats.cpu} unit="%" color={CYBER.success} />
+        <StatCard label="MEMORY_SWAP_USAGE" value={stats.mem} unit="MB" color={CYBER.secondary} />
+        <StatCard label="NET_SIGNAL_LATENCY" value={stats.latency} unit="MS" color={CYBER.warning} />
       </div>
 
-      {/* VISUAL PANEL */}
+      {/* VISUAL & TERMINAL */}
       <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '20px', gap: '20px' }}>
         <div style={{ flex: '2 1 400px', background: CYBER.card, height: '320px', border: `1px solid ${CYBER.border}`, borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', position: 'relative' }}>
           <div style={{ position: 'absolute', top: '15px', left: '15px', color: CYBER.primary, fontSize: '10px', opacity: 0.6, letterSpacing: '2px' }}>LIVE_WAVEFORM_MONITOR</div>
