@@ -97,7 +97,7 @@ async function startNeuralOS() {
             logger.system(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`);
         });
 
-        // Увеличиваем таймауты для борьбы с 502 Bad Gateway
+        // Борьба с 502 Bad Gateway
         server.keepAliveTimeout = 70000;
         server.headersTimeout = 71000;
 
@@ -185,7 +185,7 @@ async function setupAdminPanel(app) {
             branding: { 
                 companyName: 'NEURAL PULSE', 
                 softwareBrothers: false,
-                logo: '/static/images/logo.png' // Используем твое лого
+                logo: '/static/images/logo.png' 
             },
             bundler: { 
                 minify: true,
@@ -193,7 +193,6 @@ async function setupAdminPanel(app) {
             } 
         });
 
-        // --- 🔐 AUTHENTICATION GATE ---
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
                 if (email === 'admin' && password === 'neural2026') {
@@ -211,7 +210,6 @@ async function setupAdminPanel(app) {
 
         app.use(adminJs.options.rootPath, adminRouter);
         
-        // Фоновая инициализация
         adminJs.initialize().then(() => {
             logger.system("🛠 ADMIN TERMINAL READY [LOGIN: admin]");
         });
