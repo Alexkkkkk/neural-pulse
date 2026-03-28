@@ -82,10 +82,10 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 MEMORY GUARD ---
+        // --- 🩺 MEMORY GUARD (для 159MB RAM) ---
         setInterval(() => {
             const memory = process.memoryUsage().rss / 1024 / 1024;
-            if (memory > 210 && global.gc) {
+            if (memory > 140 && global.gc) {
                 logger.system(`♻️ Low memory cleaning: ${Math.round(memory)}MB`);
                 global.gc();
             }
@@ -127,7 +127,7 @@ function setupAPIRoutes(app) {
         try {
             const user = await User.findByPk(userId);
             if (!user) return res.status(404).send();
-            const multi = MULTIPLIERS.find(m => user.balance >= m.threshold).multi;
+            const multi = MULTIPLIERS.find(m => (user.balance || 0) >= m.threshold).multi;
             const reward = Math.floor(count * multi);
             await user.increment('balance', { by: reward });
             res.json({ s: 1, balance: parseFloat(user.balance) + reward });
@@ -182,23 +182,38 @@ async function setupAdminPanel(app) {
                     };
                 }
             },
-            branding: { companyName: 'NEURAL PULSE', softwareBrothers: false },
+            branding: { 
+                companyName: 'NEURAL PULSE', 
+                softwareBrothers: false,
+                logo: '/static/images/logo.png' // Используем твое лого
+            },
             bundler: { 
                 minify: true,
-                force: false // Важно: не пересобирать, если уже есть бандл
+                force: false 
             } 
         });
 
+        // --- 🔐 AUTHENTICATION GATE ---
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
-            authenticate: async (e, p) => (e === 'admin' && p === 'neural2026') ? { email: 'admin' } : null,
-            cookiePassword: 'np-titan-2026-secure',
-        }, null, { resave: false, saveUninitialized: false, secret: 'np_titan_secret', store: sessionStore });
+            authenticate: async (email, password) => {
+                if (email === 'admin' && password === 'neural2026') {
+                    return { email: 'admin' };
+                }
+                return null;
+            },
+            cookiePassword: 'np-titan-2026-secure-v2',
+        }, null, { 
+            resave: false, 
+            saveUninitialized: false, 
+            secret: 'np_titan_secret_v2', 
+            store: sessionStore 
+        });
 
         app.use(adminJs.options.rootPath, adminRouter);
         
-        // Запуск инициализации без ожидания (чтобы не вешать поток)
+        // Фоновая инициализация
         adminJs.initialize().then(() => {
-            logger.system("🛠 ADMIN TERMINAL READY");
+            logger.system("🛠 ADMIN TERMINAL READY [LOGIN: admin]");
         });
 
     } catch (err) { logger.error("AdminJS fail", err); }
