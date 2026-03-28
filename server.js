@@ -33,8 +33,13 @@ const MULTIPLIERS = [
 async function startNeuralOS() {
     const app = express();
 
-    // --- 🛡️ ОПТИМИЗАЦИЯ ПОД 1 ЯДРО ---
-    app.use(helmet({ contentSecurityPolicy: false }));
+    // --- 🛡️ ГИБКАЯ ЗАЩИТА (Исправляет белый экран) ---
+    app.use(helmet({
+        contentSecurityPolicy: false, // Отключаем CSP, так как AdminJS использует инлайн-скрипты
+        crossOriginEmbedderPolicy: false,
+        crossOriginResourcePolicy: false,
+    }));
+    
     app.use(compression({ level: 6 }));
     app.set('trust proxy', 1);
     app.use(cors({ origin: '*' }));
@@ -48,14 +53,13 @@ async function startNeuralOS() {
     try {
         console.clear();
         logger.system('╔══════════════════════════════════════════════════╗');
-        logger.system('║      NEURAL PULSE: SINGLE-CORE TITAN v12.1       ║');
-        logger.system('║   OPTIMIZED FOR BOTH HOST | MODE: STABLE-FLOW    ║');
+        logger.system('║      NEURAL PULSE: SINGLE-CORE TITAN v12.2       ║');
+        logger.system('║   FIX: ADMIN-UI READY | MODE: STABLE-FLOW        ║');
         logger.system('╚══════════════════════════════════════════════════╝');
 
         await initDB();
         const bot = new Telegraf(BOT_TOKEN);
 
-        // --- 🧬 МОДУЛИ ---
         setupAPIRoutes(app);
         await setupAdminPanel(app);
         setupBotHandlers(bot);
@@ -63,9 +67,7 @@ async function startNeuralOS() {
         // ✅ FAIL-SAFE WEBHOOK GATEWAY
         app.post(`/telegraf/${BOT_TOKEN}`, async (req, res) => {
             try {
-                if (!req.body || Object.keys(req.body).length === 0) {
-                    return res.sendStatus(200);
-                }
+                if (!req.body || Object.keys(req.body).length === 0) return res.sendStatus(200);
                 await bot.handleUpdate(req.body, res);
             } catch (err) {
                 logger.error("⚡ Gate Error", err);
@@ -79,33 +81,22 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SMART CLEANUP & TELEMETRY ---
+        // --- 🩺 SMART CLEANUP ---
         setInterval(() => {
             const memory = process.memoryUsage().rss / 1024 / 1024;
-            if (memory > 220) {
-                logger.system(`♻️ Memory Guard: ${Math.round(memory)}MB. Cleaning...`);
-                if (global.gc) global.gc();
-            }
+            if (memory > 220 && global.gc) global.gc();
             logSystemStats();
         }, 120000);
 
-        // --- 🌐 СТАРТ С ЗАЩИТОЙ ОТ ПАДЕНИЙ ---
         const server = app.listen(PORT, '0.0.0.0', () => {
             logger.system(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`);
         });
 
         const shutdown = (signal) => {
-            logger.system(`⚠️ ${signal} received. Closing connections...`);
-            server.close(() => {
-                logger.system('🛑 Server closed.');
-                process.exit(0);
-            });
+            server.close(() => process.exit(0));
         };
-
         process.on('SIGTERM', () => shutdown('SIGTERM'));
         process.on('SIGINT', () => shutdown('SIGINT'));
-        process.on('uncaughtException', (e) => logger.error('☢️ UNCAUGHT', e));
-        process.on('unhandledRejection', (e) => logger.error('☢️ REJECTION', e));
 
     } catch (err) {
         logger.error(`🚨 BOOT FAILURE`, err);
@@ -113,45 +104,32 @@ async function startNeuralOS() {
     }
 }
 
-// --- 🛠️ API ROUTES ---
 function setupAPIRoutes(app) {
     const clickLimit = rateLimit({
         windowMs: 1000,
-        max: 12,
+        max: 15,
         handler: (req, res) => res.status(429).json({ error: "Pulse overload" })
     });
 
-    app.get('/api/health', async (req, res) => {
-        try {
-            await sequelize.authenticate();
-            res.json({
-                status: "OPERATIONAL",
-                uptime: Math.floor(process.uptime()),
-                db: "CONNECTED",
-                mem: `${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`
-            });
-        } catch (e) {
-            res.status(503).json({ status: "ERROR", db: "DISCONNECTED" });
-        }
+    app.get('/api/health', (req, res) => {
+        res.json({
+            status: "OPERATIONAL",
+            uptime: Math.floor(process.uptime()),
+            mem: `${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`
+        });
     });
 
     app.post('/api/click', clickLimit, async (req, res) => {
         const { userId, count } = req.body;
         if (!userId || !count || count > 100 || count <= 0) return res.status(403).send();
-
         try {
             const user = await User.findByPk(userId, { attributes: ['id', 'balance'] });
             if (!user) return res.status(404).send();
-
-            const currentBalance = parseFloat(user.balance);
-            const multi = MULTIPLIERS.find(m => currentBalance >= m.threshold).multi;
+            const multi = MULTIPLIERS.find(m => user.balance >= m.threshold).multi;
             const reward = Math.floor(count * multi);
-
             await User.increment({ balance: reward }, { where: { id: userId } });
-            res.json({ s: 1, balance: currentBalance + reward });
-        } catch (e) {
-            res.status(500).json({ error: "DB Busy" });
-        }
+            res.json({ s: 1, balance: parseFloat(user.balance) + reward });
+        } catch (e) { res.status(500).send(); }
     });
 
     app.get('/api/user/:id', async (req, res) => {
@@ -162,7 +140,6 @@ function setupAPIRoutes(app) {
     });
 }
 
-// --- 🤖 BOT HANDLERS ---
 function setupBotHandlers(bot) {
     bot.start(async (ctx) => {
         try {
@@ -170,26 +147,13 @@ function setupBotHandlers(bot) {
                 where: { id: ctx.from.id },
                 defaults: { username: ctx.from.username || 'AGENT', balance: 0 }
             });
-
             const webAppUrl = `${DOMAIN}/static/index.html?v=${Date.now()}`;
-            const keyboard = Markup.inlineKeyboard([
-                [Markup.button.webApp("⚡ ТЕРМИНАЛ: ВХОД", webAppUrl)],
-                [Markup.button.url("📢 КАНАЛ СВЯЗИ", "https://t.me/neural_pulse")]
-            ]);
-
-            const text = `<b>[ NEURAL PULSE OS ]</b>\n\n<b>АГЕНТ:</b> <code>${user.username}</code>\n<b>БАЛАНС:</b> <code>${user.balance.toLocaleString()} NP</code>\n\n<i>Статус: Соединение стабильно.</i>`;
-            const logo = path.join(__dirname, 'static/images/logo.png');
-            
-            if (fs.existsSync(logo)) {
-                await ctx.replyWithPhoto({ source: logo }, { caption: text, parse_mode: 'HTML', ...keyboard });
-            } else {
-                await ctx.reply(text, { parse_mode: 'HTML', ...keyboard });
-            }
+            const keyboard = Markup.inlineKeyboard([[Markup.button.webApp("⚡ ТЕРМИНАЛ: ВХОД", webAppUrl)]]);
+            await ctx.reply(`<b>[ NEURAL PULSE ]</b>\n\n<b>АГЕНТ:</b> <code>${user.username}</code>`, { parse_mode: 'HTML', ...keyboard });
         } catch (e) { logger.error("Bot.start fail", e); }
     });
 }
 
-// --- 🖥️ ADMIN PANEL CONFIG ---
 async function setupAdminPanel(app) {
     try {
         const { default: AdminJS, ComponentLoader } = await import('adminjs');
@@ -207,34 +171,16 @@ async function setupAdminPanel(app) {
             ],
             rootPath: '/admin',
             componentLoader,
+            env: { NODE_ENV: 'production' }, // Ускоряет работу фронта
             dashboard: { 
                 component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
-                handler: async (request, response, context) => {
+                handler: async () => {
                     const totalUsers = await User.count();
-                    const latestStats = await Stats.findAll({ limit: 15, order: [['createdAt', 'DESC']] });
-                    
-                    const history = latestStats.reverse().map(s => ({
-                        time: dayjs(s.createdAt).format('HH:mm'),
-                        cpu: s.server_load,
-                        mem: s.mem_usage
-                    }));
-
-                    const current = latestStats[latestStats.length - 1] || {};
-
-                    return {
-                        totalUsers,
-                        cpu: current.server_load || 0,
-                        currentMem: current.mem_usage || 0,
-                        dbLatency: current.db_latency || 5,
-                        history
-                    };
+                    const latestStats = await Stats.findAll({ limit: 10, order: [['createdAt', 'DESC']] });
+                    return { totalUsers, history: latestStats.reverse().map(s => ({ time: dayjs(s.createdAt).format('HH:mm'), cpu: s.server_load, mem: s.mem_usage })) };
                 }
             },
-            branding: { 
-                companyName: 'NEURAL PULSE',
-                softwareBrothers: false,
-                theme: { colors: { primary100: '#00f2ff', bg: '#0b0e14' } }
-            },
+            branding: { companyName: 'NEURAL PULSE', softwareBrothers: false },
             bundler: { minify: true } 
         });
 
