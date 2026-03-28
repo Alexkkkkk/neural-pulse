@@ -9,7 +9,7 @@ import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import dayjs from 'dayjs';
 
-// Ресурсы ядра (БД и логи)
+// Ресурсы ядра
 import { sequelize, User, Task, Stats, sessionStore, initDB, logSystemStats } from './db.js';
 import { logger } from './logger.js';
 
@@ -33,9 +33,9 @@ const MULTIPLIERS = [
 async function startNeuralOS() {
     const app = express();
 
-    // --- 🛡️ ГИБКАЯ ЗАЩИТА (Исправляет белый экран) ---
+    // --- 🛡️ SECURITY & PERFORMANCE ---
     app.use(helmet({
-        contentSecurityPolicy: false, // Отключаем CSP, так как AdminJS использует инлайн-скрипты
+        contentSecurityPolicy: false, 
         crossOriginEmbedderPolicy: false,
         crossOriginResourcePolicy: false,
     }));
@@ -45,6 +45,7 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
+    // Раздача статики (дизайн и картинки не меняются)
     app.use('/static', express.static(path.join(__dirname, 'static'), {
         maxAge: '1h',
         etag: true
@@ -53,8 +54,8 @@ async function startNeuralOS() {
     try {
         console.clear();
         logger.system('╔══════════════════════════════════════════════════╗');
-        logger.system('║      NEURAL PULSE: SINGLE-CORE TITAN v12.2       ║');
-        logger.system('║   FIX: ADMIN-UI READY | MODE: STABLE-FLOW        ║');
+        logger.system('║      NEURAL PULSE: SINGLE-CORE TITAN v12.3       ║');
+        logger.system('║   STABLE ADMIN + NO-TIMEOUT | MODE: PROD         ║');
         logger.system('╚══════════════════════════════════════════════════╝');
 
         await initDB();
@@ -64,7 +65,7 @@ async function startNeuralOS() {
         await setupAdminPanel(app);
         setupBotHandlers(bot);
 
-        // ✅ FAIL-SAFE WEBHOOK GATEWAY
+        // ✅ WEBHOOK GATEWAY
         app.post(`/telegraf/${BOT_TOKEN}`, async (req, res) => {
             try {
                 if (!req.body || Object.keys(req.body).length === 0) return res.sendStatus(200);
@@ -81,22 +82,27 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SMART CLEANUP ---
+        // --- 🩺 MEMORY GUARD ---
         setInterval(() => {
             const memory = process.memoryUsage().rss / 1024 / 1024;
-            if (memory > 220 && global.gc) global.gc();
+            if (memory > 210 && global.gc) {
+                logger.system(`♻️ Low memory cleaning: ${Math.round(memory)}MB`);
+                global.gc();
+            }
             logSystemStats();
         }, 120000);
 
+        // --- 🌐 START SERVER ---
         const server = app.listen(PORT, '0.0.0.0', () => {
             logger.system(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`);
         });
 
-        const shutdown = (signal) => {
-            server.close(() => process.exit(0));
-        };
-        process.on('SIGTERM', () => shutdown('SIGTERM'));
-        process.on('SIGINT', () => shutdown('SIGINT'));
+        // Увеличиваем таймауты для борьбы с 502 Bad Gateway
+        server.keepAliveTimeout = 70000;
+        server.headersTimeout = 71000;
+
+        process.on('SIGTERM', () => server.close());
+        process.on('SIGINT', () => server.close());
 
     } catch (err) {
         logger.error(`🚨 BOOT FAILURE`, err);
@@ -107,35 +113,24 @@ async function startNeuralOS() {
 function setupAPIRoutes(app) {
     const clickLimit = rateLimit({
         windowMs: 1000,
-        max: 15,
+        max: 20,
         handler: (req, res) => res.status(429).json({ error: "Pulse overload" })
     });
 
     app.get('/api/health', (req, res) => {
-        res.json({
-            status: "OPERATIONAL",
-            uptime: Math.floor(process.uptime()),
-            mem: `${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`
-        });
+        res.json({ status: "OPERATIONAL", mem: `${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB` });
     });
 
     app.post('/api/click', clickLimit, async (req, res) => {
         const { userId, count } = req.body;
-        if (!userId || !count || count > 100 || count <= 0) return res.status(403).send();
+        if (!userId || !count || count > 100) return res.status(403).send();
         try {
-            const user = await User.findByPk(userId, { attributes: ['id', 'balance'] });
+            const user = await User.findByPk(userId);
             if (!user) return res.status(404).send();
             const multi = MULTIPLIERS.find(m => user.balance >= m.threshold).multi;
             const reward = Math.floor(count * multi);
-            await User.increment({ balance: reward }, { where: { id: userId } });
+            await user.increment('balance', { by: reward });
             res.json({ s: 1, balance: parseFloat(user.balance) + reward });
-        } catch (e) { res.status(500).send(); }
-    });
-
-    app.get('/api/user/:id', async (req, res) => {
-        try {
-            const user = await User.findByPk(req.params.id, { attributes: ['id', 'username', 'balance'], raw: true });
-            res.json(user || { error: 404 });
         } catch (e) { res.status(500).send(); }
     });
 }
@@ -171,17 +166,27 @@ async function setupAdminPanel(app) {
             ],
             rootPath: '/admin',
             componentLoader,
-            env: { NODE_ENV: 'production' }, // Ускоряет работу фронта
+            env: { NODE_ENV: 'production' },
             dashboard: { 
                 component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
                 handler: async () => {
                     const totalUsers = await User.count();
                     const latestStats = await Stats.findAll({ limit: 10, order: [['createdAt', 'DESC']] });
-                    return { totalUsers, history: latestStats.reverse().map(s => ({ time: dayjs(s.createdAt).format('HH:mm'), cpu: s.server_load, mem: s.mem_usage })) };
+                    return { 
+                        totalUsers, 
+                        history: latestStats.reverse().map(s => ({ 
+                            time: dayjs(s.createdAt).format('HH:mm'), 
+                            cpu: s.server_load, 
+                            mem: s.mem_usage 
+                        })) 
+                    };
                 }
             },
             branding: { companyName: 'NEURAL PULSE', softwareBrothers: false },
-            bundler: { minify: true } 
+            bundler: { 
+                minify: true,
+                force: false // Важно: не пересобирать, если уже есть бандл
+            } 
         });
 
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
@@ -190,8 +195,12 @@ async function setupAdminPanel(app) {
         }, null, { resave: false, saveUninitialized: false, secret: 'np_titan_secret', store: sessionStore });
 
         app.use(adminJs.options.rootPath, adminRouter);
-        await adminJs.initialize();
-        logger.system("🛠 ADMIN TERMINAL ONLINE");
+        
+        // Запуск инициализации без ожидания (чтобы не вешать поток)
+        adminJs.initialize().then(() => {
+            logger.system("🛠 ADMIN TERMINAL READY");
+        });
+
     } catch (err) { logger.error("AdminJS fail", err); }
 }
 
