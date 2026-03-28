@@ -45,7 +45,7 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
-    // Раздача статики (дизайн и картинки не меняются)
+    // Раздача статики
     app.use('/static', express.static(path.join(__dirname, 'static'), {
         maxAge: '1h',
         etag: true
@@ -55,7 +55,7 @@ async function startNeuralOS() {
         console.clear();
         logger.system('╔══════════════════════════════════════════════════╗');
         logger.system('║      NEURAL PULSE: SINGLE-CORE TITAN v12.3       ║');
-        logger.system('║   STABLE ADMIN + NO-TIMEOUT | MODE: PROD         ║');
+        logger.system('║   STABLE ADMIN + DARK HUD | LOGIN: 1 / 1         ║');
         logger.system('╚══════════════════════════════════════════════════╝');
 
         await initDB();
@@ -92,12 +92,10 @@ async function startNeuralOS() {
             logSystemStats();
         }, 120000);
 
-        // --- 🌐 START SERVER ---
         const server = app.listen(PORT, '0.0.0.0', () => {
             logger.system(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`);
         });
 
-        // Борьба с 502 Bad Gateway
         server.keepAliveTimeout = 70000;
         server.headersTimeout = 71000;
 
@@ -184,8 +182,32 @@ async function setupAdminPanel(app) {
             },
             branding: { 
                 companyName: 'NEURAL PULSE', 
-                softwareBrothers: false,
-                logo: '/static/images/logo.png' 
+                withMadeWithAdminJS: false,
+                logo: '/static/images/logo.png', // Логотип из твоей папки static [cite: 2026-03-06]
+                theme: {
+                    colors: {
+                        primary100: '#00f2fe', // Твой неоновый голубой
+                        accent: '#7000ff',
+                        bg: '#0b0e14',        // Глубокий черный фон
+                        surface: '#161b22',   // Цвет панелей
+                        error: '#ff3131',
+                        success: '#39ff14',
+                        border: '#30363d',
+                        text: '#ffffff',
+                    },
+                    // Глобальное переопределение стилей для полной темноты
+                    custom: `
+                        body, .adminjs_Box { background-color: #0b0e14 !important; color: #ffffff !important; }
+                        .adminjs_Card { background: #161b22 !important; border: 1px solid #30363d !important; }
+                        .adminjs_Table, .adminjs_TableThead, .adminjs_TableTbody { background: #161b22 !important; }
+                        .adminjs_TableCell { color: #ffffff !important; border-bottom: 1px solid #30363d !important; }
+                        .adminjs_Button[data-variant="primary"] { background: #00f2fe !important; color: #000 !important; }
+                        section[data-testid="sidebar"] { background: #0b0e14 !important; border-right: 1px solid #30363d !important; }
+                        a[data-testid="sidebar-resource-link"] { color: #8b949e !important; }
+                        a[data-testid="sidebar-resource-link"]:hover { color: #00f2fe !important; background: #1c2128 !important; }
+                        input, select, textarea { background: #1c2128 !important; color: white !important; border: 1px solid #30363d !important; }
+                    `,
+                }
             },
             bundler: { 
                 minify: true,
@@ -193,10 +215,11 @@ async function setupAdminPanel(app) {
             } 
         });
 
+        // --- 🔑 НОВЫЙ ЛОГИН: 1 / 1 ---
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                if (email === 'admin' && password === 'neural2026') {
-                    return { email: 'admin' };
+                if (email === '1' && password === '1') {
+                    return { email: 'admin@neural.os', title: 'CORE_ADMIN' };
                 }
                 return null;
             },
@@ -211,7 +234,7 @@ async function setupAdminPanel(app) {
         app.use(adminJs.options.rootPath, adminRouter);
         
         adminJs.initialize().then(() => {
-            logger.system("🛠 ADMIN TERMINAL READY [LOGIN: admin]");
+            logger.system("🛠 DARK_HUD_ONLINE [LOGIN: 1 / PASS: 1]");
         });
 
     } catch (err) { logger.error("AdminJS fail", err); }
