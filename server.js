@@ -8,6 +8,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import dayjs from 'dayjs';
+import { Op } from 'sequelize'; // Необходим для фильтрации по датам
 
 // Ресурсы ядра
 import { sequelize, User, Task, Stats, sessionStore, initDB, logSystemStats } from './db.js';
@@ -158,7 +159,7 @@ async function setupAdminPanel(app) {
         
         const adminJs = new AdminJS({
             resources: [
-                { resource: User, options: { navigation: { name: 'CORE' }, listProperties: ['id', 'username', 'balance'] } },
+                { resource: User, options: { navigation: { name: 'CORE' }, listProperties: ['id', 'username', 'balance', 'wallet'] } },
                 { resource: Task, options: { navigation: { name: 'OS' } } },
                 { resource: Stats, options: { navigation: { name: 'OS' } } }
             ],
@@ -168,10 +169,32 @@ async function setupAdminPanel(app) {
             dashboard: { 
                 component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
                 handler: async () => {
+                    // --- СБОР ДАННЫХ ДЛЯ КИБЕР-ДАШБОРДА ---
+                    const dayAgo = dayjs().subtract(24, 'hour').toDate();
+                    
                     const totalUsers = await User.count();
+                    
+                    // Новые юзеры за 24ч
+                    const dailyUsers = await User.count({ 
+                        where: { createdAt: { [Op.gte]: dayAgo } } 
+                    });
+
+                    // Кошельки (считаем записи, где поле wallet не null и не пустое)
+                    const walletsLinked = await User.count({ 
+                        where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } 
+                    });
+
+                    // TON Баланс (сумма всех балансов, деленная на 10^9 если хранишь в нанотонах)
+                    const sumBalance = await User.sum('balance') || 0;
+                    const totalTon = (sumBalance / 1000000000).toFixed(2);
+
                     const latestStats = await Stats.findAll({ limit: 10, order: [['createdAt', 'DESC']] });
+                    
                     return { 
-                        totalUsers, 
+                        totalUsers,
+                        dailyUsers,
+                        walletsLinked,
+                        totalTon,
                         history: latestStats.reverse().map(s => ({ 
                             time: dayjs(s.createdAt).format('HH:mm'), 
                             cpu: s.server_load, 
@@ -183,7 +206,7 @@ async function setupAdminPanel(app) {
             branding: { 
                 companyName: 'NEURAL PULSE', 
                 withMadeWithAdminJS: false,
-                logo: '/static/images/logo.png', // Твой логотип [cite: 2026-03-06]
+                logo: '/static/images/logo.png',
                 theme: {
                     colors: {
                         primary100: '#00f2fe',
@@ -208,7 +231,7 @@ async function setupAdminPanel(app) {
                         a[data-testid="sidebar-resource-link"] { color: #8b949e !important; }
                         a[data-testid="sidebar-resource-link"]:hover { color: #00f2fe !important; background: #1c2128 !important; }
                         
-                        /* ФИКС ДЛЯ ЧИТАЕМОСТИ ОШИБОК (Розовые окна со скриншотов) */
+                        /* ФИКС ДЛЯ ЧИТАЕМОСТИ ОШИБОК */
                         .adminjs_Message { background: #fff3f3 !important; border: 1px solid #ff3131 !important; color: #000 !important; }
                         .adminjs_Message * { color: #000 !important; } 
                         
