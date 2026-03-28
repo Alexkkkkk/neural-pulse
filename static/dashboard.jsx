@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Box, H2, H5, Text, Card, Badge, Button } from '@adminjs/design-system'
-import { ApiClient } from 'adminjs'
-
-const api = new ApiClient()
+// Используем компоненты из глобального пространства, чтобы избежать ошибок бандлера
+const { Box, H2, H5, Text, Card, Badge, Button } = window.AdminJSDesignSystem || {}
 
 const CYBER = {
   bg: '#0b0e14',
@@ -16,7 +14,6 @@ const CYBER = {
 };
 
 const Dashboard = (props) => {
-  // Данные могут приходить либо из пропсов при первой загрузке, либо через API
   const [stats, setStats] = useState(props.data || { totalUsers: 0, cpu: 0, currentMem: 0, dbLatency: 5 })
   const [scanPos, setScanPos] = useState(0)
   const [logs, setLogs] = useState(['> SYSTEM_READY', '> TELEMETRY_LINK_ESTABLISHED'])
@@ -27,15 +24,15 @@ const Dashboard = (props) => {
 
   const fetchStats = async () => {
     try {
+      // Безопасное использование API Client
+      const api = new window.AdminJS.ApiClient()
       const response = await api.getDashboard()
       const d = response.data || {}
       setStats(prev => ({ ...prev, ...d }))
       
       if (d.cpu > 80) addLog('CRITICAL: HIGH_CPU_LOAD');
-      if (d.currentMem > 400) addLog('MEMORY_SHIELD: ACTIVE');
-    } catch (e) { 
-      // Молчаливое ожидание восстановления линка
-    }
+      if (d.currentMem > 140) addLog('MEMORY_SHIELD: ACTIVE'); // Порог твоего тарифа
+    } catch (e) { /* Ожидание линка */ }
   }
 
   const handleReboot = () => {
@@ -55,6 +52,8 @@ const Dashboard = (props) => {
       clearInterval(anim)
     }
   }, [])
+
+  if (!Box) return <div style={{color: '#00f2fe', padding: '20px'}}>BOOTING_NEURAL_PULSE_OS...</div>
 
   return (
     <Box padding="xl" style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace' }}>
@@ -112,13 +111,13 @@ const Dashboard = (props) => {
                         background: stats.cpu > 75 ? CYBER.danger : CYBER.primary,
                         height: `${20 + Math.random() * 60}%`,
                         borderRadius: '4px',
-                        animation: `pulse 1.5s infinite ease-in-out ${i * 0.1}s`,
+                        animation: `pulse-bars 1.5s infinite ease-in-out ${i * 0.1}s`,
                         boxShadow: `0 0 10px ${CYBER.primary}44`
                     }} />
                 ))}
             </Box>
             <style>{`
-                @keyframes pulse {
+                @keyframes pulse-bars {
                     0%, 100% { height: 30%; opacity: 0.4; }
                     50% { height: 80%; opacity: 1; }
                 }
