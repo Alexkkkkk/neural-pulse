@@ -16,6 +16,7 @@ const CYBER = {
 };
 
 const Dashboard = (props) => {
+  // Данные могут приходить либо из пропсов при первой загрузке, либо через API
   const [stats, setStats] = useState(props.data || { totalUsers: 0, cpu: 0, currentMem: 0, dbLatency: 5 })
   const [scanPos, setScanPos] = useState(0)
   const [logs, setLogs] = useState(['> SYSTEM_READY', '> TELEMETRY_LINK_ESTABLISHED'])
@@ -28,12 +29,12 @@ const Dashboard = (props) => {
     try {
       const response = await api.getDashboard()
       const d = response.data || {}
-      setStats(d)
+      setStats(prev => ({ ...prev, ...d }))
       
       if (d.cpu > 80) addLog('CRITICAL: HIGH_CPU_LOAD');
-      if (d.currentMem > 200) addLog('MEMORY_SHIELD: ACTIVE');
+      if (d.currentMem > 400) addLog('MEMORY_SHIELD: ACTIVE');
     } catch (e) { 
-      // Ожидание линка
+      // Молчаливое ожидание восстановления линка
     }
   }
 
@@ -99,17 +100,16 @@ const Dashboard = (props) => {
 
       <Box display="flex" flexDirection="row" flexWrap="wrap" marginTop="xl">
         
-        {/* VISUAL PULSE AREA (Вместо тяжелого Recharts) */}
+        {/* VISUAL PULSE MONITOR */}
         <Box width={[1, 2/3]} paddingRight={['0', 'md']} marginBottom="xl">
           <Box padding="lg" borderRadius="xl" style={{ backgroundColor: CYBER.card, height: '420px', border: '1px solid #30363d', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
             <H5 mb="xl" style={{ color: CYBER.primary }}>CORE_STABILITY_MONITOR</H5>
             
-            {/* Анимированный визуализатор пульса */}
             <Box style={{ width: '80%', height: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                 {[...Array(20)].map((_, i) => (
                     <Box key={i} style={{
                         width: '8px',
-                        background: stats.cpu > 70 ? CYBER.danger : CYBER.primary,
+                        background: stats.cpu > 75 ? CYBER.danger : CYBER.primary,
                         height: `${20 + Math.random() * 60}%`,
                         borderRadius: '4px',
                         animation: `pulse 1.5s infinite ease-in-out ${i * 0.1}s`,
