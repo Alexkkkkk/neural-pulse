@@ -3,12 +3,11 @@ import { Telegraf, Markup } from 'telegraf';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
-import fs from 'fs';
 import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import dayjs from 'dayjs';
-import { Op } from 'sequelize'; // Необходим для фильтрации по датам
+import { Op } from 'sequelize';
 
 // Ресурсы ядра
 import { sequelize, User, Task, Stats, sessionStore, initDB, logSystemStats } from './db.js';
@@ -55,8 +54,8 @@ async function startNeuralOS() {
     try {
         console.clear();
         logger.system('╔══════════════════════════════════════════════════╗');
-        logger.system('║      NEURAL PULSE: SINGLE-CORE TITAN v12.3       ║');
-        logger.system('║   STABLE ADMIN + DARK HUD | LOGIN: 1 / 1         ║');
+        logger.system('║      NEURAL PULSE: TELEMETRY EDITION v12.4       ║');
+        logger.system('║    15-MIN GRAPH SYNC | STABLE DARK HUD           ║');
         logger.system('╚══════════════════════════════════════════════════╝');
 
         await initDB();
@@ -83,15 +82,15 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 MEMORY GUARD (для 159MB RAM) ---
-        setInterval(() => {
+        // --- 🩺 SYSTEM PULSE (Сбор статистики раз в 15 минут) ---
+        setInterval(async () => {
             const memory = process.memoryUsage().rss / 1024 / 1024;
-            if (memory > 140 && global.gc) {
-                logger.system(`♻️ Low memory cleaning: ${Math.round(memory)}MB`);
+            if (memory > 145 && global.gc) {
+                logger.system(`♻️ GC_CLEAN: ${Math.round(memory)}MB`);
                 global.gc();
             }
-            logSystemStats();
-        }, 120000);
+            await logSystemStats(); // Запись точки на график
+        }, 15 * 60 * 1000); 
 
         const server = app.listen(PORT, '0.0.0.0', () => {
             logger.system(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`);
@@ -165,40 +164,38 @@ async function setupAdminPanel(app) {
             ],
             rootPath: '/admin',
             componentLoader,
-            env: { NODE_ENV: 'production' },
             dashboard: { 
                 component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
                 handler: async () => {
                     // --- СБОР ДАННЫХ ДЛЯ КИБЕР-ДАШБОРДА ---
                     const dayAgo = dayjs().subtract(24, 'hour').toDate();
                     
-                    const totalUsers = await User.count();
-                    
-                    // Новые юзеры за 24ч
-                    const dailyUsers = await User.count({ 
-                        where: { createdAt: { [Op.gte]: dayAgo } } 
-                    });
+                    const [totalUsers, dailyUsers, walletsLinked, sumBalance, historyData] = await Promise.all([
+                        User.count(),
+                        User.count({ where: { createdAt: { [Op.gte]: dayAgo } } }),
+                        User.count({ where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } }),
+                        User.sum('balance'),
+                        Stats.findAll({ 
+                            limit: 30, // Показываем последние 30 точек (около 7.5 часов истории)
+                            order: [['createdAt', 'DESC']] 
+                        })
+                    ]);
 
-                    // Кошельки (считаем записи, где поле wallet не null и не пустое)
-                    const walletsLinked = await User.count({ 
-                        where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } 
-                    });
+                    const totalTon = ((sumBalance || 0) / 1000000000).toFixed(2);
 
-                    // TON Баланс (сумма всех балансов, деленная на 10^9 если хранишь в нанотонах)
-                    const sumBalance = await User.sum('balance') || 0;
-                    const totalTon = (sumBalance / 1000000000).toFixed(2);
-
-                    const latestStats = await Stats.findAll({ limit: 10, order: [['createdAt', 'DESC']] });
-                    
                     return { 
                         totalUsers,
                         dailyUsers,
                         walletsLinked,
                         totalTon,
-                        history: latestStats.reverse().map(s => ({ 
+                        // Передаем полную историю для графиков в Dashboard.jsx
+                        history: historyData.reverse().map(s => ({ 
                             time: dayjs(s.createdAt).format('HH:mm'), 
-                            cpu: s.server_load, 
-                            mem: s.mem_usage 
+                            user_count: s.user_count,
+                            active_wallets: s.active_wallets,
+                            server_load: s.server_load, 
+                            mem_usage: s.mem_usage,
+                            db_latency: s.db_latency
                         })) 
                     };
                 }
@@ -219,31 +216,15 @@ async function setupAdminPanel(app) {
                         text: '#ffffff',
                     },
                     custom: `
-                        /* ТЕМНАЯ ТЕМА TITAN */
-                        body, .adminjs_Box { background-color: #0b0e14 !important; color: #ffffff !important; font-family: 'JetBrains Mono', monospace !important; }
+                        body, .adminjs_Box { background-color: #0b0e14 !important; color: #ffffff !important; font-family: 'monospace' !important; }
                         .adminjs_Card { background: #161b22 !important; border: 1px solid #30363d !important; }
                         .adminjs_Table, .adminjs_TableThead, .adminjs_TableTbody { background: #161b22 !important; }
                         .adminjs_TableCell { color: #ffffff !important; border-bottom: 1px solid #30363d !important; }
-                        .adminjs_Button[data-variant="primary"] { background: #00f2fe !important; color: #000 !important; font-weight: bold !important; }
-                        
-                        /* САЙДБАР */
-                        section[data-testid="sidebar"] { background: #0b0e14 !important; border-right: 1px solid #30363d !important; }
-                        a[data-testid="sidebar-resource-link"] { color: #8b949e !important; }
-                        a[data-testid="sidebar-resource-link"]:hover { color: #00f2fe !important; background: #1c2128 !important; }
-                        
-                        /* ФИКС ДЛЯ ЧИТАЕМОСТИ ОШИБОК */
-                        .adminjs_Message { background: #fff3f3 !important; border: 1px solid #ff3131 !important; color: #000 !important; }
-                        .adminjs_Message * { color: #000 !important; } 
-                        
-                        /* ИНПУТЫ */
                         input, select, textarea { background: #1c2128 !important; color: white !important; border: 1px solid #30363d !important; }
+                        section[data-testid="sidebar"] { background: #0b0e14 !important; border-right: 1px solid #30363d !important; }
                     `,
                 }
-            },
-            bundler: { 
-                minify: true,
-                force: false 
-            } 
+            }
         });
 
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
@@ -264,7 +245,7 @@ async function setupAdminPanel(app) {
         app.use(adminJs.options.rootPath, adminRouter);
         
         adminJs.initialize().then(() => {
-            logger.system("🛠 DARK_HUD_ONLINE [LOGIN: 1 / PASS: 1]");
+            logger.system("🛠 DARK_HUD_TELEMETRY_READY [LOGIN: 1 / PASS: 1]");
         });
 
     } catch (err) { logger.error("AdminJS fail", err); }
