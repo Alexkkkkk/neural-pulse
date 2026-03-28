@@ -183,28 +183,36 @@ async function setupAdminPanel(app) {
             branding: { 
                 companyName: 'NEURAL PULSE', 
                 withMadeWithAdminJS: false,
-                logo: '/static/images/logo.png', // Логотип из твоей папки static [cite: 2026-03-06]
+                logo: '/static/images/logo.png', // Твой логотип [cite: 2026-03-06]
                 theme: {
                     colors: {
-                        primary100: '#00f2fe', // Твой неоновый голубой
+                        primary100: '#00f2fe',
                         accent: '#7000ff',
-                        bg: '#0b0e14',        // Глубокий черный фон
-                        surface: '#161b22',   // Цвет панелей
+                        bg: '#0b0e14',
+                        surface: '#161b22',
                         error: '#ff3131',
                         success: '#39ff14',
                         border: '#30363d',
                         text: '#ffffff',
                     },
-                    // Глобальное переопределение стилей для полной темноты
                     custom: `
-                        body, .adminjs_Box { background-color: #0b0e14 !important; color: #ffffff !important; }
+                        /* ТЕМНАЯ ТЕМА TITAN */
+                        body, .adminjs_Box { background-color: #0b0e14 !important; color: #ffffff !important; font-family: 'JetBrains Mono', monospace !important; }
                         .adminjs_Card { background: #161b22 !important; border: 1px solid #30363d !important; }
                         .adminjs_Table, .adminjs_TableThead, .adminjs_TableTbody { background: #161b22 !important; }
                         .adminjs_TableCell { color: #ffffff !important; border-bottom: 1px solid #30363d !important; }
-                        .adminjs_Button[data-variant="primary"] { background: #00f2fe !important; color: #000 !important; }
+                        .adminjs_Button[data-variant="primary"] { background: #00f2fe !important; color: #000 !important; font-weight: bold !important; }
+                        
+                        /* САЙДБАР */
                         section[data-testid="sidebar"] { background: #0b0e14 !important; border-right: 1px solid #30363d !important; }
                         a[data-testid="sidebar-resource-link"] { color: #8b949e !important; }
                         a[data-testid="sidebar-resource-link"]:hover { color: #00f2fe !important; background: #1c2128 !important; }
+                        
+                        /* ФИКС ДЛЯ ЧИТАЕМОСТИ ОШИБОК (Розовые окна со скриншотов) */
+                        .adminjs_Message { background: #fff3f3 !important; border: 1px solid #ff3131 !important; color: #000 !important; }
+                        .adminjs_Message * { color: #000 !important; } 
+                        
+                        /* ИНПУТЫ */
                         input, select, textarea { background: #1c2128 !important; color: white !important; border: 1px solid #30363d !important; }
                     `,
                 }
@@ -215,7 +223,6 @@ async function setupAdminPanel(app) {
             } 
         });
 
-        // --- 🔑 НОВЫЙ ЛОГИН: 1 / 1 ---
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
                 if (email === '1' && password === '1') {
