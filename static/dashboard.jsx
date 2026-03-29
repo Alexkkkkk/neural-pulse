@@ -50,37 +50,12 @@ const Dashboard = (props) => {
     latency: 5
   });
 
+  const addLog = (msg) => {
+    setLogs(prev => [...prev.slice(-14), `${msg}`]);
+  };
+
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        if (!window.AdminJS?.ApiClient) return;
-        const api = new window.AdminJS.ApiClient();
-        const response = await api.getDashboard();
-        const d = response.data || {};
-        const historyData = d.history || [];
-        setHistory(historyData);
-        const latest = historyData[historyData.length - 1] || {};
-        setStats(prev => ({
-          ...prev,
-          totalUsers: d.totalUsers || 0,
-          dailyUsers: d.dailyUsers || 0,
-          walletsLinked: d.walletsLinked || 0,
-          totalTon: d.totalTon || "0.00",
-          cpu: latest.server_load || 1.2,
-          mem: latest.mem_usage || 128,
-          latency: latest.db_latency || 14
-        }));
-        addLog(`> DATA_REFRESH: REMOTE_SYNC_COMPLETE`);
-      } catch (e) { 
-        addLog('> ERROR: TELEMETRY_LINK_LOST');
-      }
-    };
-
-    const addLog = (msg) => {
-      setLogs(prev => [...prev.slice(-12), `${msg}`]);
-    };
-
-    // Анимация загрузки
+    // 1. Инициализация загрузки (Boot Animation)
     const loader = setInterval(() => {
       setLoadingProgress(prev => {
         if (prev >= 100) {
@@ -92,28 +67,38 @@ const Dashboard = (props) => {
       });
     }, 40);
 
-    // Имитация активности логов и легкого дрожания цифр
-    const jitter = setInterval(() => {
+    // 2. Подключение к Real-time потоку (SSE)
+    // Сервер будет слать данные в /api/admin/stream
+    const eventSource = new EventSource('/api/admin/stream');
+    
+    eventSource.onmessage = (event) => {
+      const pulse = JSON.parse(event.data);
       setStats(prev => ({
         ...prev,
-        cpu: Math.max(0.5, prev.cpu + (Math.random() - 0.5) * 0.2),
-        latency: Math.max(1, prev.latency + Math.floor((Math.random() - 0.5) * 4))
+        cpu: pulse.server_load,
+        mem: pulse.mem_usage,
+        latency: pulse.db_latency
       }));
-      if (Math.random() > 0.7) {
+
+      // Обновляем графики "на лету"
+      setHistory(prev => [...prev.slice(-20), pulse]);
+
+      if (Math.random() > 0.8) {
         const events = ['BLOCK_VALIDATED', 'WS_PULSE_SENT', 'PEER_CONNECTED', 'CACHE_OPTIMIZED'];
         addLog(`> ${events[Math.floor(Math.random() * events.length)]}: 0x${Math.random().toString(16).slice(2, 8).toUpperCase()}`);
       }
-    }, 3000);
+    };
 
-    const dataInterval = setInterval(fetchStats, 15000);
+    eventSource.onerror = () => {
+      addLog('> ERROR: TELEMETRY_LINK_LOST. RETRYING...');
+    };
+
     const animInterval = setInterval(() => setScanPos(p => (p + 1) % 100), 60);
-    
-    fetchStats();
-    return () => { 
-        clearInterval(loader); 
-        clearInterval(jitter); 
-        clearInterval(dataInterval); 
-        clearInterval(animInterval); 
+
+    return () => {
+      clearInterval(loader);
+      clearInterval(animInterval);
+      eventSource.close();
     };
   }, []);
 
@@ -137,7 +122,7 @@ const Dashboard = (props) => {
         </div>
         <div style={{ width: '100%', height: '2px', background: '#000', marginTop: '8px' }}>
           <div style={{ 
-            width: `${Math.min((parseFloat(value) / (unit === '%' ? 1 : 1000)) * 100, 100)}%`, 
+            width: `${Math.min((parseFloat(value) / (unit === '%' ? 100 : 1000)) * 100, 100)}%`, 
             height: '100%', background: color, boxShadow: `0 0 10px ${color}`, transition: 'width 1s ease' 
           }} />
         </div>
@@ -162,20 +147,9 @@ const Dashboard = (props) => {
   return (
     <div style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace', padding: '20px' }}>
       <style>{`
-        #adminjs, #adminjs *, section, main, article, header,
-        [class*="Styled"], [data-testid*="Box"], [data-testid*="Card"],
-        [data-testid="drawer"], [data-testid="overlay"] { 
-            background-color: ${CYBER.bg} !important; 
-            border-color: ${CYBER.border} !important;
-            box-shadow: none !important;
-        }
-
-        .adminjs_Table, [data-testid="table"], td, th, tr {
-            background-color: ${CYBER.card} !important;
-            color: #ffffff !important;
-            border-bottom: 1px solid ${CYBER.border} !important;
-        }
-
+        /* Форсируем темную тему для AdminJS элементов */
+        #adminjs, section, [data-testid="Box"] { background-color: ${CYBER.bg} !important; }
+        
         .glitch-title:hover {
           animation: glitch 0.3s cubic-bezier(.25,.46,.45,.94) both infinite;
           color: ${CYBER.secondary} !important;
@@ -192,27 +166,6 @@ const Dashboard = (props) => {
           0%, 100% { height: 30%; opacity: 0.4; }
           50% { height: 80%; opacity: 1; }
         }
-
-        span, p, label, b, .adminjs_Label, .adminjs_Text, [data-testid*="link"], [data-testid*="breadcrumb"] {
-            color: #c9d1d9 !important;
-        }
-
-        svg, [data-testid="icon"] { fill: #fff !important; color: #fff !important; }
-
-        button, .adminjs_Button, [data-testid*="button"] {
-            border: 1px solid ${CYBER.primary} !important;
-            color: ${CYBER.primary} !important;
-            background: transparent !important;
-            text-transform: uppercase !important;
-            font-weight: bold !important;
-        }
-        
-        button:hover { 
-            box-shadow: 0 0 10px ${CYBER.primary} !important; 
-            background: ${CYBER.primary}11 !important; 
-        }
-
-        footer { display: none !important; }
       `}</style>
 
       {/* --- HUD HEADER --- */}
@@ -260,7 +213,7 @@ const Dashboard = (props) => {
           <div style={{ color: CYBER.success, fontSize: '10px', marginBottom: '10px', borderBottom: `1px solid ${CYBER.success}33`, paddingBottom: '5px' }}>SYSTEM_LOGS</div>
           <div style={{ fontSize: '10px', lineHeight: '1.8', color: '#4e555d', fontFamily: 'monospace' }}>
             {logs.map((log, i) => (
-              <div key={i} style={{ color: log.includes('ERROR') ? CYBER.danger : log.includes('SYNC') ? CYBER.primary : '#4e555d' }}>
+              <div key={i} style={{ color: log.includes('ERROR') ? CYBER.danger : log.includes('VALIDATED') ? CYBER.primary : '#4e555d' }}>
                 {log}
               </div>
             ))}
