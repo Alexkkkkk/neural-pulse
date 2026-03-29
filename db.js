@@ -81,14 +81,14 @@ export const Stats = sequelize.define('stats', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     user_count: { type: DataTypes.INTEGER, defaultValue: 0 },
     active_wallets: { type: DataTypes.INTEGER, defaultValue: 0 },
-    total_balance: { type: DataTypes.DECIMAL(24, 2), defaultValue: 0 }, // Изменено для точности
+    total_balance: { type: DataTypes.DECIMAL(24, 2), defaultValue: 0 },
     server_load: { type: DataTypes.FLOAT },
     mem_usage: { type: DataTypes.FLOAT },
     db_latency: { type: DataTypes.INTEGER }
 }, { 
     timestamps: true, 
     tableName: 'stats',
-    underscored: true 
+    underscored: false // Отключено, чтобы избежать ошибки column "created_at"
 });
 
 // --- 🔗 СВЯЗИ ---
@@ -97,7 +97,6 @@ User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
 // --- 📊 СБОР ТЕЛЕМЕТРИИ ---
 export const logSystemStats = async () => {
-    // Выполняем только на основном процессе
     const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
     if (!isPrimary) return;
 
@@ -118,17 +117,15 @@ export const logSystemStats = async () => {
         const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
         const load = (os.loadavg()[0] * 10).toFixed(2);
 
-        // Сохраняем снимок
         await Stats.create({
             user_count: userCount,
             active_wallets: walletCount,
-            total_balance: sumBalance || 0,
+            total_balance: parseFloat(sumBalance || 0),
             server_load: parseFloat(load),
             mem_usage: parseFloat(mem),
             db_latency: latency
         });
         
-        // Очистка: оставляем последние 288 снимков (24 часа при интервале 5 мин)
         const totalCount = await Stats.count();
         if (totalCount > 288) {
             const oldestToKeep = await Stats.findOne({
@@ -141,7 +138,7 @@ export const logSystemStats = async () => {
                 });
             }
         }
-        console.log(`--- [TELEMETRY] Snapshot stored. Latency: ${latency}ms`);
+        console.log(`--- [TELEMETRY] Snapshot OK. Users: ${userCount}`);
     } catch (e) {
         console.error('--- [TELEMETRY] LOGGING ERROR:', e.message);
     }
@@ -156,9 +153,9 @@ export const initDB = async () => {
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // alter: true бережно обновляет таблицы при добавлении новых полей
+            // Принудительно создаем/обновляем колонки
             await sequelize.sync({ alter: true });
-            console.log('--- [DB] SCHEMA ALIVE ---');
+            console.log('--- [DB] SCHEMA SYNCHRONIZED ---');
 
             await sessionStore.sync(); 
             
@@ -169,17 +166,16 @@ export const initDB = async () => {
                     { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
                     { title: 'Подключить TON кошелек', reward: 2500, url: '', icon: 'Wallet' }
                 ]);
-                console.log('--- [DB] BASE_TASKS INSTALLED ---');
+                console.log('--- [DB] DEFAULT TASKS CREATED ---');
             }
 
-            // Сбор данных каждые 5 минут для высокой детализации дашборда
             setInterval(logSystemStats, 5 * 60 * 1000);
             await logSystemStats(); 
         }
 
         return true;
     } catch (error) {
-        console.error('--- [DB] CRITICAL INITIALIZATION ERROR:', error.message);
+        console.error('--- [DB] CRITICAL ERROR:', error.message);
         throw error;
     }
 };
