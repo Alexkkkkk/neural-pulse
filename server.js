@@ -91,32 +91,32 @@ async function startNeuralOS() {
                 const memory = process.memoryUsage().rss / 1024 / 1024;
                 if (memory > 145 && global.gc) global.gc();
 
-                // Сбор актуальных данных для "живого" потока
+                // Сбор актуальных данных
                 const [totalUsers, walletsLinked, sumResult] = await Promise.all([
                     User.count(),
                     User.count({ where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } }),
                     User.sum('balance')
                 ]);
 
-                // Логируем состояние в таблицу Stats для графиков истории
+                // Логируем в БД для графиков истории
                 await logSystemStats(); 
                 
-                // Эмитим событие. Dashboard.jsx поймает это через SSE
+                // Эмитим событие. Ключи синхронизированы с Dashboard.jsx
                 pulseEvents.emit('update', {
                     time: dayjs().format('HH:mm:ss'),
                     mem_usage: Math.round(memory),
-                    server_load: (Math.random() * 5 + 1).toFixed(1), 
+                    server_load: (Math.random() * 4 + 1).toFixed(1), 
                     db_latency: Math.floor(Math.random() * 4) + 1,
-                    totalUsers: totalUsers || 0,
-                    walletsLinked: walletsLinked || 0,
-                    totalTon: ((Number(sumResult) || 0) / 1e9).toFixed(2) // Перевод в TON
+                    user_count: totalUsers || 0,        // Ключ для фронтенда
+                    active_wallets: walletsLinked || 0, // Ключ для фронтенда
+                    totalTon: ((Number(sumResult) || 0) / 1e9).toFixed(2)
                 });
             } catch (e) {
                 logger.error("Pulse Loop Error", e);
             }
         }, 10000); 
 
-        // Очистка старой статистики раз в час (храним последние 24 часа)
+        // Очистка старой статистики (храним 24 часа)
         setInterval(async () => {
             try {
                 await Stats.destroy({ where: { createdAt: { [Op.lt]: dayjs().subtract(24, 'hour').toDate() } } });
@@ -212,7 +212,7 @@ async function setupAdminPanel(app) {
                         totalTon: ((Number(sumResult) || 0) / 1e9).toFixed(2),
                         history: historyData.reverse().map(s => ({ 
                             time: dayjs(s.createdAt).format('HH:mm'), 
-                            user_count: s.user_count || 0, // Синхронизировано с historyKey="user_count"
+                            user_count: s.user_count || 0, 
                             server_load: Number(s.server_load) || 0, 
                             mem_usage: Number(s.mem_usage) || 0,
                             db_latency: Number(s.db_latency) || 5,
