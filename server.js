@@ -17,7 +17,7 @@ import { logger } from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const pulseEvents = new EventEmitter(); // Шина событий для трансляции в админку
+const pulseEvents = new EventEmitter(); 
 
 // --- ⚙️ TITAN CONFIG ---
 const BOT_TOKEN = "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
@@ -48,7 +48,6 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
-    // Раздача статики
     app.use('/static', express.static(path.join(__dirname, 'static'), {
         maxAge: '1h',
         etag: true
@@ -65,7 +64,7 @@ async function startNeuralOS() {
         const bot = new Telegraf(BOT_TOKEN);
 
         setupAPIRoutes(app);
-        setupRealTimeStream(app); // SSE канал
+        setupRealTimeStream(app); 
         await setupAdminPanel(app);
         setupBotHandlers(bot);
 
@@ -92,19 +91,17 @@ async function startNeuralOS() {
                 const memory = process.memoryUsage().rss / 1024 / 1024;
                 if (memory > 145 && global.gc) global.gc();
 
-                // Сбор актуальных данных
                 const [totalUsers, walletsLinked, sumResult] = await Promise.all([
                     User.count(),
                     User.count({ where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } }),
                     User.sum('balance').then(s => s || 0)
                 ]);
 
-                // Расчет реальной нагрузки системы
                 const cpuCount = os.cpus().length;
                 const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
                 const latency = Math.floor(Math.random() * 8) + 2;
 
-                // ✅ КРИТИЧЕСКОЕ ИЗМЕНЕНИЕ: Сохраняем в БД для истории графиков
+                // Сохраняем в БД для истории
                 await Stats.create({
                     user_count: totalUsers || 0,
                     server_load: parseFloat(load),
@@ -113,7 +110,7 @@ async function startNeuralOS() {
                     active_wallets: walletsLinked || 0
                 });
 
-                // Эмитим событие для обновления "на лету"
+                // Эмитим в реальном времени
                 pulseEvents.emit('update', {
                     time: dayjs().format('HH:mm:ss'),
                     mem_usage: Math.round(memory),
@@ -121,7 +118,7 @@ async function startNeuralOS() {
                     db_latency: latency, 
                     user_count: totalUsers || 0,
                     active_wallets: walletsLinked || 0,
-                    total_balance: parseFloat(sumResult)
+                    total_balance: parseFloat(sumResult || 0)
                 });
             } catch (e) {
                 logger.error("Pulse Loop Error", e);
@@ -153,8 +150,9 @@ function setupRealTimeStream(app) {
         };
 
         pulseEvents.on('update', sendData);
+        
         req.on('close', () => {
-            pulseEvents.removeListener('update', sendData);
+            pulseEvents.removeListener('update', sendData); // Важно для предотвращения утечек!
             res.end();
         });
     });
@@ -210,7 +208,6 @@ async function setupAdminPanel(app) {
                         User.count({ where: { createdAt: { [Op.gte]: dayAgo } } }),
                         User.count({ where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } }),
                         User.sum('balance').then(s => s || 0),
-                        // Берем последние 30 записей из Stats для графиков
                         Stats.findAll({ limit: 30, order: [['createdAt', 'DESC']] })
                     ]);
 
@@ -218,8 +215,8 @@ async function setupAdminPanel(app) {
                         totalUsers: totalUsers || 0, 
                         dailyUsers: dailyUsers || 0, 
                         walletsLinked: walletsLinked || 0, 
-                        total_balance: parseFloat(sumResult),
-                        history: historyData.reverse().map(s => ({ 
+                        total_balance: parseFloat(sumResult || 0),
+                        history: (historyData || []).reverse().map(s => ({ 
                             time: dayjs(s.createdAt).format('HH:mm'), 
                             user_count: s.user_count || 0, 
                             server_load: Number(s.server_load) || 0, 
