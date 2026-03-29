@@ -166,16 +166,15 @@ export const initDB = async () => {
             await GlobalStats.sync({ alter: true });
             await Stats.sync({ alter: true });
             
-            // 2. Синхронизируем таблицу User БЕЗ alter: true 
-            // Это предотвращает попытки изменить тип колонки balance, на которой стоит триггер
+            // 2. Таблица User БЕЗ alter: true, чтобы не мешать триггеру на колонке balance
             await User.sync(); 
             
             await Task.sync({ alter: true });
             
-            // Общая синхронизация (безопасная)
+            // Общая безопасная синхронизация
             await sequelize.sync(); 
             
-            // Инициализация агрегатора (ID 1), если строка отсутствует
+            // Создаем агрегатор (ID 1), если его нет
             await GlobalStats.findOrCreate({ 
                 where: { id: 1 }, 
                 defaults: { total_balance: 0, total_users: 0 } 
@@ -192,7 +191,7 @@ export const initDB = async () => {
                 ]);
             }
 
-            // Запуск цикла сбора данных
+            // Интервал сбора данных
             setInterval(logSystemStats, 5 * 60 * 1000);
             await logSystemStats(); 
         }
