@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 
 // --- 🌐 NEURAL PULSE OS COLOR SYSTEM ---
 const CYBER = {
@@ -14,50 +14,52 @@ const CYBER = {
   border: '#30363d'
 };
 
-const MiniChart = ({ data, color, height = 30 }) => {
+// Мемоизация графика для плавности (не перерисовывать без нужды)
+const MiniChart = memo(({ data, color, height = 30 }) => {
   if (!data || data.length < 2) return <div style={{ height: height + 10 }} />;
-  const cleanData = data.map(v => Number.isFinite(v) ? v : 0);
+  const cleanData = data.map(v => (Number.isFinite(v) ? v : 0));
   const max = Math.max(...cleanData) || 1;
   const min = Math.min(...cleanData);
-  const range = (max - min) || 1;
+  const range = max - min || 1;
   const points = cleanData.map((val, i) => ({
     x: (i / (cleanData.length - 1)) * 100,
-    y: height - ((val - min) / range) * height
+    y: height - ((val - min) / range) * height,
   }));
   const pathData = `M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`;
+  
   return (
     <svg width="100%" height={height} style={{ marginTop: '10px', overflow: 'visible', display: 'block' }}>
       <path d={pathData} fill="none" stroke={color} strokeWidth="1.5" strokeOpacity="0.8" />
       <path d={`${pathData} L 100,${height} L 0,${height} Z`} fill={color} fillOpacity="0.1" />
     </svg>
   );
-};
+});
 
 const Dashboard = (props) => {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [isReady, setIsReady] = useState(false);
-  const [logs, setLogs] = useState(['> INITIALIZING_BOOT_SEQUENCE...', '> KERNEL_LOADED', '> SYNCING_WITH_TON_GATEWAY...']);
+  const [logs, setLogs] = useState(['> INITIALIZING_BOOT_SEQUENCE...', '> KERNEL_LOADED', '> SYNCING_WITH_TITAN_CORE...']);
   const [scanPos, setScanPos] = useState(0);
   
-  // Инициализация истории из пропсов сервера
+  // Данные истории из пропсов сервера (Stats.findAll)
   const [history, setHistory] = useState(props.data?.history || []);
 
   const [stats, setStats] = useState({
     totalUsers: props.data?.totalUsers || 0,
     dailyUsers: props.data?.dailyUsers || 0,
     walletsLinked: props.data?.walletsLinked || 0,
-    totalTon: props.data?.totalTon || "0.00",
+    total_balance: props.data?.total_balance || 0,
     cpu: 0,
     mem: 0,
     latency: 5
   });
 
   const addLog = (msg) => {
-    setLogs(prev => [...prev.slice(-14), `${msg}`]);
+    setLogs(prev => [...prev.slice(-12), msg]);
   };
 
   useEffect(() => {
-    // 1. Анимация загрузки
+    // 1. Анимация прогресс-бара при входе
     const loader = setInterval(() => {
       setLoadingProgress(prev => {
         if (prev >= 100) {
@@ -69,40 +71,31 @@ const Dashboard = (props) => {
       });
     }, 30);
 
-    // 2. Подключение к Real-time потоку (SSE)
+    // 2. Real-time связь через SSE
     const eventSource = new EventSource('/api/admin/stream');
     
     eventSource.onmessage = (event) => {
       try {
         const pulse = JSON.parse(event.data);
         
-        // Обновляем текущие показатели (HUD)
+        // Обновление HUD показателей
         setStats(prev => ({
           ...prev,
-          cpu: Number(pulse.server_load) || 0,
-          mem: Number(pulse.mem_usage) || 0,
-          latency: Number(pulse.db_latency) || 0,
-          totalUsers: pulse.user_count || prev.totalUsers,
-          walletsLinked: pulse.active_wallets || prev.walletsLinked,
-          totalTon: pulse.totalTon || prev.totalTon
+          cpu: pulse.server_load,
+          mem: pulse.mem_usage,
+          latency: pulse.db_latency,
+          totalUsers: pulse.user_count,
+          walletsLinked: pulse.active_wallets,
+          total_balance: pulse.total_balance
         }));
 
-        // Мапим входящие данные под ключи графиков StatCard
-        const historyPoint = {
-          ...pulse,
-          user_count: pulse.user_count,
-          active_wallets: pulse.active_wallets,
-          server_load: Number(pulse.server_load),
-          mem_usage: Number(pulse.mem_usage),
-          db_latency: Number(pulse.db_latency)
-        };
+        // Обновление истории графиков
+        setHistory(prev => [...prev.slice(-29), pulse]);
 
-        // Добавляем новую точку в историю (храним 30 точек)
-        setHistory(prev => [...prev.slice(-29), historyPoint]);
-
+        // Рандомные логи системы для атмосферы
         if (Math.random() > 0.8) {
-          const events = ['BLOCK_VALIDATED', 'WS_PULSE_SENT', 'PEER_CONNECTED', 'CACHE_OPTIMIZED'];
-          addLog(`> ${events[Math.floor(Math.random() * events.length)]}: 0x${Math.random().toString(16).slice(2, 8).toUpperCase()}`);
+          const events = ['CORE_STABLE', 'TELEMETRY_SYNCED', 'DB_BUFFER_CLEAN', 'PULSE_RECEIVED'];
+          addLog(`> ${events[Math.floor(Math.random() * events.length)]}: ${Math.random().toString(16).slice(2, 8).toUpperCase()}`);
         }
       } catch (e) {
         console.error("Pulse error:", e);
@@ -110,7 +103,7 @@ const Dashboard = (props) => {
     };
 
     eventSource.onerror = () => {
-      addLog('> ERROR: TELEMETRY_LINK_LOST. RETRYING...');
+      addLog('> ERROR: TELEMETRY_LINK_LOST. ATTEMPTING_RECONNECT...');
     };
 
     const animInterval = setInterval(() => setScanPos(p => (p + 1) % 100), 60);
@@ -123,6 +116,7 @@ const Dashboard = (props) => {
   }, []);
 
   const StatCard = ({ label, value, unit, color, subValue, historyKey }) => {
+    // Извлекаем массив данных для конкретного графика из истории
     const chartData = history.map(h => Number(h[historyKey]) || 0);
     
     return (
@@ -141,9 +135,10 @@ const Dashboard = (props) => {
         
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
             <span style={{ fontSize: '10px', color: color, opacity: 0.8 }}>{subValue || 'SYSTEM_ACTIVE'}</span>
-            <span style={{ fontSize: '9px', color: '#444' }}>LIVE_FEED</span>
+            <span style={{ fontSize: '9px', color: '#444' }}>LIVE_STREAM</span>
         </div>
         
+        {/* Маленький прогресс-бар внизу каждой карточки */}
         <div style={{ width: '100%', height: '2px', background: '#000', marginTop: '8px' }}>
           <div style={{ 
             width: `${Math.min((parseFloat(value) / (unit === '%' ? 100 : unit === 'MB' ? 512 : 10000)) * 100, 100)}%`, 
@@ -158,7 +153,7 @@ const Dashboard = (props) => {
     return (
       <div style={{ background: CYBER.bg, color: CYBER.primary, height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' }}>
         <div style={{ textAlign: 'center', border: `1px solid ${CYBER.primary}33`, padding: '40px', background: CYBER.card }}>
-          <div style={{ fontSize: '10px', letterSpacing: '5px', marginBottom: '20px' }}>NEURAL_PULSE_BOOTING...</div>
+          <div style={{ fontSize: '10px', letterSpacing: '5px', marginBottom: '20px' }}>NEURAL_PULSE_OS_BOOTING...</div>
           <div style={{ fontSize: '48px', fontWeight: 'bold' }}>{loadingProgress}%</div>
           <div style={{ width: '200px', height: '2px', background: '#080a0f', margin: '20px auto' }}>
             <div style={{ width: `${loadingProgress}%`, height: '100%', background: CYBER.primary, boxShadow: `0 0 15px ${CYBER.primary}` }} />
@@ -196,22 +191,22 @@ const Dashboard = (props) => {
         <div style={{ position: 'absolute', top: 0, left: `${scanPos}%`, width: '1px', height: '100%', background: CYBER.primary, boxShadow: `0 0 15px ${CYBER.primary}`, opacity: 0.3, zIndex: 1 }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 2 }}>
           <div>
-            <span style={{ padding: '2px 8px', background: CYBER.primary, color: '#000', fontWeight: 'bold', fontSize: '10px' }}>NEURAL_PULSE_OS_V3</span>
+            <span style={{ padding: '2px 8px', background: CYBER.primary, color: '#000', fontWeight: 'bold', fontSize: '10px' }}>NEURAL_PULSE_OS_V12.4</span>
             <h2 className="glitch-title" style={{ color: CYBER.primary, margin: '10px 0 0 0', fontSize: '24px', letterSpacing: '1px' }}>
-              CORE_TELEMETRY
+              TITAN_CORE_TELEMETRY
             </h2>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ color: CYBER.ton, fontWeight: 'bold', fontSize: '20px' }}>{stats.totalTon} TON</div>
-            <div style={{ color: '#444', fontSize: '9px' }}>TOTAL_RESERVE</div>
+            <div style={{ color: CYBER.ton, fontWeight: 'bold', fontSize: '20px' }}>{stats.total_balance.toLocaleString()} $NP</div>
+            <div style={{ color: '#444', fontSize: '9px' }}>TOTAL_TOKEN_SUPPLY</div>
           </div>
         </div>
       </div>
 
-      {/* --- GRID --- */}
+      {/* --- GRID (HUD) --- */}
       <div style={{ display: 'flex', flexWrap: 'wrap', margin: '0 -10px' }}>
         <StatCard label="TOTAL_AGENTS" value={stats.totalUsers} unit="U" color={CYBER.primary} historyKey="user_count" />
-        <StatCard label="NEW_PLAYERS" value={stats.dailyUsers} unit="+" color={CYBER.success} historyKey="user_count" />
+        <StatCard label="NEW_24H" value={stats.dailyUsers} unit="+" color={CYBER.success} historyKey="user_count" />
         <StatCard label="WALLETS" value={stats.walletsLinked} unit="W" color={CYBER.ton} historyKey="active_wallets" />
         <StatCard label="CORE_LOAD" value={stats.cpu} unit="%" color={CYBER.secondary} historyKey="server_load" />
         <StatCard label="MEM_USAGE" value={stats.mem} unit="MB" color={CYBER.warning} historyKey="mem_usage" />
@@ -238,7 +233,7 @@ const Dashboard = (props) => {
           <div style={{ color: CYBER.success, fontSize: '10px', marginBottom: '10px', borderBottom: `1px solid ${CYBER.success}33`, paddingBottom: '5px' }}>SYSTEM_LOGS</div>
           <div style={{ fontSize: '10px', lineHeight: '1.8', color: '#4e555d', fontFamily: 'monospace' }}>
             {logs.map((log, i) => (
-              <div key={i} style={{ color: log.includes('ERROR') ? CYBER.danger : log.includes('VALIDATED') ? CYBER.primary : '#4e555d' }}>
+              <div key={i} style={{ color: log.includes('ERROR') ? CYBER.danger : log.includes('SYNC') ? CYBER.primary : '#4e555d' }}>
                 {log}
               </div>
             ))}
