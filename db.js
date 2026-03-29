@@ -59,7 +59,7 @@ export const User = sequelize.define('users', {
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { 
     timestamps: true, 
-    underscored: true,
+    underscored: false, // ВАЖНО: false, так как база создала CamelCase (createdAt)
     indexes: [
         { fields: ['username'] },
         { fields: ['wallet'] },
@@ -91,7 +91,7 @@ export const Stats = sequelize.define('stats', {
     underscored: false 
 });
 
-// --- 📈 МОДЕЛЬ: GLOBAL_STATS (Таблица-агрегатор для триггеров) ---
+// --- 📈 МОДЕЛЬ: GLOBAL_STATS (Агрегатор для триггеров) ---
 export const GlobalStats = sequelize.define('global_stats', {
     id: { type: DataTypes.INTEGER, primaryKey: true },
     total_balance: { type: DataTypes.DECIMAL(32, 2), defaultValue: 0 },
@@ -99,7 +99,7 @@ export const GlobalStats = sequelize.define('global_stats', {
 }, { 
     timestamps: false, 
     tableName: 'global_stats',
-    underscored: true 
+    underscored: false 
 });
 
 // --- 🔗 СВЯЗИ ---
@@ -108,14 +108,14 @@ User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
 // --- 📊 СБОР ТЕЛЕМЕТРИИ ---
 export const logSystemStats = async () => {
-    // Выполняем только на главном процессе
+    // Выполняем только на главном процессе (или если не используется кластер)
     const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
     if (!isPrimary) return;
 
     try {
         const start = Date.now();
         
-        // Получаем актуальные данные из агрегатора GlobalStats (куда пишут триггеры)
+        // Получаем актуальные данные из агрегатора (куда пишут триггеры)
         const gStats = await GlobalStats.findByPk(1);
         const totalBalance = gStats ? parseFloat(gStats.total_balance) : 0;
         const totalUsers = gStats ? gStats.total_users : 0;
@@ -126,10 +126,10 @@ export const logSystemStats = async () => {
 
         const latency = Date.now() - start;
         const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
-        const cpuCount = os.cpus().length;
+        const cpuCount = os.cpus()?.length || 1;
         const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
 
-        // Создаем запись в истории статистики
+        // Создаем запись в истории для графиков
         await Stats.create({
             user_count: totalUsers,
             active_wallets: walletCount,
@@ -139,18 +139,18 @@ export const logSystemStats = async () => {
             db_latency: parseFloat(latency)
         });
         
-        // Очистка старых данных: храним только 288 записей (24 часа)
-        const totalCount = await Stats.count();
-        if (totalCount > 288) {
+        // Авто-очистка: храним записи только за последние 24 часа (288 записей при 5-мин интервале)
+        const totalEntries = await Stats.count();
+        if (totalEntries > 288) {
             const oldestToKeep = await Stats.findOne({
-                offset: totalCount - 288,
+                offset: totalEntries - 288,
                 order: [['id', 'ASC']]
             });
             if (oldestToKeep) {
                 await Stats.destroy({ where: { id: { [Op.lt]: oldestToKeep.id } } });
             }
         }
-        console.log(`--- [TELEMETRY] Sync Successful | Users: ${totalUsers} | Balance: ${totalBalance}`);
+        console.log(`--- [TELEMETRY] Sync OK | Users: ${totalUsers} | Balance: ${totalBalance}`);
     } catch (e) {
         console.error('--- [TELEMETRY] ERROR:', e.message);
     }
@@ -165,27 +165,23 @@ export const initDB = async () => {
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // 1. Синхронизируем служебные таблицы
+            // 1. Синхронизируем базовые таблицы
             await GlobalStats.sync({ alter: true });
             await Stats.sync({ alter: true });
-            
-            // 2. Синхронизируем таблицу User БЕЗ alter: true (критично для триггеров!)
-            await User.sync(); 
-            
+            await User.sync(); // БЕЗ alter: true, чтобы не сбить триггеры в Dminer
             await Task.sync({ alter: true });
+            await sessionStore.sync();
             
-            // Финальная безопасная синхронизация всей остальной схемы
+            // Финальная синхронизация всей схемы
             await sequelize.sync(); 
             
-            // 3. Инициализация агрегатора (ID 1), если строка отсутствует
+            // 2. Инициализация строки агрегатора
             await GlobalStats.findOrCreate({ 
                 where: { id: 1 }, 
                 defaults: { total_balance: 0, total_users: 0 } 
             });
 
-            await sessionStore.sync(); 
-            
-            // 4. Проверка и создание стандартных задач
+            // 3. Создание стандартных задач, если их нет
             const taskCount = await Task.count();
             if (taskCount === 0) {
                 await Task.bulkCreate([
@@ -196,7 +192,7 @@ export const initDB = async () => {
                 console.log('--- [DB] Default Tasks Created ---');
             }
 
-            // Запуск цикла сбора телеметрии каждые 5 минут
+            // 4. Запуск цикла телеметрии (каждые 5 минут)
             setInterval(logSystemStats, 5 * 60 * 1000);
             await logSystemStats(); 
         }
