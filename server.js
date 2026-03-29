@@ -85,26 +85,30 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SYSTEM PULSE ---
+        // --- 🩺 SYSTEM PULSE (Каждые 10 секунд) ---
         setInterval(async () => {
             try {
                 const memory = process.memoryUsage().rss / 1024 / 1024;
                 if (memory > 145 && global.gc) global.gc();
 
-                const [totalUsers, walletsLinked] = await Promise.all([
+                // Сбор актуальных данных для "живого" потока
+                const [totalUsers, walletsLinked, sumResult] = await Promise.all([
                     User.count(),
-                    User.count({ where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } })
+                    User.count({ where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } }),
+                    User.sum('balance')
                 ]);
 
                 await logSystemStats(); 
                 
+                // Эмитим событие с ключами, которые Dashboad ожидает увидеть в SSE
                 pulseEvents.emit('update', {
                     time: dayjs().format('HH:mm:ss'),
                     mem_usage: Math.round(memory),
                     server_load: (Math.random() * 5 + 1).toFixed(1), 
                     db_latency: Math.floor(Math.random() * 4) + 1,
-                    totalUsers,
-                    walletsLinked
+                    totalUsers: totalUsers || 0,
+                    walletsLinked: walletsLinked || 0,
+                    totalTon: ((Number(sumResult) || 0) / 1e9).toFixed(2)
                 });
             } catch (e) {
                 logger.error("Pulse Loop Error", e);
@@ -113,7 +117,9 @@ async function startNeuralOS() {
 
         // Очистка старой статистики раз в час
         setInterval(async () => {
-            await Stats.destroy({ where: { createdAt: { [Op.lt]: dayjs().subtract(24, 'hour').toDate() } } });
+            try {
+                await Stats.destroy({ where: { createdAt: { [Op.lt]: dayjs().subtract(24, 'hour').toDate() } } });
+            } catch (e) { logger.error("Stats cleanup error", e); }
         }, 3600000);
 
         const server = app.listen(PORT, '0.0.0.0', () => {
@@ -198,8 +204,11 @@ async function setupAdminPanel(app) {
                         Stats.findAll({ limit: 30, order: [['createdAt', 'DESC']] })
                     ]);
 
+                    // Эти данные придут в Dashboard один раз при загрузке страницы
                     return { 
-                        totalUsers, dailyUsers, walletsLinked, 
+                        totalUsers: totalUsers || 0, 
+                        dailyUsers: dailyUsers || 0, 
+                        walletsLinked: walletsLinked || 0, 
                         totalTon: ((Number(sumResult) || 0) / 1e9).toFixed(2),
                         history: historyData.reverse().map(s => ({ 
                             time: dayjs(s.createdAt).format('HH:mm'), 
@@ -226,14 +235,11 @@ async function setupAdminPanel(app) {
                     },
                 },
                 custom: `
-                    /* --- ГЛОБАЛЬНЫЕ НАСТРОЙКИ --- */
                     body, html, #adminjs, [data-testid="Box"], .adminjs_Box { 
                         background-color: #0b0e14 !important; 
                         color: #ffffff !important; 
                         font-family: 'monospace' !important; 
                     }
-
-                    /* --- ЭФФЕКТ СКАНЕРА --- */
                     body::before {
                         content: "";
                         position: fixed;
@@ -245,46 +251,20 @@ async function setupAdminPanel(app) {
                         z-index: 9999;
                         pointer-events: none;
                     }
-
                     @keyframes scanline {
                         0% { top: -10%; }
                         100% { top: 110%; }
                     }
-
-                    /* --- СТИЛИЗАЦИЯ СТРАНИЦЫ ВХОДА --- */
                     [data-testid="login-border"] {
                         background: #161b22 !important;
                         border: 1px solid #00f2fe !important;
-                        box-shadow: 0 0 40px rgba(0, 242, 254, 0.15), inset 0 0 10px rgba(0, 242, 254, 0.05) !important;
-                        border-radius: 4px !important;
-                        position: relative;
-                        overflow: hidden;
+                        box-shadow: 0 0 40px rgba(0, 242, 254, 0.15) !important;
                     }
-
-                    [data-testid="login-border"]::after {
-                        content: "NEURAL_OS_AUTH";
-                        position: absolute;
-                        top: 5px; right: 10px;
-                        font-size: 8px;
-                        color: #00f2fe;
-                        opacity: 0.5;
-                    }
-
                     [data-testid="login-border"] input {
                         background-color: #0b0e14 !important;
-                        border: 1px solid #30363d !important;
                         border-left: 3px solid #00f2fe !important;
                         color: #00f2fe !important;
                     }
-
-                    [data-testid="login-border"] label {
-                        color: #8b949e !important;
-                        text-transform: uppercase;
-                        font-size: 10px;
-                        letter-spacing: 1px;
-                    }
-
-                    /* --- БОКОВАЯ ПАНЕЛЬ И ХЕДЕР --- */
                     section[data-testid="sidebar"], aside { 
                         background-color: #0b0e14 !important; 
                         border-right: 1px solid rgba(0, 242, 254, 0.2) !important; 
@@ -293,40 +273,17 @@ async function setupAdminPanel(app) {
                         background: #0b0e14 !important; 
                         border-bottom: 1px solid #30363d !important; 
                     }
-
-                    /* --- ТАБЛИЦЫ И КАРТОЧКИ --- */
                     .adminjs_Card, .adminjs_Table, .adminjs_Table td, .adminjs_Table th { 
                         background: #161b22 !important; 
                         border-color: #30363d !important; 
                         color: #ffffff !important;
                     }
-
-                    .adminjs_Table tr:hover {
-                        background: rgba(0, 242, 254, 0.05) !important;
-                    }
-                    
-                    /* --- КНОПКИ --- */
                     .adminjs_Button-primary, button[type="submit"] {
                         background: linear-gradient(90deg, #00f2fe, #4facfe) !important;
                         color: #0b0e14 !important;
-                        border: none !important;
                         font-weight: 800 !important;
-                        text-transform: uppercase !important;
-                        letter-spacing: 1px;
-                        transition: all 0.3s ease;
                     }
-                    .adminjs_Button-primary:hover, button[type="submit"]:hover {
-                        box-shadow: 0 0 20px rgba(0, 242, 254, 0.6);
-                        transform: translateY(-1px);
-                    }
-
                     footer, .adminjs_Footer, [data-testid="made-with-love"] { display: none !important; }
-                    
-                    /* --- СКРОЛЛБАР --- */
-                    ::-webkit-scrollbar { width: 6px; }
-                    ::-webkit-scrollbar-track { background: #0b0e14; }
-                    ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
-                    ::-webkit-scrollbar-thumb:hover { background: #00f2fe; }
                 `,
             }
         });
