@@ -84,7 +84,7 @@ export const Stats = sequelize.define('stats', {
     total_balance: { type: DataTypes.DECIMAL(24, 2), defaultValue: 0 },
     server_load: { type: DataTypes.FLOAT },
     mem_usage: { type: DataTypes.FLOAT },
-    db_latency: { type: DataTypes.INTEGER }
+    db_latency: { type: DataTypes.FLOAT } // Изменено на FLOAT для точности
 }, { 
     timestamps: true, 
     tableName: 'stats',
@@ -97,13 +97,13 @@ User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
 // --- 📊 СБОР ТЕЛЕМЕТРИИ ---
 export const logSystemStats = async () => {
+    // Выполняем только на главном процессе (Primary)
     const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
     if (!isPrimary) return;
 
     try {
         const start = Date.now();
         
-        // Собираем агрегаты по БД
         const [userCount, walletCount, sumBalance] = await Promise.all([
             User.count(),
             User.count({ 
@@ -111,27 +111,25 @@ export const logSystemStats = async () => {
                     wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } 
                 } 
             }),
-            User.sum('balance').then(sum => sum || 0)
+            User.sum('balance').then(sum => Number(sum) || 0)
         ]);
 
         const latency = Date.now() - start;
         const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
-        
-        // Нормализация CPU (учитываем количество ядер)
         const cpuCount = os.cpus().length;
         const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
 
-        // Сохраняем слепок в таблицу статов
+        // Создаем запись
         await Stats.create({
             user_count: userCount || 0,
             active_wallets: walletCount || 0,
-            total_balance: parseFloat(sumBalance),
+            total_balance: sumBalance,
             server_load: parseFloat(load),
             mem_usage: parseFloat(mem),
-            db_latency: latency
+            db_latency: parseFloat(latency)
         });
         
-        // Ротация: оставляем последние 288 записей (сутки истории при 5-мин интервале)
+        // Ротация данных (храним 288 записей = 24 часа при 5-мин интервале)
         const totalCount = await Stats.count();
         if (totalCount > 288) {
             const oldestToKeep = await Stats.findOne({
@@ -159,17 +157,13 @@ export const initDB = async () => {
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // Синхронизируем таблицу статов первой (alter: true сохраняет данные)
+            // alter: true бережно обновляет схему без удаления данных
             await Stats.sync({ alter: true });
-            
-            // Синхронизируем остальные модели
             await sequelize.sync({ alter: true });
             console.log('--- [DB] SCHEMA SYNCHRONIZED ---');
 
-            // Синхронизация хранилища сессий
             await sessionStore.sync(); 
             
-            // Наполнение дефолтными задачами
             const taskCount = await Task.count();
             if (taskCount === 0) {
                 await Task.bulkCreate([
@@ -180,10 +174,10 @@ export const initDB = async () => {
                 console.log('--- [DB] DEFAULT TASKS CREATED ---');
             }
 
-            // Запуск цикла сбора данных (каждые 5 минут)
+            // Запуск цикла сбора данных
             setInterval(logSystemStats, 5 * 60 * 1000);
             
-            // Первый запуск сразу после старта
+            // Моментальный запуск при старте
             await logSystemStats(); 
         }
 
