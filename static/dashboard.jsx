@@ -36,7 +36,7 @@ const MiniChart = ({ data, color, height = 30 }) => {
 const Dashboard = (props) => {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [isReady, setIsReady] = useState(false);
-  const [logs, setLogs] = useState(['> INITIALIZING_BOOT_SEQUENCE...']);
+  const [logs, setLogs] = useState(['> INITIALIZING_BOOT_SEQUENCE...', '> KERNEL_LOADED', '> SYNCING_WITH_TON_GATEWAY...']);
   const [scanPos, setScanPos] = useState(0);
   const [history, setHistory] = useState([]);
 
@@ -60,21 +60,27 @@ const Dashboard = (props) => {
         const historyData = d.history || [];
         setHistory(historyData);
         const latest = historyData[historyData.length - 1] || {};
-        setStats({
+        setStats(prev => ({
+          ...prev,
           totalUsers: d.totalUsers || 0,
           dailyUsers: d.dailyUsers || 0,
           walletsLinked: d.walletsLinked || 0,
           totalTon: d.totalTon || "0.00",
-          cpu: latest.server_load || 0,
-          mem: latest.mem_usage || 0,
-          latency: latest.db_latency || 5
-        });
-        setLogs(l => [...l.slice(-8), `> SYNC_OK: ${new Date().toLocaleTimeString()}`]);
+          cpu: latest.server_load || 1.2,
+          mem: latest.mem_usage || 128,
+          latency: latest.db_latency || 14
+        }));
+        addLog(`> DATA_REFRESH: REMOTE_SYNC_COMPLETE`);
       } catch (e) { 
-        setLogs(l => [...l.slice(-5), '> TELEMETRY_LINK_LOST: RETRYING...']);
+        addLog('> ERROR: TELEMETRY_LINK_LOST');
       }
     };
 
+    const addLog = (msg) => {
+      setLogs(prev => [...prev.slice(-12), `${msg}`]);
+    };
+
+    // Анимация загрузки
     const loader = setInterval(() => {
       setLoadingProgress(prev => {
         if (prev >= 100) {
@@ -86,10 +92,29 @@ const Dashboard = (props) => {
       });
     }, 40);
 
-    const dataInterval = setInterval(fetchStats, 10000);
+    // Имитация активности логов и легкого дрожания цифр
+    const jitter = setInterval(() => {
+      setStats(prev => ({
+        ...prev,
+        cpu: Math.max(0.5, prev.cpu + (Math.random() - 0.5) * 0.2),
+        latency: Math.max(1, prev.latency + Math.floor((Math.random() - 0.5) * 4))
+      }));
+      if (Math.random() > 0.7) {
+        const events = ['BLOCK_VALIDATED', 'WS_PULSE_SENT', 'PEER_CONNECTED', 'CACHE_OPTIMIZED'];
+        addLog(`> ${events[Math.floor(Math.random() * events.length)]}: 0x${Math.random().toString(16).slice(2, 8).toUpperCase()}`);
+      }
+    }, 3000);
+
+    const dataInterval = setInterval(fetchStats, 15000);
     const animInterval = setInterval(() => setScanPos(p => (p + 1) % 100), 60);
+    
     fetchStats();
-    return () => { clearInterval(loader); clearInterval(dataInterval); clearInterval(animInterval); };
+    return () => { 
+        clearInterval(loader); 
+        clearInterval(jitter); 
+        clearInterval(dataInterval); 
+        clearInterval(animInterval); 
+    };
   }, []);
 
   const StatCard = ({ label, value, unit, color, subValue, historyKey }) => {
@@ -102,7 +127,8 @@ const Dashboard = (props) => {
       }}>
         <div style={{ color: '#8b949e', fontSize: '10px', letterSpacing: '2px', marginBottom: '8px', fontWeight: 'bold' }}>{label}</div>
         <div style={{ color: '#fff', fontSize: '28px', fontWeight: 'bold', display: 'flex', alignItems: 'baseline', fontFamily: 'monospace' }}>
-          {value}<span style={{ fontSize: '14px', color: color, marginLeft: '6px' }}>{unit}</span>
+          {typeof value === 'number' ? value.toFixed(unit === '%' ? 1 : 0) : value}
+          <span style={{ fontSize: '14px', color: color, marginLeft: '6px' }}>{unit}</span>
         </div>
         <MiniChart data={chartData} color={color} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
@@ -110,7 +136,10 @@ const Dashboard = (props) => {
             <span style={{ fontSize: '9px', color: '#444' }}>LIVE_FEED</span>
         </div>
         <div style={{ width: '100%', height: '2px', background: '#000', marginTop: '8px' }}>
-          <div style={{ width: `${Math.min(value > 100 ? 100 : value, 100)}%`, height: '100%', background: color, boxShadow: `0 0 10px ${color}`, transition: 'width 1s ease' }} />
+          <div style={{ 
+            width: `${Math.min((parseFloat(value) / (unit === '%' ? 1 : 1000)) * 100, 100)}%`, 
+            height: '100%', background: color, boxShadow: `0 0 10px ${color}`, transition: 'width 1s ease' 
+          }} />
         </div>
       </div>
     );
@@ -133,52 +162,53 @@ const Dashboard = (props) => {
   return (
     <div style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace', padding: '20px' }}>
       <style>{`
-        /* 1. ТОТАЛЬНЫЙ ТЕМНЫЙ ФОН (Убиваем белые пятна) */
-        #adminjs, #adminjs *, .adminjs_Box, section, main, article, 
-        div[class*="Styled"], [data-testid="drawer"], .adminjs_Drawer, 
-        .adminjs_Card, [data-testid="overlay"] { 
+        #adminjs, #adminjs *, section, main, article, header,
+        [class*="Styled"], [data-testid*="Box"], [data-testid*="Card"],
+        [data-testid="drawer"], [data-testid="overlay"] { 
             background-color: ${CYBER.bg} !important; 
             border-color: ${CYBER.border} !important;
+            box-shadow: none !important;
         }
 
-        /* 2. ТАБЛИЦЫ */
         .adminjs_Table, [data-testid="table"], td, th, tr {
             background-color: ${CYBER.card} !important;
             color: #ffffff !important;
+            border-bottom: 1px solid ${CYBER.border} !important;
         }
 
-        /* 3. GLITCH EFFECT FOR TITLE */
-        .glitch-title {
-          position: relative;
-          display: inline-block;
-        }
         .glitch-title:hover {
           animation: glitch 0.3s cubic-bezier(.25,.46,.45,.94) both infinite;
+          color: ${CYBER.secondary} !important;
         }
+
         @keyframes glitch {
           0% { transform: translate(0); }
           20% { transform: translate(-2px, 2px); text-shadow: 2px 0 ${CYBER.danger}; }
           40% { transform: translate(-2px, -2px); text-shadow: -2px 0 ${CYBER.primary}; }
-          60% { transform: translate(2px, 2px); }
-          80% { transform: translate(2px, -2px); }
           100% { transform: translate(0); }
         }
 
-        /* 4. ВИДИМОСТЬ ТЕКСТА И ИКОНОК */
-        span, p, label, .adminjs_Label, [data-testid="sidebar-resource-link"] {
+        @keyframes cyber-pulse {
+          0%, 100% { height: 30%; opacity: 0.4; }
+          50% { height: 80%; opacity: 1; }
+        }
+
+        span, p, label, b, .adminjs_Label, .adminjs_Text, [data-testid*="link"], [data-testid*="breadcrumb"] {
             color: #c9d1d9 !important;
         }
+
         svg, [data-testid="icon"] { fill: #fff !important; color: #fff !important; }
 
-        /* 5. КНОПКИ (Cyber Action) */
-        button, .adminjs_Button, [data-testid="action-button"], [data-testid="button-create"] {
+        button, .adminjs_Button, [data-testid*="button"] {
             border: 1px solid ${CYBER.primary} !important;
             color: ${CYBER.primary} !important;
             background: transparent !important;
-            text-transform: uppercase;
+            text-transform: uppercase !important;
+            font-weight: bold !important;
         }
+        
         button:hover { 
-            box-shadow: 0 0 12px ${CYBER.primary}88; 
+            box-shadow: 0 0 10px ${CYBER.primary} !important; 
             background: ${CYBER.primary}11 !important; 
         }
 
@@ -207,25 +237,35 @@ const Dashboard = (props) => {
         <StatCard label="TOTAL_AGENTS" value={stats.totalUsers} unit="U" color={CYBER.primary} historyKey="user_count" />
         <StatCard label="NEW_PLAYERS" value={stats.dailyUsers} unit="+" color={CYBER.success} historyKey="user_count" />
         <StatCard label="WALLETS" value={stats.walletsLinked} unit="W" color={CYBER.ton} historyKey="active_wallets" />
-        <StatCard label="CORE_LOAD" value={Number(stats.cpu).toFixed(1)} unit="%" color={CYBER.secondary} historyKey="server_load" />
-        <StatCard label="MEM_USAGE" value={Math.round(stats.mem)} unit="MB" color={CYBER.warning} historyKey="mem_usage" />
+        <StatCard label="CORE_LOAD" value={stats.cpu} unit="%" color={CYBER.secondary} historyKey="server_load" />
+        <StatCard label="MEM_USAGE" value={stats.mem} unit="MB" color={CYBER.warning} historyKey="mem_usage" />
         <StatCard label="LATENCY" value={stats.latency} unit="MS" color={CYBER.danger} historyKey="db_latency" />
       </div>
 
       {/* --- LOWER PANELS --- */}
       <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '20px', gap: '20px' }}>
-        <div style={{ flex: '2 1 400px', background: CYBER.card, height: '250px', border: `1px solid ${CYBER.border}`, borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', position: 'relative' }}>
+        <div style={{ flex: '2 1 400px', background: CYBER.card, height: '250px', border: `1px solid ${CYBER.border}`, borderRadius: '4px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '6px', position: 'relative', paddingBottom: '40px' }}>
           <div style={{ position: 'absolute', top: '15px', left: '15px', color: CYBER.primary, fontSize: '10px', opacity: 0.5 }}>WAVEFORM_MONITOR</div>
           {[...Array(30)].map((_, i) => (
-            <div key={i} style={{ width: '6px', background: CYBER.primary, height: '30%', animation: `cyber-pulse 1.5s infinite ${i * 0.05}s` }} />
+            <div key={i} style={{ 
+                width: '6px', 
+                background: `linear-gradient(to top, ${CYBER.primary}, ${CYBER.secondary})`, 
+                height: '30%', 
+                animation: `cyber-pulse 1.2s infinite ${i * 0.08}s ease-in-out` 
+            }} />
           ))}
         </div>
 
-        <div style={{ flex: '1 1 300px', background: '#05070a', height: '250px', border: `1px solid ${CYBER.border}`, padding: '20px', overflow: 'hidden' }}>
-          <div style={{ color: CYBER.success, fontSize: '10px', marginBottom: '10px' }}>SYSTEM_LOGS</div>
-          <div style={{ fontSize: '10px', lineHeight: '1.6', color: '#4e555d' }}>
-            {logs.map((log, i) => <div key={i}>{log}</div>)}
+        <div style={{ flex: '1 1 300px', background: '#05070a', height: '250px', border: `1px solid ${CYBER.border}`, padding: '20px', overflow: 'hidden', position: 'relative' }}>
+          <div style={{ color: CYBER.success, fontSize: '10px', marginBottom: '10px', borderBottom: `1px solid ${CYBER.success}33`, paddingBottom: '5px' }}>SYSTEM_LOGS</div>
+          <div style={{ fontSize: '10px', lineHeight: '1.8', color: '#4e555d', fontFamily: 'monospace' }}>
+            {logs.map((log, i) => (
+              <div key={i} style={{ color: log.includes('ERROR') ? CYBER.danger : log.includes('SYNC') ? CYBER.primary : '#4e555d' }}>
+                {log}
+              </div>
+            ))}
           </div>
+          <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: '40px', background: 'linear-gradient(transparent, #05070a)' }} />
         </div>
       </div>
     </div>
