@@ -99,16 +99,26 @@ async function startNeuralOS() {
                     User.sum('balance').then(s => s || 0)
                 ]);
 
-                // Расчет реальной нагрузки системы (учитывая все ядра процессора)
+                // Расчет реальной нагрузки системы
                 const cpuCount = os.cpus().length;
                 const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
+                const latency = Math.floor(Math.random() * 8) + 2;
 
-                // Эмитим событие. Ключи синхронизированы с Dashboard.jsx
+                // ✅ КРИТИЧЕСКОЕ ИЗМЕНЕНИЕ: Сохраняем в БД для истории графиков
+                await Stats.create({
+                    user_count: totalUsers || 0,
+                    server_load: parseFloat(load),
+                    mem_usage: Math.round(memory),
+                    db_latency: latency,
+                    active_wallets: walletsLinked || 0
+                });
+
+                // Эмитим событие для обновления "на лету"
                 pulseEvents.emit('update', {
                     time: dayjs().format('HH:mm:ss'),
                     mem_usage: Math.round(memory),
                     server_load: parseFloat(load), 
-                    db_latency: Math.floor(Math.random() * 8) + 2, 
+                    db_latency: latency, 
                     user_count: totalUsers || 0,
                     active_wallets: walletsLinked || 0,
                     total_balance: parseFloat(sumResult)
@@ -200,6 +210,7 @@ async function setupAdminPanel(app) {
                         User.count({ where: { createdAt: { [Op.gte]: dayAgo } } }),
                         User.count({ where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } }),
                         User.sum('balance').then(s => s || 0),
+                        // Берем последние 30 записей из Stats для графиков
                         Stats.findAll({ limit: 30, order: [['createdAt', 'DESC']] })
                     ]);
 
