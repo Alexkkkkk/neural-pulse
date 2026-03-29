@@ -14,7 +14,7 @@ const CYBER = {
   border: '#30363d'
 };
 
-// Мемоизация графика для плавности (не перерисовывать без нужды)
+// Мемоизация графика для плавности
 const MiniChart = memo(({ data, color, height = 30 }) => {
   if (!data || data.length < 2) return <div style={{ height: height + 10 }} />;
   const cleanData = data.map(v => (Number.isFinite(v) ? v : 0));
@@ -41,7 +41,6 @@ const Dashboard = (props) => {
   const [logs, setLogs] = useState(['> INITIALIZING_BOOT_SEQUENCE...', '> KERNEL_LOADED', '> SYNCING_WITH_TITAN_CORE...']);
   const [scanPos, setScanPos] = useState(0);
   
-  // Данные истории из пропсов сервера (Stats.findAll)
   const [history, setHistory] = useState(props.data?.history || []);
 
   const [stats, setStats] = useState({
@@ -59,7 +58,7 @@ const Dashboard = (props) => {
   };
 
   useEffect(() => {
-    // 1. Анимация прогресс-бара при входе
+    // 1. Анимация загрузки
     const loader = setInterval(() => {
       setLoadingProgress(prev => {
         if (prev >= 100) {
@@ -69,7 +68,7 @@ const Dashboard = (props) => {
         }
         return prev + 10;
       });
-    }, 30);
+    }, 40);
 
     // 2. Real-time связь через SSE
     const eventSource = new EventSource('/api/admin/stream');
@@ -78,7 +77,6 @@ const Dashboard = (props) => {
       try {
         const pulse = JSON.parse(event.data);
         
-        // Обновление HUD показателей
         setStats(prev => ({
           ...prev,
           cpu: pulse.server_load,
@@ -89,12 +87,10 @@ const Dashboard = (props) => {
           total_balance: pulse.total_balance
         }));
 
-        // Обновление истории графиков
         setHistory(prev => [...prev.slice(-29), pulse]);
 
-        // Рандомные логи системы для атмосферы
         if (Math.random() > 0.8) {
-          const events = ['CORE_STABLE', 'TELEMETRY_SYNCED', 'DB_BUFFER_CLEAN', 'PULSE_RECEIVED'];
+          const events = ['CORE_STABLE', 'TELEMETRY_SYNCED', 'DB_BUFFER_CLEAN', 'PULSE_RECEIVED', 'ENCRYPTING_SESSION'];
           addLog(`> ${events[Math.floor(Math.random() * events.length)]}: ${Math.random().toString(16).slice(2, 8).toUpperCase()}`);
         }
       } catch (e) {
@@ -106,7 +102,7 @@ const Dashboard = (props) => {
       addLog('> ERROR: TELEMETRY_LINK_LOST. ATTEMPTING_RECONNECT...');
     };
 
-    const animInterval = setInterval(() => setScanPos(p => (p + 1) % 100), 60);
+    const animInterval = setInterval(() => setScanPos(p => (p + 0.5) % 100), 50);
 
     return () => {
       clearInterval(loader);
@@ -116,9 +112,15 @@ const Dashboard = (props) => {
   }, []);
 
   const StatCard = ({ label, value, unit, color, subValue, historyKey }) => {
-    // Извлекаем массив данных для конкретного графика из истории
     const chartData = history.map(h => Number(h[historyKey]) || 0);
     
+    // Динамический расчет прогресса для полоски внизу
+    let progressPercent = 0;
+    if (unit === '%') progressPercent = value;
+    else if (unit === 'MB') progressPercent = (value / 512) * 100;
+    else if (unit === 'MS') progressPercent = (value / 50) * 100;
+    else progressPercent = (value / 10000) * 100;
+
     return (
       <div style={{ 
         flex: '1 1 240px', margin: '10px', padding: '20px', 
@@ -138,10 +140,9 @@ const Dashboard = (props) => {
             <span style={{ fontSize: '9px', color: '#444' }}>LIVE_STREAM</span>
         </div>
         
-        {/* Маленький прогресс-бар внизу каждой карточки */}
         <div style={{ width: '100%', height: '2px', background: '#000', marginTop: '8px' }}>
           <div style={{ 
-            width: `${Math.min((parseFloat(value) / (unit === '%' ? 100 : unit === 'MB' ? 512 : 10000)) * 100, 100)}%`, 
+            width: `${Math.min(progressPercent, 100)}%`, 
             height: '100%', background: color, boxShadow: `0 0 10px ${color}`, transition: 'width 1s ease' 
           }} />
         </div>
@@ -167,19 +168,16 @@ const Dashboard = (props) => {
     <div style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace', padding: '20px' }}>
       <style>{`
         #adminjs, section, [data-testid="Box"], .adminjs_Box { background-color: ${CYBER.bg} !important; }
-        
         .glitch-title:hover {
           animation: glitch 0.3s cubic-bezier(.25,.46,.45,.94) both infinite;
           color: ${CYBER.secondary} !important;
         }
-
         @keyframes glitch {
           0% { transform: translate(0); }
           20% { transform: translate(-2px, 2px); text-shadow: 2px 0 ${CYBER.danger}; }
           40% { transform: translate(-2px, -2px); text-shadow: -2px 0 ${CYBER.primary}; }
           100% { transform: translate(0); }
         }
-
         @keyframes cyber-pulse {
           0%, 100% { height: 30%; opacity: 0.4; }
           50% { height: 80%; opacity: 1; }
@@ -213,7 +211,6 @@ const Dashboard = (props) => {
         <StatCard label="LATENCY" value={stats.latency} unit="MS" color={CYBER.danger} historyKey="db_latency" />
       </div>
 
-      {/* --- LOWER PANELS --- */}
       <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '20px', gap: '20px' }}>
         {/* WAVEFORM MONITOR */}
         <div style={{ flex: '2 1 400px', background: CYBER.card, height: '250px', border: `1px solid ${CYBER.border}`, borderRadius: '4px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '6px', position: 'relative', paddingBottom: '40px' }}>
