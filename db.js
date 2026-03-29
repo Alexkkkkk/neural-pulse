@@ -59,7 +59,7 @@ export const User = sequelize.define('users', {
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { 
     timestamps: true, 
-    underscored: true, // ВАЖНО: автоматически мапит createdAt -> created_at
+    underscored: true, 
     tableName: 'users',
     indexes: [
         { fields: ['username'] },
@@ -80,7 +80,7 @@ export const Task = sequelize.define('tasks', {
     underscored: true 
 });
 
-// --- 📊 МОДЕЛЬ: STATS (История для графиков) ---
+// --- 📊 МОДЕЛЬ: STATS ---
 export const Stats = sequelize.define('stats', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     user_count: { type: DataTypes.INTEGER, defaultValue: 0 },
@@ -92,10 +92,10 @@ export const Stats = sequelize.define('stats', {
 }, { 
     timestamps: true, 
     tableName: 'stats',
-    underscored: true // ВАЖНО: автоматически мапит createdAt -> created_at
+    underscored: true 
 });
 
-// --- 📈 МОДЕЛЬ: GLOBAL_STATS (Агрегатор) ---
+// --- 📈 МОДЕЛЬ: GLOBAL_STATS ---
 export const GlobalStats = sequelize.define('global_stats', {
     id: { type: DataTypes.INTEGER, primaryKey: true },
     total_balance: { type: DataTypes.DECIMAL(32, 2), defaultValue: 0 },
@@ -109,14 +109,13 @@ export const GlobalStats = sequelize.define('global_stats', {
 User.hasMany(User, { as: 'ReferralList', foreignKey: 'referred_by' });
 User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
-// --- 📊 СБОР ТЕЛЕМЕТРИИ ---
+// --- 📊 ТЕЛЕМЕТРИЯ ---
 export const logSystemStats = async () => {
     const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
     if (!isPrimary) return;
 
     try {
         const start = Date.now();
-        
         const [gStats, walletCount] = await Promise.all([
             GlobalStats.findByPk(1),
             User.count({ 
@@ -146,7 +145,6 @@ export const logSystemStats = async () => {
             const minId = await Stats.min('id');
             await Stats.destroy({ where: { id: { [Op.lte]: minId + (totalEntries - maxEntries) } } });
         }
-        
     } catch (e) {
         console.error('--- [TELEMETRY] ERROR:', e.message);
     }
@@ -161,12 +159,17 @@ export const initDB = async () => {
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // Используем alter: true для подстройки структуры под snake_case
-            await GlobalStats.sync({ alter: true });
-            await Stats.sync({ alter: true });
-            await User.sync({ alter: true }); 
-            await Task.sync({ alter: true });
+            // КРИТИЧНО: Убираем alter: true для User, чтобы не трогать триггеры
+            await GlobalStats.sync(); 
+            
+            // Если таблица Stats содержит NULL в created_at, она упадет. 
+            // Поэтому sync() здесь без alter, чтобы просто создать таблицу, если её нет.
+            await Stats.sync(); 
+            await User.sync(); 
+            await Task.sync(); 
             await sessionStore.sync();
+            
+            // Финальный проход без деструктивных изменений
             await sequelize.sync(); 
             
             await GlobalStats.findOrCreate({ 
