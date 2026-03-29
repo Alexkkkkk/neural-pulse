@@ -15,8 +15,8 @@ export const sequelize = new Sequelize(PG_URI, {
         connectTimeout: 60000 
     },
     pool: { 
-        max: 10, 
-        min: 2,  
+        max: 15, 
+        min: 5,  
         acquire: 60000, 
         idle: 10000 
     },
@@ -103,6 +103,7 @@ export const logSystemStats = async () => {
     try {
         const start = Date.now();
         
+        // Собираем агрегаты по БД
         const [userCount, walletCount, sumBalance] = await Promise.all([
             User.count(),
             User.count({ 
@@ -115,9 +116,12 @@ export const logSystemStats = async () => {
 
         const latency = Date.now() - start;
         const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
-        // Исправлено: нагрузка в % (loadavg[0] - это нагрузка за 1 мин)
-        const load = (os.loadavg()[0] * 100).toFixed(1);
+        
+        // Нормализация CPU (учитываем количество ядер)
+        const cpuCount = os.cpus().length;
+        const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
 
+        // Сохраняем слепок в таблицу статов
         await Stats.create({
             user_count: userCount || 0,
             active_wallets: walletCount || 0,
@@ -127,7 +131,7 @@ export const logSystemStats = async () => {
             db_latency: latency
         });
         
-        // Ротация: оставляем только последние 288 записей (24 часа при логе раз в 5 мин)
+        // Ротация: оставляем последние 288 записей (сутки истории при 5-мин интервале)
         const totalCount = await Stats.count();
         if (totalCount > 288) {
             const oldestToKeep = await Stats.findOne({
@@ -140,7 +144,7 @@ export const logSystemStats = async () => {
                 });
             }
         }
-        console.log(`--- [TELEMETRY] Snapshot OK. Users: ${userCount}`);
+        console.log(`--- [TELEMETRY] ${new Date().toISOString()} | Users: ${userCount} | Latency: ${latency}ms`);
     } catch (e) {
         console.error('--- [TELEMETRY] LOGGING ERROR:', e.message);
     }
@@ -155,15 +159,17 @@ export const initDB = async () => {
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // МЕНЯЕМ force: true на alter: true, чтобы не терять графики при рестарте
+            // Синхронизируем таблицу статов первой (alter: true сохраняет данные)
             await Stats.sync({ alter: true });
-            console.log('--- [DB] STATS TABLE READY ---');
-
+            
+            // Синхронизируем остальные модели
             await sequelize.sync({ alter: true });
             console.log('--- [DB] SCHEMA SYNCHRONIZED ---');
 
+            // Синхронизация хранилища сессий
             await sessionStore.sync(); 
             
+            // Наполнение дефолтными задачами
             const taskCount = await Task.count();
             if (taskCount === 0) {
                 await Task.bulkCreate([
@@ -174,8 +180,10 @@ export const initDB = async () => {
                 console.log('--- [DB] DEFAULT TASKS CREATED ---');
             }
 
-            // Интервал сбора статы раз в 5 минут
+            // Запуск цикла сбора данных (каждые 5 минут)
             setInterval(logSystemStats, 5 * 60 * 1000);
+            
+            // Первый запуск сразу после старта
             await logSystemStats(); 
         }
 
