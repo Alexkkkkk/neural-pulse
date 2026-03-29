@@ -59,7 +59,8 @@ export const User = sequelize.define('users', {
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { 
     timestamps: true, 
-    underscored: false,
+    underscored: true, // ВАЖНО: автоматически мапит createdAt -> created_at
+    tableName: 'users',
     indexes: [
         { fields: ['username'] },
         { fields: ['wallet'] },
@@ -74,7 +75,10 @@ export const Task = sequelize.define('tasks', {
     reward: { type: DataTypes.INTEGER, defaultValue: 1000 },
     url: { type: DataTypes.STRING, defaultValue: '' },
     icon: { type: DataTypes.STRING, defaultValue: 'Task' }
-}, { timestamps: false });
+}, { 
+    timestamps: false,
+    underscored: true 
+});
 
 // --- 📊 МОДЕЛЬ: STATS (История для графиков) ---
 export const Stats = sequelize.define('stats', {
@@ -88,7 +92,7 @@ export const Stats = sequelize.define('stats', {
 }, { 
     timestamps: true, 
     tableName: 'stats',
-    underscored: false 
+    underscored: true // ВАЖНО: автоматически мапит createdAt -> created_at
 });
 
 // --- 📈 МОДЕЛЬ: GLOBAL_STATS (Агрегатор) ---
@@ -99,7 +103,7 @@ export const GlobalStats = sequelize.define('global_stats', {
 }, { 
     timestamps: false, 
     tableName: 'global_stats',
-    underscored: false 
+    underscored: true 
 });
 
 User.hasMany(User, { as: 'ReferralList', foreignKey: 'referred_by' });
@@ -113,7 +117,6 @@ export const logSystemStats = async () => {
     try {
         const start = Date.now();
         
-        // 1. Быстрый сбор данных
         const [gStats, walletCount] = await Promise.all([
             GlobalStats.findByPk(1),
             User.count({ 
@@ -128,7 +131,6 @@ export const logSystemStats = async () => {
         const cpuCount = os.cpus()?.length || 1;
         const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
 
-        // 2. Сохранение точки входа для графиков
         await Stats.create({
             user_count: totalUsers,
             active_wallets: walletCount,
@@ -138,7 +140,6 @@ export const logSystemStats = async () => {
             db_latency: parseFloat(dbLatency)
         });
         
-        // 3. Оптимизированная очистка (храним 2880 записей = 24 часа при интервале 30 сек)
         const maxEntries = 2880;
         const totalEntries = await Stats.count();
         if (totalEntries > maxEntries) {
@@ -160,10 +161,10 @@ export const initDB = async () => {
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // Синхронизация таблиц
+            // Используем alter: true для подстройки структуры под snake_case
             await GlobalStats.sync({ alter: true });
             await Stats.sync({ alter: true });
-            await User.sync(); 
+            await User.sync({ alter: true }); 
             await Task.sync({ alter: true });
             await sessionStore.sync();
             await sequelize.sync(); 
@@ -181,7 +182,6 @@ export const initDB = async () => {
                 ]);
             }
 
-            // Ускоренный интервал для "живого" дашборда (30 секунд)
             setInterval(logSystemStats, 30 * 1000);
             await logSystemStats(); 
         }
