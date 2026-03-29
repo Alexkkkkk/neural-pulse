@@ -73,23 +73,39 @@ const Dashboard = (props) => {
     const eventSource = new EventSource('/api/admin/stream');
     
     eventSource.onmessage = (event) => {
-      const pulse = JSON.parse(event.data);
-      
-      setStats(prev => ({
-        ...prev,
-        cpu: Number(pulse.server_load),
-        mem: pulse.mem_usage,
-        latency: pulse.db_latency,
-        totalUsers: pulse.totalUsers || prev.totalUsers,
-        walletsLinked: pulse.walletsLinked || prev.walletsLinked
-      }));
+      try {
+        const pulse = JSON.parse(event.data);
+        
+        // Обновляем текущие показатели (HUD)
+        setStats(prev => ({
+          ...prev,
+          cpu: Number(pulse.server_load) || 0,
+          mem: Number(pulse.mem_usage) || 0,
+          latency: Number(pulse.db_latency) || 0,
+          totalUsers: pulse.totalUsers || prev.totalUsers,
+          walletsLinked: pulse.walletsLinked || prev.walletsLinked,
+          totalTon: pulse.totalTon || prev.totalTon
+        }));
 
-      // Добавляем новую точку в историю и удаляем старую (храним 30 точек)
-      setHistory(prev => [...prev.slice(-29), pulse]);
+        // Мапим входящие данные под ключи графиков StatCard
+        const historyPoint = {
+          ...pulse,
+          user_count: pulse.totalUsers,
+          active_wallets: pulse.walletsLinked,
+          server_load: Number(pulse.server_load),
+          mem_usage: Number(pulse.mem_usage),
+          db_latency: Number(pulse.db_latency)
+        };
 
-      if (Math.random() > 0.8) {
-        const events = ['BLOCK_VALIDATED', 'WS_PULSE_SENT', 'PEER_CONNECTED', 'CACHE_OPTIMIZED'];
-        addLog(`> ${events[Math.floor(Math.random() * events.length)]}: 0x${Math.random().toString(16).slice(2, 8).toUpperCase()}`);
+        // Добавляем новую точку в историю (храним 30 точек)
+        setHistory(prev => [...prev.slice(-29), historyPoint]);
+
+        if (Math.random() > 0.8) {
+          const events = ['BLOCK_VALIDATED', 'WS_PULSE_SENT', 'PEER_CONNECTED', 'CACHE_OPTIMIZED'];
+          addLog(`> ${events[Math.floor(Math.random() * events.length)]}: 0x${Math.random().toString(16).slice(2, 8).toUpperCase()}`);
+        }
+      } catch (e) {
+        console.error("Pulse error:", e);
       }
     };
 
@@ -107,7 +123,9 @@ const Dashboard = (props) => {
   }, []);
 
   const StatCard = ({ label, value, unit, color, subValue, historyKey }) => {
+    // Извлекаем данные для маленького графика по ключу
     const chartData = history.map(h => Number(h[historyKey]) || 0);
+    
     return (
       <div style={{ 
         flex: '1 1 240px', margin: '10px', padding: '20px', 
@@ -116,17 +134,21 @@ const Dashboard = (props) => {
       }}>
         <div style={{ color: '#8b949e', fontSize: '10px', letterSpacing: '2px', marginBottom: '8px', fontWeight: 'bold' }}>{label}</div>
         <div style={{ color: '#fff', fontSize: '28px', fontWeight: 'bold', display: 'flex', alignItems: 'baseline', fontFamily: 'monospace' }}>
-          {typeof value === 'number' ? value.toFixed(unit === '%' ? 1 : 0) : value}
+          {typeof value === 'number' ? value.toLocaleString() : value}
           <span style={{ fontSize: '14px', color: color, marginLeft: '6px' }}>{unit}</span>
         </div>
+        
         <MiniChart data={chartData} color={color} />
+        
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
             <span style={{ fontSize: '10px', color: color, opacity: 0.8 }}>{subValue || 'SYSTEM_ACTIVE'}</span>
             <span style={{ fontSize: '9px', color: '#444' }}>LIVE_FEED</span>
         </div>
+        
+        {/* Progress Bar внизу карточки */}
         <div style={{ width: '100%', height: '2px', background: '#000', marginTop: '8px' }}>
           <div style={{ 
-            width: `${Math.min((parseFloat(value) / (unit === '%' ? 100 : 2000)) * 100, 100)}%`, 
+            width: `${Math.min((parseFloat(value) / (unit === '%' ? 100 : unit === 'MB' ? 512 : 5000)) * 100, 100)}%`, 
             height: '100%', background: color, boxShadow: `0 0 10px ${color}`, transition: 'width 1s ease' 
           }} />
         </div>
@@ -188,7 +210,7 @@ const Dashboard = (props) => {
         </div>
       </div>
 
-      {/* --- GRID (Ключи синхронизированы с main.js) --- */}
+      {/* --- GRID --- */}
       <div style={{ display: 'flex', flexWrap: 'wrap', margin: '0 -10px' }}>
         <StatCard label="TOTAL_AGENTS" value={stats.totalUsers} unit="U" color={CYBER.primary} historyKey="user_count" />
         <StatCard label="NEW_PLAYERS" value={stats.dailyUsers} unit="+" color={CYBER.success} historyKey="user_count" />
@@ -200,6 +222,7 @@ const Dashboard = (props) => {
 
       {/* --- LOWER PANELS --- */}
       <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '20px', gap: '20px' }}>
+        {/* WAVEFORM MONITOR */}
         <div style={{ flex: '2 1 400px', background: CYBER.card, height: '250px', border: `1px solid ${CYBER.border}`, borderRadius: '4px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '6px', position: 'relative', paddingBottom: '40px' }}>
           <div style={{ position: 'absolute', top: '15px', left: '15px', color: CYBER.primary, fontSize: '10px', opacity: 0.5 }}>WAVEFORM_MONITOR</div>
           {[...Array(30)].map((_, i) => (
@@ -212,6 +235,7 @@ const Dashboard = (props) => {
           ))}
         </div>
 
+        {/* SYSTEM LOGS */}
         <div style={{ flex: '1 1 300px', background: '#05070a', height: '250px', border: `1px solid ${CYBER.border}`, padding: '20px', overflow: 'hidden', position: 'relative' }}>
           <div style={{ color: CYBER.success, fontSize: '10px', marginBottom: '10px', borderBottom: `1px solid ${CYBER.success}33`, paddingBottom: '5px' }}>SYSTEM_LOGS</div>
           <div style={{ fontSize: '10px', lineHeight: '1.8', color: '#4e555d', fontFamily: 'monospace' }}>
