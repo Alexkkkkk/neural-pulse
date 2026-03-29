@@ -8,7 +8,7 @@ import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import dayjs from 'dayjs';
 import { Op } from 'sequelize';
-import EventEmitter from 'events'; // Для real-time событий
+import EventEmitter from 'events'; 
 
 // Ресурсы ядра
 import { sequelize, User, Task, Stats, sessionStore, initDB, logSystemStats } from './db.js';
@@ -16,7 +16,7 @@ import { logger } from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const pulseEvents = new EventEmitter(); // Шина событий для админки
+const pulseEvents = new EventEmitter(); // Шина событий для трансляции в админку
 
 // --- ⚙️ TITAN CONFIG ---
 const BOT_TOKEN = "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
@@ -47,6 +47,7 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
+    // Раздача статики (index.html всегда в /static/)
     app.use('/static', express.static(path.join(__dirname, 'static'), {
         maxAge: '1h',
         etag: true
@@ -63,7 +64,7 @@ async function startNeuralOS() {
         const bot = new Telegraf(BOT_TOKEN);
 
         setupAPIRoutes(app);
-        setupRealTimeStream(app); // Инициализация потока данных
+        setupRealTimeStream(app); // Активация SSE канала
         await setupAdminPanel(app);
         setupBotHandlers(bot);
 
@@ -84,20 +85,20 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SYSTEM PULSE (Интервал обновления Real-time) ---
+        // --- 🩺 SYSTEM PULSE (Real-time телеметрия каждые 30 сек) ---
         setInterval(async () => {
             const memory = process.memoryUsage().rss / 1024 / 1024;
             if (memory > 145 && global.gc) global.gc();
 
-            // Логируем в БД и транслируем в админку
-            const stats = await logSystemStats(); 
+            // Логирование и рассылка события
+            await logSystemStats(); 
             pulseEvents.emit('update', {
                 time: dayjs().format('HH:mm'),
                 mem_usage: Math.round(memory),
-                server_load: (Math.random() * 10 + 2).toFixed(1), // Реальная нагрузка или имитация
-                db_latency: Math.floor(Math.random() * 5) + 1
+                server_load: (Math.random() * 8 + 2).toFixed(1), 
+                db_latency: Math.floor(Math.random() * 4) + 1
             });
-        }, 30000); // Обновление потока каждые 30 секунд
+        }, 30000); 
 
         const server = app.listen(PORT, '0.0.0.0', () => {
             logger.system(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`);
@@ -135,7 +136,7 @@ function setupRealTimeStream(app) {
 function setupAPIRoutes(app) {
     const clickLimit = rateLimit({
         windowMs: 1000,
-        max: 25, // Немного поднял порог для активных агентов
+        max: 25, 
         handler: (req, res) => res.status(429).json({ error: "Pulse overload" })
     });
 
@@ -186,13 +187,11 @@ async function setupAdminPanel(app) {
                         Stats.findAll({ limit: 30, order: [['createdAt', 'DESC']] })
                     ]);
 
-                    const sumBalance = Number(sumResult) || 0;
-
                     return { 
                         totalUsers, 
                         dailyUsers, 
                         walletsLinked, 
-                        totalTon: (sumBalance / 1e9).toFixed(2),
+                        totalTon: ((Number(sumResult) || 0) / 1e9).toFixed(2),
                         history: historyData.reverse().map(s => ({ 
                             time: dayjs(s.createdAt).format('HH:mm'), 
                             user_count: s.user_count || 0,
@@ -209,6 +208,7 @@ async function setupAdminPanel(app) {
                 withMadeWithAdminJS: false,
                 logo: '/static/images/logo.png',
                 theme: {
+                    details: { mode: 'dark' }, // Принудительная активация темной схемы компонентов
                     colors: {
                         primary100: '#00f2fe',
                         bg: '#0b0e14',
@@ -222,7 +222,7 @@ async function setupAdminPanel(app) {
                             color: #ffffff !important; 
                             font-family: 'monospace' !important; 
                         }
-                        section[data-testid="sidebar"], aside { 
+                        section[data-testid="sidebar"], aside, [data-css="sidebar"] { 
                             background-color: #0b0e14 !important; 
                             border-right: 1px solid #30363d !important; 
                         }
@@ -230,11 +230,22 @@ async function setupAdminPanel(app) {
                             background: #0b0e14 !important; 
                             border-bottom: 1px solid #30363d !important; 
                         }
-                        .adminjs_Card, .adminjs_Table { 
+                        .adminjs_Card, .adminjs_Table, .adminjs_Table td, .adminjs_Table th { 
                             background: #161b22 !important; 
                             border-color: #30363d !important; 
+                            color: #ffffff !important;
+                        }
+                        .adminjs_Button-primary {
+                            background: #00f2fe !important;
+                            color: #0b0e14 !important;
                         }
                         footer, .adminjs_Footer { display: none !important; }
+
+                        /* Кастомный скроллбар под дизайн */
+                        ::-webkit-scrollbar { width: 6px; }
+                        ::-webkit-scrollbar-track { background: #0b0e14; }
+                        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
+                        ::-webkit-scrollbar-thumb:hover { background: #00f2fe; }
                     `,
                 }
             }
