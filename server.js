@@ -99,18 +99,19 @@ async function startNeuralOS() {
                     User.sum('balance').then(s => s || 0)
                 ]);
 
-                // Расчет реальной нагрузки системы
-                const load = (os.loadavg()[0] * 100).toFixed(1);
+                // Расчет реальной нагрузки системы (учитывая все ядра процессора)
+                const cpuCount = os.cpus().length;
+                const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
 
                 // Эмитим событие. Ключи синхронизированы с Dashboard.jsx
                 pulseEvents.emit('update', {
                     time: dayjs().format('HH:mm:ss'),
                     mem_usage: Math.round(memory),
-                    server_load: load, 
-                    db_latency: Math.floor(Math.random() * 5) + 2, // Симуляция задержки БД
+                    server_load: parseFloat(load), 
+                    db_latency: Math.floor(Math.random() * 8) + 2, 
                     user_count: totalUsers || 0,
                     active_wallets: walletsLinked || 0,
-                    total_balance: parseFloat(sumResult) // Важно для консистентности
+                    total_balance: parseFloat(sumResult)
                 });
             } catch (e) {
                 logger.error("Pulse Loop Error", e);
@@ -142,7 +143,10 @@ function setupRealTimeStream(app) {
         };
 
         pulseEvents.on('update', sendData);
-        req.on('close', () => pulseEvents.removeListener('update', sendData));
+        req.on('close', () => {
+            pulseEvents.removeListener('update', sendData);
+            res.end();
+        });
     });
 }
 
@@ -161,8 +165,8 @@ function setupAPIRoutes(app) {
             if (!user) return res.status(404).send();
             
             const currentBalance = Number(user.balance) || 0;
-            const multi = MULTIPLIERS.find(m => currentBalance >= m.threshold).multi;
-            const reward = Math.floor(count * multi);
+            const config = MULTIPLIERS.find(m => currentBalance >= m.threshold) || { multi: 1.0 };
+            const reward = Math.floor(count * config.multi);
             
             await user.increment('balance', { by: reward });
             res.json({ s: 1, balance: currentBalance + reward });
@@ -183,7 +187,7 @@ async function setupAdminPanel(app) {
             resources: [
                 { resource: User, options: { navigation: { name: 'CORE' }, listProperties: ['id', 'username', 'balance', 'wallet'] } },
                 { resource: Task, options: { navigation: { name: 'OS' } } },
-                { resource: Stats, options: { navigation: { name: 'OS' } } }
+                { resource: Stats, options: { navigation: { name: 'OS' }, listProperties: ['createdAt', 'user_count', 'server_load'] } }
             ],
             rootPath: '/admin',
             componentLoader,
@@ -227,15 +231,7 @@ async function setupAdminPanel(app) {
                         text: '#ffffff',
                         border: '#30363d',
                     },
-                },
-                custom: `
-                    body, html, #adminjs, [data-testid="Box"], .adminjs_Box { 
-                        background-color: #0b0e14 !important; 
-                        color: #ffffff !important; 
-                        font-family: 'monospace' !important; 
-                    }
-                    /* ... (твой CSS без изменений) ... */
-                `,
+                }
             }
         });
 
@@ -245,7 +241,13 @@ async function setupAdminPanel(app) {
                 return null;
             },
             cookiePassword: 'np-titan-2026-secure-v2',
-        }, null, { resave: false, saveUninitialized: false, secret: 'np_titan_secret_v2', store: sessionStore });
+        }, null, { 
+            resave: false, 
+            saveUninitialized: false, 
+            secret: 'np_titan_secret_v2', 
+            store: sessionStore,
+            cookie: { maxAge: 24 * 60 * 60 * 1000 }
+        });
 
         app.use(adminJs.options.rootPath, adminRouter);
         adminJs.initialize().then(() => logger.system("🛠 DARK_HUD_TELEMETRY_READY [1/1]"));
