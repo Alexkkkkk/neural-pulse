@@ -81,13 +81,14 @@ export const Stats = sequelize.define('stats', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     user_count: { type: DataTypes.INTEGER, defaultValue: 0 },
     active_wallets: { type: DataTypes.INTEGER, defaultValue: 0 },
-    total_balance: { type: DataTypes.FLOAT, defaultValue: 0 },
+    total_balance: { type: DataTypes.DECIMAL(24, 2), defaultValue: 0 }, // Изменено для точности
     server_load: { type: DataTypes.FLOAT },
     mem_usage: { type: DataTypes.FLOAT },
     db_latency: { type: DataTypes.INTEGER }
 }, { 
     timestamps: true, 
-    tableName: 'stats' 
+    tableName: 'stats',
+    underscored: true 
 });
 
 // --- 🔗 СВЯЗИ ---
@@ -96,6 +97,7 @@ User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
 // --- 📊 СБОР ТЕЛЕМЕТРИИ ---
 export const logSystemStats = async () => {
+    // Выполняем только на основном процессе
     const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
     if (!isPrimary) return;
 
@@ -116,20 +118,21 @@ export const logSystemStats = async () => {
         const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
         const load = (os.loadavg()[0] * 10).toFixed(2);
 
+        // Сохраняем снимок
         await Stats.create({
             user_count: userCount,
             active_wallets: walletCount,
-            total_balance: parseFloat(sumBalance || 0),
+            total_balance: sumBalance || 0,
             server_load: parseFloat(load),
             mem_usage: parseFloat(mem),
             db_latency: latency
         });
         
-        // Храним последние 96 точек (24 часа)
+        // Очистка: оставляем последние 288 снимков (24 часа при интервале 5 мин)
         const totalCount = await Stats.count();
-        if (totalCount > 96) {
+        if (totalCount > 288) {
             const oldestToKeep = await Stats.findOne({
-                offset: totalCount - 96,
+                offset: totalCount - 288,
                 order: [['id', 'ASC']]
             });
             if (oldestToKeep) {
@@ -138,9 +141,9 @@ export const logSystemStats = async () => {
                 });
             }
         }
-        console.log(`--- [STATS] Snapshot. Users: ${userCount}, Wallets: ${walletCount}`);
+        console.log(`--- [TELEMETRY] Snapshot stored. Latency: ${latency}ms`);
     } catch (e) {
-        console.error('--- [STATS] LOGGING ERROR:', e.message);
+        console.error('--- [TELEMETRY] LOGGING ERROR:', e.message);
     }
 };
 
@@ -148,13 +151,14 @@ export const logSystemStats = async () => {
 export const initDB = async () => {
     try {
         await sequelize.authenticate();
-        console.log('--- [DB] CONNECTION ESTABLISHED ---');
+        console.log('--- [DB] CONNECTED TO TITAN_POSTGRES ---');
 
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
+            // alter: true бережно обновляет таблицы при добавлении новых полей
             await sequelize.sync({ alter: true });
-            console.log('--- [DB] SCHEMA SYNCHRONIZED ---');
+            console.log('--- [DB] SCHEMA ALIVE ---');
 
             await sessionStore.sync(); 
             
@@ -165,16 +169,17 @@ export const initDB = async () => {
                     { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
                     { title: 'Подключить TON кошелек', reward: 2500, url: '', icon: 'Wallet' }
                 ]);
-                console.log('--- [DB] DEFAULT TASKS CREATED ---');
+                console.log('--- [DB] BASE_TASKS INSTALLED ---');
             }
 
-            setInterval(logSystemStats, 15 * 60 * 1000);
+            // Сбор данных каждые 5 минут для высокой детализации дашборда
+            setInterval(logSystemStats, 5 * 60 * 1000);
             await logSystemStats(); 
         }
 
         return true;
     } catch (error) {
-        console.error('--- [DB] CRITICAL ERROR during init:', error.message);
+        console.error('--- [DB] CRITICAL INITIALIZATION ERROR:', error.message);
         throw error;
     }
 };
