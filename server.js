@@ -82,10 +82,12 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SYSTEM PULSE (SSE Трансляция) ---
-        // Теперь берем данные напрямую из GlobalStats, которые обновляют триггеры
+        // --- 🩺 SYSTEM PULSE (SSE Трансляция каждые 5 секунд) ---
         setInterval(async () => {
             try {
+                const startTime = Date.now();
+                
+                // Сбор системных метрик
                 const memory = process.memoryUsage().rss / 1024 / 1024;
                 if (memory > 145 && global.gc) global.gc();
 
@@ -94,21 +96,24 @@ async function startNeuralOS() {
                     Stats.findOne({ order: [['id', 'DESC']] })
                 ]);
 
+                const latency = Date.now() - startTime;
                 const cpuCount = os.cpus()?.length || 1;
                 const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
 
+                // Эмитим событие для всех подключенных админов
                 pulseEvents.emit('update', {
                     time: dayjs().format('HH:mm:ss'),
                     mem_usage: Math.round(memory),
                     server_load: parseFloat(load), 
                     user_count: gStats?.total_users || 0,
                     active_wallets: lastEntry?.active_wallets || 0,
-                    total_balance: parseFloat(gStats?.total_balance || 0)
+                    total_balance: parseFloat(gStats?.total_balance || 0),
+                    db_latency: latency
                 });
             } catch (e) {
                 console.error("Pulse Loop Error", e);
             }
-        }, 10000); 
+        }, 5000); 
 
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`);
@@ -132,7 +137,10 @@ function setupRealTimeStream(app) {
         };
 
         pulseEvents.on('update', sendData);
-        req.on('close', () => pulseEvents.removeListener('update', sendData));
+        req.on('close', () => {
+            pulseEvents.removeListener('update', sendData);
+            res.end();
+        });
     });
 }
 
@@ -154,8 +162,6 @@ function setupAPIRoutes(app) {
             const config = MULTIPLIERS.find(m => currentBalance >= m.threshold) || { multi: 1.0 };
             const reward = Math.floor(count * config.multi);
             
-            // Increment сам по себе не всегда триггерит UPDATE в Sequelize так, как нам нужно
-            // Но с нашими SQL-триггерами в БД это сработает идеально
             await user.increment('balance', { by: reward });
             res.json({ s: 1, balance: currentBalance + reward });
         } catch (e) { res.status(500).send(); }
@@ -183,19 +189,22 @@ async function setupAdminPanel(app) {
             dashboard: { 
                 component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
                 handler: async () => {
-                    const [gStats, historyData] = await Promise.all([
+                    const [gStats, historyData, dailyUsers] = await Promise.all([
                         GlobalStats.findByPk(1),
-                        Stats.findAll({ limit: 30, order: [['createdAt', 'DESC']] })
+                        Stats.findAll({ limit: 30, order: [['createdAt', 'DESC']] }),
+                        User.count({ where: { createdAt: { [Op.gte]: dayjs().subtract(24, 'hour').toDate() } } })
                     ]);
 
                     return { 
                         totalUsers: gStats?.total_users || 0, 
                         total_balance: parseFloat(gStats?.total_balance || 0),
+                        dailyUsers: dailyUsers || 0,
                         history: (historyData || []).reverse().map(s => ({ 
                             time: dayjs(s.createdAt).format('HH:mm'), 
                             user_count: s.user_count, 
                             server_load: s.server_load, 
-                            mem_usage: s.mem_usage
+                            mem_usage: s.mem_usage,
+                            active_wallets: s.active_wallets
                         })) 
                     };
                 }
