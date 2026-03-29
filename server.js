@@ -85,7 +85,7 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SYSTEM PULSE (10 сек для плавности телеметрии) ---
+        // --- 🩺 SYSTEM PULSE ---
         setInterval(async () => {
             try {
                 const memory = process.memoryUsage().rss / 1024 / 1024;
@@ -111,6 +111,7 @@ async function startNeuralOS() {
             }
         }, 10000); 
 
+        // Очистка старой статистики раз в час
         setInterval(async () => {
             await Stats.destroy({ where: { createdAt: { [Op.lt]: dayjs().subtract(24, 'hour').toDate() } } });
         }, 3600000);
@@ -206,7 +207,7 @@ async function setupAdminPanel(app) {
                             server_load: Number(s.server_load) || 0, 
                             mem_usage: Number(s.mem_usage) || 0,
                             db_latency: Number(s.db_latency) || 5,
-                            active_wallets: walletsLinked
+                            active_wallets: s.active_wallets || 0
                         })) 
                     };
                 }
@@ -225,24 +226,57 @@ async function setupAdminPanel(app) {
                     },
                 },
                 custom: `
-                    /* Глобальный фон и шрифты */
+                    /* --- ГЛОБАЛЬНЫЕ НАСТРОЙКИ --- */
                     body, html, #adminjs, [data-testid="Box"], .adminjs_Box { 
                         background-color: #0b0e14 !important; 
                         color: #ffffff !important; 
                         font-family: 'monospace' !important; 
                     }
 
-                    /* Стилизация страницы ЛОГИНА */
+                    /* --- ЭФФЕКТ СКАНЕРА --- */
+                    body::before {
+                        content: "";
+                        position: fixed;
+                        top: 0; left: 0;
+                        width: 100%; height: 2px;
+                        background: rgba(0, 242, 254, 0.1);
+                        box-shadow: 0 0 20px rgba(0, 242, 254, 0.5);
+                        animation: scanline 8s linear infinite;
+                        z-index: 9999;
+                        pointer-events: none;
+                    }
+
+                    @keyframes scanline {
+                        0% { top: -10%; }
+                        100% { top: 110%; }
+                    }
+
+                    /* --- СТИЛИЗАЦИЯ СТРАНИЦЫ ВХОДА --- */
                     [data-testid="login-border"] {
                         background: #161b22 !important;
-                        border: 1px solid #30363d !important;
-                        box-shadow: 0 0 30px rgba(0, 242, 254, 0.1) !important;
+                        border: 1px solid #00f2fe !important;
+                        box-shadow: 0 0 40px rgba(0, 242, 254, 0.15), inset 0 0 10px rgba(0, 242, 254, 0.05) !important;
+                        border-radius: 4px !important;
+                        position: relative;
+                        overflow: hidden;
                     }
+
+                    [data-testid="login-border"]::after {
+                        content: "NEURAL_OS_AUTH";
+                        position: absolute;
+                        top: 5px; right: 10px;
+                        font-size: 8px;
+                        color: #00f2fe;
+                        opacity: 0.5;
+                    }
+
                     [data-testid="login-border"] input {
                         background-color: #0b0e14 !important;
                         border: 1px solid #30363d !important;
+                        border-left: 3px solid #00f2fe !important;
                         color: #00f2fe !important;
                     }
+
                     [data-testid="login-border"] label {
                         color: #8b949e !important;
                         text-transform: uppercase;
@@ -250,40 +284,45 @@ async function setupAdminPanel(app) {
                         letter-spacing: 1px;
                     }
 
-                    /* Боковая панель и Хедер */
+                    /* --- БОКОВАЯ ПАНЕЛЬ И ХЕДЕР --- */
                     section[data-testid="sidebar"], aside { 
                         background-color: #0b0e14 !important; 
-                        border-right: 1px solid #30363d !important; 
+                        border-right: 1px solid rgba(0, 242, 254, 0.2) !important; 
                     }
                     header[data-testid="topbar"] { 
                         background: #0b0e14 !important; 
                         border-bottom: 1px solid #30363d !important; 
                     }
 
-                    /* Таблицы и карточки */
+                    /* --- ТАБЛИЦЫ И КАРТОЧКИ --- */
                     .adminjs_Card, .adminjs_Table, .adminjs_Table td, .adminjs_Table th { 
                         background: #161b22 !important; 
                         border-color: #30363d !important; 
                         color: #ffffff !important;
                     }
+
+                    .adminjs_Table tr:hover {
+                        background: rgba(0, 242, 254, 0.05) !important;
+                    }
                     
-                    /* Кнопки */
+                    /* --- КНОПКИ --- */
                     .adminjs_Button-primary, button[type="submit"] {
-                        background: #00f2fe !important;
+                        background: linear-gradient(90deg, #00f2fe, #4facfe) !important;
                         color: #0b0e14 !important;
                         border: none !important;
-                        font-weight: bold !important;
+                        font-weight: 800 !important;
                         text-transform: uppercase !important;
+                        letter-spacing: 1px;
                         transition: all 0.3s ease;
                     }
                     .adminjs_Button-primary:hover, button[type="submit"]:hover {
-                        box-shadow: 0 0 15px #00f2fe;
-                        opacity: 0.9;
+                        box-shadow: 0 0 20px rgba(0, 242, 254, 0.6);
+                        transform: translateY(-1px);
                     }
 
                     footer, .adminjs_Footer, [data-testid="made-with-love"] { display: none !important; }
                     
-                    /* Скроллбар */
+                    /* --- СКРОЛЛБАР --- */
                     ::-webkit-scrollbar { width: 6px; }
                     ::-webkit-scrollbar-track { background: #0b0e14; }
                     ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
