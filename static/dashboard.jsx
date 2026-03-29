@@ -82,16 +82,16 @@ const Dashboard = (props) => {
           cpu: Number(pulse.server_load) || 0,
           mem: Number(pulse.mem_usage) || 0,
           latency: Number(pulse.db_latency) || 0,
-          totalUsers: pulse.totalUsers || prev.totalUsers,
-          walletsLinked: pulse.walletsLinked || prev.walletsLinked,
+          totalUsers: pulse.user_count || prev.totalUsers,
+          walletsLinked: pulse.active_wallets || prev.walletsLinked,
           totalTon: pulse.totalTon || prev.totalTon
         }));
 
         // Мапим входящие данные под ключи графиков StatCard
         const historyPoint = {
           ...pulse,
-          user_count: pulse.totalUsers,
-          active_wallets: pulse.walletsLinked,
+          user_count: pulse.user_count,
+          active_wallets: pulse.active_wallets,
           server_load: Number(pulse.server_load),
           mem_usage: Number(pulse.mem_usage),
           db_latency: Number(pulse.db_latency)
@@ -123,7 +123,6 @@ const Dashboard = (props) => {
   }, []);
 
   const StatCard = ({ label, value, unit, color, subValue, historyKey }) => {
-    // Извлекаем данные для маленького графика по ключу
     const chartData = history.map(h => Number(h[historyKey]) || 0);
     
     return (
@@ -145,10 +144,9 @@ const Dashboard = (props) => {
             <span style={{ fontSize: '9px', color: '#444' }}>LIVE_FEED</span>
         </div>
         
-        {/* Progress Bar внизу карточки */}
         <div style={{ width: '100%', height: '2px', background: '#000', marginTop: '8px' }}>
           <div style={{ 
-            width: `${Math.min((parseFloat(value) / (unit === '%' ? 100 : unit === 'MB' ? 512 : 5000)) * 100, 100)}%`, 
+            width: `${Math.min((parseFloat(value) / (unit === '%' ? 100 : unit === 'MB' ? 512 : 10000)) * 100, 100)}%`, 
             height: '100%', background: color, boxShadow: `0 0 10px ${color}`, transition: 'width 1s ease' 
           }} />
         </div>
