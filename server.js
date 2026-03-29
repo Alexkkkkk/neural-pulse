@@ -64,7 +64,7 @@ async function startNeuralOS() {
         const bot = new Telegraf(BOT_TOKEN);
 
         setupAPIRoutes(app);
-        setupRealTimeStream(app); // Активация SSE канала
+        setupRealTimeStream(app); // SSE канал
         await setupAdminPanel(app);
         setupBotHandlers(bot);
 
@@ -85,13 +85,12 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SYSTEM PULSE (Ускорен до 10 сек для плавности графиков) ---
+        // --- 🩺 SYSTEM PULSE (10 сек для плавности телеметрии) ---
         setInterval(async () => {
             try {
                 const memory = process.memoryUsage().rss / 1024 / 1024;
                 if (memory > 145 && global.gc) global.gc();
 
-                // Сбор живых данных для Dashboard
                 const [totalUsers, walletsLinked] = await Promise.all([
                     User.count(),
                     User.count({ where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } })
@@ -111,6 +110,11 @@ async function startNeuralOS() {
                 logger.error("Pulse Loop Error", e);
             }
         }, 10000); 
+
+        // Авто-очистка логов старше 24 часов
+        setInterval(async () => {
+            await Stats.destroy({ where: { createdAt: { [Op.lt]: dayjs().subtract(24, 'hour').toDate() } } });
+        }, 3600000);
 
         const server = app.listen(PORT, '0.0.0.0', () => {
             logger.system(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`);
@@ -138,10 +142,7 @@ function setupRealTimeStream(app) {
         };
 
         pulseEvents.on('update', sendData);
-
-        req.on('close', () => {
-            pulseEvents.removeListener('update', sendData);
-        });
+        req.on('close', () => pulseEvents.removeListener('update', sendData));
     });
 }
 
@@ -190,7 +191,6 @@ async function setupAdminPanel(app) {
                 component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
                 handler: async () => {
                     const dayAgo = dayjs().subtract(24, 'hour').toDate();
-                    
                     const [totalUsers, dailyUsers, walletsLinked, sumResult, historyData] = await Promise.all([
                         User.count(),
                         User.count({ where: { createdAt: { [Op.gte]: dayAgo } } }),
@@ -200,9 +200,7 @@ async function setupAdminPanel(app) {
                     ]);
 
                     return { 
-                        totalUsers, 
-                        dailyUsers, 
-                        walletsLinked, 
+                        totalUsers, dailyUsers, walletsLinked, 
                         totalTon: ((Number(sumResult) || 0) / 1e9).toFixed(2),
                         history: historyData.reverse().map(s => ({ 
                             time: dayjs(s.createdAt).format('HH:mm'), 
@@ -234,7 +232,7 @@ async function setupAdminPanel(app) {
                             color: #ffffff !important; 
                             font-family: 'monospace' !important; 
                         }
-                        section[data-testid="sidebar"], aside, [data-css="sidebar"] { 
+                        section[data-testid="sidebar"], aside { 
                             background-color: #0b0e14 !important; 
                             border-right: 1px solid #30363d !important; 
                         }
@@ -252,7 +250,6 @@ async function setupAdminPanel(app) {
                             color: #0b0e14 !important;
                         }
                         footer, .adminjs_Footer { display: none !important; }
-
                         ::-webkit-scrollbar { width: 6px; }
                         ::-webkit-scrollbar-track { background: #0b0e14; }
                         ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
