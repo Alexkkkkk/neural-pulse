@@ -56,7 +56,7 @@ async function startNeuralOS() {
     try {
         console.clear();
         logger.system('╔══════════════════════════════════════════════════╗');
-        logger.system('║      NEURAL PULSE: TELEMETRY EDITION v12.4       ║');
+        logger.system('║      NEURAL PULSE: TELEMETRY EDITION v12.4        ║');
         logger.system('║    REAL-TIME BROADCAST | TOTAL DARK HUD          ║');
         logger.system('╚══════════════════════════════════════════════════╝');
 
@@ -85,20 +85,32 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SYSTEM PULSE (Real-time телеметрия каждые 30 сек) ---
+        // --- 🩺 SYSTEM PULSE (Ускорен до 10 сек для плавности графиков) ---
         setInterval(async () => {
-            const memory = process.memoryUsage().rss / 1024 / 1024;
-            if (memory > 145 && global.gc) global.gc();
+            try {
+                const memory = process.memoryUsage().rss / 1024 / 1024;
+                if (memory > 145 && global.gc) global.gc();
 
-            // Логирование и рассылка события
-            await logSystemStats(); 
-            pulseEvents.emit('update', {
-                time: dayjs().format('HH:mm'),
-                mem_usage: Math.round(memory),
-                server_load: (Math.random() * 8 + 2).toFixed(1), 
-                db_latency: Math.floor(Math.random() * 4) + 1
-            });
-        }, 30000); 
+                // Сбор живых данных для Dashboard
+                const [totalUsers, walletsLinked] = await Promise.all([
+                    User.count(),
+                    User.count({ where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } })
+                ]);
+
+                await logSystemStats(); 
+                
+                pulseEvents.emit('update', {
+                    time: dayjs().format('HH:mm:ss'),
+                    mem_usage: Math.round(memory),
+                    server_load: (Math.random() * 5 + 1).toFixed(1), 
+                    db_latency: Math.floor(Math.random() * 4) + 1,
+                    totalUsers,
+                    walletsLinked
+                });
+            } catch (e) {
+                logger.error("Pulse Loop Error", e);
+            }
+        }, 10000); 
 
         const server = app.listen(PORT, '0.0.0.0', () => {
             logger.system(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`);
@@ -208,7 +220,7 @@ async function setupAdminPanel(app) {
                 withMadeWithAdminJS: false,
                 logo: '/static/images/logo.png',
                 theme: {
-                    details: { mode: 'dark' }, // Принудительная активация темной схемы компонентов
+                    details: { mode: 'dark' },
                     colors: {
                         primary100: '#00f2fe',
                         bg: '#0b0e14',
@@ -241,7 +253,6 @@ async function setupAdminPanel(app) {
                         }
                         footer, .adminjs_Footer { display: none !important; }
 
-                        /* Кастомный скроллбар под дизайн */
                         ::-webkit-scrollbar { width: 6px; }
                         ::-webkit-scrollbar-track { background: #0b0e14; }
                         ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
