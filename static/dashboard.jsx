@@ -133,77 +133,56 @@ const Dashboard = (props) => {
   return (
     <div style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace', padding: '20px' }}>
       <style>{`
-        /* 1. ГЛОБАЛЬНЫЙ ФОН И СКРЫТИЕ ФУТЕРА */
-        html, body, #adminjs, .adminjs_Box, [data-css="app-loader"], section, main, [data-testid="drawer"] { 
+        /* 1. ТОТАЛЬНЫЙ ТЕМНЫЙ ФОН (Убиваем белые пятна) */
+        #adminjs, #adminjs *, .adminjs_Box, section, main, article, 
+        div[class*="Styled"], [data-testid="drawer"], .adminjs_Drawer, 
+        .adminjs_Card, [data-testid="overlay"] { 
             background-color: ${CYBER.bg} !important; 
-        }
-        footer, [data-testid="footer"], .adminjs_Footer { display: none !important; }
-
-        /* 2. НАВИГАЦИЯ И ШАПКА */
-        [data-testid="sidebar"], [data-testid="sidebar-header"], [data-testid="sidebar-content"],
-        [data-testid="topbar"], .adminjs_Sidebar, .adminjs_Topbar, .adminjs_Logo {
-            background-color: ${CYBER.bg} !important;
             border-color: ${CYBER.border} !important;
         }
 
-        /* 3. ТАБЛИЦЫ И СПИСКИ */
+        /* 2. ТАБЛИЦЫ */
         .adminjs_Table, [data-testid="table"], td, th, tr {
             background-color: ${CYBER.card} !important;
             color: #ffffff !important;
-            border-color: ${CYBER.border} !important;
         }
-        th, th *, [data-testid="table-cell-content"] {
-            color: ${CYBER.primary} !important;
-            text-transform: uppercase;
-            font-size: 11px;
+
+        /* 3. GLITCH EFFECT FOR TITLE */
+        .glitch-title {
+          position: relative;
+          display: inline-block;
+        }
+        .glitch-title:hover {
+          animation: glitch 0.3s cubic-bezier(.25,.46,.45,.94) both infinite;
+        }
+        @keyframes glitch {
+          0% { transform: translate(0); }
+          20% { transform: translate(-2px, 2px); text-shadow: 2px 0 ${CYBER.danger}; }
+          40% { transform: translate(-2px, -2px); text-shadow: -2px 0 ${CYBER.primary}; }
+          60% { transform: translate(2px, 2px); }
+          80% { transform: translate(2px, -2px); }
+          100% { transform: translate(0); }
         }
 
         /* 4. ВИДИМОСТЬ ТЕКСТА И ИКОНОК */
-        /* Принудительно делаем все иконки светлыми */
-        svg, i, .adminjs_Icon, [data-testid="icon"] {
-            fill: #ffffff !important;
-            color: #ffffff !important;
-        }
-        
-        /* Исправление надписей, которые стали невидимы */
         span, p, label, .adminjs_Label, [data-testid="sidebar-resource-link"] {
             color: #c9d1d9 !important;
         }
-        
-        /* Заголовки страниц (Resources) */
-        [data-testid="page-header"] h1, [data-testid="page-header"] h2 {
-            color: ${CYBER.primary} !important;
-        }
+        svg, [data-testid="icon"] { fill: #fff !important; color: #fff !important; }
 
-        /* 5. ФОРМЫ, ПОЛЯ ВВОДА И ВЫПАДАЮЩИЕ СПИСКИ */
-        input, select, textarea, .adminjs_Input, .adminjs_Select {
-            background-color: ${CYBER.bg} !important;
-            border: 1px solid ${CYBER.border} !important;
-            color: #ffffff !important;
-        }
-        
-        /* Фон выпадающих меню фильтров */
-        div[class*="DropDown"], div[class*="Select"], [data-testid="filter-drawer"] {
-            background-color: ${CYBER.card} !important;
-            color: #ffffff !important;
-        }
-
-        /* 6. КНОПКИ ДЕЙСТВИЙ (Edit, Show, Delete) */
-        [data-testid="action-button"], .adminjs_Button[data-variant="text"] {
-            color: ${CYBER.primary} !important;
-        }
-        
-        /* Главные кнопки (Create New, Apply Filters) */
-        [data-testid="button-create"], [data-testid="filter-button"], .adminjs_Button[data-variant="contained"] {
-            background: ${CYBER.primary}22 !important;
+        /* 5. КНОПКИ (Cyber Action) */
+        button, .adminjs_Button, [data-testid="action-button"], [data-testid="button-create"] {
             border: 1px solid ${CYBER.primary} !important;
             color: ${CYBER.primary} !important;
+            background: transparent !important;
+            text-transform: uppercase;
+        }
+        button:hover { 
+            box-shadow: 0 0 12px ${CYBER.primary}88; 
+            background: ${CYBER.primary}11 !important; 
         }
 
-        @keyframes cyber-pulse {
-          0%, 100% { transform: scaleY(0.5); opacity: 0.5; }
-          50% { transform: scaleY(1.2); opacity: 1; }
-        }
+        footer { display: none !important; }
       `}</style>
 
       {/* --- HUD HEADER --- */}
@@ -212,7 +191,9 @@ const Dashboard = (props) => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 2 }}>
           <div>
             <span style={{ padding: '2px 8px', background: CYBER.primary, color: '#000', fontWeight: 'bold', fontSize: '10px' }}>NEURAL_PULSE_OS_V3</span>
-            <h2 style={{ color: CYBER.primary, margin: '10px 0 0 0', fontSize: '24px', letterSpacing: '1px' }}>CORE_TELEMETRY</h2>
+            <h2 className="glitch-title" style={{ color: CYBER.primary, margin: '10px 0 0 0', fontSize: '24px', letterSpacing: '1px' }}>
+              CORE_TELEMETRY
+            </h2>
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ color: CYBER.ton, fontWeight: 'bold', fontSize: '20px' }}>{stats.totalTon} TON</div>
