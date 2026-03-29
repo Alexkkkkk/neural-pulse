@@ -56,9 +56,10 @@ const Dashboard = (props) => {
   });
 
   useEffect(() => {
-    // Функция получения свежих данных от сервера
+    // Функция получения свежих данных от сервера через ApiClient AdminJS
     const fetchStats = async () => {
       try {
+        // Проверка наличия ApiClient (доступен в контексте AdminJS)
         if (!window.AdminJS?.ApiClient) return;
         const api = new window.AdminJS.ApiClient();
         const response = await api.getDashboard();
@@ -85,7 +86,7 @@ const Dashboard = (props) => {
       }
     };
 
-    // Анимация загрузки системных ресурсов
+    // Анимация загрузки системных ресурсов при старте
     const loader = setInterval(() => {
       setLoadingProgress(prev => {
         if (prev >= 100) {
@@ -142,6 +143,7 @@ const Dashboard = (props) => {
     );
   };
 
+  // Экран загрузки (Boot Sequence)
   if (!isReady) {
     return (
       <div style={{ background: CYBER.bg, color: CYBER.primary, height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' }}>
@@ -181,7 +183,7 @@ const Dashboard = (props) => {
         </div>
       </div>
 
-      {/* СЕТКА КАРТОЧЕК */}
+      {/* СЕТКА КАРТОЧЕК С ГРАФИКАМИ */}
       <div style={{ display: 'flex', flexWrap: 'wrap', margin: '0 -10px' }}>
         <StatCard label="TOTAL_AGENTS" value={stats.totalUsers} unit="U" color={CYBER.primary} historyKey="user_count" />
         <StatCard label="NEW_PLAYERS_24H" value={stats.dailyUsers} unit="+" color={CYBER.success} subValue="↑ ACTIVITY_GROWTH" historyKey="user_count" />
@@ -191,9 +193,9 @@ const Dashboard = (props) => {
         <StatCard label="SIGNAL_LATENCY" value={stats.latency} unit="MS" color={CYBER.danger} historyKey="db_latency" />
       </div>
 
-      {/* НИЖНИЕ ПАНЕЛИ */}
+      {/* НИЖНИЕ ПАНЕЛИ: МОНИТОР И ЛОГИ */}
       <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '20px', gap: '20px' }}>
-        {/* Анимация волны */}
+        {/* Анимация волны (Спектрограмма) */}
         <div style={{ flex: '2 1 400px', background: CYBER.card, height: '250px', border: `1px solid ${CYBER.border}`, borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', position: 'relative' }}>
           <div style={{ position: 'absolute', top: '15px', left: '15px', color: CYBER.primary, fontSize: '10px', opacity: 0.5, letterSpacing: '2px' }}>NETWORK_WAVEFORM_MONITOR</div>
           {[...Array(40)].map((_, i) => (
@@ -204,7 +206,7 @@ const Dashboard = (props) => {
           ))}
         </div>
 
-        {/* Живые логи */}
+        {/* Живые логи системы */}
         <div style={{ flex: '1 1 300px', background: '#05070a', height: '250px', border: `1px solid ${CYBER.border}`, padding: '20px', overflow: 'hidden', borderRadius: '4px' }}>
           <div style={{ color: CYBER.success, fontSize: '10px', marginBottom: '15px', borderBottom: `1px solid ${CYBER.border}`, paddingBottom: '8px', letterSpacing: '1px' }}>LIVE_SYSTEM_LOGS</div>
           <div style={{ fontSize: '10px', lineHeight: '1.6' }}>
