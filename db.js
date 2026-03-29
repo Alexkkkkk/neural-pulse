@@ -114,7 +114,7 @@ export const logSystemStats = async () => {
     try {
         const start = Date.now();
         
-        // Читаем быстрые данные из GlobalStats (обновляются триггером в БД)
+        // Получаем актуальные данные из агрегатора GlobalStats
         const gStats = await GlobalStats.findByPk(1);
         const totalBalance = gStats ? parseFloat(gStats.total_balance) : 0;
         const totalUsers = gStats ? gStats.total_users : 0;
@@ -128,6 +128,7 @@ export const logSystemStats = async () => {
         const cpuCount = os.cpus().length;
         const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
 
+        // Создаем запись в истории статистики
         await Stats.create({
             user_count: totalUsers,
             active_wallets: walletCount,
@@ -137,6 +138,7 @@ export const logSystemStats = async () => {
             db_latency: parseFloat(latency)
         });
         
+        // Храним только последние 288 записей (примерно за 24 часа при интервале 5 мин)
         const totalCount = await Stats.count();
         if (totalCount > 288) {
             const oldestToKeep = await Stats.findOne({
@@ -147,7 +149,7 @@ export const logSystemStats = async () => {
                 await Stats.destroy({ where: { id: { [Op.lt]: oldestToKeep.id } } });
             }
         }
-        console.log(`--- [TELEMETRY] Sync Successful | Users: ${totalUsers}`);
+        console.log(`--- [TELEMETRY] Sync Successful | Users: ${totalUsers} | Balance: ${totalBalance}`);
     } catch (e) {
         console.error('--- [TELEMETRY] ERROR:', e.message);
     }
@@ -166,15 +168,15 @@ export const initDB = async () => {
             await GlobalStats.sync({ alter: true });
             await Stats.sync({ alter: true });
             
-            // 2. Таблица User БЕЗ alter: true, чтобы не мешать триггеру на колонке balance
+            // 2. Синхронизируем таблицу User БЕЗ alter: true (чтобы не сломать триггер balance)
             await User.sync(); 
             
             await Task.sync({ alter: true });
             
-            // Общая безопасная синхронизация
+            // Финальная безопасная синхронизация всей схемы
             await sequelize.sync(); 
             
-            // Создаем агрегатор (ID 1), если его нет
+            // 3. Инициализация агрегатора (ID 1), если строка отсутствует
             await GlobalStats.findOrCreate({ 
                 where: { id: 1 }, 
                 defaults: { total_balance: 0, total_users: 0 } 
@@ -182,6 +184,7 @@ export const initDB = async () => {
 
             await sessionStore.sync(); 
             
+            // Проверка и создание стандартных задач
             const taskCount = await Task.count();
             if (taskCount === 0) {
                 await Task.bulkCreate([
@@ -191,7 +194,7 @@ export const initDB = async () => {
                 ]);
             }
 
-            // Интервал сбора данных
+            // Запуск цикла сбора телеметрии каждые 5 минут
             setInterval(logSystemStats, 5 * 60 * 1000);
             await logSystemStats(); 
         }
