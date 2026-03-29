@@ -47,7 +47,7 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
-    // Раздача статики (index.html всегда в /static/)
+    // Раздача статики
     app.use('/static', express.static(path.join(__dirname, 'static'), {
         maxAge: '1h',
         etag: true
@@ -111,7 +111,6 @@ async function startNeuralOS() {
             }
         }, 10000); 
 
-        // Авто-очистка логов старше 24 часов
         setInterval(async () => {
             await Stats.destroy({ where: { createdAt: { [Op.lt]: dayjs().subtract(24, 'hour').toDate() } } });
         }, 3600000);
@@ -129,7 +128,6 @@ async function startNeuralOS() {
     }
 }
 
-// --- 🛰️ REAL-TIME STREAMING ENDPOINT ---
 function setupRealTimeStream(app) {
     app.get('/api/admin/stream', (req, res) => {
         res.setHeader('Content-Type', 'text/event-stream');
@@ -218,7 +216,6 @@ async function setupAdminPanel(app) {
                 withMadeWithAdminJS: false,
                 logo: '/static/images/logo.png',
                 theme: {
-                    details: { mode: 'dark' },
                     colors: {
                         primary100: '#00f2fe',
                         bg: '#0b0e14',
@@ -226,36 +223,72 @@ async function setupAdminPanel(app) {
                         text: '#ffffff',
                         border: '#30363d',
                     },
-                    custom: `
-                        body, html, #adminjs, .adminjs_Box { 
-                            background-color: #0b0e14 !important; 
-                            color: #ffffff !important; 
-                            font-family: 'monospace' !important; 
-                        }
-                        section[data-testid="sidebar"], aside { 
-                            background-color: #0b0e14 !important; 
-                            border-right: 1px solid #30363d !important; 
-                        }
-                        header[data-testid="topbar"] { 
-                            background: #0b0e14 !important; 
-                            border-bottom: 1px solid #30363d !important; 
-                        }
-                        .adminjs_Card, .adminjs_Table, .adminjs_Table td, .adminjs_Table th { 
-                            background: #161b22 !important; 
-                            border-color: #30363d !important; 
-                            color: #ffffff !important;
-                        }
-                        .adminjs_Button-primary {
-                            background: #00f2fe !important;
-                            color: #0b0e14 !important;
-                        }
-                        footer, .adminjs_Footer { display: none !important; }
-                        ::-webkit-scrollbar { width: 6px; }
-                        ::-webkit-scrollbar-track { background: #0b0e14; }
-                        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
-                        ::-webkit-scrollbar-thumb:hover { background: #00f2fe; }
-                    `,
-                }
+                },
+                custom: `
+                    /* Глобальный фон и шрифты */
+                    body, html, #adminjs, [data-testid="Box"], .adminjs_Box { 
+                        background-color: #0b0e14 !important; 
+                        color: #ffffff !important; 
+                        font-family: 'monospace' !important; 
+                    }
+
+                    /* Стилизация страницы ЛОГИНА */
+                    [data-testid="login-border"] {
+                        background: #161b22 !important;
+                        border: 1px solid #30363d !important;
+                        box-shadow: 0 0 30px rgba(0, 242, 254, 0.1) !important;
+                    }
+                    [data-testid="login-border"] input {
+                        background-color: #0b0e14 !important;
+                        border: 1px solid #30363d !important;
+                        color: #00f2fe !important;
+                    }
+                    [data-testid="login-border"] label {
+                        color: #8b949e !important;
+                        text-transform: uppercase;
+                        font-size: 10px;
+                        letter-spacing: 1px;
+                    }
+
+                    /* Боковая панель и Хедер */
+                    section[data-testid="sidebar"], aside { 
+                        background-color: #0b0e14 !important; 
+                        border-right: 1px solid #30363d !important; 
+                    }
+                    header[data-testid="topbar"] { 
+                        background: #0b0e14 !important; 
+                        border-bottom: 1px solid #30363d !important; 
+                    }
+
+                    /* Таблицы и карточки */
+                    .adminjs_Card, .adminjs_Table, .adminjs_Table td, .adminjs_Table th { 
+                        background: #161b22 !important; 
+                        border-color: #30363d !important; 
+                        color: #ffffff !important;
+                    }
+                    
+                    /* Кнопки */
+                    .adminjs_Button-primary, button[type="submit"] {
+                        background: #00f2fe !important;
+                        color: #0b0e14 !important;
+                        border: none !important;
+                        font-weight: bold !important;
+                        text-transform: uppercase !important;
+                        transition: all 0.3s ease;
+                    }
+                    .adminjs_Button-primary:hover, button[type="submit"]:hover {
+                        box-shadow: 0 0 15px #00f2fe;
+                        opacity: 0.9;
+                    }
+
+                    footer, .adminjs_Footer, [data-testid="made-with-love"] { display: none !important; }
+                    
+                    /* Скроллбар */
+                    ::-webkit-scrollbar { width: 6px; }
+                    ::-webkit-scrollbar-track { background: #0b0e14; }
+                    ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
+                    ::-webkit-scrollbar-thumb:hover { background: #00f2fe; }
+                `,
             }
         });
 
