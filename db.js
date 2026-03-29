@@ -114,7 +114,7 @@ export const logSystemStats = async () => {
     try {
         const start = Date.now();
         
-        // Получаем мгновенные данные из агрегатора
+        // Читаем быстрые данные из GlobalStats (обновляются триггером в БД)
         const gStats = await GlobalStats.findByPk(1);
         const totalBalance = gStats ? parseFloat(gStats.total_balance) : 0;
         const totalUsers = gStats ? gStats.total_users : 0;
@@ -147,6 +147,7 @@ export const logSystemStats = async () => {
                 await Stats.destroy({ where: { id: { [Op.lt]: oldestToKeep.id } } });
             }
         }
+        console.log(`--- [TELEMETRY] Sync Successful | Users: ${totalUsers}`);
     } catch (e) {
         console.error('--- [TELEMETRY] ERROR:', e.message);
     }
@@ -156,19 +157,25 @@ export const logSystemStats = async () => {
 export const initDB = async () => {
     try {
         await sequelize.authenticate();
-        console.log('--- [DB] CONNECTED ---');
+        console.log('--- [DB] CONNECTED TO POSTGRES ---');
 
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // Синхронизация схем
+            // 1. Синхронизируем служебные таблицы
             await GlobalStats.sync({ alter: true });
             await Stats.sync({ alter: true });
-            await User.sync({ alter: true });
-            await Task.sync({ alter: true });
-            await sequelize.sync({ alter: true });
             
-            // Инициализация агрегатора (ID 1)
+            // 2. Синхронизируем таблицу User БЕЗ alter: true 
+            // Это предотвращает попытки изменить тип колонки balance, на которой стоит триггер
+            await User.sync(); 
+            
+            await Task.sync({ alter: true });
+            
+            // Общая синхронизация (безопасная)
+            await sequelize.sync(); 
+            
+            // Инициализация агрегатора (ID 1), если строка отсутствует
             await GlobalStats.findOrCreate({ 
                 where: { id: 1 }, 
                 defaults: { total_balance: 0, total_users: 0 } 
@@ -185,6 +192,7 @@ export const initDB = async () => {
                 ]);
             }
 
+            // Запуск цикла сбора данных
             setInterval(logSystemStats, 5 * 60 * 1000);
             await logSystemStats(); 
         }
