@@ -59,7 +59,7 @@ export const User = sequelize.define('users', {
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { 
     timestamps: true, 
-    underscored: false, // ВАЖНО: false, так как база создала CamelCase (createdAt)
+    underscored: false,
     indexes: [
         { fields: ['username'] },
         { fields: ['wallet'] },
@@ -91,7 +91,7 @@ export const Stats = sequelize.define('stats', {
     underscored: false 
 });
 
-// --- 📈 МОДЕЛЬ: GLOBAL_STATS (Агрегатор для триггеров) ---
+// --- 📈 МОДЕЛЬ: GLOBAL_STATS (Агрегатор) ---
 export const GlobalStats = sequelize.define('global_stats', {
     id: { type: DataTypes.INTEGER, primaryKey: true },
     total_balance: { type: DataTypes.DECIMAL(32, 2), defaultValue: 0 },
@@ -102,55 +102,50 @@ export const GlobalStats = sequelize.define('global_stats', {
     underscored: false 
 });
 
-// --- 🔗 СВЯЗИ ---
 User.hasMany(User, { as: 'ReferralList', foreignKey: 'referred_by' });
 User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
 // --- 📊 СБОР ТЕЛЕМЕТРИИ ---
 export const logSystemStats = async () => {
-    // Выполняем только на главном процессе (или если не используется кластер)
     const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
     if (!isPrimary) return;
 
     try {
         const start = Date.now();
         
-        // Получаем актуальные данные из агрегатора (куда пишут триггеры)
-        const gStats = await GlobalStats.findByPk(1);
+        // 1. Быстрый сбор данных
+        const [gStats, walletCount] = await Promise.all([
+            GlobalStats.findByPk(1),
+            User.count({ 
+                where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } 
+            })
+        ]);
+
+        const dbLatency = Date.now() - start;
         const totalBalance = gStats ? parseFloat(gStats.total_balance) : 0;
         const totalUsers = gStats ? gStats.total_users : 0;
-
-        const walletCount = await User.count({ 
-            where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } 
-        });
-
-        const latency = Date.now() - start;
         const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
         const cpuCount = os.cpus()?.length || 1;
         const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
 
-        // Создаем запись в истории для графиков
+        // 2. Сохранение точки входа для графиков
         await Stats.create({
             user_count: totalUsers,
             active_wallets: walletCount,
             total_balance: totalBalance,
             server_load: parseFloat(load),
             mem_usage: parseFloat(mem),
-            db_latency: parseFloat(latency)
+            db_latency: parseFloat(dbLatency)
         });
         
-        // Авто-очистка: храним записи только за последние 24 часа (288 записей при 5-мин интервале)
+        // 3. Оптимизированная очистка (храним 2880 записей = 24 часа при интервале 30 сек)
+        const maxEntries = 2880;
         const totalEntries = await Stats.count();
-        if (totalEntries > 288) {
-            const oldestToKeep = await Stats.findOne({
-                offset: totalEntries - 288,
-                order: [['id', 'ASC']]
-            });
-            if (oldestToKeep) {
-                await Stats.destroy({ where: { id: { [Op.lt]: oldestToKeep.id } } });
-            }
+        if (totalEntries > maxEntries) {
+            const minId = await Stats.min('id');
+            await Stats.destroy({ where: { id: { [Op.lte]: minId + (totalEntries - maxEntries) } } });
         }
-        console.log(`--- [TELEMETRY] Sync OK | Users: ${totalUsers} | Balance: ${totalBalance}`);
+        
     } catch (e) {
         console.error('--- [TELEMETRY] ERROR:', e.message);
     }
@@ -165,35 +160,29 @@ export const initDB = async () => {
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // 1. Синхронизируем базовые таблицы
+            // Синхронизация таблиц
             await GlobalStats.sync({ alter: true });
             await Stats.sync({ alter: true });
-            await User.sync(); // БЕЗ alter: true, чтобы не сбить триггеры в Dminer
+            await User.sync(); 
             await Task.sync({ alter: true });
             await sessionStore.sync();
-            
-            // Финальная синхронизация всей схемы
             await sequelize.sync(); 
             
-            // 2. Инициализация строки агрегатора
             await GlobalStats.findOrCreate({ 
                 where: { id: 1 }, 
                 defaults: { total_balance: 0, total_users: 0 } 
             });
 
-            // 3. Создание стандартных задач, если их нет
-            const taskCount = await Task.count();
-            if (taskCount === 0) {
+            if (await Task.count() === 0) {
                 await Task.bulkCreate([
                     { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
                     { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
                     { title: 'Подключить TON кошелек', reward: 2500, url: '', icon: 'Wallet' }
                 ]);
-                console.log('--- [DB] Default Tasks Created ---');
             }
 
-            // 4. Запуск цикла телеметрии (каждые 5 минут)
-            setInterval(logSystemStats, 5 * 60 * 1000);
+            // Ускоренный интервал для "живого" дашборда (30 секунд)
+            setInterval(logSystemStats, 30 * 1000);
             await logSystemStats(); 
         }
 
