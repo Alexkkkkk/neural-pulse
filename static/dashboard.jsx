@@ -14,7 +14,7 @@ const CYBER = {
   border: '#30363d'
 };
 
-// Мемоизация графика для плавности
+// Мемоизация графика для плавности (рисует историю данных)
 const MiniChart = memo(({ data, color, height = 30 }) => {
   if (!data || data.length < 2) return <div style={{ height: height + 10 }} />;
   const cleanData = data.map(v => (Number.isFinite(v) ? v : 0));
@@ -41,6 +41,7 @@ const Dashboard = (props) => {
   const [logs, setLogs] = useState(['> INITIALIZING_BOOT_SEQUENCE...', '> KERNEL_LOADED', '> SYNCING_WITH_TITAN_CORE...']);
   const [scanPos, setScanPos] = useState(0);
   
+  // История для графиков (храним последние 30 точек)
   const [history, setHistory] = useState(props.data?.history || []);
 
   const [stats, setStats] = useState({
@@ -58,19 +59,22 @@ const Dashboard = (props) => {
   };
 
   useEffect(() => {
-    // 1. Анимация загрузки
+    // 1. Анимация загрузки (Boot Sequence)
     const loader = setInterval(() => {
       setLoadingProgress(prev => {
         if (prev >= 100) {
           clearInterval(loader);
-          setTimeout(() => setIsReady(true), 200);
+          setTimeout(() => {
+            setIsReady(true);
+            addLog('> CORE_SYSTEM_READY');
+          }, 200);
           return 100;
         }
         return prev + 10;
       });
     }, 40);
 
-    // 2. Real-time связь через SSE
+    // 2. Real-time связь через SSE (Слушаем сервер)
     const eventSource = new EventSource('/api/admin/stream');
     
     eventSource.onmessage = (event) => {
@@ -81,14 +85,16 @@ const Dashboard = (props) => {
           ...prev,
           cpu: pulse.server_load,
           mem: pulse.mem_usage,
-          latency: pulse.db_latency,
+          latency: pulse.latency || 5, // Используем приходящую задержку
           totalUsers: pulse.user_count,
           walletsLinked: pulse.active_wallets,
           total_balance: pulse.total_balance
         }));
 
+        // Обновляем массив истории для графиков
         setHistory(prev => [...prev.slice(-29), pulse]);
 
+        // Имитация активности в логах
         if (Math.random() > 0.8) {
           const events = ['CORE_STABLE', 'TELEMETRY_SYNCED', 'DB_BUFFER_CLEAN', 'PULSE_RECEIVED', 'ENCRYPTING_SESSION'];
           addLog(`> ${events[Math.floor(Math.random() * events.length)]}: ${Math.random().toString(16).slice(2, 8).toUpperCase()}`);
@@ -102,6 +108,7 @@ const Dashboard = (props) => {
       addLog('> ERROR: TELEMETRY_LINK_LOST. ATTEMPTING_RECONNECT...');
     };
 
+    // Анимация сканирующей линии в хедере
     const animInterval = setInterval(() => setScanPos(p => (p + 0.5) % 100), 50);
 
     return () => {
@@ -111,10 +118,11 @@ const Dashboard = (props) => {
     };
   }, []);
 
+  // Компонент карточки с данными
   const StatCard = ({ label, value, unit, color, subValue, historyKey }) => {
     const chartData = history.map(h => Number(h[historyKey]) || 0);
     
-    // Динамический расчет прогресса для полоски внизу
+    // Расчет прогресс-бара
     let progressPercent = 0;
     if (unit === '%') progressPercent = value;
     else if (unit === 'MB') progressPercent = (value / 512) * 100;
@@ -150,6 +158,7 @@ const Dashboard = (props) => {
     );
   };
 
+  // Экран загрузки
   if (!isReady) {
     return (
       <div style={{ background: CYBER.bg, color: CYBER.primary, height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' }}>
@@ -201,7 +210,7 @@ const Dashboard = (props) => {
         </div>
       </div>
 
-      {/* --- GRID (HUD) --- */}
+      {/* --- GRID (HUD CARDS) --- */}
       <div style={{ display: 'flex', flexWrap: 'wrap', margin: '0 -10px' }}>
         <StatCard label="TOTAL_AGENTS" value={stats.totalUsers} unit="U" color={CYBER.primary} historyKey="user_count" />
         <StatCard label="NEW_24H" value={stats.dailyUsers} unit="+" color={CYBER.success} historyKey="user_count" />
