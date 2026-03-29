@@ -88,7 +88,7 @@ export const Stats = sequelize.define('stats', {
 }, { 
     timestamps: true, 
     tableName: 'stats',
-    underscored: false // Отключено, чтобы избежать ошибки column "created_at"
+    underscored: false // Фиксируем стандартные имена для логов системы
 });
 
 // --- 🔗 СВЯЗИ ---
@@ -153,7 +153,11 @@ export const initDB = async () => {
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // Принудительно создаем/обновляем колонки
+            // ЛЕЧИМ ТАБЛИЦУ СТАТИСТИКИ (Пересоздаем её, чтобы убрать ошибку с null значениями)
+            await Stats.sync({ force: true });
+            console.log('--- [DB] STATS TABLE RESET ---');
+
+            // Синхронизируем остальные таблицы без потери данных
             await sequelize.sync({ alter: true });
             console.log('--- [DB] SCHEMA SYNCHRONIZED ---');
 
