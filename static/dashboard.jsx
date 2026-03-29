@@ -14,22 +14,17 @@ const CYBER = {
   border: '#30363d'
 };
 
-// Вспомогательный компонент: Мини-график (SVG)
 const MiniChart = ({ data, color, height = 30 }) => {
   if (!data || data.length < 2) return <div style={{ height: height + 10 }} />;
-  
   const cleanData = data.map(v => Number.isFinite(v) ? v : 0);
   const max = Math.max(...cleanData) || 1;
   const min = Math.min(...cleanData);
   const range = (max - min) || 1;
-  
   const points = cleanData.map((val, i) => ({
     x: (i / (cleanData.length - 1)) * 100,
     y: height - ((val - min) / range) * height
   }));
-
   const pathData = `M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`;
-
   return (
     <svg width="100%" height={height} style={{ marginTop: '10px', overflow: 'visible', display: 'block' }}>
       <path d={pathData} fill="none" stroke={color} strokeWidth="1.5" strokeOpacity="0.8" />
@@ -56,19 +51,15 @@ const Dashboard = (props) => {
   });
 
   useEffect(() => {
-    // Получение данных через ApiClient AdminJS
     const fetchStats = async () => {
       try {
         if (!window.AdminJS?.ApiClient) return;
         const api = new window.AdminJS.ApiClient();
         const response = await api.getDashboard();
         const d = response.data || {};
-        
         const historyData = d.history || [];
         setHistory(historyData);
-
         const latest = historyData[historyData.length - 1] || {};
-
         setStats({
           totalUsers: d.totalUsers || 0,
           dailyUsers: d.dailyUsers || 0,
@@ -78,14 +69,12 @@ const Dashboard = (props) => {
           mem: latest.mem_usage || 0,
           latency: latest.db_latency || 5
         });
-        
         setLogs(l => [...l.slice(-8), `> SYNC_OK: ${new Date().toLocaleTimeString()}`]);
       } catch (e) { 
         setLogs(l => [...l.slice(-5), '> TELEMETRY_LINK_LOST: RETRYING...']);
       }
     };
 
-    // Анимация загрузки (40ms за шаг)
     const loader = setInterval(() => {
       setLoadingProgress(prev => {
         if (prev >= 100) {
@@ -97,52 +86,36 @@ const Dashboard = (props) => {
       });
     }, 40);
 
-    const dataInterval = setInterval(fetchStats, 10000); // 10 сек обновление
+    const dataInterval = setInterval(fetchStats, 10000);
     const animInterval = setInterval(() => setScanPos(p => (p + 1) % 100), 60);
-    
     fetchStats();
-    
-    return () => { 
-      clearInterval(loader); 
-      clearInterval(dataInterval); 
-      clearInterval(animInterval); 
-    };
+    return () => { clearInterval(loader); clearInterval(dataInterval); clearInterval(animInterval); };
   }, []);
 
-  // Компонент карточки с данными и мини-графиком
   const StatCard = ({ label, value, unit, color, subValue, historyKey }) => {
     const chartData = history.map(h => h[historyKey] || 0);
     return (
       <div style={{ 
         flex: '1 1 240px', margin: '10px', padding: '20px', 
         background: CYBER.card, border: `1px solid ${color}33`, borderRadius: '4px',
-        position: 'relative', overflow: 'hidden',
-        boxShadow: `inset 0 0 15px ${color}05`
+        position: 'relative', overflow: 'hidden', boxShadow: `inset 0 0 15px ${color}05`
       }}>
         <div style={{ color: '#8b949e', fontSize: '10px', letterSpacing: '2px', marginBottom: '8px', fontWeight: 'bold' }}>{label}</div>
         <div style={{ color: '#fff', fontSize: '28px', fontWeight: 'bold', display: 'flex', alignItems: 'baseline', fontFamily: 'monospace' }}>
-          {value}
-          <span style={{ fontSize: '14px', color: color, marginLeft: '6px' }}>{unit}</span>
+          {value}<span style={{ fontSize: '14px', color: color, marginLeft: '6px' }}>{unit}</span>
         </div>
-        
         <MiniChart data={chartData} color={color} />
-
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
             <span style={{ fontSize: '10px', color: color, opacity: 0.8 }}>{subValue || 'SYSTEM_ACTIVE'}</span>
             <span style={{ fontSize: '9px', color: '#444' }}>LIVE_FEED</span>
         </div>
-        
         <div style={{ width: '100%', height: '2px', background: '#000', marginTop: '8px' }}>
-          <div style={{ 
-            width: `${Math.min(value > 100 ? 100 : value, 100)}%`, height: '100%', 
-            background: color, boxShadow: `0 0 10px ${color}`, transition: 'width 1s ease' 
-          }} />
+          <div style={{ width: `${Math.min(value > 100 ? 100 : value, 100)}%`, height: '100%', background: color, boxShadow: `0 0 10px ${color}`, transition: 'width 1s ease' }} />
         </div>
       </div>
     );
   };
 
-  // Экран загрузки (Sequencer)
   if (!isReady) {
     return (
       <div style={{ background: CYBER.bg, color: CYBER.primary, height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' }}>
@@ -160,9 +133,32 @@ const Dashboard = (props) => {
   return (
     <div style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace', padding: '20px' }}>
       <style>{`
-        /* Сброс стилей AdminJS для полной темноты */
-        #adminjs, body, html { background-color: ${CYBER.bg} !important; }
-        .adminjs_Box { background-color: ${CYBER.bg} !important; }
+        /* ПРИНУДИТЕЛЬНАЯ ТЕМНАЯ ТЕМА ДЛЯ ВСЕЙ АДМИНКИ */
+        #adminjs, body, html, .adminjs_Box, [data-css="app-loader"] { 
+            background-color: ${CYBER.bg} !important; 
+        }
+
+        /* Исправление белой боковой панели и шапки */
+        [data-testid="sidebar"], [data-testid="topbar"], .adminjs_Sidebar, .adminjs_Topbar, [data-testid="sidebar-header"] {
+            background-color: ${CYBER.bg} !important;
+            border-color: ${CYBER.border} !important;
+        }
+
+        /* Исправление белых списков ресурсов (Users и т.д.) */
+        .adminjs_Table, .adminjs_TableThead, .adminjs_TableTbody, .adminjs_TableRow, td, th {
+            background-color: ${CYBER.card} !important;
+            color: ${CYBER.text} !important;
+            border-color: ${CYBER.border} !important;
+        }
+
+        /* Текст в навигации */
+        [data-testid="sidebar-resource-link"], [data-testid="sidebar-section-title"], a, span {
+            color: #c9d1d9 !important;
+        }
+
+        /* Убираем футер AdminJS */
+        footer, [data-testid="footer"], .adminjs_Footer { display: none !important; }
+
         @keyframes cyber-pulse {
           0%, 100% { transform: scaleY(0.5); opacity: 0.5; }
           50% { transform: scaleY(1.2); opacity: 1; }
@@ -177,46 +173,36 @@ const Dashboard = (props) => {
             <span style={{ padding: '2px 8px', background: CYBER.primary, color: '#000', fontWeight: 'bold', fontSize: '10px' }}>NEURAL_PULSE_OS_V3</span>
             <h2 style={{ color: CYBER.primary, margin: '10px 0 0 0', fontSize: '24px', letterSpacing: '1px' }}>CORE_TELEMETRY</h2>
           </div>
-          <div style={{ textAlign: 'right', minWidth: '150px' }}>
-            <div style={{ color: CYBER.ton, fontWeight: 'bold', fontSize: '20px', whiteSpace: 'nowrap' }}>{stats.totalTon} TON</div>
-            <div style={{ color: '#444', fontSize: '9px', letterSpacing: '1px' }}>TOTAL_NETWORK_RESERVE</div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ color: CYBER.ton, fontWeight: 'bold', fontSize: '20px' }}>{stats.totalTon} TON</div>
+            <div style={{ color: '#444', fontSize: '9px' }}>TOTAL_RESERVE</div>
           </div>
         </div>
       </div>
 
-      {/* --- GRID: STATS & CHARTS --- */}
+      {/* --- GRID --- */}
       <div style={{ display: 'flex', flexWrap: 'wrap', margin: '0 -10px' }}>
         <StatCard label="TOTAL_AGENTS" value={stats.totalUsers} unit="U" color={CYBER.primary} historyKey="user_count" />
-        <StatCard label="NEW_PLAYERS_24H" value={stats.dailyUsers} unit="+" color={CYBER.success} subValue="↑ ACTIVITY_GROWTH" historyKey="user_count" />
-        <StatCard label="WALLETS_LINKED" value={stats.walletsLinked} unit="W" color={CYBER.ton} subValue="TON_CONNECT_READY" historyKey="active_wallets" />
+        <StatCard label="NEW_PLAYERS" value={stats.dailyUsers} unit="+" color={CYBER.success} historyKey="user_count" />
+        <StatCard label="WALLETS" value={stats.walletsLinked} unit="W" color={CYBER.ton} historyKey="active_wallets" />
         <StatCard label="CORE_LOAD" value={Number(stats.cpu).toFixed(1)} unit="%" color={CYBER.secondary} historyKey="server_load" />
         <StatCard label="MEM_USAGE" value={Math.round(stats.mem)} unit="MB" color={CYBER.warning} historyKey="mem_usage" />
-        <StatCard label="SIGNAL_LATENCY" value={stats.latency} unit="MS" color={CYBER.danger} historyKey="db_latency" />
+        <StatCard label="LATENCY" value={stats.latency} unit="MS" color={CYBER.danger} historyKey="db_latency" />
       </div>
 
-      {/* --- LOWER PANELS: WAVEFORM & LOGS --- */}
+      {/* --- LOWER PANELS --- */}
       <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '20px', gap: '20px' }}>
-        {/* NETWORK WAVEFORM */}
         <div style={{ flex: '2 1 400px', background: CYBER.card, height: '250px', border: `1px solid ${CYBER.border}`, borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', position: 'relative' }}>
-          <div style={{ position: 'absolute', top: '15px', left: '15px', color: CYBER.primary, fontSize: '10px', opacity: 0.5, letterSpacing: '2px' }}>NETWORK_WAVEFORM_MONITOR</div>
-          {[...Array(40)].map((_, i) => (
-            <div key={i} style={{
-              width: '6px', background: i % 5 === 0 ? CYBER.ton : CYBER.primary, height: '30%', borderRadius: '1px',
-              animation: `cyber-pulse 1.5s infinite ease-in-out ${i * 0.05}s`
-            }} />
+          <div style={{ position: 'absolute', top: '15px', left: '15px', color: CYBER.primary, fontSize: '10px', opacity: 0.5 }}>WAVEFORM_MONITOR</div>
+          {[...Array(30)].map((_, i) => (
+            <div key={i} style={{ width: '6px', background: CYBER.primary, height: '30%', animation: `cyber-pulse 1.5s infinite ${i * 0.05}s` }} />
           ))}
         </div>
 
-        {/* LIVE SYSTEM LOGS */}
-        <div style={{ flex: '1 1 300px', background: '#05070a', height: '250px', border: `1px solid ${CYBER.border}`, padding: '20px', overflow: 'hidden', borderRadius: '4px' }}>
-          <div style={{ color: CYBER.success, fontSize: '10px', marginBottom: '15px', borderBottom: `1px solid ${CYBER.border}`, paddingBottom: '8px', letterSpacing: '1px' }}>LIVE_SYSTEM_LOGS</div>
-          <div style={{ fontSize: '10px', lineHeight: '1.6' }}>
-            {logs.map((log, i) => (
-              <div key={i} style={{ color: log.includes('LOST') ? CYBER.danger : '#4e555d', whiteSpace: 'nowrap' }}>
-                {log}
-              </div>
-            ))}
-            <div style={{ color: CYBER.primary }}>> LISTENING_FOR_PULSE...</div>
+        <div style={{ flex: '1 1 300px', background: '#05070a', height: '250px', border: `1px solid ${CYBER.border}`, padding: '20px', overflow: 'hidden' }}>
+          <div style={{ color: CYBER.success, fontSize: '10px', marginBottom: '10px' }}>SYSTEM_LOGS</div>
+          <div style={{ fontSize: '10px', lineHeight: '1.6', color: '#4e555d' }}>
+            {logs.map((log, i) => <div key={i}>{log}</div>)}
           </div>
         </div>
       </div>
