@@ -88,7 +88,7 @@ export const Stats = sequelize.define('stats', {
 }, { 
     timestamps: true, 
     tableName: 'stats',
-    underscored: false // Фиксируем стандартные имена для логов системы
+    underscored: false 
 });
 
 // --- 🔗 СВЯЗИ ---
@@ -110,22 +110,24 @@ export const logSystemStats = async () => {
                     wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } 
                 } 
             }),
-            User.sum('balance')
+            User.sum('balance').then(sum => sum || 0)
         ]);
 
         const latency = Date.now() - start;
         const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
-        const load = (os.loadavg()[0] * 10).toFixed(2);
+        // Исправлено: нагрузка в % (loadavg[0] - это нагрузка за 1 мин)
+        const load = (os.loadavg()[0] * 100).toFixed(1);
 
         await Stats.create({
-            user_count: userCount,
-            active_wallets: walletCount,
-            total_balance: parseFloat(sumBalance || 0),
+            user_count: userCount || 0,
+            active_wallets: walletCount || 0,
+            total_balance: parseFloat(sumBalance),
             server_load: parseFloat(load),
             mem_usage: parseFloat(mem),
             db_latency: latency
         });
         
+        // Ротация: оставляем только последние 288 записей (24 часа при логе раз в 5 мин)
         const totalCount = await Stats.count();
         if (totalCount > 288) {
             const oldestToKeep = await Stats.findOne({
@@ -153,11 +155,10 @@ export const initDB = async () => {
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // ЛЕЧИМ ТАБЛИЦУ СТАТИСТИКИ (Пересоздаем её, чтобы убрать ошибку с null значениями)
-            await Stats.sync({ force: true });
-            console.log('--- [DB] STATS TABLE RESET ---');
+            // МЕНЯЕМ force: true на alter: true, чтобы не терять графики при рестарте
+            await Stats.sync({ alter: true });
+            console.log('--- [DB] STATS TABLE READY ---');
 
-            // Синхронизируем остальные таблицы без потери данных
             await sequelize.sync({ alter: true });
             console.log('--- [DB] SCHEMA SYNCHRONIZED ---');
 
@@ -173,6 +174,7 @@ export const initDB = async () => {
                 console.log('--- [DB] DEFAULT TASKS CREATED ---');
             }
 
+            // Интервал сбора статы раз в 5 минут
             setInterval(logSystemStats, 5 * 60 * 1000);
             await logSystemStats(); 
         }
