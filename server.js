@@ -10,7 +10,7 @@ import dayjs from 'dayjs';
 import EventEmitter from 'events'; 
 import os from 'os';
 
-// Ресурсы ядра
+// Ресурсы ядра из db.js
 import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB, Op } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -55,7 +55,9 @@ async function startNeuralOS() {
         console.clear();
         console.log('--- ⚡ NEURAL PULSE SYSTEM BOOTING ---');
 
+        // Инициализация БД
         await initDB();
+        
         const bot = new Telegraf(BOT_TOKEN);
 
         setupAPIRoutes(app);
@@ -80,16 +82,19 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SYSTEM PULSE (Каждые 10 секунд для SSE) ---
+        // --- 🩺 SYSTEM PULSE (SSE Трансляция) ---
+        // Теперь берем данные напрямую из GlobalStats, которые обновляют триггеры
         setInterval(async () => {
             try {
                 const memory = process.memoryUsage().rss / 1024 / 1024;
                 if (memory > 145 && global.gc) global.gc();
 
-                const gStats = await GlobalStats.findByPk(1);
-                const walletCount = await User.count({ where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } });
+                const [gStats, lastEntry] = await Promise.all([
+                    GlobalStats.findByPk(1),
+                    Stats.findOne({ order: [['id', 'DESC']] })
+                ]);
 
-                const cpuCount = os.cpus().length;
+                const cpuCount = os.cpus()?.length || 1;
                 const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
 
                 pulseEvents.emit('update', {
@@ -97,7 +102,7 @@ async function startNeuralOS() {
                     mem_usage: Math.round(memory),
                     server_load: parseFloat(load), 
                     user_count: gStats?.total_users || 0,
-                    active_wallets: walletCount || 0,
+                    active_wallets: lastEntry?.active_wallets || 0,
                     total_balance: parseFloat(gStats?.total_balance || 0)
                 });
             } catch (e) {
@@ -149,6 +154,8 @@ function setupAPIRoutes(app) {
             const config = MULTIPLIERS.find(m => currentBalance >= m.threshold) || { multi: 1.0 };
             const reward = Math.floor(count * config.multi);
             
+            // Increment сам по себе не всегда триггерит UPDATE в Sequelize так, как нам нужно
+            // Но с нашими SQL-триггерами в БД это сработает идеально
             await user.increment('balance', { by: reward });
             res.json({ s: 1, balance: currentBalance + reward });
         } catch (e) { res.status(500).send(); }
@@ -159,7 +166,7 @@ async function setupAdminPanel(app) {
     try {
         const { default: AdminJS, ComponentLoader } = await import('adminjs');
         const { default: AdminJSExpress } = await import('@adminjs/express');
-        const AdminJSSequelize = await import('@adminjs/sequelize');
+        const { default: AdminJSSequelize } = await import('@adminjs/sequelize');
 
         AdminJS.registerAdapter(AdminJSSequelize);
         const componentLoader = new ComponentLoader();
@@ -168,7 +175,8 @@ async function setupAdminPanel(app) {
             resources: [
                 { resource: User, options: { navigation: { name: 'CORE' }, listProperties: ['id', 'username', 'balance', 'wallet'] } },
                 { resource: Task, options: { navigation: { name: 'OS' } } },
-                { resource: Stats, options: { navigation: { name: 'OS' }, listProperties: ['createdAt', 'user_count', 'server_load'] } }
+                { resource: Stats, options: { navigation: { name: 'OS' }, listProperties: ['createdAt', 'user_count', 'server_load'] } },
+                { resource: GlobalStats, options: { navigation: { name: 'CORE' } } }
             ],
             rootPath: '/admin',
             componentLoader,
