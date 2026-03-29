@@ -133,64 +133,71 @@ const Dashboard = (props) => {
   return (
     <div style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace', padding: '20px' }}>
       <style>{`
-        /* 1. ГЛОБАЛЬНЫЙ ФОН ДЛЯ ВСЕХ ОКОН И МОДАЛОК */
-        html, body, #adminjs, .adminjs_Box, [data-css="app-loader"], section, main { 
+        /* 1. ГЛОБАЛЬНЫЙ ФОН И СКРЫТИЕ ФУТЕРА */
+        html, body, #adminjs, .adminjs_Box, [data-css="app-loader"], section, main, [data-testid="drawer"] { 
             background-color: ${CYBER.bg} !important; 
         }
+        footer, [data-testid="footer"], .adminjs_Footer { display: none !important; }
 
-        /* 2. НАВИГАЦИЯ (БОКОВАЯ ПАНЕЛЬ И ШАПКА) */
-        [data-testid="sidebar"], 
-        [data-testid="sidebar-header"],
-        [data-testid="sidebar-content"],
-        [data-testid="topbar"],
-        .adminjs_Sidebar, .adminjs_Topbar, .adminjs_Logo {
+        /* 2. НАВИГАЦИЯ И ШАПКА */
+        [data-testid="sidebar"], [data-testid="sidebar-header"], [data-testid="sidebar-content"],
+        [data-testid="topbar"], .adminjs_Sidebar, .adminjs_Topbar, .adminjs_Logo {
             background-color: ${CYBER.bg} !important;
-            background: ${CYBER.bg} !important;
             border-color: ${CYBER.border} !important;
         }
 
-        /* 3. ТАБЛИЦЫ И СПИСКИ РЕСУРСОВ (Users, Tasks и т.д.) */
-        .adminjs_Table, .adminjs_TableThead, .adminjs_TableTbody, .adminjs_TableRow, 
-        [data-testid="table"], [data-testid="table-row"], td, th, tr {
+        /* 3. ТАБЛИЦЫ И СПИСКИ */
+        .adminjs_Table, [data-testid="table"], td, th, tr {
             background-color: ${CYBER.card} !important;
-            background: ${CYBER.card} !important;
-            color: ${CYBER.text} !important;
-            border-bottom: 1px solid ${CYBER.border} !important;
+            color: #ffffff !important;
+            border-color: ${CYBER.border} !important;
         }
-
-        /* Заголовки таблиц */
         th, th *, [data-testid="table-cell-content"] {
             color: ${CYBER.primary} !important;
-            background-color: ${CYBER.card} !important;
-        }
-
-        /* 4. ВЫПАДАЮЩИЕ СПИСКИ И ФИЛЬТРЫ (Fix для белых окон) */
-        div[class*="DropDown"], div[class*="Select"], .adminjs_Select, 
-        [data-testid="filter-drawer"], [data-testid="drawer"] {
-            background-color: ${CYBER.card} !important;
-            border: 1px solid ${CYBER.border} !important;
-        }
-
-        /* 5. КНОПКИ (Cyberpunk Style) */
-        [data-testid="button-create"], [data-testid="filter-button"], .adminjs_Button {
-            border: 1px solid ${CYBER.primary} !important;
-            background: transparent !important;
-            color: ${CYBER.primary} !important;
             text-transform: uppercase;
+            font-size: 11px;
         }
 
-        [data-testid="button-create"]:hover {
-            box-shadow: 0 0 10px ${CYBER.primary} !important;
+        /* 4. ВИДИМОСТЬ ТЕКСТА И ИКОНОК */
+        /* Принудительно делаем все иконки светлыми */
+        svg, i, .adminjs_Icon, [data-testid="icon"] {
+            fill: #ffffff !important;
+            color: #ffffff !important;
         }
-
-        /* 6. ТЕКСТ */
-        [data-testid="sidebar-resource-link"], span, a, p, h1, h2, h3, label {
+        
+        /* Исправление надписей, которые стали невидимы */
+        span, p, label, .adminjs_Label, [data-testid="sidebar-resource-link"] {
             color: #c9d1d9 !important;
         }
+        
+        /* Заголовки страниц (Resources) */
+        [data-testid="page-header"] h1, [data-testid="page-header"] h2 {
+            color: ${CYBER.primary} !important;
+        }
 
-        /* 7. УДАЛЕНИЕ ФУТЕРА */
-        footer, [data-testid="footer"], .adminjs_Footer { 
-            display: none !important; 
+        /* 5. ФОРМЫ, ПОЛЯ ВВОДА И ВЫПАДАЮЩИЕ СПИСКИ */
+        input, select, textarea, .adminjs_Input, .adminjs_Select {
+            background-color: ${CYBER.bg} !important;
+            border: 1px solid ${CYBER.border} !important;
+            color: #ffffff !important;
+        }
+        
+        /* Фон выпадающих меню фильтров */
+        div[class*="DropDown"], div[class*="Select"], [data-testid="filter-drawer"] {
+            background-color: ${CYBER.card} !important;
+            color: #ffffff !important;
+        }
+
+        /* 6. КНОПКИ ДЕЙСТВИЙ (Edit, Show, Delete) */
+        [data-testid="action-button"], .adminjs_Button[data-variant="text"] {
+            color: ${CYBER.primary} !important;
+        }
+        
+        /* Главные кнопки (Create New, Apply Filters) */
+        [data-testid="button-create"], [data-testid="filter-button"], .adminjs_Button[data-variant="contained"] {
+            background: ${CYBER.primary}22 !important;
+            border: 1px solid ${CYBER.primary} !important;
+            color: ${CYBER.primary} !important;
         }
 
         @keyframes cyber-pulse {
