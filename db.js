@@ -76,7 +76,7 @@ export const Task = sequelize.define('tasks', {
     icon: { type: DataTypes.STRING, defaultValue: 'Task' }
 }, { timestamps: false });
 
-// --- 📊 МОДЕЛЬ: STATS ---
+// --- 📊 МОДЕЛЬ: STATS (История для графиков) ---
 export const Stats = sequelize.define('stats', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     user_count: { type: DataTypes.INTEGER, defaultValue: 0 },
@@ -84,12 +84,19 @@ export const Stats = sequelize.define('stats', {
     total_balance: { type: DataTypes.DECIMAL(24, 2), defaultValue: 0 },
     server_load: { type: DataTypes.FLOAT },
     mem_usage: { type: DataTypes.FLOAT },
-    db_latency: { type: DataTypes.FLOAT } // Изменено на FLOAT для точности
+    db_latency: { type: DataTypes.FLOAT }
 }, { 
     timestamps: true, 
     tableName: 'stats',
     underscored: false 
 });
+
+// --- 📈 МОДЕЛЬ: GLOBAL_STATS (Текущие агрегаты через триггеры) ---
+export const GlobalStats = sequelize.define('global_stats', {
+    id: { type: DataTypes.INTEGER, primaryKey: true },
+    total_balance: { type: DataTypes.DECIMAL(32, 2), defaultValue: 0 },
+    total_users: { type: DataTypes.INTEGER, defaultValue: 0 }
+}, { timestamps: false, tableName: 'global_stats' });
 
 // --- 🔗 СВЯЗИ ---
 User.hasMany(User, { as: 'ReferralList', foreignKey: 'referred_by' });
@@ -97,39 +104,38 @@ User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
 // --- 📊 СБОР ТЕЛЕМЕТРИИ ---
 export const logSystemStats = async () => {
-    // Выполняем только на главном процессе (Primary)
     const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
     if (!isPrimary) return;
 
     try {
         const start = Date.now();
         
-        const [userCount, walletCount, sumBalance] = await Promise.all([
-            User.count(),
-            User.count({ 
-                where: { 
-                    wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } 
-                } 
-            }),
-            User.sum('balance').then(sum => Number(sum) || 0)
-        ]);
+        // ⚡️ Забираем готовые данные из триггера (намного быстрее чем SUM)
+        const gStats = await GlobalStats.findByPk(1);
+        const totalBalance = gStats ? parseFloat(gStats.total_balance) : 0;
+        const totalUsers = gStats ? gStats.total_users : 0;
+
+        // Количество кошельков считаем отдельно (обычно их меньше, чем юзеров)
+        const walletCount = await User.count({ 
+            where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } 
+        });
 
         const latency = Date.now() - start;
         const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
         const cpuCount = os.cpus().length;
         const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
 
-        // Создаем запись
+        // Сохраняем слепок в историю
         await Stats.create({
-            user_count: userCount || 0,
-            active_wallets: walletCount || 0,
-            total_balance: sumBalance,
+            user_count: totalUsers,
+            active_wallets: walletCount,
+            total_balance: totalBalance,
             server_load: parseFloat(load),
             mem_usage: parseFloat(mem),
             db_latency: parseFloat(latency)
         });
         
-        // Ротация данных (храним 288 записей = 24 часа при 5-мин интервале)
+        // Ротация: оставляем историю за последние 24 часа
         const totalCount = await Stats.count();
         if (totalCount > 288) {
             const oldestToKeep = await Stats.findOne({
@@ -137,14 +143,12 @@ export const logSystemStats = async () => {
                 order: [['id', 'ASC']]
             });
             if (oldestToKeep) {
-                await Stats.destroy({
-                    where: { id: { [Op.lt]: oldestToKeep.id } }
-                });
+                await Stats.destroy({ where: { id: { [Op.lt]: oldestToKeep.id } } });
             }
         }
-        console.log(`--- [TELEMETRY] ${new Date().toISOString()} | Users: ${userCount} | Latency: ${latency}ms`);
+        console.log(`--- [TELEMETRY] ${new Date().toISOString()} | Users: ${totalUsers} | Balance: ${totalBalance}`);
     } catch (e) {
-        console.error('--- [TELEMETRY] LOGGING ERROR:', e.message);
+        console.error('--- [TELEMETRY] ERROR:', e.message);
     }
 };
 
@@ -157,10 +161,16 @@ export const initDB = async () => {
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // alter: true бережно обновляет схему без удаления данных
+            // Синхронизация таблиц
+            await GlobalStats.sync({ alter: true });
             await Stats.sync({ alter: true });
             await sequelize.sync({ alter: true });
-            console.log('--- [DB] SCHEMA SYNCHRONIZED ---');
+            
+            // Инициализация первой строки агрегатора, если её нет
+            await GlobalStats.findOrCreate({ 
+                where: { id: 1 }, 
+                defaults: { total_balance: 0, total_users: 0 } 
+            });
 
             await sessionStore.sync(); 
             
@@ -171,13 +181,9 @@ export const initDB = async () => {
                     { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
                     { title: 'Подключить TON кошелек', reward: 2500, url: '', icon: 'Wallet' }
                 ]);
-                console.log('--- [DB] DEFAULT TASKS CREATED ---');
             }
 
-            // Запуск цикла сбора данных
             setInterval(logSystemStats, 5 * 60 * 1000);
-            
-            // Моментальный запуск при старте
             await logSystemStats(); 
         }
 
