@@ -133,31 +133,44 @@ const Dashboard = (props) => {
   return (
     <div style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace', padding: '20px' }}>
       <style>{`
-        /* ПРИНУДИТЕЛЬНАЯ ТЕМНАЯ ТЕМА ДЛЯ ВСЕЙ АДМИНКИ */
+        /* ПОЛНАЯ ТЕМНАЯ ТЕМА ДЛЯ ВСЕЙ СИСТЕМЫ */
         #adminjs, body, html, .adminjs_Box, [data-css="app-loader"] { 
             background-color: ${CYBER.bg} !important; 
         }
 
-        /* Исправление белой боковой панели и шапки */
-        [data-testid="sidebar"], [data-testid="topbar"], .adminjs_Sidebar, .adminjs_Topbar, [data-testid="sidebar-header"] {
+        /* Исправление белого блока под логотипом и в боковой панели */
+        [data-testid="sidebar-header"], 
+        .adminjs_Logo, 
+        [data-testid="sidebar"], 
+        section[class*="Sidebar"],
+        [data-testid="topbar"] {
             background-color: ${CYBER.bg} !important;
             border-color: ${CYBER.border} !important;
         }
 
-        /* Исправление белых списков ресурсов (Users и т.д.) */
-        .adminjs_Table, .adminjs_TableThead, .adminjs_TableTbody, .adminjs_TableRow, td, th {
+        /* Исправление белых таблиц (Users, Tasks и др.) */
+        .adminjs_Table, 
+        .adminjs_TableThead, 
+        .adminjs_TableTbody, 
+        .adminjs_TableRow, 
+        [data-testid="table-row"],
+        td, th {
             background-color: ${CYBER.card} !important;
             color: ${CYBER.text} !important;
-            border-color: ${CYBER.border} !important;
+            border-bottom: 1px solid ${CYBER.border} !important;
         }
 
-        /* Текст в навигации */
-        [data-testid="sidebar-resource-link"], [data-testid="sidebar-section-title"], a, span {
+        /* Убираем футер с белым фоном */
+        footer, [data-testid="footer"], .adminjs_Footer { 
+            display: none !important; 
+        }
+
+        /* Текст и иконки в навигации */
+        [data-testid="sidebar-resource-link"], 
+        [data-testid="sidebar-section-title"], 
+        span, a {
             color: #c9d1d9 !important;
         }
-
-        /* Убираем футер AdminJS */
-        footer, [data-testid="footer"], .adminjs_Footer { display: none !important; }
 
         @keyframes cyber-pulse {
           0%, 100% { transform: scaleY(0.5); opacity: 0.5; }
