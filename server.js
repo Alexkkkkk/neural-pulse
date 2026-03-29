@@ -98,9 +98,10 @@ async function startNeuralOS() {
                     User.sum('balance')
                 ]);
 
+                // Логируем состояние в таблицу Stats для графиков истории
                 await logSystemStats(); 
                 
-                // Эмитим событие с ключами, которые Dashboad ожидает увидеть в SSE
+                // Эмитим событие. Dashboard.jsx поймает это через SSE
                 pulseEvents.emit('update', {
                     time: dayjs().format('HH:mm:ss'),
                     mem_usage: Math.round(memory),
@@ -108,14 +109,14 @@ async function startNeuralOS() {
                     db_latency: Math.floor(Math.random() * 4) + 1,
                     totalUsers: totalUsers || 0,
                     walletsLinked: walletsLinked || 0,
-                    totalTon: ((Number(sumResult) || 0) / 1e9).toFixed(2)
+                    totalTon: ((Number(sumResult) || 0) / 1e9).toFixed(2) // Перевод в TON
                 });
             } catch (e) {
                 logger.error("Pulse Loop Error", e);
             }
         }, 10000); 
 
-        // Очистка старой статистики раз в час
+        // Очистка старой статистики раз в час (храним последние 24 часа)
         setInterval(async () => {
             try {
                 await Stats.destroy({ where: { createdAt: { [Op.lt]: dayjs().subtract(24, 'hour').toDate() } } });
@@ -204,7 +205,6 @@ async function setupAdminPanel(app) {
                         Stats.findAll({ limit: 30, order: [['createdAt', 'DESC']] })
                     ]);
 
-                    // Эти данные придут в Dashboard один раз при загрузке страницы
                     return { 
                         totalUsers: totalUsers || 0, 
                         dailyUsers: dailyUsers || 0, 
@@ -212,7 +212,7 @@ async function setupAdminPanel(app) {
                         totalTon: ((Number(sumResult) || 0) / 1e9).toFixed(2),
                         history: historyData.reverse().map(s => ({ 
                             time: dayjs(s.createdAt).format('HH:mm'), 
-                            user_count: s.user_count || 0,
+                            user_count: s.user_count || 0, // Синхронизировано с historyKey="user_count"
                             server_load: Number(s.server_load) || 0, 
                             mem_usage: Number(s.mem_usage) || 0,
                             db_latency: Number(s.db_latency) || 5,
