@@ -133,43 +133,64 @@ const Dashboard = (props) => {
   return (
     <div style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace', padding: '20px' }}>
       <style>{`
-        /* ПОЛНАЯ ТЕМНАЯ ТЕМА ДЛЯ ВСЕЙ СИСТЕМЫ */
-        #adminjs, body, html, .adminjs_Box, [data-css="app-loader"] { 
+        /* 1. ГЛОБАЛЬНЫЙ ФОН ДЛЯ ВСЕХ ОКОН И МОДАЛОК */
+        html, body, #adminjs, .adminjs_Box, [data-css="app-loader"], section, main { 
             background-color: ${CYBER.bg} !important; 
         }
 
-        /* Исправление белого блока под логотипом и в боковой панели */
-        [data-testid="sidebar-header"], 
-        .adminjs_Logo, 
+        /* 2. НАВИГАЦИЯ (БОКОВАЯ ПАНЕЛЬ И ШАПКА) */
         [data-testid="sidebar"], 
-        section[class*="Sidebar"],
-        [data-testid="topbar"] {
+        [data-testid="sidebar-header"],
+        [data-testid="sidebar-content"],
+        [data-testid="topbar"],
+        .adminjs_Sidebar, .adminjs_Topbar, .adminjs_Logo {
             background-color: ${CYBER.bg} !important;
+            background: ${CYBER.bg} !important;
             border-color: ${CYBER.border} !important;
         }
 
-        /* Исправление белых таблиц (Users, Tasks и др.) */
-        .adminjs_Table, 
-        .adminjs_TableThead, 
-        .adminjs_TableTbody, 
-        .adminjs_TableRow, 
-        [data-testid="table-row"],
-        td, th {
+        /* 3. ТАБЛИЦЫ И СПИСКИ РЕСУРСОВ (Users, Tasks и т.д.) */
+        .adminjs_Table, .adminjs_TableThead, .adminjs_TableTbody, .adminjs_TableRow, 
+        [data-testid="table"], [data-testid="table-row"], td, th, tr {
             background-color: ${CYBER.card} !important;
+            background: ${CYBER.card} !important;
             color: ${CYBER.text} !important;
             border-bottom: 1px solid ${CYBER.border} !important;
         }
 
-        /* Убираем футер с белым фоном */
-        footer, [data-testid="footer"], .adminjs_Footer { 
-            display: none !important; 
+        /* Заголовки таблиц */
+        th, th *, [data-testid="table-cell-content"] {
+            color: ${CYBER.primary} !important;
+            background-color: ${CYBER.card} !important;
         }
 
-        /* Текст и иконки в навигации */
-        [data-testid="sidebar-resource-link"], 
-        [data-testid="sidebar-section-title"], 
-        span, a {
+        /* 4. ВЫПАДАЮЩИЕ СПИСКИ И ФИЛЬТРЫ (Fix для белых окон) */
+        div[class*="DropDown"], div[class*="Select"], .adminjs_Select, 
+        [data-testid="filter-drawer"], [data-testid="drawer"] {
+            background-color: ${CYBER.card} !important;
+            border: 1px solid ${CYBER.border} !important;
+        }
+
+        /* 5. КНОПКИ (Cyberpunk Style) */
+        [data-testid="button-create"], [data-testid="filter-button"], .adminjs_Button {
+            border: 1px solid ${CYBER.primary} !important;
+            background: transparent !important;
+            color: ${CYBER.primary} !important;
+            text-transform: uppercase;
+        }
+
+        [data-testid="button-create"]:hover {
+            box-shadow: 0 0 10px ${CYBER.primary} !important;
+        }
+
+        /* 6. ТЕКСТ */
+        [data-testid="sidebar-resource-link"], span, a, p, h1, h2, h3, label {
             color: #c9d1d9 !important;
+        }
+
+        /* 7. УДАЛЕНИЕ ФУТЕРА */
+        footer, [data-testid="footer"], .adminjs_Footer { 
+            display: none !important; 
         }
 
         @keyframes cyber-pulse {
