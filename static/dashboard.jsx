@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-// Цветовая схема Neural Pulse OS
+// --- 🌐 NEURAL PULSE OS COLOR SYSTEM ---
 const CYBER = {
   bg: '#0b0e14',
   card: '#161b22',
@@ -14,7 +14,7 @@ const CYBER = {
   border: '#30363d'
 };
 
-// Вспомогательный компонент для отрисовки линии графика внутри карточки
+// Вспомогательный компонент: Мини-график (SVG)
 const MiniChart = ({ data, color, height = 30 }) => {
   if (!data || data.length < 2) return <div style={{ height: height + 10 }} />;
   
@@ -56,10 +56,9 @@ const Dashboard = (props) => {
   });
 
   useEffect(() => {
-    // Функция получения свежих данных от сервера через ApiClient AdminJS
+    // Получение данных через ApiClient AdminJS
     const fetchStats = async () => {
       try {
-        // Проверка наличия ApiClient (доступен в контексте AdminJS)
         if (!window.AdminJS?.ApiClient) return;
         const api = new window.AdminJS.ApiClient();
         const response = await api.getDashboard();
@@ -86,7 +85,7 @@ const Dashboard = (props) => {
       }
     };
 
-    // Анимация загрузки системных ресурсов при старте
+    // Анимация загрузки (40ms за шаг)
     const loader = setInterval(() => {
       setLoadingProgress(prev => {
         if (prev >= 100) {
@@ -98,11 +97,10 @@ const Dashboard = (props) => {
       });
     }, 40);
 
-    // Основные интервалы: данные (10с) и сканирующая полоса (60мс)
-    const dataInterval = setInterval(fetchStats, 10000);
+    const dataInterval = setInterval(fetchStats, 10000); // 10 сек обновление
     const animInterval = setInterval(() => setScanPos(p => (p + 1) % 100), 60);
     
-    fetchStats(); // Первый запуск
+    fetchStats();
     
     return () => { 
       clearInterval(loader); 
@@ -111,6 +109,7 @@ const Dashboard = (props) => {
     };
   }, []);
 
+  // Компонент карточки с данными и мини-графиком
   const StatCard = ({ label, value, unit, color, subValue, historyKey }) => {
     const chartData = history.map(h => h[historyKey] || 0);
     return (
@@ -143,7 +142,7 @@ const Dashboard = (props) => {
     );
   };
 
-  // Экран загрузки (Boot Sequence)
+  // Экран загрузки (Sequencer)
   if (!isReady) {
     return (
       <div style={{ background: CYBER.bg, color: CYBER.primary, height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' }}>
@@ -161,14 +160,16 @@ const Dashboard = (props) => {
   return (
     <div style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace', padding: '20px' }}>
       <style>{`
+        /* Сброс стилей AdminJS для полной темноты */
         #adminjs, body, html { background-color: ${CYBER.bg} !important; }
+        .adminjs_Box { background-color: ${CYBER.bg} !important; }
         @keyframes cyber-pulse {
           0%, 100% { transform: scaleY(0.5); opacity: 0.5; }
           50% { transform: scaleY(1.2); opacity: 1; }
         }
       `}</style>
 
-      {/* ВЕРХНИЙ HUD */}
+      {/* --- HUD HEADER --- */}
       <div style={{ background: CYBER.card, padding: '25px', borderRadius: '4px', border: `1px solid ${CYBER.primary}44`, position: 'relative', overflow: 'hidden', marginBottom: '20px' }}>
         <div style={{ position: 'absolute', top: 0, left: `${scanPos}%`, width: '1px', height: '100%', background: CYBER.primary, boxShadow: `0 0 15px ${CYBER.primary}`, opacity: 0.3, zIndex: 1 }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 2 }}>
@@ -183,7 +184,7 @@ const Dashboard = (props) => {
         </div>
       </div>
 
-      {/* СЕТКА КАРТОЧЕК С ГРАФИКАМИ */}
+      {/* --- GRID: STATS & CHARTS --- */}
       <div style={{ display: 'flex', flexWrap: 'wrap', margin: '0 -10px' }}>
         <StatCard label="TOTAL_AGENTS" value={stats.totalUsers} unit="U" color={CYBER.primary} historyKey="user_count" />
         <StatCard label="NEW_PLAYERS_24H" value={stats.dailyUsers} unit="+" color={CYBER.success} subValue="↑ ACTIVITY_GROWTH" historyKey="user_count" />
@@ -193,9 +194,9 @@ const Dashboard = (props) => {
         <StatCard label="SIGNAL_LATENCY" value={stats.latency} unit="MS" color={CYBER.danger} historyKey="db_latency" />
       </div>
 
-      {/* НИЖНИЕ ПАНЕЛИ: МОНИТОР И ЛОГИ */}
+      {/* --- LOWER PANELS: WAVEFORM & LOGS --- */}
       <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '20px', gap: '20px' }}>
-        {/* Анимация волны (Спектрограмма) */}
+        {/* NETWORK WAVEFORM */}
         <div style={{ flex: '2 1 400px', background: CYBER.card, height: '250px', border: `1px solid ${CYBER.border}`, borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', position: 'relative' }}>
           <div style={{ position: 'absolute', top: '15px', left: '15px', color: CYBER.primary, fontSize: '10px', opacity: 0.5, letterSpacing: '2px' }}>NETWORK_WAVEFORM_MONITOR</div>
           {[...Array(40)].map((_, i) => (
@@ -206,7 +207,7 @@ const Dashboard = (props) => {
           ))}
         </div>
 
-        {/* Живые логи системы */}
+        {/* LIVE SYSTEM LOGS */}
         <div style={{ flex: '1 1 300px', background: '#05070a', height: '250px', border: `1px solid ${CYBER.border}`, padding: '20px', overflow: 'hidden', borderRadius: '4px' }}>
           <div style={{ color: CYBER.success, fontSize: '10px', marginBottom: '15px', borderBottom: `1px solid ${CYBER.border}`, paddingBottom: '8px', letterSpacing: '1px' }}>LIVE_SYSTEM_LOGS</div>
           <div style={{ fontSize: '10px', lineHeight: '1.6' }}>
