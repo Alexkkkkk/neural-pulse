@@ -45,7 +45,7 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
-    // Раздача статики
+    // Раздача статики (дизайн, лого, фронтенд)
     app.use('/static', express.static(path.join(__dirname, 'static'), {
         maxAge: '1h',
         etag: true
@@ -175,14 +175,19 @@ async function setupAdminPanel(app) {
                         User.sum('balance'),
                         Stats.findAll({ limit: 30, order: [['createdAt', 'DESC']] })
                     ]);
+                    
                     return { 
-                        totalUsers, dailyUsers, walletsLinked, 
+                        totalUsers, 
+                        dailyUsers, 
+                        walletsLinked, 
                         totalTon: ((sumBalance || 0) / 1000000000).toFixed(2),
                         history: historyData.reverse().map(s => ({ 
                             time: dayjs(s.createdAt).format('HH:mm'), 
                             user_count: s.user_count,
                             server_load: s.server_load, 
-                            mem_usage: s.mem_usage
+                            mem_usage: s.mem_usage,
+                            db_latency: s.db_latency || 5,
+                            active_wallets: walletsLinked
                         })) 
                     };
                 }
@@ -200,49 +205,25 @@ async function setupAdminPanel(app) {
                         border: '#30363d',
                     },
                     custom: `
-                        /* ГЛОБАЛЬНЫЙ ТЕМНЫЙ ФОН */
                         body, html, #adminjs, .adminjs_Box { 
                             background-color: #0b0e14 !important; 
                             color: #ffffff !important; 
                             font-family: 'monospace' !important; 
                         }
-
-                        /* ФИКС БЕЛОЙ НАВИГАЦИИ И МОБИЛЬНОГО МЕНЮ */
-                        section[data-testid="sidebar"], 
-                        div[data-css="sidebar"], 
-                        aside, 
-                        .adminjs_Drawer,
-                        div[role="group"] { 
+                        section[data-testid="sidebar"], div[data-css="sidebar"], aside, .adminjs_Drawer { 
                             background-color: #0b0e14 !important; 
                             border-right: 1px solid #30363d !important; 
                         }
-
-                        /* ШРИФТЫ И ССЫЛКИ В МЕНЮ */
                         .adminjs_Label { color: #8b949e !important; text-transform: uppercase; font-size: 11px; }
-                        a[data-testid="sidebar-resource-link"] { color: #c9d1d9 !important; }
-                        a[data-testid="sidebar-resource-link"]:hover { background: #1c2128 !important; color: #00f2fe !important; }
-                        
-                        /* ВЕРХНЯЯ ПАНЕЛЬ (TOPBAR) */
                         header[data-testid="topbar"] { 
                             background: #0b0e14 !important; 
                             border-bottom: 1px solid #30363d !important; 
                         }
-
-                        /* КАРТОЧКИ И ТАБЛИЦЫ */
-                        .adminjs_Card, .adminjs_Table, .adminjs_TableThead, .adminjs_TableTbody { 
+                        .adminjs_Card, .adminjs_Table { 
                             background: #161b22 !important; 
                             border-color: #30363d !important; 
                         }
-                        .adminjs_TableCell { color: #ffffff !important; border-bottom: 1px solid #30363d !important; }
-
-                        /* ИНПУТЫ */
-                        input, select, textarea { background: #1c2128 !important; color: white !important; border: 1px solid #30363d !important; }
-
-                        /* УДАЛЕНИЕ ФУТЕРА */
                         footer, .adminjs_Footer { display: none !important; }
-                        
-                        /* ИКОНКИ */
-                        svg { fill: #8b949e !important; }
                     `,
                 }
             }
