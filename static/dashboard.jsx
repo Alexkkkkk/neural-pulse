@@ -38,7 +38,9 @@ const Dashboard = (props) => {
   const [isReady, setIsReady] = useState(false);
   const [logs, setLogs] = useState(['> INITIALIZING_BOOT_SEQUENCE...', '> KERNEL_LOADED', '> SYNCING_WITH_TON_GATEWAY...']);
   const [scanPos, setScanPos] = useState(0);
-  const [history, setHistory] = useState([]);
+  
+  // Инициализация истории из пропсов сервера
+  const [history, setHistory] = useState(props.data?.history || []);
 
   const [stats, setStats] = useState({
     totalUsers: props.data?.totalUsers || 0,
@@ -55,7 +57,7 @@ const Dashboard = (props) => {
   };
 
   useEffect(() => {
-    // 1. Инициализация загрузки (Boot Animation)
+    // 1. Анимация загрузки
     const loader = setInterval(() => {
       setLoadingProgress(prev => {
         if (prev >= 100) {
@@ -63,25 +65,27 @@ const Dashboard = (props) => {
           setTimeout(() => setIsReady(true), 200);
           return 100;
         }
-        return prev + 5;
+        return prev + 10;
       });
-    }, 40);
+    }, 30);
 
     // 2. Подключение к Real-time потоку (SSE)
-    // Сервер будет слать данные в /api/admin/stream
     const eventSource = new EventSource('/api/admin/stream');
     
     eventSource.onmessage = (event) => {
       const pulse = JSON.parse(event.data);
+      
       setStats(prev => ({
         ...prev,
-        cpu: pulse.server_load,
+        cpu: Number(pulse.server_load),
         mem: pulse.mem_usage,
-        latency: pulse.db_latency
+        latency: pulse.db_latency,
+        totalUsers: pulse.totalUsers || prev.totalUsers,
+        walletsLinked: pulse.walletsLinked || prev.walletsLinked
       }));
 
-      // Обновляем графики "на лету"
-      setHistory(prev => [...prev.slice(-20), pulse]);
+      // Добавляем новую точку в историю и удаляем старую (храним 30 точек)
+      setHistory(prev => [...prev.slice(-29), pulse]);
 
       if (Math.random() > 0.8) {
         const events = ['BLOCK_VALIDATED', 'WS_PULSE_SENT', 'PEER_CONNECTED', 'CACHE_OPTIMIZED'];
@@ -103,7 +107,7 @@ const Dashboard = (props) => {
   }, []);
 
   const StatCard = ({ label, value, unit, color, subValue, historyKey }) => {
-    const chartData = history.map(h => h[historyKey] || 0);
+    const chartData = history.map(h => Number(h[historyKey]) || 0);
     return (
       <div style={{ 
         flex: '1 1 240px', margin: '10px', padding: '20px', 
@@ -122,7 +126,7 @@ const Dashboard = (props) => {
         </div>
         <div style={{ width: '100%', height: '2px', background: '#000', marginTop: '8px' }}>
           <div style={{ 
-            width: `${Math.min((parseFloat(value) / (unit === '%' ? 100 : 1000)) * 100, 100)}%`, 
+            width: `${Math.min((parseFloat(value) / (unit === '%' ? 100 : 2000)) * 100, 100)}%`, 
             height: '100%', background: color, boxShadow: `0 0 10px ${color}`, transition: 'width 1s ease' 
           }} />
         </div>
@@ -147,8 +151,7 @@ const Dashboard = (props) => {
   return (
     <div style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace', padding: '20px' }}>
       <style>{`
-        /* Форсируем темную тему для AdminJS элементов */
-        #adminjs, section, [data-testid="Box"] { background-color: ${CYBER.bg} !important; }
+        #adminjs, section, [data-testid="Box"], .adminjs_Box { background-color: ${CYBER.bg} !important; }
         
         .glitch-title:hover {
           animation: glitch 0.3s cubic-bezier(.25,.46,.45,.94) both infinite;
@@ -185,7 +188,7 @@ const Dashboard = (props) => {
         </div>
       </div>
 
-      {/* --- GRID --- */}
+      {/* --- GRID (Ключи синхронизированы с main.js) --- */}
       <div style={{ display: 'flex', flexWrap: 'wrap', margin: '0 -10px' }}>
         <StatCard label="TOTAL_AGENTS" value={stats.totalUsers} unit="U" color={CYBER.primary} historyKey="user_count" />
         <StatCard label="NEW_PLAYERS" value={stats.dailyUsers} unit="+" color={CYBER.success} historyKey="user_count" />
