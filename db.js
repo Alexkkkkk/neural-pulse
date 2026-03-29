@@ -91,4 +91,109 @@ export const Stats = sequelize.define('stats', {
     underscored: false 
 });
 
-// --- 📈 МОДЕЛЬ: GLOBAL_STATS (Таблица-агрегатор для триггеров
+// --- 📈 МОДЕЛЬ: GLOBAL_STATS (Таблица-агрегатор для триггеров) ---
+export const GlobalStats = sequelize.define('global_stats', {
+    id: { type: DataTypes.INTEGER, primaryKey: true },
+    total_balance: { type: DataTypes.DECIMAL(32, 2), defaultValue: 0 },
+    total_users: { type: DataTypes.INTEGER, defaultValue: 0 }
+}, { 
+    timestamps: false, 
+    tableName: 'global_stats',
+    underscored: true 
+});
+
+// --- 🔗 СВЯЗИ ---
+User.hasMany(User, { as: 'ReferralList', foreignKey: 'referred_by' });
+User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
+
+// --- 📊 СБОР ТЕЛЕМЕТРИИ ---
+export const logSystemStats = async () => {
+    const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
+    if (!isPrimary) return;
+
+    try {
+        const start = Date.now();
+        
+        // Получаем мгновенные данные из агрегатора
+        const gStats = await GlobalStats.findByPk(1);
+        const totalBalance = gStats ? parseFloat(gStats.total_balance) : 0;
+        const totalUsers = gStats ? gStats.total_users : 0;
+
+        const walletCount = await User.count({ 
+            where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } 
+        });
+
+        const latency = Date.now() - start;
+        const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
+        const cpuCount = os.cpus().length;
+        const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
+
+        await Stats.create({
+            user_count: totalUsers,
+            active_wallets: walletCount,
+            total_balance: totalBalance,
+            server_load: parseFloat(load),
+            mem_usage: parseFloat(mem),
+            db_latency: parseFloat(latency)
+        });
+        
+        const totalCount = await Stats.count();
+        if (totalCount > 288) {
+            const oldestToKeep = await Stats.findOne({
+                offset: totalCount - 288,
+                order: [['id', 'ASC']]
+            });
+            if (oldestToKeep) {
+                await Stats.destroy({ where: { id: { [Op.lt]: oldestToKeep.id } } });
+            }
+        }
+    } catch (e) {
+        console.error('--- [TELEMETRY] ERROR:', e.message);
+    }
+};
+
+// --- 🚀 ИНИЦИАЛИЗАЦИЯ ---
+export const initDB = async () => {
+    try {
+        await sequelize.authenticate();
+        console.log('--- [DB] CONNECTED ---');
+
+        const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
+
+        if (isPrimary) {
+            // Синхронизация схем
+            await GlobalStats.sync({ alter: true });
+            await Stats.sync({ alter: true });
+            await User.sync({ alter: true });
+            await Task.sync({ alter: true });
+            await sequelize.sync({ alter: true });
+            
+            // Инициализация агрегатора (ID 1)
+            await GlobalStats.findOrCreate({ 
+                where: { id: 1 }, 
+                defaults: { total_balance: 0, total_users: 0 } 
+            });
+
+            await sessionStore.sync(); 
+            
+            const taskCount = await Task.count();
+            if (taskCount === 0) {
+                await Task.bulkCreate([
+                    { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
+                    { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
+                    { title: 'Подключить TON кошелек', reward: 2500, url: '', icon: 'Wallet' }
+                ]);
+            }
+
+            setInterval(logSystemStats, 5 * 60 * 1000);
+            await logSystemStats(); 
+        }
+
+        return true;
+    } catch (error) {
+        console.error('--- [DB] CRITICAL ERROR:', error.message);
+        throw error;
+    }
+};
+
+export { Op };
