@@ -76,17 +76,18 @@ const Dashboard = (props) => {
   const [editingUser, setEditingUser] = useState(null);
   const logRef = useRef(null);
   
-  const [logs, setLogs] = useState(['> MOUNTING_VOLUMES...', '> CONNECTING_TON...', '> MONITORING_ACTIVE']);
+  const [logs, setLogs] = useState(['> MOUNTING_VOLUMES...', '> CONNECTING_TON...', '> AIRDROP_SYSTEM_READY']);
   
   const [users, setUsers] = useState(props.data?.usersList || [
     { id: '@alex_neo', ton: 65.5, refs: 12, taps: 845000, status: 'active' },
     { id: '@kander_dev', ton: 12.0, refs: 45, taps: 2100000, status: 'active' },
-    { id: '@guest_01', ton: 0.0, refs: 2, taps: 15000, status: 'active' }
+    { id: '@guest_01', ton: 0.0, refs: 2, taps: 15000, status: 'active' },
+    { id: '@crypto_bot', ton: 1.5, refs: 0, taps: 120000, status: 'active' }
   ]);
 
   const [stats, setStats] = useState({
     users: users.length,
-    tonPool: 65.5,
+    tonPool: 1250.0,
     load: 10.7,
     lat: 101,
     ram: 83.8,
@@ -122,6 +123,28 @@ const Dashboard = (props) => {
   }, [users.length, stats.tonPool, stats.load, stats.lat]);
 
   useEffect(() => { logRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [logs]);
+
+  // --- AIRDROP LOGIC ---
+  const runAirdrop = (type) => {
+    let count = 0;
+    setUsers(prev => prev.map(u => {
+      if (u.status === 'banned') return u;
+      
+      let reward = 0;
+      if (type === 'taps' && u.taps > 500000) reward = 10;
+      if (type === 'refs' && u.refs > 10) reward = u.refs * 1.5;
+      if (type === 'mass') reward = 1;
+
+      if (reward > 0) {
+        count++;
+        return { ...u, ton: u.ton + reward };
+      }
+      return u;
+    }));
+
+    playSound(900, 'sine', 0.3);
+    setLogs(prev => [...prev, `> AIRDROP_${type.toUpperCase()}: SUCCESSFUL FOR ${count} AGENTS`]);
+  };
 
   const toggleBan = useCallback((userId) => {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: u.status === 'banned' ? 'active' : 'banned' } : u));
@@ -177,9 +200,10 @@ const Dashboard = (props) => {
         .unit { font-size: 10px; margin-left: 4px; opacity: 0.5; }
 
         .op-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .cyber-btn { background: #fff; color: #000; border: none; padding: 12px; font-size: 11px; font-family: inherit; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 2px; transition: 0.2s; }
+        .cyber-btn { background: #fff; color: #000; border: none; padding: 12px; font-size: 11px; font-family: inherit; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 2px; transition: 0.2s; text-transform: uppercase; }
         .cyber-btn:active { transform: scale(0.95); opacity: 0.8; }
         .btn-danger { background: ${CYBER.warning}; }
+        .btn-airdrop { background: ${CYBER.success}; color: #000; font-size: 9px; padding: 8px; }
 
         .search-bar { width: 100%; background: #000; border: 1px solid ${CYBER.border}; color: ${CYBER.primary}; padding: 12px; margin-bottom: 15px; font-family: inherit; border-radius: 2px; }
         .cyber-table-wrap { overflow-x: auto; }
@@ -226,8 +250,8 @@ const Dashboard = (props) => {
           <div style={{ fontSize: '9px', opacity: 0.6, marginTop: '4px' }}>// ACCESS_ROOT // NODE: NL4 // OS: 9.6</div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '20px', color: CYBER.ton, fontWeight: 'bold' }}>1 000 $NP</div>
-          <div className="stat-label">TOTAL_LIQUIDITY</div>
+          <div style={{ fontSize: '20px', color: CYBER.ton, fontWeight: 'bold' }}>{stats.tonPool.toFixed(0)} TON</div>
+          <div className="stat-label">AIRDROP_RESERVE</div>
         </div>
       </div>
 
@@ -246,8 +270,8 @@ const Dashboard = (props) => {
               <MiniChart data={history.map(h => h.user_count)} color={CYBER.primary} />
             </div>
             <div className="card">
-              <div className="stat-label" style={{ color: CYBER.ton }}>TON_Pool</div>
-              <div className="stat-value">{stats.tonPool.toFixed(1)}<span className="unit">💎</span></div>
+              <div className="stat-label" style={{ color: CYBER.ton }}>Pool_Status</div>
+              <div className="stat-value">{(stats.tonPool/2000*100).toFixed(1)}<span className="unit">%</span></div>
               <MiniChart data={history.map(h => h.total_balance)} color={CYBER.ton} />
             </div>
             <div className="card">
@@ -263,21 +287,6 @@ const Dashboard = (props) => {
                 {Math.floor(stats.lat)}<span className="unit">ms</span>
               </div>
               <MiniChart data={history.map(h => h.db_latency)} color={CYBER.danger} />
-            </div>
-            
-            <div className="card">
-              <div className="stat-label">RAM_Usage</div>
-              <div className="stat-value">{stats.ram.toFixed(1)}<span className="unit">MB</span></div>
-              <div className="progress-mini">
-                <div className="progress-bar" style={{ width: `${(stats.ram/256)*100}%`, background: stats.ram > 200 ? CYBER.danger : CYBER.primary }} />
-              </div>
-            </div>
-            <div className="card">
-              <div className="stat-label">Disk_Space</div>
-              <div className="stat-value">{stats.disk}<span className="unit">%</span></div>
-              <div className="progress-mini">
-                <div className="progress-bar" style={{ width: `${stats.disk}%`, background: CYBER.warning }} />
-              </div>
             </div>
           </div>
 
@@ -306,6 +315,14 @@ const Dashboard = (props) => {
 
       {activeTab === 'airdrop' && (
         <div className="card" style={{ padding: '15px' }}>
+          {/* Quick Airdrop Actions */}
+          <div className="stat-label" style={{ marginBottom: '10px' }}>Quick_Distribute</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '20px' }}>
+            <button className="cyber-btn btn-airdrop" onClick={() => runAirdrop('taps')}>🏆 Taps (500k+)</button>
+            <button className="cyber-btn btn-airdrop" onClick={() => runAirdrop('refs')}>👥 Refs (10+)</button>
+            <button className="cyber-btn btn-airdrop" onClick={() => runAirdrop('mass')}>🌐 Mass +1 TON</button>
+          </div>
+
           <div style={{ display: 'flex', gap: '10px' }}>
             <input 
               className="search-bar" 
@@ -323,6 +340,7 @@ const Dashboard = (props) => {
                   <th>Identity</th>
                   <th>TON</th>
                   <th>Taps</th>
+                  <th>Refs</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -330,8 +348,9 @@ const Dashboard = (props) => {
                 {users.filter(u => u.id.toLowerCase().includes(searchTerm.toLowerCase())).map((u, i) => (
                   <tr key={i} style={{ opacity: u.status === 'banned' ? 0.3 : 1 }}>
                     <td style={{ color: CYBER.primary }}>{u.id}</td>
-                    <td style={{ color: CYBER.ton }}>{u.ton.toFixed(1)}</td>
-                    <td>{(u.taps / 1000).toFixed(1)}k</td>
+                    <td style={{ color: CYBER.success, fontWeight: 'bold' }}>{u.ton.toFixed(1)}</td>
+                    <td style={{ opacity: 0.7 }}>{(u.taps / 1000).toFixed(1)}k</td>
+                    <td style={{ color: CYBER.secondary }}>{u.refs}</td>
                     <td style={{ display: 'flex', gap: '8px' }}>
                       <button className="action-btn" onClick={() => setEditingUser(u)}>⚙️</button>
                       <button className="action-btn" style={{ color: u.status === 'banned' ? CYBER.success : CYBER.danger }} onClick={() => toggleBan(u.id)}>
