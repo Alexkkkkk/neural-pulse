@@ -77,6 +77,7 @@ export const Task = sequelize.define('tasks', {
     icon: { type: DataTypes.STRING, defaultValue: 'Task' }
 }, { 
     timestamps: false,
+    tableName: 'tasks',
     underscored: true 
 });
 
@@ -159,17 +160,13 @@ export const initDB = async () => {
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // КРИТИЧНО: Убираем alter: true для User, чтобы не трогать триггеры
+            // Синхронизация таблиц
             await GlobalStats.sync(); 
-            
-            // Если таблица Stats содержит NULL в created_at, она упадет. 
-            // Поэтому sync() здесь без alter, чтобы просто создать таблицу, если её нет.
             await Stats.sync(); 
             await User.sync(); 
             await Task.sync(); 
             await sessionStore.sync();
             
-            // Финальный проход без деструктивных изменений
             await sequelize.sync(); 
             
             await GlobalStats.findOrCreate({ 
@@ -185,7 +182,7 @@ export const initDB = async () => {
                 ]);
             }
 
-            setInterval(logSystemStats, 30 * 1000);
+            setInterval(logSystemStats, 60 * 1000); // Раз в минуту
             await logSystemStats(); 
         }
 
