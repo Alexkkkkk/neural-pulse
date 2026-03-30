@@ -89,7 +89,7 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SYSTEM PULSE ---
+        // --- 🩺 SYSTEM PULSE (TELEMETRY ENGINE) ---
         setInterval(async () => {
             try {
                 const startTime = Date.now();
@@ -97,14 +97,17 @@ async function startNeuralOS() {
                 const cpuCount = os.cpus()?.length || 1;
                 const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
 
-                const [gStats, walletCount] = await Promise.all([
+                // Получаем статистику и последнего юзера для логов
+                const [gStats, walletCount, lastUser] = await Promise.all([
                     GlobalStats.findByPk(1),
                     User.count({ 
                         where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } 
-                    })
+                    }),
+                    User.findOne({ order: [['created_at', 'DESC']] })
                 ]);
 
                 const latency = Date.now() - startTime;
+                
                 const pulseData = {
                     time: dayjs().format('HH:mm:ss'),
                     mem_usage: Math.round(mem),
@@ -112,12 +115,16 @@ async function startNeuralOS() {
                     user_count: gStats?.total_users || 0,
                     active_wallets: walletCount || 0,
                     total_balance: parseFloat(gStats?.total_balance || 0),
-                    db_latency: latency
+                    db_latency: latency,
+                    // Дополнительные данные для "умных" логов на Dashboard
+                    recent_event: lastUser ? `NEW_AGENT: ${lastUser.username}` : 'CORE_STABLE',
+                    event_type: lastUser && dayjs().diff(dayjs(lastUser.created_at), 'second') < 15 ? 'AUTH' : 'SYSTEM'
                 };
 
                 pulseEvents.emit('update', pulseData);
                 await Stats.create(pulseData);
 
+                // Очистка старой статистики (храним 500 записей)
                 const count = await Stats.count();
                 if (count > 500) {
                     const oldest = await Stats.findOne({ order: [['created_at', 'ASC']] });
@@ -147,9 +154,12 @@ function setupRealTimeStream(app) {
             'X-Accel-Buffering': 'no'
         });
         res.write(':\n\n');
+        
         const sendData = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
         pulseEvents.on('update', sendData);
+        
         const keepAlive = setInterval(() => res.write(':\n\n'), 15000);
+        
         req.on('close', () => {
             clearInterval(keepAlive);
             pulseEvents.removeListener('update', sendData);
@@ -243,17 +253,17 @@ async function setupAdminPanel(app) {
                 theme: {
                     colors: {
                         primary100: '#00f2fe',
-                        bg: '#0b0e14',        // Фон страницы
-                        container: '#161b22',  // Фон блоков
-                        sidebar: '#0d1117',    // Сайдбар
-                        border: '#30363d',     // Границы
-                        text: '#ffffff',       // Белый текст
-                        white: '#161b22',      // Переопределение белых элементов (кнопки и т.д.)
+                        bg: '#0b0e14',
+                        container: '#161b22',
+                        sidebar: '#0d1117',
+                        border: '#30363d',
+                        text: '#ffffff',
+                        white: '#161b22',
                         grey100: '#f0f6fc',
                         grey80: '#8b949e',
                         grey60: '#6e7681',
                         grey40: '#484f58',
-                        grey20: '#30363d',     // Темные разделители
+                        grey20: '#30363d',
                     }
                 }
             }
@@ -284,6 +294,8 @@ function setupBotHandlers(bot) {
             if (created) {
                 const gs = await GlobalStats.findByPk(1);
                 if (gs) await gs.increment('total_users');
+                // Эмиттим событие немедленно для обновления Dashboard
+                pulseEvents.emit('update', { recent_event: `NEW_AGENT: ${user.username}`, event_type: 'AUTH' });
             }
 
             const webAppUrl = `${DOMAIN}/static/index.html?v=${Date.now()}`;
