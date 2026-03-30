@@ -152,3 +152,54 @@ export const logSystemStats = async () => {
         });
         
         // Очистка старых записей (старше 2 суток)
+        await Stats.destroy({
+            where: {
+                created_at: { [Op.lt]: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) }
+            }
+        });
+    } catch (e) {
+        console.error('--- [TELEMETRY] ERROR:', e.message);
+    }
+};
+
+// --- 🚀 ИНИЦИАЛИЗАЦИЯ ---
+export const initDB = async () => {
+    try {
+        await sequelize.authenticate();
+        console.log('--- [DB] CONNECTED TO POSTGRES (STABLE) ---');
+
+        const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
+
+        if (isPrimary) {
+            // Синхронизация структуры
+            await sequelize.sync({ alter: true });
+            await sessionStore.sync();
+            
+            // Инициализация глобальных счетчиков
+            await GlobalStats.findOrCreate({ 
+                where: { id: 1 }, 
+                defaults: { total_balance: 0, total_users: 0 } 
+            });
+
+            // Наполнение дефолтными задачами
+            if (await Task.count() === 0) {
+                await Task.bulkCreate([
+                    { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
+                    { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
+                    { title: 'Подключить TON кошелек', reward: 2500, url: '', icon: 'Wallet' }
+                ]);
+            }
+
+            // Интервал сбора статистики каждые 5 секунд
+            setInterval(logSystemStats, 5000); 
+            await logSystemStats(); 
+        }
+
+        return true;
+    } catch (error) {
+        console.error('--- [DB] CRITICAL ERROR:', error.message);
+        throw error;
+    }
+};
+
+export { Op };
