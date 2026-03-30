@@ -4,8 +4,8 @@ import ConnectSessionSequelize from 'connect-session-sequelize';
 import os from 'os';
 import cluster from 'cluster'; 
 
-// --- 🌐 CONFIG ---
-const PG_URI = "postgresql://bothost_db_130943b4f3f6:oY6CieQ5aohyTLgU9i23M6w80naZt9_1mJ4V6roejTs@node1.pghost.ru:32834/bothost_db_130943b4f3f6";
+// --- 🌐 CONFIG (НОВАЯ БАЗА) ---
+const PG_URI = "postgresql://bothost_db_db1789af0108:hl3yLh4DQmySkEYDPYwS8fn9xkLPHYNMhmCbU8WCYXs@node1.pghost.ru:32865/bothost_db_db1789af0108";
 
 export const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
@@ -107,6 +107,7 @@ export const GlobalStats = sequelize.define('global_stats', {
     underscored: true 
 });
 
+// Связи
 User.hasMany(User, { as: 'ReferralList', foreignKey: 'referred_by' });
 User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
@@ -155,25 +156,28 @@ export const logSystemStats = async () => {
 export const initDB = async () => {
     try {
         await sequelize.authenticate();
-        console.log('--- [DB] CONNECTED TO POSTGRES ---');
+        console.log('--- [DB] CONNECTED TO POSTGRES (NEW DB) ---');
 
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // Синхронизация таблиц
+            // Последовательная синхронизация для надежности
             await GlobalStats.sync(); 
             await Stats.sync(); 
             await User.sync(); 
             await Task.sync(); 
             await sessionStore.sync();
             
+            // Финальная сверка всей структуры
             await sequelize.sync(); 
             
+            // Создание начальной глобальной записи
             await GlobalStats.findOrCreate({ 
                 where: { id: 1 }, 
                 defaults: { total_balance: 0, total_users: 0 } 
             });
 
+            // Наполнение списком задач, если база пуста
             if (await Task.count() === 0) {
                 await Task.bulkCreate([
                     { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
@@ -182,7 +186,8 @@ export const initDB = async () => {
                 ]);
             }
 
-            setInterval(logSystemStats, 60 * 1000); // Раз в минуту
+            // Запуск цикла логов
+            setInterval(logSystemStats, 60 * 1000); 
             await logSystemStats(); 
         }
 
