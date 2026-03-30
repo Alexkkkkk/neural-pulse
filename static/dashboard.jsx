@@ -31,6 +31,7 @@ const playPulseSound = (type = 'log') => {
   } catch (e) { }
 };
 
+// --- 📉 PRECISION MINI CHART ---
 const MiniChart = memo(({ data, color, height = 40 }) => {
   if (!data || data.length < 2) return <div style={{ height }} />;
   const cleanData = data.map(v => (Number.isFinite(v) ? v : 0));
@@ -158,20 +159,35 @@ const Dashboard = (props) => {
   return (
     <div style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace', padding: '15px' }}>
       <style>{`
-        /* --- ADMINJS UI FIXES --- */
-        #adminjs, .adminjs_Box, [data-testid="sidebar"], [data-testid="resource-header"], section { background: ${CYBER.bg} !important; border: none !important; }
+        /* --- ADMINJS UI FORCED OVERRIDES --- */
+        #adminjs, .adminjs_Box, [data-testid="sidebar"], [data-testid="resource-header"], section { 
+            background: ${CYBER.bg} !important; 
+            border: none !important; 
+        }
         [data-testid="sidebar"] { border-right: 1px solid ${CYBER.border} !important; }
-        .adminjs_Table td, .adminjs_Table th { border-bottom: 1px solid ${CYBER.border} !important; color: ${CYBER.subtext} !important; }
-        .adminjs_EmptyState { background: ${CYBER.card} !important; border: 1px dashed ${CYBER.border} !important; color: ${CYBER.subtext} !important; }
-
+        .adminjs_Table td, .adminjs_Table th { 
+            border-bottom: 1px solid ${CYBER.border} !important; 
+            color: ${CYBER.subtext} !important; 
+            background: transparent !important;
+        }
+        .adminjs_Button { background: ${CYBER.primary} !important; color: #000 !important; border-radius: 4px !important; }
+        
         /* --- DASHBOARD ELEMENTS --- */
         .cyber-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 15px; margin-bottom: 20px; }
         .cyber-card { 
-          background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 24px; border-radius: 8px;
-          position: relative; overflow: hidden; boxShadow: 0 4px 20px rgba(0,0,0,0.5);
+          background: ${CYBER.card}; 
+          border: 1px solid ${CYBER.border}; 
+          padding: 24px; 
+          border-radius: 8px;
+          position: relative; 
+          overflow: hidden; 
+          box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+          transition: transform 0.3s ease, border-color 0.3s ease;
         }
+        .cyber-card:hover { transform: translateY(-5px); border-color: ${CYBER.primary}; }
 
         .glitch-title:hover { animation: glitch 0.3s cubic-bezier(.25,.46,.45,.94) both infinite; color: ${CYBER.secondary} !important; }
+        
         @keyframes glitch {
           0% { transform: translate(0); }
           20% { transform: translate(-2px, 2px); text-shadow: 2px 0 ${CYBER.danger}; }
@@ -204,6 +220,7 @@ const Dashboard = (props) => {
         </div>
       </div>
 
+      {/* --- STATS GRID --- */}
       <div className="cyber-grid">
         <StatCard label="Agents" desc="TOTAL_ACTIVE_USERS" value={stats.totalUsers} unit="U" color={CYBER.primary} historyKey="user_count" />
         <StatCard label="Wallets" desc="CONNECTED_TON_NODES" value={stats.walletsLinked} unit="W" color={CYBER.ton} historyKey="active_wallets" />
@@ -212,12 +229,19 @@ const Dashboard = (props) => {
         <StatCard label="Latency" desc="DATABASE_PING_TIME" value={stats.latency} unit="MS" color={CYBER.danger} historyKey="db_latency" />
       </div>
 
+      {/* --- ANALYTICS HUB --- */}
       <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '20px', gap: '20px' }}>
         {/* Визуализатор (Осциллограф) */}
         <div style={{ flex: '2 1 400px', background: CYBER.card, height: '220px', border: `1px solid ${CYBER.border}`, borderRadius: '8px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '6px', paddingBottom: '20px', position: 'relative' }}>
           <div style={{ position: 'absolute', top: '10px', left: '15px', color: CYBER.primary, fontSize: '10px', opacity: 0.5 }}>SIGNAL_OSCILLOSCOPE</div>
           {[...Array(35)].map((_, i) => (
-            <div key={i} style={{ width: '4px', background: `linear-gradient(to top, ${CYBER.primary}, ${CYBER.secondary})`, height: `${20 + (Math.random() * 60)}%`, borderRadius: '2px', animation: `cyber-pulse ${0.8 + (Math.random() * 1.2)}s infinite ${i * 0.03}s ease-in-out` }} />
+            <div key={i} style={{ 
+                width: '4px', 
+                background: `linear-gradient(to top, ${CYBER.primary}, ${CYBER.secondary})`, 
+                height: `${20 + (Math.random() * 60)}%`, 
+                borderRadius: '2px', 
+                animation: `cyber-pulse ${0.8 + (Math.random() * 1.2)}s infinite ${i * 0.03}s ease-in-out` 
+            }} />
           ))}
         </div>
 
@@ -226,11 +250,16 @@ const Dashboard = (props) => {
           <div style={{ color: CYBER.success, fontSize: '11px', marginBottom: '10px', borderBottom: `1px solid ${CYBER.success}33`, paddingBottom: '5px', fontWeight: 'bold' }}>LIVE_KERNEL_LOGS</div>
           <div style={{ fontSize: '11px', lineHeight: '1.8', fontFamily: 'monospace' }}>
             {logs.map((log, i) => (
-              <div key={i} style={{ color: log.includes('ERROR') ? CYBER.danger : log.includes('CORE') ? CYBER.success : CYBER.subtext }}>{log}</div>
+              <div key={i} style={{ color: log.includes('ERROR') ? CYBER.danger : log.includes('CORE') ? CYBER.success : CYBER.subtext, marginBottom: '2px' }}>{log}</div>
             ))}
             <div ref={logEndRef} />
           </div>
         </div>
+      </div>
+      
+      {/* --- DECORATIVE FOOTER --- */}
+      <div style={{ marginTop: '20px', fontSize: '9px', color: '#444', letterSpacing: '3px', textAlign: 'center' }}>
+          NEURAL_PULSE_NETWORK // SECURE_ACCESS_GRANTED // 2026
       </div>
     </div>
   );
