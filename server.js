@@ -23,7 +23,7 @@ const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
 const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
 
-// Мультипликаторы дохода в зависимости от баланса (Кибер-экономика)
+// Мультипликаторы дохода
 const MULTIPLIERS = [
     { threshold: 2000000, multi: 3.5 },
     { threshold: 500000, multi: 2.5 },
@@ -37,7 +37,14 @@ async function startNeuralOS() {
 
     // --- 🛡️ SECURITY & PERFORMANCE ---
     app.use(helmet({
-        contentSecurityPolicy: false, // Необходимо для работы Telegram WebApp
+        contentSecurityPolicy: {
+            directives: {
+                ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+                "connect-src": ["'self'", DOMAIN],
+                "img-src": ["'self'", "data:", "https:"],
+                "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+            },
+        },
         crossOriginEmbedderPolicy: false,
         crossOriginResourcePolicy: false,
     }));
@@ -47,7 +54,7 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
-    // Раздача статики (Твой дизайн и картинки сохраняются без изменений)
+    // Раздача статики
     app.use('/static', express.static(path.join(__dirname, 'static'), {
         maxAge: '1h',
         etag: true
@@ -81,17 +88,15 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SYSTEM PULSE (Телеметрия, Логирование и Очистка) ---
+        // --- 🩺 SYSTEM PULSE ---
         setInterval(async () => {
             try {
                 const startTime = Date.now();
                 
-                // Метрики ресурсов
                 const mem = process.memoryUsage().rss / 1024 / 1024;
                 const cpuCount = os.cpus()?.length || 1;
                 const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
 
-                // Данные из БД
                 const [gStats, walletCount] = await Promise.all([
                     GlobalStats.findByPk(1),
                     User.count({ 
@@ -110,10 +115,8 @@ async function startNeuralOS() {
                     db_latency: latency
                 };
 
-                // 1. Вывод в консоль сервера
                 console.log(`[PULSE] ${pulseData.time} | CPU: ${pulseData.server_load}% | RAM: ${pulseData.mem_usage}MB | Users: ${pulseData.user_count}`);
 
-                // 2. Сохранение в историю (таблица Stats)
                 await Stats.create({
                     user_count: pulseData.user_count,
                     server_load: pulseData.server_load,
@@ -122,10 +125,8 @@ async function startNeuralOS() {
                     total_balance: pulseData.total_balance
                 });
 
-                // 3. Отправка в живой стрим (SSE)
                 pulseEvents.emit('update', pulseData);
 
-                // 4. Очистка старых логов (храним только последние 500 записей для экономии места)
                 const count = await Stats.count();
                 if (count > 500) {
                     const oldest = await Stats.findOne({ order: [['created_at', 'ASC']] });
@@ -135,7 +136,7 @@ async function startNeuralOS() {
             } catch (e) {
                 console.error("Pulse Loop Error", e.message);
             }
-        }, 10000); // Раз в 10 секунд — баланс между точностью и нагрузкой
+        }, 10000);
 
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`);
@@ -149,15 +150,30 @@ async function startNeuralOS() {
 
 function setupRealTimeStream(app) {
     app.get('/api/admin/stream', (req, res) => {
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
-        res.flushHeaders();
+        // Настройки для пробития Nginx-буферизации на Bothost
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache, no-transform',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no' // КРИТИЧНО ДЛЯ BOTHOST
+        });
 
-        const sendData = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+        // Сразу отправляем пустой комментарий для открытия потока
+        res.write(':\n\n');
+
+        const sendData = (data) => {
+            res.write(`data: ${JSON.stringify(data)}\n\n`);
+        };
+
         pulseEvents.on('update', sendData);
+
+        // Пинг-таймер, чтобы соединение не закрывалось по таймауту прокси
+        const keepAlive = setInterval(() => {
+            res.write(':\n\n');
+        }, 15000);
         
         req.on('close', () => {
+            clearInterval(keepAlive);
             pulseEvents.removeListener('update', sendData);
             res.end();
         });
