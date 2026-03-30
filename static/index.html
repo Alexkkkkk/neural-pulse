@@ -185,6 +185,7 @@
                     const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
                     if (r.ok) {
                         const db = await r.json();
+                        // Слияние данных из БД с начальными
                         this.data = { ...this.data, ...db, id: String(u.id) };
                         if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
                     }
@@ -231,9 +232,19 @@
                 const cost = this.getCost(type);
                 if(this.data.balance >= cost) {
                     this.data.balance -= cost;
-                    if(type === 'tap') { this.data.tap_lvl++; this.data.tap += 1; }
-                    else if(type === 'energy') { this.data.energy_lvl++; this.data.max_energy += 500; this.data.energy = this.data.max_energy; }
-                    else if(type === 'mine') { this.data.mine_lvl++; this.data.profit += 120; }
+                    if(type === 'tap') { 
+                        this.data.tap_lvl++; 
+                        this.data.tap += 1; 
+                    }
+                    else if(type === 'energy') { 
+                        this.data.energy_lvl++; 
+                        this.data.max_energy += 500; 
+                        this.data.energy = this.data.max_energy; 
+                    }
+                    else if(type === 'mine') { 
+                        this.data.mine_lvl++; 
+                        this.data.profit += 120; 
+                    }
                     
                     ui.render();
                     tg.HapticFeedback.notificationOccurred('success');
@@ -276,15 +287,18 @@
 
             startLoops() {
                 setInterval(() => {
+                    // Регенерация энергии
                     if(this.data.energy < this.data.max_energy) {
                         this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1.5);
                     }
+                    // Пассивный доход
                     if(this.data.profit > 0) {
                         this.data.balance += (this.data.profit / 3600);
                     }
                     ui.render();
                 }, 1000);
                 
+                // Автосохранение каждые 15 сек
                 setInterval(() => this.save(), 15000);
             }
         };
@@ -364,7 +378,7 @@
                         const top = await r.json();
                         let h = '<h2>🏆 TOP AGENTS</h2>';
                         top.forEach((u, i) => { 
-                            h += `<div class="top-item"><div><b style="color:cyan;">#${i+1}</b> ${u.username}</div><b>${Math.floor(u.balance).toLocaleString()}</b></div>`; 
+                            h += `<div class="top-item"><div><b style="color:cyan;">#${i+1}</b> ${u.username || 'Anonymous'}</div><b>${Math.floor(u.balance).toLocaleString()}</b></div>`; 
                         });
                         b.innerHTML = h;
                     } catch(e) { b.innerHTML = '<h2>OFFLINE</h2><p>Database unreachable.</p>'; }
