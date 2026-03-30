@@ -1,6 +1,6 @@
-import React, { useState, useEffect, memo, useCallback } from 'react';
+import React, { useState, useEffect, memo, useCallback, useRef } from 'react';
 
-// --- 🌐 NEURAL PULSE OS COLOR SYSTEM (Synced with Main) ---
+// --- 🌐 NEURAL PULSE OS COLOR SYSTEM ---
 const CYBER = {
   bg: '#0b0e14',
   card: '#161b22',
@@ -22,9 +22,11 @@ const playPulseSound = (type = 'log') => {
     const gain = audioCtx.createGain();
 
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(type === 'error' ? 150 : 880, audioCtx.currentTime);
+    // Разная тональность для разных событий
+    const freq = type === 'error' ? 150 : type === 'auth' ? 1200 : 880;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
     
-    gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
 
     osc.connect(gain);
@@ -60,18 +62,25 @@ const Dashboard = (props) => {
   const [logs, setLogs] = useState(['> INITIALIZING_BOOT_SEQUENCE...', '> KERNEL_LOADED', '> SYNCING_WITH_TITAN_CORE...']);
   const [scanPos, setScanPos] = useState(0);
   const [history, setHistory] = useState(props.data?.history || []);
+  const logEndRef = useRef(null);
+
   const [stats, setStats] = useState({
     totalUsers: props.data?.totalUsers || 0,
-    dailyUsers: props.data?.dailyUsers || 0,
     walletsLinked: props.data?.active_wallets || 0, 
     total_balance: props.data?.total_balance || 0,
     cpu: 0, mem: 0, latency: 0
   });
 
   const addLog = useCallback((msg, type = 'log') => {
-    setLogs(prev => [...prev.slice(-12), msg]);
+    const time = new Date().toLocaleTimeString().split(' ')[0];
+    setLogs(prev => [...prev.slice(-15), `[${time}] ${msg}`]);
     playPulseSound(type);
   }, []);
+
+  // Авто-скролл для логов терминала
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [logs]);
 
   useEffect(() => {
     const loader = setInterval(() => {
@@ -95,19 +104,22 @@ const Dashboard = (props) => {
         const pulse = JSON.parse(event.data);
         setStats(prev => ({
           ...prev,
-          cpu: pulse.server_load,
-          mem: pulse.mem_usage,
-          latency: pulse.db_latency,
-          totalUsers: pulse.user_count,
-          walletsLinked: pulse.active_wallets,
-          total_balance: pulse.total_balance
+          cpu: pulse.server_load ?? prev.cpu,
+          mem: pulse.mem_usage ?? prev.mem,
+          latency: pulse.db_latency ?? prev.latency,
+          totalUsers: pulse.user_count ?? prev.totalUsers,
+          walletsLinked: pulse.active_wallets ?? prev.walletsLinked,
+          total_balance: pulse.total_balance ?? prev.total_balance
         }));
 
-        setHistory(prev => [...prev.slice(-29), pulse]);
+        if (pulse.time) {
+          setHistory(prev => [...prev.slice(-29), pulse]);
+        }
 
-        if (Math.random() > 0.85) {
-          const events = ['CORE_STABLE', 'TELEMETRY_SYNCED', 'DB_BUFFER_CLEAN', 'PULSE_RECEIVED'];
-          addLog(`> ${events[Math.floor(Math.random() * events.length)]}: ${Math.random().toString(16).slice(2, 6).toUpperCase()}`);
+        // Обработка живых событий из main.js
+        if (pulse.recent_event) {
+          const isAuth = pulse.event_type === 'AUTH';
+          addLog(`> ${pulse.recent_event}`, isAuth ? 'auth' : 'log');
         }
       } catch (e) { console.error("Pulse error:", e); }
     };
@@ -127,12 +139,13 @@ const Dashboard = (props) => {
 
   const StatCard = ({ label, value, unit, color, historyKey }) => {
     const chartData = history.map(h => Number(h[historyKey]) || 0);
+    // Рассчет прогресса для полосок
     let progressPercent = unit === '%' ? value : unit === 'MB' ? (value / 2048) * 100 : (value / 1000) * 100;
 
     return (
       <div style={{ 
         flex: '1 1 200px', margin: '10px', padding: '20px', 
-        background: CYBER.card, border: `1px solid ${color}33`, borderRadius: '4px',
+        background: CYPER.card, border: `1px solid ${color}33`, borderRadius: '4px',
         position: 'relative', overflow: 'hidden', boxShadow: `inset 0 0 15px ${color}05`
       }}>
         <div style={{ color: '#8b949e', fontSize: '10px', letterSpacing: '2px', marginBottom: '8px', fontWeight: 'bold' }}>{label}</div>
@@ -165,7 +178,6 @@ const Dashboard = (props) => {
   return (
     <div style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace', padding: '20px' }}>
       <style>{`
-        /* --- GLOBAL DARK OVERRIDE --- */
         #adminjs, .adminjs_Box, [data-testid="sidebar"], [data-testid="resource-header"], .adminjs_Table { 
             background: ${CYBER.bg} !important; 
         }
@@ -173,7 +185,6 @@ const Dashboard = (props) => {
         .adminjs_Table td, .adminjs_Table th { border-bottom: 1px solid ${CYBER.border} !important; color: #8b949e !important; }
         .adminjs_Button, button { border-radius: 0 !important; text-transform: uppercase !important; font-family: monospace !important; }
         
-        /* Glitch Animation */
         .glitch-title:hover {
           animation: glitch 0.3s cubic-bezier(.25,.46,.45,.94) both infinite;
           color: ${CYBER.secondary} !important;
@@ -214,20 +225,21 @@ const Dashboard = (props) => {
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '20px', gap: '20px' }}>
-        {/* Визуализатор активности */}
-        <div style={{ flex: '2 1 400px', background: CYBER.card, height: '200px', border: `1px solid ${CYBER.border}`, borderRadius: '4px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '6px', paddingBottom: '20px' }}>
+        {/* Визуализатор активности (Эквалайзер) */}
+        <div style={{ flex: '2 1 400px', background: CYBER.card, height: '220px', border: `1px solid ${CYBER.border}`, borderRadius: '4px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '6px', paddingBottom: '20px' }}>
           {[...Array(30)].map((_, i) => (
             <div key={i} style={{ width: '6px', background: `linear-gradient(to top, ${CYBER.primary}, ${CYBER.secondary})`, height: `${20 + (Math.random() * 50)}%`, animation: `cyber-pulse ${0.8 + (Math.random() * 1)}s infinite ${i * 0.05}s ease-in-out` }} />
           ))}
         </div>
 
-        {/* Логи терминала */}
-        <div style={{ flex: '1 1 300px', background: '#05070a', height: '200px', border: `1px solid ${CYBER.border}`, padding: '15px', overflow: 'hidden' }}>
-          <div style={{ color: CYBER.success, fontSize: '10px', marginBottom: '8px' }}>KERNEL_LOGS</div>
+        {/* Логи терминала с авто-скроллом */}
+        <div style={{ flex: '1 1 300px', background: '#05070a', height: '220px', border: `1px solid ${CYBER.border}`, padding: '15px', overflowY: 'auto' }}>
+          <div style={{ color: CYBER.success, fontSize: '10px', marginBottom: '8px', borderBottom: `1px solid ${CYBER.success}44`, paddingBottom: '4px' }}>KERNEL_LOGS</div>
           <div style={{ fontSize: '10px', lineHeight: '1.6', fontFamily: 'monospace' }}>
             {logs.map((log, i) => (
-              <div key={i} style={{ color: log.includes('ERROR') ? CYBER.danger : log.includes('READY') ? CYBER.success : '#4e555d' }}>{log}</div>
+              <div key={i} style={{ color: log.includes('ERROR') ? CYBER.danger : log.includes('NEW_AGENT') ? CYBER.primary : log.includes('READY') ? CYBER.success : '#4e555d' }}>{log}</div>
             ))}
+            <div ref={logEndRef} />
           </div>
         </div>
       </div>
