@@ -23,7 +23,7 @@ const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
 const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
 
-// Мультипликаторы дохода в зависимости от баланса
+// Мультипликаторы дохода в зависимости от баланса (Кибер-экономика)
 const MULTIPLIERS = [
     { threshold: 2000000, multi: 3.5 },
     { threshold: 500000, multi: 2.5 },
@@ -37,7 +37,7 @@ async function startNeuralOS() {
 
     // --- 🛡️ SECURITY & PERFORMANCE ---
     app.use(helmet({
-        contentSecurityPolicy: false, // Для работы Telegram WebApp
+        contentSecurityPolicy: false, // Необходимо для работы Telegram WebApp
         crossOriginEmbedderPolicy: false,
         crossOriginResourcePolicy: false,
     }));
@@ -47,7 +47,7 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
-    // Раздача статики (дизайн и картинки сохраняются)
+    // Раздача статики (Твой дизайн и картинки сохраняются без изменений)
     app.use('/static', express.static(path.join(__dirname, 'static'), {
         maxAge: '1h',
         etag: true
@@ -56,12 +56,9 @@ async function startNeuralOS() {
     try {
         console.log('--- ⚡ NEURAL PULSE SYSTEM BOOTING ---');
 
-        // 1. Инициализация БД
         await initDB();
-        
         const bot = new Telegraf(BOT_TOKEN);
 
-        // 2. Настройка подсистем
         setupAPIRoutes(app);
         setupRealTimeStream(app); 
         await setupAdminPanel(app);
@@ -84,13 +81,17 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SYSTEM PULSE (Обновление статистики каждые 30 сек) ---
-        // Примечание: В db.js у нас стоит сбор каждые 5 сек, этот цикл нужен для SSE стрима
+        // --- 🩺 SYSTEM PULSE (Телеметрия, Логирование и Очистка) ---
         setInterval(async () => {
             try {
                 const startTime = Date.now();
-                const memory = process.memoryUsage().rss / 1024 / 1024;
+                
+                // Метрики ресурсов
+                const mem = process.memoryUsage().rss / 1024 / 1024;
+                const cpuCount = os.cpus()?.length || 1;
+                const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
 
+                // Данные из БД
                 const [gStats, walletCount] = await Promise.all([
                     GlobalStats.findByPk(1),
                     User.count({ 
@@ -99,12 +100,9 @@ async function startNeuralOS() {
                 ]);
 
                 const latency = Date.now() - startTime;
-                const cpuCount = os.cpus()?.length || 1;
-                const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
-
                 const pulseData = {
                     time: dayjs().format('HH:mm:ss'),
-                    mem_usage: Math.round(memory),
+                    mem_usage: Math.round(mem),
                     server_load: parseFloat(load), 
                     user_count: gStats?.total_users || 0,
                     active_wallets: walletCount || 0,
@@ -112,12 +110,32 @@ async function startNeuralOS() {
                     db_latency: latency
                 };
 
+                // 1. Вывод в консоль сервера
+                console.log(`[PULSE] ${pulseData.time} | CPU: ${pulseData.server_load}% | RAM: ${pulseData.mem_usage}MB | Users: ${pulseData.user_count}`);
+
+                // 2. Сохранение в историю (таблица Stats)
+                await Stats.create({
+                    user_count: pulseData.user_count,
+                    server_load: pulseData.server_load,
+                    mem_usage: pulseData.mem_usage,
+                    active_wallets: pulseData.active_wallets,
+                    total_balance: pulseData.total_balance
+                });
+
+                // 3. Отправка в живой стрим (SSE)
                 pulseEvents.emit('update', pulseData);
 
+                // 4. Очистка старых логов (храним только последние 500 записей для экономии места)
+                const count = await Stats.count();
+                if (count > 500) {
+                    const oldest = await Stats.findOne({ order: [['created_at', 'ASC']] });
+                    if (oldest) await oldest.destroy();
+                }
+
             } catch (e) {
-                console.error("Pulse Loop Error", e);
+                console.error("Pulse Loop Error", e.message);
             }
-        }, 30000);
+        }, 10000); // Раз в 10 секунд — баланс между точностью и нагрузкой
 
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`);
@@ -149,7 +167,7 @@ function setupRealTimeStream(app) {
 function setupAPIRoutes(app) {
     const clickLimit = rateLimit({
         windowMs: 1000,
-        max: 25, 
+        max: 30,
         handler: (req, res) => res.status(429).json({ error: "Pulse overload" })
     });
 
@@ -163,7 +181,7 @@ function setupAPIRoutes(app) {
 
     app.post('/api/click', clickLimit, async (req, res) => {
         const { userId, count } = req.body;
-        if (!userId || !count || count > 100) return res.status(403).send();
+        if (!userId || !count || count > 100 || count <= 0) return res.status(403).send();
         try {
             const user = await User.findByPk(userId);
             if (!user) return res.status(404).send();
@@ -268,5 +286,4 @@ function setupBotHandlers(bot) {
     });
 }
 
-// Запуск системы
 startNeuralOS();
