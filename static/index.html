@@ -7,7 +7,9 @@
     <link rel="stylesheet" href="style.css">
     <style>
         /* Системные анимации */
-        @keyframes pulse { 0% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.1); } 100% { opacity: 0.5; transform: scale(1); } }
+        @keyframes pulse { 0% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } 100% { opacity: 0.5; transform: scale(1); } }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        
         .modal-bg.active { display: flex; }
         
         .task-item, .top-item {
@@ -26,7 +28,7 @@
             border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; 
         }
         .task-btn:active { transform: scale(0.95); }
-        .task-btn:disabled { background: #555; color: #888; cursor: not-allowed; }
+        .task-btn:disabled { background: #333; color: #666; cursor: not-allowed; }
         
         .ref-box { 
             background: #000; border: 1px dashed cyan; padding: 10px; 
@@ -40,6 +42,7 @@
             position: absolute; color: cyan; font-weight: bold; font-size: 26px;
             pointer-events: none; animation: moveUp 0.6s ease-out forwards;
             z-index: 9999; text-shadow: 0 0 10px rgba(0,255,255,0.5);
+            user-select: none;
         }
         
         @keyframes moveUp {
@@ -66,6 +69,8 @@
         }
         .ai-terminal::after { content: '_'; animation: blink 1s infinite; }
         @keyframes blink { 50% { opacity: 0; } }
+
+        .energy-error { animation: shake 0.2s ease-in-out 2; border-color: red !important; }
     </style>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
@@ -103,7 +108,7 @@
 
         <main class="game-core">
             <div class="glow"></div>
-            <div class="brain-target" ontouchstart="game.tap(event)">
+            <div class="brain-target" id="main-target" ontouchstart="game.tap(event)">
                 <img src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'">
             </div>
             <div class="side-menu">
@@ -158,7 +163,6 @@
                 const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
                 this.data.id = String(u.id);
 
-                // TON Connect Initialization (Simplified: Connect/Disconnect only)
                 try {
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
                         manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json'
@@ -175,9 +179,8 @@
                         }
                         this.save();
                     });
-                } catch(e) { console.warn("TON Error"); }
+                } catch(e) { console.warn("TON Init Error"); }
 
-                // Load Data from Server
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
                     if (r.ok) {
@@ -202,8 +205,12 @@
             },
 
             tap(e) {
-                if(!this.isLoaded || this.data.energy < 1) { 
-                    tg.HapticFeedback.notificationOccurred('error'); 
+                if(!this.isLoaded) return;
+                
+                if(this.data.energy < 1) { 
+                    tg.HapticFeedback.notificationOccurred('error');
+                    document.querySelector('.e-track').classList.add('energy-error');
+                    setTimeout(() => document.querySelector('.e-track').classList.remove('energy-error'), 400);
                     return; 
                 }
                 
@@ -238,16 +245,10 @@
             },
 
             async completeTask(id, reward, link) {
-                if(this.data.completed_tasks?.includes(id)) { 
-                    tg.showAlert("Already completed!"); 
-                    return; 
-                }
+                if(this.data.completed_tasks?.includes(id)) return;
                 
-                if(link.startsWith('http')) { 
-                    tg.openLink(link); 
-                } else { 
-                    tg.openTelegramLink(link); 
-                }
+                if(link.startsWith('http')) tg.openLink(link);
+                else tg.openTelegramLink(link);
 
                 setTimeout(async () => {
                     this.data.balance += reward;
@@ -269,17 +270,14 @@
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify(this.data)
                     });
-                } catch(e) { 
-                    console.warn("Save error"); 
-                } finally { 
-                    this.isSaving = false; 
-                }
+                } catch(e) { console.warn("Save error"); } 
+                finally { this.isSaving = false; }
             },
 
             startLoops() {
                 setInterval(() => {
                     if(this.data.energy < this.data.max_energy) {
-                        this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1.2);
+                        this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1.5);
                     }
                     if(this.data.profit > 0) {
                         this.data.balance += (this.data.profit / 3600);
@@ -295,7 +293,7 @@
             startLoader() {
                 let p = 0;
                 const i = setInterval(() => {
-                    p += Math.floor(Math.random() * 5) + 4;
+                    p += Math.floor(Math.random() * 5) + 5;
                     if(p > 100) p = 100;
                     document.getElementById('pct').innerText = p+'%';
                     document.getElementById('bar').style.width = p+'%';
@@ -304,7 +302,7 @@
                         document.getElementById('loader').style.display='none'; 
                         document.getElementById('app').style.display='flex'; 
                     }
-                }, 40);
+                }, 30);
             },
 
             render() {
@@ -317,13 +315,13 @@
                 
                 const rank = d.balance < 50000 ? "NODE AGENT" : d.balance < 500000 ? "CYBER MANTIS" : "NEURAL LORD";
                 document.getElementById('ui-rank').innerText = rank;
-                document.getElementById('my-lvl').innerText = `LVL ${Math.floor(d.balance / 20000) + 1}`;
+                document.getElementById('my-lvl').innerText = `LVL ${Math.floor(d.balance / 25000) + 1}`;
             },
 
             pop(touch, p) {
                 const div = document.createElement('div');
                 div.className = 'pop'; div.innerText = `+${p}`;
-                div.style.left = (touch.clientX - 10)+'px'; div.style.top = (touch.clientY - 20)+'px';
+                div.style.left = (touch.clientX - 15)+'px'; div.style.top = (touch.clientY - 30)+'px';
                 document.body.appendChild(div);
                 setTimeout(() => div.remove(), 600);
             },
@@ -347,7 +345,6 @@
                     const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
                     b.innerHTML = `<h2>🤝 REFERRALS</h2><div class="ref-box" id="ref-url">${link}</div><button class="task-btn" style="width:100%" onclick="ui.copyRef()">COPY INVITE LINK</button>`;
                 } else if(type === 'wallet') {
-                    // Только кнопка подключения/отключения
                     b.innerHTML = `<h2>👛 TON WALLET</h2>
                     <p style="font-size:12px; color:gray; text-align:center; margin-bottom:10px;">Connect your TON wallet to sync your identity.</p>
                     <div id="ton-btn" style="display:flex; justify-content:center; padding:10px;"></div>`;
@@ -358,7 +355,7 @@
                     b.innerHTML = `<h2>🎁 DAILY BONUS</h2>
                     <div style="text-align:center; padding:20px;">
                         <button class="task-btn" style="width:100%; height:60px;" ${canClaim ? '' : 'disabled'} onclick="ui.claimDaily()">
-                            ${canClaim ? 'CLAIM 5,000 NP' : 'NEXT BONUS IN 24H'}
+                            ${canClaim ? 'CLAIM 5,000 NP' : 'RECHARGE IN PROGRESS'}
                         </button>
                     </div>`;
                 } else if(type === 'top') {
@@ -396,7 +393,7 @@
                         }) 
                     });
                     const res = await r.json(); 
-                    const text = res.text || "Pulse stable. Maximize your mining nodes for optimal efficiency.";
+                    const text = res.text || "Pulse stable. Upgrade mining nodes for maximum passive output.";
                     
                     resDiv.innerText = ""; 
                     let i = 0;
@@ -407,16 +404,13 @@
                         } 
                     }; 
                     type();
-                } catch(e) { 
-                    resDiv.innerText = "Error: Connection to AI core lost."; 
-                } finally { 
-                    btn.disabled = false; 
-                }
+                } catch(e) { resDiv.innerText = "Error: Connection lost."; } 
+                finally { btn.disabled = false; }
             },
 
             copyRef() { 
                 const url = document.getElementById('ref-url').innerText;
-                navigator.clipboard.writeText(url).then(() => tg.showAlert('Invite link copied to clipboard!')); 
+                navigator.clipboard.writeText(url).then(() => tg.showAlert('Copied!')); 
             },
 
             async claimDaily() { 
