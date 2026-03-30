@@ -5,14 +5,13 @@ import os from 'os';
 import cluster from 'cluster'; 
 
 // --- 🌐 CONFIG ---
-// Используем предоставленную строку подключения к pghost.ru
+// Подключение к pghost.ru (SSL отключен для порта 32865)
 const PG_URI = "postgresql://bothost_db_db1789af0108:hl3yLh4DQmySkEYDPYwS8fn9xkLPHYNMhmCbU8WCYXs@node1.pghost.ru:32865/bothost_db_db1789af0108";
 
 export const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
     logging: false,
     dialectOptions: { 
-        // ИСПРАВЛЕНИЕ: Отключаем SSL, так как сервер на порту 32865 не поддерживает зашифрованные соединения
         ssl: false, 
         connectTimeout: 60000 
     },
@@ -64,7 +63,7 @@ export const User = sequelize.define('users', {
     underscored: true, 
     tableName: 'users',
     createdAt: 'created_at',
-    updatedAt: 'updated_at',
+    updated_at: 'updated_at',
     indexes: [
         { fields: ['username'] },
         { fields: ['wallet'] },
@@ -85,7 +84,7 @@ export const Task = sequelize.define('tasks', {
     underscored: true 
 });
 
-// --- 📊 МОДЕЛЬ: STATS ---
+// --- 📊 МОДЕЛЬ: STATS (Для графиков Dashboard) ---
 export const Stats = sequelize.define('stats', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     user_count: { type: DataTypes.INTEGER, defaultValue: 0 },
@@ -102,7 +101,7 @@ export const Stats = sequelize.define('stats', {
     updatedAt: 'updated_at'
 });
 
-// --- 📈 МОДЕЛЬ: GLOBAL_STATS ---
+// --- 📈 МОДЕЛЬ: GLOBAL_STATS (Кэш общих данных) ---
 export const GlobalStats = sequelize.define('global_stats', {
     id: { type: DataTypes.INTEGER, primaryKey: true },
     total_balance: { 
@@ -123,6 +122,7 @@ User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
 // --- 📊 ТЕЛЕМЕТРИЯ ---
 export const logSystemStats = async () => {
+    // Выполняем только на основном процессе, чтобы не дублировать логи в кластере
     const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
     if (!isPrimary) return;
 
@@ -138,6 +138,8 @@ export const logSystemStats = async () => {
         const dbLatency = Date.now() - start;
         const totalBalance = gStats ? gStats.total_balance : 0;
         const totalUsers = gStats ? gStats.total_users : 0;
+        
+        // Сбор метрик системы
         const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
         const cpuCount = os.cpus()?.length || 1;
         const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
@@ -151,7 +153,7 @@ export const logSystemStats = async () => {
             db_latency: parseFloat(dbLatency)
         });
         
-        // Очистка старых записей (старше 2 суток)
+        // Очистка старых данных (храним историю 48 часов)
         await Stats.destroy({
             where: {
                 created_at: { [Op.lt]: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) }
@@ -171,14 +173,14 @@ export const initDB = async () => {
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // Синхронизация структуры
+            // Применяем изменения структуры (alter: true)
             await sequelize.sync({ alter: true });
             await sessionStore.sync();
             
-            // Инициализация глобальных счетчиков
-            await GlobalStats.findOrCreate({ 
+            // Гарантируем наличие записи GlobalStats
+            const [gStats] = await GlobalStats.findOrCreate({ 
                 where: { id: 1 }, 
-                defaults: { total_balance: 0, total_users: 0 } 
+                defaults: { id: 1, total_balance: 0, total_users: 0 } 
             });
 
             // Наполнение дефолтными задачами
@@ -188,9 +190,10 @@ export const initDB = async () => {
                     { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
                     { title: 'Подключить TON кошелек', reward: 2500, url: '', icon: 'Wallet' }
                 ]);
+                console.log('--- [DB] DEFAULT_TASKS_LOADED');
             }
 
-            // Интервал сбора статистики каждые 5 секунд
+            // Запуск цикла сбора метрик (5 секунд)
             setInterval(logSystemStats, 5000); 
             await logSystemStats(); 
         }
