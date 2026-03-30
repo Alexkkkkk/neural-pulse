@@ -106,7 +106,6 @@ const Dashboard = (props) => {
   }, [logs]);
 
   useEffect(() => {
-    // Симуляция загрузки ядра
     const loader = setInterval(() => {
       setLoadingProgress(p => {
         if (p >= 100) {
@@ -118,7 +117,6 @@ const Dashboard = (props) => {
       });
     }, 50);
 
-    // Подключение к потоку телеметрии
     const eventSource = new EventSource('/api/admin/stream');
     eventSource.onmessage = (e) => {
       try {
@@ -162,10 +160,10 @@ const Dashboard = (props) => {
 
   if (!isReady) return (
     <div style={{ background: CYBER.bg, height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' }}>
-       <div style={{ border: `1px solid ${CYBER.primary}44`, padding: '40px', background: CYBER.card, textAlign: 'center' }}>
-          <div style={{ color: CYBER.primary, fontSize: '10px', letterSpacing: '8px', marginBottom: '10px' }}>BOOTING_PULSE_OS_v5.2</div>
-          <div style={{ color: '#fff', fontSize: '48px', fontWeight: 'bold' }}>{loadingProgress}%</div>
-       </div>
+        <div style={{ border: `1px solid ${CYBER.primary}44`, padding: '40px', background: CYBER.card, textAlign: 'center' }}>
+           <div style={{ color: CYBER.primary, fontSize: '10px', letterSpacing: '8px', marginBottom: '10px' }}>BOOTING_PULSE_OS_v5.2</div>
+           <div style={{ color: '#fff', fontSize: '48px', fontWeight: 'bold' }}>{loadingProgress}%</div>
+        </div>
     </div>
   );
 
@@ -262,7 +260,8 @@ const Dashboard = (props) => {
           <div style={{ color: CYBER.primary, fontSize: '12px', borderBottom: `1px solid ${CYBER.border}`, paddingBottom: '10px', marginBottom: '20px', fontWeight: 'bold' }}>
             OPERATIONS_CONTROL_INTERFACE
           </div>
-          <div style={{ display: grid, gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+          {/* Исправлено: display: 'grid' в кавычках */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
             <button className="cmd-btn" onClick={() => setModal({ active: true, value: '' })}>📢 BROADCAST</button>
             <button className="cmd-btn" onClick={() => executeAction('clear_cache')}>🧹 PURGE_CACHE</button>
             <button className="cmd-btn" onClick={() => executeAction('backup')}>💾 SYS_BACKUP</button>
@@ -274,15 +273,15 @@ const Dashboard = (props) => {
           <div style={{ marginTop: '30px', background: '#000', padding: '15px', borderRadius: '4px', border: `1px solid ${CYBER.border}` }}>
              <div style={{ color: CYBER.subtext, fontSize: '9px', marginBottom: '10px', opacity: 0.5 }}>OSCILLOSCOPE_STREAM_CORE</div>
              <div style={{ display: 'flex', alignItems: 'flex-end', height: '60px', gap: '3px' }}>
-                {[...Array(40)].map((_, i) => (
-                  <div key={i} style={{ 
-                    flex: 1, 
-                    background: isMaintenance ? CYBER.danger : CYBER.primary, 
-                    height: `${15 + Math.random() * 85}%`,
-                    opacity: 0.4 + (Math.random() * 0.6),
-                    transition: 'height 0.2s ease'
-                  }} />
-                ))}
+               {[...Array(40)].map((_, i) => (
+                 <div key={i} style={{ 
+                   flex: 1, 
+                   background: isMaintenance ? CYBER.danger : CYBER.primary, 
+                   height: `${15 + Math.random() * 85}%`,
+                   opacity: 0.4 + (Math.random() * 0.6),
+                   transition: 'height 0.2s ease'
+                 }} />
+               ))}
              </div>
           </div>
         </div>
