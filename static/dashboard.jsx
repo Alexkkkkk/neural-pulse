@@ -1,6 +1,6 @@
 import React, { useState, useEffect, memo, useCallback, useRef } from 'react';
 
-// --- 🌐 NEURAL PULSE OS COLOR SYSTEM (Оптимизированная читаемость) ---
+// --- 🌐 NEURAL PULSE OS COLOR SYSTEM ---
 const CYBER = {
   bg: '#05070a',
   card: '#0d1117',
@@ -10,8 +10,8 @@ const CYBER = {
   warning: '#fbc02d',
   danger: '#ff3131',
   ton: '#0088CC',
-  text: '#e6edf3',     // Яркий текст
-  subtext: '#8b949e',  // Тусклый для подписей
+  text: '#e6edf3',
+  subtext: '#8b949e',
   border: '#30363d'
 };
 
@@ -21,19 +21,13 @@ const playPulseSound = (type = 'log') => {
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-
     osc.type = 'sine';
     const freq = type === 'error' ? 150 : type === 'auth' ? 1200 : 880;
     osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-    
     gain.gain.setValueAtTime(0.02, audioCtx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
-
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.1);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime + 0.1);
   } catch (e) { }
 };
 
@@ -97,7 +91,6 @@ const Dashboard = (props) => {
     }, 50);
 
     const eventSource = new EventSource('/api/admin/stream');
-    
     eventSource.onmessage = (event) => {
       try {
         const pulse = JSON.parse(event.data);
@@ -110,34 +103,21 @@ const Dashboard = (props) => {
           walletsLinked: pulse.active_wallets ?? prev.walletsLinked,
           total_balance: pulse.total_balance ?? prev.total_balance
         }));
-
-        if (pulse.time) {
-          setHistory(prev => [...prev.slice(-29), pulse]);
-        }
-
+        if (pulse.time) setHistory(prev => [...prev.slice(-29), pulse]);
         if (pulse.recent_event) {
-          const isAuth = pulse.event_type === 'AUTH';
-          addLog(`> ${pulse.recent_event}`, isAuth ? 'auth' : 'log');
+          addLog(`> ${pulse.recent_event}`, pulse.event_type === 'AUTH' ? 'auth' : 'log');
         }
-      } catch (e) { console.error("Pulse error:", e); }
+      } catch (e) { }
     };
-
-    eventSource.onerror = () => {
-      addLog('> ERROR: TELEMETRY_LINK_LOST', 'error');
-    };
+    eventSource.onerror = () => addLog('> ERROR: TELEMETRY_LINK_LOST', 'error');
 
     const animInterval = setInterval(() => setScanPos(p => (p + 0.5) % 100), 50);
-
-    return () => {
-      clearInterval(loader);
-      clearInterval(animInterval);
-      eventSource.close();
-    };
+    return () => { clearInterval(loader); clearInterval(animInterval); eventSource.close(); };
   }, [addLog]);
 
   const StatCard = ({ label, desc, value, unit, color, historyKey }) => {
     const chartData = history.map(h => Number(h[historyKey]) || 0);
-    let progressPercent = unit === '%' ? value : unit === 'MB' ? (value / 2048) * 100 : (value / 1000) * 100;
+    let progressPercent = unit === '%' ? value : unit === 'MB' ? (value / 2048) * 100 : (value / 500) * 100;
 
     return (
       <div style={{ 
@@ -155,9 +135,7 @@ const Dashboard = (props) => {
             <span style={{ fontSize: '14px', color: color, marginLeft: '4px' }}>{unit}</span>
           </div>
         </div>
-        
         <MiniChart data={chartData} color={color} />
-        
         <div style={{ width: '100%', height: '2px', background: '#000', marginTop: '15px' }}>
           <div style={{ 
             width: `${Math.min(progressPercent, 100)}%`, 
@@ -182,18 +160,10 @@ const Dashboard = (props) => {
   return (
     <div style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace', padding: '20px' }}>
       <style>{`
-        #adminjs, .adminjs_Box, [data-testid="sidebar"], [data-testid="resource-header"], .adminjs_Table, section { 
-            background: ${CYBER.bg} !important; 
-            border: none !important;
-        }
+        #adminjs, .adminjs_Box, [data-testid="sidebar"], section { background: ${CYBER.bg} !important; border: none !important; }
         [data-testid="sidebar"] { border-right: 1px solid ${CYBER.border} !important; }
         .adminjs_Table td, .adminjs_Table th { border-bottom: 1px solid ${CYBER.border} !important; color: ${CYBER.subtext} !important; }
-        .adminjs_Button, button { border-radius: 4px !important; text-transform: uppercase !important; font-family: monospace !important; }
-        
-        .glitch-title:hover {
-          animation: glitch 0.3s cubic-bezier(.25,.46,.45,.94) both infinite;
-          color: ${CYBER.secondary} !important;
-        }
+        .glitch-title:hover { animation: glitch 0.3s cubic-bezier(.25,.46,.45,.94) both infinite; color: ${CYBER.secondary} !important; }
         @keyframes glitch {
           0% { transform: translate(0); }
           20% { transform: translate(-2px, 2px); text-shadow: 2px 0 ${CYBER.danger}; }
@@ -212,7 +182,7 @@ const Dashboard = (props) => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <span style={{ padding: '2px 8px', background: CYBER.primary, color: '#000', fontWeight: 'bold', fontSize: '10px' }}>SYSTEM_ACTIVE</span>
-            <h2 className="glitch-title" style={{ color: CYBER.primary, margin: '10px 0 0 0', fontSize: '26px', letterSpacing: '2px' }}>TITAN_MONITOR_V4</h2>
+            <h2 className="glitch-title" style={{ color: CYBER.primary, margin: '10px 0 0 0', fontSize: '26px', letterSpacing: '2px', cursor: 'default' }}>TITAN_MONITOR_V4</h2>
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ color: CYBER.ton, fontWeight: 'bold', fontSize: '24px', textShadow: `0 0 10px ${CYBER.ton}44` }}>{stats.total_balance.toLocaleString()} $NP</div>
@@ -230,13 +200,15 @@ const Dashboard = (props) => {
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '20px', gap: '20px' }}>
+        {/* Осциллограф */}
         <div style={{ flex: '2 1 400px', background: CYBER.card, height: '220px', border: `1px solid ${CYBER.border}`, borderRadius: '8px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '6px', paddingBottom: '20px', position: 'relative' }}>
           <div style={{ position: 'absolute', top: '10px', left: '15px', color: CYBER.primary, fontSize: '10px', opacity: 0.5 }}>SIGNAL_OSCILLOSCOPE</div>
-          {[...Array(40)].map((_, i) => (
+          {[...Array(35)].map((_, i) => (
             <div key={i} style={{ width: '4px', background: `linear-gradient(to top, ${CYBER.primary}, ${CYBER.secondary})`, height: `${20 + (Math.random() * 60)}%`, borderRadius: '2px', animation: `cyber-pulse ${0.8 + (Math.random() * 1.2)}s infinite ${i * 0.03}s ease-in-out` }} />
           ))}
         </div>
 
+        {/* Логи ядра */}
         <div style={{ flex: '1 1 300px', background: '#000', height: '220px', border: `1px solid ${CYBER.border}`, borderRadius: '8px', padding: '15px', overflowY: 'auto', boxShadow: `inset 0 0 20px #000` }}>
           <div style={{ color: CYBER.success, fontSize: '11px', marginBottom: '10px', borderBottom: `1px solid ${CYBER.success}33`, paddingBottom: '5px', fontWeight: 'bold' }}>LIVE_KERNEL_LOGS</div>
           <div style={{ fontSize: '11px', lineHeight: '1.8', fontFamily: 'monospace' }}>
