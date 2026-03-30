@@ -56,7 +56,7 @@ async function startNeuralOS() {
         console.clear();
         console.log('--- ⚡ NEURAL PULSE SYSTEM BOOTING ---');
 
-        // 1. Инициализация БД (Критично выполнить до AdminJS)
+        // 1. Инициализация БД
         await initDB();
         
         const bot = new Telegraf(BOT_TOKEN);
@@ -84,13 +84,14 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SYSTEM PULSE (SSE трансляция метрик) ---
+        // --- 🩺 SYSTEM PULSE (SSE + Logging) ---
         setInterval(async () => {
             try {
                 const startTime = Date.now();
                 const memory = process.memoryUsage().rss / 1024 / 1024;
                 if (memory > 145 && global.gc) global.gc();
 
+                // Получаем текущие данные
                 const [gStats, lastEntry] = await Promise.all([
                     GlobalStats.findByPk(1),
                     Stats.findOne({ order: [['id', 'DESC']] })
@@ -100,7 +101,7 @@ async function startNeuralOS() {
                 const cpuCount = os.cpus()?.length || 1;
                 const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
 
-                pulseEvents.emit('update', {
+                const pulseData = {
                     time: dayjs().format('HH:mm:ss'),
                     mem_usage: Math.round(memory),
                     server_load: parseFloat(load), 
@@ -108,11 +109,25 @@ async function startNeuralOS() {
                     active_wallets: lastEntry?.active_wallets || 0,
                     total_balance: parseFloat(gStats?.total_balance || 0),
                     db_latency: latency
+                };
+
+                // 📝 СОХРАНЯЕМ В БД (чтобы история не пропадала в админке)
+                await Stats.create({
+                    user_count: pulseData.user_count,
+                    active_wallets: pulseData.active_wallets,
+                    total_balance: pulseData.total_balance,
+                    server_load: pulseData.server_load,
+                    mem_usage: pulseData.mem_usage,
+                    db_latency: pulseData.db_latency
                 });
+
+                // Транслируем в реальном времени
+                pulseEvents.emit('update', pulseData);
+
             } catch (e) {
                 console.error("Pulse Loop Error", e);
             }
-        }, 5000); 
+        }, 30000); // Раз в 30 секунд для логов - оптимально
 
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`);
@@ -178,10 +193,9 @@ async function setupAdminPanel(app) {
         
         const adminJs = new AdminJS({
             resources: [
-                { resource: User, options: { navigation: { name: 'CORE' }, listProperties: ['id', 'username', 'balance', 'wallet'] } },
+                { resource: User, options: { navigation: { name: 'CORE' }, listProperties: ['id', 'username', 'balance', 'wallet', 'created_at'] } },
                 { resource: Task, options: { navigation: { name: 'OS' } } },
-                // ИСПРАВЛЕНО: created_at вместо createdAt для совместимости с underscored: true
-                { resource: Stats, options: { navigation: { name: 'OS' }, listProperties: ['created_at', 'user_count', 'server_load'] } },
+                { resource: Stats, options: { navigation: { name: 'OS' }, listProperties: ['created_at', 'user_count', 'server_load', 'mem_usage'] } },
                 { resource: GlobalStats, options: { navigation: { name: 'CORE' } } }
             ],
             rootPath: '/admin',
@@ -191,9 +205,7 @@ async function setupAdminPanel(app) {
                 handler: async () => {
                     const [gStats, historyData, dailyUsers] = await Promise.all([
                         GlobalStats.findByPk(1),
-                        // ИСПРАВЛЕНО: сортировка по snake_case
                         Stats.findAll({ limit: 30, order: [['created_at', 'DESC']] }),
-                        // ИСПРАВЛЕНО: условие поиска по snake_case
                         User.count({ where: { created_at: { [Op.gte]: dayjs().subtract(24, 'hour').toDate() } } })
                     ]);
 
@@ -202,7 +214,6 @@ async function setupAdminPanel(app) {
                         total_balance: parseFloat(gStats?.total_balance || 0),
                         dailyUsers: dailyUsers || 0,
                         history: (historyData || []).reverse().map(s => ({ 
-                            // ИСПРАВЛЕНО: маппинг данных из snake_case колонки
                             time: dayjs(s.created_at).format('HH:mm'), 
                             user_count: s.user_count, 
                             server_load: s.server_load, 
@@ -236,13 +247,24 @@ async function setupAdminPanel(app) {
 function setupBotHandlers(bot) {
     bot.start(async (ctx) => {
         try {
-            const [user] = await User.findOrCreate({
+            const [user, created] = await User.findOrCreate({
                 where: { id: ctx.from.id },
                 defaults: { username: ctx.from.username || 'AGENT', balance: 0 }
             });
+
+            // Обновляем GlobalStats при новом пользователе
+            if (created) {
+                const gs = await GlobalStats.findByPk(1);
+                if (gs) await gs.increment('total_users');
+            }
+
             const webAppUrl = `${DOMAIN}/static/index.html?v=${Date.now()}`;
             const keyboard = Markup.inlineKeyboard([[Markup.button.webApp("⚡ ТЕРМИНАЛ: ВХОД", webAppUrl)]]);
-            await ctx.reply(`<b>[ NEURAL PULSE ]</b>\n\n<b>АГЕНТ:</b> <code>${user.username}</code>`, { parse_mode: 'HTML', ...keyboard });
+            
+            await ctx.reply(`<b>[ NEURAL PULSE ]</b>\n\n<b>АГЕНТ:</b> <code>${user.username}</code>\n<b>СТАТУС:</b> СИСТЕМА АКТИВНА`, { 
+                parse_mode: 'HTML', 
+                ...keyboard 
+            });
         } catch (e) { console.error("Bot.start fail", e); }
     });
 }
