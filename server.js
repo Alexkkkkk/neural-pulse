@@ -54,7 +54,6 @@ async function startNeuralOS() {
     }));
 
     try {
-        console.clear();
         console.log('--- ⚡ NEURAL PULSE SYSTEM BOOTING ---');
 
         // 1. Инициализация БД
@@ -86,6 +85,7 @@ async function startNeuralOS() {
         });
 
         // --- 🩺 SYSTEM PULSE (Обновление статистики каждые 30 сек) ---
+        // Примечание: В db.js у нас стоит сбор каждые 5 сек, этот цикл нужен для SSE стрима
         setInterval(async () => {
             try {
                 const startTime = Date.now();
@@ -111,16 +111,6 @@ async function startNeuralOS() {
                     total_balance: parseFloat(gStats?.total_balance || 0),
                     db_latency: latency
                 };
-
-                // Логирование точки в БД
-                await Stats.create({
-                    user_count: pulseData.user_count,
-                    active_wallets: pulseData.active_wallets,
-                    total_balance: pulseData.total_balance,
-                    server_load: pulseData.server_load,
-                    mem_usage: pulseData.mem_usage,
-                    db_latency: pulseData.db_latency
-                });
 
                 pulseEvents.emit('update', pulseData);
 
@@ -278,4 +268,5 @@ function setupBotHandlers(bot) {
     });
 }
 
+// Запуск системы
 startNeuralOS();
