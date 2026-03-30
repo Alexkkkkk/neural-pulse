@@ -1,6 +1,6 @@
 import React, { useState, useEffect, memo, useCallback } from 'react';
 
-// --- 🌐 NEURAL PULSE OS COLOR SYSTEM ---
+// --- 🌐 NEURAL PULSE OS COLOR SYSTEM (Synced with Main) ---
 const CYBER = {
   bg: '#0b0e14',
   card: '#161b22',
@@ -127,7 +127,7 @@ const Dashboard = (props) => {
 
   const StatCard = ({ label, value, unit, color, historyKey }) => {
     const chartData = history.map(h => Number(h[historyKey]) || 0);
-    let progressPercent = unit === '%' ? value : unit === 'MB' ? (value / 1024) * 100 : (value / 200) * 100;
+    let progressPercent = unit === '%' ? value : unit === 'MB' ? (value / 2048) * 100 : (value / 1000) * 100;
 
     return (
       <div style={{ 
@@ -165,12 +165,15 @@ const Dashboard = (props) => {
   return (
     <div style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace', padding: '20px' }}>
       <style>{`
+        /* --- GLOBAL DARK OVERRIDE --- */
         #adminjs, .adminjs_Box, [data-testid="sidebar"], [data-testid="resource-header"], .adminjs_Table { 
             background: ${CYBER.bg} !important; 
         }
         [data-testid="sidebar"] { border-right: 1px solid ${CYBER.border} !important; }
         .adminjs_Table td, .adminjs_Table th { border-bottom: 1px solid ${CYBER.border} !important; color: #8b949e !important; }
+        .adminjs_Button, button { border-radius: 0 !important; text-transform: uppercase !important; font-family: monospace !important; }
         
+        /* Glitch Animation */
         .glitch-title:hover {
           animation: glitch 0.3s cubic-bezier(.25,.46,.45,.94) both infinite;
           color: ${CYBER.secondary} !important;
@@ -205,19 +208,20 @@ const Dashboard = (props) => {
       <div style={{ display: 'flex', flexWrap: 'wrap', margin: '0 -10px' }}>
         <StatCard label="AGENTS" value={stats.totalUsers} unit="U" color={CYBER.primary} historyKey="user_count" />
         <StatCard label="WALLETS" value={stats.walletsLinked} unit="W" color={CYBER.ton} historyKey="active_wallets" />
-        {/* КАРТОЧКА ПАМЯТИ ВЕРНУЛАСЬ */}
         <StatCard label="MEMORY" value={stats.mem} unit="MB" color={CYBER.warning} historyKey="mem_usage" />
         <StatCard label="CPU_LOAD" value={stats.cpu} unit="%" color={CYBER.secondary} historyKey="server_load" />
         <StatCard label="LATENCY" value={stats.latency} unit="MS" color={CYBER.danger} historyKey="db_latency" />
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '20px', gap: '20px' }}>
+        {/* Визуализатор активности */}
         <div style={{ flex: '2 1 400px', background: CYBER.card, height: '200px', border: `1px solid ${CYBER.border}`, borderRadius: '4px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '6px', paddingBottom: '20px' }}>
           {[...Array(30)].map((_, i) => (
             <div key={i} style={{ width: '6px', background: `linear-gradient(to top, ${CYBER.primary}, ${CYBER.secondary})`, height: `${20 + (Math.random() * 50)}%`, animation: `cyber-pulse ${0.8 + (Math.random() * 1)}s infinite ${i * 0.05}s ease-in-out` }} />
           ))}
         </div>
 
+        {/* Логи терминала */}
         <div style={{ flex: '1 1 300px', background: '#05070a', height: '200px', border: `1px solid ${CYBER.border}`, padding: '15px', overflow: 'hidden' }}>
           <div style={{ color: CYBER.success, fontSize: '10px', marginBottom: '8px' }}>KERNEL_LOGS</div>
           <div style={{ fontSize: '10px', lineHeight: '1.6', fontFamily: 'monospace' }}>
