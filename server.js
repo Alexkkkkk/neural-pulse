@@ -41,9 +41,7 @@ async function startNeuralOS() {
                 ...helmet.contentSecurityPolicy.getDefaultDirectives(),
                 "connect-src": ["'self'", DOMAIN, "https://*.telegram.org"],
                 "img-src": ["'self'", "data:", "https:"],
-                // Разрешаем unsafe-eval для работы React-компонентов Dashboard в AdminJS
                 "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-                // Разрешаем генерацию звука через Blob/Data если потребуется
                 "media-src": ["'self'", "data:", "blob:"] 
             },
         },
@@ -56,7 +54,6 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
-    // Раздача статики
     app.use('/static', express.static(path.join(__dirname, 'static'), {
         maxAge: '1h',
         etag: true
@@ -92,7 +89,7 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SYSTEM PULSE (Сердцебиение системы) ---
+        // --- 🩺 SYSTEM PULSE ---
         setInterval(async () => {
             try {
                 const startTime = Date.now();
@@ -118,13 +115,9 @@ async function startNeuralOS() {
                     db_latency: latency
                 };
 
-                // Эмитим событие для SSE стрима
                 pulseEvents.emit('update', pulseData);
-
-                // Логируем и сохраняем в базу (только если нужно для истории графиков)
                 await Stats.create(pulseData);
 
-                // Очистка старых логов (храним последние 500 записей)
                 const count = await Stats.count();
                 if (count > 500) {
                     const oldest = await Stats.findOne({ order: [['created_at', 'ASC']] });
@@ -153,14 +146,10 @@ function setupRealTimeStream(app) {
             'Connection': 'keep-alive',
             'X-Accel-Buffering': 'no'
         });
-
         res.write(':\n\n');
-
         const sendData = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
         pulseEvents.on('update', sendData);
-
         const keepAlive = setInterval(() => res.write(':\n\n'), 15000);
-        
         req.on('close', () => {
             clearInterval(keepAlive);
             pulseEvents.removeListener('update', sendData);
@@ -251,15 +240,20 @@ async function setupAdminPanel(app) {
                 companyName: 'NEURAL PULSE OS', 
                 logo: '/static/images/logo.png',
                 withMadeWithAdminJS: false,
-                // ТЕМНАЯ ТЕМА ДЛЯ ВСЕГО ИНТЕРФЕЙСА ADMINJS
                 theme: {
                     colors: {
-                        bg: '#0b0e14',
-                        container: '#161b22',
-                        border: '#30363d',
-                        primary100: '#00f2fe', // Основной цвет (кибер-голубой)
-                        text: '#ffffff',
-                        sidebar: '#0b0e14'
+                        primary100: '#00f2fe',
+                        bg: '#0b0e14',        // Фон страницы
+                        container: '#161b22',  // Фон блоков
+                        sidebar: '#0d1117',    // Сайдбар
+                        border: '#30363d',     // Границы
+                        text: '#ffffff',       // Белый текст
+                        white: '#161b22',      // Переопределение белых элементов (кнопки и т.д.)
+                        grey100: '#f0f6fc',
+                        grey80: '#8b949e',
+                        grey60: '#6e7681',
+                        grey40: '#484f58',
+                        grey20: '#30363d',     // Темные разделители
                     }
                 }
             }
