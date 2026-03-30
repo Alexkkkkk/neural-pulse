@@ -17,14 +17,18 @@ const CYBER = {
 // Мемоизация графика для плавности (рисует историю данных)
 const MiniChart = memo(({ data, color, height = 30 }) => {
   if (!data || data.length < 2) return <div style={{ height: height + 10 }} />;
+  
+  // Очистка данных от null/undefined
   const cleanData = data.map(v => (Number.isFinite(v) ? v : 0));
   const max = Math.max(...cleanData) || 1;
   const min = Math.min(...cleanData);
   const range = max - min || 1;
+  
   const points = cleanData.map((val, i) => ({
     x: (i / (cleanData.length - 1)) * 100,
     y: height - ((val - min) / range) * height,
   }));
+  
   const pathData = `M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`;
   
   return (
@@ -41,9 +45,10 @@ const Dashboard = (props) => {
   const [logs, setLogs] = useState(['> INITIALIZING_BOOT_SEQUENCE...', '> KERNEL_LOADED', '> SYNCING_WITH_TITAN_CORE...']);
   const [scanPos, setScanPos] = useState(0);
   
-  // История для графиков (храним последние 30 точек)
+  // История для графиков (начальные данные приходят из handler в main.js)
   const [history, setHistory] = useState(props.data?.history || []);
 
+  // Основные показатели
   const [stats, setStats] = useState({
     totalUsers: props.data?.totalUsers || 0,
     dailyUsers: props.data?.dailyUsers || 0,
@@ -59,7 +64,7 @@ const Dashboard = (props) => {
   };
 
   useEffect(() => {
-    // 1. Анимация загрузки (Boot Sequence)
+    // 1. Имитация последовательности загрузки (Boot Sequence)
     const loader = setInterval(() => {
       setLoadingProgress(prev => {
         if (prev >= 100) {
@@ -67,37 +72,39 @@ const Dashboard = (props) => {
           setTimeout(() => {
             setIsReady(true);
             addLog('> CORE_SYSTEM_READY');
-          }, 200);
+          }, 400);
           return 100;
         }
         return prev + 10;
       });
-    }, 40);
+    }, 50);
 
-    // 2. Real-time связь через SSE (Слушаем сервер)
+    // 2. Real-time связь через SSE (Server-Sent Events)
     const eventSource = new EventSource('/api/admin/stream');
     
     eventSource.onmessage = (event) => {
       try {
         const pulse = JSON.parse(event.data);
         
+        // Обновляем текущие показатели (синхронно с main.js)
         setStats(prev => ({
           ...prev,
           cpu: pulse.server_load,
           mem: pulse.mem_usage,
-          latency: pulse.db_latency, // Исправлено под main.js (db_latency)
+          latency: pulse.db_latency,
           totalUsers: pulse.user_count,
           walletsLinked: pulse.active_wallets,
           total_balance: pulse.total_balance
         }));
 
-        // Обновляем массив истории для графиков
+        // Добавляем точку в историю графиков (держим 30 последних)
         setHistory(prev => [...prev.slice(-29), pulse]);
 
-        // Имитация активности в логах
-        if (Math.random() > 0.8) {
+        // Имитация активности в системном логе
+        if (Math.random() > 0.85) {
           const events = ['CORE_STABLE', 'TELEMETRY_SYNCED', 'DB_BUFFER_CLEAN', 'PULSE_RECEIVED', 'ENCRYPTING_SESSION'];
-          addLog(`> ${events[Math.floor(Math.random() * events.length)]}: ${Math.random().toString(16).slice(2, 8).toUpperCase()}`);
+          const randomHex = Math.random().toString(16).slice(2, 8).toUpperCase();
+          addLog(`> ${events[Math.floor(Math.random() * events.length)]}: ${randomHex}`);
         }
       } catch (e) {
         console.error("Pulse error:", e);
@@ -108,7 +115,7 @@ const Dashboard = (props) => {
       addLog('> ERROR: TELEMETRY_LINK_LOST. ATTEMPTING_RECONNECT...');
     };
 
-    // Анимация сканирующей линии в хедере
+    // Анимация сканирующей линии (Cyber Scan)
     const animInterval = setInterval(() => setScanPos(p => (p + 0.5) % 100), 50);
 
     return () => {
@@ -118,16 +125,16 @@ const Dashboard = (props) => {
     };
   }, []);
 
-  // Компонент карточки с данными
-  const StatCard = ({ label, value, unit, color, subValue, historyKey }) => {
+  // Компонент карточки HUD
+  const StatCard = ({ label, value, unit, color, historyKey }) => {
     const chartData = history.map(h => Number(h[historyKey]) || 0);
     
-    // Расчет прогресс-бара
+    // Расчет заполнения полоски прогресса
     let progressPercent = 0;
     if (unit === '%') progressPercent = value;
-    else if (unit === 'MB') progressPercent = (value / 1024) * 100; // На 1GB ресурсов
-    else if (unit === 'MS') progressPercent = (value / 150) * 100; // Порог задержки 150ms
-    else progressPercent = (value / 5000) * 100;
+    else if (unit === 'MB') progressPercent = (value / 1024) * 100; // На 1GB
+    else if (unit === 'MS') progressPercent = (value / 200) * 100;  // Критический порог 200ms
+    else progressPercent = (value / 1000) * 100;
 
     return (
       <div style={{ 
@@ -144,7 +151,7 @@ const Dashboard = (props) => {
         <MiniChart data={chartData} color={color} />
         
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
-            <span style={{ fontSize: '10px', color: color, opacity: 0.8 }}>{subValue || 'SYSTEM_ACTIVE'}</span>
+            <span style={{ fontSize: '10px', color: color, opacity: 0.8 }}>SYSTEM_ACTIVE</span>
             <span style={{ fontSize: '9px', color: '#444' }}>LIVE_STREAM</span>
         </div>
         
@@ -158,7 +165,7 @@ const Dashboard = (props) => {
     );
   };
 
-  // Экран загрузки
+  // Экран загрузки (OS Boot)
   if (!isReady) {
     return (
       <div style={{ background: CYBER.bg, color: CYBER.primary, height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' }}>
@@ -198,48 +205,48 @@ const Dashboard = (props) => {
         <div style={{ position: 'absolute', top: 0, left: `${scanPos}%`, width: '1px', height: '100%', background: CYBER.primary, boxShadow: `0 0 15px ${CYBER.primary}`, opacity: 0.3, zIndex: 1 }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 2 }}>
           <div>
-            <span style={{ padding: '2px 8px', background: CYBER.primary, color: '#000', fontWeight: 'bold', fontSize: '10px' }}>NEURAL_PULSE_OS_V12.4</span>
-            <h2 className="glitch-title" style={{ color: CYBER.primary, margin: '10px 0 0 0', fontSize: '24px', letterSpacing: '1px' }}>
-              TITAN_CORE_TELEMETRY
+            <span style={{ padding: '2px 8px', background: CYBER.primary, color: '#000', fontWeight: 'bold', fontSize: '10px' }}>NEURAL_PULSE_PRO_V4.2</span>
+            <h2 className="glitch-title" style={{ color: CYBER.primary, margin: '10px 0 0 0', fontSize: '24px', letterSpacing: '1px', transition: '0.3s' }}>
+              TITAN_CORE_MONITOR
             </h2>
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ color: CYBER.ton, fontWeight: 'bold', fontSize: '20px' }}>{stats.total_balance.toLocaleString()} $NP</div>
-            <div style={{ color: '#444', fontSize: '9px' }}>TOTAL_TOKEN_SUPPLY</div>
+            <div style={{ color: '#444', fontSize: '9px' }}>TOTAL_SUPPLY_IN_CIRCULATION</div>
           </div>
         </div>
       </div>
 
-      {/* --- GRID (HUD CARDS) --- */}
+      {/* --- HUD GRID --- */}
       <div style={{ display: 'flex', flexWrap: 'wrap', margin: '0 -10px' }}>
         <StatCard label="TOTAL_AGENTS" value={stats.totalUsers} unit="U" color={CYBER.primary} historyKey="user_count" />
-        <StatCard label="NEW_24H" value={stats.dailyUsers} unit="+" color={CYBER.success} historyKey="user_count" />
-        <StatCard label="WALLETS" value={stats.walletsLinked} unit="W" color={CYBER.ton} historyKey="active_wallets" />
-        <StatCard label="CORE_LOAD" value={stats.cpu} unit="%" color={CYBER.secondary} historyKey="server_load" />
-        <StatCard label="MEM_USAGE" value={stats.mem} unit="MB" color={CYBER.warning} historyKey="mem_usage" />
-        <StatCard label="LATENCY" value={stats.latency} unit="MS" color={CYBER.danger} historyKey="db_latency" />
+        <StatCard label="DAILY_NEW" value={stats.dailyUsers} unit="+" color={CYBER.success} historyKey="user_count" />
+        <StatCard label="ACTIVE_WALLETS" value={stats.walletsLinked} unit="W" color={CYBER.ton} historyKey="active_wallets" />
+        <StatCard label="SERVER_LOAD" value={stats.cpu} unit="%" color={CYBER.secondary} historyKey="server_load" />
+        <StatCard label="MEMORY" value={stats.mem} unit="MB" color={CYBER.warning} historyKey="mem_usage" />
+        <StatCard label="DB_LATENCY" value={stats.latency} unit="MS" color={CYBER.danger} historyKey="db_latency" />
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '20px', gap: '20px' }}>
         {/* WAVEFORM MONITOR */}
         <div style={{ flex: '2 1 400px', background: CYBER.card, height: '250px', border: `1px solid ${CYBER.border}`, borderRadius: '4px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '6px', position: 'relative', paddingBottom: '40px' }}>
-          <div style={{ position: 'absolute', top: '15px', left: '15px', color: CYBER.primary, fontSize: '10px', opacity: 0.5 }}>WAVEFORM_MONITOR</div>
+          <div style={{ position: 'absolute', top: '15px', left: '15px', color: CYBER.primary, fontSize: '10px', opacity: 0.5 }}>OS_WAVEFORM_PULSE</div>
           {[...Array(30)].map((_, i) => (
             <div key={i} style={{ 
                 width: '6px', 
                 background: `linear-gradient(to top, ${CYBER.primary}, ${CYBER.secondary})`, 
-                height: `${20 + (Math.random() * 50)}%`, // Динамическая высота для имитации жизни
+                height: `${20 + (Math.random() * 50)}%`, 
                 animation: `cyber-pulse ${0.8 + (Math.random() * 1)}s infinite ${i * 0.05}s ease-in-out` 
             }} />
           ))}
         </div>
 
-        {/* SYSTEM LOGS */}
+        {/* SYSTEM LOGS TERMINAL */}
         <div style={{ flex: '1 1 300px', background: '#05070a', height: '250px', border: `1px solid ${CYBER.border}`, padding: '20px', overflow: 'hidden', position: 'relative' }}>
-          <div style={{ color: CYBER.success, fontSize: '10px', marginBottom: '10px', borderBottom: `1px solid ${CYBER.success}33`, paddingBottom: '5px' }}>SYSTEM_LOGS</div>
+          <div style={{ color: CYBER.success, fontSize: '10px', marginBottom: '10px', borderBottom: `1px solid ${CYBER.success}33`, paddingBottom: '5px' }}>KERNEL_LOGS</div>
           <div style={{ fontSize: '10px', lineHeight: '1.8', color: '#4e555d', fontFamily: 'monospace' }}>
             {logs.map((log, i) => (
-              <div key={i} style={{ color: log.includes('ERROR') ? CYBER.danger : log.includes('SYNC') ? CYBER.primary : '#4e555d' }}>
+              <div key={i} style={{ color: log.includes('ERROR') ? CYBER.danger : log.includes('SYNC') ? CYBER.primary : log.includes('READY') ? CYBER.success : '#4e555d' }}>
                 {log}
               </div>
             ))}
