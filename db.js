@@ -5,14 +5,14 @@ import os from 'os';
 import cluster from 'cluster'; 
 
 // --- 🌐 CONFIG ---
-// Используем предоставленную строку подключения
+// Используем предоставленную строку подключения к pghost.ru
 const PG_URI = "postgresql://bothost_db_db1789af0108:hl3yLh4DQmySkEYDPYwS8fn9xkLPHYNMhmCbU8WCYXs@node1.pghost.ru:32865/bothost_db_db1789af0108";
 
 export const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
     logging: false,
     dialectOptions: { 
-        // ИСПРАВЛЕНИЕ: Отключаем SSL, так как сервер pghost.ru:32865 не поддерживает зашифрованные соединения
+        // ИСПРАВЛЕНИЕ: Отключаем SSL, так как сервер на порту 32865 не поддерживает зашифрованные соединения
         ssl: false, 
         connectTimeout: 60000 
     },
@@ -172,6 +172,7 @@ export const initDB = async () => {
 
         if (isPrimary) {
             // Синхронизация структуры
+            // Если дашборд всё еще пустой, замени alter: true на force: true один раз
             await sequelize.sync({ alter: true });
             await sessionStore.sync();
             
