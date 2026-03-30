@@ -33,6 +33,7 @@ const MULTIPLIERS = [
 
 async function startNeuralOS() {
     const app = express();
+    const bot = new Telegraf(BOT_TOKEN);
 
     // --- 🛡️ SECURITY & PERFORMANCE ---
     app.use(helmet({
@@ -65,9 +66,9 @@ async function startNeuralOS() {
         await initDB();
         await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
 
-        const bot = new Telegraf(BOT_TOKEN);
-
+        // Установка роутов
         setupAPIRoutes(app);
+        setupAdminCommands(app, bot); // Передаем bot для рассылки
         setupRealTimeStream(app); 
         await setupAdminPanel(app);
         setupBotHandlers(bot);
@@ -97,7 +98,6 @@ async function startNeuralOS() {
                 const cpuCount = os.cpus()?.length || 1;
                 const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
 
-                // Получаем статистику и последнего юзера для логов
                 const [gStats, walletCount, lastUser] = await Promise.all([
                     GlobalStats.findByPk(1),
                     User.count({ 
@@ -116,7 +116,6 @@ async function startNeuralOS() {
                     active_wallets: walletCount || 0,
                     total_balance: parseFloat(gStats?.total_balance || 0),
                     db_latency: latency,
-                    // Дополнительные данные для "умных" логов на Dashboard
                     recent_event: lastUser ? `NEW_AGENT: ${lastUser.username}` : 'CORE_STABLE',
                     event_type: lastUser && dayjs().diff(dayjs(lastUser.created_at), 'second') < 15 ? 'AUTH' : 'SYSTEM'
                 };
@@ -124,7 +123,6 @@ async function startNeuralOS() {
                 pulseEvents.emit('update', pulseData);
                 await Stats.create(pulseData);
 
-                // Очистка старой статистики (храним 500 записей)
                 const count = await Stats.count();
                 if (count > 500) {
                     const oldest = await Stats.findOne({ order: [['created_at', 'ASC']] });
@@ -143,6 +141,43 @@ async function startNeuralOS() {
         console.error(`🚨 BOOT FAILURE`, err);
         process.exit(1);
     }
+}
+
+// --- 🛰️ ADMIN COMMANDS HANDLER ---
+function setupAdminCommands(app, bot) {
+    app.post('/api/admin/command', async (req, res) => {
+        const { action, message } = req.body;
+        
+        try {
+            if (action === 'broadcast') {
+                console.log(`📡 INITIATING BROADCAST: ${message}`);
+                const users = await User.findAll({ attributes: ['id'] });
+                
+                let successCount = 0;
+                for (const user of users) {
+                    try {
+                        await bot.telegram.sendMessage(user.id, `<b>[ SYSTEM BROADCAST ]</b>\n\n${message}`, { parse_mode: 'HTML' });
+                        successCount++;
+                        // Небольшая задержка, чтобы не поймать флуд-лимит ТГ
+                        if (successCount % 20 === 0) await new Promise(r => setTimeout(r, 1000));
+                    } catch (err) {
+                        console.error(`Failed to send to ${user.id}`);
+                    }
+                }
+                pulseEvents.emit('update', { recent_event: `BROADCAST_SENT: ${successCount}_AGENTS`, event_type: 'SYSTEM' });
+            }
+
+            if (action === 'clear_cache') {
+                // Логика очистки (например, сессий или временных данных)
+                pulseEvents.emit('update', { recent_event: `CACHE_PURGED`, event_type: 'SYSTEM' });
+            }
+
+            res.sendStatus(200);
+        } catch (e) {
+            console.error("Command execution failed", e);
+            res.status(500).send(e.message);
+        }
+    });
 }
 
 function setupRealTimeStream(app) {
@@ -251,20 +286,7 @@ async function setupAdminPanel(app) {
                 logo: '/static/images/logo.png',
                 withMadeWithAdminJS: false,
                 theme: {
-                    colors: {
-                        primary100: '#00f2fe',
-                        bg: '#0b0e14',
-                        container: '#161b22',
-                        sidebar: '#0d1117',
-                        border: '#30363d',
-                        text: '#ffffff',
-                        white: '#161b22',
-                        grey100: '#f0f6fc',
-                        grey80: '#8b949e',
-                        grey60: '#6e7681',
-                        grey40: '#484f58',
-                        grey20: '#30363d',
-                    }
+                    colors: { primary100: '#00f2fe', bg: '#0b0e14', container: '#161b22', sidebar: '#0d1117', border: '#30363d', text: '#ffffff' }
                 }
             }
         });
@@ -294,7 +316,6 @@ function setupBotHandlers(bot) {
             if (created) {
                 const gs = await GlobalStats.findByPk(1);
                 if (gs) await gs.increment('total_users');
-                // Эмиттим событие немедленно для обновления Dashboard
                 pulseEvents.emit('update', { recent_event: `NEW_AGENT: ${user.username}`, event_type: 'AUTH' });
             }
 
