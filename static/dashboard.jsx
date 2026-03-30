@@ -1,6 +1,6 @@
 import React, { useState, useEffect, memo, useCallback, useRef } from 'react';
 
-// --- 🌌 INFINITY-PULSE CORE PALETTE (v9.5) ---
+// --- 🌌 INFINITY-PULSE CORE PALETTE (v9.6) ---
 const CYBER = {
   bg: '#020406',
   card: 'rgba(6, 9, 13, 0.95)',
@@ -32,7 +32,7 @@ const playSound = (freq, type = 'sine', dur = 0.2) => {
 
 // --- 📈 PRECISION MINI-CHART ---
 const MiniChart = memo(({ data, color, height = 40 }) => {
-  if (!data || data.length < 2) return <div style={{ height }} />;
+  if (!data || data.length < 2) return <div style={{ height, background: 'rgba(0,242,254,0.02)', marginTop: '10px' }} />;
   const cleanData = data.map(v => (Number.isFinite(v) ? v : 0));
   const max = Math.max(...cleanData) || 1;
   const min = Math.min(...cleanData);
@@ -43,16 +43,16 @@ const MiniChart = memo(({ data, color, height = 40 }) => {
   }));
   const pathData = `M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`;
   return (
-    <svg width="100%" height={height} style={{ marginTop: '10px', overflow: 'visible' }}>
+    <svg width="100%" height={height} style={{ marginTop: '10px', overflow: 'visible', display: 'block' }}>
       <path d={pathData} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" />
-      <path d={`${pathData} L 100,${height} L 0,${height} Z`} fill={color} fillOpacity="0.08" />
+      <path d={`${pathData} L 100,${height} L 0,${height} Z`} fill={color} fillOpacity="0.1" />
     </svg>
   );
 });
 
 // --- ⚡ NEURAL WAVE VISUALIZER ---
 const NeuralWave = memo(({ active }) => (
-  <svg viewBox="0 0 400 100" style={{ width: '100%', height: '60px', opacity: 0.7 }}>
+  <svg viewBox="0 0 400 100" style={{ width: '100%', height: '60px', opacity: 0.7, marginTop: '15px' }}>
     <path
       d="M0 50 Q 50 10, 100 50 T 200 50 T 300 50 T 400 50"
       fill="none"
@@ -68,37 +68,69 @@ const NeuralWave = memo(({ active }) => (
 ));
 
 const Dashboard = (props) => {
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' или 'airdrop'
+  const [activeTab, setActiveTab] = useState('overview');
   const [bootProgress, setBootProgress] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [logs, setLogs] = useState(['> MOUNTING_VOLUMES...', '> CONNECTING_TON...', '> PULSE_READY']);
   const [isEmergency, setIsEmergency] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingUser, setEditingUser] = useState(null);
   const logRef = useRef(null);
-
-  // --- ДАННЫЕ (Интеграция с твоим бэкендом) ---
+  
+  const [logs, setLogs] = useState(['> MOUNTING_VOLUMES...', '> CONNECTING_TON...', '> MONITORING_ACTIVE']);
+  
+  // Данные пользователей
   const [users, setUsers] = useState(props.data?.usersList || [
-    { id: '@alex_neo', ton: 15.5, refs: 12, taps: 845000, status: 'active' },
-    { id: '@kander_dev', ton: 50.0, refs: 45, taps: 2100000, status: 'active' },
-    { id: '@scam_bot_99', ton: 0.0, refs: 0, taps: 9999999, status: 'banned' },
+    { id: '@alex_neo', ton: 65.5, refs: 12, taps: 845000, status: 'active' },
+    { id: '@kander_dev', ton: 12.0, refs: 45, taps: 2100000, status: 'active' },
+    { id: '@guest_01', ton: 0.0, refs: 2, taps: 15000, status: 'active' }
   ]);
 
+  // Расширенная статистика
   const [stats, setStats] = useState({
-    users: props.data?.totalUsers || users.length,
-    wallets: props.data?.active_wallets || 0,
-    balance: props.data?.total_balance || 0,
-    load: 12.7, lat: 106
+    users: props.data?.totalUsers || 1,
+    tonPool: 65.5,
+    load: 10.7,
+    lat: 101,
+    ram: 42,
+    disk: 18
   });
 
-  const [history, setHistory] = useState(props.data?.history || []);
+  const [history, setHistory] = useState([]);
 
-  // --- ACTIONS ---
+  // --- Эффект загрузки и стрима ---
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setBootProgress(p => {
+        if (p >= 100) { clearInterval(timer); setTimeout(() => setIsLoaded(true), 300); return 100; }
+        return p + 10;
+      });
+    }, 30);
+
+    // Симуляция получения данных (замени на свой EventSource если нужно)
+    const dataInterval = setInterval(() => {
+      setStats(prev => ({
+        ...prev,
+        load: Math.max(5, Math.min(95, prev.load + (Math.random() * 4 - 2))),
+        lat: Math.max(80, Math.min(300, prev.lat + (Math.random() * 10 - 5))),
+        ram: Math.max(30, Math.min(90, prev.ram + (Math.random() * 2 - 1)))
+      }));
+      setHistory(prev => [...prev.slice(-20), { 
+        user_count: stats.users, 
+        total_balance: stats.tonPool, 
+        server_load: stats.load, 
+        db_latency: stats.lat 
+      }]);
+    }, 2000);
+
+    return () => { clearInterval(timer); clearInterval(dataInterval); };
+  }, [stats]);
+
+  useEffect(() => { logRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [logs]);
+
+  // --- Actions ---
   const toggleBan = (userId) => {
-    setUsers(prev => prev.map(u => 
-      u.id === userId ? { ...u, status: u.status === 'banned' ? 'active' : 'banned' } : u
-    ));
-    playSound(400, 'sawtooth');
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: u.status === 'banned' ? 'active' : 'banned' } : u));
+    playSound(300, 'sawtooth');
   };
 
   const updateUser = (userId, newData) => {
@@ -108,42 +140,19 @@ const Dashboard = (props) => {
   };
 
   const exportToCSV = () => {
-    const headers = ['User_ID,TON,Refs,Taps,Status\n'];
-    const rows = users.map(u => `${u.id},${u.ton},${u.refs},${u.taps},${u.status}\n`);
-    const blob = new Blob([headers, ...rows], { type: 'text/csv' });
+    const headers = 'User_ID,TON,Refs,Taps,Status\n';
+    const rows = users.map(u => `${u.id},${u.ton},${u.refs},${u.taps},${u.status}\n`).join('');
+    const blob = new Blob([headers + rows], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `neural_pulse_snapshot.csv`;
+    a.download = `np_export_${new Date().getTime()}.csv`;
     a.click();
   };
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setBootProgress(p => {
-        if (p >= 100) { clearInterval(timer); setTimeout(() => setIsLoaded(true), 300); return 100; }
-        return p + 10;
-      });
-    }, 30);
-    
-    const es = new EventSource('/api/admin/stream');
-    es.onmessage = (e) => {
-      try {
-        const d = JSON.parse(e.data);
-        setStats(p => ({ ...p, users: d.user_count ?? p.users, load: d.server_load ?? p.load, balance: d.total_balance ?? p.balance, lat: d.db_latency ?? p.lat }));
-        if (d.time) setHistory(prev => [...prev.slice(-30), d]);
-      } catch (err) {}
-    };
-    return () => { clearInterval(timer); es.close(); };
-  }, []);
-
-  useEffect(() => { logRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [logs]);
-
-  const filteredUsers = users.filter(u => u.id.toLowerCase().includes(searchTerm.toLowerCase()));
-
   if (!isLoaded) return (
     <div style={{ background: '#000', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: CYBER.primary, fontFamily: 'monospace' }}>
-      <div style={{ letterSpacing: '5px', marginBottom: '15px' }}>BOOTING_NEURAL_OS_v9.5</div>
+      <div style={{ letterSpacing: '5px', marginBottom: '15px' }}>BOOTING_NEURAL_OS_v9.6</div>
       <div style={{ width: '200px', height: '2px', background: '#111' }}>
         <div style={{ width: `${bootProgress}%`, height: '100%', background: CYBER.primary, boxShadow: `0 0 10px ${CYBER.primary}` }} />
       </div>
@@ -153,56 +162,56 @@ const Dashboard = (props) => {
   return (
     <div className={`app-root ${isEmergency ? 'emergency-mode' : ''}`}>
       <style>{`
-        .app-root { background: ${CYBER.bg}; min-height: 100vh; padding: 15px; font-family: 'JetBrains Mono', monospace; color: ${CYBER.text}; position: relative; }
+        .app-root { background: ${CYBER.bg}; min-height: 100vh; padding: 15px; font-family: 'JetBrains Mono', monospace; color: ${CYBER.text}; position: relative; overflow-x: hidden; }
         .app-root::after { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: 0.03; z-index: 10; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02)); background-size: 100% 3px, 2px 100%; }
 
-        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 25px; flex-wrap: wrap; gap: 10px; }
-        .main-title { font-size: clamp(24px, 8vw, 42px); letter-spacing: 4px; color: ${CYBER.primary}; margin: 0; font-weight: 900; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 25px; }
+        .main-title { font-size: 32px; letter-spacing: 4px; color: ${CYBER.primary}; margin: 0; font-weight: 900; text-transform: uppercase; }
         
-        .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid ${CYBER.border}; }
-        .tab-btn { background: none; border: none; color: #444; cursor: pointer; padding: 10px 15px; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; }
+        .nav-tabs { display: flex; gap: 15px; margin-bottom: 20px; border-bottom: 1px solid ${CYBER.border}; }
+        .tab-btn { background: none; border: none; color: #444; cursor: pointer; padding: 10px 0; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; }
         .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; font-weight: bold; }
 
-        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
-        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; border-radius: 2px; position: relative; transition: 0.3s; }
-        .stat-label { font-size: 9px; color: ${CYBER.primary}; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 5px; }
-        .stat-value { font-size: 22px; font-weight: bold; }
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; border-radius: 2px; position: relative; }
+        .stat-label { font-size: 9px; color: ${CYBER.primary}; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 5px; font-weight: bold; }
+        .stat-value { font-size: 22px; font-weight: bold; display: flex; align-items: baseline; }
+        .unit { font-size: 10px; margin-left: 4px; opacity: 0.5; }
 
-        /* Airdrop Manager Styles */
-        .search-bar { width: 100%; background: #000; border: 1px solid ${CYBER.border}; color: ${CYBER.primary}; padding: 12px; margin-bottom: 15px; font-family: inherit; }
+        .op-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .cyber-btn { background: #fff; color: #000; border: none; padding: 12px; font-size: 11px; font-family: inherit; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 2px; transition: 0.2s; }
+        .cyber-btn:active { transform: scale(0.95); opacity: 0.8; }
+        .btn-danger { background: ${CYBER.warning}; }
+
+        .search-bar { width: 100%; background: #000; border: 1px solid ${CYBER.border}; color: ${CYBER.primary}; padding: 12px; margin-bottom: 15px; font-family: inherit; border-radius: 2px; }
         .cyber-table-wrap { overflow-x: auto; }
         .cyber-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-        .cyber-table th { text-align: left; padding: 12px; color: ${CYBER.primary}; border-bottom: 1px solid ${CYBER.border}; text-transform: uppercase; }
+        .cyber-table th { text-align: left; padding: 12px; color: ${CYBER.primary}; border-bottom: 1px solid ${CYBER.border}; }
         .cyber-table td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .cyber-table tr:hover { background: rgba(0, 242, 254, 0.03); }
 
-        .action-btn { background: none; border: 1px solid #333; color: #fff; padding: 5px 10px; cursor: pointer; font-size: 10px; margin-right: 5px; }
-        .btn-edit { border-color: ${CYBER.warning}; color: ${CYBER.warning}; }
-        .btn-ban { border-color: ${CYBER.danger}; color: ${CYBER.danger}; }
-        .status-banned { color: ${CYBER.danger}; text-shadow: 0 0 5px ${CYBER.danger}66; }
-
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 20px; }
-        .modal-content { background: #06090d; border: 2px solid ${CYBER.primary}; padding: 25px; width: 100%; max-width: 350px; }
-        .modal-input { width: 100%; background: #000; border: 1px solid #333; color: #fff; padding: 10px; margin: 10px 0; }
-
+        .action-btn { background: none; border: 1px solid #333; color: #fff; padding: 6px; cursor: pointer; font-size: 12px; border-radius: 2px; }
         .emergency-mode { filter: hue-rotate(-160deg) saturate(1.5); }
+        
+        .progress-mini { width: 100%; height: 4px; background: rgba(255,255,255,0.05); margin-top: 10px; position: relative; }
+        .progress-bar { height: 100%; transition: 0.5s; }
+
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .modal-content { background: #06090d; border: 1px solid ${CYBER.primary}; padding: 20px; width: 100%; max-width: 300px; }
       `}</style>
 
       {/* --- EDIT MODAL --- */}
       {editingUser && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <div className="stat-label">MOD_INTERFACE // {editingUser.id}</div>
-            <label style={{fontSize: '10px', marginTop: '10px', display: 'block'}}>SET_TON</label>
-            <input className="modal-input" type="number" id="m-ton" defaultValue={editingUser.ton} />
-            <label style={{fontSize: '10px', display: 'block'}}>SET_TAPS</label>
-            <input className="modal-input" type="number" id="m-taps" defaultValue={editingUser.taps} />
-            <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}>
-              <button className="action-btn btn-edit" style={{flex: 1}} onClick={() => updateUser(editingUser.id, {
+            <div className="stat-label">MOD_USER // {editingUser.id}</div>
+            <input className="search-bar" type="number" id="m-ton" placeholder="TON" defaultValue={editingUser.ton} />
+            <input className="search-bar" type="number" id="m-taps" placeholder="TAPS" defaultValue={editingUser.taps} />
+            <div style={{display: 'flex', gap: '10px'}}>
+              <button className="cyber-btn" style={{flex: 1}} onClick={() => updateUser(editingUser.id, {
                 ton: parseFloat(document.getElementById('m-ton').value),
                 taps: parseInt(document.getElementById('m-taps').value)
               })}>SAVE</button>
-              <button className="action-btn" style={{flex: 1}} onClick={() => setEditingUser(null)}>CANCEL</button>
+              <button className="cyber-btn" style={{flex: 1, background: '#222', color: '#fff'}} onClick={() => setEditingUser(null)}>EXIT</button>
             </div>
           </div>
         </div>
@@ -212,10 +221,10 @@ const Dashboard = (props) => {
       <div className="header">
         <div>
           <h1 className="main-title">NEURAL_PULSE</h1>
-          <div style={{ fontSize: '9px', opacity: 0.5 }}>// ACCESS_ROOT // NODE: NL4 // OS: 9.5</div>
+          <div style={{ fontSize: '9px', opacity: 0.6, marginTop: '4px' }}>// ACCESS_ROOT // NODE: NL4 // OS: 9.6</div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '24px', color: CYBER.ton, fontWeight: '900' }}>{stats.balance.toLocaleString()} $NP</div>
+          <div style={{ fontSize: '20px', color: CYBER.ton, fontWeight: 'bold' }}>1 000 $NP</div>
           <div className="stat-label">TOTAL_LIQUIDITY</div>
         </div>
       </div>
@@ -226,104 +235,112 @@ const Dashboard = (props) => {
         <button className={`tab-btn ${activeTab === 'airdrop' ? 'active' : ''}`} onClick={() => setActiveTab('airdrop')}>[ Airdrop_Manager ]</button>
       </div>
 
-      {/* --- CONTENT: OVERVIEW --- */}
       {activeTab === 'overview' && (
         <>
           <div className="stat-grid">
             <div className="card">
               <div className="stat-label">Agents</div>
-              <div className="stat-value">{stats.users}U</div>
+              <div className="stat-value">{stats.users}<span className="unit">U</span></div>
               <MiniChart data={history.map(h => h.user_count)} color={CYBER.primary} />
             </div>
             <div className="card">
               <div className="stat-label" style={{ color: CYBER.ton }}>TON_Pool</div>
-              <div className="stat-value">{users.reduce((acc, u) => acc + u.ton, 0).toFixed(1)}💎</div>
+              <div className="stat-value">{stats.tonPool.toFixed(1)}<span className="unit">💎</span></div>
               <MiniChart data={history.map(h => h.total_balance)} color={CYBER.ton} />
             </div>
             <div className="card">
               <div className="stat-label" style={{ color: CYBER.success }}>Kernel_Load</div>
-              <div className="stat-value">{stats.load}%</div>
+              <div className="stat-value" style={{ color: stats.load > 80 ? CYBER.danger : CYBER.success }}>
+                {stats.load.toFixed(1)}<span className="unit">%</span>
+              </div>
               <MiniChart data={history.map(h => h.server_load)} color={CYBER.success} />
             </div>
             <div className="card">
               <div className="stat-label" style={{ color: CYBER.danger }}>Latency</div>
-              <div className="stat-value">{stats.lat}ms</div>
+              <div className="stat-value" style={{ color: stats.lat > 200 ? CYBER.danger : CYBER.warning }}>
+                {Math.floor(stats.lat)}<span className="unit">ms</span>
+              </div>
               <MiniChart data={history.map(h => h.db_latency)} color={CYBER.danger} />
+            </div>
+            
+            {/* Добавленные метрики мониторинга */}
+            <div className="card">
+              <div className="stat-label">RAM_Usage</div>
+              <div className="stat-value">{stats.ram}<span className="unit">%</span></div>
+              <div className="progress-mini">
+                <div className="progress-bar" style={{ width: `${stats.ram}%`, background: stats.ram > 85 ? CYBER.danger : CYBER.primary }} />
+              </div>
+            </div>
+            <div className="card">
+              <div className="stat-label">Disk_Space</div>
+              <div className="stat-value">{stats.disk}<span className="unit">%</span></div>
+              <div className="progress-mini">
+                <div className="progress-bar" style={{ width: `${stats.disk}%`, background: CYBER.warning }} />
+              </div>
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '15px' }}>
-            <div className="card">
-              <div className="stat-label" style={{ marginBottom: '15px' }}>CORE_OPERATIONS</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <button className="cyber-btn" onClick={() => playSound(600)}>📢<span>Broadcast</span></button>
-                <button className="cyber-btn" onClick={() => playSound(800)}>🧹<span>Purge</span></button>
-                <button className="cyber-btn" onClick={() => playSound(400)}>💾<span>Sync</span></button>
-                <button className="cyber-btn btn-danger" onClick={() => { setIsEmergency(!isEmergency); playSound(200, 'sawtooth'); }}>
-                  ⚠️<span>{isEmergency ? 'Resume' : 'Kill_Switch'}</span>
-                </button>
-              </div>
-              <NeuralWave active={isEmergency} />
+          <div className="card" style={{ marginBottom: '15px' }}>
+            <div className="stat-label">Core_Operations</div>
+            <div className="op-grid">
+              <button className="cyber-btn" onClick={() => playSound(600)}>📢 Broadcast</button>
+              <button className="cyber-btn" onClick={() => playSound(800)}>🧹 Purge</button>
+              <button className="cyber-btn" onClick={() => playSound(400)}>💾 Sync</button>
+              <button className="cyber-btn btn-danger" onClick={() => { setIsEmergency(!isEmergency); playSound(150, 'sawtooth'); }}>
+                ⚠️ {isEmergency ? 'Resume' : 'Kill_Switch'}
+              </button>
             </div>
+            <NeuralWave active={isEmergency} />
+          </div>
 
-            <div className="card" style={{ background: 'rgba(0,0,0,0.3)', height: '230px', overflow: 'hidden' }}>
-              <div className="stat-label" style={{ marginBottom: '10px' }}>[ LIVE_FEED ]</div>
-              <div style={{ fontSize: '10px', height: '180px', overflowY: 'auto', opacity: 0.7 }}>
-                {logs.map((l, i) => <div key={i} style={{ marginBottom: '4px' }}>{l}</div>)}
-                <div ref={logRef} />
-              </div>
+          <div className="card" style={{ background: 'rgba(0,0,0,0.4)', height: '150px' }}>
+            <div className="stat-label">[ LIVE_FEED ]</div>
+            <div style={{ fontSize: '10px', height: '110px', overflowY: 'auto', opacity: 0.7 }}>
+              {logs.map((l, i) => <div key={i} style={{ marginBottom: '4px' }}>{l}</div>)}
+              <div ref={logRef} />
             </div>
           </div>
         </>
       )}
 
-      {/* --- CONTENT: AIRDROP MANAGER --- */}
       {activeTab === 'airdrop' && (
-        <div className="card" style={{ padding: '0' }}>
-          <div style={{ padding: '15px' }}>
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
-              <input 
-                className="search-bar" 
-                style={{ marginBottom: '0' }}
-                placeholder="SEARCH_BY_IDENTITY..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <button className="action-btn" style={{ borderColor: CYBER.success, color: CYBER.success }} onClick={exportToCSV}>EXPORT_CSV</button>
-            </div>
-
-            <div className="cyber-table-wrap">
-              <table className="cyber-table">
-                <thead>
-                  <tr>
-                    <th>User_ID</th>
-                    <th>TON_In</th>
-                    <th>Refs</th>
-                    <th>Taps</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.map((u, i) => (
-                    <tr key={i} style={{ opacity: u.status === 'banned' ? 0.4 : 1 }}>
-                      <td style={{ color: CYBER.primary, fontWeight: 'bold' }}>{u.id}</td>
-                      <td style={{ color: CYBER.ton }}>{u.ton.toFixed(1)}</td>
-                      <td>{u.refs}</td>
-                      <td>{(u.taps / 1000).toFixed(1)}k</td>
-                      <td className={u.status === 'banned' ? 'status-banned' : ''}>{u.status.toUpperCase()}</td>
-                      <td>
-                        <button className="action-btn btn-edit" onClick={() => setEditingUser(u)}>⚙️</button>
-                        <button className="action-btn btn-ban" onClick={() => toggleBan(u.id)}>{u.status === 'banned' ? '🔓' : '🚫'}</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+        <div className="card" style={{ padding: '15px' }}>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <input 
+              className="search-bar" 
+              placeholder="SEARCH_BY_ID..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <button className="action-btn" style={{ borderColor: CYBER.success, height: '42px', padding: '0 15px' }} onClick={exportToCSV}>💾</button>
           </div>
-          <div style={{ padding: '10px 15px', borderTop: `1px solid ${CYBER.border}`, fontSize: '9px', opacity: 0.3 }}>
-            CLUSTER_TRACKING: ACTIVE // SYNC_STAMP: {new Date().toLocaleTimeString()}
+
+          <div className="cyber-table-wrap">
+            <table className="cyber-table">
+              <thead>
+                <tr>
+                  <th>Identity</th>
+                  <th>TON</th>
+                  <th>Taps</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.filter(u => u.id.toLowerCase().includes(searchTerm.toLowerCase())).map((u, i) => (
+                  <tr key={i} style={{ opacity: u.status === 'banned' ? 0.3 : 1 }}>
+                    <td style={{ color: CYBER.primary }}>{u.id}</td>
+                    <td style={{ color: CYBER.ton }}>{u.ton.toFixed(1)}</td>
+                    <td>{(u.taps / 1000).toFixed(1)}k</td>
+                    <td style={{ display: 'flex', gap: '8px' }}>
+                      <button className="action-btn" onClick={() => setEditingUser(u)}>⚙️</button>
+                      <button className="action-btn" style={{ color: u.status === 'banned' ? CYBER.success : CYBER.danger }} onClick={() => toggleBan(u.id)}>
+                        {u.status === 'banned' ? '🔓' : '🚫'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
