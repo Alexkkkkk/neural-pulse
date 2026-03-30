@@ -1,39 +1,38 @@
 import React, { useState, useEffect, memo, useCallback, useRef } from 'react';
 
-// --- 🌐 КИБЕР-СИСТЕМА ЦВЕТОВ (NEURAL PULSE OS) ---
+// --- 🌌 INFINITY-PULSE CORE PALETTE (v8.5) ---
 const CYBER = {
-  bg: '#05070a',
-  card: '#0d1117',
-  primary: '#00f2fe',
-  secondary: '#7000ff',
-  success: '#39ff14',
-  warning: '#fbc02d',
-  danger: '#ff3131',
+  bg: '#020406',
+  card: 'rgba(6, 9, 13, 0.8)',
+  primary: '#00f2fe',    
+  secondary: '#7000ff', 
+  success: '#39ff14',   
+  warning: '#ffea00',   
+  danger: '#ff003c',    
   ton: '#0088CC',
-  text: '#e6edf3',
+  text: '#e2e8f0',
   subtext: '#8b949e',
-  border: '#30363d',
-  overlay: 'rgba(5, 7, 10, 0.95)'
+  border: 'rgba(0, 242, 254, 0.25)',
+  hex: 'rgba(0, 242, 254, 0.03)'
 };
 
-// --- 🔊 АУДИО-ДВИЖОК (Haptic & Feedback) ---
-const playPulseSound = (type = 'log') => {
+// --- 🔉 QUANTUM AUDIO ENGINE ---
+const playSound = (freq, type = 'sine', dur = 0.2) => {
   try {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'sine';
-    const freq = type === 'error' ? 150 : type === 'auth' ? 1200 : type === 'cmd' ? 600 : 880;
-    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-    gain.gain.setValueAtTime(0.01, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
-    osc.connect(gain); gain.connect(audioCtx.destination);
-    osc.start(); osc.stop(audioCtx.currentTime + 0.1);
-  } catch (e) { }
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    gain.gain.setValueAtTime(0.02, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + dur);
+  } catch (e) {}
 };
 
-// --- 📈 МИНИ-ГРАФИКИ (Precision Engine) ---
-const MiniChart = memo(({ data, color, height = 40 }) => {
+// --- 📈 PRECISION MINI-CHART ---
+const MiniChart = memo(({ data, color, height = 45 }) => {
   if (!data || data.length < 2) return <div style={{ height }} />;
   const cleanData = data.map(v => (Number.isFinite(v) ? v : 0));
   const max = Math.max(...cleanData) || 1;
@@ -45,272 +44,270 @@ const MiniChart = memo(({ data, color, height = 40 }) => {
   }));
   const pathData = `M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`;
   return (
-    <svg width="100%" height={height} style={{ marginTop: '15px', overflow: 'visible', display: 'block' }}>
-      <path d={pathData} fill="none" stroke={color} strokeWidth="2" strokeOpacity="1" />
-      <path d={`${pathData} L 100,${height} L 0,${height} Z`} fill={color} fillOpacity="0.1" />
+    <svg width="100%" height={height} style={{ marginTop: '12px', overflow: 'visible', filter: `drop-shadow(0 0 5px ${color}44)` }}>
+      <path d={pathData} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={`${pathData} L 100,${height} L 0,${height} Z`} fill={color} fillOpacity="0.08" />
     </svg>
   );
 });
 
+// --- ⚡ NEURAL WAVE VISUALIZER ---
+const NeuralWave = memo(({ active }) => (
+  <svg viewBox="0 0 400 100" style={{ width: '100%', height: '80px', filter: `drop-shadow(0 0 10px ${active ? CYBER.danger : CYBER.primary})` }}>
+    <path
+      d="M0 50 Q 50 10, 100 50 T 200 50 T 300 50 T 400 50"
+      fill="none"
+      stroke={active ? CYBER.danger : CYBER.primary}
+      strokeWidth="2"
+    >
+      <animate attributeName="d" dur="2s" repeatCount="indefinite"
+        values="M0 50 Q 50 10, 100 50 T 200 50 T 300 50 T 400 50;
+                M0 50 Q 50 90, 100 50 T 200 50 T 300 50 T 400 50;
+                M0 50 Q 50 10, 100 50 T 200 50 T 300 50 T 400 50" />
+    </path>
+  </svg>
+));
+
 const Dashboard = (props) => {
-  // --- СОСТОЯНИЯ СИСТЕМЫ ---
-  const [loadingProgress, setLoadingProgress] = useState(0);
-  const [isReady, setIsReady] = useState(false);
-  const [logs, setLogs] = useState(['> SYSTEM_READY', '> ENCRYPTION_ACTIVE', '> TITAN_CORE_LINKED']);
-  const [scanPos, setScanPos] = useState(0);
+  const [bootProgress, setBootProgress] = useState(0);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [logs, setLogs] = useState(['> MOUNTING_ENCRYPTED_VOLUMES...', '> CONNECTING_TO_TON_GATEWAY...', '> PULSE_OS_v8_READY']);
   const [history, setHistory] = useState(props.data?.history || []);
-  const [actionLoading, setActionLoading] = useState(null);
-  
+  const [isEmergency, setIsEmergency] = useState(false);
   const [modal, setModal] = useState({ active: false, value: '' });
-  const [isMaintenance, setIsMaintenance] = useState(false);
-  
-  const logEndRef = useRef(null);
+  const [actionLoading, setActionLoading] = useState(null);
+  const logRef = useRef(null);
+
   const [stats, setStats] = useState({
-    totalUsers: props.data?.totalUsers || 0,
-    walletsLinked: props.data?.active_wallets || 0, 
-    total_balance: props.data?.total_balance || 0,
-    cpu: 0, mem: 0, latency: 0
+    users: props.data?.totalUsers || 0,
+    wallets: props.data?.active_wallets || 0,
+    balance: props.data?.total_balance || 0,
+    load: 0, mem: 0, lat: 0
   });
 
   const addLog = useCallback((msg, type = 'log') => {
-    const time = new Date().toLocaleTimeString().split(' ')[0];
-    setLogs(prev => [...prev.slice(-15), `[${time}] ${msg}`]);
-    playPulseSound(type);
+    const time = new Date().toLocaleTimeString('en-GB', { hour12: false });
+    setLogs(prev => [...prev.slice(-25), `[${time}] ${msg}`]);
+    if (type === 'auth') playSound(1000);
+    else if (type === 'error') playSound(200, 'sawtooth');
+    else playSound(600);
   }, []);
 
-  // --- 🛰️ API EXECUTION ENGINE ---
   const executeAction = async (cmd, payload = {}) => {
     setActionLoading(cmd);
-    addLog(`> INITIATING: ${cmd.toUpperCase()}...`, 'cmd');
-    
+    addLog(`> INITIATING_PROTOCOL: ${cmd.toUpperCase()}`, 'cmd');
     try {
       const response = await fetch('/api/admin/command', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: cmd, ...payload })
       });
-      
       if (response.ok) {
-        addLog(`> SUCCESS: ${cmd.toUpperCase()} EXECUTED`, 'success');
-        if (cmd === 'maintenance') setIsMaintenance(!isMaintenance);
+        addLog(`> PROTOCOL_${cmd.toUpperCase()}_EXECUTED`, 'success');
+        if (cmd === 'maintenance') setIsEmergency(!isEmergency);
         setModal({ active: false, value: '' });
       } else throw new Error();
-    } catch (e) {
-      addLog(`> ERROR: ${cmd.toUpperCase()} FAILED`, 'error');
-    }
+    } catch (e) { addLog(`> PROTOCOL_${cmd.toUpperCase()}_DENIED`, 'error'); }
     setActionLoading(null);
   };
 
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logs]);
-
-  useEffect(() => {
-    const loader = setInterval(() => {
-      setLoadingProgress(p => {
-        if (p >= 100) {
-          clearInterval(loader);
-          setTimeout(() => setIsReady(true), 300);
-          return 100;
-        }
-        return p + 25;
+    const timer = setInterval(() => {
+      setBootProgress(p => {
+        if (p >= 100) { clearInterval(timer); setTimeout(() => setIsLoaded(true), 400); return 100; }
+        return p + 4;
       });
-    }, 50);
-
-    const eventSource = new EventSource('/api/admin/stream');
-    eventSource.onmessage = (e) => {
+    }, 30);
+    
+    const es = new EventSource('/api/admin/stream');
+    es.onmessage = (e) => {
       try {
-        const pulse = JSON.parse(e.data);
-        setStats(prev => ({
-          ...prev,
-          cpu: pulse.server_load ?? prev.cpu,
-          mem: pulse.mem_usage ?? prev.mem,
-          latency: pulse.db_latency ?? prev.latency,
-          totalUsers: pulse.user_count ?? prev.totalUsers,
-          walletsLinked: pulse.active_wallets ?? prev.walletsLinked,
-          total_balance: pulse.total_balance ?? prev.total_balance
+        const d = JSON.parse(e.data);
+        setStats(p => ({ 
+            ...p, 
+            users: d.user_count ?? p.users, 
+            load: d.server_load ?? p.load, 
+            mem: d.mem_usage ?? p.mem, 
+            balance: d.total_balance ?? p.balance,
+            lat: d.db_latency ?? p.lat
         }));
-        if (pulse.time) setHistory(prev => [...prev.slice(-30), pulse]);
-        if (pulse.recent_event) addLog(`> ${pulse.recent_event}`, pulse.event_type === 'AUTH' ? 'auth' : 'log');
+        if (d.time) setHistory(prev => [...prev.slice(-40), d]);
+        if (d.recent_event) {
+          addLog(d.recent_event, d.event_type === 'AUTH' ? 'auth' : 'log');
+        }
       } catch (err) {}
     };
-    
-    const anim = setInterval(() => setScanPos(p => (p + 0.5) % 100), 50);
-    return () => { clearInterval(loader); clearInterval(anim); eventSource.close(); };
+    return () => { clearInterval(timer); es.close(); };
   }, [addLog]);
 
-  const StatCard = ({ label, desc, value, unit, color, historyKey }) => {
-    const chartData = history.map(h => Number(h[historyKey]) || 0);
-    return (
-      <div className="cyber-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <div style={{ color, fontSize: '11px', fontWeight: '900', letterSpacing: '1px', textTransform: 'uppercase' }}>{label}</div>
-            <div style={{ color: CYBER.subtext, fontSize: '10px', marginTop: '2px' }}>{desc}</div>
-          </div>
-          <div style={{ color: '#fff', fontSize: '22px', fontWeight: 'bold', fontFamily: 'monospace' }}>
-            {typeof value === 'number' ? value.toLocaleString() : value}
-            <span style={{ fontSize: '12px', color, marginLeft: '4px' }}>{unit}</span>
-          </div>
-        </div>
-        <MiniChart data={chartData} color={color} />
-      </div>
-    );
-  };
+  useEffect(() => { logRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [logs]);
 
-  if (!isReady) return (
-    <div style={{ background: CYBER.bg, height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' }}>
-        <div style={{ border: `1px solid ${CYBER.primary}44`, padding: '40px', background: CYBER.card, textAlign: 'center' }}>
-           <div style={{ color: CYBER.primary, fontSize: '10px', letterSpacing: '8px', marginBottom: '10px' }}>BOOTING_PULSE_OS_v5.2</div>
-           <div style={{ color: '#fff', fontSize: '48px', fontWeight: 'bold' }}>{loadingProgress}%</div>
+  const StatCard = ({ label, value, unit, color, historyKey }) => (
+    <div className="glass-panel stat-card">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <div className="stat-label" style={{ color }}>{label}</div>
+          <div className="stat-value">{typeof value === 'number' ? value.toLocaleString() : value}<span style={{ fontSize: '12px', opacity: 0.5, marginLeft: '4px' }}>{unit}</span></div>
         </div>
+      </div>
+      <MiniChart data={history.map(h => Number(h[historyKey]) || 0)} color={color} />
+    </div>
+  );
+
+  if (!isLoaded) return (
+    <div className="boot-screen">
+      <style>{`
+        .boot-screen { background: #000; height: 100vh; display: flex; flex-direction: column; alignItems: center; justify-content: center; color: ${CYBER.primary}; font-family: monospace; }
+        .boot-bar { width: 300px; height: 2px; background: #111; position: relative; margin: 20px auto; }
+        .boot-fill { height: 100%; background: ${CYBER.primary}; transition: 0.3s; box-shadow: 0 0 15px ${CYBER.primary}; }
+        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+      `}</style>
+      <div style={{ fontSize: '24px', letterSpacing: '10px', animation: 'pulse 1s infinite' }}>LOADING_PULSE_v8</div>
+      <div className="boot-bar">
+        <div className="boot-fill" style={{ width: `${bootProgress}%` }} />
+      </div>
+      <div style={{ fontSize: '10px', opacity: 0.5 }}>KERNEL_STAGING: {bootProgress}%</div>
     </div>
   );
 
   return (
-    <div style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace', padding: '15px' }}>
+    <div className={`app-root ${isEmergency ? 'emergency-mode' : ''}`}>
       <style>{`
-        .cyber-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .cyber-card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 22px; border-radius: 4px; position: relative; transition: 0.3s; }
-        .cyber-card:hover { border-color: ${CYBER.primary}; transform: translateY(-2px); }
-        
-        .cmd-btn { 
-          background: transparent; border: 1px solid ${CYBER.primary}; color: ${CYBER.primary}; 
-          padding: 12px; cursor: pointer; font-family: monospace; font-size: 11px; transition: 0.3s;
-          text-transform: uppercase; font-weight: bold;
+        .app-root { 
+          background: ${CYBER.bg}; min-height: 100vh; padding: 30px; font-family: 'JetBrains Mono', monospace; color: ${CYBER.text};
+          position: relative; overflow-x: hidden; transition: 1s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .cmd-btn:hover:not(:disabled) { background: ${CYBER.primary}22; box-shadow: 0 0 15px ${CYBER.primary}44; }
-        .cmd-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .app-root::before {
+          content: ""; position: fixed; inset: 0; pointer-events: none; opacity: 0.04;
+          background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iMzAiIHZpZXdCb3g9IjAgMCA2MCAzMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMzAgMEw2MCAxNUwzMCAzMEwwIDE1TDMwIDBaIiBmaWxsPSJub25lIiBzdHJva2U9IiMwMGYyZmUiIHN0cm9rZS13aWR0aD0iMC41Ii8+PC9zdmc+');
+        }
+        .app-root::after {
+          content: " "; position: fixed; inset: 0; pointer-events: none;
+          background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.2) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+          background-size: 100% 4px, 3px 100%; z-index: 100;
+        }
 
-        .emergency { border-color: ${CYBER.danger}; color: ${CYBER.danger}; }
-        .emergency:hover:not(:disabled) { background: ${CYBER.danger}22; box-shadow: 0 0 15px ${CYBER.danger}44; }
+        .emergency-mode { filter: hue-rotate(-160deg) saturate(1.5); }
 
-        .modal-overlay {
-          position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: ${CYBER.overlay};
-          display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(5px);
+        .glass-panel {
+          background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 2px;
+          backdrop-filter: blur(10px); position: relative; transition: 0.3s;
+        }
+        .glass-panel:hover { border-color: ${CYBER.primary}; box-shadow: 0 0 20px rgba(0, 242, 254, 0.1); }
+
+        .stat-card { padding: 22px; }
+        .stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; font-weight: 900; }
+        .stat-value { font-size: 26px; font-weight: 900; margin-top: 8px; }
+
+        .btn-cyber {
+          background: transparent; border: 1px solid ${CYBER.primary}; color: ${CYBER.primary};
+          padding: 12px; cursor: pointer; font-family: inherit; font-size: 10px; font-weight: bold;
+          text-transform: uppercase; transition: 0.2s; clip-path: polygon(8% 0, 100% 0, 92% 100%, 0 100%);
+        }
+        .btn-cyber:hover:not(:disabled) { background: ${CYBER.primary}; color: #000; box-shadow: 0 0 15px ${CYBER.primary}; }
+        .btn-cyber:disabled { opacity: 0.2; cursor: not-allowed; }
+        
+        .log-area { 
+          height: 350px; overflow-y: auto; background: rgba(0,0,0,0.6); padding: 15px; 
+          border: 1px solid ${CYBER.border}; font-size: 11px; line-height: 1.6;
+        }
+        .log-area::-webkit-scrollbar { width: 2px; }
+        .log-area::-webkit-scrollbar-thumb { background: ${CYBER.primary}; }
+
+        .modal-terminal {
+          position: fixed; inset: 0; background: rgba(2, 4, 6, 0.98); z-index: 1000;
+          display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);
         }
         .cyber-input {
           background: #000; border: 1px solid ${CYBER.primary}; color: ${CYBER.primary};
-          padding: 15px; width: 100%; font-family: monospace; outline: none; margin: 20px 0; resize: none;
+          width: 100%; padding: 15px; font-family: inherit; margin: 20px 0; outline: none; resize: none;
         }
       `}</style>
 
-      {/* --- MODAL BROADCAST TERMINAL --- */}
+      {/* --- MODAL BROADCAST --- */}
       {modal.active && (
-        <div className="modal-overlay" onClick={() => setModal({ active: false, value: '' })}>
-          <div className="cyber-card" style={{ width: '450px', borderTop: `4px solid ${CYBER.primary}` }} onClick={e => e.stopPropagation()}>
-            <div style={{ color: CYBER.primary, fontSize: '12px', fontWeight: 'bold' }}>📡 BROADCAST_TERMINAL</div>
-            <div style={{ color: CYBER.subtext, fontSize: '10px' }}>SEND ENCRYPTED PAYLOAD TO ALL AGENTS</div>
+        <div className="modal-terminal" onClick={() => setModal({ active: false, value: '' })}>
+          <div className="glass-panel" style={{ width: '450px', padding: '25px' }} onClick={e => e.stopPropagation()}>
+            <div className="stat-label" style={{ color: CYBER.primary }}>📡 [BROADCAST_TRANSMISSION]</div>
             <textarea 
               className="cyber-input" 
-              rows="5"
-              value={modal.value}
+              rows="4" 
               autoFocus
+              value={modal.value}
               onChange={(e) => setModal({...modal, value: e.target.value})}
-              placeholder="ENTER_SYSTEM_MESSAGE..."
+              placeholder="ENTER_PAYLOAD_DATA..."
             />
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button className="cmd-btn" style={{ flex: 2 }} onClick={() => executeAction('broadcast', { message: modal.value })} disabled={!modal.value || actionLoading}>
-                {actionLoading ? 'ENCRYPTING...' : 'EXECUTE_BROADCAST'}
-              </button>
-              <button className="cmd-btn" style={{ flex: 1, borderColor: '#444', color: '#444' }} onClick={() => setModal({ active: false, value: '' })}>ABORT</button>
+              <button className="btn-cyber" style={{ flex: 1 }} onClick={() => executeAction('broadcast', { message: modal.value })} disabled={!modal.value || actionLoading}>SEND_SIGNAL</button>
+              <button className="btn-cyber" style={{ borderColor: '#444', color: '#444' }} onClick={() => setModal({ active: false, value: '' })}>ABORT</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* --- HUD HEADER --- */}
-      <div style={{ 
-        background: CYBER.card, 
-        padding: '20px', 
-        borderLeft: `4px solid ${isMaintenance ? CYBER.danger : CYBER.primary}`, 
-        marginBottom: '20px', 
-        position: 'relative', 
-        overflow: 'hidden',
-        boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
-      }}>
-        <div style={{ position: 'absolute', top: 0, left: `${scanPos}%`, width: '2px', height: '100%', background: isMaintenance ? CYBER.danger : CYBER.primary, opacity: 0.2 }} />
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
-          <div>
-            <h2 style={{ color: isMaintenance ? CYBER.danger : CYBER.primary, margin: 0, fontSize: '24px', letterSpacing: '2px' }}>NEURAL_PULSE_v5.2</h2>
-            <div style={{ fontSize: '10px', color: CYBER.subtext }}>
-              STATUS: <span style={{ color: isMaintenance ? CYBER.danger : CYBER.success }}>{isMaintenance ? 'MAINTENANCE_ACTIVE' : 'CORE_STABLE'}</span> // SYSTEM_2026
-            </div>
+      {/* --- TOP HUD --- */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '40px', borderBottom: `1px solid ${CYBER.border}`, paddingBottom: '20px' }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: '36px', letterSpacing: '12px', color: CYBER.primary, fontWeight: 900 }}>NEURAL_PULSE</h1>
+          <div style={{ fontSize: '10px', opacity: 0.6, marginTop: '8px' }}>
+            // OS_KERNEL: v8.5_GENESIS // STATUS: <span style={{ color: isEmergency ? CYBER.danger : CYBER.success }}>{isEmergency ? 'HALTED' : 'OPERATIONAL'}</span>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ color: CYBER.ton, fontSize: '24px', fontWeight: 'bold', textShadow: `0 0 10px ${CYBER.ton}44` }}>{stats.total_balance.toLocaleString()} $NP</div>
-            <div style={{ fontSize: '9px', color: CYBER.subtext, letterSpacing: '1px' }}>NETWORK_EMISSION_RESERVE</div>
-          </div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: '32px', fontWeight: '900', color: CYBER.ton }}>{stats.balance.toLocaleString()} <span style={{ fontSize: '14px' }}>$NP</span></div>
+          <div className="stat-label" style={{ color: CYBER.subtext }}>NETWORK_RESERVE_CONNECTED</div>
         </div>
       </div>
 
-      {/* --- TELEMETRY CARDS --- */}
-      <div className="cyber-grid">
-        <StatCard label="Agents" desc="TOTAL_CONNECTED" value={stats.totalUsers} unit="U" color={CYBER.primary} historyKey="user_count" />
-        <StatCard label="Nodes" desc="ACTIVE_WALLETS" value={stats.walletsLinked} unit="W" color={CYBER.ton} historyKey="active_wallets" />
-        <StatCard label="Buffer" desc="RAM_ALLOCATION" value={stats.mem} unit="MB" color={CYBER.warning} historyKey="mem_usage" />
-        <StatCard label="Pulse" desc="CPU_CAPACITY" value={stats.cpu} unit="%" color={CYBER.secondary} historyKey="server_load" />
-        <StatCard label="Latency" desc="DB_RESPONSE" value={stats.latency} unit="MS" color={CYBER.danger} historyKey="db_latency" />
+      {/* --- CORE TELEMETRY --- */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+        <StatCard label="AGENTS" value={stats.users} unit="U" color={CYBER.primary} historyKey="user_count" />
+        <StatCard label="NODES" value={stats.wallets} unit="W" color={CYBER.ton} historyKey="active_wallets" />
+        <StatCard label="CPU_LOAD" value={stats.load} unit="%" color={CYBER.success} historyKey="server_load" />
+        <StatCard label="RAM_ALLOC" value={stats.mem} unit="MB" color={CYBER.warning} historyKey="mem_usage" />
+        <StatCard label="LATENCY" value={stats.lat} unit="MS" color={CYBER.danger} historyKey="db_latency" />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '20px' }}>
-        
-        {/* --- COMMAND CENTER & SIGNAL --- */}
-        <div className="cyber-card">
-          <div style={{ color: CYBER.primary, fontSize: '12px', borderBottom: `1px solid ${CYBER.border}`, paddingBottom: '10px', marginBottom: '20px', fontWeight: 'bold' }}>
-            OPERATIONS_CONTROL_INTERFACE
-          </div>
-          {/* Исправлено: display: 'grid' в кавычках */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '30px' }}>
+        {/* --- COMMAND CENTER --- */}
+        <div className="glass-panel" style={{ padding: '25px' }}>
+          <div className="stat-label" style={{ marginBottom: '25px', color: CYBER.primary }}>SYSTEM_OPERATIONS_MATRIX</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-            <button className="cmd-btn" onClick={() => setModal({ active: true, value: '' })}>📢 BROADCAST</button>
-            <button className="cmd-btn" onClick={() => executeAction('clear_cache')}>🧹 PURGE_CACHE</button>
-            <button className="cmd-btn" onClick={() => executeAction('backup')}>💾 SYS_BACKUP</button>
-            <button className={`cmd-btn ${isMaintenance ? '' : 'emergency'}`} onClick={() => executeAction('maintenance')}>
-              {isMaintenance ? '▶️ RESUME' : '⚠️ MAINTENANCE'}
+            <button className="btn-cyber" onClick={() => setModal({ active: true, value: '' })}>📢 BROADCAST</button>
+            <button className="btn-cyber" onClick={() => executeAction('clear_cache')}>🧹 PURGE_CACHE</button>
+            <button className="btn-cyber" onClick={() => executeAction('backup')}>💾 CLOUD_SYNC</button>
+            <button className="btn-cyber" style={{ borderColor: CYBER.danger, color: CYBER.danger }} onClick={() => executeAction('maintenance')}>
+              {isEmergency ? '▶️ RESUME' : '⚠️ KILL_SWITCH'}
             </button>
           </div>
-
-          <div style={{ marginTop: '30px', background: '#000', padding: '15px', borderRadius: '4px', border: `1px solid ${CYBER.border}` }}>
-             <div style={{ color: CYBER.subtext, fontSize: '9px', marginBottom: '10px', opacity: 0.5 }}>OSCILLOSCOPE_STREAM_CORE</div>
-             <div style={{ display: 'flex', alignItems: 'flex-end', height: '60px', gap: '3px' }}>
-               {[...Array(40)].map((_, i) => (
-                 <div key={i} style={{ 
-                   flex: 1, 
-                   background: isMaintenance ? CYBER.danger : CYBER.primary, 
-                   height: `${15 + Math.random() * 85}%`,
-                   opacity: 0.4 + (Math.random() * 0.6),
-                   transition: 'height 0.2s ease'
-                 }} />
-               ))}
-             </div>
+          
+          <div style={{ marginTop: '45px' }}>
+            <div className="stat-label" style={{ marginBottom: '10px', opacity: 0.5 }}>OSCILLOSCOPE_STREAM</div>
+            <NeuralWave active={isEmergency} />
           </div>
         </div>
 
-        {/* --- LIVE TELEMETRY LOGS --- */}
-        <div style={{ background: '#000', border: `1px solid ${CYBER.border}`, padding: '15px', borderRadius: '4px', position: 'relative' }}>
-          <div style={{ color: CYBER.success, fontSize: '11px', fontWeight: 'bold', marginBottom: '15px', display: 'flex', justifyContent: 'space-between' }}>
-            <span>LIVE_KERNEL_FEED</span>
-            <span style={{ fontSize: '8px', opacity: 0.4 }}>SECURE_CONNECTION_STABLE</span>
+        {/* --- LIVE KERNEL FEED --- */}
+        <div className="log-area glass-panel">
+          <div style={{ position: 'sticky', top: 0, background: CYBER.card, paddingBottom: '10px', color: CYBER.success, fontWeight: 'bold', fontSize: '10px', letterSpacing: '2px' }}>
+            [LIVE_KERNEL_STDOUT]
           </div>
-          <div style={{ fontSize: '11px', lineHeight: '1.8', height: '280px', overflowY: 'auto', scrollBehavior: 'smooth' }}>
-            {logs.map((log, i) => (
-              <div key={i} style={{ 
-                color: log.includes('ERROR') ? CYBER.danger : log.includes('SUCCESS') ? CYBER.success : CYBER.subtext,
-                marginBottom: '2px'
-              }}>
-                {log}
-              </div>
-            ))}
-            <div ref={logEndRef} />
-          </div>
+          {logs.map((l, i) => (
+            <div key={i} style={{ 
+              color: l.includes('DENIED') || l.includes('FAILED') ? CYBER.danger : l.includes('EXECUTED') ? CYBER.success : CYBER.text, 
+              marginBottom: '6px', opacity: 0.9, borderLeft: `2px solid ${l.includes('EXECUTED') ? CYBER.success : 'transparent'}`, paddingLeft: '8px'
+            }}>
+              {l}
+            </div>
+          ))}
+          <div ref={logRef} />
         </div>
-
       </div>
-      
+
       {/* --- FOOTER --- */}
-      <div style={{ textAlign: 'center', marginTop: '20px', color: '#1a1f26', fontSize: '9px', letterSpacing: '6px' }}>
-        PROPERTY_OF_NEURAL_PULSE_NETWORK // ACCESS_LEVEL_ROOT
-      </div>
+      <footer style={{ marginTop: '50px', textAlign: 'center', fontSize: '9px', letterSpacing: '6px', opacity: 0.2 }}>
+        PROPERTY_OF_NEURAL_PULSE_NETWORK // ACCESS_LEVEL_ROOT // 2026
+      </footer>
     </div>
   );
 };
