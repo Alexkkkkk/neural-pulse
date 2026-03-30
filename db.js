@@ -4,19 +4,22 @@ import ConnectSessionSequelize from 'connect-session-sequelize';
 import os from 'os';
 import cluster from 'cluster'; 
 
-// --- 🌐 CONFIG (НОВАЯ БАЗА) ---
+// --- 🌐 CONFIG ---
 const PG_URI = "postgresql://bothost_db_db1789af0108:hl3yLh4DQmySkEYDPYwS8fn9xkLPHYNMhmCbU8WCYXs@node1.pghost.ru:32865/bothost_db_db1789af0108";
 
 export const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
     logging: false,
     dialectOptions: { 
-        ssl: false, 
+        ssl: {
+            require: true,
+            rejectUnauthorized: false // Важно для работы с внешними хостингами БД
+        }, 
         connectTimeout: 60000 
     },
     pool: { 
         max: 15, 
-        min: 5,  
+        min: 2,  
         acquire: 60000, 
         idle: 10000 
     },
@@ -103,7 +106,11 @@ export const Stats = sequelize.define('stats', {
 // --- 📈 МОДЕЛЬ: GLOBAL_STATS ---
 export const GlobalStats = sequelize.define('global_stats', {
     id: { type: DataTypes.INTEGER, primaryKey: true },
-    total_balance: { type: DataTypes.DECIMAL(32, 2), defaultValue: 0 },
+    total_balance: { 
+        type: DataTypes.DECIMAL(32, 2), 
+        defaultValue: 0,
+        get() { return parseFloat(this.getDataValue('total_balance') || 0); }
+    },
     total_users: { type: DataTypes.INTEGER, defaultValue: 0 }
 }, { 
     timestamps: false, 
@@ -130,7 +137,7 @@ export const logSystemStats = async () => {
         ]);
 
         const dbLatency = Date.now() - start;
-        const totalBalance = gStats ? parseFloat(gStats.total_balance) : 0;
+        const totalBalance = gStats ? gStats.total_balance : 0;
         const totalUsers = gStats ? gStats.total_users : 0;
         const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
         const cpuCount = os.cpus()?.length || 1;
@@ -145,12 +152,12 @@ export const logSystemStats = async () => {
             db_latency: parseFloat(dbLatency)
         });
         
-        const maxEntries = 2880; // Храним за последние 2 суток (при логе 1 раз в мин)
-        const totalEntries = await Stats.count();
-        if (totalEntries > maxEntries) {
-            const minId = await Stats.min('id');
-            await Stats.destroy({ where: { id: { [Op.lte]: minId + (totalEntries - maxEntries) } } });
-        }
+        // Очистка старых записей (старше 2 суток)
+        await Stats.destroy({
+            where: {
+                created_at: { [Op.lt]: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) }
+            }
+        });
     } catch (e) {
         console.error('--- [TELEMETRY] ERROR:', e.message);
     }
@@ -160,12 +167,12 @@ export const logSystemStats = async () => {
 export const initDB = async () => {
     try {
         await sequelize.authenticate();
-        console.log('--- [DB] CONNECTED TO POSTGRES (NEW DB) ---');
+        console.log('--- [DB] CONNECTED TO POSTGRES (STABLE) ---');
 
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // Синхронизируем структуру всех моделей
+            // Синхронизация структуры (alter: true бережно обновляет таблицы)
             await sequelize.sync({ alter: true });
             await sessionStore.sync();
             
