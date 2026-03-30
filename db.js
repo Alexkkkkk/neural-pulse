@@ -61,8 +61,8 @@ export const User = sequelize.define('users', {
     timestamps: true, 
     underscored: true, 
     tableName: 'users',
-    createdAt: 'created_at', // Важно для AdminJS
-    updatedAt: 'updated_at', // Важно для AdminJS
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
     indexes: [
         { fields: ['username'] },
         { fields: ['wallet'] },
@@ -96,8 +96,8 @@ export const Stats = sequelize.define('stats', {
     timestamps: true, 
     tableName: 'stats',
     underscored: true,
-    createdAt: 'created_at', // Важно для AdminJS
-    updatedAt: 'updated_at'  // Важно для AdminJS
+    createdAt: 'created_at',
+    updatedAt: 'updated_at'
 });
 
 // --- 📈 МОДЕЛЬ: GLOBAL_STATS ---
@@ -111,6 +111,7 @@ export const GlobalStats = sequelize.define('global_stats', {
     underscored: true 
 });
 
+// Настройка связей
 User.hasMany(User, { as: 'ReferralList', foreignKey: 'referred_by' });
 User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
@@ -144,7 +145,7 @@ export const logSystemStats = async () => {
             db_latency: parseFloat(dbLatency)
         });
         
-        const maxEntries = 2880;
+        const maxEntries = 2880; // Храним за последние 2 суток (при логе 1 раз в мин)
         const totalEntries = await Stats.count();
         if (totalEntries > maxEntries) {
             const minId = await Stats.min('id');
@@ -164,19 +165,17 @@ export const initDB = async () => {
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            await GlobalStats.sync(); 
-            await Stats.sync(); 
-            await User.sync(); 
-            await Task.sync(); 
+            // Синхронизируем структуру всех моделей
+            await sequelize.sync({ alter: true });
             await sessionStore.sync();
             
-            await sequelize.sync(); 
-            
+            // Инициализация глобальных счетчиков
             await GlobalStats.findOrCreate({ 
                 where: { id: 1 }, 
                 defaults: { total_balance: 0, total_users: 0 } 
             });
 
+            // Наполнение дефолтными задачами
             if (await Task.count() === 0) {
                 await Task.bulkCreate([
                     { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
