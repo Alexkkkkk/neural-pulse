@@ -23,7 +23,6 @@ const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
 const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
 
-// Мультипликаторы дохода
 const MULTIPLIERS = [
     { threshold: 2000000, multi: 3.5 },
     { threshold: 500000, multi: 2.5 },
@@ -40,7 +39,7 @@ async function startNeuralOS() {
         contentSecurityPolicy: {
             directives: {
                 ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-                "connect-src": ["'self'", DOMAIN],
+                "connect-src": ["'self'", DOMAIN, "https://*.telegram.org"],
                 "img-src": ["'self'", "data:", "https:"],
                 "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
             },
@@ -54,7 +53,7 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
-    // Раздача статики
+    // Раздача статики (дизайн и картинки не меняются)
     app.use('/static', express.static(path.join(__dirname, 'static'), {
         maxAge: '1h',
         etag: true
@@ -64,6 +63,10 @@ async function startNeuralOS() {
         console.log('--- ⚡ NEURAL PULSE SYSTEM BOOTING ---');
 
         await initDB();
+        
+        // Гарантируем наличие GlobalStats
+        await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
+
         const bot = new Telegraf(BOT_TOKEN);
 
         setupAPIRoutes(app);
@@ -92,7 +95,6 @@ async function startNeuralOS() {
         setInterval(async () => {
             try {
                 const startTime = Date.now();
-                
                 const mem = process.memoryUsage().rss / 1024 / 1024;
                 const cpuCount = os.cpus()?.length || 1;
                 const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
@@ -117,13 +119,7 @@ async function startNeuralOS() {
 
                 console.log(`[PULSE] ${pulseData.time} | CPU: ${pulseData.server_load}% | RAM: ${pulseData.mem_usage}MB | Users: ${pulseData.user_count}`);
 
-                await Stats.create({
-                    user_count: pulseData.user_count,
-                    server_load: pulseData.server_load,
-                    mem_usage: pulseData.mem_usage,
-                    active_wallets: pulseData.active_wallets,
-                    total_balance: pulseData.total_balance
-                });
+                await Stats.create(pulseData);
 
                 pulseEvents.emit('update', pulseData);
 
@@ -132,7 +128,6 @@ async function startNeuralOS() {
                     const oldest = await Stats.findOne({ order: [['created_at', 'ASC']] });
                     if (oldest) await oldest.destroy();
                 }
-
             } catch (e) {
                 console.error("Pulse Loop Error", e.message);
             }
@@ -150,27 +145,19 @@ async function startNeuralOS() {
 
 function setupRealTimeStream(app) {
     app.get('/api/admin/stream', (req, res) => {
-        // Настройки для пробития Nginx-буферизации на Bothost
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache, no-transform',
             'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no' // КРИТИЧНО ДЛЯ BOTHOST
+            'X-Accel-Buffering': 'no'
         });
 
-        // Сразу отправляем пустой комментарий для открытия потока
         res.write(':\n\n');
 
-        const sendData = (data) => {
-            res.write(`data: ${JSON.stringify(data)}\n\n`);
-        };
-
+        const sendData = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
         pulseEvents.on('update', sendData);
 
-        // Пинг-таймер, чтобы соединение не закрывалось по таймауту прокси
-        const keepAlive = setInterval(() => {
-            res.write(':\n\n');
-        }, 15000);
+        const keepAlive = setInterval(() => res.write(':\n\n'), 15000);
         
         req.on('close', () => {
             clearInterval(keepAlive);
@@ -185,14 +172,6 @@ function setupAPIRoutes(app) {
         windowMs: 1000,
         max: 30,
         handler: (req, res) => res.status(429).json({ error: "Pulse overload" })
-    });
-
-    app.get('/api/user/:id', async (req, res) => {
-        try {
-            const user = await User.findByPk(req.params.id);
-            if (!user) return res.status(404).json({ error: "Agent not found" });
-            res.json(user);
-        } catch (e) { res.status(500).json({ error: "Core sync error" }); }
     });
 
     app.post('/api/click', clickLimit, async (req, res) => {
@@ -213,6 +192,14 @@ function setupAPIRoutes(app) {
             
             res.json({ s: 1, balance: currentBalance + reward });
         } catch (e) { res.status(500).send(); }
+    });
+
+    app.get('/api/user/:id', async (req, res) => {
+        try {
+            const user = await User.findByPk(req.params.id);
+            if (!user) return res.status(404).json({ error: "Agent not found" });
+            res.json(user);
+        } catch (e) { res.status(500).json({ error: "Core sync error" }); }
     });
 }
 
