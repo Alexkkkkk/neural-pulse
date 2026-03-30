@@ -41,7 +41,10 @@ async function startNeuralOS() {
                 ...helmet.contentSecurityPolicy.getDefaultDirectives(),
                 "connect-src": ["'self'", DOMAIN, "https://*.telegram.org"],
                 "img-src": ["'self'", "data:", "https:"],
+                // Разрешаем unsafe-eval для работы React-компонентов Dashboard в AdminJS
                 "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+                // Разрешаем генерацию звука через Blob/Data если потребуется
+                "media-src": ["'self'", "data:", "blob:"] 
             },
         },
         crossOriginEmbedderPolicy: false,
@@ -53,7 +56,7 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
-    // Раздача статики (дизайн и картинки не меняются)
+    // Раздача статики
     app.use('/static', express.static(path.join(__dirname, 'static'), {
         maxAge: '1h',
         etag: true
@@ -63,8 +66,6 @@ async function startNeuralOS() {
         console.log('--- ⚡ NEURAL PULSE SYSTEM BOOTING ---');
 
         await initDB();
-        
-        // Гарантируем наличие GlobalStats
         await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
 
         const bot = new Telegraf(BOT_TOKEN);
@@ -91,7 +92,7 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SYSTEM PULSE ---
+        // --- 🩺 SYSTEM PULSE (Сердцебиение системы) ---
         setInterval(async () => {
             try {
                 const startTime = Date.now();
@@ -117,12 +118,13 @@ async function startNeuralOS() {
                     db_latency: latency
                 };
 
-                console.log(`[PULSE] ${pulseData.time} | CPU: ${pulseData.server_load}% | RAM: ${pulseData.mem_usage}MB | Users: ${pulseData.user_count}`);
-
-                await Stats.create(pulseData);
-
+                // Эмитим событие для SSE стрима
                 pulseEvents.emit('update', pulseData);
 
+                // Логируем и сохраняем в базу (только если нужно для истории графиков)
+                await Stats.create(pulseData);
+
+                // Очистка старых логов (храним последние 500 записей)
                 const count = await Stats.count();
                 if (count > 500) {
                     const oldest = await Stats.findOne({ order: [['created_at', 'ASC']] });
@@ -239,15 +241,27 @@ async function setupAdminPanel(app) {
                             user_count: s.user_count, 
                             server_load: s.server_load, 
                             mem_usage: s.mem_usage,
-                            active_wallets: s.active_wallets
+                            active_wallets: s.active_wallets,
+                            db_latency: s.db_latency
                         })) 
                     };
                 }
             },
             branding: { 
-                companyName: 'NEURAL PULSE', 
+                companyName: 'NEURAL PULSE OS', 
                 logo: '/static/images/logo.png',
-                withMadeWithAdminJS: false
+                withMadeWithAdminJS: false,
+                // ТЕМНАЯ ТЕМА ДЛЯ ВСЕГО ИНТЕРФЕЙСА ADMINJS
+                theme: {
+                    colors: {
+                        bg: '#0b0e14',
+                        container: '#161b22',
+                        border: '#30363d',
+                        primary100: '#00f2fe', // Основной цвет (кибер-голубой)
+                        text: '#ffffff',
+                        sidebar: '#0b0e14'
+                    }
+                }
             }
         });
 
