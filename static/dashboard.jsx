@@ -22,7 +22,6 @@ const playPulseSound = (type = 'log') => {
     const gain = audioCtx.createGain();
 
     osc.type = 'sine';
-    // Разная тональность для разных событий
     const freq = type === 'error' ? 150 : type === 'auth' ? 1200 : 880;
     osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
     
@@ -77,7 +76,6 @@ const Dashboard = (props) => {
     playPulseSound(type);
   }, []);
 
-  // Авто-скролл для логов терминала
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
@@ -116,7 +114,6 @@ const Dashboard = (props) => {
           setHistory(prev => [...prev.slice(-29), pulse]);
         }
 
-        // Обработка живых событий из main.js
         if (pulse.recent_event) {
           const isAuth = pulse.event_type === 'AUTH';
           addLog(`> ${pulse.recent_event}`, isAuth ? 'auth' : 'log');
@@ -139,13 +136,12 @@ const Dashboard = (props) => {
 
   const StatCard = ({ label, value, unit, color, historyKey }) => {
     const chartData = history.map(h => Number(h[historyKey]) || 0);
-    // Рассчет прогресса для полосок
     let progressPercent = unit === '%' ? value : unit === 'MB' ? (value / 2048) * 100 : (value / 1000) * 100;
 
     return (
       <div style={{ 
         flex: '1 1 200px', margin: '10px', padding: '20px', 
-        background: CYPER.card, border: `1px solid ${color}33`, borderRadius: '4px',
+        background: CYBER.card, border: `1px solid ${color}33`, borderRadius: '4px',
         position: 'relative', overflow: 'hidden', boxShadow: `inset 0 0 15px ${color}05`
       }}>
         <div style={{ color: '#8b949e', fontSize: '10px', letterSpacing: '2px', marginBottom: '8px', fontWeight: 'bold' }}>{label}</div>
@@ -225,14 +221,12 @@ const Dashboard = (props) => {
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '20px', gap: '20px' }}>
-        {/* Визуализатор активности (Эквалайзер) */}
         <div style={{ flex: '2 1 400px', background: CYBER.card, height: '220px', border: `1px solid ${CYBER.border}`, borderRadius: '4px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '6px', paddingBottom: '20px' }}>
           {[...Array(30)].map((_, i) => (
             <div key={i} style={{ width: '6px', background: `linear-gradient(to top, ${CYBER.primary}, ${CYBER.secondary})`, height: `${20 + (Math.random() * 50)}%`, animation: `cyber-pulse ${0.8 + (Math.random() * 1)}s infinite ${i * 0.05}s ease-in-out` }} />
           ))}
         </div>
 
-        {/* Логи терминала с авто-скроллом */}
         <div style={{ flex: '1 1 300px', background: '#05070a', height: '220px', border: `1px solid ${CYBER.border}`, padding: '15px', overflowY: 'auto' }}>
           <div style={{ color: CYBER.success, fontSize: '10px', marginBottom: '8px', borderBottom: `1px solid ${CYBER.success}44`, paddingBottom: '4px' }}>KERNEL_LOGS</div>
           <div style={{ fontSize: '10px', lineHeight: '1.6', fontFamily: 'monospace' }}>
