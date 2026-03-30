@@ -117,7 +117,7 @@ const Dashboard = (props) => {
 
   const StatCard = ({ label, desc, value, unit, color, historyKey }) => {
     const chartData = history.map(h => Number(h[historyKey]) || 0);
-    let progressPercent = unit === '%' ? value : unit === 'MB' ? (value / 2048) * 100 : (value / 500) * 100;
+    let progressPercent = unit === '%' ? value : unit === 'MB' ? (value / 2048) * 100 : (value / 1000) * 100;
 
     return (
       <div style={{ 
@@ -135,7 +135,9 @@ const Dashboard = (props) => {
             <span style={{ fontSize: '14px', color: color, marginLeft: '4px' }}>{unit}</span>
           </div>
         </div>
+        
         <MiniChart data={chartData} color={color} />
+        
         <div style={{ width: '100%', height: '2px', background: '#000', marginTop: '15px' }}>
           <div style={{ 
             width: `${Math.min(progressPercent, 100)}%`, 
@@ -160,7 +162,7 @@ const Dashboard = (props) => {
   return (
     <div style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace', padding: '20px' }}>
       <style>{`
-        #adminjs, .adminjs_Box, [data-testid="sidebar"], section { background: ${CYBER.bg} !important; border: none !important; }
+        #adminjs, .adminjs_Box, [data-testid="sidebar"], [data-testid="resource-header"], section { background: ${CYBER.bg} !important; border: none !important; }
         [data-testid="sidebar"] { border-right: 1px solid ${CYBER.border} !important; }
         .adminjs_Table td, .adminjs_Table th { border-bottom: 1px solid ${CYBER.border} !important; color: ${CYBER.subtext} !important; }
         .glitch-title:hover { animation: glitch 0.3s cubic-bezier(.25,.46,.45,.94) both infinite; color: ${CYBER.secondary} !important; }
@@ -200,7 +202,7 @@ const Dashboard = (props) => {
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '20px', gap: '20px' }}>
-        {/* Осциллограф */}
+        {/* Визуализатор (Осциллограф) */}
         <div style={{ flex: '2 1 400px', background: CYBER.card, height: '220px', border: `1px solid ${CYBER.border}`, borderRadius: '8px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '6px', paddingBottom: '20px', position: 'relative' }}>
           <div style={{ position: 'absolute', top: '10px', left: '15px', color: CYBER.primary, fontSize: '10px', opacity: 0.5 }}>SIGNAL_OSCILLOSCOPE</div>
           {[...Array(35)].map((_, i) => (
@@ -208,7 +210,7 @@ const Dashboard = (props) => {
           ))}
         </div>
 
-        {/* Логи ядра */}
+        {/* Логи ядра в реальном времени */}
         <div style={{ flex: '1 1 300px', background: '#000', height: '220px', border: `1px solid ${CYBER.border}`, borderRadius: '8px', padding: '15px', overflowY: 'auto', boxShadow: `inset 0 0 20px #000` }}>
           <div style={{ color: CYBER.success, fontSize: '11px', marginBottom: '10px', borderBottom: `1px solid ${CYBER.success}33`, paddingBottom: '5px', fontWeight: 'bold' }}>LIVE_KERNEL_LOGS</div>
           <div style={{ fontSize: '11px', lineHeight: '1.8', fontFamily: 'monospace' }}>
