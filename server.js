@@ -23,6 +23,7 @@ const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
 const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
 
+// Мультипликаторы дохода в зависимости от баланса
 const MULTIPLIERS = [
     { threshold: 2000000, multi: 3.5 },
     { threshold: 500000, multi: 2.5 },
@@ -36,7 +37,7 @@ async function startNeuralOS() {
 
     // --- 🛡️ SECURITY & PERFORMANCE ---
     app.use(helmet({
-        contentSecurityPolicy: false, // Отключаем CSP для корректной работы Telegram WebApp
+        contentSecurityPolicy: false, // Для работы Telegram WebApp
         crossOriginEmbedderPolicy: false,
         crossOriginResourcePolicy: false,
     }));
@@ -46,7 +47,7 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
-    // Раздача статики (дизайн и картинки защищены)
+    // Раздача статики (дизайн и картинки)
     app.use('/static', express.static(path.join(__dirname, 'static'), {
         maxAge: '1h',
         etag: true
@@ -84,17 +85,18 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SYSTEM PULSE (SSE + Logging) ---
+        // --- 🩺 SYSTEM PULSE (Обновление статистики каждые 30 сек) ---
         setInterval(async () => {
             try {
                 const startTime = Date.now();
                 const memory = process.memoryUsage().rss / 1024 / 1024;
-                if (memory > 145 && global.gc) global.gc();
 
-                // Получаем текущие данные
-                const [gStats, lastEntry] = await Promise.all([
+                // Получаем текущие глобальные данные и последнюю запись кошельков
+                const [gStats, walletCount] = await Promise.all([
                     GlobalStats.findByPk(1),
-                    Stats.findOne({ order: [['id', 'DESC']] })
+                    User.count({ 
+                        where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } 
+                    })
                 ]);
 
                 const latency = Date.now() - startTime;
@@ -106,12 +108,12 @@ async function startNeuralOS() {
                     mem_usage: Math.round(memory),
                     server_load: parseFloat(load), 
                     user_count: gStats?.total_users || 0,
-                    active_wallets: lastEntry?.active_wallets || 0,
+                    active_wallets: walletCount || 0,
                     total_balance: parseFloat(gStats?.total_balance || 0),
                     db_latency: latency
                 };
 
-                // Сохраняем в БД для админки
+                // Сохраняем историческую точку в БД для графиков
                 await Stats.create({
                     user_count: pulseData.user_count,
                     active_wallets: pulseData.active_wallets,
@@ -121,7 +123,7 @@ async function startNeuralOS() {
                     db_latency: pulseData.db_latency
                 });
 
-                // Транслируем в реальном времени
+                // Транслируем данные подключенным админам (SSE)
                 pulseEvents.emit('update', pulseData);
 
             } catch (e) {
@@ -139,6 +141,7 @@ async function startNeuralOS() {
     }
 }
 
+// Поток данных для "живой" админки
 function setupRealTimeStream(app) {
     app.get('/api/admin/stream', (req, res) => {
         res.setHeader('Content-Type', 'text/event-stream');
@@ -165,7 +168,7 @@ function setupAPIRoutes(app) {
         handler: (req, res) => res.status(429).json({ error: "Pulse overload" })
     });
 
-    // Получение данных пользователя для фронтенда
+    // API для получения данных игрока
     app.get('/api/user/:id', async (req, res) => {
         try {
             const user = await User.findByPk(req.params.id);
@@ -176,6 +179,7 @@ function setupAPIRoutes(app) {
         }
     });
 
+    // API для обработки кликов
     app.post('/api/click', clickLimit, async (req, res) => {
         const { userId, count } = req.body;
         if (!userId || !count || count > 100) return res.status(403).send();
@@ -187,7 +191,12 @@ function setupAPIRoutes(app) {
             const config = MULTIPLIERS.find(m => currentBalance >= m.threshold) || { multi: 1.0 };
             const reward = Math.floor(count * config.multi);
             
-            await user.increment('balance', { by: reward });
+            // Атомарное обновление баланса в БД и в GlobalStats
+            await Promise.all([
+                user.increment('balance', { by: reward }),
+                GlobalStats.increment('total_balance', { by: reward, where: { id: 1 } })
+            ]);
+            
             res.json({ s: 1, balance: currentBalance + reward });
         } catch (e) { res.status(500).send(); }
     });
@@ -236,47 +245,4 @@ async function setupAdminPanel(app) {
             },
             branding: { 
                 companyName: 'NEURAL PULSE', 
-                logo: '/static/images/logo.png',
-                withMadeWithAdminJS: false
-            }
-        });
-
-        const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
-            authenticate: async (email, password) => {
-                if (email === '1' && password === '1') return { email: 'admin@neural.os' };
-                return null;
-            },
-            cookiePassword: 'np-titan-2026-secure-v2',
-        }, null, { resave: false, saveUninitialized: false, secret: 'np_titan_secret_v2', store: sessionStore });
-
-        app.use(adminJs.options.rootPath, adminRouter);
-        adminJs.initialize();
-
-    } catch (err) { console.error("AdminJS fail", err); }
-}
-
-function setupBotHandlers(bot) {
-    bot.start(async (ctx) => {
-        try {
-            const [user, created] = await User.findOrCreate({
-                where: { id: ctx.from.id },
-                defaults: { username: ctx.from.username || 'AGENT', balance: 0 }
-            });
-
-            if (created) {
-                const gs = await GlobalStats.findByPk(1);
-                if (gs) await gs.increment('total_users');
-            }
-
-            const webAppUrl = `${DOMAIN}/static/index.html?v=${Date.now()}`;
-            const keyboard = Markup.inlineKeyboard([[Markup.button.webApp("⚡ ТЕРМИНАЛ: ВХОД", webAppUrl)]]);
-            
-            await ctx.reply(`<b>[ NEURAL PULSE ]</b>\n\n<b>АГЕНТ:</b> <code>${user.username}</code>\n<b>СТАТУС:</b> СИСТЕМА АКТИВНА`, { 
-                parse_mode: 'HTML', 
-                ...keyboard 
-            });
-        } catch (e) { console.error("Bot.start fail", e); }
-    });
-}
-
-startNeuralOS();
+                logo: '/static
