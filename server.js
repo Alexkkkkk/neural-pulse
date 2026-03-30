@@ -55,7 +55,6 @@ async function startNeuralOS() {
         console.clear();
         console.log('--- ⚡ NEURAL PULSE SYSTEM BOOTING ---');
 
-        // Инициализация БД
         await initDB();
         
         const bot = new Telegraf(BOT_TOKEN);
@@ -65,7 +64,6 @@ async function startNeuralOS() {
         await setupAdminPanel(app);
         setupBotHandlers(bot);
 
-        // ✅ WEBHOOK GATEWAY
         app.post(`/telegraf/${BOT_TOKEN}`, async (req, res) => {
             try {
                 if (!req.body || Object.keys(req.body).length === 0) return res.sendStatus(200);
@@ -82,12 +80,10 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SYSTEM PULSE (SSE Трансляция каждые 5 секунд) ---
+        // --- 🩺 SYSTEM PULSE ---
         setInterval(async () => {
             try {
                 const startTime = Date.now();
-                
-                // Сбор системных метрик
                 const memory = process.memoryUsage().rss / 1024 / 1024;
                 if (memory > 145 && global.gc) global.gc();
 
@@ -100,7 +96,6 @@ async function startNeuralOS() {
                 const cpuCount = os.cpus()?.length || 1;
                 const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
 
-                // Эмитим событие для всех подключенных админов
                 pulseEvents.emit('update', {
                     time: dayjs().format('HH:mm:ss'),
                     mem_usage: Math.round(memory),
@@ -181,7 +176,8 @@ async function setupAdminPanel(app) {
             resources: [
                 { resource: User, options: { navigation: { name: 'CORE' }, listProperties: ['id', 'username', 'balance', 'wallet'] } },
                 { resource: Task, options: { navigation: { name: 'OS' } } },
-                { resource: Stats, options: { navigation: { name: 'OS' }, listProperties: ['createdAt', 'user_count', 'server_load'] } },
+                // ИСПРАВЛЕНО: created_at вместо createdAt
+                { resource: Stats, options: { navigation: { name: 'OS' }, listProperties: ['created_at', 'user_count', 'server_load'] } },
                 { resource: GlobalStats, options: { navigation: { name: 'CORE' } } }
             ],
             rootPath: '/admin',
@@ -191,8 +187,10 @@ async function setupAdminPanel(app) {
                 handler: async () => {
                     const [gStats, historyData, dailyUsers] = await Promise.all([
                         GlobalStats.findByPk(1),
-                        Stats.findAll({ limit: 30, order: [['createdAt', 'DESC']] }),
-                        User.count({ where: { createdAt: { [Op.gte]: dayjs().subtract(24, 'hour').toDate() } } })
+                        // ИСПРАВЛЕНО: created_at в сортировке
+                        Stats.findAll({ limit: 30, order: [['created_at', 'DESC']] }),
+                        // ИСПРАВЛЕНО: created_at в условии
+                        User.count({ where: { created_at: { [Op.gte]: dayjs().subtract(24, 'hour').toDate() } } })
                     ]);
 
                     return { 
@@ -200,7 +198,8 @@ async function setupAdminPanel(app) {
                         total_balance: parseFloat(gStats?.total_balance || 0),
                         dailyUsers: dailyUsers || 0,
                         history: (historyData || []).reverse().map(s => ({ 
-                            time: dayjs(s.createdAt).format('HH:mm'), 
+                            // ИСПРАВЛЕНО: обращение к s.created_at
+                            time: dayjs(s.created_at).format('HH:mm'), 
                             user_count: s.user_count, 
                             server_load: s.server_load, 
                             mem_usage: s.mem_usage,
