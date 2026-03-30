@@ -1,0 +1,21 @@
+/* Страница логина и общие фоны */
+body, html, #adminjs {
+    background-color: #0b0e14 !important;
+}
+
+/* Кнопка входа */
+button[type="submit"].is-primary {
+    background-color: #00f2fe !important;
+    color: #000 !important;
+    border: none !important;
+    font-family: 'Monospace', sans-serif;
+    text-transform: uppercase;
+    box-shadow: 0 0 15px rgba(0, 242, 254, 0.4);
+}
+
+/* Поля ввода */
+input.input {
+    background: #161b22 !important;
+    border: 1px solid #30363d !important;
+    color: #ffffff !important;
+}
