@@ -61,6 +61,8 @@ export const User = sequelize.define('users', {
     timestamps: true, 
     underscored: true, 
     tableName: 'users',
+    createdAt: 'created_at', // Важно для AdminJS
+    updatedAt: 'updated_at', // Важно для AdminJS
     indexes: [
         { fields: ['username'] },
         { fields: ['wallet'] },
@@ -93,7 +95,9 @@ export const Stats = sequelize.define('stats', {
 }, { 
     timestamps: true, 
     tableName: 'stats',
-    underscored: true 
+    underscored: true,
+    createdAt: 'created_at', // Важно для AdminJS
+    updatedAt: 'updated_at'  // Важно для AdminJS
 });
 
 // --- 📈 МОДЕЛЬ: GLOBAL_STATS ---
@@ -107,7 +111,6 @@ export const GlobalStats = sequelize.define('global_stats', {
     underscored: true 
 });
 
-// Связи
 User.hasMany(User, { as: 'ReferralList', foreignKey: 'referred_by' });
 User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
@@ -161,23 +164,19 @@ export const initDB = async () => {
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // Последовательная синхронизация для надежности
             await GlobalStats.sync(); 
             await Stats.sync(); 
             await User.sync(); 
             await Task.sync(); 
             await sessionStore.sync();
             
-            // Финальная сверка всей структуры
             await sequelize.sync(); 
             
-            // Создание начальной глобальной записи
             await GlobalStats.findOrCreate({ 
                 where: { id: 1 }, 
                 defaults: { total_balance: 0, total_users: 0 } 
             });
 
-            // Наполнение списком задач, если база пуста
             if (await Task.count() === 0) {
                 await Task.bulkCreate([
                     { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
@@ -186,7 +185,6 @@ export const initDB = async () => {
                 ]);
             }
 
-            // Запуск цикла логов
             setInterval(logSystemStats, 60 * 1000); 
             await logSystemStats(); 
         }
