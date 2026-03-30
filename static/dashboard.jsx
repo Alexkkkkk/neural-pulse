@@ -47,11 +47,11 @@ const Dashboard = (props) => {
   const [stats, setStats] = useState({
     totalUsers: props.data?.totalUsers || 0,
     dailyUsers: props.data?.dailyUsers || 0,
-    walletsLinked: props.data?.walletsLinked || 0,
+    walletsLinked: props.data?.active_wallets || 0, 
     total_balance: props.data?.total_balance || 0,
     cpu: 0,
     mem: 0,
-    latency: 5
+    latency: 0
   });
 
   const addLog = (msg) => {
@@ -85,7 +85,7 @@ const Dashboard = (props) => {
           ...prev,
           cpu: pulse.server_load,
           mem: pulse.mem_usage,
-          latency: pulse.latency || 5, // Используем приходящую задержку
+          latency: pulse.db_latency, // Исправлено под main.js (db_latency)
           totalUsers: pulse.user_count,
           walletsLinked: pulse.active_wallets,
           total_balance: pulse.total_balance
@@ -125,9 +125,9 @@ const Dashboard = (props) => {
     // Расчет прогресс-бара
     let progressPercent = 0;
     if (unit === '%') progressPercent = value;
-    else if (unit === 'MB') progressPercent = (value / 512) * 100;
-    else if (unit === 'MS') progressPercent = (value / 50) * 100;
-    else progressPercent = (value / 10000) * 100;
+    else if (unit === 'MB') progressPercent = (value / 1024) * 100; // На 1GB ресурсов
+    else if (unit === 'MS') progressPercent = (value / 150) * 100; // Порог задержки 150ms
+    else progressPercent = (value / 5000) * 100;
 
     return (
       <div style={{ 
@@ -228,8 +228,8 @@ const Dashboard = (props) => {
             <div key={i} style={{ 
                 width: '6px', 
                 background: `linear-gradient(to top, ${CYBER.primary}, ${CYBER.secondary})`, 
-                height: '30%', 
-                animation: `cyber-pulse 1.2s infinite ${i * 0.08}s ease-in-out` 
+                height: `${20 + (Math.random() * 50)}%`, // Динамическая высота для имитации жизни
+                animation: `cyber-pulse ${0.8 + (Math.random() * 1)}s infinite ${i * 0.05}s ease-in-out` 
             }} />
           ))}
         </div>
