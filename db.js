@@ -5,16 +5,15 @@ import os from 'os';
 import cluster from 'cluster'; 
 
 // --- 🌐 CONFIG ---
+// Используем предоставленную строку подключения
 const PG_URI = "postgresql://bothost_db_db1789af0108:hl3yLh4DQmySkEYDPYwS8fn9xkLPHYNMhmCbU8WCYXs@node1.pghost.ru:32865/bothost_db_db1789af0108";
 
 export const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
     logging: false,
     dialectOptions: { 
-        ssl: {
-            require: true,
-            rejectUnauthorized: false // Важно для работы с внешними хостингами БД
-        }, 
+        // ИСПРАВЛЕНИЕ: Отключаем SSL, так как сервер pghost.ru:32865 не поддерживает зашифрованные соединения
+        ssl: false, 
         connectTimeout: 60000 
     },
     pool: { 
@@ -172,7 +171,7 @@ export const initDB = async () => {
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // Синхронизация структуры (alter: true бережно обновляет таблицы)
+            // Синхронизация структуры
             await sequelize.sync({ alter: true });
             await sessionStore.sync();
             
