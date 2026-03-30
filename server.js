@@ -36,7 +36,7 @@ async function startNeuralOS() {
 
     // --- 🛡️ SECURITY & PERFORMANCE ---
     app.use(helmet({
-        contentSecurityPolicy: false, 
+        contentSecurityPolicy: false, // Отключаем CSP для корректной работы Telegram WebApp
         crossOriginEmbedderPolicy: false,
         crossOriginResourcePolicy: false,
     }));
@@ -111,7 +111,7 @@ async function startNeuralOS() {
                     db_latency: latency
                 };
 
-                // 📝 СОХРАНЯЕМ В БД (чтобы история не пропадала в админке)
+                // Сохраняем в БД для админки
                 await Stats.create({
                     user_count: pulseData.user_count,
                     active_wallets: pulseData.active_wallets,
@@ -127,7 +127,7 @@ async function startNeuralOS() {
             } catch (e) {
                 console.error("Pulse Loop Error", e);
             }
-        }, 30000); // Раз в 30 секунд для логов - оптимально
+        }, 30000);
 
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`);
@@ -163,6 +163,17 @@ function setupAPIRoutes(app) {
         windowMs: 1000,
         max: 25, 
         handler: (req, res) => res.status(429).json({ error: "Pulse overload" })
+    });
+
+    // Получение данных пользователя для фронтенда
+    app.get('/api/user/:id', async (req, res) => {
+        try {
+            const user = await User.findByPk(req.params.id);
+            if (!user) return res.status(404).json({ error: "Agent not found" });
+            res.json(user);
+        } catch (e) {
+            res.status(500).json({ error: "Core sync error" });
+        }
     });
 
     app.post('/api/click', clickLimit, async (req, res) => {
@@ -252,7 +263,6 @@ function setupBotHandlers(bot) {
                 defaults: { username: ctx.from.username || 'AGENT', balance: 0 }
             });
 
-            // Обновляем GlobalStats при новом пользователе
             if (created) {
                 const gs = await GlobalStats.findByPk(1);
                 if (gs) await gs.increment('total_users');
