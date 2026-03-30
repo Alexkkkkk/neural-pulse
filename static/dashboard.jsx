@@ -78,26 +78,23 @@ const Dashboard = (props) => {
   
   const [logs, setLogs] = useState(['> MOUNTING_VOLUMES...', '> CONNECTING_TON...', '> MONITORING_ACTIVE']);
   
-  // Данные пользователей
   const [users, setUsers] = useState(props.data?.usersList || [
     { id: '@alex_neo', ton: 65.5, refs: 12, taps: 845000, status: 'active' },
     { id: '@kander_dev', ton: 12.0, refs: 45, taps: 2100000, status: 'active' },
     { id: '@guest_01', ton: 0.0, refs: 2, taps: 15000, status: 'active' }
   ]);
 
-  // Расширенная статистика
   const [stats, setStats] = useState({
-    users: props.data?.totalUsers || 1,
+    users: users.length,
     tonPool: 65.5,
     load: 10.7,
     lat: 101,
-    ram: 42,
+    ram: 83.8,
     disk: 18
   });
 
   const [history, setHistory] = useState([]);
 
-  // --- Эффект загрузки и стрима ---
   useEffect(() => {
     const timer = setInterval(() => {
       setBootProgress(p => {
@@ -106,16 +103,15 @@ const Dashboard = (props) => {
       });
     }, 30);
 
-    // Симуляция получения данных (замени на свой EventSource если нужно)
     const dataInterval = setInterval(() => {
       setStats(prev => ({
         ...prev,
         load: Math.max(5, Math.min(95, prev.load + (Math.random() * 4 - 2))),
         lat: Math.max(80, Math.min(300, prev.lat + (Math.random() * 10 - 5))),
-        ram: Math.max(30, Math.min(90, prev.ram + (Math.random() * 2 - 1)))
+        ram: Math.max(80, Math.min(95, prev.ram + (Math.random() * 2 - 1)))
       }));
       setHistory(prev => [...prev.slice(-20), { 
-        user_count: stats.users, 
+        user_count: users.length, 
         total_balance: stats.tonPool, 
         server_load: stats.load, 
         db_latency: stats.lat 
@@ -123,20 +119,21 @@ const Dashboard = (props) => {
     }, 2000);
 
     return () => { clearInterval(timer); clearInterval(dataInterval); };
-  }, [stats]);
+  }, [users.length, stats.tonPool, stats.load, stats.lat]);
 
   useEffect(() => { logRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [logs]);
 
-  // --- Actions ---
-  const toggleBan = (userId) => {
+  const toggleBan = useCallback((userId) => {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: u.status === 'banned' ? 'active' : 'banned' } : u));
     playSound(300, 'sawtooth');
-  };
+    setLogs(prev => [...prev, `> ALERT: USER ${userId} STATUS_CHANGED`]);
+  }, []);
 
   const updateUser = (userId, newData) => {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...newData } : u));
     setEditingUser(null);
     playSound(800);
+    setLogs(prev => [...prev, `> DB_UPDATE: ${userId} PARAMETERS_MODIFIED`]);
   };
 
   const exportToCSV = () => {
@@ -148,6 +145,7 @@ const Dashboard = (props) => {
     a.href = url;
     a.download = `np_export_${new Date().getTime()}.csv`;
     a.click();
+    playSound(1000, 'sine', 0.1);
   };
 
   if (!isLoaded) return (
@@ -204,8 +202,12 @@ const Dashboard = (props) => {
         <div className="modal-overlay">
           <div className="modal-content">
             <div className="stat-label">MOD_USER // {editingUser.id}</div>
-            <input className="search-bar" type="number" id="m-ton" placeholder="TON" defaultValue={editingUser.ton} />
-            <input className="search-bar" type="number" id="m-taps" placeholder="TAPS" defaultValue={editingUser.taps} />
+            <div style={{marginTop: '10px'}}>
+              <label className="stat-label" style={{fontSize: '7px'}}>TON BALANCE</label>
+              <input className="search-bar" type="number" id="m-ton" defaultValue={editingUser.ton} />
+              <label className="stat-label" style={{fontSize: '7px'}}>TAP COUNT</label>
+              <input className="search-bar" type="number" id="m-taps" defaultValue={editingUser.taps} />
+            </div>
             <div style={{display: 'flex', gap: '10px'}}>
               <button className="cyber-btn" style={{flex: 1}} onClick={() => updateUser(editingUser.id, {
                 ton: parseFloat(document.getElementById('m-ton').value),
@@ -240,7 +242,7 @@ const Dashboard = (props) => {
           <div className="stat-grid">
             <div className="card">
               <div className="stat-label">Agents</div>
-              <div className="stat-value">{stats.users}<span className="unit">U</span></div>
+              <div className="stat-value">{users.length}<span className="unit">U</span></div>
               <MiniChart data={history.map(h => h.user_count)} color={CYBER.primary} />
             </div>
             <div className="card">
@@ -263,12 +265,11 @@ const Dashboard = (props) => {
               <MiniChart data={history.map(h => h.db_latency)} color={CYBER.danger} />
             </div>
             
-            {/* Добавленные метрики мониторинга */}
             <div className="card">
               <div className="stat-label">RAM_Usage</div>
-              <div className="stat-value">{stats.ram}<span className="unit">%</span></div>
+              <div className="stat-value">{stats.ram.toFixed(1)}<span className="unit">MB</span></div>
               <div className="progress-mini">
-                <div className="progress-bar" style={{ width: `${stats.ram}%`, background: stats.ram > 85 ? CYBER.danger : CYBER.primary }} />
+                <div className="progress-bar" style={{ width: `${(stats.ram/256)*100}%`, background: stats.ram > 200 ? CYBER.danger : CYBER.primary }} />
               </div>
             </div>
             <div className="card">
@@ -283,9 +284,9 @@ const Dashboard = (props) => {
           <div className="card" style={{ marginBottom: '15px' }}>
             <div className="stat-label">Core_Operations</div>
             <div className="op-grid">
-              <button className="cyber-btn" onClick={() => playSound(600)}>📢 Broadcast</button>
-              <button className="cyber-btn" onClick={() => playSound(800)}>🧹 Purge</button>
-              <button className="cyber-btn" onClick={() => playSound(400)}>💾 Sync</button>
+              <button className="cyber-btn" onClick={() => { playSound(600); setLogs(prev => [...prev, '> BROADCAST_SENT_TO_ALL']); }}>📢 Broadcast</button>
+              <button className="cyber-btn" onClick={() => { playSound(800); setLogs(prev => [...prev, '> CACHE_PURGED_SUCCESSFULLY']); }}>🧹 Purge</button>
+              <button className="cyber-btn" onClick={() => { playSound(400); setLogs(prev => [...prev, '> SYNCING_WITH_BLOCKCHAIN...']); }}>💾 Sync</button>
               <button className="cyber-btn btn-danger" onClick={() => { setIsEmergency(!isEmergency); playSound(150, 'sawtooth'); }}>
                 ⚠️ {isEmergency ? 'Resume' : 'Kill_Switch'}
               </button>
@@ -296,7 +297,7 @@ const Dashboard = (props) => {
           <div className="card" style={{ background: 'rgba(0,0,0,0.4)', height: '150px' }}>
             <div className="stat-label">[ LIVE_FEED ]</div>
             <div style={{ fontSize: '10px', height: '110px', overflowY: 'auto', opacity: 0.7 }}>
-              {logs.map((l, i) => <div key={i} style={{ marginBottom: '4px' }}>{l}</div>)}
+              {logs.map((l, i) => <div key={i} style={{ marginBottom: '4px', borderLeft: `2px solid ${CYBER.primary}`, paddingLeft: '5px' }}>{l}</div>)}
               <div ref={logRef} />
             </div>
           </div>
@@ -312,7 +313,7 @@ const Dashboard = (props) => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-            <button className="action-btn" style={{ borderColor: CYBER.success, height: '42px', padding: '0 15px' }} onClick={exportToCSV}>💾</button>
+            <button className="action-btn" style={{ borderColor: CYBER.success, height: '42px', padding: '0 15px' }} onClick={exportToCSV} title="Export CSV">💾</button>
           </div>
 
           <div className="cyber-table-wrap">
