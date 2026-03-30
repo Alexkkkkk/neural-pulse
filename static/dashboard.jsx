@@ -22,7 +22,6 @@ const playPulseSound = (type = 'log') => {
     const gain = audioCtx.createGain();
 
     osc.type = 'sine';
-    // Разные частоты для логов и ошибок
     osc.frequency.setValueAtTime(type === 'error' ? 150 : 880, audioCtx.currentTime);
     
     gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
@@ -33,7 +32,7 @@ const playPulseSound = (type = 'log') => {
 
     osc.start();
     osc.stop(audioCtx.currentTime + 0.1);
-  } catch (e) { /* Браузер может блокировать звук до первого клика */ }
+  } catch (e) { }
 };
 
 const MiniChart = memo(({ data, color, height = 30 }) => {
@@ -132,7 +131,7 @@ const Dashboard = (props) => {
 
     return (
       <div style={{ 
-        flex: '1 1 240px', margin: '10px', padding: '20px', 
+        flex: '1 1 200px', margin: '10px', padding: '20px', 
         background: CYBER.card, border: `1px solid ${color}33`, borderRadius: '4px',
         position: 'relative', overflow: 'hidden', boxShadow: `inset 0 0 15px ${color}05`
       }}>
@@ -166,7 +165,6 @@ const Dashboard = (props) => {
   return (
     <div style={{ backgroundColor: CYBER.bg, minHeight: '100vh', color: CYBER.text, fontFamily: 'monospace', padding: '20px' }}>
       <style>{`
-        /* GLOBAL DARK THEME OVERRIDE */
         #adminjs, .adminjs_Box, [data-testid="sidebar"], [data-testid="resource-header"], .adminjs_Table { 
             background: ${CYBER.bg} !important; 
         }
@@ -207,6 +205,8 @@ const Dashboard = (props) => {
       <div style={{ display: 'flex', flexWrap: 'wrap', margin: '0 -10px' }}>
         <StatCard label="AGENTS" value={stats.totalUsers} unit="U" color={CYBER.primary} historyKey="user_count" />
         <StatCard label="WALLETS" value={stats.walletsLinked} unit="W" color={CYBER.ton} historyKey="active_wallets" />
+        {/* КАРТОЧКА ПАМЯТИ ВЕРНУЛАСЬ */}
+        <StatCard label="MEMORY" value={stats.mem} unit="MB" color={CYBER.warning} historyKey="mem_usage" />
         <StatCard label="CPU_LOAD" value={stats.cpu} unit="%" color={CYBER.secondary} historyKey="server_load" />
         <StatCard label="LATENCY" value={stats.latency} unit="MS" color={CYBER.danger} historyKey="db_latency" />
       </div>
