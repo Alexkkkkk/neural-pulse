@@ -46,6 +46,7 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
+    // Раздача статики (дизайн и картинки защищены)
     app.use('/static', express.static(path.join(__dirname, 'static'), {
         maxAge: '1h',
         etag: true
@@ -55,15 +56,18 @@ async function startNeuralOS() {
         console.clear();
         console.log('--- ⚡ NEURAL PULSE SYSTEM BOOTING ---');
 
+        // 1. Инициализация БД (Критично выполнить до AdminJS)
         await initDB();
         
         const bot = new Telegraf(BOT_TOKEN);
 
+        // 2. Настройка подсистем
         setupAPIRoutes(app);
         setupRealTimeStream(app); 
         await setupAdminPanel(app);
         setupBotHandlers(bot);
 
+        // ✅ WEBHOOK GATEWAY
         app.post(`/telegraf/${BOT_TOKEN}`, async (req, res) => {
             try {
                 if (!req.body || Object.keys(req.body).length === 0) return res.sendStatus(200);
@@ -80,7 +84,7 @@ async function startNeuralOS() {
             allowed_updates: ['message', 'callback_query']
         });
 
-        // --- 🩺 SYSTEM PULSE ---
+        // --- 🩺 SYSTEM PULSE (SSE трансляция метрик) ---
         setInterval(async () => {
             try {
                 const startTime = Date.now();
@@ -176,7 +180,7 @@ async function setupAdminPanel(app) {
             resources: [
                 { resource: User, options: { navigation: { name: 'CORE' }, listProperties: ['id', 'username', 'balance', 'wallet'] } },
                 { resource: Task, options: { navigation: { name: 'OS' } } },
-                // ИСПРАВЛЕНО: created_at вместо createdAt
+                // ИСПРАВЛЕНО: created_at вместо createdAt для совместимости с underscored: true
                 { resource: Stats, options: { navigation: { name: 'OS' }, listProperties: ['created_at', 'user_count', 'server_load'] } },
                 { resource: GlobalStats, options: { navigation: { name: 'CORE' } } }
             ],
@@ -187,9 +191,9 @@ async function setupAdminPanel(app) {
                 handler: async () => {
                     const [gStats, historyData, dailyUsers] = await Promise.all([
                         GlobalStats.findByPk(1),
-                        // ИСПРАВЛЕНО: created_at в сортировке
+                        // ИСПРАВЛЕНО: сортировка по snake_case
                         Stats.findAll({ limit: 30, order: [['created_at', 'DESC']] }),
-                        // ИСПРАВЛЕНО: created_at в условии
+                        // ИСПРАВЛЕНО: условие поиска по snake_case
                         User.count({ where: { created_at: { [Op.gte]: dayjs().subtract(24, 'hour').toDate() } } })
                     ]);
 
@@ -198,7 +202,7 @@ async function setupAdminPanel(app) {
                         total_balance: parseFloat(gStats?.total_balance || 0),
                         dailyUsers: dailyUsers || 0,
                         history: (historyData || []).reverse().map(s => ({ 
-                            // ИСПРАВЛЕНО: обращение к s.created_at
+                            // ИСПРАВЛЕНО: маппинг данных из snake_case колонки
                             time: dayjs(s.created_at).format('HH:mm'), 
                             user_count: s.user_count, 
                             server_load: s.server_load, 
