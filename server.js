@@ -40,23 +40,28 @@ function setupAPIRoutes(app) {
         handler: (req, res) => res.status(429).json({ error: "Pulse overload" })
     });
 
+    // Маршрут для кликов
     app.post('/api/click', clickLimit, async (req, res) => {
         const { userId, count } = req.body;
         if (!userId || !count || count > 100 || count <= 0) return res.status(403).send();
         try {
             const user = await User.findByPk(userId);
             if (!user) return res.status(404).send();
+            
             const currentBalance = parseFloat(user.balance) || 0;
             const config = MULTIPLIERS.find(m => currentBalance >= m.threshold) || { multi: 1.0 };
             const reward = Math.floor(count * config.multi);
+
             await Promise.all([
                 user.increment('balance', { by: reward }),
                 GlobalStats.increment('total_balance', { by: reward, where: { id: 1 } })
             ]);
+
             res.json({ s: 1, balance: currentBalance + reward });
         } catch (e) { res.status(500).send(); }
     });
 
+    // Получение данных агента
     app.get('/api/user/:id', async (req, res) => {
         try {
             const user = await User.findByPk(req.params.id);
@@ -73,6 +78,7 @@ function setupAdminCommands(app, bot) {
             if (action === 'broadcast') {
                 const users = await User.findAll({ attributes: ['id'] });
                 let successCount = 0;
+                // Асинхронная рассылка без блокировки основного потока
                 (async () => {
                     for (const user of users) {
                         try {
@@ -98,9 +104,12 @@ function setupRealTimeStream(app) {
             'X-Accel-Buffering': 'no'
         });
         res.write(':\n\n');
+        
         const sendData = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
         pulseEvents.on('update', sendData);
+        
         const keepAlive = setInterval(() => res.write(':\n\n'), 15000);
+        
         req.on('close', () => {
             clearInterval(keepAlive);
             pulseEvents.off('update', sendData);
@@ -150,7 +159,11 @@ async function setupAdminPanel(app) {
                     };
                 }
             },
-            branding: { companyName: 'NEURAL PULSE OS', logo: '/static/images/logo.png', withMadeWithAdminJS: false }
+            branding: { 
+                companyName: 'NEURAL PULSE OS', 
+                logo: '/static/images/logo.png', 
+                withMadeWithAdminJS: false 
+            }
         });
 
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
@@ -191,7 +204,7 @@ async function startNeuralOS() {
     const app = express();
     const bot = new Telegraf(BOT_TOKEN);
 
-    // Защита (Helmet)
+    // Безопасность и заголовки
     app.use(helmet({
         contentSecurityPolicy: {
             directives: {
@@ -213,13 +226,14 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
-    // Важные файлы (Манифест TON)
+    // Важные файлы для TON (манифест должен быть доступен по прямому пути)
     app.get('/tonconnect-manifest.json', (req, res) => {
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.sendFile(path.join(__dirname, 'static', 'tonconnect-manifest.json'));
     });
 
+    // Статика проекта
     app.use('/static', express.static(path.join(__dirname, 'static'), { maxAge: '1h' }));
 
     try {
@@ -227,14 +241,14 @@ async function startNeuralOS() {
         await initDB();
         await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
 
-        // Инициализация подсистем
+        // Загрузка модулей
         setupAPIRoutes(app);
         setupAdminCommands(app, bot);
         setupRealTimeStream(app); 
         await setupAdminPanel(app);
         setupBotHandlers(bot);
 
-        // Webhook Gateway
+        // Обработка вебхуков Telegram
         app.post(`/telegraf/${BOT_TOKEN}`, async (req, res) => {
             try {
                 if (req.body && Object.keys(req.body).length > 0) {
@@ -246,7 +260,7 @@ async function startNeuralOS() {
 
         await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`, { drop_pending_updates: true });
 
-        // Система телеметрии (Pulse Loop)
+        // Цикл телеметрии (Pulse)
         setInterval(async () => {
             try {
                 const mem = process.memoryUsage().rss / 1024 / 1024;
@@ -280,5 +294,5 @@ async function startNeuralOS() {
     }
 }
 
-// Запуск ОС
+// ФИНАЛЬНЫЙ ЗАПУСК
 startNeuralOS();
