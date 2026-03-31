@@ -45,6 +45,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.24.0",
+    "@babel/preset-env": "^7.24.0",
     "@babel/preset-react": "^7.23.3"
   },
   "description": "Neural Pulse OS - Telegram Tap-to-Earn System"
