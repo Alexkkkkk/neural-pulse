@@ -21,10 +21,11 @@ const DashboardContent = (props) => {
   const { data, resource, action } = props;
   
   const [isMounted, setIsMounted] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [logs, setLogs] = useState([]);
   const logRef = useRef(null);
   
-  // Безопасное получение адреса
+  // Безопасное получение адреса TON
   let userAddress = "";
   try {
     userAddress = useTonAddress();
@@ -32,33 +33,54 @@ const DashboardContent = (props) => {
     console.error("TonConnect Hook Error", e);
   }
 
-  // --- 📝 ОПТИМИЗИРОВАННОЕ ЛОГИРОВАНИЕ ---
+  // --- 📝 СИСТЕМА ЛОГИРОВАНИЯ (Оптимизирована для RAM) ---
   const addLog = useCallback((text, type = 'INFO') => {
     const timestamp = new Date().toLocaleTimeString();
     const prefix = type === 'ERROR' ? '❌' : type === 'WARN' ? '⚠️' : '>';
     const newLog = `${prefix} [${timestamp}] ${text}`;
-    // Ограничение до 50 строк для экономии RAM на Bothost
+    // Лимит 50 строк предотвращает утечки памяти в AdminJS
     setLogs(prev => [...prev.slice(-49), newLog]);
   }, []);
 
-  // 1. Инициализация
+  // 1. ИНИЦИАЛИЗАЦИЯ И ПЕРЕХВАТ ОШИБОК
   useEffect(() => {
     setIsMounted(true);
-    addLog("SYSTEM_BOOT: NEURAL_PULSE_OS_READY");
+    addLog("DIAGNOSTICS_START: INITIALIZING_DEBUG_LAYER");
 
     const handleError = (event) => addLog(`RUNTIME_ERROR: ${event.message}`, 'ERROR');
+    const handleRejection = (event) => addLog(`PROMISE_REJECTED: ${event.reason}`, 'ERROR');
+
     window.addEventListener('error', handleError);
-    return () => window.removeEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleRejection);
+
+    // Имитация загрузки систем
+    const timer = setTimeout(() => {
+      setIsLoaded(true);
+      addLog("UI_RENDER_SUCCESS: READY_FOR_OPERATIONS");
+    }, 1000);
+
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleRejection);
+      clearTimeout(timer);
+    };
   }, [addLog]);
 
-  // 2. Аудит данных AdminJS
+  // 2. АУДИТ КОНТЕКСТА ADMINJS
   useEffect(() => {
     if (isMounted) {
-      addLog(`CONTEXT: RES=${resource?.id || 'GLOBAL'} | ACT=${action?.name || 'VIEW'}`);
+      addLog(`ADMINJS_STATUS: RESOURCE=${resource?.id || 'unknown'}`);
+      addLog(`ADMINJS_STATUS: ACTION=${action?.name || 'unknown'}`);
+      
+      if (!data) {
+        addLog("DATA_PAYLOAD: EMPTY (Check server.js)", "WARN");
+      } else {
+        addLog(`DATA_PAYLOAD: RECEIVED (${Object.keys(data).length} keys)`);
+      }
     }
-  }, [isMounted, resource, action, addLog]);
+  }, [isMounted, resource, action, data, addLog]);
 
-  // Авто-скролл логов
+  // Авто-скролл
   useEffect(() => {
     if (logRef.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -81,7 +103,7 @@ const DashboardContent = (props) => {
           font-size: 11px; 
           line-height: 1.4;
         }
-        .log-line { margin-bottom: 2px; border-bottom: 1px solid rgba(255,255,255,0.02); padding-bottom: 2px; }
+        .log-line { margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.02); padding-bottom: 2px; }
         .label { font-size: 10px; color: ${CYBER.primary}; letter-spacing: 1px; margin-bottom: 8px; display: block; }
         .error-text { color: ${CYBER.danger}; font-weight: bold; }
         .warn-text { color: #ffaa00; }
@@ -90,6 +112,7 @@ const DashboardContent = (props) => {
           width: 100%; padding: 12px; background: none; 
           border: 1px solid ${CYBER.primary}; color: ${CYBER.primary}; 
           cursor: pointer; font-family: inherit; transition: 0.3s;
+          text-transform: uppercase; letter-spacing: 1px;
         }
         .cyber-btn:hover { background: rgba(0, 242, 254, 0.1); box-shadow: 0 0 10px ${CYBER.border}; }
       `}</style>
@@ -97,7 +120,7 @@ const DashboardContent = (props) => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div>
           <h1 style={{ color: CYBER.primary, margin: 0, fontSize: '24px' }}>NEURAL_PULSE_DEBUG</h1>
-          <div style={{ fontSize: '10px', opacity: 0.6 }}>OPTIMIZED_MEMORY_MODE // v1.2.0</div>
+          <div style={{ fontSize: '10px', opacity: 0.6 }}>SYSTEM_AUDIT_MODE // v1.2.0</div>
         </div>
         <TonConnectButton />
       </div>
@@ -105,6 +128,7 @@ const DashboardContent = (props) => {
       <div className="card">
         <span className="label">Telemetry_Stream</span>
         <div className="log-container" ref={logRef}>
+          {logs.length === 0 && <div className="log-line">Waiting for telemetry...</div>}
           {logs.map((log, i) => (
             <div key={i} className={`log-line ${log.includes('❌') ? 'error-text' : log.includes('⚠️') ? 'warn-text' : ''}`}>
               {log}
@@ -115,14 +139,14 @@ const DashboardContent = (props) => {
 
       <div className="status-grid">
         <div className="card">
-          <span className="label">Neural_Link</span>
+          <span className="label">Bridge_Status</span>
           <div style={{fontSize: '12px'}}>ADDRESS: {userAddress ? `${userAddress.slice(0,6)}...${userAddress.slice(-4)}` : 'DISCONNECTED'}</div>
           <div style={{fontSize: '11px', color: userAddress ? CYBER.success : CYBER.danger}}>
             STATUS: {userAddress ? 'ACTIVE_SESSION' : 'WAITING_AUTH'}
           </div>
         </div>
         <div className="card">
-          <span className="label">Data_Snapshot</span>
+          <span className="label">AdminJS_Snapshot</span>
           <pre style={{ fontSize: '10px', opacity: 0.7, margin: 0 }}>
             {JSON.stringify({ res: resource?.id, act: action?.name }, null, 1)}
           </pre>
@@ -133,12 +157,12 @@ const DashboardContent = (props) => {
           addLog("PING: TESTING_SERVER_GATEWAY...");
           try {
             const res = await fetch('/api/admin/command', { method: 'POST' });
-            addLog(`PONG: STATUS_${res.status}`);
+            addLog(`PONG: SERVER_RESPONSE_${res.status}`);
           } catch (e) {
             addLog(`FAIL: ${e.message}`, 'ERROR');
           }
       }}>
-        EXECUTE_DIAGNOSTIC_PING
+        Execute Diagnostic Ping
       </button>
     </div>
   );
