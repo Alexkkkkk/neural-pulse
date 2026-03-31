@@ -71,7 +71,7 @@ function setupAPIRoutes(app) {
 
 function setupAdminCommands(app, bot) {
     app.post('/api/admin/command', async (req, res) => {
-        const { action, message } = req.body;
+        const { action, message, userId } = req.body;
         try {
             if (action === 'broadcast') {
                 const users = await User.findAll({ attributes: ['id'] });
@@ -86,6 +86,15 @@ function setupAdminCommands(app, bot) {
                     }
                     pulseEvents.emit('update', { recent_event: `BROADCAST_COMPLETE: ${successCount}_AGENTS`, event_type: 'SYSTEM' });
                 })();
+            }
+
+            if (action === 'toggle_ban') {
+                const user = await User.findByPk(userId);
+                if (user) {
+                    user.status = user.status === 'banned' ? 'active' : 'banned';
+                    await user.save();
+                    pulseEvents.emit('update', { recent_event: `USER_ID_${userId}_STATUS_CHANGED: ${user.status}`, event_type: 'SYSTEM' });
+                }
             }
             res.sendStatus(200);
         } catch (e) { res.status(500).send(e.message); }
@@ -123,17 +132,14 @@ async function setupAdminPanel(app) {
         
         const adminJs = new AdminJS({
             resources: [
-                { resource: User, options: { navigation: { name: 'CORE' }, listProperties: ['id', 'username', 'balance', 'wallet', 'created_at'] } },
+                { resource: User, options: { navigation: { name: 'CORE' }, listProperties: ['id', 'username', 'balance', 'wallet', 'status', 'created_at'] } },
                 { resource: Task, options: { navigation: { name: 'OS' } } },
                 { resource: Stats, options: { navigation: { name: 'OS' }, listProperties: ['created_at', 'user_count', 'server_load', 'mem_usage'] } },
                 { resource: GlobalStats, options: { navigation: { name: 'CORE' } } }
             ],
             rootPath: '/admin',
             componentLoader,
-            // Оптимизация сборки для Bothost
-            bundler: {
-                availableAndEnabled: true 
-            },
+            bundler: { availableAndEnabled: true },
             dashboard: { 
                 component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
                 handler: async () => {
@@ -181,7 +187,6 @@ async function setupAdminPanel(app) {
             cookiePassword: 'np-titan-2026-secure-v2',
         }, null, { resave: false, saveUninitialized: false, secret: 'np_titan_secret_v2', store: sessionStore });
 
-        // Принудительная инициализация ПЕРЕД использованием роутера
         console.log('--- [ADMIN] INITIALIZING ASSETS... ---');
         await adminJs.initialize();
         
@@ -217,6 +222,7 @@ async function startNeuralOS() {
     const app = express();
     const bot = new Telegraf(BOT_TOKEN);
 
+    // Расширенный Helmet для корректной работы TON Connect и Админки
     app.use(helmet({
         contentSecurityPolicy: {
             directives: {
@@ -274,6 +280,7 @@ async function startNeuralOS() {
 
         await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`, { drop_pending_updates: true });
 
+        // LOOP ТЕЛЕМЕТРИИ
         setInterval(async () => {
             try {
                 const start = Date.now();
