@@ -106,7 +106,7 @@ const Dashboard = (props) => {
   ]);
 
   // --- DYNAMIC STATS & HISTORY ---
-  const [stats, setStats] = useState({ load: 0, lat: 0 });
+  const [stats, setStats] = useState({ load: 0, lat: 0, ram: 42, disk: 18 });
   const [history, setHistory] = useState({
     load: Array(20).fill(10),
     lat: Array(20).fill(100)
@@ -136,7 +136,7 @@ const Dashboard = (props) => {
           lat: [...h.lat.slice(-19), nextLat]
         }));
         
-        return { load: nextLoad, lat: nextLat };
+        return { ...prev, load: nextLoad, lat: nextLat };
       });
     }, 2000);
     return () => clearInterval(interval);
@@ -191,7 +191,7 @@ const Dashboard = (props) => {
   return (
     <div className={`app-root ${isEmergency ? 'emergency-mode' : ''}`}>
       <style>{`
-        .app-root { background: ${CYBER.bg}; min-height: 100vh; padding: 15px; font-family: 'JetBrains Mono', monospace; color: ${CYBER.text}; position: relative; }
+        .app-root { background: ${CYBER.bg}; min-height: 100vh; padding: 15px; font-family: 'JetBrains Mono', monospace; color: ${CYBER.text}; position: relative; transition: filter 0.5s; }
         .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; border-radius: 2px; margin-bottom: 15px; position: relative; }
         .nav-tabs { display: flex; gap: 15px; margin-bottom: 20px; border-bottom: 1px solid ${CYBER.border}; }
         .tab-btn { background: none; border: none; color: #444; cursor: pointer; padding: 10px 0; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
@@ -236,14 +236,30 @@ const Dashboard = (props) => {
               <div style={{ fontSize: '22px', fontWeight: 'bold' }}>{stats.lat.toFixed(0)}ms</div>
               <MiniChart data={history.lat} color={CYBER.warning} />
             </div>
+            <div className="card">
+              <div style={{ fontSize: '9px', color: CYBER.primary }}>RAM_USAGE</div>
+              <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{stats.ram}%</div>
+              <div style={{ width: '100%', height: '4px', background: '#111', marginTop: '10px' }}>
+                <div style={{ width: `${stats.ram}%`, height: '100%', background: CYBER.primary }} />
+              </div>
+            </div>
+            <div className="card">
+              <div style={{ fontSize: '9px', color: CYBER.primary }}>DISK_SPACE</div>
+              <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{stats.disk}%</div>
+              <div style={{ width: '100%', height: '4px', background: '#111', marginTop: '10px' }}>
+                <div style={{ width: `${stats.disk}%`, height: '100%', background: CYBER.warning }} />
+              </div>
+            </div>
           </div>
+          
           <div className="card">
             <div style={{ fontSize: '9px', color: CYBER.primary, marginBottom: '10px' }}>SYSTEM_LOGS</div>
-            <div style={{ height: '150px', overflowY: 'auto', fontSize: '10px', opacity: 0.6 }}>
+            <div style={{ height: '120px', overflowY: 'auto', fontSize: '10px', opacity: 0.6 }}>
                 {logs.map((log, i) => <div key={i} style={{ marginBottom: '4px', borderLeft: `2px solid ${CYBER.primary}`, paddingLeft: '8px' }}>{log}</div>)}
                 <div ref={logRef} />
             </div>
           </div>
+
           <button className="cyber-btn btn-danger" style={{ width: '100%' }} onClick={() => setIsEmergency(!isEmergency)}>
             {isEmergency ? 'RESUME_NORMAL_OPS' : 'EMERGENCY_KILL_SWITCH'}
           </button>
