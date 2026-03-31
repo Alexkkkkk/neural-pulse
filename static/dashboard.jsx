@@ -15,8 +15,8 @@ const CYBER = {
   border: '#11151c',
 };
 
-// --- 📈 UNIVERSAL SPARKLINE COMPONENT ---
-const SparkGraph = memo(({ data, color, height = 35 }) => {
+// --- 📈 DYNAMIC SPARKLINE COMPONENT (AS PER SCREENSHOT) ---
+const SparkGraph = memo(({ data, color, height = 45 }) => {
   if (!data || data.length < 2) return <div style={{ height }} />;
   const max = Math.max(...data, 1);
   const min = Math.min(...data);
@@ -31,10 +31,16 @@ const SparkGraph = memo(({ data, color, height = 35 }) => {
   const areaPath = `${linePath} L 100,${height} L 0,${height} Z`;
 
   return (
-    <svg width="100%" height={height} style={{ marginTop: '8px', overflow: 'visible', filter: `drop-shadow(0 0 3px ${color}44)` }}>
-      <path d={areaPath} fill={`${color}11`} />
-      <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="100" cy={points[points.length-1].y} r="2" fill={color} />
+    <svg width="100%" height={height} style={{ marginTop: '12px', overflow: 'visible' }}>
+      <defs>
+        <linearGradient id={`grad-${color.replace('#','')}`} x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor={color} stopOpacity="0.2" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={areaPath} fill={`url(#grad-${color.replace('#','')})`} />
+      <path d={linePath} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="100" cy={points[points.length-1].y} r="3" fill={color} style={{ filter: `drop-shadow(0 0 5px ${color})` }} />
     </svg>
   );
 });
@@ -52,6 +58,17 @@ const TelemetryBar = ({ label, value, color }) => (
   </div>
 );
 
+// --- 🗳️ UNIFIED DATA CARD ---
+const DataCard = ({ label, value, unit, data, color }) => (
+  <div className="card">
+    <div className="label" style={{ color: color }}>{label}</div>
+    <div className="val-main">
+      {value}<span className="val-unit">{unit}</span>
+    </div>
+    <SparkGraph data={data} color={color} />
+  </div>
+);
+
 const Dashboard = (props) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isEmergency, setIsEmergency] = useState(false);
@@ -59,40 +76,43 @@ const Dashboard = (props) => {
 
   // --- LIVE MONITORING STATES ---
   const [stats, setStats] = useState({
-    cpu: 14, ram: 38, ssd: 22,
+    cpu: 10.7, ram: 38, ssd: 22,
     online: 42, liquidity: 1000,
-    latency: 101, ton: 65.5
+    latency: 95, ton: 65.5
   });
 
   // History for all graphs
   const [history, setHistory] = useState({
-    cpu: [12, 15, 14, 18, 16, 14, 14],
+    cpu: [12, 15, 14, 18, 16, 14, 10.7],
     ram: [35, 36, 38, 38, 37, 38, 38],
-    online: [38, 40, 42, 41, 43, 42, 42],
-    wallets: [840, 842, 845, 848, 850, 850, 850],
-    liq: [980, 990, 1000, 1000, 1000, 1000, 1000]
+    online: [20, 45, 30, 40, 50, 35, 42],
+    wallets: [40, 50, 65.5, 65.5, 65.5, 65.5, 65.5],
+    liq: [800, 800, 800, 800, 800, 950, 1000],
+    lat: [80, 110, 95, 85, 80, 85, 95]
   });
 
   const [logs, setLogs] = useState(['> UPLINK_ESTABLISHED', '> SECURE_ENCRYPTED_SESSION_ACTIVE']);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      // Симуляция динамики данных
-      const newCpu = Math.floor(Math.random() * 5 + 12);
-      const newLat = Math.floor(Math.random() * 10 + 95);
+      const newCpu = (Math.random() * 5 + 10).toFixed(1);
+      const newLat = Math.floor(Math.random() * 15 + 90);
+      const newOnline = Math.floor(Math.random() * 5 + 40);
       
       setStats(prev => ({
         ...prev,
-        cpu: newCpu,
-        latency: newLat
+        cpu: parseFloat(newCpu),
+        latency: newLat,
+        online: newOnline
       }));
 
       setHistory(prev => ({
-        cpu: [...prev.cpu.slice(1), newCpu],
+        cpu: [...prev.cpu.slice(1), parseFloat(newCpu)],
         ram: [...prev.ram.slice(1), 38 + (Math.random() > 0.5 ? 1 : 0)],
-        online: [...prev.online.slice(1), 40 + Math.floor(Math.random() * 5)],
-        wallets: [...prev.wallets.slice(1), prev.wallets[6] + (Math.random() > 0.8 ? 1 : 0)],
-        liq: [...prev.liq.slice(1), prev.liq[6] + (Math.random() * 4 - 2)]
+        online: [...prev.online.slice(1), newOnline],
+        wallets: [...prev.wallets.slice(1), 65.5],
+        liq: [...prev.liq.slice(1), prev.liq[6] + (Math.random() > 0.7 ? 10 : 0)],
+        lat: [...prev.lat.slice(1), newLat]
       }));
     }, 3000);
 
@@ -112,14 +132,13 @@ const Dashboard = (props) => {
         .app-root { background: ${CYBER.bg}; min-height: 100vh; padding: 15px; font-family: 'Roboto Mono', monospace; color: ${CYBER.text}; transition: 0.5s; }
         .header { margin-bottom: 25px; border-left: 3px solid ${CYBER.primary}; padding-left: 15px; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; border-radius: 2px; position: relative; overflow: hidden; }
-        .card::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 1px; background: linear-gradient(90deg, transparent, ${CYBER.primary}33, transparent); }
+        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; border-radius: 4px; position: relative; overflow: hidden; }
         
-        .label { font-size: 8px; color: ${CYBER.primary}; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; font-weight: bold; }
-        .val-main { font-size: 24px; font-weight: bold; color: #fff; line-height: 1; }
-        .val-unit { font-size: 10px; color: ${CYBER.subtext}; margin-left: 4px; }
+        .label { font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; font-weight: bold; }
+        .val-main { font-size: 28px; font-weight: bold; color: #fff; display: flex; align-items: baseline; line-height: 1; }
+        .val-unit { font-size: 10px; color: ${CYBER.subtext}; margin-left: 6px; text-transform: uppercase; }
 
-        .op-btn { background: #fff; color: #000; border: none; padding: 12px; font-size: 10px; font-weight: 700; cursor: pointer; text-transform: uppercase; transition: 0.2s; border-radius: 1px; }
+        .op-btn { background: #fff; color: #000; border: none; padding: 12px; font-size: 10px; font-weight: 700; cursor: pointer; text-transform: uppercase; border-radius: 2px; transition: 0.2s; }
         .op-btn:active { background: ${CYBER.primary}; transform: translateY(1px); }
         
         .emergency { filter: saturate(0) contrast(1.5) brightness(0.8) hue-rotate(-160deg); }
@@ -136,47 +155,55 @@ const Dashboard = (props) => {
       </div>
 
       <div className="grid">
-        {/* BLOCK 1: HARDWARE (With Progress Bars) */}
+        {/* HARDWARE TELEMETRY */}
         <div className="card" style={{ gridColumn: 'span 2' }}>
-          <div className="label">System_Hardware_Telemetry</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+          <div className="label" style={{ color: CYBER.primary }}>System_Hardware_Telemetry</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginTop: '10px' }}>
             <TelemetryBar label="Kernel" value={stats.cpu} color={CYBER.primary} />
             <TelemetryBar label="Memory" value={stats.ram} color={CYBER.secondary} />
             <TelemetryBar label="SSD" value={stats.ssd} color={CYBER.warning} />
           </div>
         </div>
 
-        {/* BLOCK 2: AGENTS (With Graph) */}
-        <div className="card">
-          <div className="label">Active_Agents</div>
-          <div className="val-main">{stats.online}<span className="val-unit">U</span></div>
-          <SparkGraph data={history.online} color={CYBER.success} />
-        </div>
+        {/* ACTIVE AGENTS */}
+        <DataCard 
+          label="Active_Agents" 
+          value={stats.online} 
+          unit="U" 
+          data={history.online} 
+          color={CYBER.success} 
+        />
 
-        {/* BLOCK 3: TON POOL (With Graph) */}
-        <div className="card">
-          <div className="label">Ton_Pool</div>
-          <div className="val-main">{stats.ton}<span className="val-unit">💎</span></div>
-          <SparkGraph data={history.wallets} color={CYBER.ton} />
-        </div>
+        {/* TON POOL */}
+        <DataCard 
+          label="Ton_Pool" 
+          value={stats.ton} 
+          unit="💎" 
+          data={history.wallets} 
+          color={CYBER.ton} 
+        />
 
-        {/* BLOCK 4: LATENCY (With Graph) */}
-        <div className="card">
-          <div className="label" style={{ color: CYBER.danger }}>I/O_Latency</div>
-          <div className="val-main">{stats.latency}<span className="val-unit">ms</span></div>
-          <SparkGraph data={history.cpu} color={CYBER.danger} />
-        </div>
+        {/* I/O LATENCY */}
+        <DataCard 
+          label="I/O_Latency" 
+          value={stats.latency} 
+          unit="ms" 
+          data={history.lat} 
+          color={CYBER.danger} 
+        />
 
-        {/* BLOCK 5: LIQUIDITY (With Graph) */}
-        <div className="card">
-          <div className="label">Total_Liquidity</div>
-          <div className="val-main">{stats.liquidity}<span className="val-unit">$NP</span></div>
-          <SparkGraph data={history.liq} color={CYBER.warning} />
-        </div>
+        {/* TOTAL LIQUIDITY */}
+        <DataCard 
+          label="Total_Liquidity" 
+          value={stats.liquidity} 
+          unit="$NP" 
+          data={history.liq} 
+          color={CYBER.warning} 
+        />
 
         {/* OPERATIONS CONTROL */}
         <div className="card" style={{ gridColumn: 'span 2' }}>
-          <div className="label">Core_Operations</div>
+          <div className="label" style={{ color: CYBER.primary }}>Core_Operations</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             <button className="op-btn" onClick={() => setLogs(p => [...p, `> BROADCAST_SENT: ${new Date().toLocaleTimeString()}`])}>📢 Broadcast</button>
             <button className="op-btn" onClick={() => setLogs(p => [...p, `> CACHE_PURGED: OK`])}>🧹 Purge</button>
