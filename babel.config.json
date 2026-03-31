@@ -1,0 +1,11 @@
+{
+  "compact": true,
+  "minified": true,
+  "comments": false,
+  "ignore": [
+    "./node_modules"
+  ],
+  "presets": [
+    ["@babel/preset-env", { "targets": { "node": "current" } }]
+  ]
+}
