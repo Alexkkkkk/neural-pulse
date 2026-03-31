@@ -1,4 +1,9 @@
 import React, { useState, useEffect, memo, useRef } from 'react';
+import { 
+  TonConnectButton, 
+  useTonAddress, 
+  useTonConnectUI 
+} from '@tonconnect/ui-react';
 
 // --- 🌌 INFINITY-PULSE CORE PALETTE ---
 const CYBER = {
@@ -68,7 +73,7 @@ const NeuralWave = memo(({ active }) => (
 ));
 
 const Dashboard = (props) => {
-  const { data } = props; // Данные приходят из AdminJS handler
+  const { data } = props;
   const [activeTab, setActiveTab] = useState('overview');
   const [bootProgress, setBootProgress] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -76,13 +81,13 @@ const Dashboard = (props) => {
   const [searchTerm, setSearchTerm] = useState('');
   const logRef = useRef(null);
 
-  const [wallet, setWallet] = useState({ connected: false, address: null });
+  // TON Connect Hooks
+  const userAddress = useTonAddress();
+  const [tonConnectUI] = useTonConnectUI();
+
   const [logs, setLogs] = useState(['> MOUNTING_VOLUMES...', '> SYSTEM_READY', `> SYNCING_DATABASE: ${data?.totalUsers || 0} AGENTS FOUND`]);
-  
-  // Состояние пользователей из БД
   const [users, setUsers] = useState(data?.usersList || []);
 
-  // Синхронизация статистики
   const [stats, setStats] = useState({
     load: data?.currentLoad || 10.7,
     lat: data?.currentLat || 101,
@@ -94,7 +99,6 @@ const Dashboard = (props) => {
     totalTonPool: data?.total_balance || 0 
   });
 
-  // История для графиков (из сервера или пустые заглушки)
   const history = {
     load: data?.history?.load || Array(20).fill(10),
     lat: data?.history?.lat || Array(20).fill(100),
@@ -102,6 +106,7 @@ const Dashboard = (props) => {
     tonInflow: data?.history?.inflow || Array(20).fill(0)
   };
 
+  // Boot sequence
   useEffect(() => {
     const timer = setInterval(() => {
       setBootProgress(p => {
@@ -112,25 +117,22 @@ const Dashboard = (props) => {
     return () => clearInterval(timer);
   }, []);
 
+  // Логирование подключения кошелька
+  useEffect(() => {
+    if (userAddress) {
+      playSound(800, 'sine', 0.1);
+      setLogs(prev => [...prev, `> WALLET_BRIDGE_ESTABLISHED: ${userAddress.slice(0, 4)}...${userAddress.slice(-4)}`]);
+    } else if (isLoaded) {
+      setLogs(prev => [...prev, '> WALLET_BRIDGE_DISCONNECTED']);
+    }
+  }, [userAddress, isLoaded]);
+
   useEffect(() => { logRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [logs]);
 
-  const connectWallet = () => {
-    playSound(800, 'sine', 0.1);
-    setWallet({ connected: true, address: 'UQAr...4Xz9' });
-    setLogs(prev => [...prev, '> WALLET_CONNECTED: UQAr...4Xz9']);
-  };
-
-  const disconnectWallet = () => {
-    playSound(300, 'sawtooth', 0.1);
-    setWallet({ connected: false, address: null });
-    setLogs(prev => [...prev, '> WALLET_DISCONNECTED']);
-  };
-
   const toggleBan = (userId) => {
-    // В будущем тут будет fetch запрос к API
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: u.status === 'banned' ? 'active' : 'banned' } : u));
     playSound(300, 'sawtooth');
-    setLogs(prev => [...prev, `> ALERT: USER ${userId} STATUS_CHANGED`]);
+    setLogs(prev => [...prev, `> ALERT: USER ${userId} STATUS_UPDATED`]);
   };
 
   if (!isLoaded) return (
@@ -153,26 +155,24 @@ const Dashboard = (props) => {
         .nav-tabs { display: flex; gap: 15px; margin-bottom: 15px; border-bottom: 1px solid ${CYBER.border}; }
         .tab-btn { background: none; border: none; color: #444; padding: 10px 0; font-size: 10px; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; }
         .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; }
-        .cyber-btn { background: #fff; color: #000; border: none; padding: 10px; font-size: 10px; font-weight: bold; cursor: pointer; text-transform: uppercase; border-radius: 2px; }
+        .cyber-btn { background: #fff; color: #000; border: none; padding: 8px 12px; font-size: 10px; font-weight: bold; cursor: pointer; text-transform: uppercase; border-radius: 2px; }
         .emergency-btn { width: 100%; background: ${CYBER.danger}; color: #fff; border: none; padding: 12px; font-weight: bold; cursor: pointer; margin-top: 10px; }
         .emergency { filter: hue-rotate(-160deg); }
         .cyber-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; }
         .cyber-table th { text-align: left; padding: 12px; color: ${CYBER.primary}; border-bottom: 1px solid ${CYBER.border}; }
         .cyber-table td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        /* TON Button Customization */
+        .ton-btn-container { scale: 0.8; transform-origin: right; }
       `}</style>
 
       {/* HEADER */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'flex-start' }}>
         <div>
           <h1 style={{ color: CYBER.primary, margin: 0, fontSize: '22px', letterSpacing: '2px' }}>NEURAL_PULSE</h1>
-          <div style={{ fontSize: '8px', opacity: 0.5 }}>ROOT_ACCESS // OS_2026_CORE</div>
+          <div style={{ fontSize: '8px', opacity: 0.5 }}>OS_9.7 // WEB3_READY</div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <div className="label" style={{color: CYBER.ton}}>Total_TON_Pool</div>
-          <div className="value" style={{ color: CYBER.ton }}>
-            {Number(stats.totalTonPool).toLocaleString()}
-            <span className="unit">💎</span>
-          </div>
+        <div className="ton-btn-container">
+          <TonConnectButton />
         </div>
       </div>
 
@@ -191,19 +191,12 @@ const Dashboard = (props) => {
             </div>
 
             <div className="card">
-              <div className="label">Wallets_Linked</div>
-              <div className="value">{stats.linkedWallets}<span className="unit">🔗</span></div>
-              <div style={{ fontSize: '8px', marginTop: '15px', color: CYBER.primary }}>
-                {stats.totalUsers > 0 ? ((stats.linkedWallets / stats.totalUsers) * 100).toFixed(1) : 0}% Conversion
+              <div className="label" style={{ color: CYBER.ton }}>TON_Pool_Status</div>
+              <div className="value" style={{ color: CYBER.ton }}>
+                {Number(stats.totalTonPool).toLocaleString()}
+                <span className="unit">💎</span>
               </div>
-            </div>
-
-            <div className="card" style={{ gridColumn: 'span 2' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <div className="label">Global_Inflow_Rate</div>
-                <div style={{ color: CYBER.ton, fontWeight: 'bold' }}>+{stats.tonInflow.toFixed(2)} TON/hr</div>
-              </div>
-              <MiniChart data={history.tonInflow} color={CYBER.ton} height={30} />
+              <MiniChart data={history.tonInflow} color={CYBER.ton} />
             </div>
 
             <div className="card">
@@ -212,15 +205,15 @@ const Dashboard = (props) => {
               <MiniChart data={history.load} color={CYBER.primary} />
             </div>
             <div className="card">
-              <div className="label">Net_Latency</div>
+              <div className="label">Latency</div>
               <div className="value">{stats.lat.toFixed(0)}ms</div>
               <MiniChart data={history.lat} color={CYBER.warning} />
             </div>
           </div>
 
           <div className="card">
-            <div className="label">System_Logs_Buffer</div>
-            <div style={{ height: '80px', overflowY: 'auto', fontSize: '9px', opacity: 0.6, marginTop: '8px', fontFamily: 'monospace' }}>
+            <div className="label">System_Logs</div>
+            <div style={{ height: '100px', overflowY: 'auto', fontSize: '9px', opacity: 0.6, marginTop: '8px', fontFamily: 'monospace' }}>
               {logs.map((log, i) => <div key={i} style={{ borderLeft: `2px solid ${CYBER.primary}`, paddingLeft: '8px', marginBottom: '4px' }}>{log}</div>)}
               <div ref={logRef} />
             </div>
@@ -236,31 +229,28 @@ const Dashboard = (props) => {
       {activeTab === 'airdrop' && (
         <>
           <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div className="label">Admin_Wallet_Bridge</div>
-                <div style={{ fontSize: '11px', fontWeight: 'bold', marginTop: '4px' }}>
-                  {wallet.connected ? `CONNECTED: ${wallet.address}` : 'STATUS: OFFLINE'}
-                </div>
-              </div>
-              <button className="cyber-btn" onClick={wallet.connected ? disconnectWallet : connectWallet}>
-                {wallet.connected ? 'Disconnect' : 'Connect'}
-              </button>
+            <div className="label">Wallet_Control_Center</div>
+            <div style={{ marginTop: '8px', fontSize: '11px' }}>
+              {userAddress ? (
+                <span style={{ color: CYBER.success }}>▣ LINKED: {userAddress.slice(0, 12)}...</span>
+              ) : (
+                <span style={{ color: CYBER.danger }}>□ OFFLINE: RE-AUTHENTICATION REQUIRED</span>
+              )}
             </div>
           </div>
 
           <div className="card">
-            <div className="label">Agent_Database_Query</div>
+            <div className="label">Agent_Search</div>
             <input 
               className="search-bar" 
               style={{ width:'100%', background:'#000', border:`1px solid ${CYBER.border}`, color:'#fff', padding:'10px', marginTop:'10px', boxSizing:'border-box', fontFamily:'inherit', outline: 'none' }}
-              placeholder="Filter by ID or Username..." 
+              placeholder="Search by ID/Username..." 
               onChange={(e) => setSearchTerm(e.target.value)} 
             />
             <div style={{ overflowX: 'auto' }}>
               <table className="cyber-table">
                 <thead>
-                  <tr><th>Agent_ID</th><th>Balance</th><th>Status</th><th>Control</th></tr>
+                  <tr><th>Identity</th><th>Balance</th><th>Status</th><th>Control</th></tr>
                 </thead>
                 <tbody>
                   {users.filter(u => String(u.id).includes(searchTerm) || String(u.username).toLowerCase().includes(searchTerm.toLowerCase())).map((u, i) => (
@@ -269,8 +259,8 @@ const Dashboard = (props) => {
                       <td>{Number(u.balance || u.taps).toLocaleString()}</td>
                       <td>{u.status || 'active'}</td>
                       <td>
-                        <button className="cyber-btn" style={{ padding: '4px 8px', fontSize: '8px' }} onClick={() => toggleBan(u.id)}>
-                          {u.status === 'banned' ? 'Restore' : 'Restrict'}
+                        <button className="cyber-btn" onClick={() => toggleBan(u.id)}>
+                          {u.status === 'banned' ? 'Unlock' : 'Ban'}
                         </button>
                       </td>
                     </tr>
@@ -283,7 +273,7 @@ const Dashboard = (props) => {
       )}
 
       <footer style={{ textAlign: 'center', fontSize: '8px', opacity: 0.2, marginTop: '20px', letterSpacing: '4px' }}>
-        NEURAL_PULSE_NETWORK // ENCRYPTED_STATION_2026
+        PROPERTY_OF_NEURAL_PULSE_CORP // 2026
       </footer>
     </div>
   );
