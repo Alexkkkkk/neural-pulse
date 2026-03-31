@@ -40,6 +40,7 @@ function setupAPIRoutes(app) {
         handler: (req, res) => res.status(429).json({ error: "Pulse overload" })
     });
 
+    // Клик-система с мультипликаторами
     app.post('/api/click', clickLimit, async (req, res) => {
         const { userId, count } = req.body;
         if (!userId || !count || count > 100 || count <= 0) return res.status(403).send();
@@ -60,6 +61,7 @@ function setupAPIRoutes(app) {
         } catch (e) { res.status(500).send(); }
     });
 
+    // Получение данных агента
     app.get('/api/user/:id', async (req, res) => {
         try {
             const user = await User.findByPk(req.params.id);
@@ -76,11 +78,13 @@ function setupAdminCommands(app, bot) {
             if (action === 'broadcast') {
                 const users = await User.findAll({ attributes: ['id'] });
                 let successCount = 0;
+                // Запускаем рассылку в фоне, не блокируя ответ API
                 (async () => {
                     for (const user of users) {
                         try {
                             await bot.telegram.sendMessage(user.id, `<b>[ SYSTEM BROADCAST ]</b>\n\n${message}`, { parse_mode: 'HTML' });
                             successCount++;
+                            // Лимит 30 сообщений в секунду для ТГ
                             if (successCount % 25 === 0) await new Promise(r => setTimeout(r, 1000));
                         } catch (err) {}
                     }
@@ -204,7 +208,7 @@ async function startNeuralOS() {
     const app = express();
     const bot = new Telegraf(BOT_TOKEN);
 
-    // Безопасность и заголовки
+    // Безопасность и заголовки (Настроено под TON Connect и WebApp)
     app.use(helmet({
         contentSecurityPolicy: {
             directives: {
@@ -226,14 +230,14 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
-    // Важные файлы для TON
+    // Манифест для TON Connect (обязательно для кошельков)
     app.get('/tonconnect-manifest.json', (req, res) => {
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.sendFile(path.join(__dirname, 'static', 'tonconnect-manifest.json'));
     });
 
-    // Статика проекта
+    // Раздача статики
     app.use('/static', express.static(path.join(__dirname, 'static'), { 
         maxAge: '1h',
         setHeaders: (res, path) => {
@@ -246,7 +250,7 @@ async function startNeuralOS() {
         await initDB();
         await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
 
-        // Загрузка модулей (Порядок важен!)
+        // Инициализация модулей
         setupAPIRoutes(app);
         setupAdminCommands(app, bot);
         setupRealTimeStream(app); 
@@ -265,7 +269,7 @@ async function startNeuralOS() {
 
         await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`, { drop_pending_updates: true });
 
-        // Цикл телеметрии (Системный Пульс)
+        // --- 🩺 СИСТЕМНЫЙ ПУЛЬС (ТЕЛЕМЕТРИЯ) ---
         setInterval(async () => {
             try {
                 const start = Date.now();
@@ -290,18 +294,16 @@ async function startNeuralOS() {
                 };
 
                 pulseEvents.emit('update', pulseData);
-                
-                // Сохраняем в БД для графиков админки
                 await Stats.create(pulseData);
                 
-                // Удаляем старые записи (больше 500), чтобы не забивать БД
+                // Очистка старой статистики (храним 500 записей)
                 const count = await Stats.count();
                 if (count > 500) {
                     const oldest = await Stats.findOne({ order: [['created_at', 'ASC']] });
                     if (oldest) await oldest.destroy();
                 }
             } catch (e) { console.error("Pulse Loop Error", e.message); }
-        }, 15000);
+        }, 15000); // Раз в 15 секунд
 
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`);
@@ -313,5 +315,4 @@ async function startNeuralOS() {
     }
 }
 
-// ЗАПУСК
 startNeuralOS();
