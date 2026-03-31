@@ -1,4 +1,4 @@
-import React, { useState, useEffect, memo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, memo, useRef } from 'react';
 
 // --- 🌌 INFINITY-PULSE CORE PALETTE (v9.6) ---
 const CYBER = {
@@ -32,7 +32,6 @@ const playSound = (freq, type = 'sine', dur = 0.2) => {
 
 // --- 📈 PRECISION MINI-CHART ---
 const MiniChart = memo(({ data, color, height = 40 }) => {
-  // Исправлено: теперь график всегда рисуется, даже если данных мало
   const chartData = (data && data.length > 1) ? data : [0, 0];
   const cleanData = chartData.map(v => (Number.isFinite(v) ? v : 0));
   const max = Math.max(...cleanData) || 1;
@@ -90,7 +89,7 @@ const Dashboard = (props) => {
   const [searchTerm, setSearchTerm] = useState('');
   const logRef = useRef(null);
 
-  // --- STATE ---
+  // --- WALLET & ASSET STATE ---
   const [wallet, setWallet] = useState({ connected: false, address: null });
   const [selectedAsset, setSelectedAsset] = useState({ symbol: 'TON', balance: 1250.0, color: CYBER.ton });
   const [assets] = useState([
@@ -106,14 +105,14 @@ const Dashboard = (props) => {
     { id: '@guest_01', ton: 0.0, refs: 2, taps: 15000, status: 'active' }
   ]);
 
-  // --- DINAMIC STATS & HISTORY ---
-  const [stats, setStats] = useState({ load: 10.7, lat: 101 });
+  // --- DYNAMIC STATS & HISTORY ---
+  const [stats, setStats] = useState({ load: 0, lat: 0 });
   const [history, setHistory] = useState({
-    load: [10, 12, 11, 14, 10, 13, 11],
-    lat: [100, 105, 101, 110, 102, 108, 101]
+    load: Array(20).fill(10),
+    lat: Array(20).fill(100)
   });
 
-  // Загрузочный экран
+  // Boot sequence
   useEffect(() => {
     const timer = setInterval(() => {
       setBootProgress(p => {
@@ -124,13 +123,13 @@ const Dashboard = (props) => {
     return () => clearInterval(timer);
   }, []);
 
-  // Обновление графиков в реальном времени
+  // Live telemetry update
   useEffect(() => {
     if (!isLoaded) return;
     const interval = setInterval(() => {
       setStats(prev => {
-        const nextLoad = Math.max(5, Math.min(95, prev.load + (Math.random() * 4 - 2)));
-        const nextLat = Math.max(80, Math.min(300, prev.lat + (Math.random() * 10 - 5)));
+        const nextLoad = Math.max(5, Math.min(95, (prev.load || 10) + (Math.random() * 6 - 3)));
+        const nextLat = Math.max(40, Math.min(250, (prev.lat || 100) + (Math.random() * 20 - 10)));
         
         setHistory(h => ({
           load: [...h.load.slice(-19), nextLoad],
@@ -139,7 +138,7 @@ const Dashboard = (props) => {
         
         return { load: nextLoad, lat: nextLat };
       });
-    }, 2500);
+    }, 2000);
     return () => clearInterval(interval);
   }, [isLoaded]);
 
@@ -193,15 +192,15 @@ const Dashboard = (props) => {
     <div className={`app-root ${isEmergency ? 'emergency-mode' : ''}`}>
       <style>{`
         .app-root { background: ${CYBER.bg}; min-height: 100vh; padding: 15px; font-family: 'JetBrains Mono', monospace; color: ${CYBER.text}; position: relative; }
-        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; border-radius: 2px; margin-bottom: 15px; }
+        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; border-radius: 2px; margin-bottom: 15px; position: relative; }
         .nav-tabs { display: flex; gap: 15px; margin-bottom: 20px; border-bottom: 1px solid ${CYBER.border}; }
-        .tab-btn { background: none; border: none; color: #444; cursor: pointer; padding: 10px 0; font-size: 11px; text-transform: uppercase; }
+        .tab-btn { background: none; border: none; color: #444; cursor: pointer; padding: 10px 0; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
         .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; }
         .cyber-btn { background: #fff; color: #000; border: none; padding: 12px; font-size: 10px; font-weight: bold; cursor: pointer; text-transform: uppercase; border-radius: 2px; transition: 0.2s; }
-        .cyber-btn:active { transform: scale(0.98); opacity: 0.8; }
+        .cyber-btn:active { transform: scale(0.96); }
         .btn-outline { background: transparent; border: 1px solid ${CYBER.primary}; color: ${CYBER.primary}; }
         .btn-danger { background: ${CYBER.danger}; color: #fff; }
-        .asset-chip { padding: 10px; border: 1px solid #222; font-size: 10px; cursor: pointer; display: flex; justify-content: space-between; }
+        .asset-chip { padding: 10px; border: 1px solid #222; font-size: 10px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; }
         .asset-chip.selected { border-color: ${CYBER.primary}; background: rgba(0, 242, 254, 0.05); }
         .search-bar { width: 100%; background: #000; border: 1px solid ${CYBER.border}; color: ${CYBER.primary}; padding: 12px; margin-bottom: 15px; font-family: inherit; box-sizing: border-box; }
         .cyber-table { width: 100%; border-collapse: collapse; font-size: 11px; }
@@ -245,7 +244,7 @@ const Dashboard = (props) => {
                 <div ref={logRef} />
             </div>
           </div>
-          <button className="cyber-btn btn-danger" style={{ width: '100%', background: isEmergency ? CYBER.success : CYBER.danger }} onClick={() => setIsEmergency(!isEmergency)}>
+          <button className="cyber-btn btn-danger" style={{ width: '100%' }} onClick={() => setIsEmergency(!isEmergency)}>
             {isEmergency ? 'RESUME_NORMAL_OPS' : 'EMERGENCY_KILL_SWITCH'}
           </button>
           <NeuralWave active={isEmergency} />
@@ -257,20 +256,28 @@ const Dashboard = (props) => {
           <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
               <div>
-                <div style={{ fontSize: '8px', color: CYBER.primary }}>WALLET_STATUS</div>
-                <div style={{ fontSize: '11px', fontWeight: 'bold' }}>{wallet.connected ? wallet.address : 'DISCONNECTED'}</div>
+                <div style={{ fontSize: '8px', color: CYBER.primary }}>WALLET_BRIDGE</div>
+                <div style={{ fontSize: '12px', fontWeight: 'bold', marginTop: '4px' }}>
+                  {wallet.connected ? `CONNECTED: ${wallet.address}` : 'STATUS: DISCONNECTED'}
+                </div>
               </div>
-              <button className="cyber-btn btn-outline" onClick={wallet.connected ? disconnectWallet : connectWallet}>
-                {wallet.connected ? 'Disconnect' : 'Connect TON'}
+              <button className={`cyber-btn ${wallet.connected ? 'btn-danger' : ''}`} onClick={wallet.connected ? disconnectWallet : connectWallet}>
+                {wallet.connected ? 'Disconnect' : 'Connect Wallet'}
               </button>
             </div>
+
             {wallet.connected && (
               <>
+                <div style={{ fontSize: '9px', color: CYBER.primary, marginBottom: '10px' }}>SELECT_ASSET:</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '15px' }}>
-                  {assets.map(a => (
-                    <div key={a.symbol} className={`asset-chip ${selectedAsset.symbol === a.symbol ? 'selected' : ''}`} onClick={() => setSelectedAsset(a)}>
-                      <span style={{fontWeight:'bold'}}>{a.symbol}</span>
-                      <span style={{opacity:0.5}}>{a.balance}</span>
+                  {assets.map(asset => (
+                    <div 
+                      key={asset.symbol} 
+                      className={`asset-chip ${selectedAsset.symbol === asset.symbol ? 'selected' : ''}`}
+                      onClick={() => { setSelectedAsset(asset); playSound(600, 'sine', 0.05); }}
+                    >
+                      <span style={{ fontWeight: 'bold' }}>{asset.symbol}</span>
+                      <span style={{ opacity: 0.6 }}>{asset.balance}</span>
                     </div>
                   ))}
                 </div>
@@ -293,7 +300,7 @@ const Dashboard = (props) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.filter(u => u.id.includes(searchTerm)).map((u, i) => (
+                  {users.filter(u => u.id.toLowerCase().includes(searchTerm.toLowerCase())).map((u, i) => (
                     <tr key={i} style={{ opacity: u.status === 'banned' ? 0.3 : 1 }}>
                       <td style={{ color: CYBER.primary }}>{u.id}</td>
                       <td>{(u.taps / 1000).toFixed(1)}k</td>
