@@ -130,6 +130,10 @@ async function setupAdminPanel(app) {
             ],
             rootPath: '/admin',
             componentLoader,
+            // Оптимизация сборки для Bothost
+            bundler: {
+                availableAndEnabled: true 
+            },
             dashboard: { 
                 component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
                 handler: async () => {
@@ -177,10 +181,15 @@ async function setupAdminPanel(app) {
             cookiePassword: 'np-titan-2026-secure-v2',
         }, null, { resave: false, saveUninitialized: false, secret: 'np_titan_secret_v2', store: sessionStore });
 
+        // Принудительная инициализация ПЕРЕД использованием роутера
+        console.log('--- [ADMIN] INITIALIZING ASSETS... ---');
         await adminJs.initialize();
+        
         app.use(adminJs.options.rootPath, adminRouter);
         console.log('✅ ADMIN INTERFACE READY');
-    } catch (err) { console.error("AdminJS fail", err); }
+    } catch (err) { 
+        console.error("🚨 AdminJS Critical Error:", err); 
+    }
 }
 
 function setupBotHandlers(bot) {
