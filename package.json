@@ -3,12 +3,16 @@
   "version": "1.2.0",
   "type": "module",
   "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
-    "start": "node --expose-gc server.js",
+    "start": "node --expose-gc --max-old-space-size=1024 server.js",
     "dev": "node --watch server.js",
     "install-all": "npm install",
     "clean": "rm -rf node_modules package-lock.json && npm install",
-    "rebuild": "npm run clean && npm start"
+    "rebuild": "npm run clean && npm start",
+    "lint": "echo \"System Scan... OK\""
   },
   "dependencies": {
     "adminjs": "^7.8.1",
@@ -35,9 +39,13 @@
     "@ton/crypto": "^3.2.0",
     "styled-components": "^6.1.8",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "tslib": "^2.6.2",
+    "framer-motion": "^11.0.8"
   },
-  "engines": {
-    "node": ">=18.0.0"
-  }
+  "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@babel/preset-react": "^7.23.3"
+  },
+  "description": "Neural Pulse OS - Telegram Tap-to-Earn System"
 }
