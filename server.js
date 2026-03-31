@@ -17,6 +17,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const pulseEvents = new EventEmitter(); 
 
+// --- 🛠 СИСТЕМА ПОСТРОЧНОГО ЛОГИРОВАНИЯ ---
+const neuralLog = (msg, type = 'INFO') => {
+    const time = dayjs().format('HH:mm:ss');
+    const icons = { INFO: '🔹', WARN: '⚠️', ERROR: '🚨', CORE: '⚡', NET: '🌐' };
+    console.log(`${icons[type] || '▪️'} [${time}] ${msg}`);
+};
+
 // --- ⚙️ TITAN CONFIG ---
 const BOT_TOKEN = "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
 const DOMAIN = "https://np.bothost.tech";
@@ -32,6 +39,7 @@ const MULTIPLIERS = [
 ];
 
 async function startNeuralOS() {
+    neuralLog('BOOTING_NEURAL_OS_INIT...', 'CORE');
     const app = express();
     const bot = new Telegraf(BOT_TOKEN);
 
@@ -55,6 +63,8 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
+    neuralLog('Security policies and middleware integrated.', 'INFO');
+
     // Статика
     app.use('/static', express.static(path.join(__dirname, 'static'), {
         maxAge: '1h',
@@ -62,16 +72,27 @@ async function startNeuralOS() {
     }));
 
     try {
-        console.log('--- ⚡ NEURAL PULSE SYSTEM BOOTING ---');
-
+        neuralLog('Database synchronization starting...', 'CORE');
         await initDB();
+        neuralLog('Database connection established.', 'SUCCESS');
+
         await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
+        neuralLog('GlobalStats state verified.', 'INFO');
 
         // Инициализация модулей
+        neuralLog('Mounting API routes...', 'NET');
         setupAPIRoutes(app);
+        
+        neuralLog('Mounting Admin Commands...', 'NET');
         setupAdminCommands(app, bot);
+        
+        neuralLog('Starting RealTime Telemetry Stream...', 'NET');
         setupRealTimeStream(app); 
+        
+        neuralLog('Initializing AdminJS Panel (Complex Load)...', 'CORE');
         await setupAdminPanel(app);
+        
+        neuralLog('Setting up Bot Handlers...', 'NET');
         setupBotHandlers(bot);
 
         // ✅ WEBHOOK GATEWAY
@@ -80,16 +101,18 @@ async function startNeuralOS() {
                 if (!req.body || Object.keys(req.body).length === 0) return res.sendStatus(200);
                 await bot.handleUpdate(req.body, res);
             } catch (err) {
-                console.error("⚡ Gate Error", err);
+                neuralLog(`Telegraf Gateway Error: ${err.message}`, 'ERROR');
             } finally {
                 if (!res.headersSent) res.sendStatus(200);
             }
         });
 
+        neuralLog('Configuring Webhook...', 'NET');
         await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`, {
             drop_pending_updates: true,
             allowed_updates: ['message', 'callback_query']
         });
+        neuralLog(`Webhook active: ${DOMAIN}/telegraf/${BOT_TOKEN}`, 'INFO');
 
         // --- 🩺 SYSTEM PULSE (TELEMETRY ENGINE) ---
         setInterval(async () => {
@@ -117,39 +140,40 @@ async function startNeuralOS() {
                     active_wallets: walletCount || 0,
                     total_balance: parseFloat(gStats?.total_balance || 0),
                     db_latency: latency,
-                    recent_event: lastUser ? `NEW_AGENT: ${lastUser.username}` : 'CORE_STABLE',
+                    recent_event: lastUser ? `AGENT_${lastUser.username}_ACTIVE` : 'CORE_STABLE',
                     event_type: lastUser && dayjs().diff(dayjs(lastUser.created_at), 'second') < 15 ? 'AUTH' : 'SYSTEM'
                 };
 
                 pulseEvents.emit('update', pulseData);
                 await Stats.create(pulseData);
 
+                // Авто-очистка логов статистики
                 const count = await Stats.count();
                 if (count > 500) {
+                    neuralLog('Cleaning old telemetry history...', 'INFO');
                     const oldest = await Stats.findOne({ order: [['created_at', 'ASC']] });
                     if (oldest) await oldest.destroy();
                 }
             } catch (e) {
-                console.error("Pulse Loop Error", e.message);
+                neuralLog(`Pulse Loop Error: ${e.message}`, 'ERROR');
             }
         }, 10000);
 
-        // --- 🌐 SPA FALLBACK (ДЛЯ DASHBOARD И WEBAPP) ---
-        // Важно: этот роут должен быть ПОСЛЕДНИМ
+        // --- 🌐 SPA FALLBACK ---
         app.get('*', (req, res, next) => {
-            // Если запрос идет к API или админке, пропускаем его
-            if (req.url.startsWith('/api') || req.url.startsWith('/admin') || req.url.startsWith('/telegraf')) {
+            if (req.url.startsWith('/api') || req.url.startsWith('/admin') || req.url.startsWith('/telegraf') || req.url.startsWith('/static')) {
                 return next();
             }
             res.sendFile(path.resolve(__dirname, 'static', 'index.html'));
         });
 
         app.listen(PORT, '0.0.0.0', () => {
-            console.log(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`);
+            neuralLog(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`, 'CORE');
+            neuralLog(`Admin Panel: ${DOMAIN}/admin`, 'INFO');
         });
 
     } catch (err) {
-        console.error(`🚨 BOOT FAILURE`, err);
+        neuralLog(`🚨 CRITICAL BOOT FAILURE: ${err.stack}`, 'ERROR');
         process.exit(1);
     }
 }
@@ -158,9 +182,11 @@ async function startNeuralOS() {
 function setupAdminCommands(app, bot) {
     app.post('/api/admin/command', async (req, res) => {
         const { action, message } = req.body;
+        neuralLog(`Admin Command Received: ${action}`, 'CORE');
         try {
             if (action === 'broadcast') {
                 const users = await User.findAll({ attributes: ['id'] });
+                neuralLog(`Broadcasting to ${users.length} agents...`, 'INFO');
                 let successCount = 0;
                 for (const user of users) {
                     try {
@@ -169,15 +195,20 @@ function setupAdminCommands(app, bot) {
                         if (successCount % 20 === 0) await new Promise(r => setTimeout(r, 1000));
                     } catch (err) { /* Skip inactive */ }
                 }
+                neuralLog(`Broadcast complete. Sent: ${successCount}`, 'INFO');
                 pulseEvents.emit('update', { recent_event: `BROADCAST_SENT: ${successCount}_AGENTS`, event_type: 'SYSTEM' });
             }
             res.sendStatus(200);
-        } catch (e) { res.status(500).send(e.message); }
+        } catch (e) { 
+            neuralLog(`Admin Command Failed: ${e.message}`, 'ERROR');
+            res.status(500).send(e.message); 
+        }
     });
 }
 
 function setupRealTimeStream(app) {
     app.get('/api/admin/stream', (req, res) => {
+        neuralLog('New Telemetry Subscriber Connected', 'NET');
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache, no-transform',
@@ -189,6 +220,7 @@ function setupRealTimeStream(app) {
         pulseEvents.on('update', sendData);
         const keepAlive = setInterval(() => res.write(':\n\n'), 15000);
         req.on('close', () => {
+            neuralLog('Telemetry Subscriber Disconnected', 'NET');
             clearInterval(keepAlive);
             pulseEvents.removeListener('update', sendData);
             res.end();
@@ -199,7 +231,10 @@ function setupRealTimeStream(app) {
 function setupAPIRoutes(app) {
     const clickLimit = rateLimit({
         windowMs: 1000, max: 30,
-        handler: (req, res) => res.status(429).json({ error: "Pulse overload" })
+        handler: (req, res) => {
+            neuralLog(`Rate Limit Triggered for IP: ${req.ip}`, 'WARN');
+            res.status(429).json({ error: "Pulse overload" });
+        }
     });
 
     app.post('/api/click', clickLimit, async (req, res) => {
@@ -208,15 +243,20 @@ function setupAPIRoutes(app) {
         try {
             const user = await User.findByPk(userId);
             if (!user) return res.status(404).send();
+            
             const currentBalance = parseFloat(user.balance) || 0;
             const config = MULTIPLIERS.find(m => currentBalance >= m.threshold) || { multi: 1.0 };
             const reward = Math.floor(count * config.multi);
+            
             await Promise.all([
                 user.increment('balance', { by: reward }),
                 GlobalStats.increment('total_balance', { by: reward, where: { id: 1 } })
             ]);
             res.json({ s: 1, balance: currentBalance + reward });
-        } catch (e) { res.status(500).send(); }
+        } catch (e) { 
+            neuralLog(`Click API Error: ${e.message}`, 'ERROR');
+            res.status(500).send(); 
+        }
     });
 
     app.get('/api/user/:id', async (req, res) => {
@@ -249,6 +289,7 @@ async function setupAdminPanel(app) {
             dashboard: { 
                 component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
                 handler: async () => {
+                    neuralLog('Admin Dashboard data requested', 'INFO');
                     const [gStats, historyData, dailyUsers] = await Promise.all([
                         GlobalStats.findByPk(1),
                         Stats.findAll({ limit: 30, order: [['created_at', 'DESC']] }),
@@ -281,7 +322,11 @@ async function setupAdminPanel(app) {
 
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                if (email === '1' && password === '1') return { email: 'admin@neural.os' };
+                if (email === '1' && password === '1') {
+                    neuralLog('Admin Authorization Success', 'CORE');
+                    return { email: 'admin@neural.os' };
+                }
+                neuralLog(`Failed Admin Auth Attempt: ${email}`, 'WARN');
                 return null;
             },
             cookiePassword: 'np-titan-2026-secure-v2',
@@ -289,12 +334,17 @@ async function setupAdminPanel(app) {
 
         app.use(adminJs.options.rootPath, adminRouter);
         await adminJs.initialize();
-    } catch (err) { console.error("AdminJS fail", err); }
+        neuralLog('AdminJS Panel successfully initialized.', 'SUCCESS');
+    } catch (err) { 
+        neuralLog(`AdminJS Initialization Fail: ${err.message}`, 'ERROR');
+        console.error(err); 
+    }
 }
 
 function setupBotHandlers(bot) {
     bot.start(async (ctx) => {
         try {
+            neuralLog(`User Start: ${ctx.from.id} (@${ctx.from.username})`, 'NET');
             const [user, created] = await User.findOrCreate({
                 where: { id: ctx.from.id },
                 defaults: { username: ctx.from.username || 'AGENT', balance: 0 }
@@ -302,6 +352,7 @@ function setupBotHandlers(bot) {
             if (created) {
                 const gs = await GlobalStats.findByPk(1);
                 if (gs) await gs.increment('total_users');
+                neuralLog(`New Agent Registered: ${user.username}`, 'CORE');
                 pulseEvents.emit('update', { recent_event: `NEW_AGENT: ${user.username}`, event_type: 'AUTH' });
             }
             const webAppUrl = `${DOMAIN}/static/index.html?v=${Date.now()}`;
@@ -309,7 +360,7 @@ function setupBotHandlers(bot) {
             await ctx.reply(`<b>[ NEURAL PULSE ]</b>\n\n<b>АГЕНТ:</b> <code>${user.username}</code>\n<b>СТАТУС:</b> СИСТЕМА АКТИВНА`, { 
                 parse_mode: 'HTML', ...keyboard 
             });
-        } catch (e) { console.error("Bot.start fail", e); }
+        } catch (e) { neuralLog(`Bot Start Error: ${e.message}`, 'ERROR'); }
     });
 }
 
