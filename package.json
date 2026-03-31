@@ -7,7 +7,7 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "start": "node --expose-gc --max-old-space-size=1024 server.js",
+    "start": "NODE_ENV=production node --expose-gc --max-old-space-size=1536 --optimize-for-size server.js",
     "dev": "node --watch server.js",
     "install-all": "npm install",
     "clean": "rm -rf node_modules package-lock.json && npm install",
@@ -46,7 +46,8 @@
   "devDependencies": {
     "@babel/core": "^7.24.0",
     "@babel/preset-env": "^7.24.0",
-    "@babel/preset-react": "^7.23.3"
+    "@babel/preset-react": "^7.23.3",
+    "babel-plugin-styled-components": "^2.1.4"
   },
   "description": "Neural Pulse OS - Telegram Tap-to-Earn System"
 }
