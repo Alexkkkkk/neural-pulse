@@ -134,7 +134,7 @@ const DashboardContent = (props) => {
     return () => eventSource.close();
   }, []);
 
-  // Boot sequence simulation
+  // Boot sequence
   useEffect(() => {
     const timer = setInterval(() => {
       setBootProgress(p => {
