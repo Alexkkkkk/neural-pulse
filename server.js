@@ -15,8 +15,10 @@ import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB, Op } f
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// --- 📡 СОБЫТИЙНАЯ ШИНА РЕАЛЬНОГО ВРЕМЕНИ ---
 const pulseEvents = new EventEmitter(); 
-pulseEvents.setMaxListeners(30); 
+pulseEvents.setMaxListeners(50); 
 
 // --- 🛠 СИСТЕМА ЛОГИРОВАНИЯ ---
 const neuralLog = (msg, type = 'INFO') => {
@@ -65,7 +67,7 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
-    // Статика
+    // Статика (index.html, изображения)
     app.use('/static', express.static(path.join(__dirname, 'static'), {
         maxAge: '1h',
         etag: true
@@ -81,12 +83,10 @@ async function startNeuralOS() {
         setupAdminCommands(app, bot);
         setupRealTimeStream(app); 
         
-        // Асинхронная загрузка админки (не блокирует бота)
         neuralLog('Core: Initializing Admin Interface...', 'CORE');
         setupAdminPanel(app).then(() => {
-            neuralLog('Admin Interface ready.', 'SUCCESS');
-            if (global.gc) global.gc(); 
-        }).catch(e => neuralLog(`Admin Init Minor Error: ${e.message}`, 'WARN'));
+            neuralLog('Admin Interface ready (Dark Mode Active).', 'SUCCESS');
+        }).catch(e => neuralLog(`Admin Init Error: ${e.message}`, 'WARN'));
 
         setupBotHandlers(bot);
 
@@ -121,21 +121,27 @@ async function startNeuralOS() {
                 ]);
 
                 const pulseData = {
-                    time: dayjs().format('HH:mm:ss'),
-                    mem_usage: Math.round(mem),
+                    event_type: 'SYSTEM',
                     server_load: parseFloat(load.toFixed(2)), 
+                    db_latency: Date.now() - startTime,
                     user_count: gStats?.total_users || 0,
                     active_wallets: walletCount || 0,
-                    total_balance: parseFloat(gStats?.total_balance || 0),
-                    db_latency: Date.now() - startTime,
-                    recent_event: 'HEARTBEAT_OK',
-                    event_type: 'SYSTEM'
+                    total_liquidity: parseFloat(gStats?.total_balance || 0),
+                    recent_event: 'HEARTBEAT_STABLE',
+                    time: dayjs().format('HH:mm:ss')
                 };
 
                 pulseEvents.emit('update', pulseData);
-                await Stats.create(pulseData);
+                
+                await Stats.create({
+                    mem_usage: Math.round(mem),
+                    server_load: pulseData.server_load,
+                    user_count: pulseData.user_count,
+                    total_balance: pulseData.total_liquidity,
+                    db_latency: pulseData.db_latency
+                });
             } catch (e) { neuralLog(`Pulse skip: ${e.message}`, 'WARN'); }
-        }, 45000); // Интервал 45 сек для снижения нагрузки
+        }, 15000);
 
         // --- 🌐 SPA FALLBACK ---
         app.get('*', (req, res, next) => {
@@ -155,16 +161,22 @@ async function startNeuralOS() {
     }
 }
 
-// --- 🛰️ ADMIN COMMANDS ---
+// --- 🛰️ ADMIN COMMANDS & BROADCAST ---
 function setupAdminCommands(app, bot) {
     app.post('/api/admin/command', async (req, res) => {
         try {
             const { action, message } = req.body;
             if (action === 'broadcast' && message) {
                 const users = await User.findAll({ attributes: ['id'] });
+                let sentCount = 0;
                 for (const user of users) {
-                    bot.telegram.sendMessage(user.id, `<b>[ SYSTEM ]</b>\n${message}`, { parse_mode: 'HTML' }).catch(()=>{});
+                    bot.telegram.sendMessage(user.id, `<b>[ SYSTEM_BROADCAST ]</b>\n\n${message}`, { parse_mode: 'HTML' }).catch(()=>{});
+                    sentCount++;
                 }
+                pulseEvents.emit('update', { 
+                    recent_event: `BROADCAST_SENT: ${sentCount} AGENTS`,
+                    event_type: 'SYSTEM'
+                });
                 return res.json({ success: true });
             }
             res.sendStatus(200);
@@ -172,6 +184,7 @@ function setupAdminCommands(app, bot) {
     });
 }
 
+// --- 🌊 SSE STREAM SERVER ---
 function setupRealTimeStream(app) {
     app.get('/api/admin/stream', (req, res) => {
         res.writeHead(200, {
@@ -185,23 +198,32 @@ function setupRealTimeStream(app) {
     });
 }
 
+// --- ⚡ API ROUTES ---
 function setupAPIRoutes(app) {
-    app.post('/api/click', rateLimit({ windowMs: 1000, max: 25 }), async (req, res) => {
+    app.post('/api/click', rateLimit({ windowMs: 1000, max: 40 }), async (req, res) => {
         const { userId, count } = req.body;
-        if (!userId || count > 100) return res.status(403).send();
+        if (!userId || !count || count > 100) return res.status(403).send();
         try {
             const user = await User.findByPk(userId);
             if (!user) return res.status(404).send();
-            const reward = Math.floor(count * (MULTIPLIERS.find(m => user.balance >= m.threshold)?.multi || 1));
+            const multi = MULTIPLIERS.find(m => user.balance >= m.threshold)?.multi || 1;
+            const reward = Math.floor(count * multi);
             await Promise.all([
                 user.increment('balance', { by: reward }),
                 GlobalStats.increment('total_balance', { by: reward, where: { id: 1 } })
             ]);
-            res.json({ balance: parseFloat(user.balance) + reward });
+            const newBalance = parseFloat(user.balance) + reward;
+            pulseEvents.emit('update', {
+                event_type: 'USER_UPDATE',
+                user_data: { id: user.id, username: user.username, balance: newBalance, status: user.status },
+                recent_event: `AGENT_${user.id.toString().slice(-4)}: +${reward} NP`
+            });
+            res.json({ balance: newBalance });
         } catch (e) { res.status(500).send(); }
     });
 }
 
+// --- 🖥️ ADMINJS CONFIG (DARK THEME) ---
 async function setupAdminPanel(app) {
     const { default: AdminJS, ComponentLoader } = await import('adminjs');
     const { default: AdminJSExpress } = await import('@adminjs/express');
@@ -222,17 +244,43 @@ async function setupAdminPanel(app) {
         dashboard: { 
             component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
             handler: async () => {
-                const [gs, history] = await Promise.all([
+                const [gs, history, users] = await Promise.all([
                     GlobalStats.findByPk(1),
-                    Stats.findAll({ limit: 15, order: [['created_at', 'DESC']] })
+                    Stats.findAll({ limit: 15, order: [['created_at', 'DESC']] }),
+                    User.findAll({ limit: 20, order: [['balance', 'DESC']] })
                 ]);
-                return { totalUsers: gs?.total_users, totalBalance: gs?.total_balance, history: history.reverse() };
+                return { 
+                    totalUsers: gs?.total_users, 
+                    totalBalance: gs?.total_balance, 
+                    history: history.reverse(),
+                    usersList: users.map(u => u.toJSON()) 
+                };
             }
         },
         branding: { 
             companyName: 'NEURAL PULSE', 
             withMadeWithAdminJS: false,
-            theme: { colors: { primary100: '#00f2fe' } }
+            // --- ПОЛНАЯ ТЕМНАЯ ТЕМА ---
+            theme: {
+                colors: {
+                    primary100: '#00f2fe',
+                    primary80: '#00ddec',
+                    primary60: '#00c1ce',
+                    bg: '#0a0b10',           // Фон страницы
+                    navBg: '#0f111a',        // Сайдбар
+                    sidebar: '#0f111a',
+                    container: '#161925',    // Карточки
+                    border: '#242a3d',
+                    inputBorder: '#242a3d',
+                    white: '#e2e8f0',        // Текст
+                    grey100: '#8e99ab',
+                    grey80: '#64748b',
+                    grey60: '#475569',
+                    grey40: '#1e293b',
+                    error: '#ff4d4d',
+                    success: '#00f2fe'
+                }
+            }
         }
     });
 
@@ -244,22 +292,29 @@ async function setupAdminPanel(app) {
         saveUninitialized: false, 
         secret: 'np_session_secret', 
         store: sessionStore,
-        cookie: { maxAge: 1000 * 60 * 60 * 24 } // 24 часа
+        cookie: { maxAge: 1000 * 60 * 60 * 24 }
     });
 
     app.use(adminJs.options.rootPath, adminRouter);
     await adminJs.initialize();
 }
 
+// --- 🤖 BOT HANDLERS ---
 function setupBotHandlers(bot) {
     bot.start(async (ctx) => {
         try {
             const [user, created] = await User.findOrCreate({
                 where: { id: ctx.from.id },
-                defaults: { username: ctx.from.username || 'AGENT' }
+                defaults: { username: ctx.from.username || 'AGENT', balance: 0 }
             });
-            if (created) await GlobalStats.increment('total_users', { where: { id: 1 } });
-            ctx.reply(`<b>[ NEURAL PULSE ]</b>\nCore Status: Online\nAgent: ${user.username}`, { 
+            if (created) {
+                await GlobalStats.increment('total_users', { where: { id: 1 } });
+                pulseEvents.emit('update', { 
+                    recent_event: `NEW_AGENT_CONNECTED: ${user.username}`,
+                    event_type: 'SYSTEM'
+                });
+            }
+            ctx.reply(`<b>[ NEURAL PULSE ]</b>\nCore Status: Online\nAgent: ${user.username}\nNetwork: TITAN_NODE_NL`, { 
                 parse_mode: 'HTML', 
                 ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ OPEN TERMINAL", `${DOMAIN}/static/index.html?v=${Date.now()}`)]])
             });
