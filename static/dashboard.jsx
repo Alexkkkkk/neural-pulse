@@ -74,7 +74,7 @@ const NeuralWave = memo(({ active }) => (
 ));
 
 const DashboardContent = (props) => {
-  const { data } = props; // Данные, передаваемые из AdminJS handler
+  const { data } = props;
   const [activeTab, setActiveTab] = useState('overview');
   const [bootProgress, setBootProgress] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -120,9 +120,9 @@ const DashboardContent = (props) => {
           }));
           
           setHistory(prev => ({
-            load: [...prev.load.slice(1), update.server_load],
-            lat: [...prev.lat.slice(1), update.db_latency],
-            tappers: [...prev.tappers.slice(1), update.user_count],
+            load: [...prev.load.slice(1), update.server_load || 0],
+            lat: [...prev.lat.slice(1), update.db_latency || 0],
+            tappers: [...prev.tappers.slice(1), update.user_count || 0],
             inflow: [...prev.inflow.slice(1), update.active_wallets || 0]
           }));
         }
@@ -160,14 +160,16 @@ const DashboardContent = (props) => {
 
   const toggleBan = async (userId) => {
     try {
-      await fetch('/api/admin/command', {
+      const response = await fetch('/api/admin/command', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'toggle_ban', userId })
       });
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: u.status === 'banned' ? 'active' : 'banned' } : u));
-      playSound(400, 'sawtooth');
-      setLogs(prev => [...prev, `> CMD_EXEC: TOGGLE_BAN ID_${userId}`]);
+      if (response.ok) {
+        setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: u.status === 'banned' ? 'active' : 'banned' } : u));
+        playSound(400, 'sawtooth');
+        setLogs(prev => [...prev, `> CMD_EXEC: TOGGLE_BAN ID_${userId}`]);
+      }
     } catch (e) { console.error(e); }
   };
 
@@ -295,11 +297,11 @@ const DashboardContent = (props) => {
                 <tr><th>Identity_UID</th><th>Pulse_Balance</th><th>Net_Status</th><th>Control</th></tr>
               </thead>
               <tbody>
-                {users.filter(u => String(u.id).includes(searchTerm) || String(u.username).toLowerCase().includes(searchTerm.toLowerCase())).map((u, i) => (
+                {users.filter(u => String(u.id).includes(searchTerm) || String(u.username || '').toLowerCase().includes(searchTerm.toLowerCase())).map((u, i) => (
                   <tr key={i} style={{ opacity: u.status === 'banned' ? 0.3 : 1, transition: '0.3s' }}>
                     <td style={{ color: CYBER.primary, fontWeight: 'bold' }}>{u.username || u.id}</td>
                     <td>{Number(u.balance || 0).toLocaleString()} <span style={{fontSize:'9px', opacity:0.4}}>PULSE</span></td>
-                    <td style={{ color: u.status === 'banned' ? CYBER.danger : CYBER.success }}>{u.status || 'ACTIVE'}</td>
+                    <td style={{ color: u.status === 'banned' ? CYBER.danger : CYBER.success }}>{(u.status || 'ACTIVE').toUpperCase()}</td>
                     <td>
                       <button className="cyber-btn" onClick={() => toggleBan(u.id)} style={{ padding: '5px 10px', fontSize: '9px' }}>
                         {u.status === 'banned' ? 'REVIVE' : 'TERMINATE'}
