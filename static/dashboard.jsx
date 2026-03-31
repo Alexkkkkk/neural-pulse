@@ -68,6 +68,7 @@ const NeuralWave = memo(({ active }) => (
 ));
 
 const Dashboard = (props) => {
+  const { data } = props; // Данные приходят из AdminJS handler
   const [activeTab, setActiveTab] = useState('overview');
   const [bootProgress, setBootProgress] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -76,34 +77,31 @@ const Dashboard = (props) => {
   const logRef = useRef(null);
 
   const [wallet, setWallet] = useState({ connected: false, address: null });
-  const [logs, setLogs] = useState(['> MOUNTING_VOLUMES...', '> SYSTEM_READY']);
+  const [logs, setLogs] = useState(['> MOUNTING_VOLUMES...', '> SYSTEM_READY', `> SYNCING_DATABASE: ${data?.totalUsers || 0} AGENTS FOUND`]);
   
-  const [users, setUsers] = useState(props.data?.usersList || [
-    { id: '@alex_neo', ton: 65.5, taps: 845000, wallet: 'UQ...1', status: 'active' },
-    { id: '@kander_dev', ton: 12.0, taps: 2100000, wallet: 'UQ...2', status: 'active' },
-    { id: '@guest_01', ton: 0.0, taps: 15000, wallet: null, status: 'active' }
-  ]);
+  // Состояние пользователей из БД
+  const [users, setUsers] = useState(data?.usersList || []);
 
-  // --- РАСШИРЕННАЯ СТАТИСТИКА ---
+  // Синхронизация статистики
   const [stats, setStats] = useState({
-    load: 10.7,
-    lat: 101,
-    ram: 42,
-    totalUsers: 1250,
-    activeTappers: 48,
-    linkedWallets: 842,
-    tonInflow: 1.25,
-    totalTonPool: 15420.50 // Начальное значение общего пула TON
+    load: data?.currentLoad || 10.7,
+    lat: data?.currentLat || 101,
+    ram: data?.ramUsage || 42,
+    totalUsers: data?.totalUsers || 0,
+    activeTappers: data?.activeTappers || 0,
+    linkedWallets: data?.linkedWallets || 0,
+    tonInflow: data?.tonInflow || 0,
+    totalTonPool: data?.total_balance || 0 
   });
 
-  const [history, setHistory] = useState({
-    load: Array(20).fill(10),
-    lat: Array(20).fill(100),
-    tappers: Array(20).fill(40),
-    tonInflow: Array(20).fill(1)
-  });
+  // История для графиков (из сервера или пустые заглушки)
+  const history = {
+    load: data?.history?.load || Array(20).fill(10),
+    lat: data?.history?.lat || Array(20).fill(100),
+    tappers: data?.history?.tappers || Array(20).fill(0),
+    tonInflow: data?.history?.inflow || Array(20).fill(0)
+  };
 
-  // Boot sequence
   useEffect(() => {
     const timer = setInterval(() => {
       setBootProgress(p => {
@@ -114,42 +112,8 @@ const Dashboard = (props) => {
     return () => clearInterval(timer);
   }, []);
 
-  // Live telemetry update
-  useEffect(() => {
-    if (!isLoaded) return;
-    const interval = setInterval(() => {
-      setStats(prev => {
-        const nextLoad = Math.max(5, Math.min(95, prev.load + (Math.random() * 6 - 3)));
-        const nextLat = Math.max(40, Math.min(250, prev.lat + (Math.random() * 20 - 10)));
-        const nextTappers = Math.max(10, Math.min(200, prev.activeTappers + Math.floor(Math.random() * 10 - 5)));
-        const nextInflow = Math.max(0.1, prev.tonInflow + (Math.random() * 0.4 - 0.2));
-        
-        // Накопление общего пула на основе текущего притока
-        const nextTotalPool = prev.totalTonPool + (nextInflow / 10); 
-
-        setHistory(h => ({
-          load: [...h.load.slice(-19), nextLoad],
-          lat: [...h.lat.slice(-19), nextLat],
-          tappers: [...h.tappers.slice(-19), nextTappers],
-          tonInflow: [...h.tonInflow.slice(-19), nextInflow]
-        }));
-
-        return { 
-          ...prev, 
-          load: nextLoad, 
-          lat: nextLat, 
-          activeTappers: nextTappers, 
-          tonInflow: nextInflow,
-          totalTonPool: nextTotalPool
-        };
-      });
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [isLoaded]);
-
   useEffect(() => { logRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [logs]);
 
-  // --- ACTIONS ---
   const connectWallet = () => {
     playSound(800, 'sine', 0.1);
     setWallet({ connected: true, address: 'UQAr...4Xz9' });
@@ -163,6 +127,7 @@ const Dashboard = (props) => {
   };
 
   const toggleBan = (userId) => {
+    // В будущем тут будет fetch запрос к API
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: u.status === 'banned' ? 'active' : 'banned' } : u));
     playSound(300, 'sawtooth');
     setLogs(prev => [...prev, `> ALERT: USER ${userId} STATUS_CHANGED`]);
@@ -170,7 +135,7 @@ const Dashboard = (props) => {
 
   if (!isLoaded) return (
     <div style={{ background: '#000', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: CYBER.primary, fontFamily: 'monospace' }}>
-      <div style={{ letterSpacing: '5px' }}>BOOTING_NEURAL_OS_v9.6</div>
+      <div style={{ letterSpacing: '5px' }}>BOOTING_NEURAL_OS_v9.7</div>
       <div style={{ width: '200px', height: '2px', background: '#111', marginTop: '15px' }}>
         <div style={{ width: `${bootProgress}%`, height: '100%', background: CYBER.primary }} />
       </div>
@@ -188,7 +153,7 @@ const Dashboard = (props) => {
         .nav-tabs { display: flex; gap: 15px; margin-bottom: 15px; border-bottom: 1px solid ${CYBER.border}; }
         .tab-btn { background: none; border: none; color: #444; padding: 10px 0; font-size: 10px; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; }
         .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; }
-        .cyber-btn { background: #fff; color: #000; border: none; padding: 12px; font-size: 10px; font-weight: bold; cursor: pointer; text-transform: uppercase; border-radius: 2px; }
+        .cyber-btn { background: #fff; color: #000; border: none; padding: 10px; font-size: 10px; font-weight: bold; cursor: pointer; text-transform: uppercase; border-radius: 2px; }
         .emergency-btn { width: 100%; background: ${CYBER.danger}; color: #fff; border: none; padding: 12px; font-weight: bold; cursor: pointer; margin-top: 10px; }
         .emergency { filter: hue-rotate(-160deg); }
         .cyber-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; }
@@ -200,12 +165,12 @@ const Dashboard = (props) => {
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
         <div>
           <h1 style={{ color: CYBER.primary, margin: 0, fontSize: '22px', letterSpacing: '2px' }}>NEURAL_PULSE</h1>
-          <div style={{ fontSize: '8px', opacity: 0.5 }}>ROOT_ACCESS // OS_9.7</div>
+          <div style={{ fontSize: '8px', opacity: 0.5 }}>ROOT_ACCESS // OS_2026_CORE</div>
         </div>
         <div style={{ textAlign: 'right' }}>
           <div className="label" style={{color: CYBER.ton}}>Total_TON_Pool</div>
           <div className="value" style={{ color: CYBER.ton }}>
-            {stats.totalTonPool.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {Number(stats.totalTonPool).toLocaleString()}
             <span className="unit">💎</span>
           </div>
         </div>
@@ -213,15 +178,15 @@ const Dashboard = (props) => {
 
       <div className="nav-tabs">
         <button className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>[ Overview ]</button>
-        <button className={`tab-btn ${activeTab === 'airdrop' ? 'active' : ''}`} onClick={() => setActiveTab('airdrop')}>[ Airdrop_Manager ]</button>
+        <button className={`tab-btn ${activeTab === 'airdrop' ? 'active' : ''}`} onClick={() => setActiveTab('airdrop')}>[ Agent_Manager ]</button>
       </div>
 
       {activeTab === 'overview' && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             <div className="card">
-              <div className="label">Active_Tappers</div>
-              <div className="value">{stats.activeTappers}<span className="unit">⚡</span></div>
+              <div className="label">Total_Agents</div>
+              <div className="value">{stats.totalUsers}<span className="unit">👤</span></div>
               <MiniChart data={history.tappers} color={CYBER.success} />
             </div>
 
@@ -229,20 +194,20 @@ const Dashboard = (props) => {
               <div className="label">Wallets_Linked</div>
               <div className="value">{stats.linkedWallets}<span className="unit">🔗</span></div>
               <div style={{ fontSize: '8px', marginTop: '15px', color: CYBER.primary }}>
-                {((stats.linkedWallets / stats.totalUsers) * 100).toFixed(1)}% Conversion
+                {stats.totalUsers > 0 ? ((stats.linkedWallets / stats.totalUsers) * 100).toFixed(1) : 0}% Conversion
               </div>
             </div>
 
             <div className="card" style={{ gridColumn: 'span 2' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <div className="label">TON_Pool_Inflow</div>
-                <div style={{ color: CYBER.ton, fontWeight: 'bold' }}>+{stats.tonInflow.toFixed(2)} TON/s</div>
+                <div className="label">Global_Inflow_Rate</div>
+                <div style={{ color: CYBER.ton, fontWeight: 'bold' }}>+{stats.tonInflow.toFixed(2)} TON/hr</div>
               </div>
               <MiniChart data={history.tonInflow} color={CYBER.ton} height={30} />
             </div>
 
             <div className="card">
-              <div className="label">CPU_Load</div>
+              <div className="label">Server_Load</div>
               <div className="value">{stats.load.toFixed(1)}%</div>
               <MiniChart data={history.load} color={CYBER.primary} />
             </div>
@@ -254,27 +219,15 @@ const Dashboard = (props) => {
           </div>
 
           <div className="card">
-            <div className="label">Resource_Monitor</div>
-            <div style={{ marginTop: '10px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', marginBottom: '4px' }}>
-                <span>RAM_USAGE</span><span>{stats.ram}%</span>
-              </div>
-              <div style={{ width: '100%', height: '4px', background: '#111' }}>
-                <div style={{ width: `${stats.ram}%`, height: '100%', background: CYBER.primary }} />
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="label">System_Logs</div>
-            <div style={{ height: '80px', overflowY: 'auto', fontSize: '9px', opacity: 0.6, marginTop: '8px' }}>
+            <div className="label">System_Logs_Buffer</div>
+            <div style={{ height: '80px', overflowY: 'auto', fontSize: '9px', opacity: 0.6, marginTop: '8px', fontFamily: 'monospace' }}>
               {logs.map((log, i) => <div key={i} style={{ borderLeft: `2px solid ${CYBER.primary}`, paddingLeft: '8px', marginBottom: '4px' }}>{log}</div>)}
               <div ref={logRef} />
             </div>
           </div>
 
           <button className="emergency-btn" onClick={() => setIsEmergency(!isEmergency)}>
-            {isEmergency ? 'RESUME_SYSTEM' : 'EMERGENCY_KILL_SWITCH'}
+            {isEmergency ? 'DEACTIVATE_SAFE_MODE' : 'EMERGENCY_KILL_SWITCH'}
           </button>
           <NeuralWave active={isEmergency} />
         </>
@@ -285,9 +238,9 @@ const Dashboard = (props) => {
           <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <div className="label">Wallet_Bridge</div>
+                <div className="label">Admin_Wallet_Bridge</div>
                 <div style={{ fontSize: '11px', fontWeight: 'bold', marginTop: '4px' }}>
-                  {wallet.connected ? `CONNECTED: ${wallet.address}` : 'STATUS: DISCONNECTED'}
+                  {wallet.connected ? `CONNECTED: ${wallet.address}` : 'STATUS: OFFLINE'}
                 </div>
               </div>
               <button className="cyber-btn" onClick={wallet.connected ? disconnectWallet : connectWallet}>
@@ -297,27 +250,27 @@ const Dashboard = (props) => {
           </div>
 
           <div className="card">
-            <div className="label">Database_Search</div>
+            <div className="label">Agent_Database_Query</div>
             <input 
               className="search-bar" 
-              style={{ width:'100%', background:'#000', border:`1px solid ${CYBER.border}`, color:'#fff', padding:'10px', marginTop:'10px', boxSizing:'border-box', fontFamily:'inherit' }}
-              placeholder="Search User ID..." 
+              style={{ width:'100%', background:'#000', border:`1px solid ${CYBER.border}`, color:'#fff', padding:'10px', marginTop:'10px', boxSizing:'border-box', fontFamily:'inherit', outline: 'none' }}
+              placeholder="Filter by ID or Username..." 
               onChange={(e) => setSearchTerm(e.target.value)} 
             />
             <div style={{ overflowX: 'auto' }}>
               <table className="cyber-table">
                 <thead>
-                  <tr><th>Identity</th><th>Taps</th><th>Status</th><th>Action</th></tr>
+                  <tr><th>Agent_ID</th><th>Balance</th><th>Status</th><th>Control</th></tr>
                 </thead>
                 <tbody>
-                  {users.filter(u => u.id.toLowerCase().includes(searchTerm.toLowerCase())).map((u, i) => (
+                  {users.filter(u => String(u.id).includes(searchTerm) || String(u.username).toLowerCase().includes(searchTerm.toLowerCase())).map((u, i) => (
                     <tr key={i} style={{ opacity: u.status === 'banned' ? 0.3 : 1 }}>
-                      <td style={{ color: CYBER.primary }}>{u.id}</td>
-                      <td>{(u.taps / 1000).toFixed(1)}k</td>
-                      <td>{u.status}</td>
+                      <td style={{ color: CYBER.primary }}>{u.username || u.id}</td>
+                      <td>{Number(u.balance || u.taps).toLocaleString()}</td>
+                      <td>{u.status || 'active'}</td>
                       <td>
                         <button className="cyber-btn" style={{ padding: '4px 8px', fontSize: '8px' }} onClick={() => toggleBan(u.id)}>
-                          {u.status === 'banned' ? 'Unlock' : 'Ban'}
+                          {u.status === 'banned' ? 'Restore' : 'Restrict'}
                         </button>
                       </td>
                     </tr>
@@ -330,7 +283,7 @@ const Dashboard = (props) => {
       )}
 
       <footer style={{ textAlign: 'center', fontSize: '8px', opacity: 0.2, marginTop: '20px', letterSpacing: '4px' }}>
-        PROPERTY_OF_NEURAL_PULSE_NETWORK // 2026
+        NEURAL_PULSE_NETWORK // ENCRYPTED_STATION_2026
       </footer>
     </div>
   );
