@@ -1,6 +1,6 @@
 import React, { useState, useEffect, memo, useRef } from 'react';
 
-// --- 🌌 INFINITY-PULSE CORE PALETTE (v9.6) ---
+// --- 🌌 INFINITY-PULSE CORE PALETTE ---
 const CYBER = {
   bg: '#020406',
   card: 'rgba(6, 9, 13, 0.95)',
@@ -76,13 +76,6 @@ const Dashboard = (props) => {
   const logRef = useRef(null);
 
   const [wallet, setWallet] = useState({ connected: false, address: null });
-  const [selectedAsset, setSelectedAsset] = useState({ symbol: 'TON', balance: 1250.0, color: CYBER.ton });
-  const [assets] = useState([
-    { symbol: 'TON', balance: 1250.0, color: CYBER.ton },
-    { symbol: '$NP', balance: 500000, color: CYBER.primary },
-    { symbol: 'USDT', balance: 450.25, color: CYBER.success }
-  ]);
-  
   const [logs, setLogs] = useState(['> MOUNTING_VOLUMES...', '> SYSTEM_READY']);
   
   const [users, setUsers] = useState(props.data?.usersList || [
@@ -96,18 +89,18 @@ const Dashboard = (props) => {
     load: 10.7,
     lat: 101,
     ram: 42,
-    disk: 18,
     totalUsers: 1250,
     activeTappers: 48,
     linkedWallets: 842,
-    tonInflow: 12.5
+    tonInflow: 1.25,
+    totalTonPool: 15420.50 // Начальное значение общего пула TON
   });
 
   const [history, setHistory] = useState({
     load: Array(20).fill(10),
     lat: Array(20).fill(100),
     tappers: Array(20).fill(40),
-    tonInflow: Array(20).fill(5)
+    tonInflow: Array(20).fill(1)
   });
 
   // Boot sequence
@@ -129,7 +122,10 @@ const Dashboard = (props) => {
         const nextLoad = Math.max(5, Math.min(95, prev.load + (Math.random() * 6 - 3)));
         const nextLat = Math.max(40, Math.min(250, prev.lat + (Math.random() * 20 - 10)));
         const nextTappers = Math.max(10, Math.min(200, prev.activeTappers + Math.floor(Math.random() * 10 - 5)));
-        const nextInflow = Math.max(0, prev.tonInflow + (Math.random() * 2 - 1));
+        const nextInflow = Math.max(0.1, prev.tonInflow + (Math.random() * 0.4 - 0.2));
+        
+        // Накопление общего пула на основе текущего притока
+        const nextTotalPool = prev.totalTonPool + (nextInflow / 10); 
 
         setHistory(h => ({
           load: [...h.load.slice(-19), nextLoad],
@@ -138,7 +134,14 @@ const Dashboard = (props) => {
           tonInflow: [...h.tonInflow.slice(-19), nextInflow]
         }));
 
-        return { ...prev, load: nextLoad, lat: nextLat, activeTappers: nextTappers, tonInflow: nextInflow };
+        return { 
+          ...prev, 
+          load: nextLoad, 
+          lat: nextLat, 
+          activeTappers: nextTappers, 
+          tonInflow: nextInflow,
+          totalTonPool: nextTotalPool
+        };
       });
     }, 2000);
     return () => clearInterval(interval);
@@ -197,11 +200,14 @@ const Dashboard = (props) => {
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
         <div>
           <h1 style={{ color: CYBER.primary, margin: 0, fontSize: '22px', letterSpacing: '2px' }}>NEURAL_PULSE</h1>
-          <div style={{ fontSize: '8px', opacity: 0.5 }}>ROOT_ACCESS // OS_9.6</div>
+          <div style={{ fontSize: '8px', opacity: 0.5 }}>ROOT_ACCESS // OS_9.7</div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div className="label">Total_Registered</div>
-          <div className="value" style={{ color: '#fff' }}>{stats.totalUsers} <span className="unit">ID</span></div>
+          <div className="label" style={{color: CYBER.ton}}>Total_TON_Pool</div>
+          <div className="value" style={{ color: CYBER.ton }}>
+            {stats.totalTonPool.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <span className="unit">💎</span>
+          </div>
         </div>
       </div>
 
@@ -230,7 +236,7 @@ const Dashboard = (props) => {
             <div className="card" style={{ gridColumn: 'span 2' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <div className="label">TON_Pool_Inflow</div>
-                <div style={{ color: CYBER.ton, fontWeight: 'bold' }}>+{stats.tonInflow.toFixed(2)} TON</div>
+                <div style={{ color: CYBER.ton, fontWeight: 'bold' }}>+{stats.tonInflow.toFixed(2)} TON/s</div>
               </div>
               <MiniChart data={history.tonInflow} color={CYBER.ton} height={30} />
             </div>
