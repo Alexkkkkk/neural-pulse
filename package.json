@@ -16,7 +16,7 @@
     "sequelize": "^6.37.1",
     "pg": "^8.11.3",
     "pg-hstore": "^2.3.4",
-    "moment-timezone": "^0.5.45", 
+    "moment-timezone": "^0.5.45",
     "express-session": "^1.18.0",
     "connect-session-sequelize": "^7.1.7",
     "cors": "^2.8.5",
@@ -24,6 +24,10 @@
     "compression": "^1.7.4",
     "express-rate-limit": "^7.1.5",
     "dayjs": "^1.11.10",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "@tonconnect/ui-react": "^2.0.9",
+    "styled-components": "^6.1.8",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   }
 }
