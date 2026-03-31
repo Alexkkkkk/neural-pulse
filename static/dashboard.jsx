@@ -1,5 +1,6 @@
 import React, { useState, useEffect, memo, useRef } from 'react';
 import { 
+  TonConnectUIProvider,
   TonConnectButton, 
   useTonAddress, 
   useTonConnectUI 
@@ -72,7 +73,7 @@ const NeuralWave = memo(({ active }) => (
   </svg>
 ));
 
-const Dashboard = (props) => {
+const DashboardContent = (props) => {
   const { data } = props;
   const [activeTab, setActiveTab] = useState('overview');
   const [bootProgress, setBootProgress] = useState(0);
@@ -81,7 +82,6 @@ const Dashboard = (props) => {
   const [searchTerm, setSearchTerm] = useState('');
   const logRef = useRef(null);
 
-  // TON Connect Hooks
   const userAddress = useTonAddress();
   const [tonConnectUI] = useTonConnectUI();
 
@@ -93,8 +93,6 @@ const Dashboard = (props) => {
     lat: data?.currentLat || 101,
     ram: data?.ramUsage || 42,
     totalUsers: data?.totalUsers || 0,
-    activeTappers: data?.activeTappers || 0,
-    linkedWallets: data?.linkedWallets || 0,
     tonInflow: data?.tonInflow || 0,
     totalTonPool: data?.total_balance || 0 
   });
@@ -106,7 +104,6 @@ const Dashboard = (props) => {
     tonInflow: data?.history?.inflow || Array(20).fill(0)
   };
 
-  // Boot sequence
   useEffect(() => {
     const timer = setInterval(() => {
       setBootProgress(p => {
@@ -117,7 +114,6 @@ const Dashboard = (props) => {
     return () => clearInterval(timer);
   }, []);
 
-  // Логирование подключения кошелька
   useEffect(() => {
     if (userAddress) {
       playSound(800, 'sine', 0.1);
@@ -133,6 +129,19 @@ const Dashboard = (props) => {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: u.status === 'banned' ? 'active' : 'banned' } : u));
     playSound(300, 'sawtooth');
     setLogs(prev => [...prev, `> ALERT: USER ${userId} STATUS_UPDATED`]);
+  };
+
+  const handleTestPayment = async () => {
+    const tx = {
+      validUntil: Math.floor(Date.now() / 1000) + 60,
+      messages: [{ address: "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c", amount: "10000000" }]
+    };
+    try {
+      await tonConnectUI.sendTransaction(tx);
+      setLogs(prev => [...prev, '> TX_STATUS: SUCCESSFUL_VALIDATION']);
+    } catch (e) {
+      setLogs(prev => [...prev, '> TX_STATUS: REJECTED_BY_USER']);
+    }
   };
 
   if (!isLoaded) return (
@@ -161,11 +170,9 @@ const Dashboard = (props) => {
         .cyber-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; }
         .cyber-table th { text-align: left; padding: 12px; color: ${CYBER.primary}; border-bottom: 1px solid ${CYBER.border}; }
         .cyber-table td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        /* TON Button Customization */
         .ton-btn-container { scale: 0.8; transform-origin: right; }
       `}</style>
 
-      {/* HEADER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'flex-start' }}>
         <div>
           <h1 style={{ color: CYBER.primary, margin: 0, fontSize: '22px', letterSpacing: '2px' }}>NEURAL_PULSE</h1>
@@ -189,16 +196,11 @@ const Dashboard = (props) => {
               <div className="value">{stats.totalUsers}<span className="unit">👤</span></div>
               <MiniChart data={history.tappers} color={CYBER.success} />
             </div>
-
             <div className="card">
               <div className="label" style={{ color: CYBER.ton }}>TON_Pool_Status</div>
-              <div className="value" style={{ color: CYBER.ton }}>
-                {Number(stats.totalTonPool).toLocaleString()}
-                <span className="unit">💎</span>
-              </div>
+              <div className="value" style={{ color: CYBER.ton }}>{Number(stats.totalTonPool).toLocaleString()}<span className="unit">💎</span></div>
               <MiniChart data={history.tonInflow} color={CYBER.ton} />
             </div>
-
             <div className="card">
               <div className="label">Server_Load</div>
               <div className="value">{stats.load.toFixed(1)}%</div>
@@ -230,23 +232,15 @@ const Dashboard = (props) => {
         <>
           <div className="card">
             <div className="label">Wallet_Control_Center</div>
-            <div style={{ marginTop: '8px', fontSize: '11px' }}>
-              {userAddress ? (
-                <span style={{ color: CYBER.success }}>▣ LINKED: {userAddress.slice(0, 12)}...</span>
-              ) : (
-                <span style={{ color: CYBER.danger }}>□ OFFLINE: RE-AUTHENTICATION REQUIRED</span>
-              )}
+            <div style={{ marginTop: '8px', fontSize: '11px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>{userAddress ? `▣ LINKED: ${userAddress.slice(0, 12)}...` : '□ OFFLINE: RE-AUTHENTICATION REQUIRED'}</span>
+              {userAddress && <button className="cyber-btn" onClick={handleTestPayment}>Test_TX</button>}
             </div>
           </div>
 
           <div className="card">
             <div className="label">Agent_Search</div>
-            <input 
-              className="search-bar" 
-              style={{ width:'100%', background:'#000', border:`1px solid ${CYBER.border}`, color:'#fff', padding:'10px', marginTop:'10px', boxSizing:'border-box', fontFamily:'inherit', outline: 'none' }}
-              placeholder="Search by ID/Username..." 
-              onChange={(e) => setSearchTerm(e.target.value)} 
-            />
+            <input className="search-bar" style={{ width:'100%', background:'#000', border:`1px solid ${CYBER.border}`, color:'#fff', padding:'10px', marginTop:'10px', boxSizing:'border-box', outline: 'none' }} placeholder="Search by ID/Username..." onChange={(e) => setSearchTerm(e.target.value)} />
             <div style={{ overflowX: 'auto' }}>
               <table className="cyber-table">
                 <thead>
@@ -258,11 +252,7 @@ const Dashboard = (props) => {
                       <td style={{ color: CYBER.primary }}>{u.username || u.id}</td>
                       <td>{Number(u.balance || u.taps).toLocaleString()}</td>
                       <td>{u.status || 'active'}</td>
-                      <td>
-                        <button className="cyber-btn" onClick={() => toggleBan(u.id)}>
-                          {u.status === 'banned' ? 'Unlock' : 'Ban'}
-                        </button>
-                      </td>
+                      <td><button className="cyber-btn" onClick={() => toggleBan(u.id)}>{u.status === 'banned' ? 'Unlock' : 'Ban'}</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -271,11 +261,16 @@ const Dashboard = (props) => {
           </div>
         </>
       )}
-
-      <footer style={{ textAlign: 'center', fontSize: '8px', opacity: 0.2, marginTop: '20px', letterSpacing: '4px' }}>
-        PROPERTY_OF_NEURAL_PULSE_CORP // 2026
-      </footer>
     </div>
+  );
+};
+
+// --- WRAPPER WITH PROVIDER ---
+const Dashboard = (props) => {
+  return (
+    <TonConnectUIProvider manifestUrl="https://np.bothost.tech/tonconnect-manifest.json">
+      <DashboardContent {...props} />
+    </TonConnectUIProvider>
   );
 };
 
