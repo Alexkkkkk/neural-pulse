@@ -4,7 +4,9 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node --expose-gc server.js"
+    "start": "node --expose-gc server.js",
+    "dev": "node --watch server.js",
+    "install-all": "npm install"
   },
   "dependencies": {
     "adminjs": "^7.8.1",
@@ -29,5 +31,8 @@
     "styled-components": "^6.1.8",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
