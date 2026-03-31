@@ -58,7 +58,7 @@ const TelemetryBar = ({ label, value, color }) => (
     </div>
     <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
       <div style={{ 
-        width: `${Math.min(value, 100)}%`, 
+        width: `${Math.min(value || 0, 100)}%`, 
         height: '100%', 
         background: `linear-gradient(90deg, ${color}aa, ${color})`, 
         boxShadow: `0 0 12px ${color}`,
@@ -85,7 +85,7 @@ const Dashboard = () => {
   const [isEmergency, setIsEmergency] = useState(false);
   const logRef = useRef(null);
 
-  // Реальные данные состояния
+  // Изначально по нулям
   const [stats, setStats] = useState({ cpu: 0, ram: 0, ssd: 22, online: 0, liquidity: 0, latency: 0, ton: 0 });
   const [history, setHistory] = useState({
     cpu: [0, 0, 0, 0, 0, 0, 0],
@@ -97,15 +97,17 @@ const Dashboard = () => {
 
   const [logs, setLogs] = useState(['> INITIALIZING_NEURAL_CORE...', '> ENCRYPTED_LINK_ESTABLISHED']);
 
-  // ПОДКЛЮЧЕНИЕ К РЕАЛЬНОЙ ШИНЕ ДАННЫХ СЕРВЕРА
+  // ПОДКЛЮЧЕНИЕ К СЕРВЕРУ
   useEffect(() => {
-    const sse = new EventSource('/api/admin/stream');
-    
-    sse.onmessage = (event) => {
-      try {
+    let sse;
+    try {
+      sse = new EventSource('/api/admin/stream');
+      
+      sse.onmessage = (event) => {
         const data = JSON.parse(event.data);
         
         if (data.event_type === 'SYSTEM') {
+          // Обновляем текущие значения
           setStats(p => ({
             ...p,
             cpu: data.server_load || 0,
@@ -116,25 +118,43 @@ const Dashboard = () => {
             ton: data.active_wallets || 0
           }));
 
-          // Обновляем графики (сдвигаем массив)
-          setHistory(p => ({
-            ...p,
-            cpu: [...p.cpu.slice(1), data.server_load || 0],
-            online: [...p.online.slice(1), data.user_count || 0],
-            liq: [...p.liq.slice(1), data.total_liquidity || 0],
-            lat: [...p.lat.slice(1), data.db_latency || 0],
-            wallets: [...p.wallets.slice(1), data.active_wallets || 0]
-          }));
+          // Умное обновление истории (чтобы убрать "лесенку" нулей при старте)
+          setHistory(p => {
+            const isFirstLoad = p.online.every(v => v === 0) && data.user_count > 0;
+            if (isFirstLoad) {
+               return {
+                 cpu: Array(7).fill(data.server_load || 0),
+                 online: Array(7).fill(data.user_count || 0),
+                 liq: Array(7).fill(data.total_liquidity || 0),
+                 lat: Array(7).fill(data.db_latency || 0),
+                 wallets: Array(7).fill(data.active_wallets || 0)
+               };
+            }
+            return {
+              cpu: [...p.cpu.slice(1), data.server_load || 0],
+              online: [...p.online.slice(1), data.user_count || 0],
+              liq: [...p.liq.slice(1), data.total_liquidity || 0],
+              lat: [...p.lat.slice(1), data.db_latency || 0],
+              wallets: [...p.wallets.slice(1), data.active_wallets || 0]
+            };
+          });
+          
         } else if (data.event_type === 'USER_UPDATE' && data.recent_event) {
           setLogs(p => [...p.slice(-15), `> [REAL-TIME] ${data.recent_event}`]);
         }
-      } catch (err) {
-        console.error('SSE Error:', err);
-      }
-    };
+      };
 
-    setTimeout(() => setIsLoaded(true), 1000);
-    return () => sse.close();
+      sse.onerror = () => {
+         setLogs(p => [...p.slice(-15), `> CONNECTION_WARNING: RETRYING_SYNC...`]);
+      };
+
+    } catch (err) {
+      console.error('SSE Error:', err);
+    }
+
+    // Показываем интерфейс через полсекунды
+    setTimeout(() => setIsLoaded(true), 500);
+    return () => { if (sse) sse.close(); };
   }, []);
 
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [logs]);
@@ -148,9 +168,7 @@ const Dashboard = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'broadcast', message: '📡 Core Update: Network is optimal. Keep mining!' })
       });
-      if(res.ok) {
-        setLogs(p => [...p, `> BROADCAST_SIGNAL_SENT_TO_API`]);
-      }
+      if(res.ok) setLogs(p => [...p, `> BROADCAST_SIGNAL_SENT_TO_API`]);
     } catch(e) {
       setLogs(p => [...p, `> BROADCAST_ERROR: ${e.message}`]);
     }
