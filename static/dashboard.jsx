@@ -2,26 +2,25 @@ import React, { useState, useEffect, memo, useRef } from 'react';
 
 // --- 🌌 NEURAL_PULSE ULTIMATE DARK PALETTE ---
 const CYBER = {
-  bg: '#000000',         // True Black
-  card: '#05070a',       // Deep Navy Black
-  primary: '#00f2fe',    // Neon Cyan
-  ton: '#0088CC',        // Ton Blue
-  success: '#39ff14',    // Neon Green
-  danger: '#ff003c',     // Neon Red
-  warning: '#ffea00',    // Neon Yellow
-  secondary: '#7000ff',  // Purple Pulse
+  bg: '#000000',
+  card: 'rgba(5, 7, 10, 0.8)',
+  primary: '#00f2fe',
+  ton: '#0088CC',
+  success: '#39ff14',
+  danger: '#ff003c',
+  warning: '#ffea00',
+  secondary: '#7000ff',
   text: '#e2e8f0',
   subtext: '#4a5568',
-  border: '#11151c',
+  border: 'rgba(0, 242, 254, 0.1)',
 };
 
-// --- 📈 DYNAMIC SPARKLINE COMPONENT (AS PER SCREENSHOT) ---
-const SparkGraph = memo(({ data, color, height = 45 }) => {
+// --- 📈 ADVANCED SPARKLINE ---
+const SparkGraph = memo(({ data, color, height = 50 }) => {
   if (!data || data.length < 2) return <div style={{ height }} />;
   const max = Math.max(...data, 1);
   const min = Math.min(...data);
   const range = max - min || 1;
-  
   const points = data.map((val, i) => ({
     x: (i / (data.length - 1)) * 100,
     y: height - ((val - min) / range) * height,
@@ -29,39 +28,51 @@ const SparkGraph = memo(({ data, color, height = 45 }) => {
 
   const linePath = `M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`;
   const areaPath = `${linePath} L 100,${height} L 0,${height} Z`;
+  const gradId = `grad-${color.replace('#', '')}`;
 
   return (
-    <svg width="100%" height={height} style={{ marginTop: '12px', overflow: 'visible' }}>
+    <svg width="100%" height={height} style={{ marginTop: '15px', overflow: 'visible' }}>
       <defs>
-        <linearGradient id={`grad-${color.replace('#','')}`} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor={color} stopOpacity="0.2" />
+        <linearGradient id={gradId} x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor={color} stopOpacity="0.4" />
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
-      <path d={areaPath} fill={`url(#grad-${color.replace('#','')})`} />
-      <path d={linePath} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="100" cy={points[points.length-1].y} r="3" fill={color} style={{ filter: `drop-shadow(0 0 5px ${color})` }} />
+      <path d={areaPath} fill={`url(#${gradId})`} />
+      <path d={linePath} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" 
+            style={{ filter: `drop-shadow(0 0 6px ${color}88)` }} />
+      <circle cx="100" cy={points[points.length-1].y} r="3.5" fill={color}>
+        <animate attributeName="opacity" values="1;0.4;1" dur="1.5s" repeatCount="indefinite" />
+        <animate attributeName="r" values="3.5;5;3.5" dur="1.5s" repeatCount="indefinite" />
+      </circle>
     </svg>
   );
 });
 
-// --- 📊 PROGRESS BAR COMPONENT ---
+// --- 📊 NEON PROGRESS BAR ---
 const TelemetryBar = ({ label, value, color }) => (
-  <div style={{ marginBottom: '12px' }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-      <span style={{ opacity: 0.6 }}>{label}</span>
-      <span style={{ color, fontWeight: 'bold' }}>{value}%</span>
+  <div style={{ marginBottom: '15px' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '1.5px' }}>
+      <span style={{ opacity: 0.5, color: '#fff' }}>{label}</span>
+      <span style={{ color, fontWeight: 'bold', textShadow: `0 0 5px ${color}` }}>{value}%</span>
     </div>
-    <div style={{ width: '100%', height: '3px', background: '#111', borderRadius: '1px' }}>
-      <div style={{ width: `${value}%`, height: '100%', background: color, boxShadow: `0 0 8px ${color}55`, transition: 'width 1s ease-in-out' }} />
+    <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
+      <div style={{ 
+        width: `${value}%`, 
+        height: '100%', 
+        background: `linear-gradient(90deg, ${color}aa, ${color})`, 
+        boxShadow: `0 0 12px ${color}`,
+        transition: 'width 1.5s cubic-bezier(0.4, 0, 0.2, 1)' 
+      }} />
     </div>
   </div>
 );
 
-// --- 🗳️ UNIFIED DATA CARD ---
+// --- 🗳️ PREMIUM DATA CARD ---
 const DataCard = ({ label, value, unit, data, color }) => (
   <div className="card">
-    <div className="label" style={{ color: color }}>{label}</div>
+    <div className="card-scanline" />
+    <div className="label" style={{ color: color, opacity: 0.8 }}>{label}</div>
     <div className="val-main">
       {value}<span className="val-unit">{unit}</span>
     </div>
@@ -69,160 +80,157 @@ const DataCard = ({ label, value, unit, data, color }) => (
   </div>
 );
 
-const Dashboard = (props) => {
+const Dashboard = () => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isEmergency, setIsEmergency] = useState(false);
   const logRef = useRef(null);
 
-  // --- LIVE MONITORING STATES ---
-  const [stats, setStats] = useState({
-    cpu: 10.7, ram: 38, ssd: 22,
-    online: 42, liquidity: 1000,
-    latency: 95, ton: 65.5
-  });
-
-  // History for all graphs
+  const [stats, setStats] = useState({ cpu: 10.7, ram: 38, ssd: 22, online: 42, liquidity: 1000, latency: 95, ton: 65.5 });
   const [history, setHistory] = useState({
     cpu: [12, 15, 14, 18, 16, 14, 10.7],
-    ram: [35, 36, 38, 38, 37, 38, 38],
-    online: [20, 45, 30, 40, 50, 35, 42],
-    wallets: [40, 50, 65.5, 65.5, 65.5, 65.5, 65.5],
-    liq: [800, 800, 800, 800, 800, 950, 1000],
-    lat: [80, 110, 95, 85, 80, 85, 95]
+    online: [30, 45, 38, 52, 48, 35, 42],
+    wallets: [50, 55, 60, 65.5, 65.5, 65.5, 65.5],
+    liq: [850, 870, 840, 920, 980, 950, 1000],
+    lat: [90, 105, 95, 110, 85, 90, 95]
   });
 
-  const [logs, setLogs] = useState(['> UPLINK_ESTABLISHED', '> SECURE_ENCRYPTED_SESSION_ACTIVE']);
+  const [logs, setLogs] = useState(['> INITIALIZING_NEURAL_CORE...', '> ENCRYPTED_LINK_ESTABLISHED']);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const newCpu = (Math.random() * 5 + 10).toFixed(1);
-      const newLat = Math.floor(Math.random() * 15 + 90);
-      const newOnline = Math.floor(Math.random() * 5 + 40);
-      
-      setStats(prev => ({
-        ...prev,
-        cpu: parseFloat(newCpu),
-        latency: newLat,
-        online: newOnline
-      }));
-
-      setHistory(prev => ({
-        cpu: [...prev.cpu.slice(1), parseFloat(newCpu)],
-        ram: [...prev.ram.slice(1), 38 + (Math.random() > 0.5 ? 1 : 0)],
-        online: [...prev.online.slice(1), newOnline],
-        wallets: [...prev.wallets.slice(1), 65.5],
-        liq: [...prev.liq.slice(1), prev.liq[6] + (Math.random() > 0.7 ? 10 : 0)],
-        lat: [...prev.lat.slice(1), newLat]
+      const nCpu = (Math.random() * 5 + 10).toFixed(1);
+      const nLat = Math.floor(Math.random() * 20 + 85);
+      setStats(p => ({ ...p, cpu: parseFloat(nCpu), latency: nLat }));
+      setHistory(p => ({
+        ...p,
+        cpu: [...p.cpu.slice(1), parseFloat(nCpu)],
+        online: [...p.online.slice(1), 40 + Math.floor(Math.random() * 10)],
+        liq: [...p.liq.slice(1), p.liq[6] + (Math.random() > 0.8 ? 5 : -2)],
+        lat: [...p.lat.slice(1), nLat]
       }));
     }, 3000);
-
-    setTimeout(() => setIsLoaded(true), 800);
+    setTimeout(() => setIsLoaded(true), 1000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [logs]);
 
-  if (!isLoaded) return <div style={{ background: '#000', height: '100vh' }} />;
+  if (!isLoaded) return <div style={{ background: '#000', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: CYBER.primary, fontFamily: 'Roboto Mono' }}>LOADING_NEURAL_PULSE...</div>;
 
   return (
     <div className={`app-root ${isEmergency ? 'emergency' : ''}`}>
       <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet" />
       
       <style>{`
-        .app-root { background: ${CYBER.bg}; min-height: 100vh; padding: 15px; font-family: 'Roboto Mono', monospace; color: ${CYBER.text}; transition: 0.5s; }
-        .header { margin-bottom: 25px; border-left: 3px solid ${CYBER.primary}; padding-left: 15px; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; border-radius: 4px; position: relative; overflow: hidden; }
-        
-        .label { font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; font-weight: bold; }
-        .val-main { font-size: 28px; font-weight: bold; color: #fff; display: flex; align-items: baseline; line-height: 1; }
-        .val-unit { font-size: 10px; color: ${CYBER.subtext}; margin-left: 6px; text-transform: uppercase; }
+        .app-root { 
+          background: ${CYBER.bg}; 
+          min-height: 100vh; 
+          padding: 20px; 
+          font-family: 'Roboto Mono', monospace; 
+          color: ${CYBER.text};
+          background-image: linear-gradient(${CYBER.border} 1px, transparent 1px), linear-gradient(90deg, ${CYBER.border} 1px, transparent 1px);
+          background-size: 40px 40px;
+          animation: backgroundScroll 20s linear infinite;
+        }
+        @keyframes backgroundScroll { from { background-position: 0 0; } to { background-position: 0 40px; } }
 
-        .op-btn { background: #fff; color: #000; border: none; padding: 12px; font-size: 10px; font-weight: 700; cursor: pointer; text-transform: uppercase; border-radius: 2px; transition: 0.2s; }
-        .op-btn:active { background: ${CYBER.primary}; transform: translateY(1px); }
+        .header { margin-bottom: 30px; border-left: 5px solid ${CYBER.primary}; padding-left: 20px; position: relative; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
         
-        .emergency { filter: saturate(0) contrast(1.5) brightness(0.8) hue-rotate(-160deg); }
-        ::-webkit-scrollbar { width: 2px; }
-        ::-webkit-scrollbar-thumb { background: ${CYBER.primary}44; }
+        .card { 
+          background: ${CYBER.card}; 
+          border: 1px solid rgba(0, 242, 254, 0.1); 
+          padding: 20px; 
+          border-radius: 8px; 
+          position: relative; 
+          overflow: hidden; 
+          backdrop-filter: blur(10px);
+          box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+          transition: 0.3s;
+        }
+        .card:hover { border-color: ${CYBER.primary}; transform: translateY(-2px); box-shadow: 0 0 20px rgba(0, 242, 254, 0.15); }
+
+        .card-scanline {
+          position: absolute; top: 0; left: 0; width: 100%; height: 2px;
+          background: linear-gradient(90deg, transparent, ${CYBER.primary}33, transparent);
+          animation: scanline 4s linear infinite;
+        }
+        @keyframes scanline { from { top: -10%; } to { top: 110%; } }
+
+        .label { font-size: 10px; text-transform: uppercase; letter-spacing: 2.5px; margin-bottom: 15px; font-weight: 700; }
+        .val-main { font-size: 32px; font-weight: 700; color: #fff; display: flex; align-items: baseline; line-height: 1; text-shadow: 0 0 15px rgba(255,255,255,0.2); }
+        .val-unit { font-size: 12px; color: ${CYBER.subtext}; margin-left: 8px; }
+
+        .op-btn { 
+          background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.1); 
+          padding: 15px; font-size: 10px; font-weight: 700; cursor: pointer; text-transform: uppercase; 
+          border-radius: 4px; transition: 0.2s; letter-spacing: 1px;
+        }
+        .op-btn:hover { background: #fff; color: #000; }
+        .op-btn:active { transform: scale(0.95); }
+        
+        .emergency { filter: saturate(0) contrast(1.2) brightness(0.8) sepia(1) hue-rotate(-50deg); }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: ${CYBER.primary}66; border-radius: 10px; }
+        
+        @keyframes pulse {
+          0% { opacity: 1; }
+          50% { opacity: 0.3; }
+          100% { opacity: 1; }
+        }
       `}</style>
 
       {/* --- HEADER --- */}
       <div className="header">
-        <h1 style={{ color: CYBER.primary, fontSize: '22px', margin: 0, letterSpacing: '4px' }}>NEURAL_PULSE</h1>
-        <div style={{ fontSize: '9px', opacity: 0.5, marginTop: '4px' }}>
-          <span style={{ color: CYBER.success }}>●</span> UPLINK_ESTABLISHED // NODE: TITAN_01
+        <h1 style={{ color: CYBER.primary, fontSize: '26px', margin: 0, letterSpacing: '6px', textShadow: `0 0 15px ${CYBER.primary}66` }}>NEURAL_PULSE v4.0</h1>
+        <div style={{ fontSize: '10px', opacity: 0.6, marginTop: '8px' }}>
+          <span style={{ color: CYBER.success, display: 'inline-block', marginRight: '5px', animation: 'pulse 2s infinite' }}>●</span> 
+          SYSTEM_READY // UPLINK_TITAN_01 // SECURE_LAYER_6
         </div>
       </div>
 
       <div className="grid">
         {/* HARDWARE TELEMETRY */}
         <div className="card" style={{ gridColumn: 'span 2' }}>
-          <div className="label" style={{ color: CYBER.primary }}>System_Hardware_Telemetry</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginTop: '10px' }}>
-            <TelemetryBar label="Kernel" value={stats.cpu} color={CYBER.primary} />
-            <TelemetryBar label="Memory" value={stats.ram} color={CYBER.secondary} />
-            <TelemetryBar label="SSD" value={stats.ssd} color={CYBER.warning} />
+          <div className="label" style={{ color: CYBER.primary }}>Neural_Node_Resources</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '30px', marginTop: '15px' }}>
+            <TelemetryBar label="Core_Processing" value={stats.cpu} color={CYBER.primary} />
+            <TelemetryBar label="Sync_Memory" value={stats.ram} color={CYBER.secondary} />
+            <TelemetryBar label="Vault_Storage" value={stats.ssd} color={CYBER.warning} />
           </div>
         </div>
 
-        {/* ACTIVE AGENTS */}
-        <DataCard 
-          label="Active_Agents" 
-          value={stats.online} 
-          unit="U" 
-          data={history.online} 
-          color={CYBER.success} 
-        />
+        {/* METRICS */}
+        <DataCard label="Active_Agents" value={stats.online} unit="USERS" data={history.online} color={CYBER.success} />
+        <DataCard label="Ton_Reserve" value={stats.ton} unit="💎 TON" data={history.wallets} color={CYBER.ton} />
+        <DataCard label="Network_Latency" value={stats.latency} unit="MS" data={history.lat} color={CYBER.danger} />
+        <DataCard label="Pulse_Liquidity" value={stats.liquidity} unit="$NP" data={history.liq} color={CYBER.warning} />
 
-        {/* TON POOL */}
-        <DataCard 
-          label="Ton_Pool" 
-          value={stats.ton} 
-          unit="💎" 
-          data={history.wallets} 
-          color={CYBER.ton} 
-        />
-
-        {/* I/O LATENCY */}
-        <DataCard 
-          label="I/O_Latency" 
-          value={stats.latency} 
-          unit="ms" 
-          data={history.lat} 
-          color={CYBER.danger} 
-        />
-
-        {/* TOTAL LIQUIDITY */}
-        <DataCard 
-          label="Total_Liquidity" 
-          value={stats.liquidity} 
-          unit="$NP" 
-          data={history.liq} 
-          color={CYBER.warning} 
-        />
-
-        {/* OPERATIONS CONTROL */}
+        {/* COMMAND CENTER */}
         <div className="card" style={{ gridColumn: 'span 2' }}>
-          <div className="label" style={{ color: CYBER.primary }}>Core_Operations</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            <button className="op-btn" onClick={() => setLogs(p => [...p, `> BROADCAST_SENT: ${new Date().toLocaleTimeString()}`])}>📢 Broadcast</button>
-            <button className="op-btn" onClick={() => setLogs(p => [...p, `> CACHE_PURGED: OK`])}>🧹 Purge</button>
-            <button className="op-btn" onClick={() => setLogs(p => [...p, `> DB_SYNC: COMPLETE`])}>💾 Sync</button>
-            <button className="op-btn" style={{ background: isEmergency ? CYBER.danger : '#fff', color: isEmergency ? '#fff' : '#000' }} onClick={() => setIsEmergency(!isEmergency)}>⚠️ Kill_Switch</button>
+          <div className="label" style={{ color: CYBER.primary }}>Directive_Control</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '12px' }}>
+            <button className="op-btn" onClick={() => setLogs(p => [...p, `> BROADCAST_PULSE_SENT` || ''])}>Broadcast</button>
+            <button className="op-btn" onClick={() => setLogs(p => [...p, `> CACHE_PURGE_SUCCESS` || ''])}>Purge</button>
+            <button className="op-btn" onClick={() => setLogs(p => [...p, `> RE-SYNCING_DATABASES...` || ''])}>Sync</button>
+            <button className="op-btn" style={{ borderColor: CYBER.danger, color: isEmergency ? '#000' : CYBER.danger, background: isEmergency ? CYBER.danger : 'transparent' }} 
+                    onClick={() => { setIsEmergency(!isEmergency); setLogs(p => [...p, `> WARNING: KILL_SWITCH_${!isEmergency ? 'ENGAGED' : 'ABORTED'}`])}}>
+              Kill_Switch
+            </button>
           </div>
         </div>
       </div>
 
-      {/* FOOTER: LIVE FEED */}
-      <footer style={{ marginTop: '20px', borderTop: `1px solid ${CYBER.border}`, paddingTop: '15px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', marginBottom: '10px' }}>
-          <span style={{ color: CYBER.primary }}>[ LIVE_SYSTEM_FEED ]</span>
-          <span style={{ opacity: 0.3 }}>SECURE_SESSION_ACTIVE</span>
+      {/* FOOTER FEED */}
+      <footer style={{ marginTop: '25px', borderTop: `1px solid rgba(255,255,255,0.05)`, paddingTop: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '12px', letterSpacing: '1px' }}>
+          <span style={{ color: CYBER.primary, fontWeight: 'bold' }}>[ RAW_SYSTEM_LOGS ]</span>
+          <span style={{ opacity: 0.4 }}>STATUS: 200_OK</span>
         </div>
-        <div ref={logRef} style={{ height: '70px', overflowY: 'auto', fontSize: '10px', opacity: 0.4, lineHeight: '1.6' }}>
-          {logs.map((l, i) => <div key={i}>{l}</div>)}
-          <div>{`> MONITORING_UPDATE: DELTA_${Math.floor(Math.random()*9999)}`}</div>
-          <div>{`> ANALYZING_NETWORK_TRAFFIC... STATUS_OK`}</div>
+        <div ref={logRef} style={{ height: '90px', overflowY: 'auto', fontSize: '11px', opacity: 0.5, lineHeight: '1.8', padding: '10px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px' }}>
+          {logs.map((l, i) => <div key={i} style={{ borderLeft: `1px solid ${CYBER.primary}33`, paddingLeft: '10px', marginBottom: '4px' }}>{l}</div>)}
+          <div>{`> MEMORY_CLEANUP_EXECUTED...`}</div>
+          <div>{`> HEARTBEAT_STABLE: ${new Date().toLocaleTimeString()}`}</div>
         </div>
       </footer>
     </div>
