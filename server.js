@@ -118,11 +118,9 @@ async function setupAdminPanel(app) {
         const { default: AdminJSExpress } = await import('@adminjs/express');
         const { default: AdminJSSequelize } = await import('@adminjs/sequelize');
 
-        // 1. Сначала регистрация адаптера и загрузчика
         AdminJS.registerAdapter(AdminJSSequelize);
         const componentLoader = new ComponentLoader();
         
-        // 2. Инициализация оболочки (БЕЗ немедленной выборки данных)
         const adminJs = new AdminJS({
             resources: [
                 { resource: User, options: { navigation: { name: 'CORE' }, listProperties: ['id', 'username', 'balance', 'wallet', 'created_at'] } },
@@ -134,9 +132,7 @@ async function setupAdminPanel(app) {
             componentLoader,
             dashboard: { 
                 component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
-                // 3. ПОГРУЗКА ДАННЫХ: Сработает только при открытии страницы в браузере
                 handler: async () => {
-                    console.log('--- 📊 ADMIN DATA SYNC ---');
                     const [gStats, historyData, dailyUsers] = await Promise.all([
                         GlobalStats.findByPk(1),
                         Stats.findAll({ limit: 30, order: [['created_at', 'DESC']] }),
@@ -175,7 +171,6 @@ async function setupAdminPanel(app) {
             cookiePassword: 'np-titan-2026-secure-v2',
         }, null, { resave: false, saveUninitialized: false, secret: 'np_titan_secret_v2', store: sessionStore });
 
-        // Важно: инициализируем до использования
         await adminJs.initialize();
         app.use(adminJs.options.rootPath, adminRouter);
         console.log('✅ ADMIN INTERFACE READY');
@@ -207,6 +202,7 @@ async function startNeuralOS() {
     const app = express();
     const bot = new Telegraf(BOT_TOKEN);
 
+    // Расширенная настройка Helmet для AdminJS и TON Connect
     app.use(helmet({
         contentSecurityPolicy: {
             directives: {
@@ -228,6 +224,7 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
+    // Важно: Маршрут манифеста до статики
     app.get('/tonconnect-manifest.json', (req, res) => {
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Access-Control-Allow-Origin', '*');
@@ -244,14 +241,11 @@ async function startNeuralOS() {
     try {
         console.log('--- ⚡ NEURAL PULSE SYSTEM BOOTING ---');
         
-        // 1. СНАЧАЛА ЗАГРУЗКА БАЗЫ
         await initDB();
         await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
 
-        // 2. ЗАТЕМ ЗАГРУЗКА ИНТЕРФЕЙСА АДМИНКИ
         await setupAdminPanel(app);
 
-        // 3. ПОСЛЕ ЭТОГО ВКЛЮЧАЕМ API И БОТА
         setupAPIRoutes(app);
         setupAdminCommands(app, bot);
         setupRealTimeStream(app); 
@@ -268,6 +262,7 @@ async function startNeuralOS() {
 
         await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`, { drop_pending_updates: true });
 
+        // Цикл мониторинга ресурсов
         setInterval(async () => {
             try {
                 const start = Date.now();
@@ -312,4 +307,5 @@ async function startNeuralOS() {
     }
 }
 
+// Запуск системы
 startNeuralOS();
