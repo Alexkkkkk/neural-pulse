@@ -45,7 +45,7 @@ function setupAPIRoutes(app) {
         if (!userId || !count || count > 100 || count <= 0) return res.status(403).send();
         try {
             const user = await User.findByPk(userId);
-            if (!user) return res.status(404).send();
+            if (!user || user.status === 'banned') return res.status(403).json({ error: "Access denied" });
             
             const currentBalance = parseFloat(user.balance) || 0;
             const config = MULTIPLIERS.find(m => currentBalance >= m.threshold) || { multi: 1.0 };
@@ -132,14 +132,14 @@ async function setupAdminPanel(app) {
         
         const adminJs = new AdminJS({
             resources: [
-                { resource: User, options: { navigation: { name: 'CORE' }, listProperties: ['id', 'username', 'balance', 'wallet', 'status', 'created_at'] } },
+                { resource: User, options: { navigation: { name: 'CORE' }, listProperties: ['id', 'username', 'balance', 'status', 'created_at'] } },
                 { resource: Task, options: { navigation: { name: 'OS' } } },
                 { resource: Stats, options: { navigation: { name: 'OS' }, listProperties: ['created_at', 'user_count', 'server_load', 'mem_usage'] } },
                 { resource: GlobalStats, options: { navigation: { name: 'CORE' } } }
             ],
             rootPath: '/admin',
             componentLoader,
-            // ФИКС: Принудительное отключение бандлера
+            // ФИКС: Отключаем бандлер для экономии памяти на Bothost
             bundler: { availableAndEnabled: false },
             dashboard: { 
                 component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
@@ -193,7 +193,6 @@ async function setupAdminPanel(app) {
         }, null, { resave: false, saveUninitialized: false, secret: 'np_titan_secret_v2', store: sessionStore });
 
         console.log('--- [ADMIN] INITIALIZING ASSETS... ---');
-        // Загрузка без остановки при ошибках
         await adminJs.initialize().catch(e => console.error("AdminJS Init Warning:", e.message));
         
         app.use(adminJs.options.rootPath, adminRouter);
@@ -208,7 +207,7 @@ function setupBotHandlers(bot) {
         try {
             const [user, created] = await User.findOrCreate({
                 where: { id: ctx.from.id },
-                defaults: { username: ctx.from.username || 'AGENT', balance: 0 }
+                defaults: { username: ctx.from.username || 'AGENT', balance: 0, status: 'active' }
             });
             if (created) {
                 const gs = await GlobalStats.findByPk(1);
