@@ -139,7 +139,10 @@ async function setupAdminPanel(app) {
             ],
             rootPath: '/admin',
             componentLoader,
-            bundler: { availableAndEnabled: true },
+            // ФИКС: Отключаем бандлер для стабильности на Bothost
+            bundler: { 
+                availableAndEnabled: false 
+            },
             dashboard: { 
                 component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
                 handler: async () => {
@@ -222,7 +225,6 @@ async function startNeuralOS() {
     const app = express();
     const bot = new Telegraf(BOT_TOKEN);
 
-    // Расширенный Helmet для корректной работы TON Connect и Админки
     app.use(helmet({
         contentSecurityPolicy: {
             directives: {
