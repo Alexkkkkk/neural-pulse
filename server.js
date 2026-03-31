@@ -133,23 +133,29 @@ async function setupAdminPanel(app) {
             dashboard: { 
                 component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
                 handler: async () => {
-                    const [gStats, historyData, dailyUsers] = await Promise.all([
+                    const [gStats, historyData, dailyUsers, allUsers] = await Promise.all([
                         GlobalStats.findByPk(1),
                         Stats.findAll({ limit: 30, order: [['created_at', 'DESC']] }),
-                        User.count({ where: { created_at: { [Op.gte]: dayjs().subtract(24, 'hour').toDate() } } })
+                        User.count({ where: { created_at: { [Op.gte]: dayjs().subtract(24, 'hour').toDate() } } }),
+                        User.findAll({ limit: 50, order: [['balance', 'DESC']] })
                     ]);
+
+                    const h = (historyData || []).reverse();
+
                     return { 
                         totalUsers: gStats?.total_users || 0, 
                         total_balance: parseFloat(gStats?.total_balance || 0),
                         dailyUsers: dailyUsers || 0,
-                        history: (historyData || []).reverse().map(s => ({ 
-                            time: dayjs(s.created_at).format('HH:mm'), 
-                            user_count: s.user_count, 
-                            server_load: s.server_load, 
-                            mem_usage: s.mem_usage,
-                            active_wallets: s.active_wallets,
-                            db_latency: s.db_latency
-                        })) 
+                        usersList: allUsers.map(u => u.toJSON()), // Передаем список для вкладки Agent Manager
+                        currentLoad: h.length > 0 ? h[h.length-1].server_load : 0,
+                        currentLat: h.length > 0 ? h[h.length-1].db_latency : 0,
+                        ramUsage: h.length > 0 ? h[h.length-1].mem_usage : 0,
+                        history: {
+                            load: h.map(s => s.server_load),
+                            lat: h.map(s => s.db_latency),
+                            tappers: h.map(s => s.user_count),
+                            inflow: h.map(s => s.active_wallets)
+                        }
                     };
                 }
             },
