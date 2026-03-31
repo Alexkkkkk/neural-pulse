@@ -20,7 +20,7 @@ const pulseEvents = new EventEmitter();
 // --- 🛠 СИСТЕМА ПОСТРОЧНОГО ЛОГИРОВАНИЯ ---
 const neuralLog = (msg, type = 'INFO') => {
     const time = dayjs().format('HH:mm:ss');
-    const icons = { INFO: '🔹', WARN: '⚠️', ERROR: '🚨', CORE: '⚡', NET: '🌐' };
+    const icons = { INFO: '🔹', WARN: '⚠️', ERROR: '🚨', CORE: '⚡', NET: '🌐', SUCCESS: '✅' };
     console.log(`${icons[type] || '▪️'} [${time}] ${msg}`);
 };
 
@@ -147,12 +147,19 @@ async function startNeuralOS() {
                 pulseEvents.emit('update', pulseData);
                 await Stats.create(pulseData);
 
-                // Авто-очистка логов статистики
+                // --- 🛡️ ОПТИМИЗИРОВАННАЯ ОЧИСТКА (LIMIT: 1500) ---
                 const count = await Stats.count();
-                if (count > 500) {
-                    neuralLog('Cleaning old telemetry history...', 'INFO');
-                    const oldest = await Stats.findOne({ order: [['created_at', 'ASC']] });
-                    if (oldest) await oldest.destroy();
+                if (count > 1500) {
+                    const recordsToDelete = await Stats.findAll({ 
+                        order: [['created_at', 'ASC']], 
+                        limit: 100 
+                    });
+                    
+                    if (recordsToDelete.length > 0) {
+                        const ids = recordsToDelete.map(r => r.id);
+                        await Stats.destroy({ where: { id: ids } });
+                        neuralLog(`DB_OPTIMIZATION: Purged ${ids.length} old telemetry records.`, 'INFO');
+                    }
                 }
             } catch (e) {
                 neuralLog(`Pulse Loop Error: ${e.message}`, 'ERROR');
