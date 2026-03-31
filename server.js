@@ -31,7 +31,7 @@ const MULTIPLIERS = [
     { threshold: 0, multi: 1.0 }
 ];
 
-// --- 🛰️ ПОДСИСТЕМЫ ---
+// --- 🛰️ ПОДСИСТЕМЫ API ---
 
 function setupAPIRoutes(app) {
     const clickLimit = rateLimit({
@@ -202,7 +202,6 @@ async function startNeuralOS() {
     const app = express();
     const bot = new Telegraf(BOT_TOKEN);
 
-    // Расширенная настройка Helmet для AdminJS и TON Connect
     app.use(helmet({
         contentSecurityPolicy: {
             directives: {
@@ -224,7 +223,7 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
-    // КРИТИЧНО: Маршрут манифеста ДО общей статики
+    // Маршрут манифеста
     app.get('/tonconnect-manifest.json', (req, res) => {
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Access-Control-Allow-Origin', '*');
@@ -233,8 +232,8 @@ async function startNeuralOS() {
 
     app.use('/static', express.static(path.join(__dirname, 'static'), { 
         maxAge: '1h',
-        setHeaders: (res, path) => {
-            if (path.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+        setHeaders: (res, filePath) => {
+            if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
         }
     }));
 
@@ -245,12 +244,12 @@ async function startNeuralOS() {
         await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
 
         await setupAdminPanel(app);
-
         setupAPIRoutes(app);
         setupAdminCommands(app, bot);
         setupRealTimeStream(app); 
         setupBotHandlers(bot);
 
+        // Webhook Gate
         app.post(`/telegraf/${BOT_TOKEN}`, async (req, res) => {
             try {
                 if (req.body && Object.keys(req.body).length > 0) {
@@ -262,7 +261,7 @@ async function startNeuralOS() {
 
         await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`, { drop_pending_updates: true });
 
-        // Цикл мониторинга ресурсов
+        // Цикл мониторинга ресурсов (Pulse Loop)
         setInterval(async () => {
             try {
                 const start = Date.now();
@@ -289,6 +288,7 @@ async function startNeuralOS() {
                 pulseEvents.emit('update', pulseData);
                 await Stats.create(pulseData);
                 
+                // Очистка старых логов мониторинга (храним 500 записей)
                 const count = await Stats.count();
                 if (count > 500) {
                     const oldest = await Stats.findOne({ order: [['created_at', 'ASC']] });
@@ -297,7 +297,6 @@ async function startNeuralOS() {
             } catch (e) { console.error("Pulse Loop Error", e.message); }
         }, 15000);
 
-        // Запуск на 0.0.0.0 для Bothost
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`);
         });
