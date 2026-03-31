@@ -58,7 +58,7 @@ const TelemetryBar = ({ label, value, color }) => (
     </div>
     <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
       <div style={{ 
-        width: `${value}%`, 
+        width: `${Math.min(value, 100)}%`, 
         height: '100%', 
         background: `linear-gradient(90deg, ${color}aa, ${color})`, 
         boxShadow: `0 0 12px ${color}`,
@@ -85,37 +85,78 @@ const Dashboard = () => {
   const [isEmergency, setIsEmergency] = useState(false);
   const logRef = useRef(null);
 
-  const [stats, setStats] = useState({ cpu: 10.7, ram: 38, ssd: 22, online: 42, liquidity: 1000, latency: 95, ton: 65.5 });
+  // Реальные данные состояния
+  const [stats, setStats] = useState({ cpu: 0, ram: 0, ssd: 22, online: 0, liquidity: 0, latency: 0, ton: 0 });
   const [history, setHistory] = useState({
-    cpu: [12, 15, 14, 18, 16, 14, 10.7],
-    online: [30, 45, 38, 52, 48, 35, 42],
-    wallets: [50, 55, 60, 65.5, 65.5, 65.5, 65.5],
-    liq: [850, 870, 840, 920, 980, 950, 1000],
-    lat: [90, 105, 95, 110, 85, 90, 95]
+    cpu: [0, 0, 0, 0, 0, 0, 0],
+    online: [0, 0, 0, 0, 0, 0, 0],
+    wallets: [0, 0, 0, 0, 0, 0, 0],
+    liq: [0, 0, 0, 0, 0, 0, 0],
+    lat: [0, 0, 0, 0, 0, 0, 0]
   });
 
   const [logs, setLogs] = useState(['> INITIALIZING_NEURAL_CORE...', '> ENCRYPTED_LINK_ESTABLISHED']);
 
+  // ПОДКЛЮЧЕНИЕ К РЕАЛЬНОЙ ШИНЕ ДАННЫХ СЕРВЕРА
   useEffect(() => {
-    const interval = setInterval(() => {
-      const nCpu = (Math.random() * 5 + 10).toFixed(1);
-      const nLat = Math.floor(Math.random() * 20 + 85);
-      setStats(p => ({ ...p, cpu: parseFloat(nCpu), latency: nLat }));
-      setHistory(p => ({
-        ...p,
-        cpu: [...p.cpu.slice(1), parseFloat(nCpu)],
-        online: [...p.online.slice(1), 40 + Math.floor(Math.random() * 10)],
-        liq: [...p.liq.slice(1), p.liq[6] + (Math.random() > 0.8 ? 5 : -2)],
-        lat: [...p.lat.slice(1), nLat]
-      }));
-    }, 3000);
+    const sse = new EventSource('/api/admin/stream');
+    
+    sse.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.event_type === 'SYSTEM') {
+          setStats(p => ({
+            ...p,
+            cpu: data.server_load || 0,
+            ram: data.ram_usage || p.ram,
+            latency: data.db_latency || 0,
+            online: data.user_count || 0,
+            liquidity: data.total_liquidity || 0,
+            ton: data.active_wallets || 0
+          }));
+
+          // Обновляем графики (сдвигаем массив)
+          setHistory(p => ({
+            ...p,
+            cpu: [...p.cpu.slice(1), data.server_load || 0],
+            online: [...p.online.slice(1), data.user_count || 0],
+            liq: [...p.liq.slice(1), data.total_liquidity || 0],
+            lat: [...p.lat.slice(1), data.db_latency || 0],
+            wallets: [...p.wallets.slice(1), data.active_wallets || 0]
+          }));
+        } else if (data.event_type === 'USER_UPDATE' && data.recent_event) {
+          setLogs(p => [...p.slice(-15), `> [REAL-TIME] ${data.recent_event}`]);
+        }
+      } catch (err) {
+        console.error('SSE Error:', err);
+      }
+    };
+
     setTimeout(() => setIsLoaded(true), 1000);
-    return () => clearInterval(interval);
+    return () => sse.close();
   }, []);
 
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [logs]);
 
-  if (!isLoaded) return <div style={{ background: '#000', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: CYBER.primary, fontFamily: 'Roboto Mono' }}>LOADING_NEURAL_PULSE...</div>;
+  // Вызов реального API рассылки
+  const triggerBroadcast = async () => {
+    setLogs(p => [...p, `> INITIATING_GLOBAL_BROADCAST...`]);
+    try {
+      const res = await fetch('/api/admin/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'broadcast', message: '📡 Core Update: Network is optimal. Keep mining!' })
+      });
+      if(res.ok) {
+        setLogs(p => [...p, `> BROADCAST_SIGNAL_SENT_TO_API`]);
+      }
+    } catch(e) {
+      setLogs(p => [...p, `> BROADCAST_ERROR: ${e.message}`]);
+    }
+  };
+
+  if (!isLoaded) return <div style={{ background: '#000', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: CYBER.primary, fontFamily: 'Roboto Mono' }}>LOADING_NEURAL_PULSE_UPLINK...</div>;
 
   return (
     <div className={`app-root ${isEmergency ? 'emergency' : ''}`}>
@@ -185,7 +226,7 @@ const Dashboard = () => {
         <h1 style={{ color: CYBER.primary, fontSize: '26px', margin: 0, letterSpacing: '6px', textShadow: `0 0 15px ${CYBER.primary}66` }}>NEURAL_PULSE v4.0</h1>
         <div style={{ fontSize: '10px', opacity: 0.6, marginTop: '8px' }}>
           <span style={{ color: CYBER.success, display: 'inline-block', marginRight: '5px', animation: 'pulse 2s infinite' }}>●</span> 
-          SYSTEM_READY // UPLINK_TITAN_01 // SECURE_LAYER_6
+          SYSTEM_SYNC: ACTIVE // UPLINK_TITAN_01 // REAL_TIME_DATA
         </div>
       </div>
 
@@ -194,7 +235,7 @@ const Dashboard = () => {
         <div className="card" style={{ gridColumn: 'span 2' }}>
           <div className="label" style={{ color: CYBER.primary }}>Neural_Node_Resources</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '30px', marginTop: '15px' }}>
-            <TelemetryBar label="Core_Processing" value={stats.cpu} color={CYBER.primary} />
+            <TelemetryBar label="Core_Load" value={stats.cpu} color={CYBER.primary} />
             <TelemetryBar label="Sync_Memory" value={stats.ram} color={CYBER.secondary} />
             <TelemetryBar label="Vault_Storage" value={stats.ssd} color={CYBER.warning} />
           </div>
@@ -202,17 +243,17 @@ const Dashboard = () => {
 
         {/* METRICS */}
         <DataCard label="Active_Agents" value={stats.online} unit="USERS" data={history.online} color={CYBER.success} />
-        <DataCard label="Ton_Reserve" value={stats.ton} unit="💎 TON" data={history.wallets} color={CYBER.ton} />
-        <DataCard label="Network_Latency" value={stats.latency} unit="MS" data={history.lat} color={CYBER.danger} />
-        <DataCard label="Pulse_Liquidity" value={stats.liquidity} unit="$NP" data={history.liq} color={CYBER.warning} />
+        <DataCard label="Active_Wallets" value={stats.ton} unit="ADDR" data={history.wallets} color={CYBER.ton} />
+        <DataCard label="DB_Latency" value={stats.latency} unit="MS" data={history.lat} color={CYBER.danger} />
+        <DataCard label="Pulse_Liquidity" value={Math.floor(stats.liquidity)} unit="$NP" data={history.liq} color={CYBER.warning} />
 
         {/* COMMAND CENTER */}
         <div className="card" style={{ gridColumn: 'span 2' }}>
           <div className="label" style={{ color: CYBER.primary }}>Directive_Control</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '12px' }}>
-            <button className="op-btn" onClick={() => setLogs(p => [...p, `> BROADCAST_PULSE_SENT` || ''])}>Broadcast</button>
+            <button className="op-btn" onClick={triggerBroadcast}>Broadcast</button>
             <button className="op-btn" onClick={() => setLogs(p => [...p, `> CACHE_PURGE_SUCCESS` || ''])}>Purge</button>
-            <button className="op-btn" onClick={() => setLogs(p => [...p, `> RE-SYNCING_DATABASES...` || ''])}>Sync</button>
+            <button className="op-btn" onClick={() => setLogs(p => [...p, `> FORCE_SYNC_ACKNOWLEDGED` || ''])}>Sync</button>
             <button className="op-btn" style={{ borderColor: CYBER.danger, color: isEmergency ? '#000' : CYBER.danger, background: isEmergency ? CYBER.danger : 'transparent' }} 
                     onClick={() => { setIsEmergency(!isEmergency); setLogs(p => [...p, `> WARNING: KILL_SWITCH_${!isEmergency ? 'ENGAGED' : 'ABORTED'}`])}}>
               Kill_Switch
@@ -224,13 +265,11 @@ const Dashboard = () => {
       {/* FOOTER FEED */}
       <footer style={{ marginTop: '25px', borderTop: `1px solid rgba(255,255,255,0.05)`, paddingTop: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '12px', letterSpacing: '1px' }}>
-          <span style={{ color: CYBER.primary, fontWeight: 'bold' }}>[ RAW_SYSTEM_LOGS ]</span>
-          <span style={{ opacity: 0.4 }}>STATUS: 200_OK</span>
+          <span style={{ color: CYBER.primary, fontWeight: 'bold' }}>[ LIVE_SYSTEM_LOGS ]</span>
+          <span style={{ opacity: 0.4 }}>CONNECTION: STREAMING</span>
         </div>
-        <div ref={logRef} style={{ height: '90px', overflowY: 'auto', fontSize: '11px', opacity: 0.5, lineHeight: '1.8', padding: '10px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px' }}>
-          {logs.map((l, i) => <div key={i} style={{ borderLeft: `1px solid ${CYBER.primary}33`, paddingLeft: '10px', marginBottom: '4px' }}>{l}</div>)}
-          <div>{`> MEMORY_CLEANUP_EXECUTED...`}</div>
-          <div>{`> HEARTBEAT_STABLE: ${new Date().toLocaleTimeString()}`}</div>
+        <div ref={logRef} style={{ height: '110px', overflowY: 'auto', fontSize: '11px', opacity: 0.7, lineHeight: '1.8', padding: '10px', background: 'rgba(0,0,0,0.5)', borderRadius: '4px' }}>
+          {logs.map((l, i) => <div key={i} style={{ borderLeft: `2px solid ${CYBER.primary}66`, paddingLeft: '10px', marginBottom: '6px', fontFamily: 'monospace' }}>{l}</div>)}
         </div>
       </footer>
     </div>
