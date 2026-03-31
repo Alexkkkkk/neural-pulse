@@ -139,37 +139,39 @@ async function setupAdminPanel(app) {
             ],
             rootPath: '/admin',
             componentLoader,
-            // ФИКС: Отключаем бандлер для стабильности на Bothost
-            bundler: { 
-                availableAndEnabled: false 
-            },
+            // ФИКС: Принудительное отключение бандлера
+            bundler: { availableAndEnabled: false },
             dashboard: { 
                 component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
                 handler: async () => {
-                    const [gStats, historyData, dailyUsers, allUsers] = await Promise.all([
-                        GlobalStats.findByPk(1),
-                        Stats.findAll({ limit: 30, order: [['created_at', 'DESC']] }),
-                        User.count({ where: { created_at: { [Op.gte]: dayjs().subtract(24, 'hour').toDate() } } }),
-                        User.findAll({ limit: 50, order: [['balance', 'DESC']] })
-                    ]);
+                    try {
+                        const [gStats, historyData, dailyUsers, allUsers] = await Promise.all([
+                            GlobalStats.findByPk(1).catch(() => null),
+                            Stats.findAll({ limit: 30, order: [['created_at', 'DESC']] }).catch(() => []),
+                            User.count({ where: { created_at: { [Op.gte]: dayjs().subtract(24, 'hour').toDate() } } }).catch(() => 0),
+                            User.findAll({ limit: 50, order: [['balance', 'DESC']] }).catch(() => [])
+                        ]);
 
-                    const h = (historyData || []).reverse();
+                        const h = (historyData || []).reverse();
 
-                    return { 
-                        totalUsers: gStats?.total_users || 0, 
-                        total_balance: parseFloat(gStats?.total_balance || 0),
-                        dailyUsers: dailyUsers || 0,
-                        usersList: allUsers.map(u => u.toJSON()), 
-                        currentLoad: h.length > 0 ? h[h.length-1].server_load : 0,
-                        currentLat: h.length > 0 ? h[h.length-1].db_latency : 0,
-                        ramUsage: h.length > 0 ? h[h.length-1].mem_usage : 0,
-                        history: {
-                            load: h.map(s => s.server_load),
-                            lat: h.map(s => s.db_latency),
-                            tappers: h.map(s => s.user_count),
-                            inflow: h.map(s => s.active_wallets)
-                        }
-                    };
+                        return { 
+                            totalUsers: gStats?.total_users || 0, 
+                            total_balance: parseFloat(gStats?.total_balance || 0),
+                            dailyUsers: dailyUsers || 0,
+                            usersList: (allUsers || []).map(u => u.toJSON?.() || u), 
+                            currentLoad: h.length > 0 ? h[h.length-1].server_load : 0,
+                            currentLat: h.length > 0 ? h[h.length-1].db_latency : 0,
+                            ramUsage: h.length > 0 ? h[h.length-1].mem_usage : 0,
+                            history: {
+                                load: h.map(s => s.server_load || 0),
+                                lat: h.map(s => s.db_latency || 0),
+                                tappers: h.map(s => s.user_count || 0),
+                                inflow: h.map(s => s.active_wallets || 0)
+                            }
+                        };
+                    } catch (e) {
+                        return { totalUsers: 0, total_balance: 0, dailyUsers: 0, usersList: [], history: { load: [], lat: [], tappers: [], inflow: [] } };
+                    }
                 }
             },
             branding: { 
@@ -191,7 +193,8 @@ async function setupAdminPanel(app) {
         }, null, { resave: false, saveUninitialized: false, secret: 'np_titan_secret_v2', store: sessionStore });
 
         console.log('--- [ADMIN] INITIALIZING ASSETS... ---');
-        await adminJs.initialize();
+        // Загрузка без остановки при ошибках
+        await adminJs.initialize().catch(e => console.error("AdminJS Init Warning:", e.message));
         
         app.use(adminJs.options.rootPath, adminRouter);
         console.log('✅ ADMIN INTERFACE READY');
@@ -291,8 +294,8 @@ async function startNeuralOS() {
                 const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
 
                 const [gStats, walletCount] = await Promise.all([
-                    GlobalStats.findByPk(1),
-                    User.count({ where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } })
+                    GlobalStats.findByPk(1).catch(() => null),
+                    User.count({ where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } }).catch(() => 0)
                 ]);
 
                 const pulseData = {
@@ -307,12 +310,12 @@ async function startNeuralOS() {
                 };
 
                 pulseEvents.emit('update', pulseData);
-                await Stats.create(pulseData);
+                await Stats.create(pulseData).catch(() => {});
                 
-                const count = await Stats.count();
+                const count = await Stats.count().catch(() => 0);
                 if (count > 500) {
                     const oldest = await Stats.findOne({ order: [['created_at', 'ASC']] });
-                    if (oldest) await oldest.destroy();
+                    if (oldest) await oldest.destroy().catch(() => {});
                 }
             } catch (e) { console.error("Pulse Loop Error", e.message); }
         }, 15000);
