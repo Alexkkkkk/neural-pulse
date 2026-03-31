@@ -1,21 +1,38 @@
-import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import React, { useState, useEffect, memo, useRef, useCallback } from 'react';
 
-// --- 🌌 CONFIG & COLORS ---
+// --- 🌌 INFINITY-PULSE CORE PALETTE ---
 const CYBER = {
   bg: '#020406',
   card: 'rgba(6, 9, 13, 0.95)',
   primary: '#00f2fe',    
+  secondary: '#7000ff', 
   success: '#39ff14',   
-  warning: '#ffaa00',
+  warning: '#ffea00',   
   danger: '#ff003c',    
-  text: '#e2e8f0',
-  border: 'rgba(0, 242, 254, 0.25)',
   ton: '#0088CC',
+  text: '#e2e8f0',
+  subtext: '#8b949e',
+  border: 'rgba(0, 242, 254, 0.25)',
 };
 
-// --- 📈 MINI-CHART COMPONENT ---
-const MiniChart = memo(({ data, color, height = 35 }) => {
-  const chartData = (data && data.length > 1) ? data : Array(20).fill(0);
+// --- 🔉 QUANTUM AUDIO ENGINE ---
+const playSound = (freq, type = 'sine', dur = 0.2) => {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    gain.gain.setValueAtTime(0.01, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + dur);
+  } catch (e) { /* Audio context blocked by browser policy */ }
+};
+
+// --- 📈 PRECISION MINI-CHART ---
+const MiniChart = memo(({ data, color, height = 40 }) => {
+  const chartData = (data && data.length > 1) ? data : [0, 0];
   const cleanData = chartData.map(v => (Number.isFinite(v) ? v : 0));
   const max = Math.max(...cleanData) || 1;
   const min = Math.min(...cleanData);
@@ -26,186 +43,247 @@ const MiniChart = memo(({ data, color, height = 35 }) => {
   }));
   const pathData = `M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`;
   return (
-    <svg width="100%" height={height} style={{ marginTop: '8px', overflow: 'visible', display: 'block' }}>
-      <path d={pathData} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" style={{ transition: 'all 0.5s ease' }} />
-      <path d={`${pathData} L 100,${height} L 0,${height} Z`} fill={color} fillOpacity="0.05" />
+    <svg width="100%" height={height} style={{ marginTop: '10px', overflow: 'visible', display: 'block' }}>
+      <path d={pathData} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" style={{ transition: 'all 0.5s ease' }} />
+      <path d={`${pathData} L 100,${height} L 0,${height} Z`} fill={color} fillOpacity="0.1" />
     </svg>
   );
 });
 
-const Dashboard = (props) => {
-  const { data, resource, action } = props;
-  
-  const [isMounted, setIsMounted] = useState(false);
-  const [logs, setLogs] = useState([]);
-  const [stats, setStats] = useState({
-    load: 0, lat: 0, 
-    totalUsers: data?.totalUsers || 0,
-    totalBalance: data?.totalBalance || 0
-  });
-  
-  const [history, setHistory] = useState({
-    load: Array(20).fill(0),
-    balance: Array(20).fill(0)
-  });
+// --- ⚡ NEURAL WAVE VISUALIZER ---
+const NeuralWave = memo(({ active }) => (
+  <svg viewBox="0 0 400 100" style={{ width: '100%', height: '60px', opacity: 0.7, marginTop: '15px' }}>
+    <path
+      d="M0 50 Q 50 10, 100 50 T 200 50 T 300 50 T 400 50"
+      fill="none"
+      stroke={active ? CYBER.danger : CYBER.primary}
+      strokeWidth="2"
+    >
+      <animate attributeName="d" dur="2s" repeatCount="indefinite"
+        values="M0 50 Q 50 10, 100 50 T 200 50 T 300 50 T 400 50; 
+                M0 50 Q 50 90, 100 50 T 200 50 T 300 50 T 400 50; 
+                M0 50 Q 50 10, 100 50 T 200 50 T 300 50 T 400 50" />
+    </path>
+  </svg>
+));
 
+const Dashboard = (props) => {
+  const { data } = props;
+  const [activeTab, setActiveTab] = useState('overview');
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isEmergency, setIsEmergency] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [broadcastMsg, setBroadcastMsg] = useState('');
   const logRef = useRef(null);
 
-  // --- 🛠 СИСТЕМА ЛОГИРОВАНИЯ ---
-  const addLog = useCallback((text, type = 'INFO') => {
-    const timestamp = new Date().toLocaleTimeString();
-    const icons = { INFO: '>', WARN: '⚠️', ERROR: '🚨', SUCCESS: '✅' };
-    const newLog = `${icons[type] || '>'} [${timestamp}] ${text}`;
-    setLogs(prev => [...prev.slice(-24), newLog]); // Лимит 25 строк
-  }, []);
+  const [logs, setLogs] = useState(['> INITIALIZING_NEURAL_PULSE_OS...', '> KERNEL_STABLE', `> DB_SYNC: ${data?.totalUsers || 0} AGENTS`]);
+  const [users, setUsers] = useState(data?.usersList || []);
+  const [stats, setStats] = useState({
+    load: data?.currentLoad || 0,
+    lat: data?.currentLat || 0,
+    ram: data?.ramUsage || 45,
+    totalUsers: data?.totalUsers || 0,
+    totalTonPool: data?.total_balance || 4520.50 
+  });
 
-  // --- 🛰️ REAL-TIME STREAM INTEGRATION ---
+  const [history, setHistory] = useState({
+    load: data?.history?.load || Array(20).fill(12),
+    lat: data?.history?.lat || Array(20).fill(90),
+    tappers: data?.history?.tappers || Array(20).fill(50),
+    inflow: data?.history?.inflow || Array(20).fill(0.5)
+  });
+
+  // --- 🛰️ REAL-TIME STREAM ---
   useEffect(() => {
-    setIsMounted(true);
-    addLog("SYSTEM: NEURAL_OS_BOOT_COMPLETE", "SUCCESS");
-
     const eventSource = new EventSource('/api/admin/stream');
-    
     eventSource.onmessage = (e) => {
       try {
         const update = JSON.parse(e.data);
         if (update.event_type === 'SYSTEM') {
           setStats(prev => ({
             ...prev,
-            load: update.server_load || 0,
-            lat: update.db_latency || 0,
-            totalUsers: update.user_count || prev.totalUsers,
-            totalBalance: update.total_balance || prev.totalBalance
+            load: update.server_load ?? prev.load,
+            lat: update.db_latency ?? prev.lat,
+            ram: update.mem_usage ?? prev.ram,
+            totalUsers: update.user_count ?? prev.totalUsers,
+            totalTonPool: update.total_balance ?? prev.totalTonPool
           }));
-          
-          setHistory(h => ({
-            load: [...h.load.slice(1), update.server_load || 0],
-            balance: [...h.balance.slice(1), update.total_balance || 0]
+          setHistory(prev => ({
+            load: [...prev.load.slice(1), update.server_load || 10],
+            lat: [...prev.lat.slice(1), update.db_latency || 80],
+            tappers: [...prev.tappers.slice(1), update.user_count || 0],
+            inflow: [...prev.inflow.slice(1), update.active_wallets || 0]
           }));
         }
         if (update.recent_event) {
-          addLog(update.recent_event, update.event_type === 'ERROR' ? 'ERROR' : 'INFO');
+          setLogs(prev => [...prev.slice(-12), `> ${update.recent_event}`]);
         }
-      } catch (err) {
-        console.error("Stream sync error");
+      } catch (err) { console.error("Stream sync failed"); }
+    };
+
+    setTimeout(() => setIsLoaded(true), 800);
+    return () => eventSource.close();
+  }, []);
+
+  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [logs]);
+
+  // --- ⚡ ACTIONS ---
+  const toggleBan = async (userId) => {
+    playSound(400, 'sawtooth');
+    try {
+      const response = await fetch('/api/admin/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'toggle_ban', userId })
+      });
+      if (response.ok) {
+        setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: u.status === 'banned' ? 'active' : 'banned' } : u));
+        setLogs(prev => [...prev, `> CMD_EXEC: TARGET_ID_${userId}_STATUS_CHANGED`]);
       }
-    };
+    } catch (e) { setLogs(prev => [...prev, `> CMD_FAIL: ${e.message}`]); }
+  };
 
-    return () => {
-      eventSource.close();
-      setIsMounted(false);
-    };
-  }, [addLog]);
+  const handleBroadcast = async () => {
+    if (!broadcastMsg) return;
+    playSound(1000, 'sine', 0.4);
+    try {
+      await fetch('/api/admin/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'broadcast', message: broadcastMsg })
+      });
+      setBroadcastMsg('');
+      setLogs(prev => [...prev, '> BROADCAST_PULSE_SENT_TO_ALL_NODES']);
+    } catch (e) { console.error(e); }
+  };
 
-  useEffect(() => {
-    if (logRef.current) {
-      logRef.current.scrollTop = logRef.current.scrollHeight;
-    }
-  }, [logs]);
-
-  if (!isMounted) return null;
+  if (!isLoaded) return <div style={{ background: '#000', height: '100vh' }} />;
 
   return (
-    <div className="debug-root">
+    <div className={`app-root ${isEmergency ? 'emergency' : ''}`}>
       <style>{`
-        .debug-root { background: ${CYBER.bg}; min-height: 100vh; padding: 20px; font-family: 'JetBrains Mono', monospace; color: ${CYBER.text}; }
-        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; margin-bottom: 15px; border-radius: 4px; }
-        .log-container { 
-          height: 200px; overflow-y: auto; background: #000; padding: 12px; 
-          border: 1px solid ${CYBER.border}; font-size: 10px; line-height: 1.5;
+        .app-root { background: ${CYBER.bg}; min-height: 100vh; padding: 20px; font-family: 'JetBrains Mono', monospace; color: ${CYBER.text}; transition: 0.5s; }
+        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; margin-bottom: 15px; border-radius: 2px; position: relative; overflow: hidden; }
+        .label { font-size: 9px; color: ${CYBER.primary}; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.7; }
+        .value { font-size: 22px; font-weight: 800; margin-top: 5px; }
+        .unit { font-size: 11px; opacity: 0.4; margin-left: 4px; }
+        .nav-tabs { display: flex; gap: 20px; margin-bottom: 20px; border-bottom: 1px solid ${CYBER.border}; }
+        .tab-btn { background: none; border: none; color: #444; padding: 12px 0; font-size: 11px; cursor: pointer; text-transform: uppercase; }
+        .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; text-shadow: 0 0 10px ${CYBER.primary}; }
+        .cyber-btn { background: ${CYBER.primary}; color: #000; border: none; padding: 10px 15px; font-size: 10px; font-weight: bold; cursor: pointer; text-transform: uppercase; }
+        .emergency-btn { width: 100%; background: ${CYBER.danger}; color: #fff; border: none; padding: 15px; font-weight: bold; cursor: pointer; margin-top: 10px; letter-spacing: 2px; }
+        .emergency { filter: hue-rotate(-160deg) saturate(1.5); }
+        .ton-bridge-link { 
+          text-decoration: none; color: ${CYBER.ton}; border: 1px solid ${CYBER.ton}; 
+          padding: 5px 12px; font-size: 10px; border-radius: 20px; transition: 0.3s;
         }
-        .label { font-size: 9px; color: ${CYBER.primary}; letter-spacing: 1.5px; margin-bottom: 8px; display: block; text-transform: uppercase; opacity: 0.8; }
-        .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; }
-        .cyber-btn {
-          width: 100%; padding: 12px; background: rgba(0, 242, 254, 0.05); 
-          border: 1px solid ${CYBER.primary}; color: ${CYBER.primary}; 
-          cursor: pointer; text-transform: uppercase; font-size: 11px; font-weight: bold;
-          transition: 0.3s;
-        }
-        .cyber-btn:hover { background: ${CYBER.primary}; color: #000; }
-        .ton-bridge { 
-          display: inline-block; padding: 6px 12px; border: 1px solid ${CYBER.ton}; 
-          color: ${CYBER.ton}; text-decoration: none; font-size: 9px; border-radius: 3px;
-        }
+        .ton-bridge-link:hover { background: ${CYBER.ton}; color: #fff; }
+        .cyber-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 15px; }
+        .cyber-table th { text-align: left; padding: 10px; color: ${CYBER.primary}; font-size: 10px; border-bottom: 1px solid ${CYBER.border}; }
+        .cyber-table td { padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.02); }
+        .broadcast-input { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid ${CYBER.border}; color: #fff; padding: 12px; margin-top: 10px; font-family: inherit; outline: none; }
       `}</style>
 
       {/* HEADER */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '25px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '30px', alignItems: 'flex-start' }}>
         <div>
-          <h1 style={{ color: CYBER.primary, margin: 0, fontSize: '22px', fontWeight: '900', letterSpacing: '2px' }}>NEURAL_PULSE_DEBUG</h1>
-          <div style={{ fontSize: '9px', opacity: 0.5 }}>KERNEL: v1.2.5 // NODE: ${resource?.id || 'CORE'}</div>
+          <h1 style={{ color: CYBER.primary, margin: 0, fontSize: '26px', letterSpacing: '4px', fontWeight: '900' }}>NEURAL_PULSE</h1>
+          <div style={{ fontSize: '9px', opacity: 0.5 }}>KERNEL_V9.7 // BOTH_HOST_NL_NODE</div>
         </div>
-        <a href="https://ton.org" target="_blank" className="ton-bridge">💎 TON_NETWORK_ACTIVE</a>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{marginBottom: '8px'}}><a href="/tonconnect-manifest.json" target="_blank" className="ton-bridge-link">🔗 TON_WALLET_GATEWAY</a></div>
+          <div className="label">Total_Network_Pool</div>
+          <div className="value" style={{ color: CYBER.ton }}>{stats.totalTonPool.toLocaleString()}<span className="unit">💎</span></div>
+        </div>
       </div>
 
-      {/* MONITORING LOGS */}
-      <div className="card">
-        <span className="label">Telemetry_Log_Stream</span>
-        <div className="log-container" ref={logRef}>
-          {logs.map((log, i) => (
-            <div key={i} style={{ 
-              marginBottom: '4px', 
-              color: log.includes('🚨') ? CYBER.danger : log.includes('⚠️') ? CYBER.warning : log.includes('✅') ? CYBER.success : '' 
-            }}>
-              {log}
+      <div className="nav-tabs">
+        <button className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>[ 01. Telemetry ]</button>
+        <button className={`tab-btn ${activeTab === 'airdrop' ? 'active' : ''}`} onClick={() => setActiveTab('airdrop')}>[ 02. Agent_Control ]</button>
+      </div>
+
+      {activeTab === 'overview' && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '15px' }}>
+            <div className="card">
+              <div className="label">Active_Agents</div>
+              <div className="value">{stats.totalUsers}<span className="unit">NODE</span></div>
+              <MiniChart data={history.tappers} color={CYBER.success} />
             </div>
-          ))}
-        </div>
-      </div>
+            <div className="card">
+              <div className="label">System_Load</div>
+              <div className="value">{Number(stats.load).toFixed(1)}%</div>
+              <MiniChart data={history.load} color={CYBER.primary} />
+            </div>
+            <div className="card">
+              <div className="label">API_Latency</div>
+              <div className="value">{Number(stats.lat).toFixed(0)}<span className="unit">ms</span></div>
+              <MiniChart data={history.lat} color={CYBER.warning} />
+            </div>
+          </div>
 
-      {/* STATS GRID */}
-      <div className="status-grid">
-        <div className="card">
-          <span className="label">Active_Agents</span>
-          <div style={{fontSize: '20px', fontWeight: 'bold'}}>{stats.totalUsers}</div>
-          <div style={{fontSize: '9px', color: CYBER.primary, marginTop: '4px'}}>LATENCY: {stats.lat}ms</div>
-        </div>
-        
-        <div className="card">
-          <span className="label">Total_Pulse_Balance</span>
-          <div style={{fontSize: '20px', fontWeight: 'bold', color: CYBER.success}}>{Number(stats.totalBalance).toLocaleString()}</div>
-          <MiniChart data={history.balance} color={CYBER.success} />
-        </div>
+          <div className="card">
+            <div className="label">Memory_Buffer_Allocation</div>
+            <div style={{ width: '100%', height: '4px', background: '#111', marginTop: '12px', borderRadius: '2px' }}>
+              <div style={{ width: `${stats.ram}%`, height: '100%', background: CYBER.primary, boxShadow: `0 0 10px ${CYBER.primary}` }} />
+            </div>
+            <div style={{ textAlign: 'right', fontSize: '9px', marginTop: '6px', opacity: 0.6 }}>{stats.ram}% LOADED</div>
+          </div>
 
-        <div className="card">
-          <span className="label">Node_CPU_Load</span>
-          <div style={{fontSize: '20px', fontWeight: 'bold'}}>{Number(stats.load).toFixed(1)}%</div>
-          <MiniChart data={history.load} color={CYBER.primary} />
-        </div>
-      </div>
+          <div className="card">
+            <div className="label">Encrypted_Event_Log</div>
+            <div ref={logRef} style={{ height: '120px', overflowY: 'auto', fontSize: '10px', marginTop: '10px', lineHeight: '1.6', fontFamily: 'monospace' }}>
+              {logs.map((log, i) => (
+                <div key={i} style={{ color: log.includes('CMD') ? CYBER.primary : CYBER.text, opacity: 0.8 }}>
+                  {log}
+                </div>
+              ))}
+            </div>
+          </div>
 
-      {/* DIAGNOSTIC PANEL */}
-      <div className="card" style={{ borderStyle: 'dashed' }}>
-        <span className="label">Diagnostic_Tools</span>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button className="cyber-btn" onClick={async () => {
-              addLog("PING: TESTING_GATEWAY...", "INFO");
-              try {
-                const start = Date.now();
-                const res = await fetch('/api/admin/command', { 
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ action: 'ping' })
-                });
-                addLog(`PONG: STATUS_${res.status} IN ${Date.now() - start}ms`, "SUCCESS");
-              } catch (e) {
-                addLog(`FAIL: ${e.message}`, 'ERROR');
-              }
-          }}>
-            Ping Server
+          <div className="card">
+            <div className="label">Global_Network_Broadcast</div>
+            <input className="broadcast-input" placeholder="ENTER PACKET DATA..." value={broadcastMsg} onChange={(e) => setBroadcastMsg(e.target.value)} />
+            <button className="cyber-btn" style={{ marginTop: '12px', width: '100%' }} onClick={handleBroadcast}>Push to all Nodes</button>
+          </div>
+
+          <button className="emergency-btn" onClick={() => { setIsEmergency(!isEmergency); playSound(200, 'square', 0.5); }}>
+            {isEmergency ? 'SYSTEM_RECOVERY_INIT' : 'CORE_KILL_SWITCH'}
           </button>
-          
-          <button className="cyber-btn" style={{ borderColor: CYBER.warning, color: CYBER.warning }} onClick={() => {
-              addLog("MEMORY_CLEANUP: EXECUTING_GC_FORCE...", "WARN");
-              addLog("CLEANUP: HEAP_OPTIMIZED", "SUCCESS");
-          }}>
-            Optimize RAM
-          </button>
-        </div>
-      </div>
+          <NeuralWave active={isEmergency} />
+        </>
+      )}
 
-      <footer style={{ textAlign: 'center', fontSize: '8px', opacity: 0.3, marginTop: '20px' }}>
-        NEURAL_PULSE_NETWORK // ENCRYPTED_DEBUG_LAYER
+      {activeTab === 'airdrop' && (
+        <div className="card">
+          <div className="label">User_Database_Index</div>
+          <input className="broadcast-input" style={{marginBottom: '10px'}} placeholder="SEARCH_BY_USERNAME..." onChange={(e) => setSearchTerm(e.target.value)} />
+          <div style={{ overflowX: 'auto' }}>
+            <table className="cyber-table">
+              <thead>
+                <tr><th>Identity</th><th>Pulse_Balance</th><th>Net_Status</th><th>Action</th></tr>
+              </thead>
+              <tbody>
+                {users.filter(u => String(u.id).includes(searchTerm) || String(u.username || '').toLowerCase().includes(searchTerm.toLowerCase())).map((u, i) => (
+                  <tr key={i} style={{ opacity: u.status === 'banned' ? 0.3 : 1 }}>
+                    <td style={{ color: CYBER.primary }}>{u.username || u.id}</td>
+                    <td style={{fontWeight: 'bold'}}>{Number(u.balance || 0).toLocaleString()} NP</td>
+                    <td style={{ color: u.status === 'banned' ? CYBER.danger : CYBER.success }}>{(u.status || 'ACTIVE').toUpperCase()}</td>
+                    <td>
+                      <button className="cyber-btn" onClick={() => toggleBan(u.id)} style={{ padding: '5px 8px', fontSize: '9px', background: u.status === 'banned' ? CYBER.success : CYBER.danger, color: '#fff' }}>
+                        {u.status === 'banned' ? 'REVIVE' : 'BAN'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <footer style={{ textAlign: 'center', fontSize: '8px', opacity: 0.2, marginTop: '30px', letterSpacing: '2px' }}>
+        NEURAL_PULSE_NETWORK // SECURED_BY_BOTH_HOST_STABLE_V2
       </footer>
     </div>
   );
