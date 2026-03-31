@@ -1,9 +1,15 @@
-import React, { useState, useEffect, memo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, memo, useRef } from 'react';
+import { 
+  TonConnectUIProvider,
+  TonConnectButton, 
+  useTonAddress, 
+  useTonConnectUI 
+} from '@tonconnect/ui-react';
 
-// --- 🌌 INFINITY-PULSE CORE PALETTE ---
+// --- 🌌 ULTRA-DARK CYBER PALETTE ---
 const CYBER = {
-  bg: '#020406',
-  card: 'rgba(6, 9, 13, 0.95)',
+  bg: '#010204',
+  card: 'rgba(10, 12, 18, 0.98)',
   primary: '#00f2fe',    
   secondary: '#7000ff', 
   success: '#39ff14',   
@@ -11,12 +17,13 @@ const CYBER = {
   danger: '#ff003c',    
   ton: '#0088CC',
   text: '#e2e8f0',
-  subtext: '#8b949e',
-  border: 'rgba(0, 242, 254, 0.25)',
+  subtext: '#4a5568',
+  border: 'rgba(0, 242, 254, 0.15)',
+  glow: '0 0 15px rgba(0, 242, 254, 0.3)',
 };
 
 // --- 🔉 QUANTUM AUDIO ENGINE ---
-const playSound = (freq, type = 'sine', dur = 0.2) => {
+const playSound = (freq, type = 'sine', dur = 0.15) => {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = ctx.createOscillator();
@@ -27,7 +34,7 @@ const playSound = (freq, type = 'sine', dur = 0.2) => {
     gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
     osc.connect(gain); gain.connect(ctx.destination);
     osc.start(); osc.stop(ctx.currentTime + dur);
-  } catch (e) { /* Audio context blocked by browser policy */ }
+  } catch (e) {}
 };
 
 // --- 📈 PRECISION MINI-CHART ---
@@ -44,30 +51,30 @@ const MiniChart = memo(({ data, color, height = 40 }) => {
   const pathData = `M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`;
   return (
     <svg width="100%" height={height} style={{ marginTop: '10px', overflow: 'visible', display: 'block' }}>
-      <path d={pathData} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" style={{ transition: 'all 0.5s ease' }} />
-      <path d={`${pathData} L 100,${height} L 0,${height} Z`} fill={color} fillOpacity="0.1" />
+      <path d={pathData} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" style={{ transition: 'all 0.5s ease' }} />
+      <path d={`${pathData} L 100,${height} L 0,${height} Z`} fill={color} fillOpacity="0.05" />
     </svg>
   );
 });
 
 // --- ⚡ NEURAL WAVE VISUALIZER ---
 const NeuralWave = memo(({ active }) => (
-  <svg viewBox="0 0 400 100" style={{ width: '100%', height: '60px', opacity: 0.7, marginTop: '15px' }}>
+  <svg viewBox="0 0 400 60" style={{ width: '100%', height: '40px', opacity: 0.5, marginTop: '10px' }}>
     <path
-      d="M0 50 Q 50 10, 100 50 T 200 50 T 300 50 T 400 50"
+      d="M0 30 Q 50 5, 100 30 T 200 30 T 300 30 T 400 30"
       fill="none"
       stroke={active ? CYBER.danger : CYBER.primary}
-      strokeWidth="2"
+      strokeWidth="1"
     >
-      <animate attributeName="d" dur="2s" repeatCount="indefinite"
-        values="M0 50 Q 50 10, 100 50 T 200 50 T 300 50 T 400 50; 
-                M0 50 Q 50 90, 100 50 T 200 50 T 300 50 T 400 50; 
-                M0 50 Q 50 10, 100 50 T 200 50 T 300 50 T 400 50" />
+      <animate attributeName="d" dur="3s" repeatCount="indefinite"
+        values="M0 30 Q 50 5, 100 30 T 200 30 T 300 30 T 400 30; 
+                M0 30 Q 50 55, 100 30 T 200 30 T 300 30 T 400 30; 
+                M0 30 Q 50 5, 100 30 T 200 30 T 300 30 T 400 30" />
     </path>
   </svg>
 ));
 
-const Dashboard = (props) => {
+const DashboardContent = (props) => {
   const { data } = props;
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoaded, setIsLoaded] = useState(false);
@@ -76,14 +83,17 @@ const Dashboard = (props) => {
   const [broadcastMsg, setBroadcastMsg] = useState('');
   const logRef = useRef(null);
 
-  const [logs, setLogs] = useState(['> INITIALIZING_NEURAL_PULSE_OS...', '> KERNEL_STABLE', `> DB_SYNC: ${data?.totalUsers || 0} AGENTS`]);
+  const userAddress = useTonAddress();
+  const [tonConnectUI] = useTonConnectUI();
+
+  const [logs, setLogs] = useState(['> INITIALIZING_NEURAL_OS...', '> KERNEL_STABLE', `> DB_SYNC: ${data?.totalUsers || 0} AGENTS`]);
   const [users, setUsers] = useState(data?.usersList || []);
   const [stats, setStats] = useState({
-    load: data?.currentLoad || 0,
-    lat: data?.currentLat || 0,
+    load: data?.currentLoad || 12,
+    lat: data?.currentLat || 95,
     ram: data?.ramUsage || 45,
     totalUsers: data?.totalUsers || 0,
-    totalTonPool: data?.total_balance || 4520.50 
+    totalTonPool: data?.total_balance || 0 
   });
 
   const [history, setHistory] = useState({
@@ -93,7 +103,7 @@ const Dashboard = (props) => {
     inflow: data?.history?.inflow || Array(20).fill(0.5)
   });
 
-  // --- 🛰️ REAL-TIME STREAM ---
+  // --- 🛰️ REAL-TIME SSE INTEGRATION ---
   useEffect(() => {
     const eventSource = new EventSource('/api/admin/stream');
     eventSource.onmessage = (e) => {
@@ -116,16 +126,22 @@ const Dashboard = (props) => {
           }));
         }
         if (update.recent_event) {
-          setLogs(prev => [...prev.slice(-12), `> ${update.recent_event}`]);
+          setLogs(prev => [...prev.slice(-15), `> ${update.recent_event}`]);
         }
       } catch (err) { console.error("Stream sync failed"); }
     };
 
-    setTimeout(() => setIsLoaded(true), 800);
+    setTimeout(() => {
+      setIsLoaded(true);
+      playSound(600, 'sine', 0.3);
+    }, 800);
+
     return () => eventSource.close();
   }, []);
 
-  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [logs]);
+  useEffect(() => { 
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; 
+  }, [logs]);
 
   // --- ⚡ ACTIONS ---
   const toggleBan = async (userId) => {
@@ -157,43 +173,40 @@ const Dashboard = (props) => {
     } catch (e) { console.error(e); }
   };
 
-  if (!isLoaded) return <div style={{ background: '#000', height: '100vh' }} />;
+  if (!isLoaded) return <div style={{ background: '#000', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: CYBER.primary, fontFamily: 'monospace', letterSpacing: '4px' }}>INITIALIZING_PULSE...</div>;
 
   return (
     <div className={`app-root ${isEmergency ? 'emergency' : ''}`}>
       <style>{`
-        .app-root { background: ${CYBER.bg}; min-height: 100vh; padding: 20px; font-family: 'JetBrains Mono', monospace; color: ${CYBER.text}; transition: 0.5s; }
-        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; margin-bottom: 15px; border-radius: 2px; position: relative; overflow: hidden; }
-        .label { font-size: 9px; color: ${CYBER.primary}; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.7; }
-        .value { font-size: 22px; font-weight: 800; margin-top: 5px; }
-        .unit { font-size: 11px; opacity: 0.4; margin-left: 4px; }
-        .nav-tabs { display: flex; gap: 20px; margin-bottom: 20px; border-bottom: 1px solid ${CYBER.border}; }
-        .tab-btn { background: none; border: none; color: #444; padding: 12px 0; font-size: 11px; cursor: pointer; text-transform: uppercase; }
-        .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; text-shadow: 0 0 10px ${CYBER.primary}; }
-        .cyber-btn { background: ${CYBER.primary}; color: #000; border: none; padding: 10px 15px; font-size: 10px; font-weight: bold; cursor: pointer; text-transform: uppercase; }
-        .emergency-btn { width: 100%; background: ${CYBER.danger}; color: #fff; border: none; padding: 15px; font-weight: bold; cursor: pointer; margin-top: 10px; letter-spacing: 2px; }
-        .emergency { filter: hue-rotate(-160deg) saturate(1.5); }
-        .ton-bridge-link { 
-          text-decoration: none; color: ${CYBER.ton}; border: 1px solid ${CYBER.ton}; 
-          padding: 5px 12px; font-size: 10px; border-radius: 20px; transition: 0.3s;
-        }
-        .ton-bridge-link:hover { background: ${CYBER.ton}; color: #fff; }
-        .cyber-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 15px; }
-        .cyber-table th { text-align: left; padding: 10px; color: ${CYBER.primary}; font-size: 10px; border-bottom: 1px solid ${CYBER.border}; }
-        .cyber-table td { padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.02); }
-        .broadcast-input { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid ${CYBER.border}; color: #fff; padding: 12px; margin-top: 10px; font-family: inherit; outline: none; }
+        .app-root { background: ${CYBER.bg}; min-height: 100vh; padding: 20px; font-family: 'JetBrains Mono', monospace; color: ${CYBER.text}; transition: filter 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 18px; margin-bottom: 15px; border-radius: 2px; position: relative; overflow: hidden; }
+        .card::before { content: ''; position: absolute; top: 0; left: 0; width: 2px; height: 100%; background: ${CYBER.primary}; opacity: 0.3; }
+        .label { font-size: 8px; color: ${CYBER.primary}; text-transform: uppercase; letter-spacing: 2px; opacity: 0.6; }
+        .value { font-size: 26px; font-weight: 900; margin-top: 6px; letter-spacing: -1px; }
+        .unit { font-size: 11px; color: ${CYBER.subtext}; margin-left: 6px; }
+        .nav-tabs { display: flex; gap: 25px; margin-bottom: 25px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+        .tab-btn { background: none; border: none; color: ${CYBER.subtext}; padding: 12px 0; font-size: 10px; cursor: pointer; text-transform: uppercase; transition: 0.3s; letter-spacing: 1px; }
+        .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; text-shadow: ${CYBER.glow}; }
+        .cyber-btn { background: ${CYBER.primary}; color: #000; border: none; padding: 12px; font-size: 10px; font-weight: bold; cursor: pointer; text-transform: uppercase; transition: 0.2s; }
+        .cyber-btn:hover { opacity: 0.8; box-shadow: ${CYBER.glow}; }
+        .emergency-btn { width: 100%; background: transparent; color: ${CYBER.danger}; border: 1px solid ${CYBER.danger}; padding: 15px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: 0.3s; letter-spacing: 2px; }
+        .emergency-btn:hover { background: ${CYBER.danger}; color: #fff; }
+        .emergency { filter: hue-rotate(-160deg) saturate(1.5) contrast(1.2); }
+        .cyber-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 15px; }
+        .cyber-table th { text-align: left; padding: 12px; color: ${CYBER.subtext}; border-bottom: 1px solid ${CYBER.border}; font-size: 9px; }
+        .cyber-table td { padding: 14px 12px; border-bottom: 1px solid rgba(255,255,255,0.02); }
+        .broadcast-input { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid ${CYBER.border}; color: ${CYBER.primary}; padding: 14px; margin-top: 10px; font-family: inherit; outline: none; box-sizing: border-box; }
+        .ton-btn-wrapper { filter: invert(1) brightness(1.5); scale: 0.9; transform-origin: right top; }
       `}</style>
 
       {/* HEADER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '30px', alignItems: 'flex-start' }}>
         <div>
-          <h1 style={{ color: CYBER.primary, margin: 0, fontSize: '26px', letterSpacing: '4px', fontWeight: '900' }}>NEURAL_PULSE</h1>
-          <div style={{ fontSize: '9px', opacity: 0.5 }}>KERNEL_V9.7 // BOTH_HOST_NL_NODE</div>
+          <h1 style={{ color: '#fff', margin: 0, fontSize: '28px', letterSpacing: '4px', fontWeight: '900' }}>NEURAL_PULSE</h1>
+          <div style={{ fontSize: '8px', color: CYBER.primary, opacity: 0.5, marginTop: '5px' }}>OS_V9.7 // BOTH_HOST_STABLE</div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{marginBottom: '8px'}}><a href="/tonconnect-manifest.json" target="_blank" className="ton-bridge-link">🔗 TON_WALLET_GATEWAY</a></div>
-          <div className="label">Total_Network_Pool</div>
-          <div className="value" style={{ color: CYBER.ton }}>{stats.totalTonPool.toLocaleString()}<span className="unit">💎</span></div>
+        <div className="ton-btn-wrapper">
+          <TonConnectButton />
         </div>
       </div>
 
@@ -203,39 +216,39 @@ const Dashboard = (props) => {
       </div>
 
       {activeTab === 'overview' && (
-        <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '15px' }}>
+        <div style={{ animation: 'fadeIn 0.5s ease' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
             <div className="card">
-              <div className="label">Active_Agents</div>
+              <div className="label">Live_Agents</div>
               <div className="value">{stats.totalUsers}<span className="unit">NODE</span></div>
               <MiniChart data={history.tappers} color={CYBER.success} />
+            </div>
+            <div className="card">
+              <div className="label" style={{ color: CYBER.ton }}>Network_Pool</div>
+              <div className="value">{Number(stats.totalTonPool).toLocaleString()}<span className="unit">TON</span></div>
+              <MiniChart data={history.inflow} color={CYBER.ton} />
             </div>
             <div className="card">
               <div className="label">System_Load</div>
               <div className="value">{Number(stats.load).toFixed(1)}%</div>
               <MiniChart data={history.load} color={CYBER.primary} />
             </div>
-            <div className="card">
-              <div className="label">API_Latency</div>
-              <div className="value">{Number(stats.lat).toFixed(0)}<span className="unit">ms</span></div>
-              <MiniChart data={history.lat} color={CYBER.warning} />
-            </div>
           </div>
 
-          <div className="card">
-            <div className="label">Memory_Buffer_Allocation</div>
-            <div style={{ width: '100%', height: '4px', background: '#111', marginTop: '12px', borderRadius: '2px' }}>
-              <div style={{ width: `${stats.ram}%`, height: '100%', background: CYBER.primary, boxShadow: `0 0 10px ${CYBER.primary}` }} />
+          <div className="card" style={{ marginTop: '15px' }}>
+            <div className="label">Memory_Allocation</div>
+            <div style={{ width: '100%', height: '4px', background: '#111', marginTop: '12px' }}>
+              <div style={{ width: `${stats.ram}%`, height: '100%', background: CYBER.primary, boxShadow: CYBER.glow }} />
             </div>
             <div style={{ textAlign: 'right', fontSize: '9px', marginTop: '6px', opacity: 0.6 }}>{stats.ram}% LOADED</div>
           </div>
 
           <div className="card">
             <div className="label">Encrypted_Event_Log</div>
-            <div ref={logRef} style={{ height: '120px', overflowY: 'auto', fontSize: '10px', marginTop: '10px', lineHeight: '1.6', fontFamily: 'monospace' }}>
+            <div ref={logRef} style={{ height: '120px', overflowY: 'auto', fontSize: '10px', marginTop: '10px', lineHeight: '1.8', color: CYBER.subtext }}>
               {logs.map((log, i) => (
-                <div key={i} style={{ color: log.includes('CMD') ? CYBER.primary : CYBER.text, opacity: 0.8 }}>
-                  {log}
+                <div key={i} style={{ borderLeft: `1px solid ${CYBER.border}`, paddingLeft: '12px', marginBottom: '4px' }}>
+                   <span style={{ color: CYBER.primary }}>[{new Date().toLocaleTimeString()}]</span> {log}
                 </div>
               ))}
             </div>
@@ -244,34 +257,34 @@ const Dashboard = (props) => {
           <div className="card">
             <div className="label">Global_Network_Broadcast</div>
             <input className="broadcast-input" placeholder="ENTER PACKET DATA..." value={broadcastMsg} onChange={(e) => setBroadcastMsg(e.target.value)} />
-            <button className="cyber-btn" style={{ marginTop: '12px', width: '100%' }} onClick={handleBroadcast}>Push to all Nodes</button>
+            <button className="cyber-btn" style={{ marginTop: '12px', width: '100%' }} onClick={handleBroadcast}>Execute_Push_Sequence</button>
           </div>
 
           <button className="emergency-btn" onClick={() => { setIsEmergency(!isEmergency); playSound(200, 'square', 0.5); }}>
-            {isEmergency ? 'SYSTEM_RECOVERY_INIT' : 'CORE_KILL_SWITCH'}
+            {isEmergency ? 'DEACTIVATE_SAFE_MODE' : 'INITIALIZE_CORE_LOCK'}
           </button>
           <NeuralWave active={isEmergency} />
-        </>
+        </div>
       )}
 
       {activeTab === 'airdrop' && (
-        <div className="card">
-          <div className="label">User_Database_Index</div>
-          <input className="broadcast-input" style={{marginBottom: '10px'}} placeholder="SEARCH_BY_USERNAME..." onChange={(e) => setSearchTerm(e.target.value)} />
+        <div className="card" style={{ animation: 'fadeIn 0.5s ease' }}>
+          <div className="label">Identity_Database_Index</div>
+          <input className="broadcast-input" style={{ marginBottom: '15px' }} placeholder="FILTER_BY_UID_OR_ALIAS..." onChange={(e) => setSearchTerm(e.target.value)} />
           <div style={{ overflowX: 'auto' }}>
             <table className="cyber-table">
               <thead>
-                <tr><th>Identity</th><th>Pulse_Balance</th><th>Net_Status</th><th>Action</th></tr>
+                <tr><th>Identity</th><th>Pulse_Weight</th><th>Net_Status</th><th>Control</th></tr>
               </thead>
               <tbody>
                 {users.filter(u => String(u.id).includes(searchTerm) || String(u.username || '').toLowerCase().includes(searchTerm.toLowerCase())).map((u, i) => (
                   <tr key={i} style={{ opacity: u.status === 'banned' ? 0.3 : 1 }}>
-                    <td style={{ color: CYBER.primary }}>{u.username || u.id}</td>
-                    <td style={{fontWeight: 'bold'}}>{Number(u.balance || 0).toLocaleString()} NP</td>
+                    <td style={{ color: CYBER.primary, fontWeight: 'bold' }}>{u.username || u.id}</td>
+                    <td>{Number(u.balance || 0).toLocaleString()} <span style={{fontSize:'9px', opacity:0.4}}>NP</span></td>
                     <td style={{ color: u.status === 'banned' ? CYBER.danger : CYBER.success }}>{(u.status || 'ACTIVE').toUpperCase()}</td>
                     <td>
-                      <button className="cyber-btn" onClick={() => toggleBan(u.id)} style={{ padding: '5px 8px', fontSize: '9px', background: u.status === 'banned' ? CYBER.success : CYBER.danger, color: '#fff' }}>
-                        {u.status === 'banned' ? 'REVIVE' : 'BAN'}
+                      <button className="cyber-btn" onClick={() => toggleBan(u.id)} style={{ padding: '6px 10px', fontSize: '9px', background: u.status === 'banned' ? CYBER.success : CYBER.danger, color: '#fff' }}>
+                        {u.status === 'banned' ? 'REVIVE' : 'TERMINATE'}
                       </button>
                     </td>
                   </tr>
@@ -282,10 +295,19 @@ const Dashboard = (props) => {
         </div>
       )}
 
-      <footer style={{ textAlign: 'center', fontSize: '8px', opacity: 0.2, marginTop: '30px', letterSpacing: '2px' }}>
-        NEURAL_PULSE_NETWORK // SECURED_BY_BOTH_HOST_STABLE_V2
+      <footer style={{ textAlign: 'center', fontSize: '8px', opacity: 0.2, marginTop: '40px', letterSpacing: '2px' }}>
+        NEURAL_PULSE_NETWORK // SECURED_TERMINAL_2026
       </footer>
     </div>
+  );
+};
+
+// --- WRAPPER WITH PROVIDER ---
+const Dashboard = (props) => {
+  return (
+    <TonConnectUIProvider manifestUrl="https://np.bothost.tech/tonconnect-manifest.json">
+      <DashboardContent {...props} />
+    </TonConnectUIProvider>
   );
 };
 
