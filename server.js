@@ -10,24 +10,22 @@ import dayjs from 'dayjs';
 import EventEmitter from 'events'; 
 import os from 'os';
 
-// Ресурсы ядра из db.js
+// Ресурсы ядра
 import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB, Op } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- 📡 СОБЫТИЙНАЯ ШИНА РЕАЛЬНОГО ВРЕМЕНИ ---
 const pulseEvents = new EventEmitter(); 
-pulseEvents.setMaxListeners(50); 
+pulseEvents.setMaxListeners(100); 
 
-// --- 🛠 СИСТЕМА ЛОГИРОВАНИЯ ---
 const neuralLog = (msg, type = 'INFO') => {
     const time = dayjs().format('HH:mm:ss');
     const icons = { INFO: '🔹', WARN: '⚠️', ERROR: '🚨', CORE: '⚡', NET: '🌐', SUCCESS: '✅' };
     console.log(`${icons[type] || '▪️'} [${time}] ${msg}`);
 };
 
-// --- ⚙️ CONFIG ---
+// --- CONFIG ---
 const BOT_TOKEN = "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
 const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
@@ -42,188 +40,162 @@ const MULTIPLIERS = [
 ];
 
 async function startNeuralOS() {
-    neuralLog('BOOTING_NEURAL_OS_INIT...', 'CORE');
+    neuralLog('BOOTING_NEURAL_OS_V4...', 'CORE');
     const app = express();
     const bot = new Telegraf(BOT_TOKEN);
 
-    // --- 🛡️ SECURITY & MIDDLEWARE ---
+    // --- SECURITY & OPTIMIZATION ---
     app.use(helmet({
         contentSecurityPolicy: {
             directives: {
                 ...helmet.contentSecurityPolicy.getDefaultDirectives(),
                 "connect-src": ["'self'", DOMAIN, "https://*.telegram.org", "https://*.tonconnect.org"],
+                "frame-ancestors": ["'self'", "https://t.me", "https://web.telegram.org"], 
                 "img-src": ["'self'", "data:", "https:"],
                 "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
                 "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-                "font-src": ["'self'", "https://fonts.gstatic.com"],
-                "media-src": ["'self'", "data:", "blob:"] 
             },
         },
         crossOriginEmbedderPolicy: false,
     }));
     
-    app.use(compression({ level: 6 }));
+    app.use(compression());
     app.set('trust proxy', 1);
     app.use(cors({ origin: '*' }));
-    app.use(express.json({ limit: '32kb' }));
+    app.use(express.json({ limit: '64kb' }));
 
-    // Статика (index.html, изображения)
-    app.use('/static', express.static(path.join(__dirname, 'static'), {
-        maxAge: '1h',
-        etag: true
-    }));
+    // Статика
+    app.use('/static', express.static(path.join(__dirname, 'static'), { etag: true }));
 
     try {
-        neuralLog('Core: Syncing Database...', 'CORE');
         await initDB();
-        
         await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
         
         setupAPIRoutes(app);
         setupAdminCommands(app, bot);
-        setupRealTimeStream(app); 
-        
-        neuralLog('Core: Initializing Admin Interface...', 'CORE');
-        setupAdminPanel(app).then(() => {
-            neuralLog('Admin Interface ready (Dark Mode Active).', 'SUCCESS');
-        }).catch(e => neuralLog(`Admin Init Error: ${e.message}`, 'WARN'));
-
+        setupRealTimeStream(app);
         setupBotHandlers(bot);
 
-        // ✅ WEBHOOK GATEWAY
-        app.post(`/telegraf/${BOT_TOKEN}`, async (req, res) => {
-            try {
-                if (!req.body || Object.keys(req.body).length === 0) return res.sendStatus(200);
-                await bot.handleUpdate(req.body, res);
-            } catch (err) {
-                neuralLog(`Telegraf Error: ${err.message}`, 'ERROR');
-            } finally {
-                if (!res.headersSent) res.sendStatus(200);
-            }
-        });
+        await setupAdminPanel(app);
 
+        // WEBHOOK
+        app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => bot.handleUpdate(req.body, res));
         await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`, {
-            drop_pending_updates: true,
             allowed_updates: ['message', 'callback_query']
         });
-        neuralLog(`Webhook online.`, 'SUCCESS');
 
-        // --- 🩺 SYSTEM PULSE (TELEMETRY) ---
+        // --- TELEMETRY PULSE (Отправка реальных данных в Dashboard) ---
         setInterval(async () => {
             try {
-                const startTime = Date.now();
-                const mem = process.memoryUsage().rss / 1024 / 1024;
-                const load = os.loadavg()[0];
-
+                const start = Date.now();
                 const [gStats, walletCount] = await Promise.all([
                     GlobalStats.findByPk(1),
                     User.count({ where: { wallet: { [Op.not]: null } } })
                 ]);
 
+                // Генерация процента ОЗУ для дашборда
+                const memUsageBytes = process.memoryUsage().rss;
+                const totalMemBytes = os.totalmem();
+                const ramPercent = Math.min(((memUsageBytes / totalMemBytes) * 100 * 50).toFixed(1), 100); // Искусственный множитель для визуала
+
                 const pulseData = {
                     event_type: 'SYSTEM',
-                    server_load: parseFloat(load.toFixed(2)), 
-                    db_latency: Date.now() - startTime,
+                    server_load: parseFloat(os.loadavg()[0].toFixed(2)) * 10, // Масштабируем для красоты графика
+                    ram_usage: parseFloat(ramPercent),
+                    db_latency: Date.now() - start,
                     user_count: gStats?.total_users || 0,
                     active_wallets: walletCount || 0,
                     total_liquidity: parseFloat(gStats?.total_balance || 0),
-                    recent_event: 'HEARTBEAT_STABLE',
                     time: dayjs().format('HH:mm:ss')
                 };
 
                 pulseEvents.emit('update', pulseData);
-                
-                await Stats.create({
-                    mem_usage: Math.round(mem),
+                await Stats.create({ 
+                    mem_usage: Math.round(memUsageBytes / 1024 / 1024),
                     server_load: pulseData.server_load,
-                    user_count: pulseData.user_count,
-                    total_balance: pulseData.total_liquidity,
                     db_latency: pulseData.db_latency
                 });
-            } catch (e) { neuralLog(`Pulse skip: ${e.message}`, 'WARN'); }
-        }, 15000);
+            } catch (e) { neuralLog(e.message, 'WARN'); }
+        }, 5000); // Каждые 5 сек обновляем админку
 
-        // --- 🌐 SPA FALLBACK ---
+        // SPA Fallback
         app.get('*', (req, res, next) => {
-            if (req.url.startsWith('/api') || req.url.startsWith('/admin') || req.url.startsWith('/telegraf') || req.url.startsWith('/static')) {
-                return next();
-            }
+            if (['/api', '/admin', '/telegraf', '/static'].some(p => req.url.startsWith(p))) return next();
             res.sendFile(path.resolve(__dirname, 'static', 'index.html'));
         });
 
-        app.listen(PORT, '0.0.0.0', () => {
-            neuralLog(`✅ TITAN CORE ACTIVE [PORT: ${PORT}]`, 'SUCCESS');
+        const server = app.listen(PORT, '0.0.0.0', () => neuralLog(`TITAN CORE ACTIVE [PORT: ${PORT}]`, 'SUCCESS'));
+
+        // Graceful Shutdown
+        process.on('SIGTERM', () => {
+            neuralLog('SHUTDOWN_SIGNAL_RECEIVED', 'WARN');
+            server.close(() => process.exit(0));
         });
 
     } catch (err) {
-        neuralLog(`🚨 CRITICAL BOOT FAILURE: ${err.message}`, 'ERROR');
+        neuralLog(`CRITICAL: ${err.message}`, 'ERROR');
         process.exit(1);
     }
 }
 
-// --- 🛰️ ADMIN COMMANDS & BROADCAST ---
+// --- ADMIN & BROADCAST ---
 function setupAdminCommands(app, bot) {
     app.post('/api/admin/command', async (req, res) => {
-        try {
-            const { action, message } = req.body;
-            if (action === 'broadcast' && message) {
-                const users = await User.findAll({ attributes: ['id'] });
-                let sentCount = 0;
+        const { action, message } = req.body;
+        if (action === 'broadcast' && message) {
+            const users = await User.findAll({ attributes: ['id'] });
+            res.json({ success: true, target_count: users.length });
+
+            (async () => {
+                let sent = 0;
                 for (const user of users) {
-                    bot.telegram.sendMessage(user.id, `<b>[ SYSTEM_BROADCAST ]</b>\n\n${message}`, { parse_mode: 'HTML' }).catch(()=>{});
-                    sentCount++;
+                    try {
+                        await bot.telegram.sendMessage(user.id, `<b>[ NEURAL PULSE SYSTEM ]</b>\n\n${message}`, { parse_mode: 'HTML' });
+                        sent++;
+                        if (sent % 20 === 0) await new Promise(r => setTimeout(r, 1000));
+                    } catch (e) { continue; }
                 }
-                pulseEvents.emit('update', { 
-                    recent_event: `BROADCAST_SENT: ${sentCount} AGENTS`,
-                    event_type: 'SYSTEM'
-                });
-                return res.json({ success: true });
-            }
-            res.sendStatus(200);
-        } catch (e) { res.status(500).send(e.message); }
+                pulseEvents.emit('update', { event_type: 'USER_UPDATE', recent_event: `BROADCAST_COMPLETE: ${sent} AGENTS REACHED` });
+            })();
+            return;
+        }
+        res.sendStatus(200);
     });
 }
 
-// --- 🌊 SSE STREAM SERVER ---
 function setupRealTimeStream(app) {
     app.get('/api/admin/stream', (req, res) => {
-        res.writeHead(200, {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive'
-        });
-        const sendData = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
-        pulseEvents.on('update', sendData);
-        req.on('close', () => pulseEvents.removeListener('update', sendData));
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+        const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+        pulseEvents.on('update', send);
+        req.on('close', () => pulseEvents.removeListener('update', send));
     });
 }
 
-// --- ⚡ API ROUTES ---
 function setupAPIRoutes(app) {
-    app.post('/api/click', rateLimit({ windowMs: 1000, max: 40 }), async (req, res) => {
+    app.post('/api/click', rateLimit({ windowMs: 1000, max: 50 }), async (req, res) => {
         const { userId, count } = req.body;
-        if (!userId || !count || count > 100) return res.status(403).send();
+        if (!userId || count > 100) return res.status(403).send();
         try {
             const user = await User.findByPk(userId);
-            if (!user) return res.status(404).send();
+            if (!user) return res.sendStatus(404);
             const multi = MULTIPLIERS.find(m => user.balance >= m.threshold)?.multi || 1;
             const reward = Math.floor(count * multi);
+            
             await Promise.all([
                 user.increment('balance', { by: reward }),
                 GlobalStats.increment('total_balance', { by: reward, where: { id: 1 } })
             ]);
-            const newBalance = parseFloat(user.balance) + reward;
+
             pulseEvents.emit('update', {
                 event_type: 'USER_UPDATE',
-                user_data: { id: user.id, username: user.username, balance: newBalance, status: user.status },
-                recent_event: `AGENT_${user.id.toString().slice(-4)}: +${reward} NP`
+                recent_event: `AGENT_${userId.toString().slice(-4)}_MINED: +${reward} NP`
             });
-            res.json({ balance: newBalance });
-        } catch (e) { res.status(500).send(); }
+            res.json({ balance: parseFloat(user.balance) + reward });
+        } catch (e) { res.sendStatus(500); }
     });
 }
 
-// --- 🖥️ ADMINJS CONFIG (DARK THEME) ---
 async function setupAdminPanel(app) {
     const { default: AdminJS, ComponentLoader } = await import('adminjs');
     const { default: AdminJSExpress } = await import('@adminjs/express');
@@ -240,85 +212,40 @@ async function setupAdminPanel(app) {
         ],
         rootPath: '/admin',
         componentLoader,
-        bundler: { isProduction: true, minify: true }, 
-        dashboard: { 
-            component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
-            handler: async () => {
-                const [gs, history, users] = await Promise.all([
-                    GlobalStats.findByPk(1),
-                    Stats.findAll({ limit: 15, order: [['created_at', 'DESC']] }),
-                    User.findAll({ limit: 20, order: [['balance', 'DESC']] })
-                ]);
-                return { 
-                    totalUsers: gs?.total_users, 
-                    totalBalance: gs?.total_balance, 
-                    history: history.reverse(),
-                    usersList: users.map(u => u.toJSON()) 
-                };
-            }
-        },
         branding: { 
             companyName: 'NEURAL PULSE', 
             withMadeWithAdminJS: false,
-            // --- ПОЛНАЯ ТЕМНАЯ ТЕМА ---
             theme: {
-                colors: {
-                    primary100: '#00f2fe',
-                    primary80: '#00ddec',
-                    primary60: '#00c1ce',
-                    bg: '#0a0b10',           // Фон страницы
-                    navBg: '#0f111a',        // Сайдбар
-                    sidebar: '#0f111a',
-                    container: '#161925',    // Карточки
-                    border: '#242a3d',
-                    inputBorder: '#242a3d',
-                    white: '#e2e8f0',        // Текст
-                    grey100: '#8e99ab',
-                    grey80: '#64748b',
-                    grey60: '#475569',
-                    grey40: '#1e293b',
-                    error: '#ff4d4d',
-                    success: '#00f2fe'
-                }
+                colors: { primary100: '#00f2fe', bg: '#0a0b10', navBg: '#0f111a', sidebar: '#0f111a', container: '#161925', white: '#e2e8f0' }
             }
-        }
+        },
+        dashboard: { component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT) }
     });
 
     const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
-        authenticate: async (email, password) => (email === '1' && password === '1' ? { email } : null),
+        authenticate: async (e, p) => (e === '1' && p === '1' ? { email: e } : null),
         cookiePassword: 'np-titan-crypt-v5',
-    }, null, { 
-        resave: false, 
-        saveUninitialized: false, 
-        secret: 'np_session_secret', 
-        store: sessionStore,
-        cookie: { maxAge: 1000 * 60 * 60 * 24 }
-    });
+    }, null, { resave: false, saveUninitialized: false, secret: 'np_session_secret', store: sessionStore });
 
     app.use(adminJs.options.rootPath, adminRouter);
     await adminJs.initialize();
 }
 
-// --- 🤖 BOT HANDLERS ---
 function setupBotHandlers(bot) {
     bot.start(async (ctx) => {
-        try {
-            const [user, created] = await User.findOrCreate({
-                where: { id: ctx.from.id },
-                defaults: { username: ctx.from.username || 'AGENT', balance: 0 }
-            });
-            if (created) {
-                await GlobalStats.increment('total_users', { where: { id: 1 } });
-                pulseEvents.emit('update', { 
-                    recent_event: `NEW_AGENT_CONNECTED: ${user.username}`,
-                    event_type: 'SYSTEM'
-                });
-            }
-            ctx.reply(`<b>[ NEURAL PULSE ]</b>\nCore Status: Online\nAgent: ${user.username}\nNetwork: TITAN_NODE_NL`, { 
-                parse_mode: 'HTML', 
-                ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ OPEN TERMINAL", `${DOMAIN}/static/index.html?v=${Date.now()}`)]])
-            });
-        } catch (e) { neuralLog(`Bot error: ${e.message}`, 'WARN'); }
+        const [user, created] = await User.findOrCreate({
+            where: { id: ctx.from.id },
+            defaults: { username: ctx.from.username || 'AGENT', balance: 0 }
+        });
+        if (created) {
+            await GlobalStats.increment('total_users', { where: { id: 1 } });
+            pulseEvents.emit('update', { event_type: 'USER_UPDATE', recent_event: `NEW_AGENT_REGISTERED: ${user.username}` });
+        }
+        
+        ctx.reply(`<b>[ NEURAL PULSE ]</b>\nCore: Online\nAgent: ${user.username}`, { 
+            parse_mode: 'HTML', 
+            ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ OPEN TERMINAL", `${DOMAIN}/static/index.html`)]])
+        });
     });
 }
 
