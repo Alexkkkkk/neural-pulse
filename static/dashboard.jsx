@@ -33,16 +33,16 @@ const DashboardContent = (props) => {
     console.error("TonConnect Hook Error", e);
   }
 
-  // --- 📝 СИСТЕМА ЛОГИРОВАНИЯ (Оптимизирована для RAM) ---
+  // --- 📝 СИСТЕМА ЛОГИРОВАНИЯ (Оптимизирована для RAM на Bothost) ---
   const addLog = useCallback((text, type = 'INFO') => {
     const timestamp = new Date().toLocaleTimeString();
     const prefix = type === 'ERROR' ? '❌' : type === 'WARN' ? '⚠️' : '>';
     const newLog = `${prefix} [${timestamp}] ${text}`;
-    // Лимит 50 строк предотвращает утечки памяти в AdminJS
+    // Лимит 50 строк предотвращает утечки памяти и тормоза AdminJS
     setLogs(prev => [...prev.slice(-49), newLog]);
   }, []);
 
-  // 1. ИНИЦИАЛИЗАЦИЯ И ПЕРЕХВАТ ОШИБОК
+  // 1. ИНИЦИАЛИЗАЦИЯ И МОНИТОРИНГ ОШИБОК
   useEffect(() => {
     setIsMounted(true);
     addLog("DIAGNOSTICS_START: INITIALIZING_DEBUG_LAYER");
@@ -53,7 +53,7 @@ const DashboardContent = (props) => {
     window.addEventListener('error', handleError);
     window.addEventListener('unhandledrejection', handleRejection);
 
-    // Имитация загрузки систем
+    // Имитация прогресса загрузки
     const timer = setTimeout(() => {
       setIsLoaded(true);
       addLog("UI_RENDER_SUCCESS: READY_FOR_OPERATIONS");
@@ -72,15 +72,15 @@ const DashboardContent = (props) => {
       addLog(`ADMINJS_STATUS: RESOURCE=${resource?.id || 'unknown'}`);
       addLog(`ADMINJS_STATUS: ACTION=${action?.name || 'unknown'}`);
       
-      if (!data) {
-        addLog("DATA_PAYLOAD: EMPTY (Check server.js)", "WARN");
+      if (!data || Object.keys(data).length === 0) {
+        addLog("DATA_PAYLOAD: EMPTY_OR_MINIMAL", "WARN");
       } else {
         addLog(`DATA_PAYLOAD: RECEIVED (${Object.keys(data).length} keys)`);
       }
     }
   }, [isMounted, resource, action, data, addLog]);
 
-  // Авто-скролл
+  // Авто-скролл контейнера логов
   useEffect(() => {
     if (logRef.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -102,9 +102,10 @@ const DashboardContent = (props) => {
           border: 1px solid ${CYBER.border}; 
           font-size: 11px; 
           line-height: 1.4;
+          scroll-behavior: smooth;
         }
         .log-line { margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.02); padding-bottom: 2px; }
-        .label { font-size: 10px; color: ${CYBER.primary}; letter-spacing: 1px; margin-bottom: 8px; display: block; }
+        .label { font-size: 10px; color: ${CYBER.primary}; letter-spacing: 1px; margin-bottom: 8px; display: block; text-transform: uppercase; }
         .error-text { color: ${CYBER.danger}; font-weight: bold; }
         .warn-text { color: #ffaa00; }
         .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
@@ -112,7 +113,7 @@ const DashboardContent = (props) => {
           width: 100%; padding: 12px; background: none; 
           border: 1px solid ${CYBER.primary}; color: ${CYBER.primary}; 
           cursor: pointer; font-family: inherit; transition: 0.3s;
-          text-transform: uppercase; letter-spacing: 1px;
+          text-transform: uppercase; letter-spacing: 1px; margin-top: 10px;
         }
         .cyber-btn:hover { background: rgba(0, 242, 254, 0.1); box-shadow: 0 0 10px ${CYBER.border}; }
       `}</style>
@@ -129,11 +130,15 @@ const DashboardContent = (props) => {
         <span className="label">Telemetry_Stream</span>
         <div className="log-container" ref={logRef}>
           {logs.length === 0 && <div className="log-line">Waiting for telemetry...</div>}
-          {logs.map((log, i) => (
-            <div key={i} className={`log-line ${log.includes('❌') ? 'error-text' : log.includes('⚠️') ? 'warn-text' : ''}`}>
-              {log}
-            </div>
-          ))}
+          {logs.map((log, i) => {
+            const isError = log.includes('❌');
+            const isWarn = log.includes('⚠️');
+            return (
+              <div key={i} className={`log-line ${isError ? 'error-text' : isWarn ? 'warn-text' : ''}`}>
+                {log}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -141,14 +146,14 @@ const DashboardContent = (props) => {
         <div className="card">
           <span className="label">Bridge_Status</span>
           <div style={{fontSize: '12px'}}>ADDRESS: {userAddress ? `${userAddress.slice(0,6)}...${userAddress.slice(-4)}` : 'DISCONNECTED'}</div>
-          <div style={{fontSize: '11px', color: userAddress ? CYBER.success : CYBER.danger}}>
+          <div style={{fontSize: '11px', color: userAddress ? CYBER.success : CYBER.danger, marginTop: '5px'}}>
             STATUS: {userAddress ? 'ACTIVE_SESSION' : 'WAITING_AUTH'}
           </div>
         </div>
         <div className="card">
           <span className="label">AdminJS_Snapshot</span>
-          <pre style={{ fontSize: '10px', opacity: 0.7, margin: 0 }}>
-            {JSON.stringify({ res: resource?.id, act: action?.name }, null, 1)}
+          <pre style={{ fontSize: '10px', opacity: 0.7, margin: 0, color: CYBER.primary }}>
+            {JSON.stringify({ res: resource?.id, act: action?.name, status: isLoaded ? 'READY' : 'INIT' }, null, 1)}
           </pre>
         </div>
       </div>
@@ -156,7 +161,10 @@ const DashboardContent = (props) => {
       <button className="cyber-btn" onClick={async () => {
           addLog("PING: TESTING_SERVER_GATEWAY...");
           try {
-            const res = await fetch('/api/admin/command', { method: 'POST' });
+            const res = await fetch('/api/admin/command', { 
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            });
             addLog(`PONG: SERVER_RESPONSE_${res.status}`);
           } catch (e) {
             addLog(`FAIL: ${e.message}`, 'ERROR');
