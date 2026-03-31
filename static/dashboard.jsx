@@ -21,8 +21,9 @@ const CYBER = {
   border: 'rgba(0, 242, 254, 0.25)',
 };
 
-// --- 🔉 QUANTUM AUDIO ENGINE ---
+// --- 🔉 QUANTUM AUDIO ENGINE (FIXED) ---
 const playSound = (freq, type = 'sine', dur = 0.2) => {
+  if (typeof window === 'undefined' || !window.AudioContext) return;
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = ctx.createOscillator();
@@ -31,9 +32,11 @@ const playSound = (freq, type = 'sine', dur = 0.2) => {
     osc.frequency.setValueAtTime(freq, ctx.currentTime);
     gain.gain.setValueAtTime(0.02, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(); osc.stop(ctx.currentTime + dur);
-  } catch (e) {}
+    osc.connect(gain); 
+    gain.connect(ctx.destination);
+    osc.start(); 
+    osc.stop(ctx.currentTime + dur);
+  } catch (e) { /* Silent fail for browser policies */ }
 };
 
 // --- 📈 PRECISION MINI-CHART ---
@@ -75,29 +78,21 @@ const NeuralWave = memo(({ active }) => (
 
 const DashboardContent = (props) => {
   const { data } = props;
+  const [isMounted, setIsMounted] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [bootProgress, setBootProgress] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isEmergency, setIsEmergency] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
   const [broadcastMsg, setBroadcastMsg] = useState('');
   const logRef = useRef(null);
 
   const userAddress = useTonAddress();
-  const [tonConnectUI] = useTonConnectUI();
-
-  // --- СТАТИСТИКА И ЛОГИ ---
+  
+  // Статистика
   const [logs, setLogs] = useState(['> MOUNTING_VOLUMES...', '> SYSTEM_READY', `> SYNCING_DATABASE: ${data?.totalUsers || 1250} AGENTS FOUND`]);
-  const [users, setUsers] = useState(data?.usersList || [
-    { id: '@alex_neo', balance: 845000, status: 'active' },
-    { id: '@kander_dev', balance: 2100000, status: 'active' }
-  ]);
-
   const [stats, setStats] = useState({
     load: data?.currentLoad || 12.4,
     lat: data?.currentLat || 98,
-    ram: data?.ramUsage || 44,
-    totalUsers: data?.totalUsers || 1250,
     activeTappers: 52,
     linkedWallets: 842,
     totalTonPool: data?.total_balance || 4520.50,
@@ -111,8 +106,24 @@ const DashboardContent = (props) => {
     tonInflow: data?.history?.tonInflow || Array(20).fill(0.5)
   });
 
-  // --- 🛰️ REAL-TIME UPDATE SIMULATION (OR SSE) ---
   useEffect(() => {
+    setIsMounted(true);
+    const timer = setInterval(() => {
+      setBootProgress(p => {
+        if (p >= 100) { 
+          clearInterval(timer); 
+          setTimeout(() => setIsLoaded(true), 300); 
+          return 100; 
+        }
+        return p + 10;
+      });
+    }, 40);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Real-time loop
+  useEffect(() => {
+    if (!isLoaded) return;
     const interval = setInterval(() => {
       setStats(prev => {
         const inflow = Math.random() * 1.5;
@@ -133,27 +144,12 @@ const DashboardContent = (props) => {
           lat: nextLat, 
           activeTappers: nextTappers, 
           tonInflow: inflow,
-          totalTonPool: prev.totalTonPool + (inflow / 10) // Плавный рост
+          totalTonPool: prev.totalTonPool + (inflow / 100)
         };
       });
     }, 2500);
     return () => clearInterval(interval);
-  }, []);
-
-  // Boot sequence
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setBootProgress(p => {
-        if (p >= 100) { 
-          clearInterval(timer); 
-          setTimeout(() => setIsLoaded(true), 300); 
-          return 100; 
-        }
-        return p + 10;
-      });
-    }, 40);
-    return () => clearInterval(timer);
-  }, []);
+  }, [isLoaded]);
 
   useEffect(() => {
     if (userAddress) {
@@ -170,6 +166,8 @@ const DashboardContent = (props) => {
     setBroadcastMsg('');
     playSound(1000, 'sine', 0.4);
   };
+
+  if (!isMounted) return null;
 
   if (!isLoaded) return (
     <div style={{ background: '#000', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: CYBER.primary, fontFamily: 'monospace' }}>
@@ -198,7 +196,6 @@ const DashboardContent = (props) => {
         .broadcast-input { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid ${CYBER.border}; color: #fff; padding: 12px; margin-top: 10px; outline: none; border-radius: 4px; }
       `}</style>
 
-      {/* HEADER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '25px', alignItems: 'center' }}>
         <div>
           <h1 style={{ color: CYBER.primary, margin: 0, fontSize: '26px', letterSpacing: '3px', fontWeight: '900' }}>NEURAL_PULSE</h1>
@@ -216,7 +213,7 @@ const DashboardContent = (props) => {
         <button className={`tab-btn ${activeTab === 'airdrop' ? 'active' : ''}`} onClick={() => setActiveTab('airdrop')}>[ 02. Agent_Manager ]</button>
       </div>
 
-      {activeTab === 'overview' && (
+      {activeTab === 'overview' ? (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '15px' }}>
             <div className="card">
@@ -228,7 +225,7 @@ const DashboardContent = (props) => {
               <div className="label">Wallets_Linked</div>
               <div className="value">{stats.linkedWallets}<span className="unit">🔗</span></div>
               <div style={{ fontSize: '9px', marginTop: '10px', color: CYBER.primary }}>
-                {((stats.linkedWallets / stats.totalUsers) * 100).toFixed(1)}% of {stats.totalUsers}
+                {((stats.linkedWallets / (data?.totalUsers || 1000)) * 100).toFixed(1)}% of {data?.totalUsers || 1250}
               </div>
             </div>
             <div className="card" style={{ gridColumn: 'span 2' }}>
@@ -267,12 +264,17 @@ const DashboardContent = (props) => {
           </button>
           <NeuralWave active={isEmergency} />
         </>
-      )}
-
-      {activeTab === 'airdrop' && (
+      ) : (
         <div className="card" style={{ textAlign: 'center', padding: '40px 0' }}>
           <div className="label">Identity_Database</div>
-          <div style={{ opacity: 0.5, marginTop: '10px' }}>[ MODULE_ENCRYPTED_CONNECT_WALLET ]</div>
+          <div style={{ opacity: 0.5, marginTop: '10px' }}>
+            {userAddress ? `ACCESS_GRANTED: ${userAddress.slice(0, 12)}...` : '[ MODULE_ENCRYPTED_CONNECT_WALLET ]'}
+          </div>
+          {userAddress && (
+             <div style={{ marginTop: '20px', fontSize: '11px', color: CYBER.primary }}>
+                Загрузка списка агентов блокчейна...
+             </div>
+          )}
         </div>
       )}
     </div>
