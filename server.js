@@ -146,7 +146,7 @@ async function setupAdminPanel(app) {
                         totalUsers: gStats?.total_users || 0, 
                         total_balance: parseFloat(gStats?.total_balance || 0),
                         dailyUsers: dailyUsers || 0,
-                        usersList: allUsers.map(u => u.toJSON()), // Передаем список для вкладки Agent Manager
+                        usersList: allUsers.map(u => u.toJSON()), 
                         currentLoad: h.length > 0 ? h[h.length-1].server_load : 0,
                         currentLat: h.length > 0 ? h[h.length-1].db_latency : 0,
                         ramUsage: h.length > 0 ? h[h.length-1].mem_usage : 0,
@@ -212,7 +212,7 @@ async function startNeuralOS() {
         contentSecurityPolicy: {
             directives: {
                 ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-                "connect-src": ["'self'", DOMAIN, "https://*.telegram.org", "https://*.tonconnect.org", "wss://*.bridge.tonapi.io"],
+                "connect-src": ["'self'", DOMAIN, "https://*.telegram.org", "https://*.tonconnect.org", "wss://*.bridge.tonapi.io", "https://*.tonapi.io"],
                 "img-src": ["'self'", "data:", "https:"],
                 "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://unpkg.com"],
                 "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
@@ -229,7 +229,6 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
-    // Маршрут манифеста
     app.get('/tonconnect-manifest.json', (req, res) => {
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Access-Control-Allow-Origin', '*');
@@ -255,7 +254,6 @@ async function startNeuralOS() {
         setupRealTimeStream(app); 
         setupBotHandlers(bot);
 
-        // Webhook Gate
         app.post(`/telegraf/${BOT_TOKEN}`, async (req, res) => {
             try {
                 if (req.body && Object.keys(req.body).length > 0) {
@@ -267,7 +265,6 @@ async function startNeuralOS() {
 
         await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`, { drop_pending_updates: true });
 
-        // Цикл мониторинга ресурсов (Pulse Loop)
         setInterval(async () => {
             try {
                 const start = Date.now();
@@ -294,7 +291,6 @@ async function startNeuralOS() {
                 pulseEvents.emit('update', pulseData);
                 await Stats.create(pulseData);
                 
-                // Очистка старых логов мониторинга (храним 500 записей)
                 const count = await Stats.count();
                 if (count > 500) {
                     const oldest = await Stats.findOne({ order: [['created_at', 'ASC']] });
