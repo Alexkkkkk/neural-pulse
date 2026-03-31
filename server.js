@@ -40,7 +40,7 @@ async function startNeuralOS() {
         contentSecurityPolicy: {
             directives: {
                 ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-                "connect-src": ["'self'", DOMAIN, "https://*.telegram.org"],
+                "connect-src": ["'self'", DOMAIN, "https://*.telegram.org", "https://*.tonconnect.org"],
                 "img-src": ["'self'", "data:", "https:"],
                 "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
                 "media-src": ["'self'", "data:", "blob:"] 
@@ -55,11 +55,17 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
-    // Статика для картинок и дизайна (не менять!)
+    // --- 📂 STATIC ASSETS ---
+    // 1. Общая статика (картинки, дизайн)
     app.use('/static', express.static(path.join(__dirname, 'static'), {
         maxAge: '1h',
         etag: true
     }));
+
+    // 2. Явный проброс манифеста в корень (РЕШАЕТ ТВОЮ ОШИБКУ)
+    app.get('/tonconnect-manifest.json', (req, res) => {
+        res.sendFile(path.join(__dirname, 'static', 'tonconnect-manifest.json'));
+    });
 
     try {
         console.log('--- ⚡ NEURAL PULSE SYSTEM BOOTING ---');
@@ -124,7 +130,6 @@ async function startNeuralOS() {
                 pulseEvents.emit('update', pulseData);
                 await Stats.create(pulseData);
 
-                // Очистка старых логов (держим последние 500 записей)
                 const count = await Stats.count();
                 if (count > 500) {
                     const oldest = await Stats.findOne({ order: [['created_at', 'ASC']] });
@@ -149,35 +154,26 @@ async function startNeuralOS() {
 function setupAdminCommands(app, bot) {
     app.post('/api/admin/command', async (req, res) => {
         const { action, message } = req.body;
-        
         try {
             if (action === 'broadcast') {
-                console.log(`📡 INITIATING BROADCAST: ${message}`);
                 const users = await User.findAll({ attributes: ['id'] });
-                
                 let successCount = 0;
-                // Рассылка в фоне
                 (async () => {
                     for (const user of users) {
                         try {
                             await bot.telegram.sendMessage(user.id, `<b>[ SYSTEM BROADCAST ]</b>\n\n${message}`, { parse_mode: 'HTML' });
                             successCount++;
                             if (successCount % 25 === 0) await new Promise(r => setTimeout(r, 1000));
-                        } catch (err) {
-                            console.error(`Failed to send to ${user.id}`);
-                        }
+                        } catch (err) {}
                     }
                     pulseEvents.emit('update', { recent_event: `BROADCAST_COMPLETE: ${successCount}_AGENTS`, event_type: 'SYSTEM' });
                 })();
             }
-
             if (action === 'clear_cache') {
                 pulseEvents.emit('update', { recent_event: `CACHE_PURGED`, event_type: 'SYSTEM' });
             }
-
             res.sendStatus(200);
         } catch (e) {
-            console.error("Command execution failed", e);
             res.status(500).send(e.message);
         }
     });
@@ -192,12 +188,9 @@ function setupRealTimeStream(app) {
             'X-Accel-Buffering': 'no'
         });
         res.write(':\n\n');
-        
         const sendData = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
         pulseEvents.on('update', sendData);
-        
         const keepAlive = setInterval(() => res.write(':\n\n'), 15000);
-        
         req.on('close', () => {
             clearInterval(keepAlive);
             pulseEvents.off('update', sendData);
@@ -209,7 +202,7 @@ function setupRealTimeStream(app) {
 function setupAPIRoutes(app) {
     const clickLimit = rateLimit({
         windowMs: 1000,
-        max: 40, // Чуть увеличил порог для активных игроков
+        max: 40,
         handler: (req, res) => res.status(429).json({ error: "Pulse overload" })
     });
 
@@ -219,16 +212,13 @@ function setupAPIRoutes(app) {
         try {
             const user = await User.findByPk(userId);
             if (!user) return res.status(404).send();
-            
             const currentBalance = parseFloat(user.balance) || 0;
             const config = MULTIPLIERS.find(m => currentBalance >= m.threshold) || { multi: 1.0 };
             const reward = Math.floor(count * config.multi);
-            
             await Promise.all([
                 user.increment('balance', { by: reward }),
                 GlobalStats.increment('total_balance', { by: reward, where: { id: 1 } })
             ]);
-            
             res.json({ s: 1, balance: currentBalance + reward });
         } catch (e) { res.status(500).send(); }
     });
@@ -271,7 +261,7 @@ async function setupAdminPanel(app) {
 
                     return { 
                         totalUsers: gStats?.total_users || 0, 
-                        total_balance: parseFloat(gStats?.total_balance || 0), // Данные для TON Pool
+                        total_balance: parseFloat(gStats?.total_balance || 0),
                         dailyUsers: dailyUsers || 0,
                         history: (historyData || []).reverse().map(s => ({ 
                             time: dayjs(s.created_at).format('HH:mm'), 
