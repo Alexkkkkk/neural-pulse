@@ -224,7 +224,7 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
-    // Важно: Маршрут манифеста до статики
+    // КРИТИЧНО: Маршрут манифеста ДО общей статики
     app.get('/tonconnect-manifest.json', (req, res) => {
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Access-Control-Allow-Origin', '*');
@@ -297,6 +297,7 @@ async function startNeuralOS() {
             } catch (e) { console.error("Pulse Loop Error", e.message); }
         }, 15000);
 
+        // Запуск на 0.0.0.0 для Bothost
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`✅ TITAN CORE ONLINE [PORT: ${PORT}]`);
         });
@@ -307,5 +308,4 @@ async function startNeuralOS() {
     }
 }
 
-// Запуск системы
 startNeuralOS();
