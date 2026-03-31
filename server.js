@@ -31,7 +31,7 @@ const MULTIPLIERS = [
     { threshold: 0, multi: 1.0 }
 ];
 
-// --- 🛰️ ПОДСИСТЕМЫ (Объявляем до старта ядра) ---
+// --- 🛰️ ПОДСИСТЕМЫ ---
 
 function setupAPIRoutes(app) {
     const clickLimit = rateLimit({
@@ -40,7 +40,6 @@ function setupAPIRoutes(app) {
         handler: (req, res) => res.status(429).json({ error: "Pulse overload" })
     });
 
-    // Маршрут для кликов
     app.post('/api/click', clickLimit, async (req, res) => {
         const { userId, count } = req.body;
         if (!userId || !count || count > 100 || count <= 0) return res.status(403).send();
@@ -61,7 +60,6 @@ function setupAPIRoutes(app) {
         } catch (e) { res.status(500).send(); }
     });
 
-    // Получение данных агента
     app.get('/api/user/:id', async (req, res) => {
         try {
             const user = await User.findByPk(req.params.id);
@@ -78,7 +76,6 @@ function setupAdminCommands(app, bot) {
             if (action === 'broadcast') {
                 const users = await User.findAll({ attributes: ['id'] });
                 let successCount = 0;
-                // Асинхронная рассылка без блокировки основного потока
                 (async () => {
                     for (const user of users) {
                         try {
@@ -162,7 +159,10 @@ async function setupAdminPanel(app) {
             branding: { 
                 companyName: 'NEURAL PULSE OS', 
                 logo: '/static/images/logo.png', 
-                withMadeWithAdminJS: false 
+                withMadeWithAdminJS: false,
+                theme: {
+                    colors: { primary100: '#00f2fe', bg: '#0b0e14', container: '#161b22', sidebar: '#0d1117', border: '#30363d', text: '#ffffff' }
+                }
             }
         });
 
@@ -226,7 +226,7 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json({ limit: '32kb' }));
 
-    // Важные файлы для TON (манифест должен быть доступен по прямому пути)
+    // Важные файлы для TON
     app.get('/tonconnect-manifest.json', (req, res) => {
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Access-Control-Allow-Origin', '*');
@@ -234,14 +234,19 @@ async function startNeuralOS() {
     });
 
     // Статика проекта
-    app.use('/static', express.static(path.join(__dirname, 'static'), { maxAge: '1h' }));
+    app.use('/static', express.static(path.join(__dirname, 'static'), { 
+        maxAge: '1h',
+        setHeaders: (res, path) => {
+            if (path.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+        }
+    }));
 
     try {
         console.log('--- ⚡ NEURAL PULSE SYSTEM BOOTING ---');
         await initDB();
         await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
 
-        // Загрузка модулей
+        // Загрузка модулей (Порядок важен!)
         setupAPIRoutes(app);
         setupAdminCommands(app, bot);
         setupRealTimeStream(app); 
@@ -260,9 +265,10 @@ async function startNeuralOS() {
 
         await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`, { drop_pending_updates: true });
 
-        // Цикл телеметрии (Pulse)
+        // Цикл телеметрии (Системный Пульс)
         setInterval(async () => {
             try {
+                const start = Date.now();
                 const mem = process.memoryUsage().rss / 1024 / 1024;
                 const cpuCount = os.cpus()?.length || 1;
                 const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
@@ -272,15 +278,28 @@ async function startNeuralOS() {
                     User.count({ where: { wallet: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } } })
                 ]);
 
-                pulseEvents.emit('update', {
+                const pulseData = {
                     time: dayjs().format('HH:mm:ss'),
                     mem_usage: Math.round(mem),
                     server_load: parseFloat(load),
                     user_count: gStats?.total_users || 0,
                     active_wallets: walletCount || 0,
                     total_balance: parseFloat(gStats?.total_balance || 0),
+                    db_latency: Date.now() - start,
                     event_type: 'SYSTEM'
-                });
+                };
+
+                pulseEvents.emit('update', pulseData);
+                
+                // Сохраняем в БД для графиков админки
+                await Stats.create(pulseData);
+                
+                // Удаляем старые записи (больше 500), чтобы не забивать БД
+                const count = await Stats.count();
+                if (count > 500) {
+                    const oldest = await Stats.findOne({ order: [['created_at', 'ASC']] });
+                    if (oldest) await oldest.destroy();
+                }
             } catch (e) { console.error("Pulse Loop Error", e.message); }
         }, 15000);
 
@@ -294,5 +313,5 @@ async function startNeuralOS() {
     }
 }
 
-// ФИНАЛЬНЫЙ ЗАПУСК
+// ЗАПУСК
 startNeuralOS();
