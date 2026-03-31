@@ -80,6 +80,7 @@ const DashboardContent = (props) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isEmergency, setIsEmergency] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [broadcastMsg, setBroadcastMsg] = useState('');
   const logRef = useRef(null);
 
   const userAddress = useTonAddress();
@@ -87,22 +88,49 @@ const DashboardContent = (props) => {
 
   const [logs, setLogs] = useState(['> MOUNTING_VOLUMES...', '> SYSTEM_READY', `> SYNCING_DATABASE: ${data?.totalUsers || 0} AGENTS FOUND`]);
   const [users, setUsers] = useState(data?.usersList || []);
-
   const [stats, setStats] = useState({
-    load: data?.currentLoad || 10.7,
-    lat: data?.currentLat || 101,
-    ram: data?.ramUsage || 42,
+    load: data?.currentLoad || 0,
+    lat: data?.currentLat || 0,
+    ram: data?.ramUsage || 0,
     totalUsers: data?.totalUsers || 0,
-    tonInflow: data?.tonInflow || 0,
     totalTonPool: data?.total_balance || 0 
   });
 
-  const history = {
-    load: data?.history?.load || Array(20).fill(10),
-    lat: data?.history?.lat || Array(20).fill(100),
+  const [history, setHistory] = useState({
+    load: data?.history?.load || Array(20).fill(0),
+    lat: data?.history?.lat || Array(20).fill(0),
     tappers: data?.history?.tappers || Array(20).fill(0),
-    tonInflow: data?.history?.inflow || Array(20).fill(0)
-  };
+    inflow: data?.history?.inflow || Array(20).fill(0)
+  });
+
+  // --- 🛰️ REAL-TIME DATA STREAM ---
+  useEffect(() => {
+    const eventSource = new EventSource('/api/admin/stream');
+    eventSource.onmessage = (e) => {
+      const update = JSON.parse(e.data);
+      if (update.event_type === 'SYSTEM') {
+        setStats(prev => ({
+          ...prev,
+          load: update.server_load ?? prev.load,
+          lat: update.db_latency ?? prev.lat,
+          ram: update.mem_usage ?? prev.ram,
+          totalUsers: update.user_count ?? prev.totalUsers,
+          totalTonPool: update.total_balance ?? prev.totalTonPool
+        }));
+        
+        setHistory(prev => ({
+          load: [...prev.load.slice(1), update.server_load],
+          lat: [...prev.lat.slice(1), update.db_latency],
+          tappers: [...prev.tappers.slice(1), update.user_count],
+          inflow: [...prev.inflow.slice(1), update.active_wallets]
+        }));
+      }
+      if (update.recent_event) {
+        setLogs(prev => [...prev.slice(-15), `> ${update.recent_event}`]);
+      }
+    };
+    return () => eventSource.close();
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -118,10 +146,8 @@ const DashboardContent = (props) => {
     if (userAddress) {
       playSound(800, 'sine', 0.1);
       setLogs(prev => [...prev, `> WALLET_BRIDGE_ESTABLISHED: ${userAddress.slice(0, 4)}...${userAddress.slice(-4)}`]);
-    } else if (isLoaded) {
-      setLogs(prev => [...prev, '> WALLET_BRIDGE_DISCONNECTED']);
     }
-  }, [userAddress, isLoaded]);
+  }, [userAddress]);
 
   useEffect(() => { logRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [logs]);
 
@@ -131,17 +157,18 @@ const DashboardContent = (props) => {
     setLogs(prev => [...prev, `> ALERT: USER ${userId} STATUS_UPDATED`]);
   };
 
-  const handleTestPayment = async () => {
-    const tx = {
-      validUntil: Math.floor(Date.now() / 1000) + 60,
-      messages: [{ address: "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c", amount: "10000000" }]
-    };
+  const handleBroadcast = async () => {
+    if (!broadcastMsg) return;
     try {
-      await tonConnectUI.sendTransaction(tx);
-      setLogs(prev => [...prev, '> TX_STATUS: SUCCESSFUL_VALIDATION']);
-    } catch (e) {
-      setLogs(prev => [...prev, '> TX_STATUS: REJECTED_BY_USER']);
-    }
+      await fetch('/api/admin/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'broadcast', message: broadcastMsg })
+      });
+      setBroadcastMsg('');
+      setLogs(prev => [...prev, '> BROADCAST_SEQUENCE_INITIATED']);
+      playSound(1000, 'sine', 0.5);
+    } catch (e) { console.error(e); }
   };
 
   if (!isLoaded) return (
@@ -171,6 +198,7 @@ const DashboardContent = (props) => {
         .cyber-table th { text-align: left; padding: 12px; color: ${CYBER.primary}; border-bottom: 1px solid ${CYBER.border}; }
         .cyber-table td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
         .ton-btn-container { scale: 0.8; transform-origin: right; }
+        .broadcast-input { width: 100%; background: #000; border: 1px solid ${CYBER.border}; color: ${CYBER.primary}; padding: 10px; margin-top: 10px; font-family: inherit; outline: none; }
       `}</style>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'flex-start' }}>
@@ -199,26 +227,32 @@ const DashboardContent = (props) => {
             <div className="card">
               <div className="label" style={{ color: CYBER.ton }}>TON_Pool_Status</div>
               <div className="value" style={{ color: CYBER.ton }}>{Number(stats.totalTonPool).toLocaleString()}<span className="unit">💎</span></div>
-              <MiniChart data={history.tonInflow} color={CYBER.ton} />
+              <MiniChart data={history.inflow} color={CYBER.ton} />
             </div>
             <div className="card">
               <div className="label">Server_Load</div>
-              <div className="value">{stats.load.toFixed(1)}%</div>
+              <div className="value">{Number(stats.load).toFixed(1)}%</div>
               <MiniChart data={history.load} color={CYBER.primary} />
             </div>
             <div className="card">
               <div className="label">Latency</div>
-              <div className="value">{stats.lat.toFixed(0)}ms</div>
+              <div className="value">{Number(stats.lat).toFixed(0)}ms</div>
               <MiniChart data={history.lat} color={CYBER.warning} />
             </div>
           </div>
 
           <div className="card">
             <div className="label">System_Logs</div>
-            <div style={{ height: '100px', overflowY: 'auto', fontSize: '9px', opacity: 0.6, marginTop: '8px', fontFamily: 'monospace' }}>
+            <div style={{ height: '120px', overflowY: 'auto', fontSize: '9px', opacity: 0.6, marginTop: '8px', fontFamily: 'monospace' }}>
               {logs.map((log, i) => <div key={i} style={{ borderLeft: `2px solid ${CYBER.primary}`, paddingLeft: '8px', marginBottom: '4px' }}>{log}</div>)}
               <div ref={logRef} />
             </div>
+          </div>
+
+          <div className="card">
+            <div className="label">Global_Broadcast</div>
+            <input className="broadcast-input" placeholder="Enter system message..." value={broadcastMsg} onChange={(e) => setBroadcastMsg(e.target.value)} />
+            <button className="cyber-btn" style={{ marginTop: '10px', width: '100%' }} onClick={handleBroadcast}>Push_to_All_Agents</button>
           </div>
 
           <button className="emergency-btn" onClick={() => setIsEmergency(!isEmergency)}>
@@ -231,14 +265,6 @@ const DashboardContent = (props) => {
       {activeTab === 'airdrop' && (
         <>
           <div className="card">
-            <div className="label">Wallet_Control_Center</div>
-            <div style={{ marginTop: '8px', fontSize: '11px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>{userAddress ? `▣ LINKED: ${userAddress.slice(0, 12)}...` : '□ OFFLINE: RE-AUTHENTICATION REQUIRED'}</span>
-              {userAddress && <button className="cyber-btn" onClick={handleTestPayment}>Test_TX</button>}
-            </div>
-          </div>
-
-          <div className="card">
             <div className="label">Agent_Search</div>
             <input className="search-bar" style={{ width:'100%', background:'#000', border:`1px solid ${CYBER.border}`, color:'#fff', padding:'10px', marginTop:'10px', boxSizing:'border-box', outline: 'none' }} placeholder="Search by ID/Username..." onChange={(e) => setSearchTerm(e.target.value)} />
             <div style={{ overflowX: 'auto' }}>
@@ -250,7 +276,7 @@ const DashboardContent = (props) => {
                   {users.filter(u => String(u.id).includes(searchTerm) || String(u.username).toLowerCase().includes(searchTerm.toLowerCase())).map((u, i) => (
                     <tr key={i} style={{ opacity: u.status === 'banned' ? 0.3 : 1 }}>
                       <td style={{ color: CYBER.primary }}>{u.username || u.id}</td>
-                      <td>{Number(u.balance || u.taps).toLocaleString()}</td>
+                      <td>{Number(u.balance || 0).toLocaleString()}</td>
                       <td>{u.status || 'active'}</td>
                       <td><button className="cyber-btn" onClick={() => toggleBan(u.id)}>{u.status === 'banned' ? 'Unlock' : 'Ban'}</button></td>
                     </tr>
