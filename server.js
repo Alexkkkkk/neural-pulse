@@ -146,25 +146,29 @@ async function startNeuralOS() {
 
                 pulseEvents.emit('update', pulseData);
                 await Stats.create(pulseData);
+            } catch (e) {
+                neuralLog(`Pulse Loop Error: ${e.message}`, 'ERROR');
+            }
+        }, 20000); // Увеличен интервал до 20 сек
 
-                // --- 🛡️ ОПТИМИЗИРОВАННАЯ ОЧИСТКА (LIMIT: 1500) ---
+        // --- 🛡️ ОБОСОБЛЕННАЯ ОЧИСТКА БД (Раз в минуту) ---
+        setInterval(async () => {
+            try {
                 const count = await Stats.count();
                 if (count > 1500) {
                     const recordsToDelete = await Stats.findAll({ 
                         order: [['created_at', 'ASC']], 
-                        limit: 100 
+                        limit: 150 
                     });
                     
                     if (recordsToDelete.length > 0) {
                         const ids = recordsToDelete.map(r => r.id);
                         await Stats.destroy({ where: { id: ids } });
-                        neuralLog(`DB_OPTIMIZATION: Purged ${ids.length} old telemetry records.`, 'INFO');
+                        neuralLog(`DB_CLEANUP: Purged ${ids.length} records.`, 'INFO');
                     }
                 }
-            } catch (e) {
-                neuralLog(`Pulse Loop Error: ${e.message}`, 'ERROR');
-            }
-        }, 10000);
+            } catch (err) { neuralLog('Cleanup Error', 'WARN'); }
+        }, 60000);
 
         // --- 🌐 SPA FALLBACK ---
         app.get('*', (req, res, next) => {
@@ -293,10 +297,10 @@ async function setupAdminPanel(app) {
             ],
             rootPath: '/admin',
             componentLoader,
+            bundler: { minify: true }, // Сжатие для экономии памяти
             dashboard: { 
                 component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
                 handler: async () => {
-                    neuralLog('Admin Dashboard data requested', 'INFO');
                     const [gStats, historyData, dailyUsers] = await Promise.all([
                         GlobalStats.findByPk(1),
                         Stats.findAll({ limit: 30, order: [['created_at', 'DESC']] }),
@@ -329,11 +333,7 @@ async function setupAdminPanel(app) {
 
         const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
             authenticate: async (email, password) => {
-                if (email === '1' && password === '1') {
-                    neuralLog('Admin Authorization Success', 'CORE');
-                    return { email: 'admin@neural.os' };
-                }
-                neuralLog(`Failed Admin Auth Attempt: ${email}`, 'WARN');
+                if (email === '1' && password === '1') return { email: 'admin@neural.os' };
                 return null;
             },
             cookiePassword: 'np-titan-2026-secure-v2',
@@ -344,14 +344,12 @@ async function setupAdminPanel(app) {
         neuralLog('AdminJS Panel successfully initialized.', 'SUCCESS');
     } catch (err) { 
         neuralLog(`AdminJS Initialization Fail: ${err.message}`, 'ERROR');
-        console.error(err); 
     }
 }
 
 function setupBotHandlers(bot) {
     bot.start(async (ctx) => {
         try {
-            neuralLog(`User Start: ${ctx.from.id} (@${ctx.from.username})`, 'NET');
             const [user, created] = await User.findOrCreate({
                 where: { id: ctx.from.id },
                 defaults: { username: ctx.from.username || 'AGENT', balance: 0 }
@@ -359,7 +357,6 @@ function setupBotHandlers(bot) {
             if (created) {
                 const gs = await GlobalStats.findByPk(1);
                 if (gs) await gs.increment('total_users');
-                neuralLog(`New Agent Registered: ${user.username}`, 'CORE');
                 pulseEvents.emit('update', { recent_event: `NEW_AGENT: ${user.username}`, event_type: 'AUTH' });
             }
             const webAppUrl = `${DOMAIN}/static/index.html?v=${Date.now()}`;
