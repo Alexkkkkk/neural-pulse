@@ -7,7 +7,8 @@
     "start": "node --expose-gc server.js",
     "dev": "node --watch server.js",
     "install-all": "npm install",
-    "clean": "rm -rf node_modules package-lock.json && npm install"
+    "clean": "rm -rf node_modules package-lock.json && npm install",
+    "rebuild": "npm run clean && npm start"
   },
   "dependencies": {
     "adminjs": "^7.8.1",
@@ -28,6 +29,7 @@
     "express-rate-limit": "^7.1.5",
     "dayjs": "^1.11.10",
     "dotenv": "^16.4.5",
+    "axios": "^1.6.7",
     "@tonconnect/ui-react": "^2.0.9",
     "@ton/ton": "^13.9.0",
     "@ton/crypto": "^3.2.0",
