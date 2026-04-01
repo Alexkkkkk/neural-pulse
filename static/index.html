@@ -158,33 +158,40 @@
             isLoaded: false,
             isSaving: false,
 
-            // 1. Исправленная инициализация TON Connect
             async init() {
                 ui.startLoader();
                 const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
                 this.data.id = String(u.id);
 
-                try {
-                    // Проверяем наличие библиотеки перед созданием
-                    const TonSDK = window.TonConnectUI || window.TON_CONNECT_UI; 
-                    if (TonSDK) {
-                        tonConnectUI = new TonSDK.TonConnectUI({
-                            manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json'
-                        });
+                // --- ФУНКЦИЯ ИНИЦИАЛИЗАЦИИ TON С ПОВТОРАМИ ---
+                const initTonWithRetry = (retries = 10) => {
+                    try {
+                        const TonSDK = window.TonConnectUI || (window.TON_CONNECT_UI ? window.TON_CONNECT_UI.TonConnectUI : null) || window.TON_CONNECT_UI;
+                        
+                        if (TonSDK && typeof TonSDK === 'function') {
+                            tonConnectUI = new TonSDK({
+                                manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json'
+                            });
 
-                        tonConnectUI.onStatusChange(wallet => {
-                            if (wallet) {
-                                this.data.wallet = wallet.account.address;
-                                const addr = wallet.account.address;
-                                document.getElementById('wallet-btn-label').innerText = "👛 " + addr.slice(0,4) + ".." + addr.slice(-4);
-                            } else {
-                                this.data.wallet = null;
-                                document.getElementById('wallet-btn-label').innerText = "👛 WALLET";
-                            }
-                            this.save();
-                        });
-                    }
-                } catch(e) { console.warn("TON Init Error", e); }
+                            tonConnectUI.onStatusChange(wallet => {
+                                if (wallet) {
+                                    this.data.wallet = wallet.account.address;
+                                    const addr = wallet.account.address;
+                                    document.getElementById('wallet-btn-label').innerText = "👛 " + addr.slice(0,4) + ".." + addr.slice(-4);
+                                } else {
+                                    this.data.wallet = null;
+                                    document.getElementById('wallet-btn-label').innerText = "👛 WALLET";
+                                }
+                                this.save();
+                            });
+                            console.log("TON Connect Loaded");
+                        } else if (retries > 0) {
+                            setTimeout(() => initTonWithRetry(retries - 1), 300);
+                        }
+                    } catch(e) { console.warn("TON Init Error", e); }
+                };
+
+                initTonWithRetry();
 
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
@@ -209,10 +216,9 @@
                 return 0;
             },
 
-            // 2. Исправленная функция тапа (защита от багов и мультитач)
             tap(e) {
                 if(!this.isLoaded) return;
-                if(e.cancelable) e.preventDefault(); // Важно для Telegram WebApp
+                if(e.cancelable) e.preventDefault(); 
 
                 if(this.data.energy < 1) { 
                     tg.HapticFeedback.notificationOccurred('error');
@@ -232,7 +238,7 @@
                 }
 
                 ui.render();
-                tg.HapticFeedback.impactOccurred('light'); // Сделал чуть мягче, приятнее для пальцев
+                tg.HapticFeedback.impactOccurred('light'); 
             },
 
             async upgrade(type) {
@@ -367,8 +373,12 @@
                     <p style="font-size:12px; color:gray; text-align:center; margin-bottom:10px;">Connect your TON wallet to sync your identity.</p>
                     <div id="ton-btn" style="display:flex; justify-content:center; padding:10px;"></div>`;
                     setTimeout(() => {
-                        if (tonConnectUI) tonConnectUI.renderButton({ container: document.getElementById('ton-btn') });
-                    }, 50);
+                        if (tonConnectUI && tonConnectUI.renderButton) {
+                            tonConnectUI.renderButton({ container: document.getElementById('ton-btn') });
+                        } else {
+                            document.getElementById('ton-btn').innerHTML = '<p style="color:red; font-size:10px;">SDK LOADING... TRY AGAIN</p>';
+                        }
+                    }, 100);
                 } else if(type === 'bonus') {
                     const last = game.data.last_bonus || 0;
                     const canClaim = (Date.now() - last) > 86400000;
