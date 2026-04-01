@@ -179,11 +179,9 @@
                 ui.startLoader();
                 tg.expand();
                 
-                // Инициализация данных пользователя
                 const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
                 this.data.id = String(u.id);
 
-                // Загрузка данных с сервера
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
                     if (r.ok) {
@@ -193,10 +191,9 @@
                     }
                 } catch(e) { console.error("Sync Error"); }
 
-                // Инициализация TON (после загрузки данных, чтобы проверить статус кошелька)
+                // Инициализация TON
                 this.initTonSDK();
 
-                // Слушатель тапов
                 const target = document.getElementById('main-target');
                 target.addEventListener('touchstart', (e) => this.tap(e), { passive: false });
 
@@ -208,9 +205,15 @@
 
             initTonSDK() {
                 try {
-                    // Используем стандартный конструктор из подключенного скрипта
-                    tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                        manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json'
+                    // Проверяем наличие объекта TON_CONNECT_UI в window
+                    const TonUI = window.TON_CONNECT_UI;
+                    if (!TonUI) {
+                        console.error("TON Connect SDK not found in window");
+                        return;
+                    }
+
+                    tonConnectUI = new TonUI.TonConnectUI({
+                        manifestUrl: 'https://np.bothost.tech/static/tonconnect-manifest.json' // Путь к статик-папке
                     });
 
                     tonConnectUI.onStatusChange(wallet => {
@@ -267,7 +270,6 @@
                     else if(type === 'mine') { 
                         this.data.mine_lvl++; 
                         this.data.profit += 120; 
-                        // Логика комбо: просто добавляем в прогресс для примера
                         if(this.data.combo_progress.length < 3) this.data.combo_progress.push('mine_' + this.data.mine_lvl);
                     }
                     ui.render();
@@ -374,7 +376,7 @@
                                 theme: 'dark' 
                             });
                         }
-                    }, 50);
+                    }, 100); // Небольшая задержка для рендеринга DOM
                 } else if(type === 'tasks') {
                     b.innerHTML = `<h2>📋 MISSIONS</h2>
                     <div class="task-item"><span>Join Channel</span><button class="task-btn" onclick="tg.openTelegramLink('https://t.me/neural_pulse')">+10k</button></div>`;
@@ -412,8 +414,9 @@
             },
 
             copyRef(url) { 
-                navigator.clipboard.writeText(url).then(() => tg.showScanQrPopup({text: "Link Copied!"}, () => {}));
-                tg.showAlert('Ссылка скопирована!'); 
+                navigator.clipboard.writeText(url).then(() => {
+                    tg.showAlert('Ссылка скопирована!');
+                });
             },
 
             async claimCombo() {
