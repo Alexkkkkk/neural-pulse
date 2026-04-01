@@ -1,6 +1,6 @@
-import React, { useState, useEffect, memo } from 'react';
+import React, { useState, useEffect, memo, useRef } from 'react';
 
-// --- 🌌 ЦВЕТОВАЯ ПАЛИТРА ---
+// --- 🌌 ЦВЕТОВАЯ ПАЛИТРА NEURAL_PULSE V9.8 ---
 const CYBER = {
   bg: '#000000',
   card: '#0a0d14',
@@ -15,7 +15,7 @@ const CYBER = {
   border: 'rgba(0, 242, 254, 0.15)',
 };
 
-// --- 📈 НЕОНОВЫЙ ГРАФИК ---
+// --- 📈 КОМПОНЕНТ НЕОНОВОГО ГРАФИКА ---
 const SparkGraph = memo(({ data, color, height = 45 }) => {
   if (!data || data.length < 2) return <div style={{ height }} />;
   const max = Math.max(...data, 1);
@@ -46,7 +46,7 @@ const SparkGraph = memo(({ data, color, height = 45 }) => {
   );
 });
 
-// --- 📊 ИНДИКАТОР РЕСУРСА ---
+// --- 📊 ИНДИКАТОР РЕСУРСА (ВЕРХНЯЯ ПАНЕЛЬ) ---
 const TelemetryCard = ({ label, value, data, color }) => (
   <div style={{ flex: 1, minWidth: '140px', background: 'rgba(255,255,255,0.02)', padding: '15px', borderRadius: '10px', border: `1px solid ${CYBER.border}` }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
@@ -57,7 +57,7 @@ const TelemetryCard = ({ label, value, data, color }) => (
   </div>
 );
 
-// --- 🗳️ КАРТОЧКА ДАННЫХ ---
+// --- 🗳️ ОСНОВНАЯ КАРТОЧКА ДАННЫХ ---
 const DataCard = ({ label, value, unit, data, color, isTon }) => (
   <div className="card">
     <div className="label" style={{ color }}>{label}</div>
@@ -69,12 +69,24 @@ const DataCard = ({ label, value, unit, data, color, isTon }) => (
   </div>
 );
 
+// --- ⚙️ ОСНОВНОЙ КОМПОНЕНТ DASHBOARD ---
 const Dashboard = (props) => {
   const { data: initialData } = props;
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoaded, setIsLoaded] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [searchTerm, setSearchTerm] = useState('');
 
+  // Состояние кошелька
+  const [wallet, setWallet] = useState({ 
+    connected: false, 
+    address: null, 
+    balance: 0, 
+    shortAddress: 'OFFLINE' 
+  });
+
+  // Системные данные
+  const [users, setUsers] = useState(initialData?.usersList || []);
   const [stats, setStats] = useState({ cpu: 28, ram: 34, online: 0, ton: 0, latency: 24, liquidity: 0 });
   const [history, setHistory] = useState({
     cpu: Array(15).fill(28),
@@ -86,13 +98,24 @@ const Dashboard = (props) => {
     liq: Array(15).fill(0)
   });
 
-  const updateSystemData = (newData) => {
+  // Логика обновления всех данных
+  const updateSystemData = async (newData = {}) => {
+    // Если кошелек подключен, тянем баланс из блокчейна
+    let currentBalance = wallet.balance;
+    if (wallet.connected && wallet.address) {
+      try {
+        const res = await fetch(`https://tonapi.io/v2/accounts/${wallet.address}`);
+        const data = await res.json();
+        currentBalance = data.balance / 1000000000;
+        setWallet(prev => ({ ...prev, balance: currentBalance }));
+      } catch (e) { console.warn("Balance fetch failed"); }
+    }
+
     setStats(prev => ({
       ...prev,
       cpu: newData.cpu ?? (prev.cpu + (Math.random() * 2 - 1)),
       ram: newData.ram ?? (prev.ram + (Math.random() * 1 - 0.5)),
       online: newData.online ?? prev.online,
-      ton: newData.ton ?? prev.ton,
       latency: newData.latency ?? (prev.latency + (Math.random() * 4 - 2)),
       liquidity: newData.liquidity ?? prev.liquidity
     }));
@@ -102,7 +125,7 @@ const Dashboard = (props) => {
       ram: [...p.ram.slice(1), newData.ram ?? (p.ram[p.ram.length-1] + (Math.random() * 1 - 0.5))],
       stability: [...p.stability.slice(1), 100 - ((newData.latency ?? p.lat[p.lat.length-1]) / 5)],
       online: [...p.online.slice(1), newData.online ?? p.online[p.online.length-1]],
-      ton: [...p.ton.slice(1), newData.ton ?? p.ton[p.ton.length-1]],
+      ton: [...p.ton.slice(1), currentBalance],
       lat: [...p.lat.slice(1), newData.latency ?? (p.lat[p.lat.length-1] + (Math.random() * 4 - 2))],
       liq: [...p.liq.slice(1), newData.liquidity ?? p.liq[p.liq.length-1]]
     }));
@@ -110,6 +133,26 @@ const Dashboard = (props) => {
   };
 
   useEffect(() => {
+    // Инициализация TON Connect
+    const tonConnectUI = new window.TON_CONNECT_UI.TonConnectUI({
+      manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json',
+      buttonRootId: 'ton-btn'
+    });
+
+    const unsubscribe = tonConnectUI.onStatusChange(w => {
+      if (w) {
+        setWallet({
+          connected: true,
+          address: w.account.address,
+          balance: 0,
+          shortAddress: `${w.account.address.slice(0,4)}...${w.account.address.slice(-4)}`
+        });
+      } else {
+        setWallet({ connected: false, address: null, balance: 0, shortAddress: 'OFFLINE' });
+      }
+    });
+
+    // Подписка на серверные события
     const eventSource = new EventSource('/api/admin/stream');
     eventSource.onmessage = (e) => {
       try {
@@ -119,7 +162,6 @@ const Dashboard = (props) => {
              cpu: update.core_load,
              ram: update.sync_memory,
              online: update.active_agents,
-             ton: update.ton_reserve,
              latency: update.network_latency,
              liquidity: update.pulse_liquidity
            });
@@ -127,17 +169,16 @@ const Dashboard = (props) => {
       } catch (err) { console.error("Stream error", err); }
     };
 
-    const interval = setInterval(() => {
-      updateSystemData({}); 
-    }, 10000);
+    // Таймер принудительного обновления (10 секунд)
+    const interval = setInterval(() => updateSystemData({}), 10000);
 
     setTimeout(() => setIsLoaded(true), 600);
-
     return () => {
       eventSource.close();
       clearInterval(interval);
+      unsubscribe();
     };
-  }, []);
+  }, [wallet.address, wallet.connected]);
 
   if (!isLoaded) return <div className="loading">CONNECTING_TO_NEURAL_PULSE_NODE...</div>;
 
@@ -146,33 +187,35 @@ const Dashboard = (props) => {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Roboto+Mono&display=swap');
         .app-root { background: #000; min-height: 100vh; padding: 20px; font-family: 'Inter', sans-serif; color: #fff; }
-        .header { display: flex; justify-content: space-between; align-items: center; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         .header h1 { font-size: 24px; font-weight: 900; letter-spacing: 4px; color: ${CYBER.primary}; margin: 0; }
         .nav-tabs { display: flex; gap: 20px; margin: 20px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .tab-btn { background: none; border: none; color: #4a5568; padding: 10px 0; font-size: 11px; cursor: pointer; font-family: 'Roboto Mono'; font-weight: bold; }
+        .tab-btn { background: none; border: none; color: #4a5568; padding: 10px 0; font-size: 11px; cursor: pointer; font-family: 'Roboto Mono'; font-weight: bold; transition: 0.3s; }
         .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; }
         .res-panel { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; padding: 15px; margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
-        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; border-radius: 12px; }
-        .label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
-        .val-main { font-size: 28px; font-weight: 700; display: flex; align-items: baseline; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 20px; border-radius: 12px; position: relative; overflow: hidden; }
+        .label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; opacity: 0.7; }
+        .val-main { font-size: 32px; font-weight: 700; display: flex; align-items: baseline; }
         .val-unit { font-size: 10px; color: #4a5568; margin-left: 6px; font-weight: 800; }
-        .loading { background: #000; height: 100vh; display: flex; align-items: center; justify-content: center; color: ${CYBER.primary}; font-family: 'Roboto Mono'; }
         .pulse-dot { width: 6px; height: 6px; background: ${CYBER.success}; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px ${CYBER.success}; animation: blink 2s infinite; }
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .cyber-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .cyber-table th { text-align: left; padding: 12px; color: ${CYBER.primary}; border-bottom: 1px solid ${CYBER.border}; font-size: 9px; text-transform: uppercase; }
+        .cyber-table td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.03); font-family: 'Roboto Mono'; }
+        .search-input { width: 100%; background: #0c1017; border: 1px solid ${CYBER.border}; color: #fff; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-family: 'Roboto Mono'; outline: none; }
+        .loading { background: #000; height: 100vh; display: flex; align-items: center; justify-content: center; color: ${CYBER.primary}; font-family: 'Roboto Mono'; letter-spacing: 2px; }
       `}</style>
 
       <div className="header">
         <div>
           <h1>NEURAL_PULSE V9.8</h1>
-          <div style={{ fontFamily: 'Roboto Mono', fontSize: '9px', color: CYBER.success, marginTop: '5px' }}>
+          <div style={{ fontFamily: 'Roboto Mono', fontSize: '9px', color: wallet.connected ? CYBER.ton : CYBER.success, marginTop: '5px' }}>
             <span className="pulse-dot"></span>
-            SYSTEM_OPERATIONAL // NEXT_SYNC: 10S
+            {wallet.connected ? `UPLINK_STABLE // ${wallet.shortAddress}` : 'SYSTEM_OPERATIONAL // SYNC: 10S'}
           </div>
         </div>
-        <div style={{ fontSize: '10px', color: '#4a5568', textAlign: 'right' }}>
-           LAST_PULSE: {lastUpdate.toLocaleTimeString()}
-        </div>
+        <div id="ton-btn" style={{ transform: 'scale(0.9)', transformOrigin: 'right' }}></div>
       </div>
 
       <div className="nav-tabs">
@@ -190,15 +233,44 @@ const Dashboard = (props) => {
 
           <div className="grid">
             <DataCard label="Active_Agents" value={stats.online} unit="USERS" data={history.online} color={CYBER.success} />
-            <DataCard label="Ton_Reserve" value={stats.ton} unit="WALLETS" data={history.ton} color={CYBER.ton} isTon={true} />
-            <DataCard label="Pulse_Liquidity" value={stats.liquidity.toFixed(0)} unit="$NP" data={history.liq} color={CYBER.warning} />
+            <DataCard label="Live_Wallet_TON" value={wallet.connected ? wallet.balance.toFixed(2) : "0.00"} unit="TON" data={history.ton} color={CYBER.ton} isTon={true} />
+            <DataCard label="Pulse_Liquidity" value={stats.liquidity.toLocaleString()} unit="$NP" data={history.liq} color={CYBER.warning} />
             <DataCard label="Network_Latency" value={Math.round(stats.latency)} unit="MS" data={history.lat} color={CYBER.danger} />
           </div>
         </>
       )}
 
-      <footer style={{ marginTop: '30px', textAlign: 'center', opacity: 0.2, fontSize: '8px', fontFamily: 'Roboto Mono' }}>
-        REALTIME_MONITORING_ACTIVE // REFRESH_RATE: 10000MS
+      {activeTab === 'agents' && (
+        <div className="card">
+          <div className="label">Identity_Database_Search</div>
+          <input 
+            className="search-input" 
+            placeholder="ENTER UID OR ALIAS..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <div style={{ overflowX: 'auto' }}>
+            <table className="cyber-table">
+              <thead>
+                <tr><th>Identity_UID</th><th>Pulse_Balance</th><th>Access_Status</th></tr>
+              </thead>
+              <tbody>
+                {users.filter(u => String(u.id).includes(searchTerm) || String(u.username).toLowerCase().includes(searchTerm.toLowerCase())).map((u, i) => (
+                  <tr key={i}>
+                    <td style={{ color: CYBER.primary }}>{u.username || u.id}</td>
+                    <td>{Number(u.balance || 0).toLocaleString()} <span style={{fontSize:'8px', opacity:0.3}}>$NP</span></td>
+                    <td style={{ color: CYBER.success }}>AUTHORIZED</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <footer style={{ marginTop: '30px', display: 'flex', justifyContent: 'space-between', opacity: 0.2, fontSize: '8px', fontFamily: 'Roboto Mono' }}>
+        <div>NODE_HYBRID_ACTIVE // RENDER_V9.8</div>
+        <div>LAST_PULSE: {lastUpdate.toLocaleTimeString()}</div>
       </footer>
     </div>
   );
