@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse v5.6.0 | Terminal</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
         /* Системные анимации */
         @keyframes pulse { 0% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } 100% { opacity: 0.5; transform: scale(1); } }
@@ -74,23 +74,10 @@
 
         .energy-error { animation: shake 0.2s ease-in-out 2; border-color: red !important; }
 
-        #tc-widget-root, .tc-root, #ton-connect-ui-container {
-            z-index: 10000 !important;
-            position: relative;
-        }
-        #ton-btn-container {
-            min-height: 44px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 10px;
-        }
-
         .combo-dots { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; }
         .dot { width: 12px; height: 12px; border: 1px solid cyan; border-radius: 50%; transition: 0.3s; }
         .dot.active { background: cyan; box-shadow: 0 0 10px cyan; }
 
-        /* Фикс для модального окна на мобилках */
         .modal-box {
             background: #001a1a;
             width: 100%;
@@ -191,26 +178,27 @@
             async init() {
                 ui.startLoader();
                 tg.expand();
-                tg.enableClosingConfirmation();
-                if (tg.setHeaderColor) tg.setHeaderColor('#001414'); 
-
+                
+                // Инициализация данных пользователя
                 const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
                 this.data.id = String(u.id);
 
-                // Инициализация TON
-                this.initTonSDK();
-
-                const target = document.getElementById('main-target');
-                target.addEventListener('touchstart', (e) => this.tap(e), { passive: false });
-
+                // Загрузка данных с сервера
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
                     if (r.ok) {
                         const db = await r.json();
-                        this.data = { ...this.data, ...db, id: String(u.id) };
+                        this.data = { ...this.data, ...db };
                         if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
                     }
                 } catch(e) { console.error("Sync Error"); }
+
+                // Инициализация TON (после загрузки данных, чтобы проверить статус кошелька)
+                this.initTonSDK();
+
+                // Слушатель тапов
+                const target = document.getElementById('main-target');
+                target.addEventListener('touchstart', (e) => this.tap(e), { passive: false });
 
                 document.getElementById('my-name').innerText = (u.username || u.first_name).toUpperCase();
                 this.isLoaded = true;
@@ -219,31 +207,24 @@
             },
 
             initTonSDK() {
-                // Прямая инициализация через глобальное имя, которое использует CDN библиотека
                 try {
-                    const TonSDK = window.TON_CONNECT_UI?.TonConnectUI || window.TonConnectUI;
-                    
-                    if (TonSDK) {
-                        tonConnectUI = new TonSDK({ 
-                            manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json' 
-                        });
-                        
-                        tonConnectUI.onStatusChange(wallet => {
-                            if (wallet) {
-                                this.data.wallet = wallet.account.address;
-                                const shortAddr = this.data.wallet.slice(0,4) + ".." + this.data.wallet.slice(-4);
-                                document.getElementById('wallet-btn-label').innerText = "👛 " + shortAddr;
-                            } else {
-                                this.data.wallet = null;
-                                document.getElementById('wallet-btn-label').innerText = "👛 WALLET";
-                            }
-                            this.save();
-                        });
-                        console.log("TON SDK Live");
-                    }
-                } catch(e) { 
-                    console.error("TON Init Error", e); 
-                }
+                    // Используем стандартный конструктор из подключенного скрипта
+                    tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+                        manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json'
+                    });
+
+                    tonConnectUI.onStatusChange(wallet => {
+                        if (wallet) {
+                            this.data.wallet = wallet.account.address;
+                            const addr = this.data.wallet;
+                            document.getElementById('wallet-btn-label').innerText = "👛 " + addr.slice(0,4) + ".." + addr.slice(-4);
+                        } else {
+                            this.data.wallet = null;
+                            document.getElementById('wallet-btn-label').innerText = "👛 WALLET";
+                        }
+                        this.save();
+                    });
+                } catch(e) { console.error("TON Init failed", e); }
             },
 
             getCost(type) {
@@ -286,7 +267,8 @@
                     else if(type === 'mine') { 
                         this.data.mine_lvl++; 
                         this.data.profit += 120; 
-                        if(this.data.combo_progress.length < 3) this.data.combo_progress.push('mine');
+                        // Логика комбо: просто добавляем в прогресс для примера
+                        if(this.data.combo_progress.length < 3) this.data.combo_progress.push('mine_' + this.data.mine_lvl);
                     }
                     ui.render();
                     tg.HapticFeedback.notificationOccurred('success');
@@ -304,7 +286,7 @@
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify(this.data)
                     });
-                } catch(e) { console.warn("Save error"); } 
+                } catch(e) { console.warn("Save failed"); } 
                 finally { this.isSaving = false; }
             },
 
@@ -322,7 +304,7 @@
             startLoader() {
                 let p = 0;
                 const i = setInterval(() => {
-                    p += Math.floor(Math.random() * 10) + 2;
+                    p += Math.floor(Math.random() * 12) + 5;
                     if(p > 100) p = 100;
                     document.getElementById('pct').innerText = p+'%';
                     document.getElementById('bar').style.width = p+'%';
@@ -331,7 +313,7 @@
                         document.getElementById('loader').style.display='none'; 
                         document.getElementById('app').style.display='flex'; 
                     }
-                }, 40);
+                }, 50);
             },
 
             render() {
@@ -374,7 +356,7 @@
                     const dots = [0,1,2].map(i => `<div class="dot ${game.data.combo_progress[i] ? 'active' : ''}"></div>`).join('');
                     b.innerHTML = `<h2>🧩 DAILY COMBO</h2>
                     <div class="combo-dots">${dots}</div>
-                    <p style="text-align:center; font-size:12px;">Find 3 secret upgrades to claim 1,000,000 NP!</p>
+                    <p style="text-align:center; font-size:12px;">Upgrade nodes to find the daily combo and claim 1M NP!</p>
                     <button class="task-btn" style="width:100%" ${game.data.combo_progress.length === 3 ? '' : 'disabled'} onclick="ui.claimCombo()">CLAIM REWARD</button>`;
                 } else if(type === 'friends') {
                     const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
@@ -383,15 +365,16 @@
                     const isConnected = !!game.data.wallet;
                     b.innerHTML = `<h2>👛 TON WALLET</h2>
                     <p id="wallet-status" style="font-size:12px; color:gray; text-align:center; margin-bottom:15px;">${isConnected ? 'Identity Linked' : 'Connect for Sync'}</p>
-                    <div id="ton-btn-container"><div id="ton-connect-button"></div></div>
-                    ${isConnected ? '<button class="task-btn" style="width:100%; background:#ff4444; color:white; margin-top:10px;" onclick="tonConnectUI.disconnect()">DISCONNECT</button>' : ''}`;
+                    <div id="ton-connect-button" style="display:flex; justify-content:center;"></div>`;
                     
                     setTimeout(() => {
-                        const container = document.getElementById('ton-connect-button');
-                        if (tonConnectUI && container) {
-                            tonConnectUI.renderButton({ container, theme: 'dark', buttonConfiguration: { width: 'full' } });
+                        if (tonConnectUI) {
+                            tonConnectUI.renderButton({ 
+                                container: document.getElementById('ton-connect-button'), 
+                                theme: 'dark' 
+                            });
                         }
-                    }, 100);
+                    }, 50);
                 } else if(type === 'tasks') {
                     b.innerHTML = `<h2>📋 MISSIONS</h2>
                     <div class="task-item"><span>Join Channel</span><button class="task-btn" onclick="tg.openTelegramLink('https://t.me/neural_pulse')">+10k</button></div>`;
@@ -400,7 +383,9 @@
                         const r = await fetch('/api/top'); 
                         const top = await r.json();
                         let h = '<h2>🏆 TOP AGENTS</h2>';
-                        top.forEach((u, i) => { h += `<div class="top-item"><div><b style="color:cyan;">#${i+1}</b> ${u.username || 'Anon'}</div><b>${Math.floor(u.balance).toLocaleString()}</b></div>`; });
+                        top.forEach((u, i) => { 
+                            h += `<div class="top-item"><div><b style="color:cyan;">#${i+1}</b> ${u.username || 'Anon'}</div><b>${Math.floor(u.balance).toLocaleString()}</b></div>`; 
+                        });
                         b.innerHTML = h;
                     } catch(e) { b.innerHTML = '<h2>OFFLINE</h2>'; }
                 }
@@ -426,7 +411,10 @@
                 finally { btn.disabled = false; }
             },
 
-            copyRef(url) { navigator.clipboard.writeText(url).then(() => tg.showAlert('Copied!')); },
+            copyRef(url) { 
+                navigator.clipboard.writeText(url).then(() => tg.showScanQrPopup({text: "Link Copied!"}, () => {}));
+                tg.showAlert('Ссылка скопирована!'); 
+            },
 
             async claimCombo() {
                 if(game.data.combo_progress.length === 3) {
