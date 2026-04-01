@@ -1,4 +1,4 @@
-import React, { useState, useEffect, memo, useRef } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 
 // --- 🌌 ЦВЕТОВАЯ ПАЛИТРА ---
 const CYBER = {
@@ -75,7 +75,6 @@ const Dashboard = (props) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
 
-  const [users, setUsers] = useState(initialData?.usersList || []);
   const [stats, setStats] = useState({ cpu: 28, ram: 34, online: 0, ton: 0, latency: 24, liquidity: 0 });
   const [history, setHistory] = useState({
     cpu: Array(15).fill(28),
@@ -87,32 +86,30 @@ const Dashboard = (props) => {
     liq: Array(15).fill(0)
   });
 
-  // Функция обновления состояния (вызывается из Stream или по Таймеру)
   const updateSystemData = (newData) => {
     setStats(prev => ({
       ...prev,
-      cpu: newData.cpu ?? (prev.cpu + (Math.random() * 4 - 2)),
-      ram: newData.ram ?? (prev.ram + (Math.random() * 2 - 1)),
+      cpu: newData.cpu ?? (prev.cpu + (Math.random() * 2 - 1)),
+      ram: newData.ram ?? (prev.ram + (Math.random() * 1 - 0.5)),
       online: newData.online ?? prev.online,
       ton: newData.ton ?? prev.ton,
-      latency: newData.latency ?? (prev.latency + (Math.random() * 6 - 3)),
+      latency: newData.latency ?? (prev.latency + (Math.random() * 4 - 2)),
       liquidity: newData.liquidity ?? prev.liquidity
     }));
 
     setHistory(p => ({
-      cpu: [...p.cpu.slice(1), newData.cpu ?? (p.cpu[p.cpu.length-1] + (Math.random() * 4 - 2))],
-      ram: [...p.ram.slice(1), newData.ram ?? (p.ram[p.ram.length-1] + (Math.random() * 2 - 1))],
+      cpu: [...p.cpu.slice(1), newData.cpu ?? (p.cpu[p.cpu.length-1] + (Math.random() * 2 - 1))],
+      ram: [...p.ram.slice(1), newData.ram ?? (p.ram[p.ram.length-1] + (Math.random() * 1 - 0.5))],
       stability: [...p.stability.slice(1), 100 - ((newData.latency ?? p.lat[p.lat.length-1]) / 5)],
       online: [...p.online.slice(1), newData.online ?? p.online[p.online.length-1]],
       ton: [...p.ton.slice(1), newData.ton ?? p.ton[p.ton.length-1]],
-      lat: [...p.lat.slice(1), newData.latency ?? (p.lat[p.lat.length-1] + (Math.random() * 6 - 3))],
+      lat: [...p.lat.slice(1), newData.latency ?? (p.lat[p.lat.length-1] + (Math.random() * 4 - 2))],
       liq: [...p.liq.slice(1), newData.liquidity ?? p.liq[p.liq.length-1]]
     }));
     setLastUpdate(new Date());
   };
 
   useEffect(() => {
-    // 1. Подписка на поток (SSE)
     const eventSource = new EventSource('/api/admin/stream');
     eventSource.onmessage = (e) => {
       try {
@@ -124,15 +121,14 @@ const Dashboard = (props) => {
              online: update.active_agents,
              ton: update.ton_reserve,
              latency: update.network_latency,
-             liquidity: update.total_liquidity
+             liquidity: update.pulse_liquidity
            });
         }
       } catch (err) { console.error("Stream error", err); }
     };
 
-    // 2. Таймер принудительного обновления каждые 10 секунд
     const interval = setInterval(() => {
-      updateSystemData({}); // Имитируем пульсацию, если сервер молчит
+      updateSystemData({}); 
     }, 10000);
 
     setTimeout(() => setIsLoaded(true), 600);
@@ -194,14 +190,12 @@ const Dashboard = (props) => {
 
           <div className="grid">
             <DataCard label="Active_Agents" value={stats.online} unit="USERS" data={history.online} color={CYBER.success} />
-            <DataCard label="Ton_Reserve" value={stats.ton.toFixed(1)} unit="TON" data={history.ton} color={CYBER.ton} isTon={true} />
-            <DataCard label="Pulse_Liquidity" value={stats.liquidity} unit="$NP" data={history.liq} color={CYBER.warning} />
+            <DataCard label="Ton_Reserve" value={stats.ton} unit="WALLETS" data={history.ton} color={CYBER.ton} isTon={true} />
+            <DataCard label="Pulse_Liquidity" value={stats.liquidity.toFixed(0)} unit="$NP" data={history.liq} color={CYBER.warning} />
             <DataCard label="Network_Latency" value={Math.round(stats.latency)} unit="MS" data={history.lat} color={CYBER.danger} />
           </div>
         </>
       )}
-
-      {/* Остальные вкладки (Agents) остаются без изменений */}
 
       <footer style={{ marginTop: '30px', textAlign: 'center', opacity: 0.2, fontSize: '8px', fontFamily: 'Roboto Mono' }}>
         REALTIME_MONITORING_ACTIVE // REFRESH_RATE: 10000MS
