@@ -128,7 +128,7 @@
 
     <div id="app" style="display: none; flex-direction: column; height: 100vh;">
         <header>
-            <div class="u-avatar"><img id="my-avatar" src="images/logo.png" onerror="this.src='images/logo.png'"></div>
+            <div class="u-avatar"><img id="my-avatar" src="images/logo.png"></div>
             <div class="u-info">
                 <b id="my-name">AGENT</b>
                 <small id="ui-rank">SCANNING SYSTEM...</small>
@@ -202,7 +202,6 @@
                 const u = tg.initDataUnsafe.user || { id: 0, first_name: 'Local', username: 'user' };
                 this.data.id = String(u.id);
 
-                // Initialize TON Connect
                 try {
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
                         manifestUrl: window.location.origin + '/tonconnect-manifest.json',
@@ -215,7 +214,6 @@
                     });
                 } catch(e) { console.error("TON Error:", e); }
 
-                // Fetch Data
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${u.username || u.first_name}`);
                     if (r.ok) {
@@ -231,7 +229,6 @@
                 this.startLoops();
                 ui.render();
 
-                // Multi-touch Support
                 const target = document.getElementById('main-target');
                 target.addEventListener('touchstart', (e) => {
                     e.preventDefault();
@@ -382,15 +379,34 @@
                         b.innerHTML = `<h2>👛 TON WALLET</h2><p style="text-align:center; font-size:12px; color:#888; margin-bottom:15px;">Connect your wallet for future airdrops</p><div id="ton-btn" style="display:flex; justify-content:center;"></div>`;
                         setTimeout(() => tonConnectUI.renderButton({ container: document.getElementById('ton-btn'), width: '100%' }), 50);
                     } else if(type === 'tasks') {
+                        const t1 = game.data.completed_tasks.includes('tg') ? 'DONE' : '+10,000';
+                        const t2 = game.data.completed_tasks.includes('x') ? 'DONE' : '+5,000';
                         b.innerHTML = `<h2>📋 MISSIONS</h2><br>
-                        <div class="task-item"><span>Join Community</span><button class="task-btn" onclick="tg.openTelegramLink('https://t.me/neural_pulse')">+10,000</button></div>
-                        <div class="task-item"><span>Follow X</span><button class="task-btn" onclick="tg.openLink('https://x.com/')">+5,000</button></div>`;
+                        <div class="task-item"><span>Join Community</span><button class="task-btn" onclick="ui.doTask('tg', 'https://t.me/neural_pulse', 10000)" ${t1==='DONE'?'disabled':''}>${t1}</button></div>
+                        <div class="task-item"><span>Follow X</span><button class="task-btn" onclick="ui.doTask('x', 'https://x.com/', 5000)" ${t2==='DONE'?'disabled':''}>${t2}</button></div>`;
                     } else if(type === 'top') {
                         b.innerHTML = `<h2>🏆 GLOBAL TOP</h2><br><p style="color:#555; text-align:center; font-family:monospace;">RANKING DATABASE OFFLINE...<br>COMING SOON</p>`;
                     } else if(type === 'bonus') {
-                        b.innerHTML = `<h2>🎁 DAILY REWARD</h2><br><p style="text-align:center; margin-bottom:15px;">Claim your daily maintenance bonus</p><button class="task-btn" style="width:100%; height:60px;" onclick="ui.claimDaily()">CLAIM 5,000 NP</button>`;
+                        const canClaim = Date.now() - (game.data.last_bonus || 0) > 24*60*60*1000;
+                        b.innerHTML = `<h2>🎁 DAILY REWARD</h2><br><p style="text-align:center; margin-bottom:15px;">Claim your daily maintenance bonus</p>
+                        <button class="task-btn" style="width:100%; height:60px;" onclick="ui.claimDaily()" ${!canClaim?'disabled':''}>
+                            ${canClaim ? 'CLAIM 5,000 NP' : 'WAIT 24H'}
+                        </button>`;
                     }
                 }, 100);
+            },
+
+            doTask(id, url, reward) {
+                if(id === 'tg') tg.openTelegramLink(url); else tg.openLink(url);
+                setTimeout(() => {
+                    if(!game.data.completed_tasks.includes(id)) {
+                        game.data.balance += reward;
+                        game.data.completed_tasks.push(id);
+                        ui.render();
+                        ui.openM('tasks');
+                        game.save();
+                    }
+                }, 2000);
             },
 
             async askAI() {
@@ -416,6 +432,7 @@
 
             claimDaily() {
                 game.data.balance += 5000;
+                game.data.last_bonus = Date.now();
                 ui.render(); ui.closeM();
                 tg.showAlert("Maintenance bonus 5,000 NP credited!");
                 game.save();
