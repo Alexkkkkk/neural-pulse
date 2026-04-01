@@ -106,7 +106,7 @@
 
     <div id="app" style="display: none; flex-direction: column; height: 100vh;">
         <header>
-            <div class="u-avatar"><img id="my-avatar" src="images/logo.png" onerror="this.src='images/logo.png'"></div>
+            <div class="u-avatar"><img id="my-avatar" src="images/logo.png"></div>
             <div class="u-info">
                 <b id="my-name">AGENT</b><br>
                 <small id="ui-rank">SCANNING...</small>
@@ -191,7 +191,7 @@
                     }
                 } catch(e) { console.error("Sync Error"); }
 
-                // Инициализация TON
+                // Инициализация TON с проверкой готовности
                 this.initTonSDK();
 
                 const target = document.getElementById('main-target');
@@ -204,16 +204,16 @@
             },
 
             initTonSDK() {
-                try {
-                    // Проверяем наличие объекта TON_CONNECT_UI в window
-                    const TonUI = window.TON_CONNECT_UI;
-                    if (!TonUI) {
-                        console.error("TON Connect SDK not found in window");
-                        return;
-                    }
+                // Если библиотека еще не загрузилась, ждем 500мс и пробуем снова
+                if (typeof TON_CONNECT_UI === 'undefined') {
+                    console.warn("TON SDK not ready, retrying...");
+                    setTimeout(() => this.initTonSDK(), 500);
+                    return;
+                }
 
-                    tonConnectUI = new TonUI.TonConnectUI({
-                        manifestUrl: 'https://np.bothost.tech/static/tonconnect-manifest.json' // Путь к статик-папке
+                try {
+                    tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+                        manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json' 
                     });
 
                     tonConnectUI.onStatusChange(wallet => {
@@ -376,7 +376,7 @@
                                 theme: 'dark' 
                             });
                         }
-                    }, 100); // Небольшая задержка для рендеринга DOM
+                    }, 150); 
                 } else if(type === 'tasks') {
                     b.innerHTML = `<h2>📋 MISSIONS</h2>
                     <div class="task-item"><span>Join Channel</span><button class="task-btn" onclick="tg.openTelegramLink('https://t.me/neural_pulse')">+10k</button></div>`;
