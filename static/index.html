@@ -1,445 +1,451 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v5.5.9 | Terminal</title>
-    <link rel="stylesheet" href="style.css">
-    <style>
-        /* Системные анимации */
-        @keyframes pulse { 0% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } 100% { opacity: 0.5; transform: scale(1); } }
-        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
-        
-        .modal-bg.active { display: flex; }
-        
-        .task-item, .top-item {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(0,255,255,0.2);
-            border-radius: 12px;
-            padding: 12px;
-            margin-bottom: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .task-btn { 
-            background: cyan; color: black; border: none; padding: 8px 12px; 
-            border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; 
-        }
-        .task-btn:active { transform: scale(0.95); }
-        .task-btn:disabled { background: #333; color: #666; cursor: not-allowed; }
-        
-        .ref-box { 
-            background: #000; border: 1px dashed cyan; padding: 10px; 
-            border-radius: 8px; margin: 10px 0; word-break: break-all; 
-            font-family: monospace; font-size: 11px; color: #0ff; 
-        }
-        
-        .loading { text-align: center; padding: 20px; color: cyan; animation: pulse 1.5s infinite; font-family: monospace; }
-        
-        .pop {
-            position: absolute; color: cyan; font-weight: bold; font-size: 26px;
-            pointer-events: none; animation: moveUp 0.6s ease-out forwards;
-            z-index: 9999; text-shadow: 0 0 10px rgba(0,255,255,0.5);
-            user-select: none;
-        }
-        
-        @keyframes moveUp {
-            0% { transform: translateY(0) scale(1); opacity: 1; }
-            100% { transform: translateY(-120px) scale(1.2); opacity: 0; }
-        }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Neural Pulse v5.5.9 | Terminal</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Системные анимации */
+        @keyframes pulse { 0% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } 100% { opacity: 0.5; transform: scale(1); } }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        
+        .modal-bg.active { display: flex; }
+        
+        .task-item, .top-item {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(0,255,255,0.2);
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .task-btn { 
+            background: cyan; color: black; border: none; padding: 8px 12px; 
+            border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; 
+        }
+        .task-btn:active { transform: scale(0.95); }
+        .task-btn:disabled { background: #333; color: #666; cursor: not-allowed; }
+        
+        .ref-box { 
+            background: #000; border: 1px dashed cyan; padding: 10px; 
+            border-radius: 8px; margin: 10px 0; word-break: break-all; 
+            font-family: monospace; font-size: 11px; color: #0ff; 
+        }
+        
+        .loading { text-align: center; padding: 20px; color: cyan; animation: pulse 1.5s infinite; font-family: monospace; }
+        
+        .pop {
+            position: absolute; color: cyan; font-weight: bold; font-size: 26px;
+            pointer-events: none; animation: moveUp 0.6s ease-out forwards;
+            z-index: 9999; text-shadow: 0 0 10px rgba(0,255,255,0.5);
+            user-select: none;
+        }
+        
+        @keyframes moveUp {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-120px) scale(1.2); opacity: 0; }
+        }
 
-        .ai-terminal {
-            background: rgba(0, 20, 20, 0.9);
-            border: 1px solid cyan;
-            padding: 15px;
-            border-radius: 10px;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            color: #0ff;
-            margin: 10px 0;
-            line-height: 1.5;
-            min-height: 120px;
-            max-height: 220px;
-            box-shadow: inset 0 0 15px rgba(0,255,255,0.2);
-            overflow-y: auto;
-            white-space: pre-wrap;
-            position: relative;
-        }
-        .ai-terminal::after { content: '_'; animation: blink 1s infinite; }
-        @keyframes blink { 50% { opacity: 0; } }
+        .ai-terminal {
+            background: rgba(0, 20, 20, 0.9);
+            border: 1px solid cyan;
+            padding: 15px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #0ff;
+            margin: 10px 0;
+            line-height: 1.5;
+            min-height: 120px;
+            max-height: 220px;
+            box-shadow: inset 0 0 15px rgba(0,255,255,0.2);
+            overflow-y: auto;
+            white-space: pre-wrap;
+            position: relative;
+        }
+        .ai-terminal::after { content: '_'; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
 
-        .energy-error { animation: shake 0.2s ease-in-out 2; border-color: red !important; }
-    </style>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+        .energy-error { animation: shake 0.2s ease-in-out 2; border-color: red !important; }
+    </style>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
 </head>
 <body>
 
-    <div id="loader">
-        <div class="l-content">
-            <div class="ring"></div>
-            <img src="images/logo.png" class="l-logo" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'">
-        </div>
-        <div class="l-status">INITIALIZING NEURAL LINK...</div>
-        <div class="l-pct" id="pct">0%</div>
-        <div class="l-bar"><div id="bar"></div></div>
-    </div>
+    <div id="loader">
+        <div class="l-content">
+            <div class="ring"></div>
+            <img src="images/logo.png" class="l-logo" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'">
+        </div>
+        <div class="l-status">INITIALIZING NEURAL LINK...</div>
+        <div class="l-pct" id="pct">0%</div>
+        <div class="l-bar"><div id="bar"></div></div>
+    </div>
 
-    <div id="app" style="display: none; flex-direction: column; height: 100vh;">
-        <header>
-            <div class="u-avatar"><img id="my-avatar" src="images/logo.png" onerror="this.src='images/logo.png'"></div>
-            <div class="u-info">
-                <b id="my-name">AGENT</b><br>
-                <small id="ui-rank">SCANNING...</small>
-            </div>
-            <div class="u-lvl" id="my-lvl">LVL 1</div>
-        </header>
+    <div id="app" style="display: none; flex-direction: column; height: 100vh;">
+        <header>
+            <div class="u-avatar"><img id="my-avatar" src="images/logo.png" onerror="this.src='images/logo.png'"></div>
+            <div class="u-info">
+                <b id="my-name">AGENT</b><br>
+                <small id="ui-rank">SCANNING...</small>
+            </div>
+            <div class="u-lvl" id="my-lvl">LVL 1</div>
+        </header>
 
-        <div class="stats-row">
-            <div class="s-box"><small>POWER</small><b id="ui-tap">+1</b></div>
-            <div class="s-box"><small>MINING / HR</small><b id="ui-profit">0</b></div>
-        </div>
+        <div class="stats-row">
+            <div class="s-box"><small>POWER</small><b id="ui-tap">+1</b></div>
+            <div class="s-box"><small>MINING / HR</small><b id="ui-profit">0</b></div>
+        </div>
 
-        <div class="balance-area">
-            <h1 id="ui-balance">0</h1>
-        </div>
+        <div class="balance-area">
+            <h1 id="ui-balance">0</h1>
+        </div>
 
-        <main class="game-core">
-            <div class="glow"></div>
-            <div class="brain-target" id="main-target" ontouchstart="game.tap(event)">
-                <img src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'">
-            </div>
-            <div class="side-menu">
-                <button onclick="ui.openM('ai')">🤖 AI ADVISOR</button>
-                <button id="wallet-btn-label" onclick="ui.openM('wallet')">👛 WALLET</button>
-                <button onclick="ui.openM('friends')">🤝 FRIENDS</button>
-                <button onclick="ui.openM('bonus')">🎁 BONUS</button>
-            </div>
-        </main>
+        <main class="game-core">
+            <div class="glow"></div>
+            <div class="brain-target" id="main-target" ontouchstart="game.tap(event)">
+                <img src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'">
+            </div>
+            <div class="side-menu">
+                <button onclick="ui.openM('ai')">🤖 AI ADVISOR</button>
+                <button id="wallet-btn-label" onclick="ui.openM('wallet')">👛 WALLET</button>
+                <button onclick="ui.openM('friends')">🤝 FRIENDS</button>
+                <button onclick="ui.openM('bonus')">🎁 BONUS</button>
+            </div>
+        </main>
 
-        <footer class="energy-section">
-            <div class="e-labels">
-                <span>SYSTEM STABILITY</span>
-                <span id="ui-energy">1000/1000</span>
-            </div>
-            <div class="e-track"><div id="e-fill"></div></div>
-            <nav class="bottom-tabs">
-                <button onclick="ui.openM('boost')">🚀 BOOST</button>
-                <button onclick="ui.openM('mine')">⛏️ MINE</button>
-                <button onclick="ui.openM('tasks')">📋 TASKS</button>
-                <button onclick="ui.openM('top')">🏆 TOP</button>
-            </nav>
-        </footer>
-    </div>
+        <footer class="energy-section">
+            <div class="e-labels">
+                <span>SYSTEM STABILITY</span>
+                <span id="ui-energy">1000/1000</span>
+            </div>
+            <div class="e-track"><div id="e-fill"></div></div>
+            <nav class="bottom-tabs">
+                <button onclick="ui.openM('boost')">🚀 BOOST</button>
+                <button onclick="ui.openM('mine')">⛏️ MINE</button>
+                <button onclick="ui.openM('tasks')">📋 TASKS</button>
+                <button onclick="ui.openM('top')">🏆 TOP</button>
+            </nav>
+        </footer>
+    </div>
 
-    <div id="modal" class="modal-bg" onclick="if(event.target===this) ui.closeM()">
-        <div class="modal-box">
-            <div class="handle"></div>
-            <div id="m-body"></div>
-            <button class="m-close" onclick="ui.closeM()">TERMINATE SESSION</button>
-        </div>
-    </div>
+    <div id="modal" class="modal-bg" onclick="if(event.target===this) ui.closeM()">
+        <div class="modal-box">
+            <div class="handle"></div>
+            <div id="m-body"></div>
+            <button class="m-close" onclick="ui.closeM()">TERMINATE SESSION</button>
+        </div>
+    </div>
 
-    <script>
-        const tg = window.Telegram.WebApp;
-        tg.expand();
-        tg.enableClosingConfirmation();
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.enableClosingConfirmation();
 
-        let tonConnectUI = null;
+        let tonConnectUI = null;
 
-        const game = {
-            data: { 
-                id: "0", balance: 0, energy: 1000, max_energy: 1000, 
-                tap: 1, profit: 0, tap_lvl: 1, mine_lvl: 1, 
-                energy_lvl: 1, last_bonus: 0, wallet: null, completed_tasks: []
-            },
-            isLoaded: false,
-            isSaving: false,
+        const game = {
+            data: { 
+                id: "0", balance: 0, energy: 1000, max_energy: 1000, 
+                tap: 1, profit: 0, tap_lvl: 1, mine_lvl: 1, 
+                energy_lvl: 1, last_bonus: 0, wallet: null, completed_tasks: []
+            },
+            isLoaded: false,
+            isSaving: false,
 
-            async init() {
-                ui.startLoader();
-                const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
-                this.data.id = String(u.id);
+            // 1. Исправленная инициализация TON Connect
+            async init() {
+                ui.startLoader();
+                const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
+                this.data.id = String(u.id);
 
-                try {
-                    tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                        manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json'
-                    });
+                try {
+                    // Проверяем наличие библиотеки перед созданием
+                    const TonSDK = window.TonConnectUI || window.TON_CONNECT_UI; 
+                    if (TonSDK) {
+                        tonConnectUI = new TonSDK.TonConnectUI({
+                            manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json'
+                        });
 
-                    tonConnectUI.onStatusChange(wallet => {
-                        if (wallet) {
-                            this.data.wallet = wallet.account.address;
-                            const addr = wallet.account.address;
-                            document.getElementById('wallet-btn-label').innerText = "👛 " + addr.slice(0,4) + ".." + addr.slice(-4);
-                        } else {
-                            this.data.wallet = null;
-                            document.getElementById('wallet-btn-label').innerText = "👛 WALLET";
-                        }
-                        this.save();
-                    });
-                } catch(e) { console.warn("TON Init Error"); }
+                        tonConnectUI.onStatusChange(wallet => {
+                            if (wallet) {
+                                this.data.wallet = wallet.account.address;
+                                const addr = wallet.account.address;
+                                document.getElementById('wallet-btn-label').innerText = "👛 " + addr.slice(0,4) + ".." + addr.slice(-4);
+                            } else {
+                                this.data.wallet = null;
+                                document.getElementById('wallet-btn-label').innerText = "👛 WALLET";
+                            }
+                            this.save();
+                        });
+                    }
+                } catch(e) { console.warn("TON Init Error", e); }
 
-                try {
-                    const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
-                    if (r.ok) {
-                        const db = await r.json();
-                        // Слияние данных из БД с начальными
-                        this.data = { ...this.data, ...db, id: String(u.id) };
-                        if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
-                    }
-                } catch(e) { console.error("Sync Error"); }
+                try {
+                    const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
+                    if (r.ok) {
+                        const db = await r.json();
+                        this.data = { ...this.data, ...db, id: String(u.id) };
+                        if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
+                    }
+                } catch(e) { console.error("Sync Error"); }
 
-                document.getElementById('my-name').innerText = (u.username || u.first_name).toUpperCase();
-                this.isLoaded = true;
-                this.startLoops();
-                ui.render();
-            },
+                document.getElementById('my-name').innerText = (u.username || u.first_name).toUpperCase();
+                this.isLoaded = true;
+                this.startLoops();
+                ui.render();
+            },
 
-            getCost(type) {
-                const lvl = this.data[type + '_lvl'] || 1;
-                if(type === 'tap') return Math.floor(500 * Math.pow(1.8, lvl - 1));
-                if(type === 'energy') return Math.floor(400 * Math.pow(1.5, lvl - 1));
-                if(type === 'mine') return Math.floor(1200 * Math.pow(1.7, lvl - 1));
-                return 0;
-            },
+            getCost(type) {
+                const lvl = this.data[type + '_lvl'] || 1;
+                if(type === 'tap') return Math.floor(500 * Math.pow(1.8, lvl - 1));
+                if(type === 'energy') return Math.floor(400 * Math.pow(1.5, lvl - 1));
+                if(type === 'mine') return Math.floor(1200 * Math.pow(1.7, lvl - 1));
+                return 0;
+            },
 
-            tap(e) {
-                if(!this.isLoaded) return;
-                
-                if(this.data.energy < 1) { 
-                    tg.HapticFeedback.notificationOccurred('error');
-                    document.querySelector('.e-track').classList.add('energy-error');
-                    setTimeout(() => document.querySelector('.e-track').classList.remove('energy-error'), 400);
-                    return; 
-                }
-                
-                const touches = e.changedTouches;
-                for(let i=0; i < touches.length; i++) {
-                    if(this.data.energy >= 1) {
-                        this.data.balance += this.data.tap;
-                        this.data.energy -= 1;
-                        ui.pop(touches[i], this.data.tap);
-                    }
-                }
+            // 2. Исправленная функция тапа (защита от багов и мультитач)
+            tap(e) {
+                if(!this.isLoaded) return;
+                if(e.cancelable) e.preventDefault(); // Важно для Telegram WebApp
 
-                ui.render();
-                tg.HapticFeedback.impactOccurred('medium');
-            },
+                if(this.data.energy < 1) { 
+                    tg.HapticFeedback.notificationOccurred('error');
+                    const track = document.querySelector('.e-track');
+                    track.classList.add('energy-error');
+                    setTimeout(() => track.classList.remove('energy-error'), 400);
+                    return; 
+                }
+                
+                const touches = e.changedTouches || [{ clientX: e.clientX, clientY: e.clientY }];
+                for(let i=0; i < touches.length; i++) {
+                    if(this.data.energy >= 1) {
+                        this.data.balance += this.data.tap;
+                        this.data.energy -= 1;
+                        ui.pop(touches[i], this.data.tap);
+                    }
+                }
 
-            async upgrade(type) {
-                const cost = this.getCost(type);
-                if(this.data.balance >= cost) {
-                    this.data.balance -= cost;
-                    if(type === 'tap') { 
-                        this.data.tap_lvl++; 
-                        this.data.tap += 1; 
-                    }
-                    else if(type === 'energy') { 
-                        this.data.energy_lvl++; 
-                        this.data.max_energy += 500; 
-                        this.data.energy = this.data.max_energy; 
-                    }
-                    else if(type === 'mine') { 
-                        this.data.mine_lvl++; 
-                        this.data.profit += 120; 
-                    }
-                    
-                    ui.render();
-                    tg.HapticFeedback.notificationOccurred('success');
-                    await this.save(); 
-                    ui.openM(type === 'mine' ? 'mine' : 'boost');
-                } else { 
-                    tg.showAlert("НЕДОСТАТОЧНО NP ДЛЯ АПГРЕЙДА"); 
-                }
-            },
+                ui.render();
+                tg.HapticFeedback.impactOccurred('light'); // Сделал чуть мягче, приятнее для пальцев
+            },
 
-            async completeTask(id, reward, link) {
-                if(this.data.completed_tasks?.includes(id)) return;
-                
-                if(link.startsWith('http')) tg.openLink(link);
-                else tg.openTelegramLink(link);
+            async upgrade(type) {
+                const cost = this.getCost(type);
+                if(this.data.balance >= cost) {
+                    this.data.balance -= cost;
+                    if(type === 'tap') { 
+                        this.data.tap_lvl++; 
+                        this.data.tap += 1; 
+                    }
+                    else if(type === 'energy') { 
+                        this.data.energy_lvl++; 
+                        this.data.max_energy += 500; 
+                        this.data.energy = this.data.max_energy; 
+                    }
+                    else if(type === 'mine') { 
+                        this.data.mine_lvl++; 
+                        this.data.profit += 120; 
+                    }
+                    
+                    ui.render();
+                    tg.HapticFeedback.notificationOccurred('success');
+                    await this.save(); 
+                    ui.openM(type === 'mine' ? 'mine' : 'boost');
+                } else { 
+                    tg.showAlert("НЕДОСТАТОЧНО NP ДЛЯ АПГРЕЙДА"); 
+                }
+            },
 
-                setTimeout(async () => {
-                    this.data.balance += reward;
-                    if(!this.data.completed_tasks) this.data.completed_tasks = [];
-                    this.data.completed_tasks.push(id);
-                    ui.render(); 
-                    ui.openM('tasks');
-                    tg.showAlert(`Verified! +${reward.toLocaleString()} NP`);
-                    await this.save();
-                }, 3000);
-            },
+            async completeTask(id, reward, link) {
+                if(this.data.completed_tasks?.includes(id)) return;
+                
+                if(link.startsWith('http')) tg.openLink(link);
+                else tg.openTelegramLink(link);
 
-            async save() {
-                if(!this.isLoaded || this.isSaving) return;
-                this.isSaving = true;
-                try {
-                    await fetch('/api/save', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify(this.data)
-                    });
-                } catch(e) { console.warn("Save error"); } 
-                finally { this.isSaving = false; }
-            },
+                setTimeout(async () => {
+                    this.data.balance += reward;
+                    if(!this.data.completed_tasks) this.data.completed_tasks = [];
+                    this.data.completed_tasks.push(id);
+                    ui.render(); 
+                    ui.openM('tasks');
+                    tg.showAlert(`Verified! +${reward.toLocaleString()} NP`);
+                    await this.save();
+                }, 3000);
+            },
 
-            startLoops() {
-                setInterval(() => {
-                    // Регенерация энергии
-                    if(this.data.energy < this.data.max_energy) {
-                        this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1.5);
-                    }
-                    // Пассивный доход
-                    if(this.data.profit > 0) {
-                        this.data.balance += (this.data.profit / 3600);
-                    }
-                    ui.render();
-                }, 1000);
-                
-                // Автосохранение каждые 15 сек
-                setInterval(() => this.save(), 15000);
-            }
-        };
+            async save() {
+                if(!this.isLoaded || this.isSaving) return;
+                this.isSaving = true;
+                try {
+                    await fetch('/api/save', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(this.data)
+                    });
+                } catch(e) { console.warn("Save error"); } 
+                finally { this.isSaving = false; }
+            },
 
-        const ui = {
-            startLoader() {
-                let p = 0;
-                const i = setInterval(() => {
-                    p += Math.floor(Math.random() * 5) + 5;
-                    if(p > 100) p = 100;
-                    document.getElementById('pct').innerText = p+'%';
-                    document.getElementById('bar').style.width = p+'%';
-                    if(p>=100) { 
-                        clearInterval(i); 
-                        document.getElementById('loader').style.display='none'; 
-                        document.getElementById('app').style.display='flex'; 
-                    }
-                }, 30);
-            },
+            startLoops() {
+                setInterval(() => {
+                    if(this.data.energy < this.data.max_energy) {
+                        this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1.5);
+                    }
+                    if(this.data.profit > 0) {
+                        this.data.balance += (this.data.profit / 3600);
+                    }
+                    ui.render();
+                }, 1000);
+                
+                setInterval(() => this.save(), 15000);
+            }
+        };
 
-            render() {
-                const d = game.data;
-                document.getElementById('ui-balance').innerText = Math.floor(d.balance).toLocaleString();
-                document.getElementById('ui-energy').innerText = `${Math.floor(d.energy)}/${d.max_energy}`;
-                document.getElementById('e-fill').style.width = (d.energy/d.max_energy*100)+'%';
-                document.getElementById('ui-tap').innerText = `+${d.tap}`;
-                document.getElementById('ui-profit').innerText = Math.floor(d.profit).toLocaleString();
-                
-                const rank = d.balance < 50000 ? "NODE AGENT" : d.balance < 500000 ? "CYBER MANTIS" : "NEURAL LORD";
-                document.getElementById('ui-rank').innerText = rank;
-                document.getElementById('my-lvl').innerText = `LVL ${Math.floor(d.balance / 25000) + 1}`;
-            },
+        const ui = {
+            startLoader() {
+                let p = 0;
+                const i = setInterval(() => {
+                    p += Math.floor(Math.random() * 5) + 5;
+                    if(p > 100) p = 100;
+                    document.getElementById('pct').innerText = p+'%';
+                    document.getElementById('bar').style.width = p+'%';
+                    if(p>=100) { 
+                        clearInterval(i); 
+                        document.getElementById('loader').style.display='none'; 
+                        document.getElementById('app').style.display='flex'; 
+                    }
+                }, 30);
+            },
 
-            pop(touch, p) {
-                const div = document.createElement('div');
-                div.className = 'pop'; div.innerText = `+${p}`;
-                div.style.left = (touch.clientX - 15)+'px'; div.style.top = (touch.clientY - 30)+'px';
-                document.body.appendChild(div);
-                setTimeout(() => div.remove(), 600);
-            },
+            render() {
+                const d = game.data;
+                document.getElementById('ui-balance').innerText = Math.floor(d.balance).toLocaleString();
+                document.getElementById('ui-energy').innerText = `${Math.floor(d.energy)}/${d.max_energy}`;
+                document.getElementById('e-fill').style.width = (d.energy/d.max_energy*100)+'%';
+                document.getElementById('ui-tap').innerText = `+${d.tap}`;
+                document.getElementById('ui-profit').innerText = Math.floor(d.profit).toLocaleString();
+                
+                const rank = d.balance < 50000 ? "NODE AGENT" : d.balance < 500000 ? "CYBER MANTIS" : "NEURAL LORD";
+                document.getElementById('ui-rank').innerText = rank;
+                document.getElementById('my-lvl').innerText = `LVL ${Math.floor(d.balance / 25000) + 1}`;
+            },
 
-            async openM(type) {
-                const b = document.getElementById('m-body');
-                document.getElementById('modal').classList.add('active');
-                b.innerHTML = `<div class="loading">SYNCING DATA...</div>`;
-                
-                if(type === 'boost') {
-                    b.innerHTML = `<h2>🚀 UPGRADES</h2>
-                    <div class="top-item" onclick="game.upgrade('tap')"><div><b>Multitap</b><br><small>Level ${game.data.tap_lvl}</small></div><b>${game.getCost('tap')} NP</b></div>
-                    <div class="top-item" onclick="game.upgrade('energy')"><div><b>Energy Cap</b><br><small>Level ${game.data.energy_lvl}</small></div><b>${game.getCost('energy')} NP</b></div>`;
-                } else if(type === 'mine') {
-                    b.innerHTML = `<h2>⛏️ MINING</h2>
-                    <div class="top-item" onclick="game.upgrade('mine')"><div><b>Neural Node</b><br><small>Level ${game.data.mine_lvl}</small></div><b>${game.getCost('mine')} NP</b></div>
-                    <p style="font-size:10px; color:gray; text-align:center;">Nodes generate passive income every second.</p>`;
-                } else if(type === 'ai') {
-                    b.innerHTML = `<h2>🤖 AI ADVISOR</h2><div class="ai-terminal" id="ai-res">Neural link standby...</div><button class="task-btn" style="width:100%" id="ai-btn" onclick="ui.askAI()">RUN ANALYSIS</button>`;
-                } else if(type === 'friends') {
-                    const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
-                    b.innerHTML = `<h2>🤝 REFERRALS</h2><div class="ref-box" id="ref-url">${link}</div><button class="task-btn" style="width:100%" onclick="ui.copyRef()">COPY INVITE LINK</button>`;
-                } else if(type === 'wallet') {
-                    b.innerHTML = `<h2>👛 TON WALLET</h2>
-                    <p style="font-size:12px; color:gray; text-align:center; margin-bottom:10px;">Connect your TON wallet to sync your identity.</p>
-                    <div id="ton-btn" style="display:flex; justify-content:center; padding:10px;"></div>`;
-                    setTimeout(() => tonConnectUI.renderButton({ container: document.getElementById('ton-btn') }), 50);
-                } else if(type === 'bonus') {
-                    const last = game.data.last_bonus || 0;
-                    const canClaim = (Date.now() - last) > 86400000;
-                    b.innerHTML = `<h2>🎁 DAILY BONUS</h2>
-                    <div style="text-align:center; padding:20px;">
-                        <button class="task-btn" style="width:100%; height:60px;" ${canClaim ? '' : 'disabled'} onclick="ui.claimDaily()">
-                            ${canClaim ? 'CLAIM 5,000 NP' : 'RECHARGE IN PROGRESS'}
-                        </button>
-                    </div>`;
-                } else if(type === 'top') {
-                    try {
-                        const r = await fetch('/api/top'); 
-                        const top = await r.json();
-                        let h = '<h2>🏆 TOP AGENTS</h2>';
-                        top.forEach((u, i) => { 
-                            h += `<div class="top-item"><div><b style="color:cyan;">#${i+1}</b> ${u.username || 'Anonymous'}</div><b>${Math.floor(u.balance).toLocaleString()}</b></div>`; 
-                        });
-                        b.innerHTML = h;
-                    } catch(e) { b.innerHTML = '<h2>OFFLINE</h2><p>Database unreachable.</p>'; }
-                } else if(type === 'tasks') {
-                    const done = (id) => game.data.completed_tasks?.includes(id);
-                    b.innerHTML = `<h2>📋 MISSIONS</h2>
-                    <div class="task-item"><span>Join Telegram</span><button class="task-btn" ${done('tg') ? 'disabled' : ''} onclick="game.completeTask('tg', 10000, 'https://t.me/neural_pulse')">${done('tg') ? 'DONE' : '+10k'}</button></div>
-                    <div class="task-item"><span>Follow X (Twitter)</span><button class="task-btn" ${done('x') ? 'disabled' : ''} onclick="game.completeTask('x', 5000, 'https://twitter.com')">${done('x') ? 'DONE' : '+5k'}</button></div>`;
-                }
-            },
+            pop(touch, p) {
+                const div = document.createElement('div');
+                div.className = 'pop'; div.innerText = `+${p}`;
+                div.style.left = (touch.clientX - 15)+'px'; div.style.top = (touch.clientY - 30)+'px';
+                document.body.appendChild(div);
+                setTimeout(() => div.remove(), 600);
+            },
 
-            async askAI() {
-                const resDiv = document.getElementById('ai-res'); 
-                const btn = document.getElementById('ai-btn');
-                resDiv.innerHTML = `<div class="loading">CALCULATING...</div>`; 
-                btn.disabled = true;
-                
-                try {
-                    const r = await fetch('/api/ai-advice', { 
-                        method: 'POST', 
-                        headers: {'Content-Type': 'application/json'}, 
-                        body: JSON.stringify({ 
-                            id: game.data.id, 
-                            balance: game.data.balance, 
-                            levels: { tap: game.data.tap_lvl, mine: game.data.mine_lvl } 
-                        }) 
-                    });
-                    const res = await r.json(); 
-                    const text = res.text || "Pulse stable. Upgrade mining nodes for maximum passive output.";
-                    
-                    resDiv.innerText = ""; 
-                    let i = 0;
-                    const type = () => { 
-                        if (i < text.length) { 
-                            resDiv.innerText += text.charAt(i); i++; 
-                            setTimeout(type, 30); 
-                        } 
-                    }; 
-                    type();
-                } catch(e) { resDiv.innerText = "Error: Connection lost."; } 
-                finally { btn.disabled = false; }
-            },
+            async openM(type) {
+                const b = document.getElementById('m-body');
+                document.getElementById('modal').classList.add('active');
+                b.innerHTML = `<div class="loading">SYNCING DATA...</div>`;
+                
+                if(type === 'boost') {
+                    b.innerHTML = `<h2>🚀 UPGRADES</h2>
+                    <div class="top-item" onclick="game.upgrade('tap')"><div><b>Multitap</b><br><small>Level ${game.data.tap_lvl}</small></div><b>${game.getCost('tap')} NP</b></div>
+                    <div class="top-item" onclick="game.upgrade('energy')"><div><b>Energy Cap</b><br><small>Level ${game.data.energy_lvl}</small></div><b>${game.getCost('energy')} NP</b></div>`;
+                } else if(type === 'mine') {
+                    b.innerHTML = `<h2>⛏️ MINING</h2>
+                    <div class="top-item" onclick="game.upgrade('mine')"><div><b>Neural Node</b><br><small>Level ${game.data.mine_lvl}</small></div><b>${game.getCost('mine')} NP</b></div>
+                    <p style="font-size:10px; color:gray; text-align:center;">Nodes generate passive income every second.</p>`;
+                } else if(type === 'ai') {
+                    b.innerHTML = `<h2>🤖 AI ADVISOR</h2><div class="ai-terminal" id="ai-res">Neural link standby...</div><button class="task-btn" style="width:100%" id="ai-btn" onclick="ui.askAI()">RUN ANALYSIS</button>`;
+                } else if(type === 'friends') {
+                    const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
+                    b.innerHTML = `<h2>🤝 REFERRALS</h2><div class="ref-box" id="ref-url">${link}</div><button class="task-btn" style="width:100%" onclick="ui.copyRef()">COPY INVITE LINK</button>`;
+                } else if(type === 'wallet') {
+                    b.innerHTML = `<h2>👛 TON WALLET</h2>
+                    <p style="font-size:12px; color:gray; text-align:center; margin-bottom:10px;">Connect your TON wallet to sync your identity.</p>
+                    <div id="ton-btn" style="display:flex; justify-content:center; padding:10px;"></div>`;
+                    setTimeout(() => {
+                        if (tonConnectUI) tonConnectUI.renderButton({ container: document.getElementById('ton-btn') });
+                    }, 50);
+                } else if(type === 'bonus') {
+                    const last = game.data.last_bonus || 0;
+                    const canClaim = (Date.now() - last) > 86400000;
+                    b.innerHTML = `<h2>🎁 DAILY BONUS</h2>
+                    <div style="text-align:center; padding:20px;">
+                        <button class="task-btn" style="width:100%; height:60px;" ${canClaim ? '' : 'disabled'} onclick="ui.claimDaily()">
+                            ${canClaim ? 'CLAIM 5,000 NP' : 'RECHARGE IN PROGRESS'}
+                        </button>
+                    </div>`;
+                } else if(type === 'top') {
+                    try {
+                        const r = await fetch('/api/top'); 
+                        const top = await r.json();
+                        let h = '<h2>🏆 TOP AGENTS</h2>';
+                        top.forEach((u, i) => { 
+                            h += `<div class="top-item"><div><b style="color:cyan;">#${i+1}</b> ${u.username || 'Anonymous'}</div><b>${Math.floor(u.balance).toLocaleString()}</b></div>`; 
+                        });
+                        b.innerHTML = h;
+                    } catch(e) { b.innerHTML = '<h2>OFFLINE</h2><p>Database unreachable.</p>'; }
+                } else if(type === 'tasks') {
+                    const done = (id) => game.data.completed_tasks?.includes(id);
+                    b.innerHTML = `<h2>📋 MISSIONS</h2>
+                    <div class="task-item"><span>Join Telegram</span><button class="task-btn" ${done('tg') ? 'disabled' : ''} onclick="game.completeTask('tg', 10000, 'https://t.me/neural_pulse')">${done('tg') ? 'DONE' : '+10k'}</button></div>
+                    <div class="task-item"><span>Follow X (Twitter)</span><button class="task-btn" ${done('x') ? 'disabled' : ''} onclick="game.completeTask('x', 5000, 'https://twitter.com')">${done('x') ? 'DONE' : '+5k'}</button></div>`;
+                }
+            },
 
-            copyRef() { 
-                const url = document.getElementById('ref-url').innerText;
-                navigator.clipboard.writeText(url).then(() => tg.showAlert('Copied!')); 
-            },
+            async askAI() {
+                const resDiv = document.getElementById('ai-res'); 
+                const btn = document.getElementById('ai-btn');
+                resDiv.innerHTML = `<div class="loading">CALCULATING...</div>`; 
+                btn.disabled = true;
+                
+                try {
+                    const r = await fetch('/api/ai-advice', { 
+                        method: 'POST', 
+                        headers: {'Content-Type': 'application/json'}, 
+                        body: JSON.stringify({ 
+                            id: game.data.id, 
+                            balance: game.data.balance, 
+                            levels: { tap: game.data.tap_lvl, mine: game.data.mine_lvl } 
+                        }) 
+                    });
+                    const res = await r.json(); 
+                    const text = res.text || "Pulse stable. Upgrade mining nodes for maximum passive output.";
+                    
+                    resDiv.innerText = ""; 
+                    let i = 0;
+                    const type = () => { 
+                        if (i < text.length) { 
+                            resDiv.innerText += text.charAt(i); i++; 
+                            setTimeout(type, 30); 
+                        } 
+                    }; 
+                    type();
+                } catch(e) { resDiv.innerText = "Error: Connection lost."; } 
+                finally { btn.disabled = false; }
+            },
 
-            async claimDaily() { 
-                game.data.balance += 5000; 
-                game.data.last_bonus = Date.now(); 
-                ui.render(); 
-                ui.closeM(); 
-                tg.showAlert("Daily Reward: +5,000 NP");
-                await game.save(); 
-            },
+            copyRef() { 
+                const url = document.getElementById('ref-url').innerText;
+                navigator.clipboard.writeText(url).then(() => tg.showAlert('Copied!')); 
+            },
 
-            closeM() { document.getElementById('modal').classList.remove('active'); }
-        };
+            async claimDaily() { 
+                game.data.balance += 5000; 
+                game.data.last_bonus = Date.now(); 
+                ui.render(); 
+                ui.closeM(); 
+                tg.showAlert("Daily Reward: +5,000 NP");
+                await game.save(); 
+            },
 
-        window.onload = () => game.init();
-    </script>
+            closeM() { document.getElementById('modal').classList.remove('active'); }
+        };
+
+        window.onload = () => game.init();
+    </script>
 </body>
-</html>проверь
+</html>
