@@ -85,8 +85,6 @@
             padding: 10px;
         }
     </style>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
 </head>
 <body>
 
@@ -155,6 +153,9 @@
         </div>
     </div>
 
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
@@ -176,8 +177,8 @@
                 const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
                 this.data.id = String(u.id);
 
-                // Инициализация TON SDK с проверкой
-                const initTonWithRetry = (retries = 15) => {
+                // Инициализация TON SDK с проверкой готовности объекта
+                const initTonWithRetry = (retries = 20) => {
                     try {
                         const TonSDK = window.TonConnectUI?.TonConnectUI || window.TonConnectUI;
                         if (TonSDK && typeof TonSDK === 'function') {
@@ -196,6 +197,7 @@
                                 }
                                 this.save();
                             });
+                            console.log("TON SDK Loaded successfully");
                         } else if (retries > 0) {
                             setTimeout(() => initTonWithRetry(retries - 1), 300);
                         }
@@ -204,7 +206,6 @@
 
                 initTonWithRetry();
 
-                // Привязка события клика
                 const target = document.getElementById('main-target');
                 target.addEventListener('touchstart', (e) => this.tap(e), { passive: false });
 
@@ -391,8 +392,8 @@
                                 buttonConfiguration: { width: 'full' }
                             });
                         } else if (container) {
-                            container.innerHTML = '<p style="color:cyan; font-size:10px; animation: pulse 1s infinite;">SDK LOADING...</p>';
-                            setTimeout(renderTonButton, 400);
+                            container.innerHTML = '<p style="color:cyan; font-size:12px; animation: pulse 1s infinite;">SYNCING SDK...</p>';
+                            setTimeout(renderTonButton, 800); // Увеличена задержка для стабильности
                         }
                     };
                     renderTonButton();
