@@ -11,11 +11,19 @@ import os from 'os';
 import crypto from 'crypto';
 import fs from 'fs';
 
+// --- 🏛️ ADMINJS IMPORTS ---
+import AdminJS from 'adminjs';
+import AdminJSExpress from '@adminjs/express';
+import * as AdminJSSequelize from '@adminjs/sequelize';
+
 // Ядро данных
-import { sequelize, User, Stats, GlobalStats, sessionStore, initDB, Op } from './db.js';
+import { sequelize, User, Task, Stats, GlobalStats, initDB, Op } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Регистрация адаптера Sequelize для AdminJS
+AdminJS.registerAdapter(AdminJSSequelize);
 
 // --- 💠 СИНГУЛЯРНОСТЬ ВЫСШЕГО ПОРЯДКА ---
 class GodCore extends EventEmitter {
@@ -25,8 +33,6 @@ class GodCore extends EventEmitter {
     }
 }
 const core = new GodCore();
-
-const ADMIN_ID = 485145717; 
 
 const neuralLog = (msg, type = 'INFO') => {
     const time = dayjs().format('HH:mm:ss.SSS');
@@ -48,97 +54,74 @@ const bot = new Telegraf(BOT_TOKEN);
 // --- 🛡️ PROTOCOL "VOID AEGIS" ---
 const shieldData = new Map(); 
 const blackList = new Set(); 
-
-const SHIELD_LIMIT = 100; // Порог для High-Load
-const BAN_DURATION = 3600000; // 1 час за спам
-
-let isCircuitOpen = false;
-
-// Агрессивная очистка памяти для 20M+ профилей
-setInterval(() => {
-    shieldData.clear(); 
-    if (isCircuitOpen) {
-        isCircuitOpen = false;
-        neuralLog('🛡️ CIRCUIT BREAKER: Auto-Reset active', 'CORE');
-    }
-}, 60000);
-
-// --- 🧬 DELTA-SYNC ENGINE: MASSIVE SQL OPTIMIZATION ---
+const SHIELD_LIMIT = 100;
 const updateBuffer = new Map();
 let isSyncing = false;
+let isCircuitOpen = false;
 
+// --- 🧬 DELTA-SYNC ENGINE ---
 const executeMassiveCommit = async () => {
     if (updateBuffer.size === 0 || isSyncing) return;
     isSyncing = true;
-    
     const snapshot = Array.from(updateBuffer.values());
     updateBuffer.clear();
-
-    const CHUNK_SIZE = 2500; // Оптимально для одного SQL пакета
-    neuralLog(`🧬 SYNC: Processing ${snapshot.length} units`, 'SYNC');
+    const CHUNK_SIZE = 2500;
 
     for (let i = 0; i < snapshot.length; i += CHUNK_SIZE) {
         const chunk = snapshot.slice(i, i + CHUNK_SIZE);
-        
         try {
-            // МАССОВОЕ ОБНОВЛЕНИЕ ЧЕРЕЗ CASE (В 100 раз быстрее циклов)
             const ids = chunk.map(u => u.id);
             const cases = chunk.map(u => `WHEN id = ${u.id} THEN ${u.balance}`).join(' ');
-            
             await sequelize.query(
-                `UPDATE Users SET balance = CASE ${cases} ELSE balance END, 
-                updatedAt = NOW() WHERE id IN (${ids.join(',')})`
+                `UPDATE users SET balance = CASE ${cases} ELSE balance END, 
+                updated_at = NOW() WHERE id IN (${ids.join(',')})`
             );
-
-            // Инкремент общего баланса (суммарно по чанку)
-            const chunkDelta = chunk.reduce((sum, u) => sum + (u.delta || 0), 0);
-            if (chunkDelta > 0) {
-                await GlobalStats.increment('total_balance', { by: chunkDelta, where: { id: 1 } });
-            }
         } catch (e) {
             neuralLog(`🚨 SYNC ERROR: ${e.message}`, 'ERROR');
-            fs.appendFileSync('quantum_dump.json', JSON.stringify(chunk) + '\n');
             isCircuitOpen = true;
         }
     }
     isSyncing = false;
 };
-
 setInterval(executeMassiveCommit, 3000);
 
-// --- 🌐 API SUPREME INTERFACE ---
-function setupAPIRoutes(app) {
+// --- 🌐 API & ADMIN SETUP ---
+async function setupSupremeInterface(app) {
+    // 1. Настройка AdminJS
+    const adminJs = new AdminJS({
+        resources: [
+            { resource: User, options: { navigation: { name: 'Users', icon: 'User' } } },
+            { resource: Task, options: { navigation: { name: 'Quests', icon: 'List' } } },
+            { resource: Stats, options: { navigation: { name: 'Analytics', icon: 'Activity' } } },
+            { resource: GlobalStats, options: { navigation: { name: 'System', icon: 'Settings' } } }
+        ],
+        rootPath: '/admin',
+        branding: {
+            companyName: 'NEURAL PULSE OS',
+            softwareBrochure: false,
+            logo: '/static/images/logo.png', // Использует твой дизайн
+            withMadeWithLove: false
+        },
+        bundler: { minify: true }
+    });
+
+    // Строим роутер для админки (БЕЗ авторизации для Bothost, или добавь её позже)
+    const adminRouter = AdminJSExpress.buildRouter(adminJs);
+    
+    // ВАЖНО: Подключаем админку ДО статики и общих роутов
+    app.use(adminJs.options.rootPath, adminRouter);
+
+    // 2. API Роуты
     app.get('/health', (req, res) => {
-        res.status(isCircuitOpen ? 503 : 200).json({ 
-            status: isCircuitOpen ? 'degraded' : 'perfect', 
-            load: os.loadavg()[0].toFixed(2) 
-        });
+        res.status(isCircuitOpen ? 503 : 200).json({ status: isCircuitOpen ? 'degraded' : 'perfect' });
     });
 
     app.post('/api/save', (req, res) => {
         const { id, balance, hash, nonce } = req.body;
-
         if (blackList.has(id)) return res.status(403).send("VOID");
-
-        // 1. Быстрая проверка подписи
         const check = crypto.createHmac('sha256', SECRET_SALT).update(`${id}:${balance}`).digest('hex');
         if (hash !== check) return res.status(403).send("SIGN_ERR");
-
-        // 2. Shield Logic (Rate limit + Idempotency)
-        let uData = shieldData.get(id) || { n: new Set(), r: 0 };
-        if (uData.n.has(nonce)) return res.json({ s: 1, msg: "cached" });
-
-        uData.r++;
-        if (uData.r > SHIELD_LIMIT) {
-            blackList.add(id);
-            return res.status(429).send("LIMIT");
-        }
-        uData.n.add(nonce);
-        shieldData.set(id, uData);
-
-        // 3. Buffer Injection
         updateBuffer.set(id, { id, balance });
-        
         res.json({ s: 1, node: "QUANTUM-X" });
     });
 
@@ -150,7 +133,7 @@ function setupAPIRoutes(app) {
     });
 }
 
-// --- 🤖 BOT NEURAL SUPREME ---
+// --- 🤖 BOT SETUP ---
 function setupBot(botInstance) {
     botInstance.start(async (ctx) => {
         try {
@@ -163,8 +146,7 @@ function setupBot(botInstance) {
             ctx.replyWithHTML(
                 `<b>─── [ NEURAL OS : OMNI ] ───</b>\n\n` +
                 `Agent: <code>${user.username}</code>\n` +
-                `Status: <b>V12 QUANTUM</b>\n` +
-                `Capacity: <b>20M+ READY</b>\n\n` +
+                `Status: <b>V12 QUANTUM</b>\n\n` +
                 `<i>Система готова к глобальному потоку данных.</i>`,
                 Markup.inlineKeyboard([
                     [Markup.button.webApp("⚡ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)],
@@ -180,21 +162,23 @@ async function startSupreme() {
     neuralLog('🔮 INITIALIZING OMNI-QUANTUM CORE...', 'CORE');
     const app = express();
 
+    // Настройка безопасности и сжатия
     app.use(helmet({ contentSecurityPolicy: false }));
-    app.use(compression({ level: 1 })); // Быстрое сжатие для High-Load
+    app.use(compression({ level: 1 }));
     app.use(cors());
-    app.use(express.json({ limit: '1kb' }));
+    app.use(express.json({ limit: '5kb' }));
 
+    // Статика (Твой дизайн и лого)
     app.use('/static', express.static(path.join(__dirname, 'static'), { maxAge: '30d' }));
 
     try {
         await initDB();
-        await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
         
-        setupAPIRoutes(app);
+        // Интеграция Админки и API
+        await setupSupremeInterface(app);
         setupBot(bot);
 
-        // GOD VISION: Метрики
+        // Метрики для стрима
         setInterval(() => {
             core.emit('broadcast', {
                 v: '12.0-OMNI',
@@ -204,15 +188,13 @@ async function startSupreme() {
             });
         }, 2000);
 
-        // Webhook для масштабирования
+        // Webhook
         app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => bot.handleUpdate(req.body, res));
-        await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`, {
-            allowed_updates: ['message', 'callback_query'],
-            drop_pending_updates: true
-        });
+        await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`);
 
         app.listen(PORT, '0.0.0.0', () => {
             neuralLog(`👑 OMNI-QUANTUM ONLINE | PORT: ${PORT}`, 'SUCCESS');
+            neuralLog(`🚀 ADMIN PANEL: ${DOMAIN}/admin`, 'SUCCESS');
         });
     } catch (err) {
         neuralLog(`🚨 SYSTEM FAIL: ${err.message}`, 'ERROR');
