@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse v5.6.0 | Terminal</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js" defer></script>
+    <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
     <style>
         /* Системные анимации */
         @keyframes pulse { 0% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } 100% { opacity: 0.5; transform: scale(1); } }
@@ -13,6 +13,9 @@
         
         .modal-bg { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: flex-end; backdrop-filter: blur(5px); }
         .modal-bg.active { display: flex; }
+        
+        .modal-box { background: #001a1a; width: 100%; max-width: 500px; border-radius: 20px 20px 0 0; border-top: 2px solid cyan; padding: 20px; color: white; position: relative; max-height: 85vh; overflow-y: auto; }
+        .handle { width: 40px; height: 4px; background: rgba(0,255,255,0.3); border-radius: 2px; margin: 0 auto 15px; }
         
         .task-item, .top-item {
             background: rgba(255,255,255,0.05);
@@ -87,10 +90,10 @@
             padding: 10px;
         }
 
-        /* Стили для Комбо */
         .combo-dots { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; }
         .dot { width: 12px; height: 12px; border: 1px solid cyan; border-radius: 50%; transition: 0.3s; }
         .dot.active { background: cyan; box-shadow: 0 0 10px cyan; }
+        .m-close { width: 100%; padding: 12px; background: #222; border: 1px solid #444; color: #888; border-radius: 10px; margin-top: 15px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -185,7 +188,6 @@
                 const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
                 this.data.id = String(u.id);
 
-                // --- НОВАЯ ЗАЩИЩЕННАЯ ИНИЦИАЛИЗАЦИЯ TON ---
                 this.initTonSDK();
 
                 const target = document.getElementById('main-target');
@@ -206,13 +208,12 @@
                 ui.render();
             },
 
-            // Метод для безопасного ожидания загрузки библиотеки
             initTonSDK() {
                 const checkInterval = setInterval(() => {
-                    // Проверяем наличие SDK в разных возможных местах глобальной видимости
-                    const TonSDK = window.TonConnectUI?.TonConnectUI || window.TonConnectUI;
+                    // Пытаемся найти конструктор в глобальном объекте
+                    const TonSDK = window.TonConnectUI?.TonConnectUI || (typeof TonConnectUI !== 'undefined' ? TonConnectUI : null);
                     
-                    if (TonSDK && typeof TonSDK === 'function') {
+                    if (TonSDK) {
                         clearInterval(checkInterval);
                         try {
                             tonConnectUI = new TonSDK({ 
@@ -229,10 +230,10 @@
                                 }
                                 this.save();
                             });
-                            console.log("TON SDK Initialized successfully");
+                            console.log("TON SDK Initialized");
                         } catch(e) { console.error("TON Init Error", e); }
                     }
-                }, 300); // Проверка каждые 300мс
+                }, 400);
             },
 
             getCost(type) {
@@ -282,6 +283,20 @@
                     await this.save(); 
                     ui.openM(type === 'mine' ? 'mine' : 'boost');
                 } else { tg.showAlert("НЕДОСТАТОЧНО NP"); }
+            },
+
+            async completeTask(id, reward, url) {
+                if (url) tg.openLink(url);
+                setTimeout(async () => {
+                    if (!this.data.completed_tasks.includes(id)) {
+                        this.data.completed_tasks.push(id);
+                        this.data.balance += reward;
+                        ui.render();
+                        tg.showAlert(`TASK COMPLETE: +${reward} NP`);
+                        await this.save();
+                        ui.openM('tasks');
+                    }
+                }, 2000);
             },
 
             async save() {
@@ -375,7 +390,6 @@
                     <div id="ton-btn-container"><div id="ton-connect-button"></div></div>
                     ${isConnected ? '<button class="task-btn" style="width:100%; background:#ff4444; color:white; margin-top:10px;" onclick="tonConnectUI.disconnect()">DISCONNECT</button>' : ''}`;
                     
-                    // Безопасный рендер кнопки TON
                     const renderTon = () => {
                         const container = document.getElementById('ton-connect-button');
                         if (tonConnectUI && container) {
