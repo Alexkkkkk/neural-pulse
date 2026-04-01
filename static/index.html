@@ -219,31 +219,31 @@
             },
 
             initTonSDK() {
-                const checkInterval = setInterval(() => {
-                    // Пытаемся найти конструктор в глобальном объекте
-                    const TonSDK = window.TON_CONNECT_UI?.TonConnectUI || (window.TonConnectUI && window.TonConnectUI.TonConnectUI ? window.TonConnectUI.TonConnectUI : window.TonConnectUI);
+                // Прямая инициализация через глобальное имя, которое использует CDN библиотека
+                try {
+                    const TonSDK = window.TON_CONNECT_UI?.TonConnectUI || window.TonConnectUI;
                     
-                    if (TonSDK && typeof TonSDK === 'function') {
-                        clearInterval(checkInterval);
-                        try {
-                            tonConnectUI = new TonSDK({ 
-                                manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json' 
-                            });
-                            
-                            tonConnectUI.onStatusChange(wallet => {
-                                if (wallet) {
-                                    this.data.wallet = wallet.account.address;
-                                    document.getElementById('wallet-btn-label').innerText = "👛 " + this.data.wallet.slice(0,4) + ".." + this.data.wallet.slice(-4);
-                                } else {
-                                    this.data.wallet = null;
-                                    document.getElementById('wallet-btn-label').innerText = "👛 WALLET";
-                                }
-                                this.save();
-                            });
-                            console.log("TON SDK Initialized successfully");
-                        } catch(e) { console.error("TON Init Error", e); }
+                    if (TonSDK) {
+                        tonConnectUI = new TonSDK({ 
+                            manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json' 
+                        });
+                        
+                        tonConnectUI.onStatusChange(wallet => {
+                            if (wallet) {
+                                this.data.wallet = wallet.account.address;
+                                const shortAddr = this.data.wallet.slice(0,4) + ".." + this.data.wallet.slice(-4);
+                                document.getElementById('wallet-btn-label').innerText = "👛 " + shortAddr;
+                            } else {
+                                this.data.wallet = null;
+                                document.getElementById('wallet-btn-label').innerText = "👛 WALLET";
+                            }
+                            this.save();
+                        });
+                        console.log("TON SDK Live");
                     }
-                }, 300);
+                } catch(e) { 
+                    console.error("TON Init Error", e); 
+                }
             },
 
             getCost(type) {
