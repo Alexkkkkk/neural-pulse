@@ -1,6 +1,6 @@
 import React, { useState, useEffect, memo, useRef } from 'react';
 
-// --- 🌌 NEURAL_PULSE ULTIMATE DARK PALETTE ---
+// --- 🌌 ЦВЕТОВАЯ ПАЛИТРА NEURAL_PULSE V4.0 ---
 const CYBER = {
   bg: '#000000',
   card: 'rgba(5, 7, 10, 0.9)',
@@ -15,7 +15,7 @@ const CYBER = {
   border: 'rgba(0, 242, 254, 0.15)',
 };
 
-// --- 📈 NEON SPARKLINE (Графики с эффектом свечения) ---
+// --- 📈 НЕОНОВЫЙ ГРАФИК (Sparkline) ---
 const SparkGraph = memo(({ data, color, height = 60 }) => {
   if (!data || data.length < 2) return <div style={{ height }} />;
   const max = Math.max(...data, 1);
@@ -48,7 +48,7 @@ const SparkGraph = memo(({ data, color, height = 60 }) => {
   );
 });
 
-// --- 🗳️ DATA CARD ---
+// --- 🗳️ КАРТОЧКА ДАННЫХ ---
 const DataCard = ({ label, value, unit, data, color }) => (
   <div className="card">
     <div className="card-scanline" />
@@ -60,7 +60,7 @@ const DataCard = ({ label, value, unit, data, color }) => (
   </div>
 );
 
-// --- 📊 TELEMETRY BARS (Верхняя панель ресурсов) ---
+// --- 📊 ИНДИКАТОРЫ РЕСУРСОВ (Top Bar) ---
 const TelemetryBar = ({ label, value, color }) => (
   <div style={{ flex: 1 }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', marginBottom: '6px' }}>
@@ -95,13 +95,29 @@ const Dashboard = () => {
 
   const [logs, setLogs] = useState(['> INITIALIZING_NEURAL_CORE...', '> ENCRYPTED_LINK_ESTABLISHED']);
 
+  // Функция для выполнения команд (Broadcast, Purge и т.д.)
+  const runCommand = async (cmd) => {
+    setLogs(p => [...p, `> EXECUTING_${cmd.toUpperCase()}...`]);
+    try {
+      const res = await fetch(`/api/admin/command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: cmd })
+      });
+      const data = await res.json();
+      setLogs(p => [...p, `> ${cmd.toUpperCase()}: ${data.status || 'SUCCESS'}`]);
+    } catch (e) {
+      setLogs(p => [...p, `> ERROR_EXECUTING_${cmd.toUpperCase()}`]);
+    }
+  };
+
   useEffect(() => {
-    const eventSource = new EventSource('/admin/stream');
+    const eventSource = new EventSource('/api/admin/stream');
     
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.event_type === 'SYSTEM') {
-        // Исправляем точность чисел (округление до 1 знака)
+        // Округление Core Load
         const nCpu = parseFloat(data.core_load || 0);
         
         setStats(p => ({
@@ -128,6 +144,10 @@ const Dashboard = () => {
     return () => eventSource.close();
   }, []);
 
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [logs]);
+
   if (!isLoaded) return <div className="loading">LOADING_NEURAL_PULSE_V4...</div>;
 
   return (
@@ -144,7 +164,7 @@ const Dashboard = () => {
           background-image: linear-gradient(${CYBER.border} 1px, transparent 1px), 
                             linear-gradient(90deg, ${CYBER.border} 1px, transparent 1px);
           background-size: 45px 45px;
-          animation: bgScroll 20s linear infinite;
+          animation: bgScroll 25s linear infinite;
         }
         @keyframes bgScroll { from { background-position: 0 0; } to { background-position: 0 45px; } }
 
@@ -181,7 +201,7 @@ const Dashboard = () => {
         .op-btn { 
           background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.1); 
           padding: 12px; font-size: 9px; cursor: pointer; text-transform: uppercase; border-radius: 4px;
-          transition: 0.2s;
+          transition: 0.2s; font-family: 'Roboto Mono';
         }
         .op-btn:hover { background: #fff; color: #000; }
         
@@ -189,6 +209,7 @@ const Dashboard = () => {
         .loading { background: #000; height: 100vh; display: flex; align-items: center; justifyContent: center; color: ${CYBER.primary}; font-family: 'Roboto Mono'; }
       `}</style>
 
+      {/* --- HEADER --- */}
       <div className="header">
         <h1>NEURAL_PULSE V4.0</h1>
         <div className="status-line">
@@ -196,6 +217,7 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* --- RESOURCE BARS --- */}
       <div className="resources-panel">
         <div className="label" style={{ color: CYBER.primary, marginBottom: '15px' }}>Neural_Node_Resources</div>
         <div style={{ display: 'flex', gap: '30px' }}>
@@ -205,29 +227,32 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* --- MAIN GRID --- */}
       <div className="grid">
         <DataCard label="Active_Agents" value={stats.online} unit="USERS" data={history.online} color={CYBER.success} />
         <DataCard label="Ton_Reserve" value={stats.ton.toFixed(1)} unit="TON" data={history.wallets} color={CYBER.ton} />
         <DataCard label="Network_Latency" value={stats.latency} unit="MS" data={history.lat} color={CYBER.danger} />
         <DataCard label="Pulse_Liquidity" value={stats.liquidity} unit="$NP" data={history.liq} color={CYBER.warning} />
 
+        {/* --- CONTROL PANEL --- */}
         <div className="card" style={{ gridColumn: 'span 2' }}>
           <div className="label" style={{ color: CYBER.primary }}>Directive_Control</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
-            <button className="op-btn">Broadcast</button>
-            <button className="op-btn">Purge</button>
-            <button className="op-btn">Sync</button>
+            <button className="op-btn" onClick={() => runCommand('broadcast')}>Broadcast</button>
+            <button className="op-btn" onClick={() => runCommand('purge')}>Purge</button>
+            <button className="op-btn" onClick={() => runCommand('sync')}>Sync</button>
             <button className="op-btn" style={{ color: CYBER.danger, borderColor: CYBER.danger }} 
-                    onClick={() => setIsEmergency(!isEmergency)}>
-              {isEmergency ? 'OVERRIDE' : 'Kill_Switch'}
+                    onClick={() => { setIsEmergency(!isEmergency); runCommand('kill_switch'); }}>
+              {isEmergency ? 'RESTORE' : 'Kill_Switch'}
             </button>
           </div>
         </div>
       </div>
 
-      <footer style={{ marginTop: '20px', opacity: 0.4, fontSize: '10px' }}>
-        <div ref={logRef} style={{ height: '65px', overflow: 'hidden', padding: '12px', background: 'rgba(0,0,0,0.3)', borderRadius: '6px', border: `1px solid ${CYBER.border}` }}>
-          {logs.slice(-2).map((l, i) => <div key={i} style={{ marginBottom: '4px' }}>{l}</div>)}
+      {/* --- SYSTEM LOGS --- */}
+      <footer style={{ marginTop: '20px', opacity: 0.5, fontSize: '10px' }}>
+        <div ref={logRef} style={{ height: '70px', overflowY: 'auto', padding: '12px', background: 'rgba(0,0,0,0.4)', borderRadius: '6px', border: `1px solid ${CYBER.border}` }}>
+          {logs.map((l, i) => <div key={i} style={{ marginBottom: '4px', borderLeft: `2px solid ${CYBER.primary}33`, paddingLeft: '8px' }}>{l}</div>)}
           <div>{`> HEARTBEAT_STABLE: ${new Date().toLocaleTimeString()}`}</div>
         </div>
       </footer>
