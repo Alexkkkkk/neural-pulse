@@ -1,5 +1,5 @@
 import React, { useState, useEffect, memo, useRef } from 'react';
-
+import { TonConnectUIProvider, TonConnectButton, useTonAddress, useTonConnectUI } from '@tonconnect/ui-react';
 
 // --- 🌌 INFINITY-PULSE CORE PALETTE ---
 const CYBER = {
@@ -254,7 +254,6 @@ const DashboardContent = (props) => {
             </div>
           </div>
 
-          {/* ЛОГИ СИСТЕМЫ */}
           <div className="card">
             <div className="label">Neural_Telemetry_Log</div>
             <div style={{ height: '140px', overflowY: 'auto', fontSize: '10px', opacity: 0.7, marginTop: '10px', fontFamily: 'monospace', lineHeight: '1.6' }}>
@@ -267,7 +266,6 @@ const DashboardContent = (props) => {
             </div>
           </div>
 
-          {/* РАССЫЛКА */}
           <div className="card">
             <div className="label">Global_Neural_Broadcast</div>
             <input className="broadcast-input" placeholder="SEND DATA TO ALL ACTIVE AGENTS..." value={broadcastMsg} onChange={(e) => setBroadcastMsg(e.target.value)} />
@@ -320,7 +318,6 @@ const DashboardContent = (props) => {
   );
 };
 
-// --- WRAPPER WITH PROVIDER ---
 const Dashboard = (props) => {
   return (
     <TonConnectUIProvider manifestUrl="https://np.bothost.tech/tonconnect-manifest.json">
