@@ -36,12 +36,14 @@
         #loader {
             position: fixed; inset: 0; background: var(--bg); z-index: 10000;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 0.5s ease;
         }
         .ring { width: 80px; height: 80px; border: 3px solid transparent; border-top-color: var(--neon); border-radius: 50%; animation: spin 1s linear infinite; }
         .l-logo { position: absolute; width: 45px; }
         .l-status { margin-top: 20px; font-family: monospace; color: var(--neon); font-size: 10px; letter-spacing: 2px; }
         .l-bar { width: 200px; height: 2px; background: #111; margin-top: 10px; position: relative; }
         #bar { height: 100%; width: 0%; background: var(--neon); box-shadow: 0 0 10px var(--neon); transition: 0.1s; }
+        .l-pct { margin-top: 5px; font-family: monospace; font-size: 12px; color: var(--neon); }
 
         /* --- Header --- */
         header { padding: 15px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
