@@ -163,11 +163,12 @@
                 const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
                 this.data.id = String(u.id);
 
+                // Попытка инициализации TON SDK с ожиданием загрузки скрипта
                 const initTonWithRetry = (retries = 10) => {
                     try {
-                        const TonSDK = window.TonConnectUI || (window.TON_CONNECT_UI ? window.TON_CONNECT_UI.TonConnectUI : null) || window.TON_CONNECT_UI;
+                        const TonSDK = window.TonConnectUI || (window.TON_CONNECT_UI ? window.TON_CONNECT_UI.TonConnectUI : null);
                         
-                        if (TonSDK && typeof TonSDK === 'function') {
+                        if (TonSDK) {
                             tonConnectUI = new TonSDK({
                                 manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json'
                             });
@@ -183,7 +184,6 @@
                                 }
                                 this.save();
                             });
-                            console.log("TON Connect Ready");
                         } else if (retries > 0) {
                             setTimeout(() => initTonWithRetry(retries - 1), 300);
                         }
@@ -192,6 +192,7 @@
 
                 initTonWithRetry();
 
+                // Загрузка данных с сервера
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
                     if (r.ok) {
