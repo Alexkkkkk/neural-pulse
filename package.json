@@ -7,10 +7,10 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "start": "NODE_ENV=production node --expose-gc --max-old-space-size=1536 --optimize-for-size --gc-interval=100 server.js",
+    "start": "node --expose-gc --max-old-space-size=1024 --optimize-for-size server.js",
     "dev": "node --watch server.js",
     "install-all": "npm install",
-    "clean": "rm -rf node_modules package-lock.json && npm install --production=false",
+    "clean": "rm -rf node_modules package-lock.json && npm install",
     "rebuild": "npm run clean && npm start",
     "lint": "echo \"System Scan... OK\""
   },
@@ -27,6 +27,7 @@
     "moment-timezone": "^0.5.45",
     "express-session": "^1.18.0",
     "connect-session-sequelize": "^7.1.7",
+    "express-formidable": "^1.2.0",
     "cors": "^2.8.5",
     "helmet": "^7.1.0",
     "compression": "^1.7.4",
