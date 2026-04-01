@@ -30,102 +30,54 @@ const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
 const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
 
-async function startNeuralOS() {
-    neuralLog('BOOTING_NEURAL_OS_INIT...', 'CORE');
-    const app = express();
-    const bot = new Telegraf(BOT_TOKEN);
+// --- 🩺 SYSTEM PULSE (Аналитика в реальном времени) ---
+function startPulseMonitor() {
+    setInterval(async () => {
+        try {
+            const [gStats, walletCount] = await Promise.all([
+                GlobalStats.findByPk(1),
+                User.count({ where: { wallet: { [Op.not]: null } } })
+            ]);
 
-    // --- 🛡️ MAXIMUM SECURITY (Разблокировка TON Connect) ---
-    app.use(helmet({
-        contentSecurityPolicy: {
-            directives: {
-                "default-src": ["'self'"],
-                "script-src": ["'self'", "'unsafe-inline'", "https://telegram.org", "https://unpkg.com", "https://*.tonconnect.dev"],
-                "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-                "img-src": ["'self'", "data:", "https://*.telegram.org", "https://*.ton.org", "https://wallet.tg"],
-                "connect-src": [
-                    "'self'", 
-                    "https://*.ton.org", 
-                    "https://*.tonconnect.dev", 
-                    "https://bridge.tonapi.io", 
-                    "https://bridge.keeper.link", 
-                    "wss://bridge.tonapi.io",
-                    DOMAIN
-                ],
-                "frame-src": ["'self'", "https://*.tonconnect.dev", "https://wallet.tg"],
-            },
-        },
-    }));
-    app.use(compression());
-    app.use(cors({ origin: '*' }));
-    app.use(express.json());
+            const pulseData = {
+                event_type: 'SYSTEM',
+                core_load: (os.loadavg()[0] * 10) + 15 + (Math.random() * 5),
+                sync_memory: (process.memoryUsage().rss / 1024 / 1024) / 4 + 30, 
+                active_agents: gStats?.total_users || 0,
+                ton_reserve: walletCount || 0,
+                network_latency: Math.floor(Math.random() * 20 + 20),
+                pulse_liquidity: parseFloat(gStats?.total_balance || 0),
+                time: dayjs().format('HH:mm:ss')
+            };
 
-    // Раздача статики (дизайн и картинки НЕ МЕНЯЮТСЯ)
-    app.use('/static', express.static(path.join(__dirname, 'static')));
+            pulseEvents.emit('update', pulseData);
 
-    try {
-        await initDB();
-        await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
-        
-        setupAPIRoutes(app);
-        setupRealTimeStream(app); 
-        await setupAdminPanel(app);
-        setupBotHandlers(bot);
-
-        // Webhook для Telegram
-        app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => bot.handleUpdate(req.body, res));
-        await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`);
-        
-        neuralLog(`✅ TITAN CORE ACTIVE [PORT: ${PORT}]`, 'SUCCESS');
-
-        // --- 🩺 SYSTEM PULSE (Аналитика в реальном времени) ---
-        setInterval(async () => {
-            try {
-                const [gStats, walletCount] = await Promise.all([
-                    GlobalStats.findByPk(1),
-                    User.count({ where: { wallet: { [Op.not]: null } } })
-                ]);
-
-                const pulseData = {
-                    event_type: 'SYSTEM',
-                    core_load: (os.loadavg()[0] * 10) + 15 + (Math.random() * 5),
-                    sync_memory: (process.memoryUsage().rss / 1024 / 1024) / 4 + 30, 
-                    active_agents: gStats?.total_users || 0,
-                    ton_reserve: walletCount || 0,
-                    network_latency: Math.floor(Math.random() * 20 + 20),
-                    pulse_liquidity: parseFloat(gStats?.total_balance || 0),
-                    time: dayjs().format('HH:mm:ss')
-                };
-
-                pulseEvents.emit('update', pulseData);
-
-                await Stats.create({
-                    mem_usage: Math.round(pulseData.sync_memory),
-                    server_load: pulseData.core_load,
-                    user_count: pulseData.active_agents,
-                    total_balance: pulseData.pulse_liquidity,
-                    db_latency: pulseData.network_latency
-                }).catch(() => {});
-            } catch (e) { neuralLog(`Pulse error: ${e.message}`, 'WARN'); }
-        }, 10000);
-
-        app.listen(PORT, '0.0.0.0');
-
-    } catch (err) {
-        neuralLog(`🚨 CRITICAL FAILURE: ${err.message}`, 'ERROR');
-    }
+            await Stats.create({
+                mem_usage: Math.round(pulseData.sync_memory),
+                server_load: pulseData.core_load,
+                user_count: pulseData.active_agents,
+                total_balance: pulseData.pulse_liquidity,
+                db_latency: pulseData.network_latency
+            }).catch(() => {});
+        } catch (e) { neuralLog(`Pulse error: ${e.message}`, 'WARN'); }
+    }, 10000);
 }
 
+// --- 🌐 REAL-TIME STREAM ---
 function setupRealTimeStream(app) {
     app.get('/api/admin/stream', (req, res) => {
-        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+        res.writeHead(200, { 
+            'Content-Type': 'text/event-stream', 
+            'Cache-Control': 'no-cache', 
+            'Connection': 'keep-alive' 
+        });
         const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
         pulseEvents.on('update', send);
         req.on('close', () => pulseEvents.removeListener('update', send));
     });
 }
 
-// --- 🌐 API ROUTES (Глубокая интеграция Wallet) ---
+// --- 🌐 API ROUTES ---
 function setupAPIRoutes(app) {
     app.get('/api/user/:userId', async (req, res) => {
         try {
@@ -145,7 +97,6 @@ function setupAPIRoutes(app) {
             const oldBalance = parseFloat(user.balance || 0);
             const diff = newBalance - oldBalance;
 
-            // Логируем новый кошелек в системе
             if (wallet && user.wallet !== wallet) {
                 neuralLog(`🔗 NEW WALLET SYNC: Agent ${id} -> ${wallet.substring(0, 12)}...`, 'NET');
             }
@@ -177,7 +128,7 @@ function setupAPIRoutes(app) {
     });
 }
 
-// --- 🛠️ ADMIN PANEL (Максимальный контроль) ---
+// --- 🛠️ ADMIN PANEL ---
 async function setupAdminPanel(app) {
     const { default: AdminJS, ComponentLoader } = await import('adminjs');
     const { default: AdminJSExpress } = await import('@adminjs/express');
@@ -255,5 +206,53 @@ function setupBotHandlers(bot) {
     });
 }
 
-// --- 🚀 LAUNCH ---
+// --- 🚀 MAIN STARTER ---
+async function startNeuralOS() {
+    neuralLog('BOOTING_NEURAL_OS_INIT...', 'CORE');
+    const app = express();
+    const bot = new Telegraf(BOT_TOKEN);
+
+    // Security & Middleware
+    app.use(helmet({
+        contentSecurityPolicy: {
+            directives: {
+                "default-src": ["'self'"],
+                "script-src": ["'self'", "'unsafe-inline'", "https://telegram.org", "https://unpkg.com", "https://*.tonconnect.dev"],
+                "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+                "img-src": ["'self'", "data:", "https://*.telegram.org", "https://*.ton.org", "https://wallet.tg"],
+                "connect-src": ["'self'", "https://*.ton.org", "https://*.tonconnect.dev", "https://bridge.tonapi.io", "https://bridge.keeper.link", "wss://bridge.tonapi.io", DOMAIN],
+                "frame-src": ["'self'", "https://*.tonconnect.dev", "https://wallet.tg"],
+            },
+        },
+    }));
+    app.use(compression());
+    app.use(cors({ origin: '*' }));
+    app.use(express.json());
+
+    // Раздача статики (Твой дизайн и картинки защищены)
+    app.use('/static', express.static(path.join(__dirname, 'static')));
+
+    try {
+        await initDB();
+        await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
+        
+        setupAPIRoutes(app);
+        setupRealTimeStream(app); 
+        await setupAdminPanel(app);
+        setupBotHandlers(bot);
+        startPulseMonitor();
+
+        // Webhook для Telegram
+        app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => bot.handleUpdate(req.body, res));
+        await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`);
+        
+        app.listen(PORT, '0.0.0.0', () => {
+            neuralLog(`✅ TITAN CORE ACTIVE [PORT: ${PORT}]`, 'SUCCESS');
+        });
+
+    } catch (err) {
+        neuralLog(`🚨 CRITICAL FAILURE: ${err.message}`, 'ERROR');
+    }
+}
+
 startNeuralOS();
