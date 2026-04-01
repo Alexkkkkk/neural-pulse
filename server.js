@@ -35,15 +35,32 @@ async function startNeuralOS() {
     const app = express();
     const bot = new Telegraf(BOT_TOKEN);
 
-    // --- 🛡️ SECURITY & MIDDLEWARE ---
+    // --- 🛡️ MAXIMUM SECURITY (Разблокировка TON Connect) ---
     app.use(helmet({
-        contentSecurityPolicy: false, // Разрешаем внешние шрифты и скрипты TON
+        contentSecurityPolicy: {
+            directives: {
+                "default-src": ["'self'"],
+                "script-src": ["'self'", "'unsafe-inline'", "https://telegram.org", "https://unpkg.com", "https://*.tonconnect.dev"],
+                "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+                "img-src": ["'self'", "data:", "https://*.telegram.org", "https://*.ton.org", "https://wallet.tg"],
+                "connect-src": [
+                    "'self'", 
+                    "https://*.ton.org", 
+                    "https://*.tonconnect.dev", 
+                    "https://bridge.tonapi.io", 
+                    "https://bridge.keeper.link", 
+                    "wss://bridge.tonapi.io",
+                    DOMAIN
+                ],
+                "frame-src": ["'self'", "https://*.tonconnect.dev", "https://wallet.tg"],
+            },
+        },
     }));
     app.use(compression());
     app.use(cors({ origin: '*' }));
     app.use(express.json());
 
-    // Раздача статики
+    // Раздача статики (дизайн и картинки НЕ МЕНЯЮТСЯ)
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
     try {
@@ -61,7 +78,7 @@ async function startNeuralOS() {
         
         neuralLog(`✅ TITAN CORE ACTIVE [PORT: ${PORT}]`, 'SUCCESS');
 
-        // --- 🩺 SYSTEM PULSE (Каждые 10 секунд) ---
+        // --- 🩺 SYSTEM PULSE (Аналитика в реальном времени) ---
         setInterval(async () => {
             try {
                 const [gStats, walletCount] = await Promise.all([
@@ -99,23 +116,17 @@ async function startNeuralOS() {
     }
 }
 
-// Поток данных для админ-панели
 function setupRealTimeStream(app) {
     app.get('/api/admin/stream', (req, res) => {
-        res.writeHead(200, {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive'
-        });
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
         const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
         pulseEvents.on('update', send);
         req.on('close', () => pulseEvents.removeListener('update', send));
     });
 }
 
-// --- 🌐 API ROUTES ---
+// --- 🌐 API ROUTES (Глубокая интеграция Wallet) ---
 function setupAPIRoutes(app) {
-    // Получение данных пользователя
     app.get('/api/user/:userId', async (req, res) => {
         try {
             const user = await User.findByPk(req.params.userId);
@@ -124,7 +135,6 @@ function setupAPIRoutes(app) {
         } catch (e) { res.status(500).send(e.message); }
     });
 
-    // Сохранение состояния и баланса
     app.post('/api/save', async (req, res) => {
         const { id, balance, tap_lvl, mine_lvl, energy_lvl, wallet } = req.body;
         try {
@@ -135,12 +145,18 @@ function setupAPIRoutes(app) {
             const oldBalance = parseFloat(user.balance || 0);
             const diff = newBalance - oldBalance;
 
-            // Базовая защита: если пришло слишком много за раз (чит)
-            if (diff > 5000) {
-                 neuralLog(`Suspicious balance jump for ID ${id}: +${diff}`, 'WARN');
+            // Логируем новый кошелек в системе
+            if (wallet && user.wallet !== wallet) {
+                neuralLog(`🔗 NEW WALLET SYNC: Agent ${id} -> ${wallet.substring(0, 12)}...`, 'NET');
             }
 
-            await user.update({ balance: newBalance, tap_lvl, mine_lvl, energy_lvl, wallet });
+            await user.update({ 
+                balance: newBalance, 
+                tap_lvl, 
+                mine_lvl, 
+                energy_lvl, 
+                wallet: wallet || user.wallet 
+            });
             
             if (diff > 0) {
                 await GlobalStats.increment('total_balance', { by: diff, where: { id: 1 } });
@@ -149,17 +165,19 @@ function setupAPIRoutes(app) {
         } catch (e) { res.status(500).send(e.message); }
     });
 
-    // AI Advisor (аналитика для фронтенда)
     app.post('/api/ai-advice', (req, res) => {
-        const { balance } = req.body;
-        const advice = balance < 1000 
-            ? "> [ADVISOR]: Инициализируйте протоколы кликов. Энергия на пике." 
-            : "> [ADVISOR]: Обнаружен избыток NP. Рекомендую инвестировать в модули майнинга.";
+        const { balance, hasWallet } = req.body;
+        let advice = "> [ADVISOR]: Инициализируйте протоколы кликов.";
+        if (balance > 5000 && !hasWallet) {
+            advice = "> [ADVISOR]: ВНИМАНИЕ! Обнаружен высокий баланс. Подключите TON WALLET для синхронизации активов.";
+        } else if (hasWallet) {
+            advice = "> [ADVISOR]: Кошелек синхронизирован. Статус: SECURE.";
+        }
         res.json({ text: advice });
     });
 }
 
-// --- 🛠️ ADMIN PANEL ---
+// --- 🛠️ ADMIN PANEL (Максимальный контроль) ---
 async function setupAdminPanel(app) {
     const { default: AdminJS, ComponentLoader } = await import('adminjs');
     const { default: AdminJSExpress } = await import('@adminjs/express');
@@ -170,7 +188,17 @@ async function setupAdminPanel(app) {
     
     const adminJs = new AdminJS({
         resources: [
-            { resource: User, options: { navigation: { name: 'AGENTS', icon: 'User' }, properties: { balance: { isTitle: true } } } },
+            { 
+                resource: User, 
+                options: { 
+                    navigation: { name: 'AGENTS', icon: 'User' },
+                    properties: { 
+                        wallet: { isVisible: { list: true, show: true, edit: true }, position: 10 },
+                        balance: { position: 1 }
+                    },
+                    listProperties: ['id', 'username', 'balance', 'wallet', 'updatedAt']
+                } 
+            },
             { resource: Stats, options: { navigation: { name: 'METRICS' } } },
             { resource: GlobalStats, options: { navigation: { name: 'METRICS' } } }
         ],
@@ -202,7 +230,7 @@ async function setupAdminPanel(app) {
     await adminJs.initialize();
 }
 
-// --- 🤖 BOT LOGIC ---
+// --- 🤖 BOT HANDLERS ---
 function setupBotHandlers(bot) {
     bot.start(async (ctx) => {
         const userId = ctx.from.id;
@@ -211,16 +239,13 @@ function setupBotHandlers(bot) {
             defaults: { username: ctx.from.username || 'AGENT', balance: 0 }
         });
         
-        if (created) {
-            await GlobalStats.increment('total_users', { where: { id: 1 } });
-            neuralLog(`New Agent Initialized: ${user.username}`, 'SUCCESS');
-        }
+        if (created) await GlobalStats.increment('total_users', { where: { id: 1 } });
 
         const welcomeMsg = `<b>[ NEURAL PULSE ]</b>\n\n` +
                            `Добро пожаловать в систему, <code>${user.username}</code>.\n\n` +
                            `▪️ Статус: ACTIVE\n` +
                            `▪️ Узел: NL-02\n` +
-                           `▪️ Доступ: LEVEL_1\n\n` +
+                           `▪️ Кошелек: ${user.wallet ? 'CONNECTED' : 'NOT LINKED'}\n\n` +
                            `Ваш терминал готов к синхронизации.`;
 
         ctx.replyWithHTML(welcomeMsg, Markup.inlineKeyboard([
@@ -230,5 +255,5 @@ function setupBotHandlers(bot) {
     });
 }
 
-// --- 🚀 START ---
+// --- 🚀 LAUNCH ---
 startNeuralOS();
