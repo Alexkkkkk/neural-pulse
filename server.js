@@ -15,15 +15,17 @@ import fs from 'fs';
 import AdminJS from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
+import { ComponentLoader } from 'adminjs';
 
 // Ядро данных
-import { sequelize, User, Task, Stats, GlobalStats, initDB, Op } from './db.js';
+import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB, Op } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Регистрация адаптера Sequelize для AdminJS
+// Регистрация адаптера
 AdminJS.registerAdapter(AdminJSSequelize);
+const componentLoader = new ComponentLoader();
 
 // --- 💠 СИНГУЛЯРНОСТЬ ВЫСШЕГО ПОРЯДКА ---
 class GodCore extends EventEmitter {
@@ -48,13 +50,13 @@ const BOT_TOKEN = process.env.BOT_TOKEN || "8745333905:AAFYxazvS95oEMuPeVxlWvnwm
 const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
 const SECRET_SALT = process.env.SECRET_SALT || "ULTRA_SECRET_PULSE_2026_VOID";
+const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
 
 const bot = new Telegraf(BOT_TOKEN);
 
 // --- 🛡️ PROTOCOL "VOID AEGIS" ---
 const shieldData = new Map(); 
 const blackList = new Set(); 
-const SHIELD_LIMIT = 100;
 const updateBuffer = new Map();
 let isSyncing = false;
 let isCircuitOpen = false;
@@ -87,29 +89,64 @@ setInterval(executeMassiveCommit, 3000);
 
 // --- 🌐 API & ADMIN SETUP ---
 async function setupSupremeInterface(app) {
-    // 1. Настройка AdminJS
+    // 1. Настройка AdminJS (TITAN UI DESIGN)
     const adminJs = new AdminJS({
         resources: [
-            { resource: User, options: { navigation: { name: 'Users', icon: 'User' } } },
-            { resource: Task, options: { navigation: { name: 'Quests', icon: 'List' } } },
-            { resource: Stats, options: { navigation: { name: 'Analytics', icon: 'Activity' } } },
-            { resource: GlobalStats, options: { navigation: { name: 'System', icon: 'Settings' } } }
+            { 
+                resource: User, 
+                options: { 
+                    navigation: { name: 'DATABASE', icon: 'User' },
+                    listProperties: ['id', 'username', 'balance', 'wallet', 'updatedAt']
+                } 
+            },
+            { resource: Task, options: { navigation: { name: 'QUESTS', icon: 'List' } } },
+            { resource: Stats, options: { navigation: { name: 'ANALYTICS', icon: 'Activity' } } },
+            { resource: GlobalStats, options: { navigation: { name: 'SYSTEM', icon: 'Settings' } } }
         ],
         rootPath: '/admin',
+        componentLoader,
+        dashboard: { 
+            component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
+            handler: async () => {
+                const [gs, topUsers] = await Promise.all([
+                    GlobalStats.findByPk(1),
+                    User.findAll({ limit: 5, order: [['balance', 'DESC']] })
+                ]);
+                return { 
+                    totalUsers: gs?.total_users || 0, 
+                    totalBalance: gs?.total_balance || 0,
+                    topUsers: topUsers
+                };
+            }
+        },
         branding: {
             companyName: 'NEURAL PULSE OS',
-            softwareBrochure: false,
-            logo: '/static/images/logo.png', // Использует твой дизайн
-            withMadeWithLove: false
-        },
-        bundler: { minify: true }
+            logo: `${DOMAIN}/static/images/logo.png`,
+            withMadeWithLove: false,
+            theme: {
+                colors: {
+                    primary100: '#00f2fe',
+                    bg: '#0b0e11',
+                    container: '#15191d',
+                    text: '#ffffff'
+                }
+            }
+        }
     });
 
-    // Строим роутер для админки (БЕЗ авторизации для Bothost, или добавь её позже)
-    const adminRouter = AdminJSExpress.buildRouter(adminJs);
-    
-    // ВАЖНО: Подключаем админку ДО статики и общих роутов
+    // Авторизация: Логин 1, Пароль 1
+    const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
+        authenticate: async (email, password) => (email === '1' && password === '1' ? { email } : null),
+        cookiePassword: 'np-ultra-crypt-v12',
+    }, null, { 
+        resave: false, 
+        saveUninitialized: false, 
+        secret: 'np_secret_key', 
+        store: sessionStore 
+    });
+
     app.use(adminJs.options.rootPath, adminRouter);
+    await adminJs.initialize();
 
     // 2. API Роуты
     app.get('/health', (req, res) => {
@@ -117,7 +154,7 @@ async function setupSupremeInterface(app) {
     });
 
     app.post('/api/save', (req, res) => {
-        const { id, balance, hash, nonce } = req.body;
+        const { id, balance, hash } = req.body;
         if (blackList.has(id)) return res.status(403).send("VOID");
         const check = crypto.createHmac('sha256', SECRET_SALT).update(`${id}:${balance}`).digest('hex');
         if (hash !== check) return res.status(403).send("SIGN_ERR");
@@ -147,7 +184,7 @@ function setupBot(botInstance) {
                 `<b>─── [ NEURAL OS : OMNI ] ───</b>\n\n` +
                 `Agent: <code>${user.username}</code>\n` +
                 `Status: <b>V12 QUANTUM</b>\n\n` +
-                `<i>Система готова к глобальному потоку данных.</i>`,
+                `<i>Система готова к синхронизации.</i>`,
                 Markup.inlineKeyboard([
                     [Markup.button.webApp("⚡ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)],
                     [Markup.button.url("🛰️ ТРАНСЛЯЦИЯ", "https://t.me/neural_pulse_news")]
@@ -162,23 +199,20 @@ async function startSupreme() {
     neuralLog('🔮 INITIALIZING OMNI-QUANTUM CORE...', 'CORE');
     const app = express();
 
-    // Настройка безопасности и сжатия
     app.use(helmet({ contentSecurityPolicy: false }));
     app.use(compression({ level: 1 }));
     app.use(cors());
     app.use(express.json({ limit: '5kb' }));
 
-    // Статика (Твой дизайн и лого)
     app.use('/static', express.static(path.join(__dirname, 'static'), { maxAge: '30d' }));
 
     try {
         await initDB();
+        await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
         
-        // Интеграция Админки и API
         await setupSupremeInterface(app);
         setupBot(bot);
 
-        // Метрики для стрима
         setInterval(() => {
             core.emit('broadcast', {
                 v: '12.0-OMNI',
@@ -188,13 +222,12 @@ async function startSupreme() {
             });
         }, 2000);
 
-        // Webhook
         app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => bot.handleUpdate(req.body, res));
         await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`);
 
         app.listen(PORT, '0.0.0.0', () => {
             neuralLog(`👑 OMNI-QUANTUM ONLINE | PORT: ${PORT}`, 'SUCCESS');
-            neuralLog(`🚀 ADMIN PANEL: ${DOMAIN}/admin`, 'SUCCESS');
+            neuralLog(`🚀 ADMIN PORTAL: ${DOMAIN}/admin (Login: 1 / Pass: 1)`, 'SUCCESS');
         });
     } catch (err) {
         neuralLog(`🚨 SYSTEM FAIL: ${err.message}`, 'ERROR');
