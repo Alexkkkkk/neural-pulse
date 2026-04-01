@@ -77,7 +77,6 @@ const Dashboard = (props) => {
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Состояние кошелька
   const [wallet, setWallet] = useState({ 
     connected: false, 
     address: null, 
@@ -85,8 +84,7 @@ const Dashboard = (props) => {
     shortAddress: 'OFFLINE' 
   });
 
-  // Системные данные
-  const [users, setUsers] = useState(initialData?.usersList || []);
+  const [users] = useState(initialData?.usersList || []);
   const [stats, setStats] = useState({ cpu: 28, ram: 34, online: 0, ton: 0, latency: 24, liquidity: 0 });
   const [history, setHistory] = useState({
     cpu: Array(15).fill(28),
@@ -98,7 +96,6 @@ const Dashboard = (props) => {
     liq: Array(15).fill(0)
   });
 
-  // Фильтрация пользователей (useMemo для производительности)
   const filteredUsers = useMemo(() => {
     return users.filter(u => 
       String(u.id).includes(searchTerm) || 
@@ -106,19 +103,24 @@ const Dashboard = (props) => {
     );
   }, [users, searchTerm]);
 
-  // Логика обновления всех данных
+  // 🔥 ОПТИМИЗИРОВАННАЯ ЛОГИКА ОБНОВЛЕНИЯ
   const updateSystemData = async (newData = {}) => {
-    let currentBalance = wallet.balance;
-    
-    // Подгрузка баланса, если кошелек подключен
-    if (wallet.connected && wallet.address) {
-      try {
-        const res = await fetch(`https://tonapi.io/v2/accounts/${wallet.address}`);
-        const tonData = await res.json();
-        currentBalance = tonData.balance / 1e9;
-        setWallet(prev => ({ ...prev, balance: currentBalance }));
-      } catch (e) { console.warn("Balance fetch failed"); }
-    }
+    let freshBalance = 0;
+
+    // Получаем баланс из стейта или API
+    setWallet(currentWallet => {
+      if (currentWallet.connected && currentWallet.address) {
+        fetch(`https://tonapi.io/v2/accounts/${currentWallet.address}`)
+          .then(res => res.json())
+          .then(tonData => {
+            const b = (tonData.balance || 0) / 1e9;
+            setWallet(prev => ({ ...prev, balance: b }));
+            freshBalance = b;
+          })
+          .catch(() => { freshBalance = currentWallet.balance; });
+      }
+      return currentWallet;
+    });
 
     setStats(prev => ({
       ...prev,
@@ -134,7 +136,7 @@ const Dashboard = (props) => {
       ram: [...p.ram.slice(1), newData.ram ?? (p.ram[p.ram.length-1] + (Math.random() * 1 - 0.5))],
       stability: [...p.stability.slice(1), Math.max(0, 100 - ((newData.latency ?? p.lat[p.lat.length-1]) / 5))],
       online: [...p.online.slice(1), newData.online ?? p.online[p.online.length-1]],
-      ton: [...p.ton.slice(1), currentBalance],
+      ton: [...p.ton.slice(1), freshBalance || p.ton[p.ton.length-1]],
       lat: [...p.lat.slice(1), newData.latency ?? (p.lat[p.lat.length-1] + (Math.random() * 4 - 2))],
       liq: [...p.liq.slice(1), newData.liquidity ?? p.liq[p.liq.length-1]]
     }));
@@ -142,7 +144,6 @@ const Dashboard = (props) => {
   };
 
   useEffect(() => {
-    // 1. Инициализация TON Connect
     const tonConnectUI = new window.TON_CONNECT_UI.TonConnectUI({
       manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json',
       buttonRootId: 'ton-btn'
@@ -161,7 +162,6 @@ const Dashboard = (props) => {
       }
     });
 
-    // 2. Подписка на серверные события (SSE)
     const eventSource = new EventSource('/api/admin/stream');
     eventSource.onmessage = (e) => {
       try {
@@ -178,9 +178,7 @@ const Dashboard = (props) => {
       } catch (err) { console.error("Stream error", err); }
     };
 
-    // 3. Таймер обновления (Fallback)
     const interval = setInterval(() => updateSystemData({}), 10000);
-
     setTimeout(() => setIsLoaded(true), 600);
 
     return () => {
@@ -188,7 +186,7 @@ const Dashboard = (props) => {
       clearInterval(interval);
       unsubscribe();
     };
-  }, []); // Пустой массив, чтобы не пересоздавать EventSource при смене баланса
+  }, []);
 
   if (!isLoaded) return <div className="loading">CONNECTING_TO_NEURAL_PULSE_NODE...</div>;
 
