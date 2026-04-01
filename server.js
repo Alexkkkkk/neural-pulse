@@ -102,7 +102,8 @@ async function setupSupremeInterface(app) {
                 resource: User, 
                 options: { 
                     navigation: { name: 'DATABASE', icon: 'User' },
-                    listProperties: ['id', 'username', 'balance', 'wallet', 'updatedAt'],
+                    // Исправлено: updatedAt -> updated_at для синхронизации с PostgreSQL
+                    listProperties: ['id', 'username', 'balance', 'wallet', 'updated_at'],
                     properties: { balance: { type: 'number' } }
                 } 
             },
