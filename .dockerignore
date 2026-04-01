@@ -3,7 +3,7 @@
 # ==============================================================================
 
 # --- [ DEPENDENCIES & PACKAGE MANAGERS ] ---
-# Игнорируем всё, что связано с локальным окружением
+# Игнорируем модули, но ОСТАВЛЯЕМ package-lock.json для npm ci
 node_modules/
 jspm_packages/
 .npm/
@@ -14,7 +14,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
-package-lock.json
+# package-lock.json УДАЛЕН из игнора, так как он критичен для сборки
 yarn.lock
 pnpm-lock.yaml
 
@@ -50,7 +50,7 @@ desktop.ini
 $RECYCLE.BIN/
 
 # --- [ DATA, LOGS & VOLUMES ] ---
-# БД и Логи должны жить только в Volume-монтировании
+# БД и Логи должны жить только в Volume-монтировании или создаваться сервером
 data/
 logs/
 *.log
@@ -80,7 +80,6 @@ tmp/
 .factorypath
 
 # --- [ COMPILER & NATIVE BUILD TRASH ] ---
-# Если устанавливаются нативные зависимости (pg, argon2 и т.д.)
 build/Release/
 obj.target/
 *.target.mk
@@ -92,7 +91,7 @@ __pycache__/
 *.pyd
 
 # --- [ MEDIA & ASSETS SOURCE ] ---
-# Игнорируем исходники дизайна, оставляем только сжатые файлы в static/
+# Твой дизайн остается в безопасности, в образ попадут только файлы из static/
 *.psd
 *.ai
 *.sketch
