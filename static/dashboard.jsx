@@ -103,7 +103,6 @@ const Dashboard = (props) => {
     );
   }, [users, searchTerm]);
 
-  // Обновление системных данных и истории
   const updateSystemData = async (newData = {}) => {
     let freshBalance = wallet.balance;
 
@@ -138,6 +137,12 @@ const Dashboard = (props) => {
   };
 
   useEffect(() => {
+    // --- ПРОВЕРКА НАЛИЧИЯ SDK TON ---
+    if (!window.TON_CONNECT_UI) {
+        console.warn("Waiting for TON_CONNECT_UI to load...");
+        return;
+    }
+
     const tonConnectUI = new window.TON_CONNECT_UI.TonConnectUI({
       manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json',
       buttonRootId: 'ton-btn'
@@ -180,7 +185,8 @@ const Dashboard = (props) => {
       clearInterval(interval);
       unsubscribe();
     };
-  }, [wallet.connected, wallet.address]); 
+    // Добавлена проверка window.TON_CONNECT_UI в зависимости, чтобы эффект перезапустился при загрузке скрипта
+  }, [wallet.connected, wallet.address, window.TON_CONNECT_UI]); 
 
   if (!isLoaded) return <div className="loading">CONNECTING_TO_NEURAL_PULSE_NODE...</div>;
 
