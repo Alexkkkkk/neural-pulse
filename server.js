@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import rateLimit from 'express-rate-limit';
 import dayjs from 'dayjs';
 import EventEmitter from 'events'; 
 import os from 'os';
@@ -26,7 +25,7 @@ const neuralLog = (msg, type = 'INFO') => {
 };
 
 // --- ⚙️ CONFIG ---
-const BOT_TOKEN = "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
+const BOT_TOKEN = process.env.BOT_TOKEN || "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
 const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
 const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
@@ -36,13 +35,15 @@ async function startNeuralOS() {
     const app = express();
     const bot = new Telegraf(BOT_TOKEN);
 
+    // Middleware
     app.use(helmet({
-        contentSecurityPolicy: false, // Для корректной работы AdminJS и внешних шрифтов
+        contentSecurityPolicy: false, // Нужно для AdminJS и внешних ресурсов
     }));
     app.use(compression());
     app.use(cors({ origin: '*' }));
     app.use(express.json());
 
+    // Раздача статики (index.html, images, etc)
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
     try {
@@ -54,12 +55,13 @@ async function startNeuralOS() {
         await setupAdminPanel(app);
         setupBotHandlers(bot);
 
-        // Webhook
+        // Webhook для Telegram
         app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => bot.handleUpdate(req.body, res));
         await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`);
+        
         neuralLog(`✅ TITAN CORE ACTIVE [PORT: ${PORT}]`, 'SUCCESS');
 
-        // --- 🩺 SYSTEM PULSE ---
+        // --- 🩺 SYSTEM PULSE (Каждые 10 секунд) ---
         setInterval(async () => {
             try {
                 const [gStats, walletCount] = await Promise.all([
@@ -88,7 +90,7 @@ async function startNeuralOS() {
                     db_latency: pulseData.network_latency
                 }).catch(() => {});
             } catch (e) { neuralLog(`Pulse error: ${e.message}`, 'WARN'); }
-        }, 10000); // Синхронизация каждые 10 секунд
+        }, 10000);
 
         app.listen(PORT, '0.0.0.0');
 
@@ -97,6 +99,7 @@ async function startNeuralOS() {
     }
 }
 
+// Поток данных для админ-панели (Server-Sent Events)
 function setupRealTimeStream(app) {
     app.get('/api/admin/stream', (req, res) => {
         res.writeHead(200, {
@@ -110,17 +113,44 @@ function setupRealTimeStream(app) {
     });
 }
 
+// API для взаимодействия с фронтендом (Mini App)
 function setupAPIRoutes(app) {
-    app.post('/api/click', async (req, res) => {
-        const { userId, count } = req.body;
+    // Получение данных пользователя при входе
+    app.get('/api/user/:userId', async (req, res) => {
         try {
-            const user = await User.findByPk(userId);
+            const user = await User.findByPk(req.params.userId);
+            if (!user) return res.status(404).json({ error: "User not found" });
+            res.json(user);
+        } catch (e) { res.status(500).send(e.message); }
+    });
+
+    // Сохранение прогресса (Balance, Levels, Wallet)
+    app.post('/api/save', async (req, res) => {
+        const { id, balance, tap_lvl, mine_lvl, energy_lvl, wallet } = req.body;
+        try {
+            const user = await User.findByPk(id);
             if (!user) return res.sendStatus(404);
-            const reward = count * 1.5;
-            await user.increment('balance', { by: reward });
-            await GlobalStats.increment('total_balance', { by: reward, where: { id: 1 } });
-            res.json({ balance: user.balance + reward });
-        } catch (e) { res.sendStatus(500); }
+
+            const oldBalance = parseFloat(user.balance || 0);
+            const newBalance = parseFloat(balance);
+            const diff = newBalance - oldBalance;
+
+            await user.update({ balance, tap_lvl, mine_lvl, energy_lvl, wallet });
+            
+            if (diff > 0) {
+                await GlobalStats.increment('total_balance', { by: diff, where: { id: 1 } });
+            }
+            res.sendStatus(200);
+        } catch (e) { res.status(500).send(e.message); }
+    });
+
+    // AI Советник (для красоты на фронтенде)
+    app.post('/api/ai-advice', (req, res) => {
+        const { balance } = req.body;
+        const advice = balance < 5000 
+            ? "> [SYSTEM]: Рекомендую апгрейд Neural Link для ускорения майнинга." 
+            : "> [SYSTEM]: Баланс в норме. Время подключать TON кошелек.";
+        res.json({ text: advice });
     });
 }
 
@@ -134,9 +164,9 @@ async function setupAdminPanel(app) {
     
     const adminJs = new AdminJS({
         resources: [
-            { resource: User },
-            { resource: Stats },
-            { resource: GlobalStats }
+            { resource: User, options: { navigation: { name: 'CORE', icon: 'User' } } },
+            { resource: Stats, options: { navigation: { name: 'SYSTEM' } } },
+            { resource: GlobalStats, options: { navigation: { name: 'SYSTEM' } } }
         ],
         rootPath: '/admin',
         componentLoader,
@@ -150,7 +180,11 @@ async function setupAdminPanel(app) {
                 return { totalUsers: gs?.total_users, totalBalance: gs?.total_balance, usersList: users };
             }
         },
-        branding: { companyName: 'NEURAL PULSE', theme: { colors: { primary100: '#00f2fe', bg: '#000' } } }
+        branding: { 
+            companyName: 'NEURAL PULSE', 
+            theme: { colors: { primary100: '#00f2fe', bg: '#0b0e11' } },
+            logo: `${DOMAIN}/static/images/logo.png`
+        }
     });
 
     const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
@@ -168,10 +202,19 @@ function setupBotHandlers(bot) {
             where: { id: ctx.from.id },
             defaults: { username: ctx.from.username || 'AGENT', balance: 0 }
         });
+        
         if (created) await GlobalStats.increment('total_users', { where: { id: 1 } });
-        ctx.reply(`<b>[ NEURAL PULSE ]</b>\nAgent: ${user.username}`, { 
+
+        const welcomeMsg = `<b>[ NEURAL PULSE ]</b>\n\n` +
+                           `Добро пожаловать в систему, <code>${user.username}</code>.\n` +
+                           `Ваш терминал готов к синхронизации.`;
+
+        ctx.reply(welcomeMsg, { 
             parse_mode: 'HTML', 
-            ...Markup.inlineKeyboard([[Markup.button.webApp("⚡ TERMINAL", `${DOMAIN}/static/index.html`)]])
+            ...Markup.inlineKeyboard([
+                [Markup.button.webApp("⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)],
+                [Markup.button.url("🌐 СООБЩЕСТВО", "https://t.me/your_channel")]
+            ])
         });
     });
 }
