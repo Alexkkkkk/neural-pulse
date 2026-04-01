@@ -1,4 +1,4 @@
-import React, { useState, useEffect, memo } from 'react';
+import React, { useState, useEffect, memo, useMemo } from 'react';
 
 // --- 🌌 ЦВЕТОВАЯ ПАЛИТРА NEURAL_PULSE V9.8 ---
 const CYBER = {
@@ -98,15 +98,24 @@ const Dashboard = (props) => {
     liq: Array(15).fill(0)
   });
 
+  // Фильтрация пользователей (useMemo для производительности)
+  const filteredUsers = useMemo(() => {
+    return users.filter(u => 
+      String(u.id).includes(searchTerm) || 
+      String(u.username || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [users, searchTerm]);
+
   // Логика обновления всех данных
   const updateSystemData = async (newData = {}) => {
-    // Если кошелек подключен, тянем баланс из блокчейна
     let currentBalance = wallet.balance;
+    
+    // Подгрузка баланса, если кошелек подключен
     if (wallet.connected && wallet.address) {
       try {
         const res = await fetch(`https://tonapi.io/v2/accounts/${wallet.address}`);
-        const data = await res.json();
-        currentBalance = data.balance / 1000000000;
+        const tonData = await res.json();
+        currentBalance = tonData.balance / 1e9;
         setWallet(prev => ({ ...prev, balance: currentBalance }));
       } catch (e) { console.warn("Balance fetch failed"); }
     }
@@ -123,7 +132,7 @@ const Dashboard = (props) => {
     setHistory(p => ({
       cpu: [...p.cpu.slice(1), newData.cpu ?? (p.cpu[p.cpu.length-1] + (Math.random() * 2 - 1))],
       ram: [...p.ram.slice(1), newData.ram ?? (p.ram[p.ram.length-1] + (Math.random() * 1 - 0.5))],
-      stability: [...p.stability.slice(1), 100 - ((newData.latency ?? p.lat[p.lat.length-1]) / 5)],
+      stability: [...p.stability.slice(1), Math.max(0, 100 - ((newData.latency ?? p.lat[p.lat.length-1]) / 5))],
       online: [...p.online.slice(1), newData.online ?? p.online[p.online.length-1]],
       ton: [...p.ton.slice(1), currentBalance],
       lat: [...p.lat.slice(1), newData.latency ?? (p.lat[p.lat.length-1] + (Math.random() * 4 - 2))],
@@ -133,7 +142,7 @@ const Dashboard = (props) => {
   };
 
   useEffect(() => {
-    // Инициализация TON Connect
+    // 1. Инициализация TON Connect
     const tonConnectUI = new window.TON_CONNECT_UI.TonConnectUI({
       manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json',
       buttonRootId: 'ton-btn'
@@ -152,7 +161,7 @@ const Dashboard = (props) => {
       }
     });
 
-    // Подписка на серверные события
+    // 2. Подписка на серверные события (SSE)
     const eventSource = new EventSource('/api/admin/stream');
     eventSource.onmessage = (e) => {
       try {
@@ -169,16 +178,17 @@ const Dashboard = (props) => {
       } catch (err) { console.error("Stream error", err); }
     };
 
-    // Таймер принудительного обновления (10 секунд)
+    // 3. Таймер обновления (Fallback)
     const interval = setInterval(() => updateSystemData({}), 10000);
 
     setTimeout(() => setIsLoaded(true), 600);
+
     return () => {
       eventSource.close();
       clearInterval(interval);
       unsubscribe();
     };
-  }, [wallet.address, wallet.connected]);
+  }, []); // Пустой массив, чтобы не пересоздавать EventSource при смене баланса
 
   if (!isLoaded) return <div className="loading">CONNECTING_TO_NEURAL_PULSE_NODE...</div>;
 
@@ -203,7 +213,8 @@ const Dashboard = (props) => {
         .cyber-table { width: 100%; border-collapse: collapse; font-size: 12px; }
         .cyber-table th { text-align: left; padding: 12px; color: ${CYBER.primary}; border-bottom: 1px solid ${CYBER.border}; font-size: 9px; text-transform: uppercase; }
         .cyber-table td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.03); font-family: 'Roboto Mono'; }
-        .search-input { width: 100%; background: #0c1017; border: 1px solid ${CYBER.border}; color: #fff; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-family: 'Roboto Mono'; outline: none; }
+        .search-input { width: 100%; background: #0c1017; border: 1px solid ${CYBER.border}; color: #fff; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-family: 'Roboto Mono'; outline: none; transition: 0.3s; }
+        .search-input:focus { border-color: ${CYBER.primary}; box-shadow: 0 0 10px rgba(0, 242, 254, 0.1); }
         .loading { background: #000; height: 100vh; display: flex; align-items: center; justify-content: center; color: ${CYBER.primary}; font-family: 'Roboto Mono'; letter-spacing: 2px; }
       `}</style>
 
@@ -228,7 +239,7 @@ const Dashboard = (props) => {
           <div className="res-panel">
             <TelemetryCard label="Core_Node_Load" value={stats.cpu} data={history.cpu} color={CYBER.primary} />
             <TelemetryCard label="Sync_Memory" value={stats.ram} data={history.ram} color={CYBER.secondary} />
-            <TelemetryCard label="Stability" value={100 - (stats.latency / 5)} data={history.stability} color={CYBER.warning} />
+            <TelemetryCard label="Stability" value={Math.max(0, 100 - (stats.latency / 5))} data={history.stability} color={CYBER.warning} />
           </div>
 
           <div className="grid">
@@ -255,13 +266,17 @@ const Dashboard = (props) => {
                 <tr><th>Identity_UID</th><th>Pulse_Balance</th><th>Access_Status</th></tr>
               </thead>
               <tbody>
-                {users.filter(u => String(u.id).includes(searchTerm) || String(u.username).toLowerCase().includes(searchTerm.toLowerCase())).map((u, i) => (
+                {filteredUsers.length > 0 ? filteredUsers.map((u, i) => (
                   <tr key={i}>
                     <td style={{ color: CYBER.primary }}>{u.username || u.id}</td>
                     <td>{Number(u.balance || 0).toLocaleString()} <span style={{fontSize:'8px', opacity:0.3}}>$NP</span></td>
                     <td style={{ color: CYBER.success }}>AUTHORIZED</td>
                   </tr>
-                ))}
+                )) : (
+                  <tr>
+                    <td colSpan="3" style={{ textAlign: 'center', opacity: 0.3, padding: '20px' }}>NO_DATA_FOUND</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
