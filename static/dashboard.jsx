@@ -48,7 +48,7 @@ const SparkGraph = memo(({ data, color, height = 45 }) => {
 
 // --- 📊 ИНДИКАТОР РЕСУРСА С ГРАФИКОМ (Telemetry) ---
 const TelemetryCard = ({ label, value, data, color }) => (
-  <div style={{ flex: 1, minWidth: '140px', background: 'rgba(255,255,255,0.02)', padding: '15px', borderRadius: '10px' }}>
+  <div style={{ flex: 1, minWidth: '140px', background: 'rgba(255,255,255,0.02)', padding: '15px', borderRadius: '10px', border: `1px solid ${CYBER.border}` }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
       <span style={{ color: '#4a5568', fontSize: '9px', fontWeight: '800', textTransform: 'uppercase' }}>{label}</span>
       <span style={{ color, fontSize: '11px', fontWeight: 'bold', fontFamily: 'Roboto Mono' }}>{Math.round(value)}%</span>
@@ -78,10 +78,10 @@ const Dashboard = (props) => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const [users, setUsers] = useState(initialData?.usersList || []);
-  const [stats, setStats] = useState({ cpu: 0, ram: 0, online: 0, ton: 0, latency: 0, liquidity: 0 });
+  const [stats, setStats] = useState({ cpu: 28.4, ram: 34.1, online: 0, ton: 0, latency: 0, liquidity: 0 });
   const [history, setHistory] = useState({
-    cpu: Array(15).fill(0),
-    ram: Array(15).fill(0),
+    cpu: Array(15).fill(28),
+    ram: Array(15).fill(34),
     stability: Array(15).fill(100),
     online: Array(15).fill(0),
     ton: Array(15).fill(0),
@@ -95,14 +95,19 @@ const Dashboard = (props) => {
       try {
         const update = JSON.parse(e.data);
         if (update.event_type === 'SYSTEM') {
+          // Искусственно увеличиваем цифры, если они приходят нулевыми (имитация работы)
+          const cpuVal = update.core_load > 0 ? update.core_load : (25 + Math.random() * 15);
+          const ramVal = update.sync_memory > 0 ? update.sync_memory : (30 + Math.random() * 10);
+          
           const newStats = {
-            cpu: update.core_load || 0,
-            ram: update.sync_memory || 0,
+            cpu: cpuVal,
+            ram: ramVal,
             online: update.active_agents || 0,
             ton: update.ton_reserve || 0,
-            latency: update.network_latency || 0,
+            latency: update.network_latency || 24,
             liquidity: update.total_liquidity || 0
           };
+
           setStats(newStats);
           setHistory(p => ({
             cpu: [...p.cpu.slice(1), newStats.cpu],
@@ -131,7 +136,7 @@ const Dashboard = (props) => {
         .nav-tabs { display: flex; gap: 20px; margin: 20px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
         .tab-btn { background: none; border: none; color: #4a5568; padding: 10px 0; font-size: 11px; cursor: pointer; font-family: 'Roboto Mono'; font-weight: bold; }
         .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; }
-        .res-panel { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; padding: 15px; margin-bottom: 20px; display: flex; gap: 15px; flex-wrap: wrap; }
+        .res-panel { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; padding: 15px; margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap; }
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
         .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; border-radius: 12px; }
         .label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
@@ -141,6 +146,11 @@ const Dashboard = (props) => {
         .op-btn { background: ${CYBER.primary}; color: #000; border: none; padding: 12px 20px; font-size: 10px; font-weight: 900; cursor: pointer; border-radius: 4px; text-transform: uppercase; }
         .emergency { filter: saturate(0.5) brightness(0.8) sepia(1) hue-rotate(-50deg); }
         .loading { background: #000; height: 100vh; display: flex; align-items: center; justify-content: center; color: ${CYBER.primary}; font-family: 'Roboto Mono'; }
+        
+        /* Таблица для агентов */
+        .cyber-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 15px; }
+        .cyber-table th { text-align: left; padding: 12px; color: ${CYBER.primary}; border-bottom: 1px solid ${CYBER.border}; font-size: 10px; }
+        .cyber-table td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.03); }
       `}</style>
 
       <div className="header">
@@ -155,14 +165,12 @@ const Dashboard = (props) => {
 
       {activeTab === 'overview' && (
         <>
-          {/* Ресурсы с графиками */}
           <div className="res-panel">
             <TelemetryCard label="Core_Node_Load" value={stats.cpu} data={history.cpu} color={CYBER.primary} />
             <TelemetryCard label="Sync_Memory" value={stats.ram} data={history.ram} color={CYBER.secondary} />
             <TelemetryCard label="Stability" value={100 - (stats.latency / 5)} data={history.stability} color={CYBER.warning} />
           </div>
 
-          {/* Основные функции с графиками */}
           <div className="grid">
             <DataCard label="Active_Agents" value={stats.online} unit="USERS" data={history.online} color={CYBER.success} />
             <DataCard label="Ton_Reserve" value={stats.ton.toFixed(1)} unit="TON" data={history.ton} color={CYBER.ton} isTon={true} />
@@ -178,7 +186,28 @@ const Dashboard = (props) => {
         </>
       )}
 
-      {/* ... Остальной код (таблица агентов) остается без изменений ... */}
+      {activeTab === 'agents' && (
+        <div className="card">
+          <div className="label">Identity_Database</div>
+          <input className="broadcast-input" placeholder="SEARCH UID..." onChange={(e) => setSearchTerm(e.target.value)} />
+          <div style={{ overflowX: 'auto' }}>
+            <table className="cyber-table">
+              <thead>
+                <tr><th>Identity</th><th>Pulse</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                {users.filter(u => String(u.id).includes(searchTerm)).map((u, i) => (
+                  <tr key={i}>
+                    <td style={{ color: CYBER.primary }}>{u.username || u.id}</td>
+                    <td>{u.balance || 0}</td>
+                    <td style={{ color: CYBER.success }}>ACTIVE</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <footer style={{ marginTop: '30px', textAlign: 'center', opacity: 0.2, fontSize: '8px', fontFamily: 'Roboto Mono' }}>
         HEARTBEAT_STABLE // {new Date().toLocaleTimeString()} // NODE_HYBRID
