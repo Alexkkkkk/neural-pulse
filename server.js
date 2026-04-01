@@ -51,13 +51,15 @@ async function getSystemStats() {
     const memUsageMB = process.memoryUsage().rss / 1024 / 1024;
     const visualRam = Math.min((memUsageMB / 10).toFixed(1), 100); // Визуальная симуляция % ОЗУ для ноды
     let cpuLoad = parseFloat(os.loadavg()[0].toFixed(2)) * 10;
-    if (cpuLoad === 0) cpuLoad = (Math.random() * 5 + 5).toFixed(1); // Заглушка, если контейнер прячет CPU
+    
+    // Если система скрывает нагрузку (0.00), создаем живой пульс активности
+    if (cpuLoad === 0) cpuLoad = (Math.random() * 8 + 2).toFixed(1);
 
     return {
         event_type: 'SYSTEM',
         server_load: parseFloat(cpuLoad),
         ram_usage: parseFloat(visualRam),
-        db_latency: Date.now() - start || Math.floor(Math.random() * 5 + 2), // Если 0ms, даем микро-задержку
+        db_latency: Date.now() - start || Math.floor(Math.random() * 5 + 2),
         user_count: gStats?.total_users || 0,
         active_wallets: walletCount || 0,
         total_liquidity: parseFloat(gStats?.total_balance || 0),
@@ -100,7 +102,7 @@ async function startNeuralOS() {
         
         setupAPIRoutes(app);
         setupAdminCommands(app, bot);
-        setupRealTimeStream(app);
+        setupRealTimeStream(app); // Исправленная версия внутри
         setupBotHandlers(bot);
 
         await setupAdminPanel(app);
@@ -121,7 +123,7 @@ async function startNeuralOS() {
                     mem_usage: Math.round(pulseData.mem_mb),
                     server_load: pulseData.server_load,
                     db_latency: pulseData.db_latency
-                }).catch(() => {}); // Игнорируем ошибки записи логов
+                }).catch(() => {});
             } catch (e) { neuralLog(e.message, 'WARN'); }
         }, 3000); 
 
@@ -169,20 +171,35 @@ function setupAdminCommands(app, bot) {
     });
 }
 
-// --- REAL-TIME ПОТОК ДЛЯ ДАШБОРДА ---
+// --- REAL-TIME ПОТОК (SSE) С ОБХОДОМ БУФЕРИЗАЦИИ ---
 function setupRealTimeStream(app) {
     app.get('/api/admin/stream', async (req, res) => {
-        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
-        const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+        // Установка заголовков для живого соединения без задержек
+        res.writeHead(200, { 
+            'Content-Type': 'text/event-stream', 
+            'Cache-Control': 'no-cache, no-transform', 
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no' // Важно для Nginx/Bothost
+        });
         
-        // Отправляем данные МГНОВЕННО при подключении админа
+        const send = (data) => {
+            res.write(`data: ${JSON.stringify(data)}\n\n`);
+            // Принудительный сброс буфера
+            if (res.flush) res.flush();
+        };
+        
+        // Моментальный снимок системы при входе админа
         try {
             const initialData = await getSystemStats();
             send(initialData);
         } catch(e) {}
 
+        // Подписка на глобальные события
         pulseEvents.on('update', send);
-        req.on('close', () => pulseEvents.removeListener('update', send));
+        
+        req.on('close', () => {
+            pulseEvents.removeListener('update', send);
+        });
     });
 }
 
@@ -201,10 +218,12 @@ function setupAPIRoutes(app) {
                 GlobalStats.increment('total_balance', { by: reward, where: { id: 1 } })
             ]);
 
+            // Отправляем событие клика в реальном времени на дашборд
             pulseEvents.emit('update', {
                 event_type: 'USER_UPDATE',
-                recent_event: `AGENT_${userId.toString().slice(-4)}_MINED: +${reward} NP`
+                recent_event: `AGENT_${userId.toString().slice(-4)} MINED: +${reward} NP`
             });
+            
             res.json({ balance: parseFloat(user.balance) + reward });
         } catch (e) { res.sendStatus(500); }
     });
@@ -251,9 +270,14 @@ function setupBotHandlers(bot) {
             where: { id: ctx.from.id },
             defaults: { username: ctx.from.username || 'AGENT', balance: 0 }
         });
+        
         if (created) {
             await GlobalStats.increment('total_users', { where: { id: 1 } });
-            pulseEvents.emit('update', { event_type: 'USER_UPDATE', recent_event: `NEW_AGENT_REGISTERED: ${user.username}` });
+            // Сообщаем в админку о новом пользователе мгновенно
+            pulseEvents.emit('update', { 
+                event_type: 'USER_UPDATE', 
+                recent_event: `NEW_AGENT: ${user.username}` 
+            });
         }
         
         ctx.reply(`<b>[ NEURAL PULSE ]</b>\nCore: Online\nAgent: ${user.username}`, { 
