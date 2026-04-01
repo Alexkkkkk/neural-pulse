@@ -3,7 +3,7 @@ import React, { useState, useEffect, memo, useRef } from 'react';
 // --- 🌌 NEURAL_PULSE ULTIMATE DARK PALETTE ---
 const CYBER = {
   bg: '#000000',
-  card: 'rgba(5, 7, 10, 0.8)',
+  card: 'rgba(5, 7, 10, 0.85)',
   primary: '#00f2fe',
   ton: '#0088CC',
   success: '#39ff14',
@@ -16,14 +16,14 @@ const CYBER = {
 };
 
 // --- 📈 ADVANCED SPARKLINE ---
-const SparkGraph = memo(({ data, color, height = 50 }) => {
+const SparkGraph = memo(({ data, color, height = 60 }) => {
   if (!data || data.length < 2) return <div style={{ height }} />;
   const max = Math.max(...data, 1);
   const min = Math.min(...data);
   const range = max - min || 1;
   const points = data.map((val, i) => ({
     x: (i / (data.length - 1)) * 100,
-    y: height - ((val - min) / range) * height,
+    y: height - ((val - min) / range) * 50 - 5, // Небольшой отступ снизу
   }));
 
   const linePath = `M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`;
@@ -34,13 +34,13 @@ const SparkGraph = memo(({ data, color, height = 50 }) => {
     <svg width="100%" height={height} style={{ marginTop: '15px', overflow: 'visible' }}>
       <defs>
         <linearGradient id={gradId} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor={color} stopOpacity="0.4" />
+          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
       <path d={areaPath} fill={`url(#${gradId})`} />
       <path d={linePath} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" 
-            style={{ filter: `drop-shadow(0 0 6px ${color}88)` }} />
+            style={{ filter: `drop-shadow(0 0 8px ${color}aa)` }} />
       <circle cx="100" cy={points[points.length-1].y} r="3.5" fill={color}>
         <animate attributeName="opacity" values="1;0.4;1" dur="1.5s" repeatCount="indefinite" />
         <animate attributeName="r" values="3.5;5;3.5" dur="1.5s" repeatCount="indefinite" />
@@ -49,34 +49,34 @@ const SparkGraph = memo(({ data, color, height = 50 }) => {
   );
 });
 
-// --- 📊 NEON PROGRESS BAR (ИСПОЛЬЗУЕМ ДЛЯ RAM/SSD) ---
-const TelemetryBar = ({ label, value, color }) => (
-  <div style={{ marginBottom: '15px' }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '1.5px' }}>
-      <span style={{ opacity: 0.5, color: '#fff' }}>{label}</span>
-      <span style={{ color, fontWeight: 'bold', textShadow: `0 0 5px ${color}` }}>{value}%</span>
-    </div>
-    <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
-      <div style={{ 
-        width: `${value}%`, 
-        height: '100%', 
-        background: `linear-gradient(90deg, ${color}aa, ${color})`, 
-        boxShadow: `0 0 12px ${color}`,
-        transition: 'width 1.5s cubic-bezier(0.4, 0, 0.2, 1)' 
-      }} />
-    </div>
-  </div>
-);
-
-// --- 🗳️ PREMIUM DATA CARD (ИСПОЛЬЗУЕМ ДЛЯ CPU И ДРУГИХ) ---
+// --- 🗳️ PREMIUM DATA CARD ---
 const DataCard = ({ label, value, unit, data, color }) => (
   <div className="card">
     <div className="card-scanline" />
-    <div className="label" style={{ color: color, opacity: 0.8 }}>{label}</div>
+    <div className="label" style={{ color: color }}>{label}</div>
     <div className="val-main">
       {value}<span className="val-unit">{unit}</span>
     </div>
     <SparkGraph data={data} color={color} />
+  </div>
+);
+
+// --- 📊 MINI TELEMETRY BAR ---
+const TelemetryBar = ({ label, value, color }) => (
+  <div style={{ flex: 1 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', marginBottom: '8px', letterSpacing: '1px' }}>
+      <span style={{ color: '#4a5568', textTransform: 'uppercase' }}>{label}</span>
+      <span style={{ color, fontWeight: 'bold' }}>{value}%</span>
+    </div>
+    <div style={{ height: '3px', background: '#111', borderRadius: '2px', overflow: 'hidden' }}>
+      <div style={{ 
+        width: `${value}%`, 
+        height: '100%', 
+        background: color, 
+        boxShadow: `0 0 10px ${color}`,
+        transition: 'width 1s ease-in-out'
+      }} />
+    </div>
   </div>
 );
 
@@ -85,69 +85,56 @@ const Dashboard = () => {
   const [isEmergency, setIsEmergency] = useState(false);
   const logRef = useRef(null);
 
-  const [stats, setStats] = useState({ cpu: 10.7, ram: 38, ssd: 22, online: 42, liquidity: 1000, latency: 95, ton: 65.5 });
+  const [stats, setStats] = useState({ cpu: 0, ram: 38, ssd: 22, online: 0, liquidity: 0, latency: 0, ton: 0 });
   const [history, setHistory] = useState({
-    cpu: [12, 15, 14, 18, 16, 14, 10.7],
-    online: [30, 45, 38, 52, 48, 35, 42],
-    wallets: [50, 55, 60, 65.5, 65.5, 65.5, 65.5],
-    liq: [850, 870, 840, 920, 980, 950, 1000],
-    lat: [90, 105, 95, 110, 85, 90, 95]
+    cpu: Array(15).fill(0),
+    online: Array(15).fill(0),
+    wallets: Array(15).fill(0),
+    liq: Array(15).fill(0),
+    lat: Array(15).fill(0)
   });
 
   const [logs, setLogs] = useState(['> INITIALIZING_NEURAL_CORE...', '> ENCRYPTED_LINK_ESTABLISHED']);
 
   useEffect(() => {
-    // ПОДКЛЮЧЕНИЕ С SSE СЕРВЕРОМ ДЛЯ РЕАЛЬНЫХ ДАННЫХ
-    const eventSource = new EventSource('/admin/stream');
+    const eventSource = new EventSource('/api/admin/stream');
     
-    eventSource.onopen = () => {
-        neuralLog(`Encrypted stream established [MODE: REAL-TIME]`, 'NET');
-    };
-
     eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.event_type === 'SYSTEM') {
-            //✅ ИСПРАВЛЕНИЕ: ЧТОБЫ ИЗБЕЖАТЬ БАГА (РИС. 8), МЫ ПРИВОДИМ nCpu К ЧИСЛУ
-            const nCpu = typeof data.core_processing === 'string' ? parseFloat(data.core_processing) : data.core_processing;
-            
-            setStats(p => ({
-                ...p,
-                //✅ ИСПРАВЛЕНИЕ ЗДЕСЬ. Был data.server_load. Но nCpu - это число.
-                cpu: nCpu, 
-                latency: data.db_latency,
-                online: data.user_count,
-                ton: data.active_wallets,
-                liquidity: data.total_liquidity
-            }));
-            
-            setHistory(p => ({
-                ...p,
-                cpu: [...p.cpu.slice(1), nCpu],
-                online: [...p.online.slice(1), data.user_count],
-                wallets: [...p.wallets.slice(1), data.active_wallets],
-                liq: [...p.liq.slice(1), data.total_liquidity],
-                lat: [...p.lat.slice(1), data.db_latency]
-            }));
+      const data = JSON.parse(event.data);
+      if (data.event_type === 'SYSTEM') {
+        const nCpu = typeof data.core_load === 'string' ? parseFloat(data.core_load) : data.core_load;
+        
+        setStats(p => ({
+          ...p,
+          cpu: nCpu || 0, 
+          ram: data.sync_memory || p.ram,
+          latency: data.network_latency || 0,
+          online: data.active_agents || 0,
+          ton: data.ton_reserve || 0,
+          liquidity: data.pulse_liquidity || 0
+        }));
+        
+        setHistory(p => ({
+          cpu: [...p.cpu.slice(1), nCpu],
+          online: [...p.online.slice(1), data.active_agents],
+          wallets: [...p.wallets.slice(1), data.ton_reserve],
+          liq: [...p.liq.slice(1), data.pulse_liquidity],
+          lat: [...p.lat.slice(1), data.network_latency]
+        }));
 
-            if(data.recent_event && data.recent_event !== 'HEARTBEAT_STABLE') {
-                setLogs(p => [...p, `> ${data.recent_event}`]);
-            }
-        } else if (data.event_type === 'USER_UPDATE' && data.user_data) {
-             setLogs(p => [...p, `> [AGENT_SYNC] ${data.user_data.username.toUpperCase()}: NP BAL UPDATED`]);
+        if(data.recent_event && data.recent_event !== 'HEARTBEAT_STABLE') {
+          setLogs(p => [...p.slice(-50), `> ${data.recent_event}`]);
         }
+      }
     };
 
-    eventSource.onerror = () => {
-        neuralLog(`Stream connection fault. Core attempt retry...`, 'ERROR');
-    };
-
-    setTimeout(() => setIsLoaded(true), 1000);
+    setTimeout(() => setIsLoaded(true), 800);
     return () => eventSource.close();
   }, []);
 
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [logs]);
 
-  if (!isLoaded) return <div style={{ background: '#000', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: CYBER.primary, fontFamily: 'Roboto Mono' }}>LOADING_NEURAL_PULSE...</div>;
+  if (!isLoaded) return <div style={{ background: '#000', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: CYBER.primary, fontFamily: 'Roboto Mono' }}>BOOTING_NEURAL_PULSE_V4...</div>;
 
   return (
     <div className={`app-root ${isEmergency ? 'emergency' : ''}`}>
@@ -157,112 +144,107 @@ const Dashboard = () => {
         .app-root { 
           background: ${CYBER.bg}; 
           min-height: 100vh; 
-          padding: 20px; 
+          padding: 25px; 
           font-family: 'Roboto Mono', monospace; 
           color: ${CYBER.text};
           background-image: linear-gradient(${CYBER.border} 1px, transparent 1px), linear-gradient(90deg, ${CYBER.border} 1px, transparent 1px);
           background-size: 40px 40px;
-          animation: backgroundScroll 20s linear infinite;
+          animation: backgroundScroll 30s linear infinite;
         }
         @keyframes backgroundScroll { from { background-position: 0 0; } to { background-position: 0 40px; } }
 
-        .header { margin-bottom: 30px; border-left: 5px solid ${CYBER.primary}; padding-left: 20px; position: relative; }
+        .header { margin-bottom: 30px; border-left: 4px solid ${CYBER.primary}; padding-left: 20px; }
+        .resources-box { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; padding: 25px; margin-bottom: 20px; backdrop-filter: blur(10px); }
+        
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
         
         .card { 
           background: ${CYBER.card}; 
-          border: 1px solid rgba(0, 242, 254, 0.1); 
+          border: 1px solid ${CYBER.border}; 
           padding: 20px; 
-          border-radius: 8px; 
+          border-radius: 12px; 
           position: relative; 
           overflow: hidden; 
           backdrop-filter: blur(10px);
-          box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-          transition: 0.3s;
+          box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+          transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .card:hover { border-color: ${CYBER.primary}; transform: translateY(-2px); box-shadow: 0 0 20px rgba(0, 242, 254, 0.15); }
+        .card:hover { border-color: ${CYBER.primary}; transform: translateY(-3px); box-shadow: 0 0 25px rgba(0, 242, 254, 0.2); }
 
         .card-scanline {
-          position: absolute; top: 0; left: 0; width: 100%; height: 2px;
-          background: linear-gradient(90deg, transparent, ${CYBER.primary}33, transparent);
-          animation: scanline 4s linear infinite;
+          position: absolute; top: 0; left: 0; width: 100%; height: 1.5px;
+          background: linear-gradient(90deg, transparent, ${CYBER.primary}44, transparent);
+          animation: scanline 3s linear infinite;
         }
         @keyframes scanline { from { top: -10%; } to { top: 110%; } }
 
-        .label { font-size: 10px; text-transform: uppercase; letter-spacing: 2.5px; margin-bottom: 15px; font-weight: 700; }
-        .val-main { font-size: 32px; font-weight: 700; color: #fff; display: flex; align-items: baseline; line-height: 1; text-shadow: 0 0 15px rgba(255,255,255,0.2); }
-        .val-unit { font-size: 12px; color: ${CYBER.subtext}; margin-left: 8px; }
+        .label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 15px; font-weight: 700; opacity: 0.8; }
+        .val-main { font-size: 34px; font-weight: 800; color: #fff; display: flex; align-items: baseline; line-height: 1; text-shadow: 0 0 20px rgba(255,255,255,0.15); }
+        .val-unit { font-size: 11px; color: ${CYBER.subtext}; margin-left: 8px; font-weight: 400; }
 
         .op-btn { 
-          background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.1); 
-          padding: 15px; font-size: 10px; font-weight: 700; cursor: pointer; text-transform: uppercase; 
-          border-radius: 4px; transition: 0.2s; letter-spacing: 1px;
+          background: rgba(255,255,255,0.03); color: #fff; border: 1px solid rgba(255,255,255,0.08); 
+          padding: 14px; font-size: 9px; font-weight: 700; cursor: pointer; text-transform: uppercase; 
+          border-radius: 6px; transition: 0.2s; letter-spacing: 1.5px;
         }
-        .op-btn:hover { background: #fff; color: #000; }
-        .op-btn:active { transform: scale(0.95); }
+        .op-btn:hover { background: #fff; color: #000; border-color: #fff; }
         
-        .emergency { filter: saturate(0) contrast(1.2) brightness(0.8) sepia(1) hue-rotate(-50deg); }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: ${CYBER.primary}66; border-radius: 10px; }
+        .emergency { filter: saturate(0.2) contrast(1.1) brightness(0.9) sepia(0.5) hue-rotate(-50deg); }
         
-        @keyframes pulse {
-          0% { opacity: 1; }
-          50% { opacity: 0.3; }
-          100% { opacity: 1; }
-        }
+        ::-webkit-scrollbar { width: 3px; }
+        ::-webkit-scrollbar-thumb { background: ${CYBER.primary}44; border-radius: 10px; }
       `}</style>
 
       {/* --- HEADER --- */}
       <div className="header">
-        <h1 style={{ color: CYBER.primary, fontSize: '26px', margin: 0, letterSpacing: '6px', textShadow: `0 0 15px ${CYBER.primary}66` }}>NEURAL_PULSE v4.0</h1>
-        <div style={{ fontSize: '10px', opacity: 0.6, marginTop: '8px' }}>
-          <span style={{ color: CYBER.success, display: 'inline-block', marginRight: '5px', animation: 'pulse 2s infinite' }}>●</span> 
-          SYSTEM_SYNC: ACTIVE // UPLINK_TITAN_01 // SECURE_LAYER_6
+        <h1 style={{ color: CYBER.primary, fontSize: '24px', margin: 0, letterSpacing: '5px', textShadow: `0 0 20px ${CYBER.primary}44` }}>NEURAL_PULSE V4.0</h1>
+        <div style={{ fontSize: '9px', opacity: 0.7, marginTop: '8px', letterSpacing: '1px' }}>
+          <span style={{ color: CYBER.success }}>●</span> SYSTEM_READY // NODE_TITAN_NL // SECURE_LAYER_V6
         </div>
       </div>
 
-      <div className="grid">
-        {/* ✅ ИСПРАВЛЕНИЕ ОТОБРАЖЕНИЯ CPU (РИС. 8) */}
-        {/* МЫ ПРЕВРАЩАЕМ ЭТУ ЧАСТЬ В DataCard С ГРАФИКОМ */}
-        <DataCard 
-            label="Neural_Node_Core_Processing" 
-            value={stats.cpu.toFixed(1)} 
-            unit="%" 
-            data={history.cpu} 
-            color={CYBER.primary} 
-        />
+      {/* --- RESOURCE BAR --- */}
+      <div className="resources-box">
+        <div className="label" style={{ color: CYBER.primary, marginBottom: '20px' }}>Global_Node_Telemetry</div>
+        <div style={{ display: 'flex', gap: '40px' }}>
+          <TelemetryBar label="Core_Load" value={stats.cpu.toFixed(1)} color={CYBER.primary} />
+          <TelemetryBar label="Sync_Memory" value={stats.ram.toFixed(0)} color={CYBER.secondary} />
+          <TelemetryBar label="Vault_Storage" value={22} color={CYBER.warning} />
+        </div>
+      </div>
 
-        {/* METRICS */}
+      {/* --- MAIN GRID --- */}
+      <div className="grid">
+        <DataCard label="Neural_Node_Processing" value={stats.cpu.toFixed(1)} unit="%" data={history.cpu} color={CYBER.primary} />
         <DataCard label="Active_Agents" value={stats.online} unit="USERS" data={history.online} color={CYBER.success} />
-        <DataCard label="Ton_Reserve" value={stats.ton} unit="💎 TON" data={history.wallets} color={CYBER.ton} />
+        <DataCard label="Ton_Reserve" value={stats.ton.toFixed(1)} unit="TON" data={history.wallets} color={CYBER.ton} />
         <DataCard label="Network_Latency" value={stats.latency} unit="MS" data={history.lat} color={CYBER.danger} />
         <DataCard label="Pulse_Liquidity" value={stats.liquidity} unit="$NP" data={history.liq} color={CYBER.warning} />
 
-        {/* COMMAND CENTER */}
+        {/* CONTROL PANEL */}
         <div className="card" style={{ gridColumn: 'span 2' }}>
           <div className="label" style={{ color: CYBER.primary }}>Directive_Control</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '12px' }}>
-            <button className="op-btn" onClick={() => setLogs(p => [...p, `> BROADCAST_PULSE_SENT`])}>Broadcast</button>
-            <button className="op-btn" onClick={() => setLogs(p => [...p, `> CACHE_PURGE_SUCCESS`])}>Purge</button>
-            <button className="op-btn" onClick={() => setLogs(p => [...p, `> RE-SYNCING_DATABASES...`])}>Sync</button>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+            <button className="op-btn">Broadcast</button>
+            <button className="op-btn">Purge</button>
+            <button className="op-btn">Sync</button>
             <button className="op-btn" style={{ borderColor: CYBER.danger, color: isEmergency ? '#000' : CYBER.danger, background: isEmergency ? CYBER.danger : 'transparent' }} 
-                    onClick={() => { setIsEmergency(!isEmergency); setLogs(p => [...p, `> WARNING: KILL_SWITCH_${!isEmergency ? 'ENGAGED' : 'ABORTED'}`])}}>
+                    onClick={() => setIsEmergency(!isEmergency)}>
               Kill_Switch
             </button>
           </div>
         </div>
       </div>
 
-      {/* FOOTER FEED */}
-      <footer style={{ marginTop: '25px', borderTop: `1px solid rgba(255,255,255,0.05)`, paddingTop: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '12px', letterSpacing: '1px' }}>
-          <span style={{ color: CYBER.primary, fontWeight: 'bold' }}>[ RAW_SYSTEM_LOGS ]</span>
-          <span style={{ opacity: 0.4 }}>STATUS: STREAMING</span>
+      {/* --- SYSTEM LOGS --- */}
+      <footer style={{ marginTop: '25px', borderTop: `1px solid ${CYBER.border}`, paddingTop: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', marginBottom: '12px', opacity: 0.6, letterSpacing: '1px' }}>
+          <span style={{ color: CYBER.primary }}>[ SYSTEM_EVENT_STREAM ]</span>
+          <span>STABLE_LINK</span>
         </div>
-        <div ref={logRef} style={{ height: '90px', overflowY: 'auto', fontSize: '11px', opacity: 0.5, lineHeight: '1.8', padding: '10px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px' }}>
-          {logs.map((l, i) => <div key={i} style={{ borderLeft: `1px solid ${CYBER.primary}33`, paddingLeft: '10px', marginBottom: '4px' }}>{l}</div>)}
-          <div>{`> MEMORY_CLEANUP_EXECUTED...`}</div>
-          <div>{`> HEARTBEAT_STABLE: ${new Date().toLocaleTimeString()}`}</div>
+        <div ref={logRef} style={{ height: '100px', overflowY: 'auto', fontSize: '10px', opacity: 0.4, lineHeight: '1.8', padding: '15px', background: 'rgba(0,0,0,0.4)', borderRadius: '8px', border: `1px solid ${CYBER.border}` }}>
+          {logs.map((l, i) => <div key={i} style={{ borderLeft: `2px solid ${CYBER.primary}22`, paddingLeft: '10px', marginBottom: '5px' }}>{l}</div>)}
+          <div style={{ borderLeft: `2px solid ${CYBER.primary}22`, paddingLeft: '10px' }}>{`> HEARTBEAT_STABLE: ${new Date().toLocaleTimeString()}`}</div>
         </div>
       </footer>
     </div>
