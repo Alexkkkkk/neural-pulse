@@ -20,14 +20,16 @@
             font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             background: var(--bg);
             color: white;
-            overflow: hidden; /* Отключаем лишний скролл */
+            overflow: hidden;
             height: 100vh;
+            user-select: none;
         }
 
         /* --- Animations --- */
         @keyframes pulse { 0% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } 100% { opacity: 0.5; transform: scale(1); } }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
         @keyframes moveUp { 0% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: translateY(-120px) scale(1.2); opacity: 0; } }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
         /* --- Loader --- */
         #loader {
@@ -35,7 +37,6 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
         .ring { width: 80px; height: 80px; border: 3px solid transparent; border-top-color: var(--neon); border-radius: 50%; animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
         .l-logo { position: absolute; width: 40px; }
         .l-status { margin-top: 20px; font-family: monospace; color: var(--neon); font-size: 10px; letter-spacing: 2px; }
         .l-bar { width: 200px; height: 2px; background: #111; margin-top: 10px; }
@@ -43,8 +44,8 @@
 
         /* --- Header --- */
         header { padding: 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
-        .u-avatar img { width: 45px; height: 45px; border-radius: 10px; border: 1px solid var(--neon); }
-        .u-info b { font-size: 14px; color: var(--neon); }
+        .u-avatar img { width: 45px; height: 45px; border-radius: 10px; border: 1px solid var(--neon); object-fit: cover; }
+        .u-info b { font-size: 14px; color: var(--neon); text-transform: uppercase; }
         .u-info small { font-size: 10px; color: #888; }
         .u-lvl { margin-left: auto; background: var(--neon); color: black; padding: 4px 8px; border-radius: 5px; font-weight: bold; font-size: 12px; }
 
@@ -58,22 +59,25 @@
         .balance-area { text-align: center; padding: 20px 0; }
         #ui-balance { font-size: 42px; font-weight: 900; letter-spacing: -1px; text-shadow: 0 0 20px rgba(0,255,255,0.3); }
 
-        /* --- Main Target (The Brain) --- */
+        /* --- Main Target --- */
         .game-core { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; }
         .brain-target {
             width: 250px; height: 250px; position: relative; z-index: 5;
-            transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: transform 0.05s;
             display: flex; align-items: center; justify-content: center;
         }
-        .brain-target img { width: 100%; filter: drop-shadow(0 0 15px var(--neon)); }
-        .brain-target:active { transform: scale(0.92); }
+        .brain-target img { width: 100%; filter: drop-shadow(0 0 15px var(--neon)); pointer-events: none; }
+        .brain-target:active { transform: scale(0.95); }
         .glow { position: absolute; width: 300px; height: 300px; background: radial-gradient(circle, rgba(0,255,255,0.1) 0%, transparent 70%); pointer-events: none; }
 
+        /* --- Side Menu --- */
         .side-menu { position: absolute; right: 10px; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
         .side-menu button { 
             background: rgba(0,0,0,0.6); border: 1px solid var(--border); color: white; 
-            padding: 8px; border-radius: 8px; font-size: 10px; backdrop-filter: blur(5px);
+            padding: 10px; border-radius: 10px; font-size: 11px; backdrop-filter: blur(5px);
+            transition: 0.2s;
         }
+        .side-menu button:active { transform: scale(0.9); border-color: var(--neon); }
 
         /* --- Energy & Tabs --- */
         .energy-section { padding: 15px; background: rgba(0,0,0,0.5); border-top: 1px solid var(--border); }
@@ -82,11 +86,13 @@
         #e-fill { height: 100%; background: linear-gradient(90deg, #008888, var(--neon)); width: 100%; transition: 0.3s; }
         .energy-error { animation: shake 0.2s ease-in-out 2; border: 1px solid red; }
 
-        .bottom-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 15px; }
+        .bottom-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 15px; }
         .bottom-tabs button { 
             background: var(--panel); border: 1px solid var(--border); color: white; 
-            padding: 10px 5px; border-radius: 10px; font-size: 10px; font-weight: bold;
+            padding: 12px 5px; border-radius: 12px; font-size: 11px; font-weight: bold;
+            transition: 0.2s;
         }
+        .bottom-tabs button:active { background: var(--border); transform: translateY(-2px); }
 
         /* --- Modals --- */
         .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: flex-end; z-index: 1000; backdrop-filter: blur(10px); }
@@ -98,8 +104,8 @@
         .handle { width: 40px; height: 4px; background: #333; border-radius: 2px; margin: -10px auto 20px; }
         .m-close { width: 100%; margin-top: 20px; padding: 15px; background: #111; border: 1px solid #333; color: #555; border-radius: 12px; font-family: monospace; }
         
-        .task-item, .top-item { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        .task-btn { background: var(--neon); color: black; border: none; padding: 10px 18px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .task-item { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .task-btn { background: var(--neon); color: black; border: none; padding: 12px 20px; border-radius: 10px; font-weight: bold; cursor: pointer; }
         .task-btn:disabled { background: #222; color: #555; }
 
         .ai-terminal { background: #000; border: 1px solid var(--neon); padding: 15px; border-radius: 10px; font-family: monospace; color: var(--neon); margin: 10px 0; min-height: 100px; white-space: pre-wrap; font-size: 12px; }
@@ -206,16 +212,16 @@
                         document.getElementById('wallet-btn-label').innerText = w ? "👛 " + w.account.address.slice(0,4) + ".." : "👛 WALLET";
                         this.save();
                     });
-                } catch(e) {}
+                } catch(e) { console.error("TON Init error", e); }
 
-                // Load Data
+                // Load Data from Server
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${u.username || u.first_name}`);
                     if (r.ok) {
                         const db = await r.json();
                         this.data = { ...this.data, ...db };
                     }
-                } catch(e) {}
+                } catch(e) { console.warn("Load failed, using local"); }
 
                 document.getElementById('my-name').innerText = (u.username || u.first_name).toUpperCase();
                 if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
@@ -224,8 +230,10 @@
                 this.startLoops();
                 ui.render();
 
-                // Click event
-                document.getElementById('main-target').addEventListener('touchstart', (e) => this.tap(e));
+                document.getElementById('main-target').addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.tap(e);
+                });
             },
 
             getCost(type) {
