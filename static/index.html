@@ -71,6 +71,19 @@
         @keyframes blink { 50% { opacity: 0; } }
 
         .energy-error { animation: shake 0.2s ease-in-out 2; border-color: red !important; }
+
+        /* ПРАВКА ДЛЯ КОННЕКТА: Вывод окна TON поверх всех */
+        #tc-widget-root, .tc-root, #ton-connect-ui-container {
+            z-index: 10000 !important;
+            position: relative;
+        }
+        #ton-btn-container {
+            min-height: 44px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+        }
     </style>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
@@ -163,12 +176,12 @@
                 const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
                 this.data.id = String(u.id);
 
-                // Попытка инициализации TON SDK с ожиданием загрузки скрипта
-                const initTonWithRetry = (retries = 10) => {
+                const initTonWithRetry = (retries = 15) => {
                     try {
-                        const TonSDK = window.TonConnectUI || (window.TON_CONNECT_UI ? window.TON_CONNECT_UI.TonConnectUI : null);
+                        // Пытаемся найти SDK в глобальном пространстве
+                        const TonSDK = window.TonConnectUI?.TonConnectUI || window.TonConnectUI;
                         
-                        if (TonSDK) {
+                        if (TonSDK && typeof TonSDK === 'function') {
                             tonConnectUI = new TonSDK({
                                 manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json'
                             });
@@ -192,7 +205,6 @@
 
                 initTonWithRetry();
 
-                // Загрузка данных с сервера
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
                     if (r.ok) {
@@ -362,16 +374,26 @@
                     <p style="font-size:12px; color:gray; text-align:center; margin-bottom:15px;">
                         ${isConnected ? 'Your identity is linked to the blockchain.' : 'Connect your TON wallet to sync your identity.'}
                     </p>
-                    <div id="ton-btn" style="display:flex; justify-content:center; padding:10px;"></div>
+                    <div id="ton-btn-container">
+                        <div id="ton-connect-button"></div>
+                    </div>
                     ${isConnected ? '<button class="task-btn" style="width:100%; margin-top:10px; background:#ff4444; color:white;" onclick="tonConnectUI.disconnect()">DISCONNECT WALLET</button>' : ''}`;
                     
-                    setTimeout(() => {
-                        if (tonConnectUI && tonConnectUI.renderButton) {
-                            tonConnectUI.renderButton({ container: document.getElementById('ton-btn'), theme: 'dark' });
-                        } else {
-                            document.getElementById('ton-btn').innerHTML = '<p style="color:red; font-size:10px;">SDK LOADING... TRY AGAIN</p>';
+                    const renderTonButton = () => {
+                        const container = document.getElementById('ton-connect-button');
+                        if (tonConnectUI && container) {
+                            tonConnectUI.renderButton({
+                                container: container,
+                                theme: 'dark',
+                                buttonConfiguration: { width: 'full' }
+                            });
+                        } else if (container) {
+                            container.innerHTML = '<p style="color:cyan; font-size:10px; animation: pulse 1s infinite;">SDK LOADING...</p>';
+                            setTimeout(renderTonButton, 400);
                         }
-                    }, 100);
+                    };
+                    renderTonButton();
+
                 } else if(type === 'bonus') {
                     const last = game.data.last_bonus || 0;
                     const canClaim = (Date.now() - last) > 86400000;
