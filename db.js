@@ -5,7 +5,7 @@ import os from 'os';
 import cluster from 'cluster'; 
 
 // --- 🌐 CONFIG ---
-// Подключение к pghost.ru (SSL отключен для порта 32865)
+// Подключение к pghost.ru (SSL отключен для порта 32865 согласно спецификации Bothost)
 const PG_URI = "postgresql://bothost_db_db1789af0108:hl3yLh4DQmySkEYDPYwS8fn9xkLPHYNMhmCbU8WCYXs@node1.pghost.ru:32865/bothost_db_db1789af0108";
 
 export const sequelize = new Sequelize(PG_URI, { 
@@ -63,7 +63,7 @@ export const User = sequelize.define('users', {
     underscored: true, 
     tableName: 'users',
     createdAt: 'created_at',
-    updated_at: 'updated_at',
+    updatedAt: 'updated_at',
     indexes: [
         { fields: ['username'] },
         { fields: ['wallet'] },
@@ -122,7 +122,7 @@ User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
 // --- 📊 ТЕЛЕМЕТРИЯ ---
 export const logSystemStats = async () => {
-    // Выполняем только на основном процессе, чтобы не дублировать логи в кластере
+    // Выполняем только на основном процессе (isPrimary), чтобы не дублировать логи
     const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
     if (!isPrimary) return;
 
@@ -136,8 +136,8 @@ export const logSystemStats = async () => {
         ]);
 
         const dbLatency = Date.now() - start;
-        const totalBalance = gStats ? gStats.total_balance : 0;
-        const totalUsers = gStats ? gStats.total_users : 0;
+        const totalBalance = gStats?.total_balance || 0;
+        const totalUsers = gStats?.total_users || 0;
         
         // Сбор метрик системы
         const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
@@ -160,7 +160,7 @@ export const logSystemStats = async () => {
             }
         });
     } catch (e) {
-        console.error('--- [TELEMETRY] ERROR:', e.message);
+        console.error('▪️ [TELEMETRY] ERROR:', e.message);
     }
 };
 
@@ -168,39 +168,39 @@ export const logSystemStats = async () => {
 export const initDB = async () => {
     try {
         await sequelize.authenticate();
-        console.log('--- [DB] CONNECTED TO POSTGRES (STABLE) ---');
+        console.log('⚡ [DB] CONNECTED TO POSTGRES (STABLE)');
 
         const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // Применяем изменения структуры (alter: true)
+            // Синхронизация структуры БД
             await sequelize.sync({ alter: true });
             await sessionStore.sync();
             
-            // Гарантируем наличие записи GlobalStats
-            const [gStats] = await GlobalStats.findOrCreate({ 
+            // Инициализация глобальной статистики
+            await GlobalStats.findOrCreate({ 
                 where: { id: 1 }, 
                 defaults: { id: 1, total_balance: 0, total_users: 0 } 
             });
 
-            // Наполнение дефолтными задачами
+            // Наполнение дефолтными задачами, если таблица пуста
             if (await Task.count() === 0) {
                 await Task.bulkCreate([
                     { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
                     { title: 'Пригласить 3 агентов', reward: 15000, url: '', icon: 'Users' },
                     { title: 'Подключить TON кошелек', reward: 2500, url: '', icon: 'Wallet' }
                 ]);
-                console.log('--- [DB] DEFAULT_TASKS_LOADED');
+                console.log('▪️ [DB] DEFAULT_TASKS_LOADED');
             }
 
-            // Запуск цикла сбора метрик (5 секунд)
-            setInterval(logSystemStats, 5000); 
+            // Запуск цикла сбора метрик (каждые 10 секунд для снижения нагрузки)
+            setInterval(logSystemStats, 10000); 
             await logSystemStats(); 
         }
 
         return true;
     } catch (error) {
-        console.error('--- [DB] CRITICAL ERROR:', error.message);
+        console.error('🚨 [DB] CRITICAL ERROR:', error.message);
         throw error;
     }
 };
