@@ -158,8 +158,6 @@
 
     <script>
         const tg = window.Telegram.WebApp;
-        tg.expand();
-        tg.enableClosingConfirmation();
 
         let tonConnectUI = null;
 
@@ -174,10 +172,19 @@
 
             async init() {
                 ui.startLoader();
+                
+                // --- ЗАЩИТА И НАСТРОЙКА ИНТЕРФЕЙСА TELEGRAM ---
+                tg.expand();
+                tg.enableClosingConfirmation();
+                // Принудительно ставим темный цвет шапки (убирает системные надписи)
+                if (tg.setHeaderColor) {
+                    tg.setHeaderColor('#001414'); 
+                }
+                // ----------------------------------------------
+
                 const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
                 this.data.id = String(u.id);
 
-                // Инициализация TON SDK с проверкой готовности объекта
                 const initTonWithRetry = (retries = 20) => {
                     try {
                         const TonSDK = window.TonConnectUI?.TonConnectUI || window.TonConnectUI;
@@ -197,7 +204,6 @@
                                 }
                                 this.save();
                             });
-                            console.log("TON SDK Loaded successfully");
                         } else if (retries > 0) {
                             setTimeout(() => initTonWithRetry(retries - 1), 300);
                         }
@@ -393,7 +399,7 @@
                             });
                         } else if (container) {
                             container.innerHTML = '<p style="color:cyan; font-size:12px; animation: pulse 1s infinite;">SYNCING SDK...</p>';
-                            setTimeout(renderTonButton, 800); // Увеличена задержка для стабильности
+                            setTimeout(renderTonButton, 800);
                         }
                     };
                     renderTonButton();
