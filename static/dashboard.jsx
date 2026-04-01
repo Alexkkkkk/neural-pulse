@@ -16,6 +16,9 @@ const CYBER = {
   border: 'rgba(0, 242, 254, 0.25)',
 };
 
+// Вспомогательная функция для сокращения адреса
+const shortAddr = (addr) => addr ? `${addr.slice(0, 4)}...${addr.slice(-4)}` : 'NULL';
+
 // --- 🔉 QUANTUM AUDIO ENGINE ---
 const playSound = (freq, type = 'sine', dur = 0.2) => {
   try {
@@ -98,7 +101,6 @@ const DashboardContent = (props) => {
     inflow: data?.history?.inflow || Array(20).fill(0)
   });
 
-  // --- 🛰️ REAL-TIME SSE INTEGRATION ---
   useEffect(() => {
     const eventSource = new EventSource('/api/admin/stream');
     eventSource.onmessage = (e) => {
@@ -129,7 +131,6 @@ const DashboardContent = (props) => {
     return () => eventSource.close();
   }, []);
 
-  // Boot sequence
   useEffect(() => {
     const timer = setInterval(() => {
       setBootProgress(p => {
@@ -147,7 +148,8 @@ const DashboardContent = (props) => {
   useEffect(() => {
     if (userAddress) {
       playSound(800, 'sine', 0.1);
-      setLogs(prev => [...prev, `> WALLET_BRIDGE_ESTABLISHED: ${userAddress.slice(0, 6)}...`]);
+      // Добавляем лог с ссылкой
+      setLogs(prev => [...prev, `> WALLET_BRIDGE_ESTABLISHED: ${shortAddr(userAddress)}`]);
     }
   }, [userAddress]);
 
@@ -211,6 +213,8 @@ const DashboardContent = (props) => {
         .ton-btn-container { scale: 0.9; transform-origin: right top; }
         .broadcast-input { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid ${CYBER.border}; color: #fff; padding: 12px; margin-top: 10px; font-family: inherit; outline: none; border-radius: 4px; }
         .search-bar { width: 100%; background: rgba(0,0,0,0.5); border: 1px solid ${CYBER.border}; color: #fff; padding: 12px; box-sizing: border-box; outline: none; border-radius: 4px; }
+        .wallet-link { color: ${CYBER.ton}; text-decoration: none; border-bottom: 1px dashed ${CYBER.ton}; font-size: 11px; transition: 0.2s; }
+        .wallet-link:hover { color: ${CYBER.primary}; border-color: ${CYBER.primary}; }
       `}</style>
 
       {/* HEADER */}
@@ -218,6 +222,14 @@ const DashboardContent = (props) => {
         <div>
           <h1 style={{ color: CYBER.primary, margin: 0, fontSize: '26px', letterSpacing: '3px', fontWeight: '900' }}>NEURAL_PULSE</h1>
           <div style={{ fontSize: '9px', opacity: 0.5, marginTop: '4px' }}>CORE_OS_v9.7 // BOTH_HOST_STABLE</div>
+          {/* Ссылка на текущий кошелек админа под заголовком */}
+          {userAddress && (
+            <div style={{ marginTop: '8px' }}>
+              <a href={`https://tonviewer.com/${userAddress}`} target="_blank" rel="noreferrer" className="wallet-link">
+                EXTERNAL_LINK: {shortAddr(userAddress)} ↗
+              </a>
+            </div>
+          )}
         </div>
         <div className="ton-btn-container">
           <TonConnectButton />
@@ -295,7 +307,16 @@ const DashboardContent = (props) => {
               <tbody>
                 {users.filter(u => String(u.id).includes(searchTerm) || String(u.username || '').toLowerCase().includes(searchTerm.toLowerCase())).map((u, i) => (
                   <tr key={i} style={{ opacity: u.status === 'banned' ? 0.3 : 1, transition: '0.3s' }}>
-                    <td style={{ color: CYBER.primary, fontWeight: 'bold' }}>{u.username || u.id}</td>
+                    <td style={{ color: CYBER.primary, fontWeight: 'bold' }}>
+                      {/* Если у юзера есть кошелек (u.wallet), делаем ссылку */}
+                      {u.wallet ? (
+                        <a href={`https://tonviewer.com/${u.wallet}`} target="_blank" rel="noreferrer" className="wallet-link">
+                          {u.username || u.id}
+                        </a>
+                      ) : (
+                        u.username || u.id
+                      )}
+                    </td>
                     <td>{Number(u.balance || 0).toLocaleString()} <span style={{fontSize:'9px', opacity:0.4}}>PULSE</span></td>
                     <td style={{ color: u.status === 'banned' ? CYBER.danger : CYBER.success }}>{(u.status || 'ACTIVE').toUpperCase()}</td>
                     <td>
