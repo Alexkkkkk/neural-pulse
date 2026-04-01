@@ -2,15 +2,67 @@
   "compact": true,
   "minified": true,
   "comments": false,
-  "ignore": [
-    "./node_modules"
-  ],
+  "ignore": ["./node_modules"],
   "presets": [
-    ["@babel/preset-env", { 
-      "targets": { "node": "current" } 
+    [
+      "@babel/preset-env",
+      {
+        "targets": { "node": "current" },
+        "modules": false,
+        "bugfixes": true,
+        "shippedProposals": true,
+        "loose": true,
+        "useBuiltIns": false,
+        "exclude": [
+          "@babel/plugin-transform-regenerator",
+          "@babel/plugin-transform-async-to-generator",
+          "@babel/plugin-transform-function-name",
+          "@babel/plugin-transform-parameters",
+          "@babel/plugin-transform-template-literals",
+          "@babel/plugin-transform-typeof-symbol"
+        ]
+      }
+    ],
+    [
+      "@babel/preset-react",
+      {
+        "runtime": "automatic",
+        "development": false,
+        "useBuiltIns": true,
+        "useSpread": true
+      }
+    ]
+  ],
+  "plugins": [
+    [
+      "babel-plugin-styled-components",
+      {
+        "ssr": true,
+        "displayName": false,
+        "minify": true,
+        "transpileTemplateLiterals": true,
+        "pure": true,
+        "namespace": "np",
+        "cssProp": false
+      }
+    ],
+    ["@babel/plugin-transform-runtime", { 
+      "regenerator": false, 
+      "useESModules": true 
     }],
-    ["@babel/preset-react", {
-      "runtime": "automatic"
-    }]
+    ["babel-plugin-transform-react-remove-prop-types", { "removeImport": true }],
+    "@babel/plugin-transform-react-constant-elements",
+    "@babel/plugin-transform-react-inline-elements",
+    ["@babel/plugin-proposal-class-properties", { "loose": true }],
+    ["@babel/plugin-proposal-private-methods", { "loose": true }],
+    ["@babel/plugin-proposal-private-property-in-object", { "loose": true }],
+    "babel-plugin-minify-dead-code-elimination",
+    "babel-plugin-transform-inline-consecutive-adds",
+    "babel-plugin-minify-constant-folding",
+    "babel-plugin-minify-guarded-expressions",
+    "babel-plugin-transform-member-expression-literals",
+    "babel-plugin-transform-property-literals",
+    "babel-plugin-transform-merge-sibling-variables",
+    "babel-plugin-transform-minify-booleans"
   ]
 }
