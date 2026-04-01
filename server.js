@@ -19,10 +19,19 @@ import { ComponentLoader } from 'adminjs';
 // Ядро данных (модели и сессии)
 import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB, Op } from './db.js';
 
+// --- 🛡️ PROTOCOL "IMMORTALITY" ---
+// Перехват фатальных ошибок: сервер запишет лог, но НЕ выключится
+process.on('uncaughtException', (err) => {
+    console.error('☢️ CRITICAL VOID DETECTED (Shield Active):', err);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('🛰️ UNHANDLED PROMISE REJECTION:', reason);
+});
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Регистрация адаптера и загрузчика компонентов
+// Регистрация адаптера
 AdminJS.registerAdapter(AdminJSSequelize);
 const componentLoader = new ComponentLoader();
 
@@ -53,12 +62,11 @@ const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// --- 🛡️ PROTOCOL "VOID AEGIS" & SYNC ---
+// --- 🧬 DELTA-SYNC ENGINE ---
 const updateBuffer = new Map();
 let isSyncing = false;
 let isCircuitOpen = false;
 
-// МАССОВАЯ СИНХРОНИЗАЦИЯ (Delta-Sync)
 const executeMassiveCommit = async () => {
     if (updateBuffer.size === 0 || isSyncing) return;
     isSyncing = true;
@@ -86,7 +94,6 @@ setInterval(executeMassiveCommit, 3000);
 
 // --- 🌐 API & ADMIN INTERFACE ---
 async function setupSupremeInterface(app) {
-    // 1. Инициализация AdminJS
     const adminJs = new AdminJS({
         resources: [
             { 
@@ -123,7 +130,6 @@ async function setupSupremeInterface(app) {
         }
     });
 
-    // Авторизация TITAN (Логин: 1, Пароль: 1)
     const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
         authenticate: async (email, password) => (email === '1' && password === '1' ? { email } : null),
         cookiePassword: 'np-ultra-secure-key-2026',
@@ -137,9 +143,12 @@ async function setupSupremeInterface(app) {
     app.use(adminJs.options.rootPath, adminRouter);
     await adminJs.initialize();
 
-    // 2. API Роуты
+    // API Routes
     app.get('/health', (req, res) => {
-        res.status(isCircuitOpen ? 503 : 200).json({ status: isCircuitOpen ? 'degraded' : 'perfect' });
+        res.status(isCircuitOpen ? 503 : 200).json({ 
+            status: isCircuitOpen ? 'degraded' : 'perfect',
+            uptime: Math.floor(process.uptime()) 
+        });
     });
 
     app.post('/api/save', (req, res) => {
@@ -147,10 +156,9 @@ async function setupSupremeInterface(app) {
         const check = crypto.createHmac('sha256', SECRET_SALT).update(`${id}:${balance}`).digest('hex');
         if (hash !== check) return res.status(403).send("SIGN_ERR");
         updateBuffer.set(id, { id, balance });
-        res.json({ s: 1, node: "QUANTUM-X" });
+        res.json({ s: 1, node: "ULTRA-PULSE" });
     });
 
-    // Реал-тайм стрим для дашборда
     app.get('/api/admin/stream', (req, res) => {
         res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
         const listener = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
@@ -172,8 +180,8 @@ function setupBot(botInstance) {
             ctx.replyWithHTML(
                 `<b>─── [ NEURAL OS : OMNI ] ───</b>\n\n` +
                 `Agent: <code>${user.username}</code>\n` +
-                `Status: <b>ONLINE</b>\n\n` +
-                `<i>Система готова к синхронизации.</i>`,
+                `System: <b>V12 ULTRA</b>\n\n` +
+                `<i>Ядро синхронизировано. Терминал активен.</i>`,
                 Markup.inlineKeyboard([
                     [Markup.button.webApp("⚡ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)],
                     [Markup.button.url("🛰️ ТРАНСЛЯЦИЯ", "https://t.me/neural_pulse_news")]
@@ -183,18 +191,23 @@ function setupBot(botInstance) {
     });
 }
 
-// --- 🚀 LAUNCH ---
+// --- 🚀 SUPREME LAUNCH SEQUENCE ---
 async function startSupreme() {
-    neuralLog('🔮 BOOTING OMNI-QUANTUM CORE...', 'CORE');
+    neuralLog('🔮 BOOTING NEURAL PULSE OS...', 'CORE');
     const app = express();
 
-    app.use(helmet({ contentSecurityPolicy: false }));
+    // Настройка безопасности (Helmet) с разрешением для WebApp и AdminJS
+    app.use(helmet({ 
+        contentSecurityPolicy: false,
+        crossOriginResourcePolicy: { policy: "cross-origin" }
+    }));
+    
     app.use(compression());
     app.use(cors());
-    app.use(express.json());
+    app.use(express.json({ limit: '10kb' }));
 
-    // Раздача твоей статики и дизайна
-    app.use('/static', express.static(path.join(__dirname, 'static')));
+    // Статика
+    app.use('/static', express.static(path.join(__dirname, 'static'), { maxAge: '7d' }));
 
     try {
         await initDB();
@@ -203,26 +216,27 @@ async function startSupreme() {
         await setupSupremeInterface(app);
         setupBot(bot);
 
-        // Фоновый мониторинг для админки
+        // Реальное время для мониторинга
         setInterval(() => {
+            if (global.gc) global.gc(); // Ручная чистка памяти, если запущен флаг
             core.emit('broadcast', {
                 v: '12.0',
                 users: updateBuffer.size,
                 ram: `${(process.memoryUsage().rss / 1024 / 1024).toFixed(0)}MB`,
                 load: os.loadavg()[0].toFixed(2)
             });
-        }, 2000);
+        }, 3000);
 
         // Webhook
         app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => bot.handleUpdate(req.body, res));
         await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`);
 
         app.listen(PORT, '0.0.0.0', () => {
-            neuralLog(`👑 OMNI-QUANTUM ONLINE | PORT: ${PORT}`, 'SUCCESS');
-            neuralLog(`🚀 ADMIN: ${DOMAIN}/admin`, 'SUCCESS');
+            neuralLog(`👑 SYSTEM ONLINE | PORT: ${PORT}`, 'SUCCESS');
+            neuralLog(`🚀 ADMIN PORTAL: ${DOMAIN}/admin`, 'SUCCESS');
         });
     } catch (err) {
-        neuralLog(`🚨 SYSTEM FAIL: ${err.message}`, 'ERROR');
+        neuralLog(`🚨 BOOT FAIL: ${err.message}`, 'ERROR');
         process.exit(1);
     }
 }
