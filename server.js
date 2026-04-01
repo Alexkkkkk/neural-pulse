@@ -9,6 +9,7 @@ import dayjs from 'dayjs';
 import EventEmitter from 'events'; 
 import os from 'os';
 import crypto from 'crypto';
+import pino from 'pino'; // Сверхбыстрый логгер
 
 // --- 🏛️ ADMINJS & CORE IMPORTS ---
 import AdminJS from 'adminjs';
@@ -20,12 +21,13 @@ import { ComponentLoader } from 'adminjs';
 import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB, Op } from './db.js';
 
 // --- 🛡️ PROTOCOL "IMMORTALITY" ---
-// Перехват фатальных ошибок: сервер запишет лог, но НЕ выключится
+const logger = pino({ transport: { target: 'pino-pretty' } });
+
 process.on('uncaughtException', (err) => {
-    console.error('☢️ CRITICAL VOID DETECTED (Shield Active):', err);
+    logger.fatal({ err }, '☢️ CRITICAL VOID DETECTED (Shield Active)');
 });
 process.on('unhandledRejection', (reason) => {
-    console.error('🛰️ UNHANDLED PROMISE REJECTION:', reason);
+    logger.error({ reason }, '🛰️ UNHANDLED PROMISE REJECTION');
 });
 
 const __filename = fileURLToPath(import.meta.url);
@@ -50,7 +52,7 @@ const neuralLog = (msg, type = 'INFO') => {
         INFO: '💎', WARN: '⚠️', ERROR: '☢️', CORE: '🔮', 
         NET: '🛰️', SUCCESS: '🔋', SYNC: '🧬', SHIELD: '🛡️'
     };
-    console.log(`${icons[type] || '▪️'} [${time}] ${msg}`);
+    logger.info(`${icons[type] || '▪️'} [${time}] ${msg}`);
 };
 
 // --- ⚙️ OMNI-CONFIGURATION ---
@@ -147,16 +149,20 @@ async function setupSupremeInterface(app) {
     app.get('/health', (req, res) => {
         res.status(isCircuitOpen ? 503 : 200).json({ 
             status: isCircuitOpen ? 'degraded' : 'perfect',
-            uptime: Math.floor(process.uptime()) 
+            uptime: Math.floor(process.uptime()),
+            memory: process.memoryUsage().rss
         });
     });
 
     app.post('/api/save', (req, res) => {
         const { id, balance, hash } = req.body;
+        if (!id || balance === undefined) return res.status(400).send("BAD_REQ");
+        
         const check = crypto.createHmac('sha256', SECRET_SALT).update(`${id}:${balance}`).digest('hex');
         if (hash !== check) return res.status(403).send("SIGN_ERR");
+        
         updateBuffer.set(id, { id, balance });
-        res.json({ s: 1, node: "ULTRA-PULSE" });
+        res.json({ s: 1, node: "ULTRA-PULSE-X" });
     });
 
     app.get('/api/admin/stream', (req, res) => {
@@ -180,7 +186,7 @@ function setupBot(botInstance) {
             ctx.replyWithHTML(
                 `<b>─── [ NEURAL OS : OMNI ] ───</b>\n\n` +
                 `Agent: <code>${user.username}</code>\n` +
-                `System: <b>V12 ULTRA</b>\n\n` +
+                `System: <b>V12 ULTRA (STABLE)</b>\n\n` +
                 `<i>Ядро синхронизировано. Терминал активен.</i>`,
                 Markup.inlineKeyboard([
                     [Markup.button.webApp("⚡ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)],
@@ -196,7 +202,6 @@ async function startSupreme() {
     neuralLog('🔮 BOOTING NEURAL PULSE OS...', 'CORE');
     const app = express();
 
-    // Настройка безопасности (Helmet) с разрешением для WebApp и AdminJS
     app.use(helmet({ 
         contentSecurityPolicy: false,
         crossOriginResourcePolicy: { policy: "cross-origin" }
@@ -204,9 +209,8 @@ async function startSupreme() {
     
     app.use(compression());
     app.use(cors());
-    app.use(express.json({ limit: '10kb' }));
+    app.use(express.json({ limit: '15kb' }));
 
-    // Статика
     app.use('/static', express.static(path.join(__dirname, 'static'), { maxAge: '7d' }));
 
     try {
@@ -216,9 +220,11 @@ async function startSupreme() {
         await setupSupremeInterface(app);
         setupBot(bot);
 
-        // Реальное время для мониторинга
+        // Реальное время для мониторинга + GC
         setInterval(() => {
-            if (global.gc) global.gc(); // Ручная чистка памяти, если запущен флаг
+            if (global.gc) {
+                global.gc(); // Вызов сборщика мусора (нужен флаг --expose-gc)
+            }
             core.emit('broadcast', {
                 v: '12.0',
                 users: updateBuffer.size,
