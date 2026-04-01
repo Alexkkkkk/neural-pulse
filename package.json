@@ -4,13 +4,13 @@
   "type": "module",
   "main": "server.js",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.16.0"
   },
   "scripts": {
-    "start": "node --expose-gc --max-old-space-size=1024 --optimize-for-size server.js",
+    "start": "node --expose-gc --max-old-space-size=1024 --optimize-for-size --gc-interval=100 --turbo-fast-api-calls server.js",
     "dev": "node --watch server.js",
     "install-all": "npm install",
-    "clean": "rm -rf node_modules package-lock.json && npm install",
+    "clean": "rm -rf node_modules package-lock.json && npm install --production",
     "rebuild": "npm run clean && npm start",
     "lint": "echo \"System Scan... OK\""
   },
@@ -35,6 +35,9 @@
     "dayjs": "^1.11.10",
     "dotenv": "^16.4.5",
     "axios": "^1.6.7",
+    "fast-json-stringify": "^5.12.0",
+    "pino": "^8.19.0",
+    "pino-pretty": "^10.3.1",
     "@tonconnect/ui-react": "^2.0.9",
     "@ton/ton": "^13.9.0",
     "@ton/crypto": "^3.2.0",
@@ -50,5 +53,5 @@
     "@babel/preset-react": "^7.23.3",
     "babel-plugin-styled-components": "^2.1.4"
   },
-  "description": "Neural Pulse OS - Telegram Tap-to-Earn System"
+  "description": "Neural Pulse OS - Ultra Fast Performance Edition"
 }
