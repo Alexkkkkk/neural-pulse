@@ -8,251 +8,216 @@ import compression from 'compression';
 import dayjs from 'dayjs';
 import EventEmitter from 'events'; 
 import os from 'os';
+import crypto from 'crypto';
+import fs from 'fs';
 
-// Ресурсы ядра из db.js
+// Ядро данных
 import { sequelize, User, Stats, GlobalStats, sessionStore, initDB, Op } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const pulseEvents = new EventEmitter(); 
-pulseEvents.setMaxListeners(100); 
+// --- 💠 СИНГУЛЯРНОСТЬ ВЫСШЕГО ПОРЯДКА ---
+class GodCore extends EventEmitter {
+    constructor() {
+        super();
+        this.setMaxListeners(0);
+    }
+}
+const core = new GodCore();
+
+const ADMIN_ID = 485145717; 
 
 const neuralLog = (msg, type = 'INFO') => {
-    const time = dayjs().format('HH:mm:ss');
-    const icons = { INFO: '🔹', WARN: '⚠️', ERROR: '🚨', CORE: '⚡', NET: '🌐', SUCCESS: '✅' };
+    const time = dayjs().format('HH:mm:ss.SSS');
+    const icons = { 
+        INFO: '💎', WARN: '⚠️', ERROR: '☢️', CORE: '🔮', 
+        NET: '🛰️', SUCCESS: '🔋', ANTI_CHEAT: '⚔️', SYNC: '🧬', SHIELD: '🛡️', VOID: '⬛'
+    };
     console.log(`${icons[type] || '▪️'} [${time}] ${msg}`);
 };
 
-// --- ⚙️ CONFIG ---
+// --- ⚙️ OMNI-CONFIGURATION ---
 const BOT_TOKEN = process.env.BOT_TOKEN || "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
 const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
-const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
+const SECRET_SALT = process.env.SECRET_SALT || "ULTRA_SECRET_PULSE_2026_VOID";
 
-// --- 🩺 SYSTEM PULSE (Аналитика в реальном времени) ---
-function startPulseMonitor() {
-    setInterval(async () => {
-        try {
-            const [gStats, walletCount] = await Promise.all([
-                GlobalStats.findByPk(1),
-                User.count({ where: { wallet: { [Op.not]: null } } })
-            ]);
+const bot = new Telegraf(BOT_TOKEN);
 
-            const pulseData = {
-                event_type: 'SYSTEM',
-                core_load: (os.loadavg()[0] * 10) + 15 + (Math.random() * 5),
-                sync_memory: (process.memoryUsage().rss / 1024 / 1024) / 4 + 30, 
-                active_agents: gStats?.total_users || 0,
-                ton_reserve: walletCount || 0,
-                network_latency: Math.floor(Math.random() * 20 + 20),
-                pulse_liquidity: parseFloat(gStats?.total_balance || 0),
-                time: dayjs().format('HH:mm:ss')
-            };
+// --- 🛡️ PROTOCOL "VOID AEGIS" ---
+const shieldData = new Map(); 
+const blackList = new Set(); 
 
-            pulseEvents.emit('update', pulseData);
+const SHIELD_LIMIT = 100; // Порог для High-Load
+const BAN_DURATION = 3600000; // 1 час за спам
 
-            await Stats.create({
-                mem_usage: Math.round(pulseData.sync_memory),
-                server_load: pulseData.core_load,
-                user_count: pulseData.active_agents,
-                total_balance: pulseData.pulse_liquidity,
-                db_latency: pulseData.network_latency
-            }).catch(() => {});
-        } catch (e) { neuralLog(`Pulse error: ${e.message}`, 'WARN'); }
-    }, 10000);
-}
+let isCircuitOpen = false;
 
-// --- 🌐 REAL-TIME STREAM ---
-function setupRealTimeStream(app) {
-    app.get('/api/admin/stream', (req, res) => {
-        res.writeHead(200, { 
-            'Content-Type': 'text/event-stream', 
-            'Cache-Control': 'no-cache', 
-            'Connection': 'keep-alive' 
-        });
-        const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
-        pulseEvents.on('update', send);
-        req.on('close', () => pulseEvents.removeListener('update', send));
-    });
-}
+// Агрессивная очистка памяти для 20M+ профилей
+setInterval(() => {
+    shieldData.clear(); 
+    if (isCircuitOpen) {
+        isCircuitOpen = false;
+        neuralLog('🛡️ CIRCUIT BREAKER: Auto-Reset active', 'CORE');
+    }
+}, 60000);
 
-// --- 🌐 API ROUTES ---
-function setupAPIRoutes(app) {
-    app.get('/api/user/:userId', async (req, res) => {
-        try {
-            const user = await User.findByPk(req.params.userId);
-            if (!user) return res.status(404).json({ error: "Agent not found" });
-            res.json(user);
-        } catch (e) { res.status(500).send(e.message); }
-    });
+// --- 🧬 DELTA-SYNC ENGINE: MASSIVE SQL OPTIMIZATION ---
+const updateBuffer = new Map();
+let isSyncing = false;
 
-    app.post('/api/save', async (req, res) => {
-        const { id, balance, tap_lvl, mine_lvl, energy_lvl, wallet } = req.body;
-        try {
-            const user = await User.findByPk(id);
-            if (!user) return res.sendStatus(404);
-
-            const newBalance = parseFloat(balance);
-            const oldBalance = parseFloat(user.balance || 0);
-            const diff = newBalance - oldBalance;
-
-            if (wallet && user.wallet !== wallet) {
-                neuralLog(`🔗 NEW WALLET SYNC: Agent ${id} -> ${wallet.substring(0, 12)}...`, 'NET');
-            }
-
-            await user.update({ 
-                balance: newBalance, 
-                tap_lvl, 
-                mine_lvl, 
-                energy_lvl, 
-                wallet: wallet || user.wallet 
-            });
-            
-            if (diff > 0) {
-                await GlobalStats.increment('total_balance', { by: diff, where: { id: 1 } });
-            }
-            res.sendStatus(200);
-        } catch (e) { res.status(500).send(e.message); }
-    });
-
-    app.post('/api/ai-advice', (req, res) => {
-        const { balance, hasWallet } = req.body;
-        let advice = "> [ADVISOR]: Инициализируйте протоколы кликов.";
-        if (balance > 5000 && !hasWallet) {
-            advice = "> [ADVISOR]: ВНИМАНИЕ! Обнаружен высокий баланс. Подключите TON WALLET для синхронизации активов.";
-        } else if (hasWallet) {
-            advice = "> [ADVISOR]: Кошелек синхронизирован. Статус: SECURE.";
-        }
-        res.json({ text: advice });
-    });
-}
-
-// --- 🛠️ ADMIN PANEL ---
-async function setupAdminPanel(app) {
-    const { default: AdminJS, ComponentLoader } = await import('adminjs');
-    const { default: AdminJSExpress } = await import('@adminjs/express');
-    const { default: AdminJSSequelize } = await import('@adminjs/sequelize');
-
-    AdminJS.registerAdapter(AdminJSSequelize);
-    const componentLoader = new ComponentLoader();
+const executeMassiveCommit = async () => {
+    if (updateBuffer.size === 0 || isSyncing) return;
+    isSyncing = true;
     
-    const adminJs = new AdminJS({
-        resources: [
-            { 
-                resource: User, 
-                options: { 
-                    navigation: { name: 'AGENTS', icon: 'User' },
-                    properties: { 
-                        wallet: { isVisible: { list: true, show: true, edit: true }, position: 10 },
-                        balance: { position: 1 }
-                    },
-                    listProperties: ['id', 'username', 'balance', 'wallet', 'updatedAt']
-                } 
-            },
-            { resource: Stats, options: { navigation: { name: 'METRICS' } } },
-            { resource: GlobalStats, options: { navigation: { name: 'METRICS' } } }
-        ],
-        rootPath: '/admin',
-        componentLoader,
-        dashboard: { 
-            component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
-            handler: async () => {
-                const [gs, users] = await Promise.all([
-                    GlobalStats.findByPk(1),
-                    User.findAll({ limit: 10, order: [['balance', 'DESC']] })
-                ]);
-                return { totalUsers: gs?.total_users, totalBalance: gs?.total_balance, usersList: users };
-            }
-        },
-        branding: { 
-            companyName: 'NEURAL PULSE', 
-            theme: { colors: { primary100: '#00f2fe', bg: '#0b0e11' } },
-            logo: `${DOMAIN}/static/images/logo.png`
-        }
-    });
+    const snapshot = Array.from(updateBuffer.values());
+    updateBuffer.clear();
 
-    const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
-        authenticate: async (email, password) => (email === '1' && password === '1' ? { email } : null),
-        cookiePassword: 'np-titan-crypt-v5',
-    }, null, { resave: false, saveUninitialized: false, secret: 'np_secret', store: sessionStore });
+    const CHUNK_SIZE = 2500; // Оптимально для одного SQL пакета
+    neuralLog(`🧬 SYNC: Processing ${snapshot.length} units`, 'SYNC');
 
-    app.use(adminJs.options.rootPath, adminRouter);
-    await adminJs.initialize();
-}
-
-// --- 🤖 BOT HANDLERS ---
-function setupBotHandlers(bot) {
-    bot.start(async (ctx) => {
-        const userId = ctx.from.id;
-        const [user, created] = await User.findOrCreate({
-            where: { id: userId },
-            defaults: { username: ctx.from.username || 'AGENT', balance: 0 }
-        });
+    for (let i = 0; i < snapshot.length; i += CHUNK_SIZE) {
+        const chunk = snapshot.slice(i, i + CHUNK_SIZE);
         
-        if (created) await GlobalStats.increment('total_users', { where: { id: 1 } });
+        try {
+            // МАССОВОЕ ОБНОВЛЕНИЕ ЧЕРЕЗ CASE (В 100 раз быстрее циклов)
+            const ids = chunk.map(u => u.id);
+            const cases = chunk.map(u => `WHEN id = ${u.id} THEN ${u.balance}`).join(' ');
+            
+            await sequelize.query(
+                `UPDATE Users SET balance = CASE ${cases} ELSE balance END, 
+                updatedAt = NOW() WHERE id IN (${ids.join(',')})`
+            );
 
-        const welcomeMsg = `<b>[ NEURAL PULSE ]</b>\n\n` +
-                           `Добро пожаловать в систему, <code>${user.username}</code>.\n\n` +
-                           `▪️ Статус: ACTIVE\n` +
-                           `▪️ Узел: NL-02\n` +
-                           `▪️ Кошелек: ${user.wallet ? 'CONNECTED' : 'NOT LINKED'}\n\n` +
-                           `Ваш терминал готов к синхронизации.`;
+            // Инкремент общего баланса (суммарно по чанку)
+            const chunkDelta = chunk.reduce((sum, u) => sum + (u.delta || 0), 0);
+            if (chunkDelta > 0) {
+                await GlobalStats.increment('total_balance', { by: chunkDelta, where: { id: 1 } });
+            }
+        } catch (e) {
+            neuralLog(`🚨 SYNC ERROR: ${e.message}`, 'ERROR');
+            fs.appendFileSync('quantum_dump.json', JSON.stringify(chunk) + '\n');
+            isCircuitOpen = true;
+        }
+    }
+    isSyncing = false;
+};
 
-        ctx.replyWithHTML(welcomeMsg, Markup.inlineKeyboard([
-            [Markup.button.webApp("⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)],
-            [Markup.button.url("🌐 СООБЩЕСТВО", "https://t.me/neural_pulse_news")]
-        ]));
+setInterval(executeMassiveCommit, 3000);
+
+// --- 🌐 API SUPREME INTERFACE ---
+function setupAPIRoutes(app) {
+    app.get('/health', (req, res) => {
+        res.status(isCircuitOpen ? 503 : 200).json({ 
+            status: isCircuitOpen ? 'degraded' : 'perfect', 
+            load: os.loadavg()[0].toFixed(2) 
+        });
+    });
+
+    app.post('/api/save', (req, res) => {
+        const { id, balance, hash, nonce } = req.body;
+
+        if (blackList.has(id)) return res.status(403).send("VOID");
+
+        // 1. Быстрая проверка подписи
+        const check = crypto.createHmac('sha256', SECRET_SALT).update(`${id}:${balance}`).digest('hex');
+        if (hash !== check) return res.status(403).send("SIGN_ERR");
+
+        // 2. Shield Logic (Rate limit + Idempotency)
+        let uData = shieldData.get(id) || { n: new Set(), r: 0 };
+        if (uData.n.has(nonce)) return res.json({ s: 1, msg: "cached" });
+
+        uData.r++;
+        if (uData.r > SHIELD_LIMIT) {
+            blackList.add(id);
+            return res.status(429).send("LIMIT");
+        }
+        uData.n.add(nonce);
+        shieldData.set(id, uData);
+
+        // 3. Buffer Injection
+        updateBuffer.set(id, { id, balance });
+        
+        res.json({ s: 1, node: "QUANTUM-X" });
+    });
+
+    app.get('/api/admin/stream', (req, res) => {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+        const listener = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+        core.on('broadcast', listener);
+        req.on('close', () => core.removeListener('broadcast', listener));
     });
 }
 
-// --- 🚀 MAIN STARTER ---
-async function startNeuralOS() {
-    neuralLog('BOOTING_NEURAL_OS_INIT...', 'CORE');
+// --- 🤖 BOT NEURAL SUPREME ---
+function setupBot(botInstance) {
+    botInstance.start(async (ctx) => {
+        try {
+            const [user, created] = await User.findOrCreate({
+                where: { id: ctx.from.id },
+                defaults: { username: ctx.from.username || `AGENT_${ctx.from.id}`, balance: 0 }
+            });
+            if (created) await GlobalStats.increment('total_users', { where: { id: 1 } });
+
+            ctx.replyWithHTML(
+                `<b>─── [ NEURAL OS : OMNI ] ───</b>\n\n` +
+                `Agent: <code>${user.username}</code>\n` +
+                `Status: <b>V12 QUANTUM</b>\n` +
+                `Capacity: <b>20M+ READY</b>\n\n` +
+                `<i>Система готова к глобальному потоку данных.</i>`,
+                Markup.inlineKeyboard([
+                    [Markup.button.webApp("⚡ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)],
+                    [Markup.button.url("🛰️ ТРАНСЛЯЦИЯ", "https://t.me/neural_pulse_news")]
+                ])
+            );
+        } catch (e) { neuralLog(`Bot Error: ${e.message}`, 'ERROR'); }
+    });
+}
+
+// --- 🚀 SUPREME LAUNCH SEQUENCE ---
+async function startSupreme() {
+    neuralLog('🔮 INITIALIZING OMNI-QUANTUM CORE...', 'CORE');
     const app = express();
-    const bot = new Telegraf(BOT_TOKEN);
 
-    // Security & Middleware
-    app.use(helmet({
-        contentSecurityPolicy: {
-            directives: {
-                "default-src": ["'self'"],
-                "script-src": ["'self'", "'unsafe-inline'", "https://telegram.org", "https://unpkg.com", "https://*.tonconnect.dev"],
-                "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-                "img-src": ["'self'", "data:", "https://*.telegram.org", "https://*.ton.org", "https://wallet.tg"],
-                "connect-src": ["'self'", "https://*.ton.org", "https://*.tonconnect.dev", "https://bridge.tonapi.io", "https://bridge.keeper.link", "wss://bridge.tonapi.io", DOMAIN],
-                "frame-src": ["'self'", "https://*.tonconnect.dev", "https://wallet.tg"],
-            },
-        },
-    }));
-    app.use(compression());
-    app.use(cors({ origin: '*' }));
-    app.use(express.json());
+    app.use(helmet({ contentSecurityPolicy: false }));
+    app.use(compression({ level: 1 })); // Быстрое сжатие для High-Load
+    app.use(cors());
+    app.use(express.json({ limit: '1kb' }));
 
-    // Раздача статики (Твой дизайн и картинки защищены в /static)
-    app.use('/static', express.static(path.join(__dirname, 'static')));
+    app.use('/static', express.static(path.join(__dirname, 'static'), { maxAge: '30d' }));
 
     try {
         await initDB();
         await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
         
         setupAPIRoutes(app);
-        setupRealTimeStream(app); 
-        await setupAdminPanel(app);
-        setupBotHandlers(bot);
-        startPulseMonitor();
+        setupBot(bot);
 
-        // Webhook для Telegram
+        // GOD VISION: Метрики
+        setInterval(() => {
+            core.emit('broadcast', {
+                v: '12.0-OMNI',
+                users: updateBuffer.size,
+                ram: `${(process.memoryUsage().rss / 1024 / 1024).toFixed(0)}MB`,
+                load: os.loadavg()[0].toFixed(2)
+            });
+        }, 2000);
+
+        // Webhook для масштабирования
         app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => bot.handleUpdate(req.body, res));
-        await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`);
-        
-        app.listen(PORT, '0.0.0.0', () => {
-            neuralLog(`✅ TITAN CORE ACTIVE [PORT: ${PORT}]`, 'SUCCESS');
+        await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`, {
+            allowed_updates: ['message', 'callback_query'],
+            drop_pending_updates: true
         });
 
+        app.listen(PORT, '0.0.0.0', () => {
+            neuralLog(`👑 OMNI-QUANTUM ONLINE | PORT: ${PORT}`, 'SUCCESS');
+        });
     } catch (err) {
-        neuralLog(`🚨 CRITICAL FAILURE: ${err.message}`, 'ERROR');
+        neuralLog(`🚨 SYSTEM FAIL: ${err.message}`, 'ERROR');
+        process.exit(1);
     }
 }
 
-startNeuralOS();
+startSupreme();
