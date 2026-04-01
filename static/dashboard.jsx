@@ -16,7 +16,6 @@ const CYBER = {
   border: 'rgba(0, 242, 254, 0.25)',
 };
 
-// Вспомогательная функция для сокращения адреса
 const shortAddr = (addr) => addr ? `${addr.slice(0, 4)}...${addr.slice(-4)}` : 'NULL';
 
 // --- 🔉 QUANTUM AUDIO ENGINE ---
@@ -82,7 +81,6 @@ const DashboardContent = (props) => {
   const logRef = useRef(null);
 
   const userAddress = useTonAddress();
-  const [tonConnectUI] = useTonConnectUI();
 
   const [logs, setLogs] = useState(['> MOUNTING_VOLUMES...', '> SYSTEM_READY', `> SYNCING_DATABASE: ${data?.totalUsers || 0} AGENTS FOUND`]);
   const [users, setUsers] = useState(data?.usersList || []);
@@ -148,7 +146,6 @@ const DashboardContent = (props) => {
   useEffect(() => {
     if (userAddress) {
       playSound(800, 'sine', 0.1);
-      // Добавляем лог с ссылкой
       setLogs(prev => [...prev, `> WALLET_BRIDGE_ESTABLISHED: ${shortAddr(userAddress)}`]);
     }
   }, [userAddress]);
@@ -222,7 +219,6 @@ const DashboardContent = (props) => {
         <div>
           <h1 style={{ color: CYBER.primary, margin: 0, fontSize: '26px', letterSpacing: '3px', fontWeight: '900' }}>NEURAL_PULSE</h1>
           <div style={{ fontSize: '9px', opacity: 0.5, marginTop: '4px' }}>CORE_OS_v9.7 // BOTH_HOST_STABLE</div>
-          {/* Ссылка на текущий кошелек админа под заголовком */}
           {userAddress && (
             <div style={{ marginTop: '8px' }}>
               <a href={`https://tonviewer.com/${userAddress}`} target="_blank" rel="noreferrer" className="wallet-link">
@@ -308,14 +304,11 @@ const DashboardContent = (props) => {
                 {users.filter(u => String(u.id).includes(searchTerm) || String(u.username || '').toLowerCase().includes(searchTerm.toLowerCase())).map((u, i) => (
                   <tr key={i} style={{ opacity: u.status === 'banned' ? 0.3 : 1, transition: '0.3s' }}>
                     <td style={{ color: CYBER.primary, fontWeight: 'bold' }}>
-                      {/* Если у юзера есть кошелек (u.wallet), делаем ссылку */}
                       {u.wallet ? (
                         <a href={`https://tonviewer.com/${u.wallet}`} target="_blank" rel="noreferrer" className="wallet-link">
                           {u.username || u.id}
                         </a>
-                      ) : (
-                        u.username || u.id
-                      )}
+                      ) : ( u.username || u.id )}
                     </td>
                     <td>{Number(u.balance || 0).toLocaleString()} <span style={{fontSize:'9px', opacity:0.4}}>PULSE</span></td>
                     <td style={{ color: u.status === 'banned' ? CYBER.danger : CYBER.success }}>{(u.status || 'ACTIVE').toUpperCase()}</td>
