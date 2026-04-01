@@ -103,24 +103,18 @@ const Dashboard = (props) => {
     );
   }, [users, searchTerm]);
 
-  // 🔥 ОПТИМИЗИРОВАННАЯ ЛОГИКА ОБНОВЛЕНИЯ
+  // Обновление системных данных и истории
   const updateSystemData = async (newData = {}) => {
-    let freshBalance = 0;
+    let freshBalance = wallet.balance;
 
-    // Получаем баланс из стейта или API
-    setWallet(currentWallet => {
-      if (currentWallet.connected && currentWallet.address) {
-        fetch(`https://tonapi.io/v2/accounts/${currentWallet.address}`)
-          .then(res => res.json())
-          .then(tonData => {
-            const b = (tonData.balance || 0) / 1e9;
-            setWallet(prev => ({ ...prev, balance: b }));
-            freshBalance = b;
-          })
-          .catch(() => { freshBalance = currentWallet.balance; });
-      }
-      return currentWallet;
-    });
+    if (wallet.connected && wallet.address) {
+      try {
+        const res = await fetch(`https://tonapi.io/v2/accounts/${wallet.address}`);
+        const tonData = await res.json();
+        freshBalance = (tonData.balance || 0) / 1e9;
+        setWallet(prev => ({ ...prev, balance: freshBalance }));
+      } catch (e) { console.warn("Balance sync failed"); }
+    }
 
     setStats(prev => ({
       ...prev,
@@ -136,7 +130,7 @@ const Dashboard = (props) => {
       ram: [...p.ram.slice(1), newData.ram ?? (p.ram[p.ram.length-1] + (Math.random() * 1 - 0.5))],
       stability: [...p.stability.slice(1), Math.max(0, 100 - ((newData.latency ?? p.lat[p.lat.length-1]) / 5))],
       online: [...p.online.slice(1), newData.online ?? p.online[p.online.length-1]],
-      ton: [...p.ton.slice(1), freshBalance || p.ton[p.ton.length-1]],
+      ton: [...p.ton.slice(1), freshBalance],
       lat: [...p.lat.slice(1), newData.latency ?? (p.lat[p.lat.length-1] + (Math.random() * 4 - 2))],
       liq: [...p.liq.slice(1), newData.liquidity ?? p.liq[p.liq.length-1]]
     }));
@@ -186,7 +180,7 @@ const Dashboard = (props) => {
       clearInterval(interval);
       unsubscribe();
     };
-  }, []);
+  }, [wallet.connected, wallet.address]); 
 
   if (!isLoaded) return <div className="loading">CONNECTING_TO_NEURAL_PULSE_NODE...</div>;
 
