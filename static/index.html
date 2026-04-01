@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v5.5.9 | Terminal</title>
+    <title>Neural Pulse v5.6.0 | Extreme Sync</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
@@ -116,6 +116,10 @@
         .ai-terminal { background: #000; border: 1px solid var(--neon); padding: 15px; border-radius: 10px; font-family: monospace; color: var(--neon); margin: 15px 0; min-height: 120px; white-space: pre-wrap; font-size: 13px; line-height: 1.4; box-shadow: inset 0 0 10px var(--neon); }
         .pop { position: absolute; color: var(--neon); font-weight: 900; font-size: 32px; pointer-events: none; animation: moveUp 0.7s ease-out forwards; z-index: 999; text-shadow: 0 0 15px var(--neon); font-family: monospace; }
         .ref-box { background: #000; border: 1px dashed var(--neon); padding: 15px; border-radius: 12px; margin: 15px 0; word-break: break-all; font-family: monospace; font-size: 12px; color: var(--neon); text-align: center; }
+        
+        /* Sync Status Light */
+        #sync-status { width: 6px; height: 6px; border-radius: 50%; background: #555; display: inline-block; margin-right: 5px; transition: 0.3s; }
+        #sync-status.saving { background: var(--neon); box-shadow: 0 0 8px var(--neon); }
     </style>
 </head>
 <body>
@@ -133,7 +137,7 @@
             <div class="u-avatar"><img id="my-avatar" src="images/logo.png"></div>
             <div class="u-info">
                 <b id="my-name">AGENT</b>
-                <small id="ui-rank">SCANNING SYSTEM...</small>
+                <small><span id="sync-status"></span><span id="ui-rank">SCANNING SYSTEM...</span></small>
             </div>
             <div class="u-lvl" id="my-lvl">LVL 1</div>
         </header>
@@ -194,16 +198,19 @@
             data: { 
                 id: "0", balance: 0, energy: 1000, max_energy: 1000, 
                 tap: 1, profit: 0, tap_lvl: 1, mine_lvl: 1, 
-                energy_lvl: 1, last_bonus: 0, wallet: null, completed_tasks: []
+                energy_lvl: 1, last_bonus: 0, wallet: null, completed_tasks: [],
+                version: Date.now()
             },
             isLoaded: false,
             isSaving: false,
+            hasUnsavedChanges: false,
 
             async init() {
                 ui.startLoader();
                 const u = tg.initDataUnsafe.user || { id: 0, first_name: 'Local', username: 'user' };
                 this.data.id = String(u.id);
 
+                // --- TON Connect ---
                 try {
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
                         manifestUrl: window.location.origin + '/tonconnect-manifest.json',
@@ -212,17 +219,21 @@
                     tonConnectUI.onStatusChange(w => {
                         this.data.wallet = w ? w.account.address : null;
                         document.getElementById('wallet-btn-label').innerText = w ? "✅" : "👛";
-                        this.save();
+                        this.save(true);
                     });
                 } catch(e) { console.error("TON Error:", e); }
 
+                // --- Initial Load ---
                 try {
-                    const r = await fetch(`/api/user/${this.data.id}?username=${u.username || u.first_name}`);
+                    const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
                     if (r.ok) {
                         const db = await r.json();
-                        this.data = { ...this.data, ...db };
+                        // Синхронизируем только если данные с сервера новее или локальные еще не инициализированы
+                        if (!this.data.version || db.version >= this.data.version) {
+                            this.data = { ...this.data, ...db };
+                        }
                     }
-                } catch(e) { console.warn("Using local cache"); }
+                } catch(e) { console.warn("Using local cache mode"); }
 
                 document.getElementById('my-name').innerText = (u.username || u.first_name).toUpperCase();
                 if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
@@ -231,11 +242,18 @@
                 this.startLoops();
                 ui.render();
 
+                // --- Event Listeners ---
                 const target = document.getElementById('main-target');
                 target.addEventListener('touchstart', (e) => {
                     e.preventDefault();
-                    this.tap(e);
+                    this.handleTap(e);
                 }, {passive: false});
+
+                // ЖЕЛЕЗНАЯ СИНХРОНИЗАЦИЯ ПРИ ВЫХОДЕ
+                const finalSync = () => this.save(true);
+                window.addEventListener('visibilitychange', () => { if (document.hidden) finalSync(); });
+                window.addEventListener('pagehide', finalSync);
+                tg.onEvent('viewportChanged', (isChanged) => { if(isChanged) finalSync(); });
             },
 
             getCost(type) {
@@ -245,12 +263,11 @@
                 return Math.floor(base[type] * Math.pow(mult[type], lvl-1));
             },
 
-            tap(e) {
+            handleTap(e) {
                 if(!this.isLoaded || this.data.energy < 1) {
                     if(this.data.energy < 1) {
                         tg.HapticFeedback.notificationOccurred('error');
-                        document.querySelector('.e-track').classList.add('energy-error');
-                        setTimeout(() => document.querySelector('.e-track').classList.remove('energy-error'), 400);
+                        ui.triggerEnergyError();
                     }
                     return;
                 }
@@ -260,6 +277,7 @@
                     if(this.data.energy >= 1) {
                         this.data.balance += this.data.tap;
                         this.data.energy -= 1;
+                        this.hasUnsavedChanges = true;
                         ui.pop(touches[i], this.data.tap);
                     }
                 }
@@ -277,37 +295,69 @@
                     
                     ui.render();
                     tg.HapticFeedback.notificationOccurred('success');
-                    await this.save();
+                    await this.save(true); 
                     ui.openM(type === 'mine' ? 'mine' : 'boost');
                 } else {
                     tg.showAlert("INSUFFICIENT NP ENERGY");
                 }
             },
 
-            async save() {
-                if(!this.isLoaded || this.isSaving) return;
+            // --- УЛЬТРА СИНХРОНИЗАЦИЯ ---
+            async save(force = false) {
+                if (!this.isLoaded || (this.isSaving && !force)) return;
+                if (!this.hasUnsavedChanges && !force) return;
+
                 this.isSaving = true;
+                this.hasUnsavedChanges = false;
+                this.data.version = Date.now(); // Метка времени для сервера
+
+                const statusLight = document.getElementById('sync-status');
+                if(statusLight) statusLight.classList.add('saving');
+
+                const payload = JSON.stringify(this.data);
+
                 try {
-                    await fetch('/api/save', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify(this.data)
-                    });
-                } catch(e) {} finally { this.isSaving = false; }
+                    // Используем Beacon API для экстренного завершения, если доступно
+                    if (force && navigator.sendBeacon) {
+                        const blob = new Blob([payload], {type: 'application/json'});
+                        navigator.sendBeacon('/api/save', blob);
+                    } else {
+                        // Обычный fetch с keepalive для надежности
+                        await fetch('/api/save', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: payload,
+                            keepalive: true 
+                        });
+                    }
+                    console.log("System Synced.");
+                } catch(e) {
+                    console.error("Sync Failed:", e);
+                    this.hasUnsavedChanges = true; 
+                } finally {
+                    this.isSaving = false;
+                    if(statusLight) statusLight.classList.remove('saving');
+                }
             },
 
             startLoops() {
+                // Регенерация и доход (раз в сек)
                 setInterval(() => {
+                    let changed = false;
                     if(this.data.energy < this.data.max_energy) {
                         this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1.5);
+                        changed = true;
                     }
                     if(this.data.profit > 0) {
                         this.data.balance += (this.data.profit / 3600);
+                        this.hasUnsavedChanges = true;
+                        changed = true;
                     }
-                    ui.render();
+                    if(changed) ui.render();
                 }, 1000);
                 
-                setInterval(() => this.save(), 15000);
+                // Авто-сохранение каждые 5 секунд при наличии изменений
+                setInterval(() => this.save(), 5000);
             }
         };
 
@@ -346,6 +396,12 @@
                 if(d.balance > 1000000) rank = "NEURAL OVERLORD";
                 document.getElementById('ui-rank').innerText = rank;
                 document.getElementById('my-lvl').innerText = `LVL ${Math.floor(Math.sqrt(d.balance / 5000)) + 1}`;
+            },
+
+            triggerEnergyError() {
+                const track = document.querySelector('.e-track');
+                track.classList.add('energy-error');
+                setTimeout(() => track.classList.remove('energy-error'), 400);
             },
 
             pop(t, p) {
@@ -406,7 +462,7 @@
                         game.data.completed_tasks.push(id);
                         ui.render();
                         ui.openM('tasks');
-                        game.save();
+                        game.save(true);
                     }
                 }, 2000);
             },
@@ -437,7 +493,7 @@
                 game.data.last_bonus = Date.now();
                 ui.render(); ui.closeM();
                 tg.showAlert("Maintenance bonus 5,000 NP credited!");
-                game.save();
+                game.save(true);
             },
 
             closeM() { document.getElementById('modal').classList.remove('active'); }
