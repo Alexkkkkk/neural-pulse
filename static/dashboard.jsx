@@ -1,4 +1,4 @@
-import React, { useState, useEffect, memo, useMemo } from 'react';
+import React, { useState, useEffect, memo, useMemo, useRef } from 'react';
 
 // --- 🌌 ЦВЕТОВАЯ ПАЛИТРА NEURAL_PULSE V9.8 ---
 const CYBER = {
@@ -46,7 +46,7 @@ const SparkGraph = memo(({ data, color, height = 45 }) => {
   );
 });
 
-// --- 📊 ИНДИКАТОР РЕСУРСА (ВЕРХНЯЯ ПАНЕЛЬ) ---
+// --- 📊 ИНДИКАТОР РЕСУРСА ---
 const TelemetryCard = ({ label, value, data, color }) => (
   <div style={{ flex: 1, minWidth: '140px', background: 'rgba(255,255,255,0.02)', padding: '15px', borderRadius: '10px', border: `1px solid ${CYBER.border}` }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
@@ -57,7 +57,7 @@ const TelemetryCard = ({ label, value, data, color }) => (
   </div>
 );
 
-// --- 🗳️ ОСНОВНАЯ КАРТОЧКА ДАННЫХ ---
+// --- 🗳️ КАРТОЧКА ДАННЫХ ---
 const DataCard = ({ label, value, unit, data, color, isTon }) => (
   <div className="card">
     <div className="label" style={{ color }}>{label}</div>
@@ -69,13 +69,16 @@ const DataCard = ({ label, value, unit, data, color, isTon }) => (
   </div>
 );
 
-// --- ⚙️ ОСНОВНОЙ КОМПОНЕНТ DASHBOARD ---
+// --- ⚙️ ОСНОВНОЙ КОМПОНЕНТ ---
 const Dashboard = (props) => {
   const { data: initialData } = props;
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoaded, setIsLoaded] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Реф для хранения экземпляра UI, чтобы избежать дублей
+  const tonUiRef = useRef(null);
 
   const [wallet, setWallet] = useState({ 
     connected: false, 
@@ -87,13 +90,8 @@ const Dashboard = (props) => {
   const [users] = useState(initialData?.usersList || []);
   const [stats, setStats] = useState({ cpu: 28, ram: 34, online: 0, ton: 0, latency: 24, liquidity: 0 });
   const [history, setHistory] = useState({
-    cpu: Array(15).fill(28),
-    ram: Array(15).fill(34),
-    stability: Array(15).fill(100),
-    online: Array(15).fill(0),
-    ton: Array(15).fill(0),
-    lat: Array(15).fill(24),
-    liq: Array(15).fill(0)
+    cpu: Array(15).fill(28), ram: Array(15).fill(34), stability: Array(15).fill(100),
+    online: Array(15).fill(0), ton: Array(15).fill(0), lat: Array(15).fill(24), liq: Array(15).fill(0)
   });
 
   const filteredUsers = useMemo(() => {
@@ -105,7 +103,6 @@ const Dashboard = (props) => {
 
   const updateSystemData = async (newData = {}) => {
     let freshBalance = wallet.balance;
-
     if (wallet.connected && wallet.address) {
       try {
         const res = await fetch(`https://tonapi.io/v2/accounts/${wallet.address}`);
@@ -137,30 +134,46 @@ const Dashboard = (props) => {
   };
 
   useEffect(() => {
-    // --- ПРОВЕРКА НАЛИЧИЯ SDK TON ---
-    if (!window.TON_CONNECT_UI) {
-        console.warn("Waiting for TON_CONNECT_UI to load...");
-        return;
+    let unsubscribe = () => {};
+
+    // 1. Инициализация TON Connect с защитой
+    const initTon = () => {
+      if (window.TON_CONNECT_UI && !tonUiRef.current) {
+        try {
+          tonUiRef.current = new window.TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json',
+            buttonRootId: 'ton-btn'
+          });
+
+          unsubscribe = tonUiRef.current.onStatusChange(w => {
+            if (w) {
+              setWallet({
+                connected: true,
+                address: w.account.address,
+                balance: 0,
+                shortAddress: `${w.account.address.slice(0,4)}...${w.account.address.slice(-4)}`
+              });
+            } else {
+              setWallet({ connected: false, address: null, balance: 0, shortAddress: 'OFFLINE' });
+            }
+          });
+          return true;
+        } catch (err) {
+          console.error("TON Init Error:", err);
+        }
+      }
+      return false;
+    };
+
+    // Пробуем запустить, если не вышло — ждем появления объекта в окне
+    if (!initTon()) {
+      const timer = setInterval(() => {
+        if (initTon()) clearInterval(timer);
+      }, 500);
+      setTimeout(() => clearInterval(timer), 10000); // Тайм-аут 10 сек
     }
 
-    const tonConnectUI = new window.TON_CONNECT_UI.TonConnectUI({
-      manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json',
-      buttonRootId: 'ton-btn'
-    });
-
-    const unsubscribe = tonConnectUI.onStatusChange(w => {
-      if (w) {
-        setWallet({
-          connected: true,
-          address: w.account.address,
-          balance: 0,
-          shortAddress: `${w.account.address.slice(0,4)}...${w.account.address.slice(-4)}`
-        });
-      } else {
-        setWallet({ connected: false, address: null, balance: 0, shortAddress: 'OFFLINE' });
-      }
-    });
-
+    // 2. EventSource
     const eventSource = new EventSource('/api/admin/stream');
     eventSource.onmessage = (e) => {
       try {
@@ -178,15 +191,14 @@ const Dashboard = (props) => {
     };
 
     const interval = setInterval(() => updateSystemData({}), 10000);
-    setTimeout(() => setIsLoaded(true), 600);
+    setTimeout(() => setIsLoaded(true), 800);
 
     return () => {
       eventSource.close();
       clearInterval(interval);
       unsubscribe();
     };
-    // Добавлена проверка window.TON_CONNECT_UI в зависимости, чтобы эффект перезапустился при загрузке скрипта
-  }, [wallet.connected, wallet.address, window.TON_CONNECT_UI]); 
+  }, []); // Пустой массив, чтобы не перезапускать эффект
 
   if (!isLoaded) return <div className="loading">CONNECTING_TO_NEURAL_PULSE_NODE...</div>;
 
