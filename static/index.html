@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
-        /* Системные анимации */
+        /* Системные анимации и дополнительные стили */
         @keyframes pulse { 0% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } 100% { opacity: 0.5; transform: scale(1); } }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
         
@@ -97,7 +97,7 @@
     <div id="loader">
         <div class="l-content">
             <div class="ring"></div>
-            <img src="images/logo.png" class="l-logo" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'">
+            <img src="images/logo.png" class="l-logo" id="loader-logo" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'">
         </div>
         <div class="l-status">INITIALIZING NEURAL LINK...</div>
         <div class="l-pct" id="pct">0%</div>
@@ -106,7 +106,7 @@
 
     <div id="app" style="display: none; flex-direction: column; height: 100vh;">
         <header>
-            <div class="u-avatar"><img id="my-avatar" src="images/logo.png"></div>
+            <div class="u-avatar"><img id="my-avatar" src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'"></div>
             <div class="u-info">
                 <b id="my-name">AGENT</b><br>
                 <small id="ui-rank">SCANNING...</small>
@@ -179,6 +179,7 @@
                 ui.startLoader();
                 tg.expand();
                 
+                // Получаем данные пользователя из Telegram
                 const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
                 this.data.id = String(u.id);
 
@@ -187,11 +188,15 @@
                     if (r.ok) {
                         const db = await r.json();
                         this.data = { ...this.data, ...db };
-                        if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
+                        // Устанавливаем аватар из TG
+                        if(u.photo_url) {
+                            document.getElementById('my-avatar').src = u.photo_url;
+                            document.getElementById('loader-logo').src = u.photo_url;
+                        }
                     }
                 } catch(e) { console.error("Sync Error"); }
 
-                // Инициализация TON с проверкой готовности
+                // Безопасная инициализация TON SDK
                 this.initTonSDK();
 
                 const target = document.getElementById('main-target');
@@ -204,7 +209,7 @@
             },
 
             initTonSDK() {
-                // Если библиотека еще не загрузилась, ждем 500мс и пробуем снова
+                // Если библиотека еще не загрузилась, ждем и пробуем снова (защита от TypeError)
                 if (typeof TON_CONNECT_UI === 'undefined') {
                     console.warn("TON SDK not ready, retrying...");
                     setTimeout(() => this.initTonSDK(), 500);
@@ -298,7 +303,7 @@
                     if(this.data.profit > 0) this.data.balance += (this.data.profit / 3600);
                     ui.render();
                 }, 1000);
-                setInterval(() => this.save(), 15000);
+                setInterval(() => this.save(), 15000); // Автосохранение каждые 15 сек
             }
         };
 
