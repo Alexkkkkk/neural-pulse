@@ -35,15 +35,15 @@ async function startNeuralOS() {
     const app = express();
     const bot = new Telegraf(BOT_TOKEN);
 
-    // Middleware
+    // --- 🛡️ SECURITY & MIDDLEWARE ---
     app.use(helmet({
-        contentSecurityPolicy: false, // Нужно для AdminJS и внешних ресурсов
+        contentSecurityPolicy: false, // Разрешаем внешние шрифты и скрипты TON
     }));
     app.use(compression());
     app.use(cors({ origin: '*' }));
     app.use(express.json());
 
-    // Раздача статики (index.html, images, etc)
+    // Раздача статики
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
     try {
@@ -99,7 +99,7 @@ async function startNeuralOS() {
     }
 }
 
-// Поток данных для админ-панели (Server-Sent Events)
+// Поток данных для админ-панели
 function setupRealTimeStream(app) {
     app.get('/api/admin/stream', (req, res) => {
         res.writeHead(200, {
@@ -113,29 +113,34 @@ function setupRealTimeStream(app) {
     });
 }
 
-// API для взаимодействия с фронтендом (Mini App)
+// --- 🌐 API ROUTES ---
 function setupAPIRoutes(app) {
-    // Получение данных пользователя при входе
+    // Получение данных пользователя
     app.get('/api/user/:userId', async (req, res) => {
         try {
             const user = await User.findByPk(req.params.userId);
-            if (!user) return res.status(404).json({ error: "User not found" });
+            if (!user) return res.status(404).json({ error: "Agent not found" });
             res.json(user);
         } catch (e) { res.status(500).send(e.message); }
     });
 
-    // Сохранение прогресса (Balance, Levels, Wallet)
+    // Сохранение состояния и баланса
     app.post('/api/save', async (req, res) => {
         const { id, balance, tap_lvl, mine_lvl, energy_lvl, wallet } = req.body;
         try {
             const user = await User.findByPk(id);
             if (!user) return res.sendStatus(404);
 
-            const oldBalance = parseFloat(user.balance || 0);
             const newBalance = parseFloat(balance);
+            const oldBalance = parseFloat(user.balance || 0);
             const diff = newBalance - oldBalance;
 
-            await user.update({ balance, tap_lvl, mine_lvl, energy_lvl, wallet });
+            // Базовая защита: если пришло слишком много за раз (чит)
+            if (diff > 5000) {
+                 neuralLog(`Suspicious balance jump for ID ${id}: +${diff}`, 'WARN');
+            }
+
+            await user.update({ balance: newBalance, tap_lvl, mine_lvl, energy_lvl, wallet });
             
             if (diff > 0) {
                 await GlobalStats.increment('total_balance', { by: diff, where: { id: 1 } });
@@ -144,16 +149,17 @@ function setupAPIRoutes(app) {
         } catch (e) { res.status(500).send(e.message); }
     });
 
-    // AI Советник (для красоты на фронтенде)
+    // AI Advisor (аналитика для фронтенда)
     app.post('/api/ai-advice', (req, res) => {
         const { balance } = req.body;
-        const advice = balance < 5000 
-            ? "> [SYSTEM]: Рекомендую апгрейд Neural Link для ускорения майнинга." 
-            : "> [SYSTEM]: Баланс в норме. Время подключать TON кошелек.";
+        const advice = balance < 1000 
+            ? "> [ADVISOR]: Инициализируйте протоколы кликов. Энергия на пике." 
+            : "> [ADVISOR]: Обнаружен избыток NP. Рекомендую инвестировать в модули майнинга.";
         res.json({ text: advice });
     });
 }
 
+// --- 🛠️ ADMIN PANEL ---
 async function setupAdminPanel(app) {
     const { default: AdminJS, ComponentLoader } = await import('adminjs');
     const { default: AdminJSExpress } = await import('@adminjs/express');
@@ -164,9 +170,9 @@ async function setupAdminPanel(app) {
     
     const adminJs = new AdminJS({
         resources: [
-            { resource: User, options: { navigation: { name: 'CORE', icon: 'User' } } },
-            { resource: Stats, options: { navigation: { name: 'SYSTEM' } } },
-            { resource: GlobalStats, options: { navigation: { name: 'SYSTEM' } } }
+            { resource: User, options: { navigation: { name: 'AGENTS', icon: 'User' }, properties: { balance: { isTitle: true } } } },
+            { resource: Stats, options: { navigation: { name: 'METRICS' } } },
+            { resource: GlobalStats, options: { navigation: { name: 'METRICS' } } }
         ],
         rootPath: '/admin',
         componentLoader,
@@ -196,27 +202,33 @@ async function setupAdminPanel(app) {
     await adminJs.initialize();
 }
 
+// --- 🤖 BOT LOGIC ---
 function setupBotHandlers(bot) {
     bot.start(async (ctx) => {
+        const userId = ctx.from.id;
         const [user, created] = await User.findOrCreate({
-            where: { id: ctx.from.id },
+            where: { id: userId },
             defaults: { username: ctx.from.username || 'AGENT', balance: 0 }
         });
         
-        if (created) await GlobalStats.increment('total_users', { where: { id: 1 } });
+        if (created) {
+            await GlobalStats.increment('total_users', { where: { id: 1 } });
+            neuralLog(`New Agent Initialized: ${user.username}`, 'SUCCESS');
+        }
 
         const welcomeMsg = `<b>[ NEURAL PULSE ]</b>\n\n` +
-                           `Добро пожаловать в систему, <code>${user.username}</code>.\n` +
+                           `Добро пожаловать в систему, <code>${user.username}</code>.\n\n` +
+                           `▪️ Статус: ACTIVE\n` +
+                           `▪️ Узел: NL-02\n` +
+                           `▪️ Доступ: LEVEL_1\n\n` +
                            `Ваш терминал готов к синхронизации.`;
 
-        ctx.reply(welcomeMsg, { 
-            parse_mode: 'HTML', 
-            ...Markup.inlineKeyboard([
-                [Markup.button.webApp("⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)],
-                [Markup.button.url("🌐 СООБЩЕСТВО", "https://t.me/your_channel")]
-            ])
-        });
+        ctx.replyWithHTML(welcomeMsg, Markup.inlineKeyboard([
+            [Markup.button.webApp("⚡ ЗАПУСТИТЬ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)],
+            [Markup.button.url("🌐 СООБЩЕСТВО", "https://t.me/neural_pulse_news")]
+        ]));
     });
 }
 
+// --- 🚀 START ---
 startNeuralOS();
