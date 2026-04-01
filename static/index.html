@@ -158,7 +158,6 @@
 
     <script>
         const tg = window.Telegram.WebApp;
-
         let tonConnectUI = null;
 
         const game = {
@@ -172,22 +171,20 @@
 
             async init() {
                 ui.startLoader();
-                
-                // --- ЗАЩИТА И НАСТРОЙКА ИНТЕРФЕЙСА TELEGRAM ---
                 tg.expand();
                 tg.enableClosingConfirmation();
-                // Принудительно ставим темный цвет шапки (убирает системные надписи)
-                if (tg.setHeaderColor) {
-                    tg.setHeaderColor('#001414'); 
-                }
-                // ----------------------------------------------
+                if (tg.setHeaderColor) tg.setHeaderColor('#001414'); 
 
                 const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
                 this.data.id = String(u.id);
 
-                const initTonWithRetry = (retries = 20) => {
+                // --- ИСПРАВЛЕННАЯ ИНИЦИАЛИЗАЦИЯ TON ---
+                const initTonWithRetry = (retries = 25) => {
                     try {
-                        const TonSDK = window.TonConnectUI?.TonConnectUI || window.TonConnectUI;
+                        const TonSDK = window.TonConnectUI?.TonConnectUI || 
+                                       window.TonConnectUI || 
+                                       (window.TON_CONNECT_UI ? window.TON_CONNECT_UI.TonConnectUI : null);
+                        
                         if (TonSDK && typeof TonSDK === 'function') {
                             tonConnectUI = new TonSDK({
                                 manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json'
@@ -204,13 +201,14 @@
                                 }
                                 this.save();
                             });
+                            console.log("TON SDK Initialized");
                         } else if (retries > 0) {
-                            setTimeout(() => initTonWithRetry(retries - 1), 300);
+                            setTimeout(() => initTonWithRetry(retries - 1), 400);
                         }
                     } catch(e) { console.warn("TON SDK Init Error", e); }
                 };
-
                 initTonWithRetry();
+                // --------------------------------------
 
                 const target = document.getElementById('main-target');
                 target.addEventListener('touchstart', (e) => this.tap(e), { passive: false });
@@ -258,7 +256,6 @@
                         ui.pop(touches[i], this.data.tap);
                     }
                 }
-
                 ui.render();
                 tg.HapticFeedback.impactOccurred('light'); 
             },
@@ -389,17 +386,18 @@
                     </div>
                     ${isConnected ? '<button class="task-btn" style="width:100%; margin-top:10px; background:#ff4444; color:white;" onclick="tonConnectUI.disconnect()">DISCONNECT WALLET</button>' : ''}`;
                     
+                    // --- БЕЗОПАСНАЯ ОТРИСОВКА КНОПКИ ---
                     const renderTonButton = () => {
                         const container = document.getElementById('ton-connect-button');
-                        if (tonConnectUI && container) {
+                        if (tonConnectUI && typeof tonConnectUI.renderButton === 'function' && container) {
                             tonConnectUI.renderButton({
                                 container: container,
                                 theme: 'dark',
                                 buttonConfiguration: { width: 'full' }
                             });
                         } else if (container) {
-                            container.innerHTML = '<p style="color:cyan; font-size:12px; animation: pulse 1s infinite;">SYNCING SDK...</p>';
-                            setTimeout(renderTonButton, 800);
+                            container.innerHTML = '<p style="color:cyan; font-size:11px; animation: pulse 1s infinite;">SDK LOADING... TRY AGAIN</p>';
+                            setTimeout(renderTonButton, 1000);
                         }
                     };
                     renderTonButton();
