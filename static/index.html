@@ -158,34 +158,38 @@
             isLoaded: false,
             isSaving: false,
 
+            // 1. Исправленная инициализация TON Connect
             async init() {
                 ui.startLoader();
                 const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
                 this.data.id = String(u.id);
 
                 try {
-                    tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                        manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json'
-                    });
+                    // Проверяем наличие библиотеки перед созданием
+                    const TonSDK = window.TonConnectUI || window.TON_CONNECT_UI; 
+                    if (TonSDK) {
+                        tonConnectUI = new TonSDK.TonConnectUI({
+                            manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json'
+                        });
 
-                    tonConnectUI.onStatusChange(wallet => {
-                        if (wallet) {
-                            this.data.wallet = wallet.account.address;
-                            const addr = wallet.account.address;
-                            document.getElementById('wallet-btn-label').innerText = "👛 " + addr.slice(0,4) + ".." + addr.slice(-4);
-                        } else {
-                            this.data.wallet = null;
-                            document.getElementById('wallet-btn-label').innerText = "👛 WALLET";
-                        }
-                        this.save();
-                    });
-                } catch(e) { console.warn("TON Init Error"); }
+                        tonConnectUI.onStatusChange(wallet => {
+                            if (wallet) {
+                                this.data.wallet = wallet.account.address;
+                                const addr = wallet.account.address;
+                                document.getElementById('wallet-btn-label').innerText = "👛 " + addr.slice(0,4) + ".." + addr.slice(-4);
+                            } else {
+                                this.data.wallet = null;
+                                document.getElementById('wallet-btn-label').innerText = "👛 WALLET";
+                            }
+                            this.save();
+                        });
+                    }
+                } catch(e) { console.warn("TON Init Error", e); }
 
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
                     if (r.ok) {
                         const db = await r.json();
-                        // Слияние данных из БД с начальными
                         this.data = { ...this.data, ...db, id: String(u.id) };
                         if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
                     }
@@ -205,17 +209,20 @@
                 return 0;
             },
 
+            // 2. Исправленная функция тапа (защита от багов и мультитач)
             tap(e) {
                 if(!this.isLoaded) return;
-                
+                if(e.cancelable) e.preventDefault(); // Важно для Telegram WebApp
+
                 if(this.data.energy < 1) { 
                     tg.HapticFeedback.notificationOccurred('error');
-                    document.querySelector('.e-track').classList.add('energy-error');
-                    setTimeout(() => document.querySelector('.e-track').classList.remove('energy-error'), 400);
+                    const track = document.querySelector('.e-track');
+                    track.classList.add('energy-error');
+                    setTimeout(() => track.classList.remove('energy-error'), 400);
                     return; 
                 }
                 
-                const touches = e.changedTouches;
+                const touches = e.changedTouches || [{ clientX: e.clientX, clientY: e.clientY }];
                 for(let i=0; i < touches.length; i++) {
                     if(this.data.energy >= 1) {
                         this.data.balance += this.data.tap;
@@ -225,7 +232,7 @@
                 }
 
                 ui.render();
-                tg.HapticFeedback.impactOccurred('medium');
+                tg.HapticFeedback.impactOccurred('light'); // Сделал чуть мягче, приятнее для пальцев
             },
 
             async upgrade(type) {
@@ -287,18 +294,15 @@
 
             startLoops() {
                 setInterval(() => {
-                    // Регенерация энергии
                     if(this.data.energy < this.data.max_energy) {
                         this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1.5);
                     }
-                    // Пассивный доход
                     if(this.data.profit > 0) {
                         this.data.balance += (this.data.profit / 3600);
                     }
                     ui.render();
                 }, 1000);
                 
-                // Автосохранение каждые 15 сек
                 setInterval(() => this.save(), 15000);
             }
         };
@@ -362,7 +366,9 @@
                     b.innerHTML = `<h2>👛 TON WALLET</h2>
                     <p style="font-size:12px; color:gray; text-align:center; margin-bottom:10px;">Connect your TON wallet to sync your identity.</p>
                     <div id="ton-btn" style="display:flex; justify-content:center; padding:10px;"></div>`;
-                    setTimeout(() => tonConnectUI.renderButton({ container: document.getElementById('ton-btn') }), 50);
+                    setTimeout(() => {
+                        if (tonConnectUI) tonConnectUI.renderButton({ container: document.getElementById('ton-btn') });
+                    }, 50);
                 } else if(type === 'bonus') {
                     const last = game.data.last_bonus || 0;
                     const canClaim = (Date.now() - last) > 86400000;
