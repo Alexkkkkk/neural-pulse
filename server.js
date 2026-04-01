@@ -229,7 +229,7 @@ async function startNeuralOS() {
     app.use(cors({ origin: '*' }));
     app.use(express.json());
 
-    // Раздача статики (Твой дизайн и картинки защищены)
+    // Раздача статики (Твой дизайн и картинки защищены в /static)
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
     try {
