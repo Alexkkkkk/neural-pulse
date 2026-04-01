@@ -122,8 +122,8 @@ User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
 // --- 📊 ТЕЛЕМЕТРИЯ ---
 export const logSystemStats = async () => {
-    // Выполняем только на основном процессе (isPrimary), чтобы не дублировать логи
-    const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
+    // Выполняем только на основном процессе, чтобы не дублировать логи
+    const isPrimary = cluster.isPrimary || (cluster.isWorker && cluster.worker.id === 1);
     if (!isPrimary) return;
 
     try {
@@ -170,7 +170,7 @@ export const initDB = async () => {
         await sequelize.authenticate();
         console.log('⚡ [DB] CONNECTED TO POSTGRES (STABLE)');
 
-        const isPrimary = cluster.isMaster || (cluster.isWorker && cluster.worker.id === 1);
+        const isPrimary = cluster.isPrimary || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
             // Синхронизация структуры БД
@@ -193,7 +193,7 @@ export const initDB = async () => {
                 console.log('▪️ [DB] DEFAULT_TASKS_LOADED');
             }
 
-            // Запуск цикла сбора метрик (каждые 10 секунд для снижения нагрузки)
+            // Запуск цикла сбора метрик (каждые 10 секунд)
             setInterval(logSystemStats, 10000); 
             await logSystemStats(); 
         }
