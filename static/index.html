@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Neural Pulse v5.6.0 | Terminal</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js" defer></script>
     <style>
         /* Системные анимации */
         @keyframes pulse { 0% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } 100% { opacity: 0.5; transform: scale(1); } }
@@ -160,7 +161,6 @@
     </div>
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/ui@2.0.2/dist/tonconnect-ui.min.js"></script>
 
     <script>
         const tg = window.Telegram.WebApp;
@@ -185,26 +185,8 @@
                 const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
                 this.data.id = String(u.id);
 
-                // --- TON SDK INIT ---
-                const initTonWithRetry = (retries = 30) => {
-                    const TonSDK = window.TonConnectUI?.TonConnectUI || window.TonConnectUI || (window.TON_CONNECT_UI ? window.TON_CONNECT_UI.TonConnectUI : null);
-                    if (TonSDK && typeof TonSDK === 'function') {
-                        try {
-                            tonConnectUI = new TonSDK({ manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json' });
-                            tonConnectUI.onStatusChange(wallet => {
-                                if (wallet) {
-                                    this.data.wallet = wallet.account.address;
-                                    document.getElementById('wallet-btn-label').innerText = "👛 " + this.data.wallet.slice(0,4) + ".." + this.data.wallet.slice(-4);
-                                } else {
-                                    this.data.wallet = null;
-                                    document.getElementById('wallet-btn-label').innerText = "👛 WALLET";
-                                }
-                                this.save();
-                            });
-                        } catch(e) { console.error("TON Connect Error", e); }
-                    } else if (retries > 0) { setTimeout(() => initTonWithRetry(retries - 1), 300); }
-                };
-                initTonWithRetry();
+                // --- НОВАЯ ЗАЩИЩЕННАЯ ИНИЦИАЛИЗАЦИЯ TON ---
+                this.initTonSDK();
 
                 const target = document.getElementById('main-target');
                 target.addEventListener('touchstart', (e) => this.tap(e), { passive: false });
@@ -222,6 +204,35 @@
                 this.isLoaded = true;
                 this.startLoops();
                 ui.render();
+            },
+
+            // Метод для безопасного ожидания загрузки библиотеки
+            initTonSDK() {
+                const checkInterval = setInterval(() => {
+                    // Проверяем наличие SDK в разных возможных местах глобальной видимости
+                    const TonSDK = window.TonConnectUI?.TonConnectUI || window.TonConnectUI;
+                    
+                    if (TonSDK && typeof TonSDK === 'function') {
+                        clearInterval(checkInterval);
+                        try {
+                            tonConnectUI = new TonSDK({ 
+                                manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json' 
+                            });
+                            
+                            tonConnectUI.onStatusChange(wallet => {
+                                if (wallet) {
+                                    this.data.wallet = wallet.account.address;
+                                    document.getElementById('wallet-btn-label').innerText = "👛 " + this.data.wallet.slice(0,4) + ".." + this.data.wallet.slice(-4);
+                                } else {
+                                    this.data.wallet = null;
+                                    document.getElementById('wallet-btn-label').innerText = "👛 WALLET";
+                                }
+                                this.save();
+                            });
+                            console.log("TON SDK Initialized successfully");
+                        } catch(e) { console.error("TON Init Error", e); }
+                    }
+                }, 300); // Проверка каждые 300мс
             },
 
             getCost(type) {
@@ -264,7 +275,6 @@
                     else if(type === 'mine') { 
                         this.data.mine_lvl++; 
                         this.data.profit += 120; 
-                        // Логика комбо: если купил 'mine', проверяем прогресс
                         if(this.data.combo_progress.length < 3) this.data.combo_progress.push('mine');
                     }
                     ui.render();
@@ -361,15 +371,16 @@
                 } else if(type === 'wallet') {
                     const isConnected = !!game.data.wallet;
                     b.innerHTML = `<h2>👛 TON WALLET</h2>
-                    <p style="font-size:12px; color:gray; text-align:center; margin-bottom:15px;">${isConnected ? 'Identity Linked' : 'Connect for Sync'}</p>
+                    <p id="wallet-status" style="font-size:12px; color:gray; text-align:center; margin-bottom:15px;">${isConnected ? 'Identity Linked' : 'Connect for Sync'}</p>
                     <div id="ton-btn-container"><div id="ton-connect-button"></div></div>
-                    ${isConnected ? '<button class="task-btn" style="width:100%; background:#ff4444; color:white;" onclick="tonConnectUI.disconnect()">DISCONNECT</button>' : ''}`;
+                    ${isConnected ? '<button class="task-btn" style="width:100%; background:#ff4444; color:white; margin-top:10px;" onclick="tonConnectUI.disconnect()">DISCONNECT</button>' : ''}`;
                     
+                    // Безопасный рендер кнопки TON
                     const renderTon = () => {
                         const container = document.getElementById('ton-connect-button');
                         if (tonConnectUI && container) {
                             tonConnectUI.renderButton({ container, theme: 'dark', buttonConfiguration: { width: 'full' } });
-                        } else { setTimeout(renderTon, 500); }
+                        } else { setTimeout(renderTon, 300); }
                     };
                     renderTon();
                 } else if(type === 'tasks') {
