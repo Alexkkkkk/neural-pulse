@@ -1,5 +1,12 @@
 {
-  "url": "https://neural-pulse.bothost.ru",
+  "url": "https://neural-pulse.bothost.tech",
   "name": "Neural Pulse",
-  "iconUrl": "https://neural-pulse.bothost.ru/images/logo.png"
+  "iconUrl": "https://neural-pulse.bothost.tech/static/images/logo.png",
+  "description": "Neural Pulse — Инновационная экосистема управления нейросетевыми импульсами и мониторинга нод. Будущее ИИ в твоих руках.",
+  "termsOfUseUrl": "https://neural-pulse.bothost.tech/static/terms.html",
+  "privacyPolicyUrl": "https://neural-pulse.bothost.tech/static/privacy.html",
+  "platforms": ["chrome", "android", "ios", "firefox"],
+  "homepageUrl": "https://neural-pulse.bothost.tech",
+  "keywords": ["AI", "Neural", "Pulse", "Web3", "Telegram Bot"],
+  "manifestVersion": 2
 }
