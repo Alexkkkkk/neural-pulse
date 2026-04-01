@@ -163,7 +163,6 @@
                 const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
                 this.data.id = String(u.id);
 
-                // --- ФУНКЦИЯ ИНИЦИАЛИЗАЦИИ TON С ПОВТОРАМИ ---
                 const initTonWithRetry = (retries = 10) => {
                     try {
                         const TonSDK = window.TonConnectUI || (window.TON_CONNECT_UI ? window.TON_CONNECT_UI.TonConnectUI : null) || window.TON_CONNECT_UI;
@@ -184,11 +183,11 @@
                                 }
                                 this.save();
                             });
-                            console.log("TON Connect Loaded");
+                            console.log("TON Connect Ready");
                         } else if (retries > 0) {
                             setTimeout(() => initTonWithRetry(retries - 1), 300);
                         }
-                    } catch(e) { console.warn("TON Init Error", e); }
+                    } catch(e) { console.warn("TON SDK Init Error", e); }
                 };
 
                 initTonWithRetry();
@@ -245,19 +244,9 @@
                 const cost = this.getCost(type);
                 if(this.data.balance >= cost) {
                     this.data.balance -= cost;
-                    if(type === 'tap') { 
-                        this.data.tap_lvl++; 
-                        this.data.tap += 1; 
-                    }
-                    else if(type === 'energy') { 
-                        this.data.energy_lvl++; 
-                        this.data.max_energy += 500; 
-                        this.data.energy = this.data.max_energy; 
-                    }
-                    else if(type === 'mine') { 
-                        this.data.mine_lvl++; 
-                        this.data.profit += 120; 
-                    }
+                    if(type === 'tap') { this.data.tap_lvl++; this.data.tap += 1; }
+                    else if(type === 'energy') { this.data.energy_lvl++; this.data.max_energy += 500; this.data.energy = this.data.max_energy; }
+                    else if(type === 'mine') { this.data.mine_lvl++; this.data.profit += 120; }
                     
                     ui.render();
                     tg.HapticFeedback.notificationOccurred('success');
@@ -270,7 +259,6 @@
 
             async completeTask(id, reward, link) {
                 if(this.data.completed_tasks?.includes(id)) return;
-                
                 if(link.startsWith('http')) tg.openLink(link);
                 else tg.openTelegramLink(link);
 
@@ -308,7 +296,6 @@
                     }
                     ui.render();
                 }, 1000);
-                
                 setInterval(() => this.save(), 15000);
             }
         };
@@ -369,12 +356,17 @@
                     const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
                     b.innerHTML = `<h2>🤝 REFERRALS</h2><div class="ref-box" id="ref-url">${link}</div><button class="task-btn" style="width:100%" onclick="ui.copyRef()">COPY INVITE LINK</button>`;
                 } else if(type === 'wallet') {
+                    const isConnected = !!game.data.wallet;
                     b.innerHTML = `<h2>👛 TON WALLET</h2>
-                    <p style="font-size:12px; color:gray; text-align:center; margin-bottom:10px;">Connect your TON wallet to sync your identity.</p>
-                    <div id="ton-btn" style="display:flex; justify-content:center; padding:10px;"></div>`;
+                    <p style="font-size:12px; color:gray; text-align:center; margin-bottom:15px;">
+                        ${isConnected ? 'Your identity is linked to the blockchain.' : 'Connect your TON wallet to sync your identity.'}
+                    </p>
+                    <div id="ton-btn" style="display:flex; justify-content:center; padding:10px;"></div>
+                    ${isConnected ? '<button class="task-btn" style="width:100%; margin-top:10px; background:#ff4444; color:white;" onclick="tonConnectUI.disconnect()">DISCONNECT WALLET</button>' : ''}`;
+                    
                     setTimeout(() => {
                         if (tonConnectUI && tonConnectUI.renderButton) {
-                            tonConnectUI.renderButton({ container: document.getElementById('ton-btn') });
+                            tonConnectUI.renderButton({ container: document.getElementById('ton-btn'), theme: 'dark' });
                         } else {
                             document.getElementById('ton-btn').innerHTML = '<p style="color:red; font-size:10px;">SDK LOADING... TRY AGAIN</p>';
                         }
@@ -382,20 +374,13 @@
                 } else if(type === 'bonus') {
                     const last = game.data.last_bonus || 0;
                     const canClaim = (Date.now() - last) > 86400000;
-                    b.innerHTML = `<h2>🎁 DAILY BONUS</h2>
-                    <div style="text-align:center; padding:20px;">
-                        <button class="task-btn" style="width:100%; height:60px;" ${canClaim ? '' : 'disabled'} onclick="ui.claimDaily()">
-                            ${canClaim ? 'CLAIM 5,000 NP' : 'RECHARGE IN PROGRESS'}
-                        </button>
-                    </div>`;
+                    b.innerHTML = `<h2>🎁 DAILY BONUS</h2><div style="text-align:center; padding:20px;"><button class="task-btn" style="width:100%; height:60px;" ${canClaim ? '' : 'disabled'} onclick="ui.claimDaily()">${canClaim ? 'CLAIM 5,000 NP' : 'RECHARGE IN PROGRESS'}</button></div>`;
                 } else if(type === 'top') {
                     try {
                         const r = await fetch('/api/top'); 
                         const top = await r.json();
                         let h = '<h2>🏆 TOP AGENTS</h2>';
-                        top.forEach((u, i) => { 
-                            h += `<div class="top-item"><div><b style="color:cyan;">#${i+1}</b> ${u.username || 'Anonymous'}</div><b>${Math.floor(u.balance).toLocaleString()}</b></div>`; 
-                        });
+                        top.forEach((u, i) => { h += `<div class="top-item"><div><b style="color:cyan;">#${i+1}</b> ${u.username || 'Anonymous'}</div><b>${Math.floor(u.balance).toLocaleString()}</b></div>`; });
                         b.innerHTML = h;
                     } catch(e) { b.innerHTML = '<h2>OFFLINE</h2><p>Database unreachable.</p>'; }
                 } else if(type === 'tasks') {
@@ -411,28 +396,16 @@
                 const btn = document.getElementById('ai-btn');
                 resDiv.innerHTML = `<div class="loading">CALCULATING...</div>`; 
                 btn.disabled = true;
-                
                 try {
                     const r = await fetch('/api/ai-advice', { 
-                        method: 'POST', 
-                        headers: {'Content-Type': 'application/json'}, 
-                        body: JSON.stringify({ 
-                            id: game.data.id, 
-                            balance: game.data.balance, 
-                            levels: { tap: game.data.tap_lvl, mine: game.data.mine_lvl } 
-                        }) 
+                        method: 'POST', headers: {'Content-Type': 'application/json'}, 
+                        body: JSON.stringify({ id: game.data.id, balance: game.data.balance, levels: { tap: game.data.tap_lvl, mine: game.data.mine_lvl } }) 
                     });
                     const res = await r.json(); 
                     const text = res.text || "Pulse stable. Upgrade mining nodes for maximum passive output.";
-                    
                     resDiv.innerText = ""; 
                     let i = 0;
-                    const type = () => { 
-                        if (i < text.length) { 
-                            resDiv.innerText += text.charAt(i); i++; 
-                            setTimeout(type, 30); 
-                        } 
-                    }; 
+                    const type = () => { if (i < text.length) { resDiv.innerText += text.charAt(i); i++; setTimeout(type, 30); } }; 
                     type();
                 } catch(e) { resDiv.innerText = "Error: Connection lost."; } 
                 finally { btn.disabled = false; }
@@ -446,8 +419,7 @@
             async claimDaily() { 
                 game.data.balance += 5000; 
                 game.data.last_bonus = Date.now(); 
-                ui.render(); 
-                ui.closeM(); 
+                ui.render(); ui.closeM(); 
                 tg.showAlert("Daily Reward: +5,000 NP");
                 await game.save(); 
             },
