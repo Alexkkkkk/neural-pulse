@@ -23,12 +23,13 @@
             overflow: hidden;
             height: 100vh;
             user-select: none;
+            touch-action: manipulation;
         }
 
         /* --- Animations --- */
         @keyframes pulse { 0% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } 100% { opacity: 0.5; transform: scale(1); } }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
-        @keyframes moveUp { 0% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: translateY(-120px) scale(1.2); opacity: 0; } }
+        @keyframes moveUp { 0% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: translateY(-120px) scale(1.5); opacity: 0; } }
         @keyframes spin { to { transform: rotate(360deg); } }
 
         /* --- Loader --- */
@@ -37,89 +38,89 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
         .ring { width: 80px; height: 80px; border: 3px solid transparent; border-top-color: var(--neon); border-radius: 50%; animation: spin 1s linear infinite; }
-        .l-logo { position: absolute; width: 40px; }
+        .l-logo { position: absolute; width: 45px; }
         .l-status { margin-top: 20px; font-family: monospace; color: var(--neon); font-size: 10px; letter-spacing: 2px; }
-        .l-bar { width: 200px; height: 2px; background: #111; margin-top: 10px; }
+        .l-bar { width: 200px; height: 2px; background: #111; margin-top: 10px; position: relative; }
         #bar { height: 100%; width: 0%; background: var(--neon); box-shadow: 0 0 10px var(--neon); transition: 0.1s; }
 
         /* --- Header --- */
-        header { padding: 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
-        .u-avatar img { width: 45px; height: 45px; border-radius: 10px; border: 1px solid var(--neon); object-fit: cover; }
+        header { padding: 15px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
+        .u-avatar img { width: 42px; height: 42px; border-radius: 10px; border: 1px solid var(--neon); object-fit: cover; }
         .u-info b { font-size: 14px; color: var(--neon); text-transform: uppercase; }
-        .u-info small { font-size: 10px; color: #888; }
-        .u-lvl { margin-left: auto; background: var(--neon); color: black; padding: 4px 8px; border-radius: 5px; font-weight: bold; font-size: 12px; }
+        .u-info small { font-size: 10px; color: #888; display: block; }
+        .u-lvl { margin-left: auto; background: var(--neon); color: black; padding: 4px 10px; border-radius: 6px; font-weight: 900; font-size: 12px; }
 
         /* --- Stats --- */
         .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 15px; }
         .s-box { background: var(--panel); border: 1px solid var(--border); padding: 10px; border-radius: 12px; text-align: center; }
-        .s-box small { font-size: 9px; color: #888; display: block; margin-bottom: 4px; }
-        .s-box b { font-size: 14px; color: var(--neon); }
+        .s-box small { font-size: 9px; color: #888; display: block; margin-bottom: 4px; text-transform: uppercase; }
+        .s-box b { font-size: 14px; color: var(--neon); font-family: monospace; }
 
         /* --- Balance --- */
-        .balance-area { text-align: center; padding: 20px 0; }
-        #ui-balance { font-size: 42px; font-weight: 900; letter-spacing: -1px; text-shadow: 0 0 20px rgba(0,255,255,0.3); }
+        .balance-area { text-align: center; padding: 15px 0; }
+        #ui-balance { font-size: 48px; font-weight: 900; letter-spacing: -1px; text-shadow: 0 0 20px rgba(0,255,255,0.4); font-family: monospace; }
 
         /* --- Main Target --- */
         .game-core { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; }
         .brain-target {
-            width: 250px; height: 250px; position: relative; z-index: 5;
-            transition: transform 0.05s;
+            width: 260px; height: 260px; position: relative; z-index: 5;
+            transition: transform 0.05s cubic-bezier(0, 0, 0.2, 1);
             display: flex; align-items: center; justify-content: center;
         }
-        .brain-target img { width: 100%; filter: drop-shadow(0 0 15px var(--neon)); pointer-events: none; }
-        .brain-target:active { transform: scale(0.95); }
-        .glow { position: absolute; width: 300px; height: 300px; background: radial-gradient(circle, rgba(0,255,255,0.1) 0%, transparent 70%); pointer-events: none; }
+        .brain-target img { width: 100%; filter: drop-shadow(0 0 20px var(--neon)); pointer-events: none; }
+        .brain-target:active { transform: scale(0.92); }
+        .glow { position: absolute; width: 300px; height: 300px; background: radial-gradient(circle, rgba(0,255,255,0.15) 0%, transparent 70%); pointer-events: none; }
 
         /* --- Side Menu --- */
-        .side-menu { position: absolute; right: 10px; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
+        .side-menu { position: absolute; right: 15px; display: flex; flex-direction: column; gap: 12px; z-index: 10; }
         .side-menu button { 
-            background: rgba(0,0,0,0.6); border: 1px solid var(--border); color: white; 
-            padding: 10px; border-radius: 10px; font-size: 11px; backdrop-filter: blur(5px);
-            transition: 0.2s;
+            background: rgba(0,0,0,0.7); border: 1px solid var(--border); color: white; 
+            width: 50px; height: 50px; border-radius: 12px; font-size: 18px; backdrop-filter: blur(8px);
+            display: flex; align-items: center; justify-content: center; transition: 0.2s;
         }
-        .side-menu button:active { transform: scale(0.9); border-color: var(--neon); }
+        .side-menu button:active { transform: scale(0.9); border-color: var(--neon); box-shadow: 0 0 10px var(--neon); }
 
         /* --- Energy & Tabs --- */
         .energy-section { padding: 15px; background: rgba(0,0,0,0.5); border-top: 1px solid var(--border); }
-        .e-labels { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 6px; font-weight: bold; }
-        .e-track { height: 8px; background: #111; border-radius: 4px; overflow: hidden; border: 1px solid #222; }
-        #e-fill { height: 100%; background: linear-gradient(90deg, #008888, var(--neon)); width: 100%; transition: 0.3s; }
-        .energy-error { animation: shake 0.2s ease-in-out 2; border: 1px solid red; }
+        .e-labels { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 8px; font-weight: bold; color: var(--neon); }
+        .e-track { height: 10px; background: #0a1111; border-radius: 5px; overflow: hidden; border: 1px solid #1a2222; }
+        #e-fill { height: 100%; background: linear-gradient(90deg, #004444, var(--neon)); width: 100%; transition: 0.2s; }
+        .energy-error { animation: shake 0.2s ease-in-out 2; border-color: #ff3333 !important; }
 
         .bottom-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 15px; }
         .bottom-tabs button { 
             background: var(--panel); border: 1px solid var(--border); color: white; 
-            padding: 12px 5px; border-radius: 12px; font-size: 11px; font-weight: bold;
-            transition: 0.2s;
+            padding: 12px 5px; border-radius: 14px; font-size: 10px; font-weight: bold;
+            display: flex; flex-direction: column; align-items: center; gap: 4px; transition: 0.2s;
         }
         .bottom-tabs button:active { background: var(--border); transform: translateY(-2px); }
 
         /* --- Modals --- */
-        .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: flex-end; z-index: 1000; backdrop-filter: blur(10px); }
+        .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: none; align-items: flex-end; z-index: 1000; backdrop-filter: blur(15px); }
         .modal-bg.active { display: flex; }
         .modal-box { 
-            width: 100%; background: #0a0f0f; border-top: 2px solid var(--neon); 
-            border-radius: 25px 25px 0 0; padding: 25px; max-height: 80vh; overflow-y: auto;
+            width: 100%; background: #070c0c; border-top: 3px solid var(--neon); 
+            border-radius: 30px 30px 0 0; padding: 25px; max-height: 85vh; overflow-y: auto;
+            box-shadow: 0 -10px 30px rgba(0,255,255,0.1);
         }
-        .handle { width: 40px; height: 4px; background: #333; border-radius: 2px; margin: -10px auto 20px; }
-        .m-close { width: 100%; margin-top: 20px; padding: 15px; background: #111; border: 1px solid #333; color: #555; border-radius: 12px; font-family: monospace; }
+        .handle { width: 40px; height: 4px; background: #222; border-radius: 2px; margin: -10px auto 20px; }
+        .m-close { width: 100%; margin-top: 20px; padding: 15px; background: #111; border: 1px solid #222; color: #444; border-radius: 12px; font-family: monospace; font-size: 12px; }
         
-        .task-item { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        .task-btn { background: var(--neon); color: black; border: none; padding: 12px 20px; border-radius: 10px; font-weight: bold; cursor: pointer; }
-        .task-btn:disabled { background: #222; color: #555; }
+        .task-item { background: var(--panel); border: 1px solid var(--border); border-radius: 15px; padding: 18px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+        .task-item b { color: var(--neon); font-size: 16px; }
+        .task-btn { background: var(--neon); color: black; border: none; padding: 12px 20px; border-radius: 12px; font-weight: 900; cursor: pointer; text-transform: uppercase; font-size: 12px; }
+        .task-btn:disabled { background: #1a2222; color: #444; }
 
-        .ai-terminal { background: #000; border: 1px solid var(--neon); padding: 15px; border-radius: 10px; font-family: monospace; color: var(--neon); margin: 10px 0; min-height: 100px; white-space: pre-wrap; font-size: 12px; }
-        .pop { position: absolute; color: var(--neon); font-weight: bold; font-size: 28px; pointer-events: none; animation: moveUp 0.6s ease-out forwards; z-index: 999; text-shadow: 0 0 10px rgba(0,255,255,0.8); }
-        .ref-box { background: #000; border: 1px dashed var(--neon); padding: 12px; border-radius: 10px; margin: 10px 0; word-break: break-all; font-family: monospace; font-size: 12px; color: var(--neon); }
+        .ai-terminal { background: #000; border: 1px solid var(--neon); padding: 15px; border-radius: 10px; font-family: monospace; color: var(--neon); margin: 15px 0; min-height: 120px; white-space: pre-wrap; font-size: 13px; line-height: 1.4; box-shadow: inset 0 0 10px var(--neon); }
+        .pop { position: absolute; color: var(--neon); font-weight: 900; font-size: 32px; pointer-events: none; animation: moveUp 0.7s ease-out forwards; z-index: 999; text-shadow: 0 0 15px var(--neon); font-family: monospace; }
+        .ref-box { background: #000; border: 1px dashed var(--neon); padding: 15px; border-radius: 12px; margin: 15px 0; word-break: break-all; font-family: monospace; font-size: 12px; color: var(--neon); text-align: center; }
     </style>
 </head>
 <body>
 
     <div id="loader">
-        <div class="l-content">
-            <div class="ring"></div>
-            <img src="images/logo.png" class="l-logo" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'">
-        </div>
+        <div class="ring"></div>
+        <img src="images/logo.png" class="l-logo" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'">
         <div class="l-status">INITIALIZING NEURAL LINK...</div>
         <div class="l-pct" id="pct">0%</div>
         <div class="l-bar"><div id="bar"></div></div>
@@ -129,15 +130,15 @@
         <header>
             <div class="u-avatar"><img id="my-avatar" src="images/logo.png" onerror="this.src='images/logo.png'"></div>
             <div class="u-info">
-                <b id="my-name">AGENT</b><br>
-                <small id="ui-rank">SCANNING...</small>
+                <b id="my-name">AGENT</b>
+                <small id="ui-rank">SCANNING SYSTEM...</small>
             </div>
             <div class="u-lvl" id="my-lvl">LVL 1</div>
         </header>
 
         <div class="stats-row">
-            <div class="s-box"><small>POWER</small><b id="ui-tap">+1</b></div>
-            <div class="s-box"><small>MINING / HR</small><b id="ui-profit">0</b></div>
+            <div class="s-box"><small>Tap Power</small><b id="ui-tap">+1</b></div>
+            <div class="s-box"><small>Profit / Hour</small><b id="ui-profit">0</b></div>
         </div>
 
         <div class="balance-area">
@@ -150,24 +151,24 @@
                 <img src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'">
             </div>
             <div class="side-menu">
-                <button onclick="ui.openM('ai')">🤖 AI</button>
-                <button id="wallet-btn-label" onclick="ui.openM('wallet')">👛 WALLET</button>
-                <button onclick="ui.openM('friends')">🤝 REF</button>
-                <button onclick="ui.openM('bonus')">🎁 DAILY</button>
+                <button onclick="ui.openM('ai')">🤖</button>
+                <button id="wallet-btn-label" onclick="ui.openM('wallet')">👛</button>
+                <button onclick="ui.openM('friends')">🤝</button>
+                <button onclick="ui.openM('bonus')">🎁</button>
             </div>
         </main>
 
         <footer class="energy-section">
             <div class="e-labels">
-                <span>SYSTEM STABILITY</span>
+                <span>STABILITY</span>
                 <span id="ui-energy">1000/1000</span>
             </div>
             <div class="e-track"><div id="e-fill"></div></div>
             <nav class="bottom-tabs">
-                <button onclick="ui.openM('boost')">🚀 BOOST</button>
-                <button onclick="ui.openM('mine')">⛏️ MINE</button>
-                <button onclick="ui.openM('tasks')">📋 TASKS</button>
-                <button onclick="ui.openM('top')">🏆 TOP</button>
+                <button onclick="ui.openM('boost')">🚀<span>BOOST</span></button>
+                <button onclick="ui.openM('mine')">⛏️<span>MINE</span></button>
+                <button onclick="ui.openM('tasks')">📋<span>TASKS</span></button>
+                <button onclick="ui.openM('top')">🏆<span>TOP</span></button>
             </nav>
         </footer>
     </div>
@@ -198,30 +199,30 @@
 
             async init() {
                 ui.startLoader();
-                const u = tg.initDataUnsafe.user || { id: 12345, first_name: 'Tester', username: 'tester' };
+                const u = tg.initDataUnsafe.user || { id: 0, first_name: 'Local', username: 'user' };
                 this.data.id = String(u.id);
 
-                // TON Connect
+                // Initialize TON Connect
                 try {
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                        manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json',
+                        manifestUrl: window.location.origin + '/tonconnect-manifest.json',
                         buttonRootId: null
                     });
                     tonConnectUI.onStatusChange(w => {
                         this.data.wallet = w ? w.account.address : null;
-                        document.getElementById('wallet-btn-label').innerText = w ? "👛 " + w.account.address.slice(0,4) + ".." : "👛 WALLET";
+                        document.getElementById('wallet-btn-label').innerText = w ? "✅" : "👛";
                         this.save();
                     });
-                } catch(e) { console.error("TON Init error", e); }
+                } catch(e) { console.error("TON Error:", e); }
 
-                // Load Data from Server
+                // Fetch Data
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${u.username || u.first_name}`);
                     if (r.ok) {
                         const db = await r.json();
                         this.data = { ...this.data, ...db };
                     }
-                } catch(e) { console.warn("Load failed, using local"); }
+                } catch(e) { console.warn("Using local cache"); }
 
                 document.getElementById('my-name').innerText = (u.username || u.first_name).toUpperCase();
                 if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
@@ -230,16 +231,19 @@
                 this.startLoops();
                 ui.render();
 
-                document.getElementById('main-target').addEventListener('touchstart', (e) => {
+                // Multi-touch Support
+                const target = document.getElementById('main-target');
+                target.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     this.tap(e);
-                });
+                }, {passive: false});
             },
 
             getCost(type) {
                 const lvl = this.data[type + '_lvl'] || 1;
-                const costs = { tap: 500 * Math.pow(1.8, lvl-1), energy: 400 * Math.pow(1.5, lvl-1), mine: 1200 * Math.pow(1.7, lvl-1) };
-                return Math.floor(costs[type]);
+                const base = { tap: 500, energy: 400, mine: 1200 };
+                const mult = { tap: 1.85, energy: 1.6, mine: 1.75 };
+                return Math.floor(base[type] * Math.pow(mult[type], lvl-1));
             },
 
             tap(e) {
@@ -251,12 +255,13 @@
                     }
                     return;
                 }
-                const touches = e.changedTouches.length;
-                for(let i=0; i<touches; i++) {
+
+                const touches = e.changedTouches;
+                for(let i=0; i<touches.length; i++) {
                     if(this.data.energy >= 1) {
                         this.data.balance += this.data.tap;
                         this.data.energy -= 1;
-                        ui.pop(e.changedTouches[i], this.data.tap);
+                        ui.pop(touches[i], this.data.tap);
                     }
                 }
                 tg.HapticFeedback.impactOccurred('medium');
@@ -267,15 +272,16 @@
                 const cost = this.getCost(type);
                 if(this.data.balance >= cost) {
                     this.data.balance -= cost;
-                    if(type === 'tap') { this.data.tap_lvl++; this.data.tap++; }
+                    if(type === 'tap') { this.data.tap_lvl++; this.data.tap += 1; }
                     if(type === 'energy') { this.data.energy_lvl++; this.data.max_energy += 500; this.data.energy = this.data.max_energy; }
-                    if(type === 'mine') { this.data.mine_lvl++; this.data.profit += 150; }
+                    if(type === 'mine') { this.data.mine_lvl++; this.data.profit += 250; }
+                    
                     ui.render();
                     tg.HapticFeedback.notificationOccurred('success');
                     await this.save();
                     ui.openM(type === 'mine' ? 'mine' : 'boost');
                 } else {
-                    tg.showAlert("НЕДОСТАТОЧНО NP");
+                    tg.showAlert("INSUFFICIENT NP ENERGY");
                 }
             },
 
@@ -293,10 +299,15 @@
 
             startLoops() {
                 setInterval(() => {
-                    if(this.data.energy < this.data.max_energy) this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1.2);
-                    if(this.data.profit > 0) this.data.balance += (this.data.profit / 3600);
+                    if(this.data.energy < this.data.max_energy) {
+                        this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1.5);
+                    }
+                    if(this.data.profit > 0) {
+                        this.data.balance += (this.data.profit / 3600);
+                    }
                     ui.render();
                 }, 1000);
+                
                 setInterval(() => this.save(), 15000);
             }
         };
@@ -305,78 +316,108 @@
             startLoader() {
                 let p = 0;
                 const i = setInterval(() => {
-                    p += 4;
-                    document.getElementById('pct').innerText = p+'%';
-                    document.getElementById('bar').style.width = p+'%';
-                    if(p>=100) { clearInterval(i); document.getElementById('loader').style.display='none'; document.getElementById('app').style.display='flex'; }
-                }, 50);
+                    p += Math.floor(Math.random() * 5) + 2;
+                    if(p > 100) p = 100;
+                    document.getElementById('pct').innerText = p + '%';
+                    document.getElementById('bar').style.width = p + '%';
+                    if(p >= 100) { 
+                        clearInterval(i); 
+                        setTimeout(() => {
+                            document.getElementById('loader').style.opacity = '0';
+                            setTimeout(() => {
+                                document.getElementById('loader').style.display = 'none';
+                                document.getElementById('app').style.display = 'flex';
+                            }, 500);
+                        }, 300);
+                    }
+                }, 80);
             },
 
             render() {
                 const d = game.data;
                 document.getElementById('ui-balance').innerText = Math.floor(d.balance).toLocaleString();
-                document.getElementById('ui-energy').innerText = `${Math.floor(d.energy)}/${d.max_energy}`;
-                document.getElementById('e-fill').style.width = (d.energy/d.max_energy*100)+'%';
+                document.getElementById('ui-energy').innerText = `${Math.floor(d.energy)} / ${d.max_energy}`;
+                document.getElementById('e-fill').style.width = (d.energy / d.max_energy * 100) + '%';
                 document.getElementById('ui-tap').innerText = `+${d.tap}`;
                 document.getElementById('ui-profit').innerText = Math.floor(d.profit).toLocaleString();
-                document.getElementById('ui-rank').innerText = d.balance < 50000 ? "NODE AGENT" : "CYBER MANTIS";
-                document.getElementById('my-lvl').innerText = `LVL ${Math.floor(d.balance / 30000) + 1}`;
+                
+                let rank = "RECRUIT";
+                if(d.balance > 50000) rank = "TECHNO ACADEMY";
+                if(d.balance > 250000) rank = "CYBER MANTIS";
+                if(d.balance > 1000000) rank = "NEURAL OVERLORD";
+                document.getElementById('ui-rank').innerText = rank;
+                document.getElementById('my-lvl').innerText = `LVL ${Math.floor(Math.sqrt(d.balance / 5000)) + 1}`;
             },
 
             pop(t, p) {
                 const div = document.createElement('div');
-                div.className = 'pop'; div.innerText = `+${p}`;
-                div.style.left = t.clientX + 'px'; div.style.top = t.clientY + 'px';
+                div.className = 'pop';
+                div.innerText = `+${p}`;
+                div.style.left = (t.clientX - 20) + 'px';
+                div.style.top = (t.clientY - 40) + 'px';
                 document.body.appendChild(div);
-                setTimeout(() => div.remove(), 600);
+                setTimeout(() => div.remove(), 650);
             },
 
             async openM(type) {
                 const b = document.getElementById('m-body');
-                document.getElementById('modal').classList.add('active');
-                b.innerHTML = `<p style="text-align:center; color:cyan;">CONNECTING...</p>`;
+                const m = document.getElementById('modal');
+                m.classList.add('active');
+                b.innerHTML = `<div style="text-align:center; padding:40px; color:cyan; font-family:monospace;">ACCESSING DATA...</div>`;
                 
-                if(type === 'boost') {
-                    b.innerHTML = `<h2>🚀 UPGRADES</h2>
-                    <div class="task-item" onclick="game.upgrade('tap')"><div><b>Multitap</b><br><small>Level ${game.data.tap_lvl}</small></div><b>${game.getCost('tap')} NP</b></div>
-                    <div class="task-item" onclick="game.upgrade('energy')"><div><b>Energy Cap</b><br><small>Level ${game.data.energy_lvl}</small></div><b>${game.getCost('energy')} NP</b></div>`;
-                } else if(type === 'mine') {
-                    b.innerHTML = `<h2>⛏️ MINING</h2>
-                    <div class="task-item" onclick="game.upgrade('mine')"><div><b>Neural Node</b><br><small>Level ${game.data.mine_lvl}</small></div><b>${game.getCost('mine')} NP</b></div>`;
-                } else if(type === 'ai') {
-                    b.innerHTML = `<h2>🤖 AI ADVISOR</h2><div class="ai-terminal" id="ai-res">Standby...</div><button class="task-btn" style="width:100%" onclick="ui.askAI()">ANALYZE</button>`;
-                } else if(type === 'friends') {
-                    const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
-                    b.innerHTML = `<h2>🤝 REFERRALS</h2><div class="ref-box">${link}</div><button class="task-btn" style="width:100%" onclick="ui.copyRef('${link}')">COPY LINK</button>`;
-                } else if(type === 'wallet') {
-                    b.innerHTML = `<h2>👛 WALLET</h2><div id="ton-btn" style="display:flex; justify-content:center; padding:20px;"></div>`;
-                    setTimeout(() => tonConnectUI.renderButton({ container: document.getElementById('ton-btn') }), 100);
-                } else if(type === 'tasks') {
-                    b.innerHTML = `<h2>📋 MISSIONS</h2>
-                    <div class="task-item"><span>Join Telegram</span><button class="task-btn" onclick="tg.openTelegramLink('https://t.me/neural_pulse')">+10k</button></div>`;
-                } else if(type === 'top') {
-                    b.innerHTML = `<h2>🏆 TOP AGENTS</h2><p style="color:gray; text-align:center;">Coming soon...</p>`;
-                } else if(type === 'bonus') {
-                    b.innerHTML = `<h2>🎁 DAILY</h2><button class="task-btn" style="width:100%; height:60px;" onclick="ui.claimDaily()">CLAIM 5,000 NP</button>`;
-                }
+                setTimeout(() => {
+                    if(type === 'boost') {
+                        b.innerHTML = `<h2>🚀 UPGRADES</h2><br>
+                        <div class="task-item" onclick="game.upgrade('tap')"><div><b>Multitap</b><br><small>Level ${game.data.tap_lvl}</small></div><b>${game.getCost('tap')} NP</b></div>
+                        <div class="task-item" onclick="game.upgrade('energy')"><div><b>Energy Cap</b><br><small>Level ${game.data.energy_lvl}</small></div><b>${game.getCost('energy')} NP</b></div>`;
+                    } else if(type === 'mine') {
+                        b.innerHTML = `<h2>⛏️ NEURAL MINING</h2><br>
+                        <div class="task-item" onclick="game.upgrade('mine')"><div><b>Neural Node</b><br><small>Level ${game.data.mine_lvl}</small><br><small style="color:cyan">+250 NP/hr</small></div><b>${game.getCost('mine')} NP</b></div>`;
+                    } else if(type === 'ai') {
+                        b.innerHTML = `<h2>🤖 AI ADVISOR</h2><div class="ai-terminal" id="ai-res">System Standby. Awaiting analysis...</div><button class="task-btn" style="width:100%" onclick="ui.askAI()">RUN NEURAL SCAN</button>`;
+                    } else if(type === 'friends') {
+                        const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
+                        b.innerHTML = `<h2>🤝 REFERRALS</h2><p style="font-size:12px; color:#888;">Invite friends and get 10% of their earnings.</p><div class="ref-box">${link}</div><button class="task-btn" style="width:100%" onclick="ui.copyRef('${link}')">COPY LINK</button>`;
+                    } else if(type === 'wallet') {
+                        b.innerHTML = `<h2>👛 TON WALLET</h2><p style="text-align:center; font-size:12px; color:#888; margin-bottom:15px;">Connect your wallet for future airdrops</p><div id="ton-btn" style="display:flex; justify-content:center;"></div>`;
+                        setTimeout(() => tonConnectUI.renderButton({ container: document.getElementById('ton-btn'), width: '100%' }), 50);
+                    } else if(type === 'tasks') {
+                        b.innerHTML = `<h2>📋 MISSIONS</h2><br>
+                        <div class="task-item"><span>Join Community</span><button class="task-btn" onclick="tg.openTelegramLink('https://t.me/neural_pulse')">+10,000</button></div>
+                        <div class="task-item"><span>Follow X</span><button class="task-btn" onclick="tg.openLink('https://x.com/')">+5,000</button></div>`;
+                    } else if(type === 'top') {
+                        b.innerHTML = `<h2>🏆 GLOBAL TOP</h2><br><p style="color:#555; text-align:center; font-family:monospace;">RANKING DATABASE OFFLINE...<br>COMING SOON</p>`;
+                    } else if(type === 'bonus') {
+                        b.innerHTML = `<h2>🎁 DAILY REWARD</h2><br><p style="text-align:center; margin-bottom:15px;">Claim your daily maintenance bonus</p><button class="task-btn" style="width:100%; height:60px;" onclick="ui.claimDaily()">CLAIM 5,000 NP</button>`;
+                    }
+                }, 100);
             },
 
             async askAI() {
                 const res = document.getElementById('ai-res');
-                res.innerText = "Processing...";
+                res.innerText = "> Initializing scan...\n> Analyzing pulse pattern...\n> Accessing mainframe...";
                 try {
-                    const r = await fetch('/api/ai-advice', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(game.data) });
+                    const r = await fetch('/api/ai-advice', { 
+                        method: 'POST', 
+                        headers: {'Content-Type': 'application/json'}, 
+                        body: JSON.stringify(game.data) 
+                    });
                     const j = await r.json();
-                    res.innerText = j.text || "Pulse stable. Keep mining.";
-                } catch(e) { res.innerText = "Offline."; }
+                    res.innerText = j.text || "Pulse stable. Efficiency at 98.4%. Continue mining, Agent.";
+                } catch(e) { res.innerText = "Error: Connection lost. Try again later."; }
             },
 
-            copyRef(url) { navigator.clipboard.writeText(url).then(() => tg.showAlert('Copied!')); },
+            copyRef(url) { 
+                navigator.clipboard.writeText(url).then(() => {
+                    tg.showAlert('Neural Link Copied!');
+                    tg.HapticFeedback.notificationOccurred('success');
+                }); 
+            },
 
             claimDaily() {
                 game.data.balance += 5000;
                 ui.render(); ui.closeM();
-                tg.showAlert("Reward Claimed!");
+                tg.showAlert("Maintenance bonus 5,000 NP credited!");
                 game.save();
             },
 
