@@ -72,7 +72,7 @@
 
         .energy-error { animation: shake 0.2s ease-in-out 2; border-color: red !important; }
 
-        /* ПРАВКА ДЛЯ КОННЕКТА: Вывод окна TON поверх всех */
+        /* Фикс для TON UI */
         #tc-widget-root, .tc-root, #ton-connect-ui-container {
             z-index: 10000 !important;
             position: relative;
@@ -121,7 +121,7 @@
 
         <main class="game-core">
             <div class="glow"></div>
-            <div class="brain-target" id="main-target" ontouchstart="game.tap(event)">
+            <div class="brain-target" id="main-target">
                 <img src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'">
             </div>
             <div class="side-menu">
@@ -176,11 +176,10 @@
                 const u = tg.initDataUnsafe.user || { id: 1774360651, first_name: 'Dev_Agent', username: 'neural_dev' };
                 this.data.id = String(u.id);
 
+                // Инициализация TON SDK с проверкой
                 const initTonWithRetry = (retries = 15) => {
                     try {
-                        // Пытаемся найти SDK в глобальном пространстве
                         const TonSDK = window.TonConnectUI?.TonConnectUI || window.TonConnectUI;
-                        
                         if (TonSDK && typeof TonSDK === 'function') {
                             tonConnectUI = new TonSDK({
                                 manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json'
@@ -204,6 +203,10 @@
                 };
 
                 initTonWithRetry();
+
+                // Привязка события клика
+                const target = document.getElementById('main-target');
+                target.addEventListener('touchstart', (e) => this.tap(e), { passive: false });
 
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
