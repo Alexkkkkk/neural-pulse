@@ -28,7 +28,7 @@ const SparkGraph = memo(({ data, color, height = 45 }) => {
 
   const linePath = `M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`;
   const areaPath = `${linePath} L 100,${height} L 0,${height} Z`;
-  const gradId = `grad-${color.replace('#', '')}-${Math.random().toString(36).substr(2, 9)}`;
+  const gradId = `grad-${color.replace('#', '')}`;
 
   return (
     <svg width="100%" height={height} style={{ marginTop: '10px', overflow: 'visible', display: 'block' }}>
@@ -76,22 +76,16 @@ const Dashboard = (props) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // Реф для хранения экземпляра UI, чтобы избежать дублей
   const tonUiRef = useRef(null);
 
-  const [wallet, setWallet] = useState({ 
-    connected: false, 
-    address: null, 
-    balance: 0, 
-    shortAddress: 'OFFLINE' 
-  });
-
+  const [wallet, setWallet] = useState({ connected: false, address: null, balance: 0, shortAddress: 'OFFLINE' });
   const [users] = useState(initialData?.usersList || []);
-  const [stats, setStats] = useState({ cpu: 28, ram: 34, online: 0, ton: 0, latency: 24, liquidity: 0 });
+  
+  // Состояния для метрик
+  const [stats, setStats] = useState({ cpu: 0, ram: 0, online: 0, latency: 0, liquidity: 0 });
   const [history, setHistory] = useState({
-    cpu: Array(15).fill(28), ram: Array(15).fill(34), stability: Array(15).fill(100),
-    online: Array(15).fill(0), ton: Array(15).fill(0), lat: Array(15).fill(24), liq: Array(15).fill(0)
+    cpu: Array(15).fill(0), ram: Array(15).fill(0), stability: Array(15).fill(100),
+    online: Array(15).fill(0), ton: Array(15).fill(0), lat: Array(15).fill(0), liq: Array(15).fill(0)
   });
 
   const filteredUsers = useMemo(() => {
@@ -101,34 +95,27 @@ const Dashboard = (props) => {
     );
   }, [users, searchTerm]);
 
-  const updateSystemData = async (newData = {}) => {
-    let freshBalance = wallet.balance;
-    if (wallet.connected && wallet.address) {
-      try {
-        const res = await fetch(`https://tonapi.io/v2/accounts/${wallet.address}`);
-        const tonData = await res.json();
-        freshBalance = (tonData.balance || 0) / 1e9;
-        setWallet(prev => ({ ...prev, balance: freshBalance }));
-      } catch (e) { console.warn("Balance sync failed"); }
-    }
+  // Функция для сдвига истории (реальное время)
+  const updateHistoryArray = (arr, newVal) => [...arr.slice(1), newVal];
 
+  const processStreamUpdate = (newData) => {
     setStats(prev => ({
       ...prev,
-      cpu: newData.cpu ?? (prev.cpu + (Math.random() * 2 - 1)),
-      ram: newData.ram ?? (prev.ram + (Math.random() * 1 - 0.5)),
-      online: newData.online ?? prev.online,
-      latency: newData.latency ?? (prev.latency + (Math.random() * 4 - 2)),
-      liquidity: newData.liquidity ?? prev.liquidity
+      cpu: newData.core_load ?? prev.cpu,
+      ram: newData.sync_memory ?? prev.ram,
+      online: newData.active_agents ?? prev.online,
+      latency: newData.network_latency ?? prev.latency,
+      liquidity: newData.pulse_liquidity ?? prev.liquidity
     }));
 
     setHistory(p => ({
-      cpu: [...p.cpu.slice(1), newData.cpu ?? (p.cpu[p.cpu.length-1] + (Math.random() * 2 - 1))],
-      ram: [...p.ram.slice(1), newData.ram ?? (p.ram[p.ram.length-1] + (Math.random() * 1 - 0.5))],
-      stability: [...p.stability.slice(1), Math.max(0, 100 - ((newData.latency ?? p.lat[p.lat.length-1]) / 5))],
-      online: [...p.online.slice(1), newData.online ?? p.online[p.online.length-1]],
-      ton: [...p.ton.slice(1), freshBalance],
-      lat: [...p.lat.slice(1), newData.latency ?? (p.lat[p.lat.length-1] + (Math.random() * 4 - 2))],
-      liq: [...p.liq.slice(1), newData.liquidity ?? p.liq[p.liq.length-1]]
+      cpu: updateHistoryArray(p.cpu, newData.core_load ?? p.cpu[p.cpu.length-1]),
+      ram: updateHistoryArray(p.ram, newData.sync_memory ?? p.ram[p.ram.length-1]),
+      stability: updateHistoryArray(p.stability, Math.max(0, 100 - ((newData.network_latency || 20) / 5))),
+      online: updateHistoryArray(p.online, newData.active_agents ?? p.online[p.online.length-1]),
+      ton: updateHistoryArray(p.ton, wallet.balance),
+      lat: updateHistoryArray(p.lat, newData.network_latency ?? p.lat[p.lat.length-1]),
+      liq: updateHistoryArray(p.liq, newData.pulse_liquidity ?? p.liq[p.liq.length-1])
     }));
     setLastUpdate(new Date());
   };
@@ -136,7 +123,7 @@ const Dashboard = (props) => {
   useEffect(() => {
     let unsubscribe = () => {};
 
-    // 1. Инициализация TON Connect с защитой
+    // 1. Инициализация TON Connect
     const initTon = () => {
       if (window.TON_CONNECT_UI && !tonUiRef.current) {
         try {
@@ -144,7 +131,6 @@ const Dashboard = (props) => {
             manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json',
             buttonRootId: 'ton-btn'
           });
-
           unsubscribe = tonUiRef.current.onStatusChange(w => {
             if (w) {
               setWallet({
@@ -158,47 +144,34 @@ const Dashboard = (props) => {
             }
           });
           return true;
-        } catch (err) {
-          console.error("TON Init Error:", err);
-        }
+        } catch (err) { console.error("TON Init Error:", err); }
       }
       return false;
     };
 
-    // Пробуем запустить, если не вышло — ждем появления объекта в окне
     if (!initTon()) {
-      const timer = setInterval(() => {
-        if (initTon()) clearInterval(timer);
-      }, 500);
-      setTimeout(() => clearInterval(timer), 10000); // Тайм-аут 10 сек
+      const timer = setInterval(() => { if (initTon()) clearInterval(timer); }, 500);
+      setTimeout(() => clearInterval(timer), 10000);
     }
 
-    // 2. EventSource
+    // 2. Подключение к EventSource (Real-time Stream)
     const eventSource = new EventSource('/api/admin/stream');
     eventSource.onmessage = (e) => {
       try {
         const update = JSON.parse(e.data);
         if (update.event_type === 'SYSTEM') {
-           updateSystemData({
-             cpu: update.core_load,
-             ram: update.sync_memory,
-             online: update.active_agents,
-             latency: update.network_latency,
-             liquidity: update.pulse_liquidity
-           });
+          processStreamUpdate(update);
         }
-      } catch (err) { console.error("Stream error", err); }
+      } catch (err) { console.error("Stream sync error", err); }
     };
 
-    const interval = setInterval(() => updateSystemData({}), 10000);
     setTimeout(() => setIsLoaded(true), 800);
 
     return () => {
       eventSource.close();
-      clearInterval(interval);
       unsubscribe();
     };
-  }, []); // Пустой массив, чтобы не перезапускать эффект
+  }, [wallet.address]);
 
   if (!isLoaded) return <div className="loading">CONNECTING_TO_NEURAL_PULSE_NODE...</div>;
 
@@ -233,7 +206,7 @@ const Dashboard = (props) => {
           <h1>NEURAL_PULSE V9.8</h1>
           <div style={{ fontFamily: 'Roboto Mono', fontSize: '9px', color: wallet.connected ? CYBER.ton : CYBER.success, marginTop: '5px' }}>
             <span className="pulse-dot"></span>
-            {wallet.connected ? `UPLINK_STABLE // ${wallet.shortAddress}` : 'SYSTEM_OPERATIONAL // SYNC: 10S'}
+            {wallet.connected ? `UPLINK_STABLE // ${wallet.shortAddress}` : 'SYSTEM_OPERATIONAL // REALTIME_SYNC'}
           </div>
         </div>
         <div id="ton-btn" style={{ transform: 'scale(0.9)', transformOrigin: 'right' }}></div>
