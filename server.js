@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import dayjs from 'dayjs';
 import EventEmitter from 'events'; 
 import os from 'os';
 import crypto from 'crypto';
@@ -17,15 +16,10 @@ import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
 import { ComponentLoader } from 'adminjs';
 
-// Ядро данных (модели и сессии)
-import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB, Op } from './db.js';
+// Ядро данных
+import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB } from './db.js';
 
 const logger = pino({ transport: { target: 'pino-pretty' } });
-
-// Защита от падений
-process.on('uncaughtException', (err) => logger.fatal({ err }, '☢️ CRITICAL VOID'));
-process.on('unhandledRejection', (reason) => logger.error({ reason }, '🛰️ UNHANDLED REJECTION'));
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -39,26 +33,30 @@ class GodCore extends EventEmitter {
         this.setMaxListeners(0);
     }
     
-    // Метод для генерации пакета данных для фронтенда
     async generatePulse() {
-        const memory = process.memoryUsage();
-        const [gs] = await Promise.all([GlobalStats.findByPk(1)]);
-        
-        return {
-            event_type: 'SYSTEM',
-            core_load: (os.loadavg()[0] * 10).toFixed(1), // Нагрузка в %
-            sync_memory: ((memory.rss / os.totalmem()) * 100).toFixed(1), // RAM в %
-            active_agents: gs?.total_users || 0,
-            network_latency: Math.random() * 30 + 10, // Имитация задержки сети
-            pulse_liquidity: gs?.total_balance || 0,
-            timestamp: new Date().toISOString()
-        };
+        try {
+            const memory = process.memoryUsage();
+            const gs = await GlobalStats.findByPk(1);
+            
+            return {
+                event_type: 'SYSTEM',
+                core_load: parseFloat((os.loadavg()[0] * 10).toFixed(1)),
+                sync_memory: parseFloat(((memory.rss / os.totalmem()) * 100).toFixed(1)),
+                active_agents: gs?.total_users || 0,
+                network_latency: Math.floor(Math.random() * 20 + 10),
+                pulse_liquidity: gs?.total_balance || 0,
+                timestamp: new Date().toISOString()
+            };
+        } catch (err) {
+            logger.error('Pulse generation failed');
+            return null;
+        }
     }
 }
 const core = new GodCore();
 
 const neuralLog = (msg, type = 'INFO') => {
-    const icons = { INFO: '💎', WARN: '⚠️', ERROR: '☢️', SUCCESS: '🔋' };
+    const icons = { INFO: '💎', WARN: '⚠️', ERROR: '☢️', SUCCESS: '🔋', CORE: '🔮' };
     logger.info(`${icons[type] || '▪️'} ${msg}`);
 };
 
@@ -82,10 +80,12 @@ const executeMassiveCommit = async () => {
     updateBuffer.clear();
     
     try {
-        // Оптимизированное обновление балансов через Bulk Update
-        for (const u of snapshot) {
-            await User.update({ balance: u.balance }, { where: { id: u.id } });
-        }
+        await sequelize.transaction(async (t) => {
+            for (const u of snapshot) {
+                await User.update({ balance: u.balance }, { where: { id: u.id }, transaction: t });
+            }
+        });
+        neuralLog(`Delta-Sync: ${snapshot.length} units committed.`, 'SUCCESS');
     } catch (e) {
         neuralLog(`🚨 SYNC ERROR: ${e.message}`, 'ERROR');
     }
@@ -97,7 +97,7 @@ setInterval(executeMassiveCommit, 5000);
 async function setupSupremeInterface(app) {
     const adminJs = new AdminJS({
         resources: [
-            { resource: User, options: { navigation: { name: 'DATABASE', icon: 'User' }, listProperties: ['id', 'username', 'balance', 'updated_at'] } },
+            { resource: User, options: { navigation: { name: 'DATABASE', icon: 'User' } } },
             { resource: Task, options: { navigation: { name: 'CONTENT', icon: 'List' } } },
             { resource: Stats, options: { navigation: { name: 'ANALYTICS', icon: 'Activity' } } },
             { resource: GlobalStats, options: { navigation: { name: 'SYSTEM', icon: 'Settings' } } }
@@ -129,22 +129,24 @@ async function setupSupremeInterface(app) {
     app.use(adminJs.options.rootPath, adminRouter);
     await adminJs.initialize();
 
-    // --- SSE STREAM: Реальное время для React ---
+    // --- SSE STREAM: Real-time Uplink ---
     app.get('/api/admin/stream', (req, res) => {
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
         res.flushHeaders();
 
+        // Пишем пустой комментарий каждые 15 сек для поддержания соединения
+        const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 15000);
+
         const sendData = (data) => {
             res.write(`data: ${JSON.stringify(data)}\n\n`);
         };
 
-        // Подписываемся на события ядра
         core.on('broadcast', sendData);
 
-        // Удаляем слушателя при отключении клиента
         req.on('close', () => {
+            clearInterval(keepAlive);
             core.removeListener('broadcast', sendData);
             res.end();
         });
@@ -170,7 +172,7 @@ function setupBot(botInstance) {
         if (created) await GlobalStats.increment('total_users', { where: { id: 1 } });
 
         ctx.replyWithHTML(
-            `<b>── [ NEURAL OS : OMNI ] ──</b>\n\nAgent: <code>${user.username}</code>\nSystem: <b>V12.0</b>`,
+            `<b>── [ NEURAL OS : OMNI ] ──</b>\n\nAgent: <code>${user.username}</code>\nSystem: <b>V12.5</b>\nStatus: <b>READY</b>`,
             Markup.inlineKeyboard([[Markup.button.webApp("⚡ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)]])
         );
     });
@@ -194,19 +196,25 @@ async function startSupreme() {
         await setupSupremeInterface(app);
         setupBot(bot);
 
-        // Цикл пульсации данных (каждые 3 секунды)
+        // Реальный цикл пульсации
         setInterval(async () => {
             const pulse = await core.generatePulse();
-            core.emit('broadcast', pulse);
+            if (pulse) core.emit('broadcast', pulse);
         }, 3000);
 
-        // Webhook для Telegram
+        // Webhook configuration
         app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => bot.handleUpdate(req.body, res));
         await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`);
 
-        app.listen(PORT, '0.0.0.0', () => {
+        const server = app.listen(PORT, '0.0.0.0', () => {
             neuralLog(`👑 SYSTEM ONLINE | PORT: ${PORT}`, 'SUCCESS');
         });
+
+        // Защита при выключении
+        process.on('SIGTERM', () => {
+            server.close(() => neuralLog('Server terminated.', 'WARN'));
+        });
+
     } catch (err) {
         neuralLog(`🚨 BOOT FAIL: ${err.message}`, 'ERROR');
     }
