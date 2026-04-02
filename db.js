@@ -5,7 +5,7 @@ import os from 'os';
 import cluster from 'cluster'; 
 
 // --- 🌐 CONFIG ---
-// Подключение к pghost.ru (SSL отключен для порта 32865 согласно спецификации Bothost)
+// Подключение к pghost.ru (SSL отключен согласно спецификации Bothost для порта 32865)
 const PG_URI = "postgresql://bothost_db_db1789af0108:hl3yLh4DQmySkEYDPYwS8fn9xkLPHYNMhmCbU8WCYXs@node1.pghost.ru:32865/bothost_db_db1789af0108";
 
 export const sequelize = new Sequelize(PG_URI, { 
@@ -103,7 +103,11 @@ export const Stats = sequelize.define('stats', {
 
 // --- 📈 МОДЕЛЬ: GLOBAL_STATS (Кэш общих данных) ---
 export const GlobalStats = sequelize.define('global_stats', {
-    id: { type: DataTypes.INTEGER, primaryKey: true },
+    id: { 
+        type: DataTypes.INTEGER, 
+        primaryKey: true, 
+        autoIncrement: false // Явно отключаем, так как ID всегда 1
+    },
     total_balance: { 
         type: DataTypes.DECIMAL(32, 2), 
         defaultValue: 0,
@@ -122,6 +126,7 @@ User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
 // --- 📊 ТЕЛЕМЕТРИЯ ---
 export const logSystemStats = async () => {
+    // Проверка на мастер-процесс для кластерных сред
     const isPrimary = cluster.isPrimary || (cluster.isWorker && cluster.worker.id === 1);
     if (!isPrimary) return;
 
@@ -135,12 +140,13 @@ export const logSystemStats = async () => {
         ]);
 
         const dbLatency = Date.now() - start;
-        const totalBalance = gStats?.total_balance || 0;
-        const totalUsers = gStats?.total_users || 0;
+        const totalBalance = gStats?.total_balance ?? 0;
+        const totalUsers = gStats?.total_users ?? 0;
         
         // Сбор метрик системы
         const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
-        const cpuCount = os.cpus()?.length || 1;
+        const cpus = os.cpus();
+        const cpuCount = cpus && cpus.length ? cpus.length : 1;
         const loadRaw = os.loadavg()?.[0] || 0;
         const load = ((loadRaw / cpuCount) * 100).toFixed(1);
 
@@ -173,11 +179,11 @@ export const initDB = async () => {
         const isPrimary = cluster.isPrimary || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // Синхронизация структуры (alter: true бережно обновляет таблицы)
+            // Синхронизация структуры
             await sequelize.sync({ alter: true });
             await sessionStore.sync();
             
-            // Инициализация глобальной статистики
+            // Инициализация глобальной статистики (синглтон)
             await GlobalStats.findOrCreate({ 
                 where: { id: 1 }, 
                 defaults: { id: 1, total_balance: 0, total_users: 0 } 
@@ -193,7 +199,7 @@ export const initDB = async () => {
                 console.log('▪️ [DB] DEFAULT_TASKS_LOADED');
             }
 
-            // Сбор метрик каждые 30 секунд (10 было слишком часто для БД)
+            // Интервал сбора метрик (30 секунд)
             setInterval(logSystemStats, 30000); 
             await logSystemStats(); 
         }
