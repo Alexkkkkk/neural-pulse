@@ -16,7 +16,7 @@ import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
 import { ComponentLoader } from 'adminjs';
 
-// Ядро данных (убедись, что db.js на месте)
+// Ядро данных
 import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB } from './db.js';
 
 const logger = pino({ transport: { target: 'pino-pretty' } });
@@ -98,7 +98,7 @@ const executeMassiveCommit = async () => {
         neuralLog(`Delta-Sync: ${snapshot.length} units committed.`, 'SUCCESS');
     } catch (e) {
         neuralLog(`🚨 SYNC ERROR: ${e.message}`, 'ERROR');
-        // Возврат данных в буфер при ошибке
+        // Возврат данных в буфер при ошибке для следующей попытки
         snapshot.forEach(([id, data]) => {
             if (!updateBuffer.has(id)) updateBuffer.set(id, data);
         });
@@ -149,7 +149,7 @@ async function setupSupremeInterface(app) {
     app.use(adminJs.options.rootPath, adminRouter);
     await adminJs.initialize();
 
-    // SSE STREAM для админки
+    // SSE STREAM для реал-тайм данных в админке
     app.get('/api/admin/stream', (req, res) => {
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -178,8 +178,12 @@ async function setupSupremeInterface(app) {
         const { id, balance, hash } = req.body;
         if (!id || balance === undefined) return res.status(400).send("DATA_MISSING");
 
+        // Проверка целостности данных
         const check = crypto.createHmac('sha256', SECRET_SALT).update(`${id}:${balance}`).digest('hex');
-        if (hash !== check) return res.status(403).send("SIGN_ERR");
+        if (hash !== check) {
+            neuralLog(`SECURITY ALERT: Invalid hash from user ${id}`, 'WARN');
+            return res.status(403).send("SIGN_ERR");
+        }
         
         updateBuffer.set(id.toString(), { balance });
         res.json({ s: 1 });
@@ -200,6 +204,7 @@ function setupBot(botInstance) {
             
             if (created) {
                 await GlobalStats.increment('total_users', { where: { id: 1 } });
+                neuralLog(`New Agent Initialized: ${user.username}`, 'SUCCESS');
             }
 
             ctx.replyWithHTML(
@@ -222,35 +227,34 @@ async function startSupreme() {
     neuralLog('🔮 BOOTING NEURAL PULSE...', 'CORE');
     const app = express();
 
+    // Security & Optimization Middlewares
     app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
     app.use(compression());
     app.use(cors());
     app.use(express.json());
     
-    // Статика
+    // Раздача статики (index.html, картинки)
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
     try {
+        // Инициализация БД
         await initDB();
-        await GlobalStats.findOrCreate({ 
-            where: { id: 1 }, 
-            defaults: { total_users: 0, total_balance: 0 } 
-        });
         
+        // Настройка интерфейса админки и API
         await setupSupremeInterface(app);
+        
+        // Настройка бота
         setupBot(bot);
 
-        // Пульс системы (SSE)
+        // Цикл генерации системного пульса
         setInterval(async () => {
             const pulse = await core.generatePulse();
             if (pulse) core.emit('broadcast', pulse);
         }, 3000);
 
-        // Webhook
+        // Настройка Webhook для Telegram
         const webhookPath = `/telegraf/${BOT_TOKEN}`;
         app.post(webhookPath, (req, res) => bot.handleUpdate(req.body, res));
-        
-        // Доп. маршрут для проверки в браузере (Cannot GET fix)
         app.get(webhookPath, (req, res) => res.send('System Pulse Active.'));
         
         await bot.telegram.setWebhook(`${DOMAIN}${webhookPath}`);
@@ -259,10 +263,10 @@ async function startSupreme() {
             neuralLog(`👑 SYSTEM ONLINE | PORT: ${PORT}`, 'SUCCESS');
         });
 
-        // Graceful Shutdown
+        // Безопасное завершение работы
         const shutdown = async () => {
             neuralLog('☢️ SHUTTING DOWN...', 'WARN');
-            await executeMassiveCommit(); // Скидываем остатки буфера перед выходом
+            await executeMassiveCommit(); // Сохраняем буфер перед выходом
             server.close(async () => {
                 await sequelize.close();
                 process.exit(0);
@@ -278,6 +282,7 @@ async function startSupreme() {
     }
 }
 
+// Глобальный перехват ошибок
 process.on('unhandledRejection', (reason) => {
     logger.error({ reason }, 'Unhandled Rejection');
 });
