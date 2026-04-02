@@ -99,8 +99,7 @@ const Dashboard = (props) => {
   const updateHistoryArray = (arr, newVal) => [...arr.slice(1), newVal];
 
   const processStreamUpdate = (newData) => {
-    // ИСПРАВЛЕНИЕ: Конвертируем байты в MB (делим на 1024 * 1024)
-    // Это позволит цифрам совпадать с данными Bothost (например, 97.4 MB)
+    // КОНВЕРТАЦИЯ: Преобразуем байты в MB для соответствия с панелью Bothost
     const ramInMb = newData.sync_memory 
       ? (newData.sync_memory / (1024 * 1024)).toFixed(1) 
       : 0;
