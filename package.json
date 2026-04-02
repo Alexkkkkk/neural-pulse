@@ -1,6 +1,6 @@
 {
   "name": "neural-pulse",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "type": "module",
   "main": "server.js",
   "engines": {
@@ -50,6 +50,7 @@
     "babel-plugin-styled-components": "^2.1.4",
     "@babel/plugin-transform-react-constant-elements": "^7.24.1",
     "@babel/plugin-transform-react-inline-elements": "^7.24.1",
+    "@babel/plugin-transform-class-properties": "^7.24.1",
     "@babel/plugin-transform-runtime": "^7.24.0",
     "@babel/runtime": "^7.24.0"
   },
