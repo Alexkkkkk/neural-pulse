@@ -100,12 +100,14 @@ const Dashboard = (props) => {
 
   // --- УЛУЧШЕННАЯ ОБРАБОТКА СТРИМА ---
   const processStreamUpdate = (newData) => {
-    // Получаем RAM (сервер присылает уже в МБ)
     const ramVal = Number(newData.sync_memory || 0);
     const cpuVal = Number(newData.core_load || 0);
     const activeUsers = Number(newData.active_agents || 0);
     const latVal = Number(newData.network_latency || 0);
     const liqVal = Number(newData.pulse_liquidity || 0);
+    
+    // Безопасный расчет стабильности (0-100)
+    const stabilityVal = Math.max(0, Math.min(100, 100 - (latVal / 5)));
 
     setStats(prev => ({
       ...prev,
@@ -119,7 +121,7 @@ const Dashboard = (props) => {
     setHistory(p => ({
       cpu: updateHistoryArray(p.cpu, cpuVal),
       ram: updateHistoryArray(p.ram, ramVal),
-      stability: updateHistoryArray(p.stability, Math.max(0, 100 - (latVal / 5))),
+      stability: updateHistoryArray(p.stability, stabilityVal),
       online: updateHistoryArray(p.online, activeUsers),
       ton: updateHistoryArray(p.ton, wallet.balance),
       lat: updateHistoryArray(p.lat, latVal),
@@ -140,7 +142,7 @@ const Dashboard = (props) => {
             buttonRootId: 'ton-btn'
           });
           unsubscribe = tonUiRef.current.onStatusChange(w => {
-            if (w) {
+            if (w && w.account) {
               setWallet(prev => ({
                 ...prev,
                 connected: true,
@@ -162,7 +164,6 @@ const Dashboard = (props) => {
       setTimeout(() => clearInterval(timer), 10000);
     }
 
-    // Подключаемся к стриму
     const eventSource = new EventSource('/api/admin/stream');
     eventSource.onmessage = (e) => {
       try {
@@ -177,7 +178,7 @@ const Dashboard = (props) => {
       eventSource.close();
       unsubscribe();
     };
-  }, []); // Зависимости пусты, чтобы не перезапускать SSE
+  }, [wallet.balance]); // Следим за балансом для обновления истории TON
 
   if (!isLoaded) return <div className="loading">CONNECTING_TO_NEURAL_PULSE_NODE...</div>;
 
