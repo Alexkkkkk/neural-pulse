@@ -338,7 +338,6 @@
                 this.hasUnsavedChanges = false;
                 
                 try {
-                    // Используем Beacon для закрытия приложения, fetch для обычных сохранений
                     if (force && document.hidden) {
                         navigator.sendBeacon('/api/save', JSON.stringify(payload));
                     } else {
@@ -346,7 +345,6 @@
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
-                                // ВАЖНО: передаем initData для проверки хеша на сервере
                                 'X-Telegram-Init-Data': tg.initData 
                             },
                             body: JSON.stringify(payload),
