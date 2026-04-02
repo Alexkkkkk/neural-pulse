@@ -1,22 +1,67 @@
 import React, { useState, useEffect, memo, useMemo, useRef } from 'react';
 
-// --- 🌌 ЦВЕТОВАЯ ПАЛИТРА NEURAL_PULSE V9.8 ---
+// --- 🌌 OMNI-CYBER PALETTE V12.0 (GOD_MODE) ---
 const CYBER = {
-  bg: '#000000',
-  card: '#0a0d14',
+  bg: '#000103',
+  card: 'rgba(10, 15, 25, 0.85)',
   primary: '#00f2fe',
+  accent: '#bc13fe',
   ton: '#0088CC',
-  success: '#39ff14',
-  danger: '#ff003c',
-  warning: '#ffea00',
-  secondary: '#7000ff',
-  text: '#e2e8f0',
-  subtext: '#4a5568',
-  border: 'rgba(0, 242, 254, 0.15)',
+  success: '#00ff9f',
+  danger: '#ff0055',
+  warning: '#f3ff00',
+  info: '#00d4ff',
+  text: '#ffffff',
+  subtext: '#8892b0',
+  border: 'rgba(0, 242, 254, 0.2)',
+  glow: 'rgba(0, 242, 254, 0.4)',
 };
 
-// --- 📈 КОМПОНЕНТ НЕОНОВОГО ГРАФИКА ---
-const SparkGraph = memo(({ data, color, height = 45 }) => {
+// --- ✨ NEURAL BACKGROUND V2 ---
+const NeuralBackground = memo(() => (
+  <div className="neural-bg">
+    {[...Array(30)].map((_, i) => (
+      <div key={i} className="node-particle" style={{
+        left: `${Math.random() * 100}%`,
+        top: `${Math.random() * 100}%`,
+        animationDelay: `${Math.random() * 8}s`,
+        opacity: Math.random() * 0.5
+      }} />
+    ))}
+    <div className="scan-line-global"></div>
+  </div>
+));
+
+// --- 🛰️ NETWORK TOPOLOGY MAP ---
+const TopologyMap = memo(() => (
+  <div className="topology-container">
+    <div className="map-overlay">REALTIME_NET_TOPOLOGY // LOC: AMS_01</div>
+    <svg viewBox="0 0 800 300" className="topology-svg">
+      <defs>
+        <filter id="neon-glow"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      {/* Connection Paths */}
+      <path d="M100 150 L400 50 L700 150 L400 250 Z" stroke={CYBER.primary} fill="none" strokeWidth="0.5" opacity="0.3" />
+      <circle cx="100" cy="150" r="4" fill={CYBER.primary} filter="url(#neon-glow)">
+        <animate attributeName="r" values="4;6;4" dur="2s" repeatCount="indefinite" />
+      </circle>
+      <circle cx="400" cy="50" r="4" fill={CYBER.accent} filter="url(#neon-glow)" />
+      <circle cx="700" cy="150" r="4" fill={CYBER.success} filter="url(#neon-glow)" />
+      <circle cx="400" cy="250" r="4" fill={CYBER.warning} filter="url(#neon-glow)" />
+      
+      {/* Moving Packets */}
+      <circle r="2" fill="#fff">
+        <animateMotion dur="3s" repeatCount="indefinite" path="M100 150 L400 50" />
+      </circle>
+      <circle r="2" fill="#fff">
+        <animateMotion dur="4s" repeatCount="indefinite" path="M400 50 L700 150" />
+      </circle>
+    </svg>
+  </div>
+));
+
+// --- 📈 SPARK GRAPH ---
+const SparkGraph = memo(({ data, color, height = 50 }) => {
   if (!data || data.length < 2) return <div style={{ height }} />;
   const max = Math.max(...data, 1);
   const min = Math.min(...data);
@@ -25,258 +70,187 @@ const SparkGraph = memo(({ data, color, height = 45 }) => {
     x: (i / (data.length - 1)) * 100,
     y: height - ((val - min) / range) * (height * 0.7) - 5,
   }));
-
   const linePath = `M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`;
-  const areaPath = `${linePath} L 100,${height} L 0,${height} Z`;
-  const gradId = `grad-${color.replace('#', '')}`;
-
   return (
-    <svg width="100%" height={height} style={{ marginTop: '10px', overflow: 'visible', display: 'block' }}>
-      <defs>
-        <linearGradient id={gradId} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={areaPath} fill={`url(#${gradId})`} />
-      <path d={linePath} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" 
-            style={{ filter: `drop-shadow(0 0 5px ${color})` }} />
-      <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r="2" fill={color} />
+    <svg width="100%" height={height} style={{ overflow: 'visible', filter: `drop-shadow(0 0 5px ${color})` }}>
+      <path d={linePath} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" />
+      <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r="3" fill={color} />
     </svg>
   );
 });
 
-// --- 📊 ИНДИКАТОР РЕСУРСА ---
-const TelemetryCard = ({ label, value, data, color, unit = "%" }) => (
-  <div style={{ flex: 1, minWidth: '140px', background: 'rgba(255,255,255,0.02)', padding: '15px', borderRadius: '10px', border: `1px solid ${CYBER.border}` }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-      <span style={{ color: '#4a5568', fontSize: '9px', fontWeight: '800', textTransform: 'uppercase' }}>{label}</span>
-      <span style={{ color, fontSize: '11px', fontWeight: 'bold', fontFamily: 'Roboto Mono' }}>
-        {unit === '%' ? Math.round(value) : value}{unit}
-      </span>
-    </div>
-    <SparkGraph data={data} color={color} height={30} />
-  </div>
-);
-
-// --- 🗳️ КАРТОЧКА ДАННЫХ ---
-const DataCard = ({ label, value, unit, data, color, isTon }) => (
-  <div className="card">
-    <div className="label" style={{ color }}>{label}</div>
-    <div className="val-main">
+// --- 💎 QUANTUM CARD ---
+const AnalyticCard = ({ label, value, unit, data, color, trend }) => (
+  <div className="quantum-card">
+    <div className="q-label" style={{ color }}>{label}</div>
+    <div className="q-val">
       {typeof value === 'number' ? value.toLocaleString() : value}
-      <span className="val-unit">{isTon ? '💎 ' : ''}{unit}</span>
+      <span className="q-unit">{unit}</span>
     </div>
     <SparkGraph data={data} color={color} />
+    <div className="card-decoration"></div>
   </div>
 );
 
-// --- ⚙️ ОСНОВНОЙ КОМПОНЕНТ ---
-const Dashboard = (props) => {
-  const { data: initialData } = props;
+// --- 🛠️ MAIN DASHBOARD ---
+const Dashboard = ({ data: initialData }) => {
   const [activeTab, setActiveTab] = useState('overview');
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState(new Date());
-  const [searchTerm, setSearchTerm] = useState('');
-  const tonUiRef = useRef(null);
+  const [isBooting, setIsBooting] = useState(true);
+  const [logs, setLogs] = useState([]);
+  const [command, setCommand] = useState('');
+  const [stats, setStats] = useState({ cpu: 0, ram: 0, online: 0, health: 100 });
+  const [history, setHistory] = useState({ cpu: Array(20).fill(0), health: Array(20).fill(100) });
 
-  const [wallet, setWallet] = useState({ connected: false, address: null, balance: 0, shortAddress: 'OFFLINE' });
-  const [users] = useState(initialData?.usersList || []);
-  
-  const [stats, setStats] = useState({ cpu: 0, ram: 0, online: 0, latency: 0, liquidity: 0 });
-  const [history, setHistory] = useState({
-    cpu: Array(15).fill(0), ram: Array(15).fill(0), stability: Array(15).fill(100),
-    online: Array(15).fill(0), ton: Array(15).fill(0), lat: Array(15).fill(0), liq: Array(15).fill(0)
-  });
+  const addLog = (msg, type = 'info') => {
+    setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), msg, type }].slice(-50));
+  };
 
-  const filteredUsers = useMemo(() => {
-    return users.filter(u => 
-      String(u.id).includes(searchTerm) || 
-      String(u.username || '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [users, searchTerm]);
-
-  const updateHistoryArray = (arr, newVal) => [...arr.slice(1), Number(newVal)];
-
-  // --- УЛУЧШЕННАЯ ОБРАБОТКА СТРИМА ---
-  const processStreamUpdate = (newData) => {
-    const ramVal = Number(newData.sync_memory || 0);
-    const cpuVal = Number(newData.core_load || 0);
-    const activeUsers = Number(newData.active_agents || 0);
-    const latVal = Number(newData.network_latency || 0);
-    const liqVal = Number(newData.pulse_liquidity || 0);
-    
-    // Безопасный расчет стабильности (0-100)
-    const stabilityVal = Math.max(0, Math.min(100, 100 - (latVal / 5)));
-
-    setStats(prev => ({
-      ...prev,
-      cpu: cpuVal,
-      ram: ramVal.toFixed(1),
-      online: activeUsers,
-      latency: latVal,
-      liquidity: liqVal
-    }));
-
-    setHistory(p => ({
-      cpu: updateHistoryArray(p.cpu, cpuVal),
-      ram: updateHistoryArray(p.ram, ramVal),
-      stability: updateHistoryArray(p.stability, stabilityVal),
-      online: updateHistoryArray(p.online, activeUsers),
-      ton: updateHistoryArray(p.ton, wallet.balance),
-      lat: updateHistoryArray(p.lat, latVal),
-      liq: updateHistoryArray(p.liq, liqVal)
-    }));
-    
-    setLastUpdate(new Date());
+  const handleCommand = (e) => {
+    if (e.key === 'Enter' && command) {
+      addLog(`> EXEC: ${command}`, 'info');
+      if (command === '/clear') setLogs([]);
+      if (command === '/reboot') window.location.reload();
+      setCommand('');
+    }
   };
 
   useEffect(() => {
-    let unsubscribe = () => {};
-
-    const initTon = () => {
-      if (window.TON_CONNECT_UI && !tonUiRef.current) {
-        try {
-          tonUiRef.current = new window.TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json',
-            buttonRootId: 'ton-btn'
-          });
-          unsubscribe = tonUiRef.current.onStatusChange(w => {
-            if (w && w.account) {
-              setWallet(prev => ({
-                ...prev,
-                connected: true,
-                address: w.account.address,
-                shortAddress: `${w.account.address.slice(0,4)}...${w.account.address.slice(-4)}`
-              }));
-            } else {
-              setWallet({ connected: false, address: null, balance: 0, shortAddress: 'OFFLINE' });
-            }
-          });
-          return true;
-        } catch (err) { console.error("TON Init Error:", err); }
-      }
-      return false;
-    };
-
-    if (!initTon()) {
-      const timer = setInterval(() => { if (initTon()) clearInterval(timer); }, 500);
-      setTimeout(() => clearInterval(timer), 10000);
-    }
-
+    const timer = setTimeout(() => {
+      setIsBooting(false);
+      addLog("GOD_MODE_KERNEL_LOADED", "success");
+      addLog("SYNCING_WITH_BLOCKCHAIN_NODES...", "info");
+    }, 2500);
+    
     const eventSource = new EventSource('/api/admin/stream');
     eventSource.onmessage = (e) => {
-      try {
-        const update = JSON.parse(e.data);
-        processStreamUpdate(update);
-      } catch (err) { console.error("Stream sync error", err); }
+      const d = JSON.parse(e.data);
+      setStats({ cpu: d.core_load, ram: d.sync_memory, online: d.active_agents, health: (100 - d.core_load/2).toFixed(1) });
+      setHistory(p => ({
+        cpu: [...p.cpu.slice(1), d.core_load],
+        health: [...p.health.slice(1), (100 - d.core_load/2)]
+      }));
     };
 
-    setTimeout(() => setIsLoaded(true), 800);
+    return () => { eventSource.close(); clearTimeout(timer); };
+  }, []);
 
-    return () => {
-      eventSource.close();
-      unsubscribe();
-    };
-  }, [wallet.balance]); // Следим за балансом для обновления истории TON
-
-  if (!isLoaded) return <div className="loading">CONNECTING_TO_NEURAL_PULSE_NODE...</div>;
+  if (isBooting) {
+    return (
+      <div className="boot-container">
+        <div className="glitch-text" data-text="GOD_MODE_ACTIVE">GOD_MODE_ACTIVE</div>
+        <div className="boot-loader"></div>
+        <div className="boot-log">ENCRYPTING_SESSION // BY_KANDERKANDER</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="app-root">
+    <div className="omni-app">
+      <NeuralBackground />
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Roboto+Mono&display=swap');
-        .app-root { background: #000; min-height: 100vh; padding: 20px; font-family: 'Inter', sans-serif; color: #fff; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .header h1 { font-size: 24px; font-weight: 900; letter-spacing: 4px; color: ${CYBER.primary}; margin: 0; }
-        .nav-tabs { display: flex; gap: 20px; margin: 20px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .tab-btn { background: none; border: none; color: #4a5568; padding: 10px 0; font-size: 11px; cursor: pointer; font-family: 'Roboto Mono'; font-weight: bold; transition: 0.3s; }
-        .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; }
-        .res-panel { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; padding: 15px; margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 20px; border-radius: 12px; position: relative; overflow: hidden; transition: border 0.3s; }
-        .card:hover { border-color: ${CYBER.primary}; }
-        .label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; opacity: 0.7; }
-        .val-main { font-size: 32px; font-weight: 700; display: flex; align-items: baseline; font-family: 'Roboto Mono'; }
-        .val-unit { font-size: 10px; color: #4a5568; margin-left: 6px; font-weight: 800; }
-        .pulse-dot { width: 6px; height: 6px; background: ${CYBER.success}; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px ${CYBER.success}; animation: blink 1.5s infinite; }
-        @keyframes blink { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(0.8); } }
-        .cyber-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        .cyber-table th { text-align: left; padding: 12px; color: ${CYBER.primary}; border-bottom: 1px solid ${CYBER.border}; font-size: 9px; text-transform: uppercase; }
-        .cyber-table td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.03); font-family: 'Roboto Mono'; }
-        .search-input { width: 100%; background: #0c1017; border: 1px solid ${CYBER.border}; color: #fff; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-family: 'Roboto Mono'; outline: none; transition: 0.3s; }
-        .search-input:focus { border-color: ${CYBER.primary}; box-shadow: 0 0 10px rgba(0, 242, 254, 0.1); }
-        .loading { background: #000; height: 100vh; display: flex; align-items: center; justify-content: center; color: ${CYBER.primary}; font-family: 'Roboto Mono'; letter-spacing: 2px; }
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;900&family=JetBrains+Mono:wght@300;700&display=swap');
+        
+        body { margin: 0; background: ${CYBER.bg}; color: ${CYBER.text}; font-family: 'JetBrains Mono', monospace; }
+        .omni-app { min-height: 100vh; padding: 40px; position: relative; z-index: 1; }
+        
+        .boot-container { height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; font-family: 'Orbitron'; }
+        .boot-loader { width: 200px; height: 2px; background: ${CYBER.primary}; margin: 20px 0; animation: loading 2s infinite; }
+        @keyframes loading { 0% { width: 0; opacity: 0; } 50% { width: 200px; opacity: 1; } 100% { width: 0; opacity: 0; } }
+
+        .omni-header { display: flex; justify-content: space-between; border-bottom: 1px solid ${CYBER.border}; padding-bottom: 20px; margin-bottom: 40px; }
+        .omni-logo { font-family: 'Orbitron'; font-weight: 900; font-size: 24px; letter-spacing: 2px; }
+        .omni-logo span { color: ${CYBER.primary}; text-shadow: 0 0 15px ${CYBER.glow}; }
+
+        .omni-grid { display: grid; grid-template-columns: 2.5fr 1fr; gap: 30px; }
+        .quantum-card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 25px; border-radius: 4px; position: relative; backdrop-filter: blur(15px); }
+        .q-label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; }
+        .q-val { font-family: 'Orbitron'; font-size: 38px; color: ${CYBER.primary}; }
+        .q-unit { font-size: 14px; margin-left: 8px; opacity: 0.5; }
+
+        .topology-container { height: 200px; border: 1px solid ${CYBER.border}; margin-bottom: 30px; border-radius: 4px; background: rgba(0,0,0,0.5); overflow: hidden; position: relative; }
+        .map-overlay { position: absolute; top: 10px; left: 10px; font-size: 8px; color: ${CYBER.primary}; }
+        .topology-svg { width: 100%; height: 100%; }
+
+        .terminal-box { background: rgba(0,0,0,0.8); border: 1px solid ${CYBER.border}; height: 300px; display: flex; flex-direction: column; }
+        .terminal-content { flex: 1; padding: 15px; overflow-y: auto; font-size: 11px; }
+        .log-entry { margin-bottom: 5px; }
+        .type-success { color: ${CYBER.success}; }
+        .type-info { color: ${CYBER.info}; }
+        .command-input { background: none; border: none; border-top: 1px solid ${CYBER.border}; padding: 15px; color: ${CYBER.primary}; font-family: 'JetBrains Mono'; outline: none; }
+
+        .omni-tabs { display: flex; gap: 20px; margin-bottom: 30px; }
+        .omni-tab { background: none; border: 1px solid ${CYBER.border}; color: ${CYBER.subtext}; padding: 8px 20px; cursor: pointer; font-family: 'Orbitron'; font-size: 10px; transition: 0.3s; }
+        .omni-tab.active { background: ${CYBER.primary}; color: #000; box-shadow: 0 0 15px ${CYBER.glow}; }
+
+        .neural-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
+        .node-particle { position: absolute; width: 2px; height: 2px; background: ${CYBER.primary}; border-radius: 50%; animation: pulseNode 5s infinite; }
+        @keyframes pulseNode { 0%, 100% { opacity: 0.2; transform: scale(1); } 50% { opacity: 0.8; transform: scale(3); } }
+        .scan-line-global { position: absolute; width: 100%; height: 2px; background: rgba(0, 242, 254, 0.1); animation: scanMove 8s infinite linear; }
+        @keyframes scanMove { from { top: -10%; } to { top: 110%; } }
       `}</style>
 
-      <div className="header">
-        <div>
-          <h1>NEURAL_PULSE V9.8</h1>
-          <div style={{ fontFamily: 'Roboto Mono', fontSize: '9px', color: wallet.connected ? CYBER.ton : CYBER.success, marginTop: '5px' }}>
-            <span className="pulse-dot"></span>
-            {wallet.connected ? `UPLINK_STABLE // ${wallet.shortAddress}` : 'SYSTEM_OPERATIONAL // REALTIME_SYNC'}
-          </div>
+      <header className="omni-header">
+        <div className="omni-logo">NEURAL_PULSE // <span>GOD_MODE</span></div>
+        <div style={{ textAlign: 'right', fontSize: '10px' }}>
+          <div style={{ color: CYBER.success }}>SYS_INTEGRITY: 100%</div>
+          <div style={{ opacity: 0.5 }}>{new Date().toLocaleTimeString()}</div>
         </div>
-        <div id="ton-btn" style={{ transform: 'scale(0.9)', transformOrigin: 'right' }}></div>
+      </header>
+
+      <nav className="omni-tabs">
+        <button className={`omni-tab ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>DASHBOARD</button>
+        <button className={`omni-tab ${activeTab === 'terminal' ? 'active' : ''}`} onClick={() => setActiveTab('terminal')}>QUANTUM_CONSOLE</button>
+      </nav>
+
+      <div className="omni-grid">
+        <div className="main-section">
+          {activeTab === 'overview' && (
+            <>
+              <TopologyMap />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                <AnalyticCard label="Global_Stability" value={stats.health} unit="%" data={history.health} color={CYBER.primary} />
+                <AnalyticCard label="Neural_Load" value={stats.cpu} unit="%" data={history.cpu} color={CYBER.accent} />
+              </div>
+            </>
+          )}
+
+          {activeTab === 'terminal' && (
+            <div className="terminal-box">
+              <div className="terminal-content">
+                {logs.map((l, i) => (
+                  <div key={i} className={`log-entry type-${l.type}`}>
+                    [{l.time}] {l.msg}
+                  </div>
+                ))}
+              </div>
+              <input 
+                className="command-input" 
+                placeholder="AWAITING COMMAND..." 
+                value={command}
+                onChange={(e) => setCommand(e.target.value)}
+                onKeyDown={handleCommand}
+              />
+            </div>
+          )}
+        </div>
+
+        <aside className="sidebar">
+          <div className="quantum-card" style={{ marginBottom: '20px' }}>
+            <div className="q-label">Active_Agents</div>
+            <div className="q-val" style={{ fontSize: '28px' }}>{stats.online}</div>
+            <div style={{ fontSize: '9px', marginTop: '10px', color: CYBER.success }}>CONNECTION: SECURE</div>
+          </div>
+          <div className="quantum-card">
+            <div className="q-label">Node_Location</div>
+            <div style={{ fontSize: '12px', fontWeight: 'bold', color: CYBER.primary }}>NETHERLANDS_NODE_01</div>
+            <div style={{ fontSize: '9px', opacity: 0.5, marginTop: '5px' }}>IP: 185.XXX.XXX.42</div>
+          </div>
+        </aside>
       </div>
 
-      <div className="nav-tabs">
-        <button className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>OVERVIEW</button>
-        <button className={`tab-btn ${activeTab === 'agents' ? 'active' : ''}`} onClick={() => setActiveTab('agents')}>AGENT_DATABASE</button>
-      </div>
-
-      {activeTab === 'overview' && (
-        <>
-          <div className="res-panel">
-            <TelemetryCard label="Core_Node_Load" value={stats.cpu} data={history.cpu} color={CYBER.primary} />
-            <TelemetryCard label="Sync_Memory" value={stats.ram} data={history.ram} color={CYBER.secondary} unit="MB" />
-            <TelemetryCard label="Stability" value={Math.max(0, 100 - (stats.latency / 5))} data={history.stability} color={CYBER.warning} />
-          </div>
-
-          <div className="grid">
-            <DataCard label="Active_Agents" value={stats.online} unit="USERS" data={history.online} color={CYBER.success} />
-            <DataCard label="Live_Wallet_TON" value={wallet.connected ? wallet.balance.toFixed(2) : "0.00"} unit="TON" data={history.ton} color={CYBER.ton} isTon={true} />
-            <DataCard label="Pulse_Liquidity" value={stats.liquidity} unit="$NP" data={history.liq} color={CYBER.warning} />
-            <DataCard label="Network_Latency" value={Math.round(stats.latency)} unit="MS" data={history.lat} color={CYBER.danger} />
-          </div>
-        </>
-      )}
-
-      {activeTab === 'agents' && (
-        <div className="card">
-          <div className="label">Identity_Database_Search</div>
-          <input 
-            className="search-input" 
-            placeholder="ENTER UID OR ALIAS..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <div style={{ overflowX: 'auto' }}>
-            <table className="cyber-table">
-              <thead>
-                <tr><th>Identity_UID</th><th>Pulse_Balance</th><th>Access_Status</th></tr>
-              </thead>
-              <tbody>
-                {filteredUsers.length > 0 ? filteredUsers.map((u, i) => (
-                  <tr key={i}>
-                    <td style={{ color: CYBER.primary }}>{u.username || u.id}</td>
-                    <td>{Number(u.balance || 0).toLocaleString()} <span style={{fontSize:'8px', opacity:0.3}}>$NP</span></td>
-                    <td style={{ color: CYBER.success }}>AUTHORIZED</td>
-                  </tr>
-                )) : (
-                  <tr>
-                    <td colSpan="3" style={{ textAlign: 'center', opacity: 0.3, padding: '20px' }}>NO_DATA_FOUND</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      <footer style={{ marginTop: '30px', display: 'flex', justifyContent: 'space-between', opacity: 0.2, fontSize: '8px', fontFamily: 'Roboto Mono' }}>
-        <div>NODE_HYBRID_ACTIVE // RENDER_V9.8</div>
-        <div>LAST_PULSE: {lastUpdate.toLocaleTimeString()}</div>
+      <footer style={{ marginTop: '50px', borderTop: `1px solid ${CYBER.border}`, padding: '20px 0', fontSize: '9px', opacity: 0.3, display: 'flex', justifyContent: 'space-between' }}>
+        <div>V12.0_GOD_MODE_EDITION // CRYPTO_NEURAL_OPERATIONS</div>
+        <div>AUTHORIZED_ACCESS_ONLY // USER: KANDERKANDER</div>
       </footer>
     </div>
   );
