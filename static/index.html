@@ -117,11 +117,9 @@
         .pop { position: absolute; color: var(--neon); font-weight: 900; font-size: 32px; pointer-events: none; animation: moveUp 0.7s ease-out forwards; z-index: 999; text-shadow: 0 0 15px var(--neon); font-family: monospace; }
         .ref-box { background: #000; border: 1px dashed var(--neon); padding: 15px; border-radius: 12px; margin: 15px 0; word-break: break-all; font-family: monospace; font-size: 12px; color: var(--neon); text-align: center; }
         
-        /* Sync Status Light */
         #sync-status { width: 6px; height: 6px; border-radius: 50%; background: #333; display: inline-block; margin-right: 5px; transition: 0.3s; }
         #sync-status.saving { background: var(--neon); box-shadow: 0 0 8px var(--neon); }
 
-        /* Wallet Button Styles */
         .wallet-connect-btn {
             width: 100%; height: 60px; background: #111; border: 2px solid var(--neon);
             color: var(--neon); border-radius: 15px; font-size: 14px; font-weight: 900;
@@ -130,7 +128,6 @@
         }
         .wallet-connect-btn.connected { border-color: #ff3333; color: #ff3333; box-shadow: 0 0 10px rgba(255, 51, 51, 0.2); }
 
-        /* Leaderboard Style */
         .top-list { list-style: none; }
         .top-item { display: flex; align-items: center; padding: 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; }
         .top-rank { font-weight: 900; color: var(--neon); width: 30px; }
@@ -228,7 +225,6 @@
                 const u = tg.initDataUnsafe.user || { id: 0, first_name: 'Local', username: 'user' };
                 this.data.id = String(u.id);
 
-                // --- TON Connect Initialization ---
                 try {
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
                         manifestUrl: 'https://np.bothost.tech/static/tonconnect-manifest.json',
@@ -243,7 +239,6 @@
                     });
                 } catch(e) { console.error("TON Error:", e); }
 
-                // --- Load Data ---
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
                     if (r.ok) {
@@ -314,25 +309,39 @@
                 }
             },
 
+            // --- ОБНОВЛЕННЫЙ МЕТОД СОХРАНЕНИЯ ---
             async save(force = false) {
+                // Если уже идет сохранение и это не принудительно — выходим
                 if (!this.isLoaded || (this.isSaving && !force)) return;
                 if (!this.hasUnsavedChanges && !force) return;
+
                 this.isSaving = true;
-                this.hasUnsavedChanges = false;
                 const statusLight = document.getElementById('sync-status');
                 if(statusLight) statusLight.classList.add('saving');
                 
+                // Делаем копию данных, чтобы новые тапы не потерялись во время запроса
+                const payload = JSON.parse(JSON.stringify(this.data));
+                this.hasUnsavedChanges = false;
+                
                 try {
-                    await fetch('/api/save', {
+                    const response = await fetch('/api/save', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify(this.data),
+                        body: JSON.stringify(payload),
                         keepalive: true 
                     });
-                } catch(e) { this.hasUnsavedChanges = true; } 
-                finally {
+                    if(!response.ok) throw new Error("Sync failed");
+                } catch(e) { 
+                    console.error("Save error:", e);
+                    this.hasUnsavedChanges = true; // Если ошибка, пометим, что нужно пересохранить
+                } finally {
                     this.isSaving = false;
                     setTimeout(() => { if(statusLight) statusLight.classList.remove('saving'); }, 500);
+                    
+                    // Если за время запроса появились новые данные — сохраняем еще раз
+                    if(this.hasUnsavedChanges && force) {
+                        setTimeout(() => this.save(true), 1000);
+                    }
                 }
             },
 
@@ -350,19 +359,21 @@
                     }
                     if(changed) ui.render();
                 }, 1000);
-                setInterval(() => this.save(), 7000);
+                
+                // Авто-сохранение каждые 5 секунд, если были тапы
+                setInterval(() => {
+                    if(this.hasUnsavedChanges) this.save();
+                }, 5000);
             }
         };
 
         const ui = {
             currentModal: null,
-
             num(n) {
                 if (n >= 1e6) return (n/1e6).toFixed(2) + 'M';
                 if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
                 return Math.floor(n).toLocaleString();
             },
-
             startLoader() {
                 let p = 0;
                 const i = setInterval(() => {
@@ -382,7 +393,6 @@
                     }
                 }, 100);
             },
-
             render() {
                 const d = game.data;
                 document.getElementById('ui-balance').innerText = Math.floor(d.balance).toLocaleString();
@@ -398,13 +408,11 @@
                 document.getElementById('ui-rank').innerText = rank;
                 document.getElementById('my-lvl').innerText = `LVL ${Math.floor(Math.sqrt(d.balance / 5000)) + 1}`;
             },
-
             triggerEnergyError() {
                 const track = document.querySelector('.e-track');
                 track.classList.add('energy-error');
                 setTimeout(() => track.classList.remove('energy-error'), 400);
             },
-
             pop(t, p) {
                 const div = document.createElement('div');
                 div.className = 'pop';
@@ -414,7 +422,6 @@
                 document.body.appendChild(div);
                 setTimeout(() => div.remove(), 650);
             },
-
             async openM(type) {
                 this.currentModal = type;
                 const b = document.getElementById('m-body');
@@ -462,7 +469,6 @@
                     b.innerHTML = `<h2>🎁 DAILY BONUS</h2><br><button class="task-btn" style="width:100%; height:60px;" onclick="ui.claimDaily()" ${!canClaim?'disabled':''}>${canClaim ? 'CLAIM 5,000 NP' : 'WAIT 24H'}</button>`;
                 }
             },
-
             doTask(id, url, reward) {
                 if(id === 'tg') tg.openTelegramLink(url); else tg.openLink(url);
                 setTimeout(() => {
@@ -475,7 +481,6 @@
                     }
                 }, 3000);
             },
-
             async askAI() {
                 const res = document.getElementById('ai-res');
                 res.innerText = "> Initializing scan...";
@@ -485,14 +490,12 @@
                     res.innerText = j.text || "Pulse stable. Continue, Agent.";
                 } catch(e) { res.innerText = "Error: Connection lost."; }
             },
-
             copyRef(url) { 
                 navigator.clipboard.writeText(url).then(() => {
                     tg.showAlert('Link copied!');
                     tg.HapticFeedback.notificationOccurred('success');
                 }); 
             },
-
             claimDaily() {
                 game.data.balance += 5000;
                 game.data.last_bonus = Date.now();
@@ -501,13 +504,11 @@
                 tg.showAlert("5,000 NP credited!");
                 game.save(true);
             },
-
             closeM() { 
                 document.getElementById('modal').classList.remove('active'); 
                 this.currentModal = null;
             }
         };
-
         window.onload = () => game.init();
     </script>
 </body>
