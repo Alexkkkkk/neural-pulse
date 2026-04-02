@@ -149,7 +149,7 @@
 
     <div id="app" style="display: none; flex-direction: column; height: 100vh;">
         <header>
-            <div class="u-avatar"><img id="my-avatar" src="images/logo.png" onerror="this.src='images/logo.png'"></div>
+            <div class="u-avatar"><img id="my-avatar" src="images/logo.png"></div>
             <div class="u-info">
                 <b id="my-name">AGENT</b>
                 <small><span id="sync-status"></span><span id="ui-rank">SCANNING...</span></small>
@@ -241,9 +241,11 @@
                     });
                 } catch(e) { console.error("TON Error:", e); }
 
-                // --- LOAD DATA ---
+                // --- LOAD DATA (With Auth Header) ---
                 try {
-                    const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
+                    const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`, {
+                        headers: { 'X-Telegram-Init-Data': tg.initData }
+                    });
                     if (r.ok) {
                         const db = await r.json();
                         this.data = { ...this.data, ...db };
@@ -457,7 +459,7 @@
                 } else if(type === 'top') {
                     b.innerHTML = `<h2>🏆 TOP AGENTS</h2><br><div id="top-list-container">Loading...</div>`;
                     try {
-                        const r = await fetch('/api/top');
+                        const r = await fetch('/api/top', { headers: { 'X-Telegram-Init-Data': tg.initData } });
                         const top = await r.json();
                         let html = '<ul class="top-list">';
                         top.forEach((u, i) => {
