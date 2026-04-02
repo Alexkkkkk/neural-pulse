@@ -122,7 +122,6 @@ User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
 // --- 📊 ТЕЛЕМЕТРИЯ ---
 export const logSystemStats = async () => {
-    // Выполняем только на основном процессе, чтобы не дублировать логи
     const isPrimary = cluster.isPrimary || (cluster.isWorker && cluster.worker.id === 1);
     if (!isPrimary) return;
 
@@ -142,7 +141,8 @@ export const logSystemStats = async () => {
         // Сбор метрик системы
         const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
         const cpuCount = os.cpus()?.length || 1;
-        const load = ((os.loadavg()[0] / cpuCount) * 100).toFixed(1);
+        const loadRaw = os.loadavg()?.[0] || 0;
+        const load = ((loadRaw / cpuCount) * 100).toFixed(1);
 
         await Stats.create({
             user_count: totalUsers,
@@ -156,7 +156,7 @@ export const logSystemStats = async () => {
         // Очистка старых данных (храним историю 48 часов)
         await Stats.destroy({
             where: {
-                created_at: { [Op.lt]: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) }
+                created_at: { [Op.lt]: new Date(Date.now() - 48 * 60 * 60 * 1000) }
             }
         });
     } catch (e) {
@@ -173,7 +173,7 @@ export const initDB = async () => {
         const isPrimary = cluster.isPrimary || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // Синхронизация структуры БД
+            // Синхронизация структуры (alter: true бережно обновляет таблицы)
             await sequelize.sync({ alter: true });
             await sessionStore.sync();
             
@@ -183,7 +183,7 @@ export const initDB = async () => {
                 defaults: { id: 1, total_balance: 0, total_users: 0 } 
             });
 
-            // Наполнение дефолтными задачами, если таблица пуста
+            // Наполнение дефолтными задачами
             if (await Task.count() === 0) {
                 await Task.bulkCreate([
                     { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
@@ -193,8 +193,8 @@ export const initDB = async () => {
                 console.log('▪️ [DB] DEFAULT_TASKS_LOADED');
             }
 
-            // Запуск цикла сбора метрик (каждые 10 секунд)
-            setInterval(logSystemStats, 10000); 
+            // Сбор метрик каждые 30 секунд (10 было слишком часто для БД)
+            setInterval(logSystemStats, 30000); 
             await logSystemStats(); 
         }
 
