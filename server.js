@@ -16,7 +16,7 @@ import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
 import { ComponentLoader } from 'adminjs';
 
-// Ядро данных
+// Ядро данных (убедись, что db.js экспортирует эти сущности)
 import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB } from './db.js';
 
 const logger = pino({ transport: { target: 'pino-pretty' } });
@@ -31,21 +31,26 @@ class GodCore extends EventEmitter {
     constructor() {
         super();
         this.setMaxListeners(0);
+        this.cache = { gs: null, lastUpdate: 0 };
     }
     
     async generatePulse() {
         try {
             const memory = process.memoryUsage();
-            // Безопасное получение статы через опциональную цепочку
-            const gs = await GlobalStats.findByPk(1);
+            
+            // Кеширование глобальной статистики на 5 секунд для снижения нагрузки на БД
+            if (!this.cache.gs || Date.now() - this.cache.lastUpdate > 5000) {
+                this.cache.gs = await GlobalStats.findByPk(1);
+                this.cache.lastUpdate = Date.now();
+            }
             
             return {
                 event_type: 'SYSTEM',
                 core_load: parseFloat((os.loadavg()[0] * 10).toFixed(1)),
                 sync_memory: parseFloat(((memory.rss / os.totalmem()) * 100).toFixed(1)),
-                active_agents: gs?.total_users || 0,
+                active_agents: this.cache.gs?.total_users || 0,
                 network_latency: Math.floor(Math.random() * 20 + 10),
-                pulse_liquidity: gs?.total_balance || 0,
+                pulse_liquidity: this.cache.gs?.total_balance || 0,
                 timestamp: new Date().toISOString()
             };
         } catch (err) {
@@ -78,14 +83,12 @@ const executeMassiveCommit = async () => {
     if (updateBuffer.size === 0 || isSyncing) return;
     isSyncing = true;
     
-    // Копируем буфер и очищаем оригинал сразу, чтобы не потерять входящие данные
     const snapshot = Array.from(updateBuffer.entries());
     updateBuffer.clear();
     
     try {
         await sequelize.transaction(async (t) => {
             for (const [id, data] of snapshot) {
-                // Используем прямое обновление баланса, чтобы избежать конфликтов
                 await User.update(
                     { balance: data.balance }, 
                     { where: { id }, transaction: t }
@@ -95,7 +98,10 @@ const executeMassiveCommit = async () => {
         neuralLog(`Delta-Sync: ${snapshot.length} units committed.`, 'SUCCESS');
     } catch (e) {
         neuralLog(`🚨 SYNC ERROR: ${e.message}`, 'ERROR');
-        // В случае ошибки можно вернуть данные в буфер (опционально)
+        // Возврат данных в буфер, если они не были обновлены за время попытки
+        snapshot.forEach(([id, data]) => {
+            if (!updateBuffer.has(id)) updateBuffer.set(id, data);
+        });
     } finally {
         isSyncing = false;
     }
@@ -151,9 +157,13 @@ async function setupSupremeInterface(app) {
         res.setHeader('X-Accel-Buffering', 'no'); 
         res.flushHeaders();
 
-        const sendData = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
-        core.on('broadcast', sendData);
+        const sendData = (data) => {
+            if (!res.writableEnded) {
+                res.write(`data: ${JSON.stringify(data)}\n\n`);
+            }
+        };
 
+        core.on('broadcast', sendData);
         const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 15000);
 
         req.on('close', () => {
@@ -163,12 +173,15 @@ async function setupSupremeInterface(app) {
         });
     });
 
+    // API для сохранения из WebApp
     app.post('/api/save', (req, res) => {
         const { id, balance, hash } = req.body;
+        if (!id || balance === undefined) return res.status(400).send("DATA_MISSING");
+
         const check = crypto.createHmac('sha256', SECRET_SALT).update(`${id}:${balance}`).digest('hex');
         if (hash !== check) return res.status(403).send("SIGN_ERR");
         
-        updateBuffer.set(id, { balance });
+        updateBuffer.set(id.toString(), { balance });
         res.json({ s: 1 });
     });
 }
@@ -178,8 +191,11 @@ function setupBot(botInstance) {
     botInstance.start(async (ctx) => {
         try {
             const [user, created] = await User.findOrCreate({
-                where: { id: ctx.from.id.toString() }, // ID в БД часто строка
-                defaults: { username: ctx.from.username || `AGENT_${ctx.from.id}`, balance: 0 }
+                where: { id: ctx.from.id.toString() },
+                defaults: { 
+                    username: ctx.from.username || `AGENT_${ctx.from.id}`, 
+                    balance: 0 
+                }
             });
             
             if (created) {
@@ -187,8 +203,13 @@ function setupBot(botInstance) {
             }
 
             ctx.replyWithHTML(
-                `<b>── [ NEURAL OS : OMNI ] ──</b>\n\nAgent: <code>${user.username}</code>\nSystem: <b>V12.7 Stable</b>\nStatus: <b>ONLINE</b>`,
-                Markup.inlineKeyboard([[Markup.button.webApp("⚡ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)]])
+                `<b>── [ NEURAL OS : OMNI ] ──</b>\n\n` +
+                `Agent: <code>${user.username}</code>\n` +
+                `System: <b>V12.7 Stable</b>\n` +
+                `Status: <b>ONLINE</b>`,
+                Markup.inlineKeyboard([
+                    [Markup.button.webApp("⚡ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)]
+                ])
             );
         } catch (e) {
             neuralLog(`Bot Start Error: ${e.message}`, 'ERROR');
@@ -201,37 +222,51 @@ async function startSupreme() {
     neuralLog('🔮 BOOTING NEURAL PULSE...', 'CORE');
     const app = express();
 
+    // Middlewares
     app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
     app.use(compression());
     app.use(cors());
     app.use(express.json());
+    
+    // Статика (index.html должен быть в /static)
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
     try {
         await initDB();
-        await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
+        await GlobalStats.findOrCreate({ 
+            where: { id: 1 }, 
+            defaults: { total_users: 0, total_balance: 0 } 
+        });
         
         await setupSupremeInterface(app);
         setupBot(bot);
 
-        // Пульсация
+        // Цикл пульсации системы
         setInterval(async () => {
             const pulse = await core.generatePulse();
             if (pulse) core.emit('broadcast', pulse);
         }, 3000);
 
-        // Webhook
+        // Webhook configuration
         const webhookPath = `/telegraf/${BOT_TOKEN}`;
         app.post(webhookPath, (req, res) => bot.handleUpdate(req.body, res));
+        
         await bot.telegram.setWebhook(`${DOMAIN}${webhookPath}`);
 
         app.listen(PORT, '0.0.0.0', () => {
             neuralLog(`👑 SYSTEM ONLINE | PORT: ${PORT}`, 'SUCCESS');
+            neuralLog(`🔗 WEBHOOK: ${DOMAIN}${webhookPath}`, 'INFO');
         });
 
     } catch (err) {
         neuralLog(`🚨 BOOT FAIL: ${err.message}`, 'ERROR');
+        process.exit(1);
     }
 }
+
+// Обработка необработанных исключений
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error({ reason }, 'Unhandled Rejection at Promise');
+});
 
 startSupreme();
