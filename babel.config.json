@@ -48,7 +48,7 @@
     ],
     ["@babel/plugin-transform-runtime", { 
       "regenerator": false, 
-      "useESModules": true 
+      "helpers": false 
     }],
     ["babel-plugin-transform-react-remove-prop-types", { "removeImport": true }],
     "@babel/plugin-transform-react-constant-elements",
