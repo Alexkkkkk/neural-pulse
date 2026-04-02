@@ -77,6 +77,7 @@ const bot = new Telegraf(BOT_TOKEN);
 // --- 🛡️ SECURITY UTILS ---
 function verifyTelegramWebAppData(telegramInitData) {
     try {
+        if (!telegramInitData) return false;
         const urlParams = new URLSearchParams(telegramInitData);
         const hash = urlParams.get('hash');
         urlParams.delete('hash');
@@ -203,14 +204,12 @@ async function setupSupremeInterface(app) {
         const check = crypto.createHmac('sha256', SECRET_SALT).update(`${id}:${balance}`).digest('hex');
         
         if (hash !== check) {
-            // Если хэш не совпал, проверяем initData через Telegram
             if (initData && !verifyTelegramWebAppData(initData)) {
                 neuralLog(`SECURITY ALERT: Deep validation failed for user ${id}`, 'WARN');
                 return res.status(403).send("SIGN_ERR");
             }
             
-            // Расширенный лог для дебага хэша
-            neuralLog(`INVALID HASH | User: ${id} | Rec: ${hash?.slice(0,8)}... | Exp: ${check.slice(0,8)}...`, 'WARN');
+            neuralLog(`INVALID HASH | User: ${id} | Rec: ${hash ? hash.slice(0,8) : 'undefined'}... | Exp: ${check.slice(0,8)}...`, 'WARN');
             return res.status(403).send("SIGN_ERR");
         }
         
