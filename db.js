@@ -5,7 +5,6 @@ import os from 'os';
 import cluster from 'cluster'; 
 
 // --- 🌐 CONFIG ---
-// Подключение к pghost.ru (SSL отключен согласно спецификации Bothost для порта 32865)
 const PG_URI = "postgresql://bothost_db_db1789af0108:hl3yLh4DQmySkEYDPYwS8fn9xkLPHYNMhmCbU8WCYXs@node1.pghost.ru:32865/bothost_db_db1789af0108";
 
 export const sequelize = new Sequelize(PG_URI, { 
@@ -56,6 +55,10 @@ export const User = sequelize.define('users', {
     referred_by: { type: DataTypes.BIGINT, allowNull: true },
     completed_tasks: { type: DataTypes.JSONB, defaultValue: [] },
     wallet: { type: DataTypes.STRING, allowNull: true },
+    
+    // --- 🛡️ ПОЛЯ ЗАЩИТЫ ---
+    last_sync_token: { type: DataTypes.STRING, allowNull: true }, // Токен для проверки последовательности сохранений
+    
     last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 }, 
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { 
@@ -84,7 +87,7 @@ export const Task = sequelize.define('tasks', {
     underscored: true 
 });
 
-// --- 📊 МОДЕЛЬ: STATS (Для графиков Dashboard) ---
+// --- 📊 МОДЕЛЬ: STATS ---
 export const Stats = sequelize.define('stats', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     user_count: { type: DataTypes.INTEGER, defaultValue: 0 },
@@ -101,13 +104,9 @@ export const Stats = sequelize.define('stats', {
     updatedAt: 'updated_at'
 });
 
-// --- 📈 МОДЕЛЬ: GLOBAL_STATS (Кэш общих данных) ---
+// --- 📈 МОДЕЛЬ: GLOBAL_STATS ---
 export const GlobalStats = sequelize.define('global_stats', {
-    id: { 
-        type: DataTypes.INTEGER, 
-        primaryKey: true, 
-        autoIncrement: false // Явно отключаем, так как ID всегда 1
-    },
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: false },
     total_balance: { 
         type: DataTypes.DECIMAL(32, 2), 
         defaultValue: 0,
@@ -120,13 +119,11 @@ export const GlobalStats = sequelize.define('global_stats', {
     underscored: true 
 });
 
-// Настройка связей
 User.hasMany(User, { as: 'ReferralList', foreignKey: 'referred_by' });
 User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
 // --- 📊 ТЕЛЕМЕТРИЯ ---
 export const logSystemStats = async () => {
-    // Проверка на мастер-процесс для кластерных сред
     const isPrimary = cluster.isPrimary || (cluster.isWorker && cluster.worker.id === 1);
     if (!isPrimary) return;
 
@@ -143,10 +140,11 @@ export const logSystemStats = async () => {
         const totalBalance = gStats?.total_balance ?? 0;
         const totalUsers = gStats?.total_users ?? 0;
         
-        // Сбор метрик системы
         const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
-        const cpus = os.cpus();
-        const cpuCount = cpus && cpus.length ? cpus.length : 1;
+        
+        // ПРАВКА: Более надежный расчет CPU
+        const cpus = os.cpus() || [];
+        const cpuCount = cpus.length || 1;
         const loadRaw = os.loadavg()?.[0] || 0;
         const load = ((loadRaw / cpuCount) * 100).toFixed(1);
 
@@ -159,7 +157,7 @@ export const logSystemStats = async () => {
             db_latency: parseFloat(dbLatency)
         });
         
-        // Очистка старых данных (храним историю 48 часов)
+        // Очистка старых данных (храним 48 часов)
         await Stats.destroy({
             where: {
                 created_at: { [Op.lt]: new Date(Date.now() - 48 * 60 * 60 * 1000) }
@@ -179,17 +177,14 @@ export const initDB = async () => {
         const isPrimary = cluster.isPrimary || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // Синхронизация структуры
             await sequelize.sync({ alter: true });
             await sessionStore.sync();
             
-            // Инициализация глобальной статистики (синглтон)
             await GlobalStats.findOrCreate({ 
                 where: { id: 1 }, 
                 defaults: { id: 1, total_balance: 0, total_users: 0 } 
             });
 
-            // Наполнение дефолтными задачами
             if (await Task.count() === 0) {
                 await Task.bulkCreate([
                     { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
@@ -199,7 +194,6 @@ export const initDB = async () => {
                 console.log('▪️ [DB] DEFAULT_TASKS_LOADED');
             }
 
-            // Интервал сбора метрик (30 секунд)
             setInterval(logSystemStats, 30000); 
             await logSystemStats(); 
         }
