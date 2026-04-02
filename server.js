@@ -75,7 +75,6 @@ const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
 const bot = new Telegraf(BOT_TOKEN);
 
 // --- 🛡️ SECURITY UTILS ---
-// Функция проверки подписи данных от Telegram (для Mini App)
 function verifyTelegramWebAppData(telegramInitData) {
     try {
         const urlParams = new URLSearchParams(telegramInitData);
@@ -117,7 +116,7 @@ const executeMassiveCommit = async () => {
             for (const [id, data] of snapshot) {
                 await User.update(
                     { balance: data.balance }, 
-                    { where: { id }, transaction: t }
+                    { where: { id: id.toString() }, transaction: t }
                 );
             }
         });
@@ -197,22 +196,17 @@ async function setupSupremeInterface(app) {
         });
     });
 
-    // API для сохранения баланса из Mini App
     app.post('/api/save', (req, res) => {
         const { id, balance, hash, initData } = req.body;
-        
         if (!id || balance === undefined) return res.status(400).send("DATA_MISSING");
 
-        // 1. Проверка игровой транзакции (SECRET_SALT)
         const check = crypto.createHmac('sha256', SECRET_SALT).update(`${id}:${balance}`).digest('hex');
         
         if (hash !== check) {
-            // Если передан initData, проверяем его через Telegram (для доп. безопасности)
             if (initData && !verifyTelegramWebAppData(initData)) {
                 neuralLog(`SECURITY ALERT: Deep validation failed for user ${id}`, 'WARN');
                 return res.status(403).send("SIGN_ERR");
             }
-            
             neuralLog(`SECURITY ALERT: Invalid hash from user ${id}`, 'WARN');
             return res.status(403).send("SIGN_ERR");
         }
@@ -268,6 +262,10 @@ async function startSupreme() {
 
     try {
         await initDB();
+        
+        // Гарантируем наличие записи GlobalStats для корректного пульса
+        await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
+
         await setupSupremeInterface(app);
         setupBot(bot);
 
@@ -277,7 +275,15 @@ async function startSupreme() {
         }, 3000);
 
         const webhookPath = `/telegraf/${BOT_TOKEN}`;
-        app.post(webhookPath, (req, res) => bot.handleUpdate(req.body, res));
+        
+        // Безопасный обработчик вебхука
+        app.post(webhookPath, (req, res) => {
+            bot.handleUpdate(req.body, res).catch((err) => {
+                neuralLog(`Webhook Logic Error: ${err.message}`, 'ERROR');
+                if (!res.writableEnded) res.sendStatus(500);
+            });
+        });
+
         app.get(webhookPath, (req, res) => res.send('System Pulse Active.'));
         
         await bot.telegram.setWebhook(`${DOMAIN}${webhookPath}`);
@@ -288,9 +294,11 @@ async function startSupreme() {
 
         const shutdown = async () => {
             neuralLog('☢️ SHUTTING DOWN...', 'WARN');
+            // Ожидаем финального сохранения данных перед выходом
             await executeMassiveCommit();
             server.close(async () => {
                 await sequelize.close();
+                neuralLog('🛑 Core halted.', 'CORE');
                 process.exit(0);
             });
         };
