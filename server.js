@@ -17,7 +17,7 @@ import * as AdminJSSequelize from '@adminjs/sequelize';
 import { ComponentLoader } from 'adminjs';
 
 // Ядро данных
-import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB } from './db.js';
+import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB, Op } from './db.js';
 
 const logger = pino({ transport: { target: 'pino-pretty' } });
 const __filename = fileURLToPath(import.meta.url);
@@ -43,9 +43,14 @@ class GodCore extends EventEmitter {
                 this.cache.lastUpdate = Date.now();
             }
             
+            // Защита расчета нагрузки
+            const cpus = os.cpus() || [];
+            const cpuCount = cpus.length || 1;
+            const loadRaw = os.loadavg()?.[0] || 0;
+
             return {
                 event_type: 'SYSTEM',
-                core_load: parseFloat((os.loadavg()[0] * 10).toFixed(1)),
+                core_load: parseFloat(((loadRaw / cpuCount) * 100).toFixed(1)),
                 sync_memory: parseFloat(((memory.rss / os.totalmem()) * 100).toFixed(1)),
                 active_agents: this.cache.gs?.total_users || 0,
                 network_latency: Math.floor(Math.random() * 20 + 10),
@@ -124,6 +129,7 @@ const executeMassiveCommit = async () => {
         neuralLog(`Delta-Sync: ${snapshot.length} units committed.`, 'SUCCESS');
     } catch (e) {
         neuralLog(`🚨 SYNC ERROR: ${e.message}`, 'ERROR');
+        // Возвращаем данные в буфер в случае провала
         snapshot.forEach(([id, data]) => {
             if (!updateBuffer.has(id)) updateBuffer.set(id, data);
         });
@@ -197,40 +203,30 @@ async function setupSupremeInterface(app) {
         });
     });
 
-    // --- 💾 ОБНОВЛЕННЫЙ API SAVE С ПРОВЕРКОЙ ПО БАЗЕ ---
+    // API SAVE
     app.post('/api/save', async (req, res) => {
         const { id, balance, hash, initData } = req.body;
         if (!id || balance === undefined) return res.status(400).send("DATA_MISSING");
 
         try {
-            // Ищем пользователя в БД, чтобы взять его текущий "nonce" (время последнего обновления)
             const user = await User.findByPk(id.toString());
             if (!user) return res.status(404).send("USER_NOT_FOUND");
 
-            // Генерируем проверочный хеш: Баланс + Соль + Время последнего сохранения в БД
             const nonce = new Date(user.updatedAt).getTime();
             const check = crypto.createHmac('sha256', SECRET_SALT)
                 .update(`${id}:${balance}:${nonce}`)
                 .digest('hex');
             
             if (hash !== check) {
-                // Если хеш не совпал, пробуем глубокую валидацию через Telegram (на случай первого входа)
                 if (initData && verifyTelegramWebAppData(initData)) {
                      updateBuffer.set(id.toString(), { balance });
                      return res.json({ s: 1, next_nonce: Date.now() });
                 }
-
-                neuralLog(`INVALID HASH | User: ${id} | Expected Nonce: ${nonce}`, 'WARN');
-                return res.status(403).json({ 
-                    error: "SIGN_ERR", 
-                    required_nonce: nonce 
-                });
+                neuralLog(`INVALID HASH | User: ${id}`, 'WARN');
+                return res.status(403).json({ error: "SIGN_ERR", required_nonce: nonce });
             }
             
-            // Если все ок, записываем в буфер
             updateBuffer.set(id.toString(), { balance });
-            
-            // Возвращаем s:1 и новый nonce для следующего запроса фронтенда
             res.json({ s: 1, next_nonce: Date.now() });
             
         } catch (err) {
@@ -239,7 +235,6 @@ async function setupSupremeInterface(app) {
         }
     });
 
-    // API для получения текущих данных (и nonce) при старте приложения
     app.get('/api/user/:id', async (req, res) => {
         try {
             const user = await User.findByPk(req.params.id);
@@ -300,9 +295,7 @@ async function startSupreme() {
 
     try {
         await initDB();
-        
         await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
-
         await setupSupremeInterface(app);
         setupBot(bot);
 
@@ -312,7 +305,6 @@ async function startSupreme() {
         }, 3000);
 
         const webhookPath = `/telegraf/${BOT_TOKEN}`;
-        
         app.post(webhookPath, (req, res) => {
             bot.handleUpdate(req.body, res).catch((err) => {
                 neuralLog(`Webhook Logic Error: ${err.message}`, 'ERROR');
@@ -320,8 +312,6 @@ async function startSupreme() {
             });
         });
 
-        app.get(webhookPath, (req, res) => res.send('System Pulse Active.'));
-        
         await bot.telegram.setWebhook(`${DOMAIN}${webhookPath}`);
 
         const server = app.listen(PORT, '0.0.0.0', () => {
@@ -330,10 +320,9 @@ async function startSupreme() {
 
         const shutdown = async () => {
             neuralLog('☢️ SHUTTING DOWN...', 'WARN');
-            await executeMassiveCommit();
+            await executeMassiveCommit(); // Сбрасываем буфер перед выходом
             server.close(async () => {
                 await sequelize.close();
-                neuralLog('🛑 Core halted.', 'CORE');
                 process.exit(0);
             });
         };
@@ -346,9 +335,5 @@ async function startSupreme() {
         process.exit(1);
     }
 }
-
-process.on('unhandledRejection', (reason) => {
-    logger.error({ reason }, 'Unhandled Rejection');
-});
 
 startSupreme();
