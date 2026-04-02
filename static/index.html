@@ -49,7 +49,7 @@
         header { padding: 15px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
         .u-avatar img { width: 42px; height: 42px; border-radius: 10px; border: 1px solid var(--neon); object-fit: cover; }
         .u-info b { font-size: 14px; color: var(--neon); text-transform: uppercase; }
-        .u-info small { font-size: 10px; color: #888; display: block; }
+        .u-info small { font-size: 10px; color: #888; display: flex; align-items: center; }
         .u-lvl { margin-left: auto; background: var(--neon); color: black; padding: 4px 10px; border-radius: 6px; font-weight: 900; font-size: 12px; }
 
         /* --- Stats --- */
@@ -106,7 +106,7 @@
             box-shadow: 0 -10px 30px rgba(0,255,255,0.1);
         }
         .handle { width: 40px; height: 4px; background: #222; border-radius: 2px; margin: -10px auto 20px; }
-        .m-close { width: 100%; margin-top: 20px; padding: 15px; background: #111; border: 1px solid #222; color: #444; border-radius: 12px; font-family: monospace; font-size: 12px; }
+        .m-close { width: 100%; margin-top: 20px; padding: 15px; background: #111; border: 1px solid #222; color: #666; border-radius: 12px; font-family: monospace; font-size: 12px; font-weight: bold; }
         
         .task-item { background: var(--panel); border: 1px solid var(--border); border-radius: 15px; padding: 18px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
         .task-item b { color: var(--neon); font-size: 16px; }
@@ -118,7 +118,7 @@
         .ref-box { background: #000; border: 1px dashed var(--neon); padding: 15px; border-radius: 12px; margin: 15px 0; word-break: break-all; font-family: monospace; font-size: 12px; color: var(--neon); text-align: center; }
         
         /* Sync Status Light */
-        #sync-status { width: 6px; height: 6px; border-radius: 50%; background: #555; display: inline-block; margin-right: 5px; transition: 0.3s; }
+        #sync-status { width: 6px; height: 6px; border-radius: 50%; background: #333; display: inline-block; margin-right: 5px; transition: 0.3s; }
         #sync-status.saving { background: var(--neon); box-shadow: 0 0 8px var(--neon); }
 
         /* Wallet Button Styles */
@@ -136,6 +136,8 @@
         .top-rank { font-weight: 900; color: var(--neon); width: 30px; }
         .top-name { flex: 1; font-size: 14px; font-weight: bold; }
         .top-val { font-family: monospace; color: var(--neon); }
+        
+        h2 { text-transform: uppercase; letter-spacing: 2px; color: var(--neon); font-size: 18px; text-align: center; margin-bottom: 15px; }
     </style>
 </head>
 <body>
@@ -153,7 +155,7 @@
             <div class="u-avatar"><img id="my-avatar" src="images/logo.png"></div>
             <div class="u-info">
                 <b id="my-name">AGENT</b>
-                <small><span id="sync-status"></span><span id="ui-rank">SCANNING SYSTEM...</span></small>
+                <small><span id="sync-status"></span><span id="ui-rank">SCANNING...</span></small>
             </div>
             <div class="u-lvl" id="my-lvl">LVL 1</div>
         </header>
@@ -248,7 +250,7 @@
                         const db = await r.json();
                         this.data = { ...this.data, ...db };
                     }
-                } catch(e) { console.warn("Cache mode active"); }
+                } catch(e) { console.warn("Offline Mode"); }
 
                 document.getElementById('my-name').innerText = (u.username || u.first_name).toUpperCase();
                 if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
@@ -287,7 +289,7 @@
                 for(let i=0; i<touches.length; i++) {
                     if(this.data.energy >= 1) {
                         this.data.balance += this.data.tap;
-                        this.data.energy -= 1;
+                        this.data.energy = Math.max(0, this.data.energy - 1);
                         this.hasUnsavedChanges = true;
                         ui.pop(touches[i], this.data.tap);
                     }
@@ -330,7 +332,7 @@
                 } catch(e) { this.hasUnsavedChanges = true; } 
                 finally {
                     this.isSaving = false;
-                    if(statusLight) statusLight.classList.remove('saving');
+                    setTimeout(() => { if(statusLight) statusLight.classList.remove('saving'); }, 500);
                 }
             },
 
@@ -348,7 +350,7 @@
                     }
                     if(changed) ui.render();
                 }, 1000);
-                setInterval(() => this.save(), 5000);
+                setInterval(() => this.save(), 7000);
             }
         };
 
@@ -364,7 +366,7 @@
             startLoader() {
                 let p = 0;
                 const i = setInterval(() => {
-                    p += Math.floor(Math.random() * 5) + 2;
+                    p += Math.floor(Math.random() * 5) + 5;
                     if(p > 100) p = 100;
                     document.getElementById('pct').innerText = p + '%';
                     document.getElementById('bar').style.width = p + '%';
@@ -378,7 +380,7 @@
                             }, 500);
                         }, 300);
                     }
-                }, 80);
+                }, 100);
             },
 
             render() {
@@ -390,9 +392,9 @@
                 document.getElementById('ui-profit').innerText = Math.floor(d.profit).toLocaleString();
                 
                 let rank = "RECRUIT";
-                if(d.balance > 50000) rank = "TECHNO ACADEMY";
-                if(d.balance > 250000) rank = "CYBER MANTIS";
-                if(d.balance > 1000000) rank = "NEURAL OVERLORD";
+                if(d.balance > 50000) rank = "ACADEMY";
+                if(d.balance > 250000) rank = "MANTIS";
+                if(d.balance > 1000000) rank = "OVERLORD";
                 document.getElementById('ui-rank').innerText = rank;
                 document.getElementById('my-lvl').innerText = `LVL ${Math.floor(Math.sqrt(d.balance / 5000)) + 1}`;
             },
@@ -424,15 +426,15 @@
                     <div class="task-item" onclick="game.upgrade('tap')"><div><b>Multitap</b><br><small>Level ${game.data.tap_lvl}</small></div><b>${this.num(game.getCost('tap'))}</b></div>
                     <div class="task-item" onclick="game.upgrade('energy')"><div><b>Energy Cap</b><br><small>Level ${game.data.energy_lvl}</small></div><b>${this.num(game.getCost('energy'))}</b></div>`;
                 } else if(type === 'mine') {
-                    b.innerHTML = `<h2>⛏️ NEURAL MINING</h2><br>
+                    b.innerHTML = `<h2>⛏️ MINING</h2><br>
                     <div class="task-item" onclick="game.upgrade('mine')"><div><b>Neural Node</b><br><small>Level ${game.data.mine_lvl}</small><br><small style="color:cyan">+250 NP/hr</small></div><b>${this.num(game.getCost('mine'))}</b></div>`;
                 } else if(type === 'ai') {
                     b.innerHTML = `<h2>🤖 AI ADVISOR</h2><div class="ai-terminal" id="ai-res">System Standby...</div><button class="task-btn" style="width:100%" onclick="ui.askAI()">RUN NEURAL SCAN</button>`;
                 } else if(type === 'friends') {
                     const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
-                    b.innerHTML = `<h2>🤝 REFERRALS</h2><p style="font-size:12px; color:#888; margin-bottom:10px;">Get 10% from friends.</p><div class="ref-box">${link}</div><button class="task-btn" style="width:100%" onclick="ui.copyRef('${link}')">COPY LINK</button>`;
+                    b.innerHTML = `<h2>🤝 REFERRALS</h2><p style="text-align:center; font-size:12px; color:#888; margin-bottom:10px;">Get 10% from friends.</p><div class="ref-box">${link}</div><button class="task-btn" style="width:100%" onclick="ui.copyRef('${link}')">COPY LINK</button>`;
                 } else if(type === 'top') {
-                    b.innerHTML = `<h2>🏆 TOP AGENTS</h2><br><div id="top-list-container">Loading data...</div>`;
+                    b.innerHTML = `<h2>🏆 TOP AGENTS</h2><br><div id="top-list-container">Loading...</div>`;
                     try {
                         const r = await fetch('/api/top');
                         const top = await r.json();
@@ -441,7 +443,7 @@
                             html += `<li class="top-item"><span class="top-rank">#${i+1}</span><span class="top-name">${u.username}</span><span class="top-val">${this.num(u.balance)}</span></li>`;
                         });
                         b.querySelector('#top-list-container').innerHTML = html + '</ul>';
-                    } catch(e) { b.querySelector('#top-list-container').innerText = "Failed to load TOP."; }
+                    } catch(e) { b.querySelector('#top-list-container').innerText = "Data unavailable."; }
                 } else if(type === 'wallet') {
                     const isConnected = !!game.data.wallet;
                     const addr = game.data.wallet;
@@ -486,7 +488,7 @@
 
             copyRef(url) { 
                 navigator.clipboard.writeText(url).then(() => {
-                    tg.showAlert('Copied!');
+                    tg.showAlert('Link copied!');
                     tg.HapticFeedback.notificationOccurred('success');
                 }); 
             },
