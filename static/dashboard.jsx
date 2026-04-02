@@ -46,12 +46,14 @@ const SparkGraph = memo(({ data, color, height = 45 }) => {
   );
 });
 
-// --- 📊 ИНДИКАТОР РЕСУРСА ---
-const TelemetryCard = ({ label, value, data, color }) => (
+// --- 📊 ИНДИКАТОР РЕСУРСА (ИЗМЕНЕНО: Добавлен пропс unit) ---
+const TelemetryCard = ({ label, value, data, color, unit = "%" }) => (
   <div style={{ flex: 1, minWidth: '140px', background: 'rgba(255,255,255,0.02)', padding: '15px', borderRadius: '10px', border: `1px solid ${CYBER.border}` }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
       <span style={{ color: '#4a5568', fontSize: '9px', fontWeight: '800', textTransform: 'uppercase' }}>{label}</span>
-      <span style={{ color, fontSize: '11px', fontWeight: 'bold', fontFamily: 'Roboto Mono' }}>{Math.round(value)}%</span>
+      <span style={{ color, fontSize: '11px', fontWeight: 'bold', fontFamily: 'Roboto Mono' }}>
+        {unit === '%' ? Math.round(value) : value}{unit}
+      </span>
     </div>
     <SparkGraph data={data} color={color} height={30} />
   </div>
@@ -62,7 +64,7 @@ const DataCard = ({ label, value, unit, data, color, isTon }) => (
   <div className="card">
     <div className="label" style={{ color }}>{label}</div>
     <div className="val-main">
-      {value}
+      {typeof value === 'number' ? value.toLocaleString() : value}
       <span className="val-unit">{isTon ? '💎 ' : ''}{unit}</span>
     </div>
     <SparkGraph data={data} color={color} />
@@ -81,7 +83,6 @@ const Dashboard = (props) => {
   const [wallet, setWallet] = useState({ connected: false, address: null, balance: 0, shortAddress: 'OFFLINE' });
   const [users] = useState(initialData?.usersList || []);
   
-  // Состояния для метрик
   const [stats, setStats] = useState({ cpu: 0, ram: 0, online: 0, latency: 0, liquidity: 0 });
   const [history, setHistory] = useState({
     cpu: Array(15).fill(0), ram: Array(15).fill(0), stability: Array(15).fill(100),
@@ -98,10 +99,14 @@ const Dashboard = (props) => {
   const updateHistoryArray = (arr, newVal) => [...arr.slice(1), newVal];
 
   const processStreamUpdate = (newData) => {
+    // Если бэкенд шлет в процентах, а нужно в MB, здесь может понадобиться коэффициент.
+    // Пока считаем, что newData.sync_memory — это уже мегабайты.
+    const ramValue = newData.sync_memory ?? 0;
+
     setStats(prev => ({
       ...prev,
       cpu: newData.core_load ?? prev.cpu,
-      ram: newData.sync_memory ?? prev.ram,
+      ram: ramValue,
       online: newData.active_agents ?? prev.online,
       latency: newData.network_latency ?? prev.latency,
       liquidity: newData.pulse_liquidity ?? prev.liquidity
@@ -109,7 +114,7 @@ const Dashboard = (props) => {
 
     setHistory(p => ({
       cpu: updateHistoryArray(p.cpu, newData.core_load ?? p.cpu[p.cpu.length-1]),
-      ram: updateHistoryArray(p.ram, newData.sync_memory ?? p.ram[p.ram.length-1]),
+      ram: updateHistoryArray(p.ram, ramValue),
       stability: updateHistoryArray(p.stability, Math.max(0, 100 - ((newData.network_latency || 20) / 5))),
       online: updateHistoryArray(p.online, newData.active_agents ?? p.online[p.online.length-1]),
       ton: updateHistoryArray(p.ton, wallet.balance),
@@ -182,12 +187,13 @@ const Dashboard = (props) => {
         .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; }
         .res-panel { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; padding: 15px; margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap; }
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 20px; border-radius: 12px; position: relative; overflow: hidden; }
+        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 20px; border-radius: 12px; position: relative; overflow: hidden; transition: border 0.3s; }
+        .card:hover { border-color: ${CYBER.primary}; }
         .label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; opacity: 0.7; }
-        .val-main { font-size: 32px; font-weight: 700; display: flex; align-items: baseline; }
+        .val-main { font-size: 32px; font-weight: 700; display: flex; align-items: baseline; font-family: 'Roboto Mono'; }
         .val-unit { font-size: 10px; color: #4a5568; margin-left: 6px; font-weight: 800; }
-        .pulse-dot { width: 6px; height: 6px; background: ${CYBER.success}; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px ${CYBER.success}; animation: blink 2s infinite; }
-        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .pulse-dot { width: 6px; height: 6px; background: ${CYBER.success}; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px ${CYBER.success}; animation: blink 1.5s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(0.8); } }
         .cyber-table { width: 100%; border-collapse: collapse; font-size: 12px; }
         .cyber-table th { text-align: left; padding: 12px; color: ${CYBER.primary}; border-bottom: 1px solid ${CYBER.border}; font-size: 9px; text-transform: uppercase; }
         .cyber-table td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.03); font-family: 'Roboto Mono'; }
@@ -216,14 +222,15 @@ const Dashboard = (props) => {
         <>
           <div className="res-panel">
             <TelemetryCard label="Core_Node_Load" value={stats.cpu} data={history.cpu} color={CYBER.primary} />
-            <TelemetryCard label="Sync_Memory" value={stats.ram} data={history.ram} color={CYBER.secondary} />
+            {/* ИЗМЕНЕНО: Добавлен unit="MB" */}
+            <TelemetryCard label="Sync_Memory" value={stats.ram} data={history.ram} color={CYBER.secondary} unit="MB" />
             <TelemetryCard label="Stability" value={Math.max(0, 100 - (stats.latency / 5))} data={history.stability} color={CYBER.warning} />
           </div>
 
           <div className="grid">
             <DataCard label="Active_Agents" value={stats.online} unit="USERS" data={history.online} color={CYBER.success} />
             <DataCard label="Live_Wallet_TON" value={wallet.connected ? wallet.balance.toFixed(2) : "0.00"} unit="TON" data={history.ton} color={CYBER.ton} isTon={true} />
-            <DataCard label="Pulse_Liquidity" value={stats.liquidity.toLocaleString()} unit="$NP" data={history.liq} color={CYBER.warning} />
+            <DataCard label="Pulse_Liquidity" value={stats.liquidity} unit="$NP" data={history.liq} color={CYBER.warning} />
             <DataCard label="Network_Latency" value={Math.round(stats.latency)} unit="MS" data={history.lat} color={CYBER.danger} />
           </div>
         </>
