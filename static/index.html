@@ -123,11 +123,12 @@
 
         /* Wallet Button Styles */
         .wallet-connect-btn {
-            width: 100%; height: 60px; background: #111; border: 1px solid var(--neon);
+            width: 100%; height: 60px; background: #111; border: 2px solid var(--neon);
             color: var(--neon); border-radius: 15px; font-size: 14px; font-weight: 900;
             margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 10px;
+            text-transform: uppercase; letter-spacing: 1px;
         }
-        .wallet-connect-btn.connected { border-color: #ff3333; color: #ff3333; }
+        .wallet-connect-btn.connected { border-color: #ff3333; color: #ff3333; box-shadow: 0 0 10px rgba(255, 51, 51, 0.2); }
     </style>
 </head>
 <body>
@@ -221,7 +222,7 @@
                 // --- TON Connect Initialization ---
                 try {
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                        manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json', // Твой манифест
+                        manifestUrl: 'https://np.bothost.tech/static/tonconnect-manifest.json', // Добавил /static/ для точности
                         buttonRootId: null
                     });
                     
@@ -229,22 +230,20 @@
                         this.data.wallet = w ? w.account.address : null;
                         document.getElementById('wallet-btn-label').innerText = w ? "✅" : "👛";
                         this.save(true);
-                        // Если модалка открыта, перерендерим её для кошелька
-                        const modal = document.getElementById('modal');
-                        if(modal.classList.contains('active') && this.currentModal === 'wallet') {
+                        
+                        // Если модалка кошелька открыта, обновляем её содержимое
+                        if(ui.currentModal === 'wallet') {
                             ui.openM('wallet');
                         }
                     });
                 } catch(e) { console.error("TON Error:", e); }
 
-                // --- Initial Load ---
+                // --- Initial Load From Server ---
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
                     if (r.ok) {
                         const db = await r.json();
-                        if (!this.data.version || db.version >= this.data.version) {
-                            this.data = { ...this.data, ...db };
-                        }
+                        this.data = { ...this.data, ...db };
                     }
                 } catch(e) { console.warn("Using local cache mode"); }
 
@@ -255,7 +254,7 @@
                 this.startLoops();
                 ui.render();
 
-                // --- Event Listeners ---
+                // --- Tap Events ---
                 const target = document.getElementById('main-target');
                 target.addEventListener('touchstart', (e) => {
                     e.preventDefault();
@@ -319,12 +318,12 @@
                 this.data.version = Date.now();
                 const statusLight = document.getElementById('sync-status');
                 if(statusLight) statusLight.classList.add('saving');
-                const payload = JSON.stringify(this.data);
+                
                 try {
                     await fetch('/api/save', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: payload,
+                        body: JSON.stringify(this.data),
                         keepalive: true 
                     });
                 } catch(e) {
@@ -407,61 +406,65 @@
                 setTimeout(() => div.remove(), 650);
             },
 
-            async openM(type) {
+            openM(type) {
                 this.currentModal = type;
                 const b = document.getElementById('m-body');
                 const m = document.getElementById('modal');
                 m.classList.add('active');
-                b.innerHTML = `<div style="text-align:center; padding:40px; color:cyan; font-family:monospace;">ACCESSING DATA...</div>`;
                 
-                setTimeout(() => {
-                    if(type === 'boost') {
-                        b.innerHTML = `<h2>🚀 UPGRADES</h2><br>
-                        <div class="task-item" onclick="game.upgrade('tap')"><div><b>Multitap</b><br><small>Level ${game.data.tap_lvl}</small></div><b>${game.getCost('tap')} NP</b></div>
-                        <div class="task-item" onclick="game.upgrade('energy')"><div><b>Energy Cap</b><br><small>Level ${game.data.energy_lvl}</small></div><b>${game.getCost('energy')} NP</b></div>`;
-                    } else if(type === 'mine') {
-                        b.innerHTML = `<h2>⛏️ NEURAL MINING</h2><br>
-                        <div class="task-item" onclick="game.upgrade('mine')"><div><b>Neural Node</b><br><small>Level ${game.data.mine_lvl}</small><br><small style="color:cyan">+250 NP/hr</small></div><b>${game.getCost('mine')} NP</b></div>`;
-                    } else if(type === 'ai') {
-                        b.innerHTML = `<h2>🤖 AI ADVISOR</h2><div class="ai-terminal" id="ai-res">System Standby. Awaiting analysis...</div><button class="task-btn" style="width:100%" onclick="ui.askAI()">RUN NEURAL SCAN</button>`;
-                    } else if(type === 'friends') {
-                        const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
-                        b.innerHTML = `<h2>🤝 REFERRALS</h2><p style="font-size:12px; color:#888;">Invite friends and get 10% of their earnings.</p><div class="ref-box">${link}</div><button class="task-btn" style="width:100%" onclick="ui.copyRef('${link}')">COPY LINK</button>`;
-                    } else if(type === 'wallet') {
-                        const isConnected = !!game.data.wallet;
-                        const shortAddr = isConnected ? game.data.wallet.slice(0,6) + '...' + game.data.wallet.slice(-4) : '';
-                        
-                        b.innerHTML = `
-                            <h2>👛 TON WALLET</h2>
-                            <p style="text-align:center; font-size:12px; color:#888; margin-bottom:15px;">
-                                ${isConnected ? 'CONNECTED: ' + shortAddr : 'Connect your wallet for future airdrops'}
-                            </p>
-                            <button id="custom-ton-btn" class="wallet-connect-btn ${isConnected ? 'connected' : ''}">
-                                ${isConnected ? 'DISCONNECT WALLET' : 'CONNECT TON WALLET'}
-                            </button>
-                        `;
+                // Рендерим контент в зависимости от типа
+                if(type === 'boost') {
+                    b.innerHTML = `<h2>🚀 UPGRADES</h2><br>
+                    <div class="task-item" onclick="game.upgrade('tap')"><div><b>Multitap</b><br><small>Level ${game.data.tap_lvl}</small></div><b>${game.getCost('tap')} NP</b></div>
+                    <div class="task-item" onclick="game.upgrade('energy')"><div><b>Energy Cap</b><br><small>Level ${game.data.energy_lvl}</small></div><b>${game.getCost('energy')} NP</b></div>`;
+                } else if(type === 'mine') {
+                    b.innerHTML = `<h2>⛏️ NEURAL MINING</h2><br>
+                    <div class="task-item" onclick="game.upgrade('mine')"><div><b>Neural Node</b><br><small>Level ${game.data.mine_lvl}</small><br><small style="color:cyan">+250 NP/hr</small></div><b>${game.getCost('mine')} NP</b></div>`;
+                } else if(type === 'ai') {
+                    b.innerHTML = `<h2>🤖 AI ADVISOR</h2><div class="ai-terminal" id="ai-res">System Standby. Awaiting analysis...</div><button class="task-btn" style="width:100%" onclick="ui.askAI()">RUN NEURAL SCAN</button>`;
+                } else if(type === 'friends') {
+                    const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
+                    b.innerHTML = `<h2>🤝 REFERRALS</h2><p style="font-size:12px; color:#888;">Invite friends and get 10% of their earnings.</p><div class="ref-box">${link}</div><button class="task-btn" style="width:100%" onclick="ui.copyRef('${link}')">COPY LINK</button>`;
+                } else if(type === 'wallet') {
+                    const isConnected = !!game.data.wallet;
+                    const addr = game.data.wallet;
+                    const shortAddr = isConnected ? addr.slice(0,6) + '...' + addr.slice(-4) : '';
+                    
+                    b.innerHTML = `
+                        <h2>👛 TON WALLET</h2>
+                        <p style="text-align:center; font-size:12px; color:#888; margin-bottom:15px; font-family:monospace;">
+                            ${isConnected ? 'CONNECTED AS: ' + shortAddr : 'Connect your TON wallet for future airdrops and rewards.'}
+                        </p>
+                        <button id="custom-ton-btn" class="wallet-connect-btn ${isConnected ? 'connected' : ''}">
+                            ${isConnected ? 'TERMINATE SESSION' : 'CONNECT TON KEEPER'}
+                        </button>
+                    `;
 
-                        document.getElementById('custom-ton-btn').onclick = async () => {
+                    document.getElementById('custom-ton-btn').onclick = async () => {
+                        try {
                             if(tonConnectUI.connected) {
                                 await tonConnectUI.disconnect();
                             } else {
                                 await tonConnectUI.openModal();
                             }
-                        };
-                    } else if(type === 'tasks') {
-                        const t1 = game.data.completed_tasks.includes('tg') ? 'DONE' : '+10,000';
-                        const t2 = game.data.completed_tasks.includes('x') ? 'DONE' : '+5,000';
-                        b.innerHTML = `<h2>📋 MISSIONS</h2><br>
-                        <div class="task-item"><span>Join Community</span><button class="task-btn" onclick="ui.doTask('tg', 'https://t.me/neural_pulse', 10000)" ${t1==='DONE'?'disabled':''}>${t1}</button></div>
-                        <div class="task-item"><span>Follow X</span><button class="task-btn" onclick="ui.doTask('x', 'https://x.com/', 5000)" ${t2==='DONE'?'disabled':''}>${t2}</button></div>`;
-                    } else if(type === 'bonus') {
-                        const canClaim = Date.now() - (game.data.last_bonus || 0) > 24*60*60*1000;
-                        b.innerHTML = `<h2>🎁 DAILY REWARD</h2><br><p style="text-align:center; margin-bottom:15px;">Claim your daily maintenance bonus</p>
-                        <button class="task-btn" style="width:100%; height:60px;" onclick="ui.claimDaily()" ${!canClaim?'disabled':''}>
-                            ${canClaim ? 'CLAIM 5,000 NP' : 'WAIT 24H'}
-                        </button>`;
-                    }
-                }, 100);
+                        } catch(e) {
+                            console.error("Wallet Action Error:", e);
+                            tg.showAlert("Wallet interaction failed. Try again.");
+                        }
+                    };
+                } else if(type === 'tasks') {
+                    const t1 = game.data.completed_tasks.includes('tg') ? 'DONE' : '+10,000';
+                    const t2 = game.data.completed_tasks.includes('x') ? 'DONE' : '+5,000';
+                    b.innerHTML = `<h2>📋 MISSIONS</h2><br>
+                    <div class="task-item"><span>Join Community</span><button class="task-btn" onclick="ui.doTask('tg', 'https://t.me/neural_pulse', 10000)" ${t1==='DONE'?'disabled':''}>${t1}</button></div>
+                    <div class="task-item"><span>Follow X</span><button class="task-btn" onclick="ui.doTask('x', 'https://x.com/', 5000)" ${t2==='DONE'?'disabled':''}>${t2}</button></div>`;
+                } else if(type === 'bonus') {
+                    const canClaim = Date.now() - (game.data.last_bonus || 0) > 24*60*60*1000;
+                    b.innerHTML = `<h2>🎁 DAILY REWARD</h2><br><p style="text-align:center; margin-bottom:15px;">Claim your daily maintenance bonus</p>
+                    <button class="task-btn" style="width:100%; height:60px;" onclick="ui.claimDaily()" ${!canClaim?'disabled':''}>
+                        ${canClaim ? 'CLAIM 5,000 NP' : 'WAIT 24H'}
+                    </button>`;
+                }
             },
 
             doTask(id, url, reward) {
@@ -501,7 +504,9 @@
             claimDaily() {
                 game.data.balance += 5000;
                 game.data.last_bonus = Date.now();
-                ui.render(); ui.closeM();
+                game.hasUnsavedChanges = true;
+                ui.render(); 
+                ui.closeM();
                 tg.showAlert("Maintenance bonus 5,000 NP credited!");
                 game.save(true);
             },
