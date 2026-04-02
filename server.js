@@ -47,13 +47,13 @@ class GodCore extends EventEmitter {
             const cpuCount = cpus.length || 1;
             const loadRaw = os.loadavg()?.[0] || 0;
 
-            // ИСПРАВЛЕНИЕ: Передаем реальные МБ для SYNC_MEMORY, чтобы избежать 0.0%
+            // РЕАЛЬНЫЕ МБ ДЛЯ DASHBOARD (RSS - Resident Set Size)
             const rssMb = parseFloat((memory.rss / 1024 / 1024).toFixed(1));
 
             return {
                 event_type: 'SYSTEM',
                 core_load: parseFloat(((loadRaw / cpuCount) * 100).toFixed(1)),
-                sync_memory: rssMb, // Теперь это мегабайты
+                sync_memory: rssMb, 
                 active_agents: this.cache.gs?.total_users || 0,
                 network_latency: Math.floor(Math.random() * 20 + 10),
                 pulse_liquidity: this.cache.gs?.total_balance || 0,
@@ -181,7 +181,7 @@ async function setupSupremeInterface(app) {
     app.use(adminJs.options.rootPath, adminRouter);
     await adminJs.initialize();
 
-    // SSE Stream
+    // SSE Stream для Dashboard
     app.get('/api/admin/stream', (req, res) => {
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
@@ -294,6 +294,7 @@ async function startSupreme() {
         await setupSupremeInterface(app);
         setupBot(bot);
 
+        // Генерация пульса данных каждые 3 секунды
         setInterval(async () => {
             const pulse = await core.generatePulse();
             if (pulse) core.emit('broadcast', pulse);
@@ -301,7 +302,7 @@ async function startSupreme() {
 
         const webhookPath = `/telegraf/${BOT_TOKEN}`;
         
-        // ИСПРАВЛЕНИЕ: Добавлен явный ответ для Webhook Telegram
+        // ОБРАБОТКА WEBHOOK
         app.post(webhookPath, (req, res) => {
             bot.handleUpdate(req.body, res)
                 .then(() => { if (!res.writableEnded) res.status(200).send('OK'); })
