@@ -203,11 +203,14 @@ async function setupSupremeInterface(app) {
         const check = crypto.createHmac('sha256', SECRET_SALT).update(`${id}:${balance}`).digest('hex');
         
         if (hash !== check) {
+            // Если хэш не совпал, проверяем initData через Telegram
             if (initData && !verifyTelegramWebAppData(initData)) {
                 neuralLog(`SECURITY ALERT: Deep validation failed for user ${id}`, 'WARN');
                 return res.status(403).send("SIGN_ERR");
             }
-            neuralLog(`SECURITY ALERT: Invalid hash from user ${id}`, 'WARN');
+            
+            // Расширенный лог для дебага хэша
+            neuralLog(`INVALID HASH | User: ${id} | Rec: ${hash?.slice(0,8)}... | Exp: ${check.slice(0,8)}...`, 'WARN');
             return res.status(403).send("SIGN_ERR");
         }
         
@@ -263,7 +266,6 @@ async function startSupreme() {
     try {
         await initDB();
         
-        // Гарантируем наличие записи GlobalStats для корректного пульса
         await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
 
         await setupSupremeInterface(app);
@@ -276,7 +278,6 @@ async function startSupreme() {
 
         const webhookPath = `/telegraf/${BOT_TOKEN}`;
         
-        // Безопасный обработчик вебхука
         app.post(webhookPath, (req, res) => {
             bot.handleUpdate(req.body, res).catch((err) => {
                 neuralLog(`Webhook Logic Error: ${err.message}`, 'ERROR');
@@ -294,7 +295,6 @@ async function startSupreme() {
 
         const shutdown = async () => {
             neuralLog('☢️ SHUTTING DOWN...', 'WARN');
-            // Ожидаем финального сохранения данных перед выходом
             await executeMassiveCommit();
             server.close(async () => {
                 await sequelize.close();
