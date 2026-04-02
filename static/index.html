@@ -129,6 +129,13 @@
             text-transform: uppercase; letter-spacing: 1px;
         }
         .wallet-connect-btn.connected { border-color: #ff3333; color: #ff3333; box-shadow: 0 0 10px rgba(255, 51, 51, 0.2); }
+
+        /* Leaderboard Style */
+        .top-list { list-style: none; }
+        .top-item { display: flex; align-items: center; padding: 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; }
+        .top-rank { font-weight: 900; color: var(--neon); width: 30px; }
+        .top-name { flex: 1; font-size: 14px; font-weight: bold; }
+        .top-val { font-family: monospace; color: var(--neon); }
     </style>
 </head>
 <body>
@@ -222,7 +229,7 @@
                 // --- TON Connect Initialization ---
                 try {
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                        manifestUrl: 'https://np.bothost.tech/static/tonconnect-manifest.json', // Добавил /static/ для точности
+                        manifestUrl: 'https://np.bothost.tech/static/tonconnect-manifest.json',
                         buttonRootId: null
                     });
                     
@@ -230,22 +237,18 @@
                         this.data.wallet = w ? w.account.address : null;
                         document.getElementById('wallet-btn-label').innerText = w ? "✅" : "👛";
                         this.save(true);
-                        
-                        // Если модалка кошелька открыта, обновляем её содержимое
-                        if(ui.currentModal === 'wallet') {
-                            ui.openM('wallet');
-                        }
+                        if(ui.currentModal === 'wallet') ui.openM('wallet');
                     });
                 } catch(e) { console.error("TON Error:", e); }
 
-                // --- Initial Load From Server ---
+                // --- Load Data ---
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
                     if (r.ok) {
                         const db = await r.json();
                         this.data = { ...this.data, ...db };
                     }
-                } catch(e) { console.warn("Using local cache mode"); }
+                } catch(e) { console.warn("Cache mode active"); }
 
                 document.getElementById('my-name').innerText = (u.username || u.first_name).toUpperCase();
                 if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
@@ -254,7 +257,6 @@
                 this.startLoops();
                 ui.render();
 
-                // --- Tap Events ---
                 const target = document.getElementById('main-target');
                 target.addEventListener('touchstart', (e) => {
                     e.preventDefault();
@@ -315,7 +317,6 @@
                 if (!this.hasUnsavedChanges && !force) return;
                 this.isSaving = true;
                 this.hasUnsavedChanges = false;
-                this.data.version = Date.now();
                 const statusLight = document.getElementById('sync-status');
                 if(statusLight) statusLight.classList.add('saving');
                 
@@ -326,9 +327,8 @@
                         body: JSON.stringify(this.data),
                         keepalive: true 
                     });
-                } catch(e) {
-                    this.hasUnsavedChanges = true; 
-                } finally {
+                } catch(e) { this.hasUnsavedChanges = true; } 
+                finally {
                     this.isSaving = false;
                     if(statusLight) statusLight.classList.remove('saving');
                 }
@@ -354,6 +354,12 @@
 
         const ui = {
             currentModal: null,
+
+            num(n) {
+                if (n >= 1e6) return (n/1e6).toFixed(2) + 'M';
+                if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+                return Math.floor(n).toLocaleString();
+            },
 
             startLoader() {
                 let p = 0;
@@ -382,6 +388,7 @@
                 document.getElementById('e-fill').style.width = (d.energy / d.max_energy * 100) + '%';
                 document.getElementById('ui-tap').innerText = `+${d.tap}`;
                 document.getElementById('ui-profit').innerText = Math.floor(d.profit).toLocaleString();
+                
                 let rank = "RECRUIT";
                 if(d.balance > 50000) rank = "TECHNO ACADEMY";
                 if(d.balance > 250000) rank = "CYBER MANTIS";
@@ -406,64 +413,51 @@
                 setTimeout(() => div.remove(), 650);
             },
 
-            openM(type) {
+            async openM(type) {
                 this.currentModal = type;
                 const b = document.getElementById('m-body');
                 const m = document.getElementById('modal');
                 m.classList.add('active');
                 
-                // Рендерим контент в зависимости от типа
                 if(type === 'boost') {
                     b.innerHTML = `<h2>🚀 UPGRADES</h2><br>
-                    <div class="task-item" onclick="game.upgrade('tap')"><div><b>Multitap</b><br><small>Level ${game.data.tap_lvl}</small></div><b>${game.getCost('tap')} NP</b></div>
-                    <div class="task-item" onclick="game.upgrade('energy')"><div><b>Energy Cap</b><br><small>Level ${game.data.energy_lvl}</small></div><b>${game.getCost('energy')} NP</b></div>`;
+                    <div class="task-item" onclick="game.upgrade('tap')"><div><b>Multitap</b><br><small>Level ${game.data.tap_lvl}</small></div><b>${this.num(game.getCost('tap'))}</b></div>
+                    <div class="task-item" onclick="game.upgrade('energy')"><div><b>Energy Cap</b><br><small>Level ${game.data.energy_lvl}</small></div><b>${this.num(game.getCost('energy'))}</b></div>`;
                 } else if(type === 'mine') {
                     b.innerHTML = `<h2>⛏️ NEURAL MINING</h2><br>
-                    <div class="task-item" onclick="game.upgrade('mine')"><div><b>Neural Node</b><br><small>Level ${game.data.mine_lvl}</small><br><small style="color:cyan">+250 NP/hr</small></div><b>${game.getCost('mine')} NP</b></div>`;
+                    <div class="task-item" onclick="game.upgrade('mine')"><div><b>Neural Node</b><br><small>Level ${game.data.mine_lvl}</small><br><small style="color:cyan">+250 NP/hr</small></div><b>${this.num(game.getCost('mine'))}</b></div>`;
                 } else if(type === 'ai') {
-                    b.innerHTML = `<h2>🤖 AI ADVISOR</h2><div class="ai-terminal" id="ai-res">System Standby. Awaiting analysis...</div><button class="task-btn" style="width:100%" onclick="ui.askAI()">RUN NEURAL SCAN</button>`;
+                    b.innerHTML = `<h2>🤖 AI ADVISOR</h2><div class="ai-terminal" id="ai-res">System Standby...</div><button class="task-btn" style="width:100%" onclick="ui.askAI()">RUN NEURAL SCAN</button>`;
                 } else if(type === 'friends') {
                     const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
-                    b.innerHTML = `<h2>🤝 REFERRALS</h2><p style="font-size:12px; color:#888;">Invite friends and get 10% of their earnings.</p><div class="ref-box">${link}</div><button class="task-btn" style="width:100%" onclick="ui.copyRef('${link}')">COPY LINK</button>`;
+                    b.innerHTML = `<h2>🤝 REFERRALS</h2><p style="font-size:12px; color:#888; margin-bottom:10px;">Get 10% from friends.</p><div class="ref-box">${link}</div><button class="task-btn" style="width:100%" onclick="ui.copyRef('${link}')">COPY LINK</button>`;
+                } else if(type === 'top') {
+                    b.innerHTML = `<h2>🏆 TOP AGENTS</h2><br><div id="top-list-container">Loading data...</div>`;
+                    try {
+                        const r = await fetch('/api/top');
+                        const top = await r.json();
+                        let html = '<ul class="top-list">';
+                        top.forEach((u, i) => {
+                            html += `<li class="top-item"><span class="top-rank">#${i+1}</span><span class="top-name">${u.username}</span><span class="top-val">${this.num(u.balance)}</span></li>`;
+                        });
+                        b.querySelector('#top-list-container').innerHTML = html + '</ul>';
+                    } catch(e) { b.querySelector('#top-list-container').innerText = "Failed to load TOP."; }
                 } else if(type === 'wallet') {
                     const isConnected = !!game.data.wallet;
                     const addr = game.data.wallet;
                     const shortAddr = isConnected ? addr.slice(0,6) + '...' + addr.slice(-4) : '';
-                    
-                    b.innerHTML = `
-                        <h2>👛 TON WALLET</h2>
-                        <p style="text-align:center; font-size:12px; color:#888; margin-bottom:15px; font-family:monospace;">
-                            ${isConnected ? 'CONNECTED AS: ' + shortAddr : 'Connect your TON wallet for future airdrops and rewards.'}
-                        </p>
-                        <button id="custom-ton-btn" class="wallet-connect-btn ${isConnected ? 'connected' : ''}">
-                            ${isConnected ? 'TERMINATE SESSION' : 'CONNECT TON KEEPER'}
-                        </button>
-                    `;
-
+                    b.innerHTML = `<h2>👛 TON WALLET</h2><p style="text-align:center; font-size:12px; color:#888; margin-bottom:15px;">${isConnected ? 'CONNECTED: ' + shortAddr : 'Connect for airdrops.'}</p>
+                        <button id="custom-ton-btn" class="wallet-connect-btn ${isConnected ? 'connected' : ''}">${isConnected ? 'DISCONNECT' : 'CONNECT TON'}</button>`;
                     document.getElementById('custom-ton-btn').onclick = async () => {
-                        try {
-                            if(tonConnectUI.connected) {
-                                await tonConnectUI.disconnect();
-                            } else {
-                                await tonConnectUI.openModal();
-                            }
-                        } catch(e) {
-                            console.error("Wallet Action Error:", e);
-                            tg.showAlert("Wallet interaction failed. Try again.");
-                        }
+                        if(tonConnectUI.connected) await tonConnectUI.disconnect();
+                        else await tonConnectUI.openModal();
                     };
                 } else if(type === 'tasks') {
-                    const t1 = game.data.completed_tasks.includes('tg') ? 'DONE' : '+10,000';
-                    const t2 = game.data.completed_tasks.includes('x') ? 'DONE' : '+5,000';
-                    b.innerHTML = `<h2>📋 MISSIONS</h2><br>
-                    <div class="task-item"><span>Join Community</span><button class="task-btn" onclick="ui.doTask('tg', 'https://t.me/neural_pulse', 10000)" ${t1==='DONE'?'disabled':''}>${t1}</button></div>
-                    <div class="task-item"><span>Follow X</span><button class="task-btn" onclick="ui.doTask('x', 'https://x.com/', 5000)" ${t2==='DONE'?'disabled':''}>${t2}</button></div>`;
+                    const t1 = game.data.completed_tasks.includes('tg') ? 'DONE' : '+10K';
+                    b.innerHTML = `<h2>📋 MISSIONS</h2><br><div class="task-item"><span>Join Telegram</span><button class="task-btn" onclick="ui.doTask('tg', 'https://t.me/neural_pulse', 10000)" ${t1==='DONE'?'disabled':''}>${t1}</button></div>`;
                 } else if(type === 'bonus') {
                     const canClaim = Date.now() - (game.data.last_bonus || 0) > 24*60*60*1000;
-                    b.innerHTML = `<h2>🎁 DAILY REWARD</h2><br><p style="text-align:center; margin-bottom:15px;">Claim your daily maintenance bonus</p>
-                    <button class="task-btn" style="width:100%; height:60px;" onclick="ui.claimDaily()" ${!canClaim?'disabled':''}>
-                        ${canClaim ? 'CLAIM 5,000 NP' : 'WAIT 24H'}
-                    </button>`;
+                    b.innerHTML = `<h2>🎁 DAILY BONUS</h2><br><button class="task-btn" style="width:100%; height:60px;" onclick="ui.claimDaily()" ${!canClaim?'disabled':''}>${canClaim ? 'CLAIM 5,000 NP' : 'WAIT 24H'}</button>`;
                 }
             },
 
@@ -477,26 +471,22 @@
                         ui.openM('tasks');
                         game.save(true);
                     }
-                }, 2000);
+                }, 3000);
             },
 
             async askAI() {
                 const res = document.getElementById('ai-res');
-                res.innerText = "> Initializing scan...\n> Analyzing pulse pattern...\n> Accessing mainframe...";
+                res.innerText = "> Initializing scan...";
                 try {
-                    const r = await fetch('/api/ai-advice', { 
-                        method: 'POST', 
-                        headers: {'Content-Type': 'application/json'}, 
-                        body: JSON.stringify(game.data) 
-                    });
+                    const r = await fetch('/api/ai-advice', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(game.data) });
                     const j = await r.json();
-                    res.innerText = j.text || "Pulse stable. Efficiency at 98.4%. Continue mining, Agent.";
-                } catch(e) { res.innerText = "Error: Connection lost. Try again later."; }
+                    res.innerText = j.text || "Pulse stable. Continue, Agent.";
+                } catch(e) { res.innerText = "Error: Connection lost."; }
             },
 
             copyRef(url) { 
                 navigator.clipboard.writeText(url).then(() => {
-                    tg.showAlert('Neural Link Copied!');
+                    tg.showAlert('Copied!');
                     tg.HapticFeedback.notificationOccurred('success');
                 }); 
             },
@@ -505,9 +495,8 @@
                 game.data.balance += 5000;
                 game.data.last_bonus = Date.now();
                 game.hasUnsavedChanges = true;
-                ui.render(); 
-                ui.closeM();
-                tg.showAlert("Maintenance bonus 5,000 NP credited!");
+                ui.render(); ui.closeM();
+                tg.showAlert("5,000 NP credited!");
                 game.save(true);
             },
 
