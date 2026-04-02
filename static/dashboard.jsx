@@ -46,7 +46,7 @@ const SparkGraph = memo(({ data, color, height = 45 }) => {
   );
 });
 
-// --- 📊 ИНДИКАТОР РЕСУРСА (ИЗМЕНЕНО: Добавлен пропс unit) ---
+// --- 📊 ИНДИКАТОР РЕСУРСА ---
 const TelemetryCard = ({ label, value, data, color, unit = "%" }) => (
   <div style={{ flex: 1, minWidth: '140px', background: 'rgba(255,255,255,0.02)', padding: '15px', borderRadius: '10px', border: `1px solid ${CYBER.border}` }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
@@ -99,14 +99,16 @@ const Dashboard = (props) => {
   const updateHistoryArray = (arr, newVal) => [...arr.slice(1), newVal];
 
   const processStreamUpdate = (newData) => {
-    // Если бэкенд шлет в процентах, а нужно в MB, здесь может понадобиться коэффициент.
-    // Пока считаем, что newData.sync_memory — это уже мегабайты.
-    const ramValue = newData.sync_memory ?? 0;
+    // ИСПРАВЛЕНИЕ: Конвертируем байты в MB (делим на 1024 * 1024)
+    // Это позволит цифрам совпадать с данными Bothost (например, 97.4 MB)
+    const ramInMb = newData.sync_memory 
+      ? (newData.sync_memory / (1024 * 1024)).toFixed(1) 
+      : 0;
 
     setStats(prev => ({
       ...prev,
       cpu: newData.core_load ?? prev.cpu,
-      ram: ramValue,
+      ram: ramInMb,
       online: newData.active_agents ?? prev.online,
       latency: newData.network_latency ?? prev.latency,
       liquidity: newData.pulse_liquidity ?? prev.liquidity
@@ -114,7 +116,7 @@ const Dashboard = (props) => {
 
     setHistory(p => ({
       cpu: updateHistoryArray(p.cpu, newData.core_load ?? p.cpu[p.cpu.length-1]),
-      ram: updateHistoryArray(p.ram, ramValue),
+      ram: updateHistoryArray(p.ram, Number(ramInMb)),
       stability: updateHistoryArray(p.stability, Math.max(0, 100 - ((newData.network_latency || 20) / 5))),
       online: updateHistoryArray(p.online, newData.active_agents ?? p.online[p.online.length-1]),
       ton: updateHistoryArray(p.ton, wallet.balance),
@@ -136,12 +138,12 @@ const Dashboard = (props) => {
           });
           unsubscribe = tonUiRef.current.onStatusChange(w => {
             if (w) {
-              setWallet({
+              setWallet(prev => ({
+                ...prev,
                 connected: true,
                 address: w.account.address,
-                balance: 0,
                 shortAddress: `${w.account.address.slice(0,4)}...${w.account.address.slice(-4)}`
-              });
+              }));
             } else {
               setWallet({ connected: false, address: null, balance: 0, shortAddress: 'OFFLINE' });
             }
@@ -222,7 +224,6 @@ const Dashboard = (props) => {
         <>
           <div className="res-panel">
             <TelemetryCard label="Core_Node_Load" value={stats.cpu} data={history.cpu} color={CYBER.primary} />
-            {/* ИЗМЕНЕНО: Добавлен unit="MB" */}
             <TelemetryCard label="Sync_Memory" value={stats.ram} data={history.ram} color={CYBER.secondary} unit="MB" />
             <TelemetryCard label="Stability" value={Math.max(0, 100 - (stats.latency / 5))} data={history.stability} color={CYBER.warning} />
           </div>
