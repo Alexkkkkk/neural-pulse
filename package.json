@@ -1,6 +1,6 @@
 {
   "name": "neural-pulse",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "type": "module",
   "main": "server.js",
   "engines": {
@@ -48,11 +48,21 @@
     "framer-motion": "^11.0.8",
     "babel-plugin-transform-react-remove-prop-types": "^0.4.24",
     "babel-plugin-styled-components": "^2.1.4",
+    "@babel/plugin-transform-runtime": "^7.24.0",
+    "@babel/runtime": "^7.24.0",
     "@babel/plugin-transform-react-constant-elements": "^7.24.1",
     "@babel/plugin-transform-react-inline-elements": "^7.24.1",
     "@babel/plugin-transform-class-properties": "^7.24.1",
-    "@babel/plugin-transform-runtime": "^7.24.0",
-    "@babel/runtime": "^7.24.0"
+    "@babel/plugin-transform-private-methods": "^7.24.1",
+    "@babel/plugin-transform-private-property-in-object": "^7.24.1",
+    "babel-plugin-minify-dead-code-elimination": "^0.5.2",
+    "babel-plugin-transform-inline-consecutive-adds": "^0.5.2",
+    "babel-plugin-minify-constant-folding": "^0.5.0",
+    "babel-plugin-minify-guarded-expressions": "^0.5.0",
+    "babel-plugin-transform-member-expression-literals": "^6.9.4",
+    "babel-plugin-transform-property-literals": "^6.9.4",
+    "babel-plugin-transform-merge-sibling-variables": "^6.9.4",
+    "babel-plugin-transform-minify-booleans": "^6.9.4"
   },
   "devDependencies": {
     "@babel/core": "^7.24.0",
