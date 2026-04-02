@@ -132,43 +132,23 @@ const AgentsTable = ({ users }) => (
   </div>
 );
 
-// --- 🚀 ГЛАВНЫЙ ДАШБОРД С АВТОРИЗАЦИЕЙ ---
+// --- 🚀 ГЛАВНЫЙ ДАШБОРД ---
 const Dashboard = (props) => {
   const { data: initialData } = props;
-  const [isAuthorized, setIsAuthorized] = useState(false);
-  const [authKey, setAuthKey] = useState('');
-  const [authError, setAuthError] = useState(false);
-  
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoaded, setIsLoaded] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
 
+  // Данные и Логи
   const [users, setUsers] = useState(initialData?.usersList || []);
   const [logs, setLogs] = useState([{ time: new Date().toLocaleTimeString(), msg: 'NEURAL_OS BOOT SEQUENCE INITIATED...', type: 'INFO' }]);
+  
+  // Статистика
   const [stats, setStats] = useState({ cpu: 0, ram: 0, online: initialData?.totalUsers || 0, ton: 0, latency: 0, liquidity: initialData?.totalBalance || 0 });
   const [history, setHistory] = useState({
     cpu: Array(15).fill(0), ram: Array(15).fill(0), stability: Array(15).fill(100),
     online: Array(15).fill(0), ton: Array(15).fill(0), lat: Array(15).fill(0), liq: Array(15).fill(0)
   });
-
-  // Проверка сессии при загрузке
-  useEffect(() => {
-    const saved = sessionStorage.getItem('cyber_access_granted');
-    if (saved === 'true') setIsAuthorized(true);
-  }, []);
-
-  const handleAuth = (e) => {
-    e.preventDefault();
-    // В реальном проекте здесь будет fetch('/api/auth', { method: 'POST', body: { authKey } })
-    if (authKey === 'admin' || authKey === 'pulse2026') { // Твой ключ здесь
-      setIsAuthorized(true);
-      sessionStorage.setItem('cyber_access_granted', 'true');
-      setAuthError(false);
-    } else {
-      setAuthError(true);
-      setTimeout(() => setAuthError(false), 2000);
-    }
-  };
 
   const addLog = (msg, type = 'INFO') => {
     setLogs(prev => [...prev.slice(-99), { time: new Date().toLocaleTimeString(), msg, type }]);
@@ -199,8 +179,6 @@ const Dashboard = (props) => {
   };
 
   useEffect(() => {
-    if (!isAuthorized) return;
-
     const eventSource = new EventSource('/api/admin/stream');
     eventSource.onmessage = (e) => {
       try {
@@ -232,42 +210,8 @@ const Dashboard = (props) => {
     }, 600);
 
     return () => { eventSource.close(); clearInterval(interval); };
-  }, [lastUpdate, isAuthorized]);
+  }, [lastUpdate]);
 
-  // --- ЭКРАН АВТОРИЗАЦИИ (БЕЗ ИЗМЕНЕНИЯ ДИЗАЙНА) ---
-  if (!isAuthorized) {
-    return (
-      <div className="app-root" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <style>{`
-          .app-root { background: #000; min-height: 100vh; font-family: 'Inter', sans-serif; color: #fff; }
-          .auth-box { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 40px; border-radius: 12px; width: 100%; max-width: 320px; text-align: center; box-shadow: 0 0 30px rgba(0, 242, 254, 0.1); }
-          .auth-box h1 { font-size: 18px; letter-spacing: 3px; color: ${CYBER.primary}; margin-bottom: 30px; font-weight: 900; }
-          .cyber-input { background: rgba(255,255,255,0.03); border: 1px solid ${CYBER.border}; color: #fff; padding: 12px; border-radius: 6px; width: 100%; box-sizing: border-box; font-family: 'Roboto Mono'; margin-bottom: 20px; outline: none; transition: border 0.3s; }
-          .cyber-input:focus { border-color: ${CYBER.primary}; box-shadow: 0 0 10px rgba(0, 242, 254, 0.2); }
-          .cyber-btn { background: ${CYBER.primary}; color: #000; border: none; padding: 12px; border-radius: 6px; width: 100%; font-weight: 900; cursor: pointer; font-family: 'Roboto Mono'; letter-spacing: 1px; transition: all 0.3s; }
-          .cyber-btn:hover { filter: brightness(1.2); box-shadow: 0 0 20px ${CYBER.primary}; }
-          .error-msg { color: ${CYBER.danger}; font-size: 10px; font-family: 'Roboto Mono'; margin-top: 10px; text-transform: uppercase; }
-        `}</style>
-        <div className="auth-box">
-          <h1>NEURAL_GATE_V9.8</h1>
-          <form onSubmit={handleAuth}>
-            <input 
-              type="password" 
-              className="cyber-input" 
-              placeholder="ENTER_ACCESS_KEY" 
-              value={authKey}
-              onChange={(e) => setAuthKey(e.target.value)}
-              autoFocus
-            />
-            <button type="submit" className="cyber-btn">INITIALIZE_SESSION</button>
-            {authError && <div className="error-msg">ACCESS_DENIED // INVALID_KEY</div>}
-          </form>
-        </div>
-      </div>
-    );
-  }
-
-  // --- ОСНОВНОЙ ИНТЕРФЕЙС (ТВОЙ ДИЗАЙН) ---
   if (!isLoaded) return <div className="loading">CONNECTING_TO_NEURAL_PULSE_NODE...</div>;
 
   return (
@@ -280,9 +224,10 @@ const Dashboard = (props) => {
         .nav-tabs { display: flex; gap: 20px; margin: 20px 0; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 5px; }
         .tab-btn { background: none; border: none; color: #4a5568; padding: 10px 0; font-size: 11px; cursor: pointer; font-family: 'Roboto Mono'; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; transition: all 0.3s ease; }
         .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; text-shadow: 0 0 8px ${CYBER.primary}; }
-        .res-panel { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; padding: 15px; margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap; }
+        .res-panel { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; padding: 15px; margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap; box-shadow: inset 0 0 20px rgba(0, 242, 254, 0.02); }
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
         .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; border-radius: 12px; transition: transform 0.2s; }
+        .card:hover { transform: translateY(-2px); border-color: ${CYBER.primary}; }
         .label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
         .val-main { font-size: 28px; font-weight: 700; display: flex; align-items: baseline; font-family: 'Roboto Mono'; }
         .val-unit { font-size: 10px; color: #4a5568; margin-left: 6px; font-weight: 800; }
@@ -295,7 +240,7 @@ const Dashboard = (props) => {
         .log-line { display: flex; gap: 10px; margin-bottom: 6px; }
         .table-container { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; overflow-x: auto; max-height: 65vh; overflow-y: auto; }
         .cyber-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; }
-        .cyber-table th { position: sticky; top: 0; background: #05070a; color: ${CYBER.subtext}; padding: 15px; border-bottom: 1px solid ${CYBER.border}; }
+        .cyber-table th { position: sticky; top: 0; background: #05070a; color: ${CYBER.subtext}; padding: 15px; border-bottom: 1px solid ${CYBER.border}; z-index: 10; }
         .cyber-table td { padding: 12px 15px; border-bottom: 1px solid rgba(255,255,255,0.02); }
         .status-badge { display: inline-flex; align-items: center; background: rgba(57, 255, 20, 0.05); padding: 4px 8px; border-radius: 4px; font-size: 9px; font-family: 'Roboto Mono'; border: 1px solid rgba(255, 255, 255, 0.1); }
         ::-webkit-scrollbar { width: 4px; }
@@ -307,16 +252,11 @@ const Dashboard = (props) => {
           <h1>NEURAL_PULSE V9.8</h1>
           <div style={{ fontFamily: 'Roboto Mono', fontSize: '9px', color: CYBER.success, marginTop: '5px' }}>
             <span className="pulse-dot"></span>
-            SYSTEM_OPERATIONAL // AUTH_LEVEL: ROOT
+            SYSTEM_OPERATIONAL // SYNC_ACTIVE
           </div>
         </div>
         <div style={{ fontSize: '10px', color: '#4a5568', textAlign: 'right', fontFamily: 'Roboto Mono' }}>
            LAST_PULSE: {lastUpdate.toLocaleTimeString()}
-           <div 
-             onClick={() => { sessionStorage.clear(); window.location.reload(); }} 
-             style={{ cursor: 'pointer', color: CYBER.danger, marginTop: '4px', textDecoration: 'underline' }}>
-             LOGOUT
-           </div>
         </div>
       </div>
 
@@ -347,7 +287,7 @@ const Dashboard = (props) => {
       {activeTab === 'logs' && <Terminal logs={logs} />}
 
       <footer style={{ marginTop: '30px', textAlign: 'center', opacity: 0.2, fontSize: '8px', fontFamily: 'Roboto Mono' }}>
-        ENCRYPTED_SESSION_ACTIVE // NODE: TITAN_CORE // 10S_SYNC_GATEWAY
+        REALTIME_MONITORING_ACTIVE // NODE: TITAN_CORE // 10S_SYNC_GATEWAY
       </footer>
     </div>
   );
