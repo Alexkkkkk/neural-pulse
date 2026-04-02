@@ -96,39 +96,34 @@ const Dashboard = (props) => {
     );
   }, [users, searchTerm]);
 
-  const updateHistoryArray = (arr, newVal) => [...arr.slice(1), newVal];
+  const updateHistoryArray = (arr, newVal) => [...arr.slice(1), Number(newVal)];
 
   // --- УЛУЧШЕННАЯ ОБРАБОТКА СТРИМА ---
   const processStreamUpdate = (newData) => {
-    console.log("DEBUG_DATA_INCOMING:", newData);
-
-    // Расчет RAM (поддержка разных ключей и конвертация байт -> МБ)
-    const rawMemory = Number(newData.sync_memory || newData.ram || newData.memory || 0);
-    const ramInMb = rawMemory > 0 ? (rawMemory / (1024 * 1024)).toFixed(1) : "0.0";
-
-    // Остальные параметры с защитой и приведением к числу
-    const cpuValue = Number(newData.core_load ?? newData.cpu ?? 0);
-    const activeUsers = Number(newData.active_agents ?? newData.users ?? 0);
-    const latValue = Number(newData.network_latency ?? newData.latency ?? 0);
-    const liqValue = Number(newData.pulse_liquidity ?? stats.liquidity);
+    // Получаем RAM (сервер присылает уже в МБ)
+    const ramVal = Number(newData.sync_memory || 0);
+    const cpuVal = Number(newData.core_load || 0);
+    const activeUsers = Number(newData.active_agents || 0);
+    const latVal = Number(newData.network_latency || 0);
+    const liqVal = Number(newData.pulse_liquidity || 0);
 
     setStats(prev => ({
       ...prev,
-      cpu: cpuValue,
-      ram: ramInMb,
+      cpu: cpuVal,
+      ram: ramVal.toFixed(1),
       online: activeUsers,
-      latency: latValue,
-      liquidity: liqValue
+      latency: latVal,
+      liquidity: liqVal
     }));
 
     setHistory(p => ({
-      cpu: updateHistoryArray(p.cpu, cpuValue),
-      ram: updateHistoryArray(p.ram, Number(ramInMb)),
-      stability: updateHistoryArray(p.stability, Math.max(0, 100 - (latValue / 5))),
+      cpu: updateHistoryArray(p.cpu, cpuVal),
+      ram: updateHistoryArray(p.ram, ramVal),
+      stability: updateHistoryArray(p.stability, Math.max(0, 100 - (latVal / 5))),
       online: updateHistoryArray(p.online, activeUsers),
       ton: updateHistoryArray(p.ton, wallet.balance),
-      lat: updateHistoryArray(p.lat, latValue),
-      liq: updateHistoryArray(p.liq, liqValue)
+      lat: updateHistoryArray(p.lat, latVal),
+      liq: updateHistoryArray(p.liq, liqVal)
     }));
     
     setLastUpdate(new Date());
@@ -167,6 +162,7 @@ const Dashboard = (props) => {
       setTimeout(() => clearInterval(timer), 10000);
     }
 
+    // Подключаемся к стриму
     const eventSource = new EventSource('/api/admin/stream');
     eventSource.onmessage = (e) => {
       try {
@@ -181,7 +177,7 @@ const Dashboard = (props) => {
       eventSource.close();
       unsubscribe();
     };
-  }, [wallet.balance]);
+  }, []); // Зависимости пусты, чтобы не перезапускать SSE
 
   if (!isLoaded) return <div className="loading">CONNECTING_TO_NEURAL_PULSE_NODE...</div>;
 
