@@ -16,8 +16,8 @@ import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
 import { ComponentLoader } from 'adminjs';
 
-// Ядро данных
-import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB, Op } from './db.js';
+// Ядро данных (убедитесь, что db.js экспортирует эти модели)
+import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB } from './db.js';
 
 const logger = pino({ transport: { target: 'pino-pretty' } });
 const __filename = fileURLToPath(import.meta.url);
@@ -43,15 +43,17 @@ class GodCore extends EventEmitter {
                 this.cache.lastUpdate = Date.now();
             }
             
-            // Защита расчета нагрузки
             const cpus = os.cpus() || [];
             const cpuCount = cpus.length || 1;
             const loadRaw = os.loadavg()?.[0] || 0;
 
+            // ИСПРАВЛЕНИЕ: Передаем реальные МБ для SYNC_MEMORY, чтобы избежать 0.0%
+            const rssMb = parseFloat((memory.rss / 1024 / 1024).toFixed(1));
+
             return {
                 event_type: 'SYSTEM',
                 core_load: parseFloat(((loadRaw / cpuCount) * 100).toFixed(1)),
-                sync_memory: parseFloat(((memory.rss / os.totalmem()) * 100).toFixed(1)),
+                sync_memory: rssMb, // Теперь это мегабайты
                 active_agents: this.cache.gs?.total_users || 0,
                 network_latency: Math.floor(Math.random() * 20 + 10),
                 pulse_liquidity: this.cache.gs?.total_balance || 0,
@@ -129,7 +131,6 @@ const executeMassiveCommit = async () => {
         neuralLog(`Delta-Sync: ${snapshot.length} units committed.`, 'SUCCESS');
     } catch (e) {
         neuralLog(`🚨 SYNC ERROR: ${e.message}`, 'ERROR');
-        // Возвращаем данные в буфер в случае провала
         snapshot.forEach(([id, data]) => {
             if (!updateBuffer.has(id)) updateBuffer.set(id, data);
         });
@@ -180,12 +181,14 @@ async function setupSupremeInterface(app) {
     app.use(adminJs.options.rootPath, adminRouter);
     await adminJs.initialize();
 
+    // SSE Stream
     app.get('/api/admin/stream', (req, res) => {
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache, no-transform');
-        res.setHeader('Connection', 'keep-alive');
-        res.setHeader('X-Accel-Buffering', 'no'); 
-        res.flushHeaders();
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache, no-transform',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no'
+        });
 
         const sendData = (data) => {
             if (!res.writableEnded) {
@@ -194,7 +197,9 @@ async function setupSupremeInterface(app) {
         };
 
         core.on('broadcast', sendData);
-        const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 15000);
+        const keepAlive = setInterval(() => {
+            if (!res.writableEnded) res.write(': keep-alive\n\n');
+        }, 15000);
 
         req.on('close', () => {
             clearInterval(keepAlive);
@@ -203,7 +208,6 @@ async function setupSupremeInterface(app) {
         });
     });
 
-    // API SAVE
     app.post('/api/save', async (req, res) => {
         const { id, balance, hash, initData } = req.body;
         if (!id || balance === undefined) return res.status(400).send("DATA_MISSING");
@@ -222,7 +226,6 @@ async function setupSupremeInterface(app) {
                      updateBuffer.set(id.toString(), { balance });
                      return res.json({ s: 1, next_nonce: Date.now() });
                 }
-                neuralLog(`INVALID HASH | User: ${id}`, 'WARN');
                 return res.status(403).json({ error: "SIGN_ERR", required_nonce: nonce });
             }
             
@@ -230,7 +233,6 @@ async function setupSupremeInterface(app) {
             res.json({ s: 1, next_nonce: Date.now() });
             
         } catch (err) {
-            neuralLog(`Save Error: ${err.message}`, 'ERROR');
             res.status(500).send("INTERNAL_ERROR");
         }
     });
@@ -239,13 +241,8 @@ async function setupSupremeInterface(app) {
         try {
             const user = await User.findByPk(req.params.id);
             if (!user) return res.status(404).send("NOT_FOUND");
-            res.json({
-                balance: user.balance,
-                nonce: new Date(user.updatedAt).getTime()
-            });
-        } catch (err) {
-            res.status(500).send("ERR");
-        }
+            res.json({ balance: user.balance, nonce: new Date(user.updatedAt).getTime() });
+        } catch (err) { res.status(500).send("ERR"); }
     });
 }
 
@@ -263,7 +260,7 @@ function setupBot(botInstance) {
             
             if (created) {
                 await GlobalStats.increment('total_users', { where: { id: 1 } });
-                neuralLog(`New Agent Initialized: ${user.username}`, 'SUCCESS');
+                neuralLog(`New Agent: ${user.username}`, 'SUCCESS');
             }
 
             ctx.replyWithHTML(
@@ -275,9 +272,7 @@ function setupBot(botInstance) {
                     [Markup.button.webApp("⚡ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)]
                 ])
             );
-        } catch (e) {
-            neuralLog(`Bot Start Error: ${e.message}`, 'ERROR');
-        }
+        } catch (e) { neuralLog(`Bot Error: ${e.message}`, 'ERROR'); }
     });
 }
 
@@ -305,11 +300,15 @@ async function startSupreme() {
         }, 3000);
 
         const webhookPath = `/telegraf/${BOT_TOKEN}`;
+        
+        // ИСПРАВЛЕНИЕ: Добавлен явный ответ для Webhook Telegram
         app.post(webhookPath, (req, res) => {
-            bot.handleUpdate(req.body, res).catch((err) => {
-                neuralLog(`Webhook Logic Error: ${err.message}`, 'ERROR');
-                if (!res.writableEnded) res.sendStatus(500);
-            });
+            bot.handleUpdate(req.body, res)
+                .then(() => { if (!res.writableEnded) res.status(200).send('OK'); })
+                .catch((err) => {
+                    neuralLog(`Webhook Error: ${err.message}`, 'ERROR');
+                    if (!res.writableEnded) res.sendStatus(500);
+                });
         });
 
         await bot.telegram.setWebhook(`${DOMAIN}${webhookPath}`);
@@ -320,7 +319,7 @@ async function startSupreme() {
 
         const shutdown = async () => {
             neuralLog('☢️ SHUTTING DOWN...', 'WARN');
-            await executeMassiveCommit(); // Сбрасываем буфер перед выходом
+            await executeMassiveCommit();
             server.close(async () => {
                 await sequelize.close();
                 process.exit(0);
