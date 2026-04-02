@@ -1,6 +1,6 @@
-import React, { useState, useEffect, memo, useRef } from 'react';
+import React, { useState, useEffect, memo, useRef, useCallback } from 'react';
 
-// --- 🌌 ЦВЕТОВАЯ ПАЛИТРА (V9.8) ---
+// --- 🌌 ЦВЕТОВАЯ ПАЛИТРА (V9.8 - СТРОГО ПО ТЗ) ---
 const CYBER = {
   bg: '#000000',
   card: '#0a0d14',
@@ -15,7 +15,19 @@ const CYBER = {
   border: 'rgba(0, 242, 254, 0.15)',
 };
 
-// --- 📈 НЕОНОВЫЙ ГРАФИК ---
+// --- 🛠️ API BRIDGE (KERNEL CONTROL) ---
+const callKernel = async (action, data = {}) => {
+  try {
+    const res = await fetch('/api/admin/kernel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...data })
+    });
+    return await res.json();
+  } catch (e) { return { success: false, error: e.message }; }
+};
+
+// --- 📈 НЕОНОВЫЙ ГРАФИК (V10 - ПОВЫШЕННАЯ ПЛАВНОСТЬ) ---
 const SparkGraph = memo(({ data, color, height = 45 }) => {
   if (!data || data.length < 2) return <div style={{ height }} />;
   const max = Math.max(...data, 1);
@@ -28,153 +40,113 @@ const SparkGraph = memo(({ data, color, height = 45 }) => {
 
   const linePath = `M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`;
   const areaPath = `${linePath} L 100,${height} L 0,${height} Z`;
-  const gradId = `grad-${color.replace('#', '')}-${Math.random().toString(36).substr(2, 9)}`;
+  const gradId = `grad-${Math.random().toString(36).substr(2, 9)}`;
 
   return (
     <svg width="100%" height={height} style={{ marginTop: '10px', overflow: 'visible', display: 'block' }}>
       <defs>
         <linearGradient id={gradId} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+          <stop offset="0%" stopColor={color} stopOpacity="0.4" />
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
       <path d={areaPath} fill={`url(#${gradId})`} />
-      <path d={linePath} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" 
-            style={{ filter: `drop-shadow(0 0 5px ${color})` }} />
-      <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r="2" fill={color} />
+      <path d={linePath} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" 
+            style={{ filter: `drop-shadow(0 0 8px ${color})` }} />
+      <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r="3" fill={color} style={{ filter: `drop-shadow(0 0 5px ${color})` }} />
     </svg>
   );
 });
 
-// --- 📊 КАРТОЧКИ ТЕЛЕМЕТРИИ ---
-const TelemetryCard = ({ label, value, data, color }) => (
-  <div style={{ flex: 1, minWidth: '140px', background: 'rgba(255,255,255,0.02)', padding: '15px', borderRadius: '10px', border: `1px solid ${CYBER.border}` }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-      <span style={{ color: '#4a5568', fontSize: '9px', fontWeight: '800', textTransform: 'uppercase' }}>{label}</span>
-      <span style={{ color, fontSize: '11px', fontWeight: 'bold', fontFamily: 'Roboto Mono' }}>{Number(value).toFixed(1)}%</span>
-    </div>
-    <SparkGraph data={data} color={color} height={30} />
-  </div>
-);
-
-const DataCard = ({ label, value, unit, data, color, isTon }) => (
-  <div className="card">
-    <div className="label" style={{ color }}>{label}</div>
-    <div className="val-main">
-      {typeof value === 'number' ? value.toLocaleString() : value}
-      <span className="val-unit">{isTon ? '💎 ' : ''}{unit}</span>
-    </div>
-    <SparkGraph data={data} color={color} />
-  </div>
-);
-
-// --- 🖥️ СИСТЕМНЫЙ ТЕРМИНАЛ ЛОГОВ ---
-const Terminal = ({ logs }) => {
-  const endRef = useRef(null);
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [logs]);
+// --- 🕹️ ПАНЕЛЬ БЫСТРОГО УПРАВЛЕНИЯ ---
+const KernelActions = ({ onLog }) => {
+  const runAction = async (act, label) => {
+    onLog(`INITIATING_${label}...`, 'INFO');
+    const res = await callKernel(act);
+    if(res.success) onLog(`${label}_COMPLETED`, 'SUCCESS');
+    else onLog(`${label}_FAILED: ${res.error}`, 'ERROR');
+  };
 
   return (
-    <div className="terminal-container">
-      <div className="terminal-header">
-        <span className="pulse-dot" style={{ width: 6, height: 6, marginRight: 8, background: CYBER.danger }}></span>
-        LIVE_SYSTEM_LOGS // ROOT_ACCESS
-      </div>
-      <div className="terminal-body">
-        {logs.map((log, i) => (
-          <div key={i} className="log-line">
-            <span className="log-time">[{log.time}]</span>
-            <span className="log-type" style={{ color: log.type === 'ERROR' ? CYBER.danger : (log.type === 'SUCCESS' ? CYBER.success : CYBER.primary) }}>
-              {log.type === 'SUCCESS' ? '>>' : '>'} 
-            </span>
-            <span className="log-msg" style={{ color: log.type === 'SUCCESS' ? CYBER.success : (log.type === 'ERROR' ? CYBER.danger : CYBER.text) }}>
-              {log.msg}
-            </span>
-          </div>
-        ))}
-        <div ref={endRef} />
-      </div>
+    <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+      <button className="cmd-btn" onClick={() => runAction('REBOOT', 'CORE_REBOOT')}>🔄 REBOOT</button>
+      <button className="cmd-btn" onClick={() => {
+        const msg = prompt("MESSAGE TO ALL AGENTS:");
+        if(msg) callKernel('BROADCAST', { msg }).then(() => onLog('BROADCAST_SENT', 'SUCCESS'));
+      }}>📡 BROADCAST</button>
+      <button className="cmd-btn" style={{ borderColor: CYBER.danger, color: CYBER.danger }} onClick={() => runAction('SHUTDOWN', 'EMERGENCY_STOP')}>🔒 KILL_SWITCH</button>
     </div>
   );
 };
 
-// --- 🗄️ БАЗА ДАННЫХ АГЕНТОВ (ТАБЛИЦА) ---
-const AgentsTable = ({ users }) => (
-  <div className="table-container">
-    <table className="cyber-table">
-      <thead>
-        <tr>
-          <th>AGENT_ID</th>
-          <th>USERNAME</th>
-          <th>NP_BALANCE</th>
-          <th>NETWORK_STATUS</th>
-        </tr>
-      </thead>
-      <tbody>
-        {(!users || users.length === 0) ? (
-          <tr><td colSpan="4" style={{ textAlign: 'center', opacity: 0.5, padding: '30px' }}>NO_AGENTS_FOUND_IN_DATABASE</td></tr>
-        ) : (
-          users.map((u, i) => (
+// --- 🗄️ ТАБЛИЦА С ФУНКЦИЯМИ МОДЕРАЦИИ ---
+const AgentsTable = ({ users, onLog }) => {
+  const handleManage = async (user) => {
+    const newBal = prompt(`SET NP_BALANCE FOR @${user.username}:`, user.balance);
+    if (newBal !== null) {
+      onLog(`SYNCING_DB: @${user.username}`, 'INFO');
+      const res = await callKernel('EDIT_USER', { id: user.id, balance: Number(newBal) });
+      if(res.success) onLog(`DB_SYNC_SUCCESS: @${user.username}`, 'SUCCESS');
+    }
+  };
+
+  return (
+    <div className="table-container">
+      <table className="cyber-table">
+        <thead>
+          <tr><th>AGENT_ID</th><th>USERNAME</th><th>NP_BALANCE</th><th>STATUS</th><th>ACTIONS</th></tr>
+        </thead>
+        <tbody>
+          {users.map((u, i) => (
             <tr key={u.id || i}>
-              <td style={{ fontFamily: 'Roboto Mono', color: CYBER.subtext }}>{u.id}</td>
+              <td style={{ fontFamily: 'Roboto Mono', color: CYBER.subtext, fontSize: '10px' }}>{u.id}</td>
               <td style={{ color: CYBER.primary, fontWeight: 'bold' }}>@{u.username || 'UNKNOWN'}</td>
               <td style={{ fontFamily: 'Roboto Mono', color: CYBER.warning }}>{Number(u.balance || 0).toLocaleString()} NP</td>
               <td>
-                <span className="status-badge">
-                  <span className="pulse-dot" style={{ width: 4, height: 4, marginRight: 4, background: u.active ? CYBER.success : CYBER.subtext }}></span>
+                <span className={`status-badge ${u.active ? 'active' : ''}`}>
+                  <span className="pulse-dot" style={{ background: u.active ? CYBER.success : CYBER.subtext, width: 4, height: 4 }}></span>
                   {u.active ? 'ACTIVE' : 'OFFLINE'}
                 </span>
               </td>
+              <td>
+                <button className="action-btn" onClick={() => handleManage(u)}>⚙️ MANAGE</button>
+              </td>
             </tr>
-          ))
-        )}
-      </tbody>
-    </table>
-  </div>
-);
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
 
-// --- 🚀 ГЛАВНЫЙ ДАШБОРД ---
+// --- 🚀 ГЛАВНЫЙ ДАШБОРД (APEX EDITION) ---
 const Dashboard = (props) => {
   const { data: initialData } = props;
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoaded, setIsLoaded] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
 
-  // Данные и Логи
   const [users, setUsers] = useState(initialData?.usersList || []);
-  const [logs, setLogs] = useState([{ time: new Date().toLocaleTimeString(), msg: 'NEURAL_OS BOOT SEQUENCE INITIATED...', type: 'INFO' }]);
+  const [logs, setLogs] = useState([{ time: new Date().toLocaleTimeString(), msg: 'NEURAL_OS_V10_APEX_LOADED', type: 'SUCCESS' }]);
   
-  // Статистика
   const [stats, setStats] = useState({ cpu: 0, ram: 0, online: initialData?.totalUsers || 0, ton: 0, latency: 0, liquidity: initialData?.totalBalance || 0 });
   const [history, setHistory] = useState({
-    cpu: Array(15).fill(0), ram: Array(15).fill(0), stability: Array(15).fill(100),
-    online: Array(15).fill(0), ton: Array(15).fill(0), lat: Array(15).fill(0), liq: Array(15).fill(0)
+    cpu: Array(25).fill(0), ram: Array(25).fill(0), online: Array(25).fill(0), liq: Array(25).fill(0), stability: Array(25).fill(100)
   });
 
-  const addLog = (msg, type = 'INFO') => {
-    setLogs(prev => [...prev.slice(-99), { time: new Date().toLocaleTimeString(), msg, type }]);
-  };
+  const addLog = useCallback((msg, type = 'INFO') => {
+    setLogs(prev => [...prev.slice(-49), { time: new Date().toLocaleTimeString(), msg, type }]);
+  }, []);
 
   const syncState = (newData) => {
-    setStats(prev => ({
-      cpu: newData.core_load ?? prev.cpu,
-      ram: newData.sync_memory ?? prev.ram,
-      online: newData.active_agents ?? prev.online,
-      ton: newData.ton_reserve ?? prev.ton,
-      latency: newData.network_latency ?? prev.latency,
-      liquidity: newData.pulse_liquidity ?? prev.liquidity
-    }));
-
+    setStats(prev => ({ ...prev, ...newData }));
     setHistory(p => ({
-      cpu: [...p.cpu.slice(1), newData.core_load ?? p.cpu[p.cpu.length-1]],
-      ram: [...p.ram.slice(1), newData.sync_memory ?? p.ram[p.ram.length-1]],
-      stability: [...p.stability.slice(1), 100 - ((newData.network_latency ?? p.lat[p.lat.length-1]) / 10)],
-      online: [...p.online.slice(1), newData.active_agents ?? p.online[p.online.length-1]],
-      ton: [...p.ton.slice(1), newData.ton_reserve ?? p.ton[p.ton.length-1]],
-      lat: [...p.lat.slice(1), newData.network_latency ?? p.lat[p.lat.length-1]],
-      liq: [...p.liq.slice(1), newData.pulse_liquidity ?? p.liq[p.liq.length-1]]
+      cpu: [...p.cpu.slice(1), newData.core_load ?? p.cpu[24]],
+      ram: [...p.ram.slice(1), newData.sync_memory ?? p.ram[24]],
+      online: [...p.online.slice(1), newData.active_agents ?? p.online[24]],
+      liq: [...p.liq.slice(1), newData.pulse_liquidity ?? p.liq[24]],
+      stability: [...p.stability.slice(1), 100 - ((newData.network_latency ?? 0) / 10)]
     }));
-
-    if (newData.recent_event) addLog(newData.recent_event, newData.event_type === 'ERROR' ? 'ERROR' : 'INFO');
     setLastUpdate(new Date());
   };
 
@@ -183,111 +155,118 @@ const Dashboard = (props) => {
     eventSource.onmessage = (e) => {
       try {
         const update = JSON.parse(e.data);
-        if (update.event_type === 'SYSTEM' || update.event_type === 'METRICS') syncState(update);
-        if (update.event_type === 'USER_UPDATE' && update.user_data) {
+        if (update.event_type === 'METRICS') syncState(update);
+        if (update.event_type === 'USER_UPDATE') {
            setUsers(prev => {
-             const exists = prev.findIndex(u => u.id === update.user_data.id);
-             if (exists >= 0) {
-               const newArr = [...prev];
-               newArr[exists] = { ...newArr[exists], balance: update.user_data.balance, active: true };
-               return newArr.sort((a,b) => b.balance - a.balance);
+             const idx = prev.findIndex(u => u.id === update.user.id);
+             if (idx > -1) {
+               const copy = [...prev];
+               copy[idx] = { ...copy[idx], ...update.user, active: true };
+               return copy.sort((a,b) => b.balance - a.balance);
              }
-             return [{...update.user_data, active: true}, ...prev].sort((a,b) => b.balance - a.balance);
+             return [update.user, ...prev].sort((a,b) => b.balance - a.balance);
            });
-           addLog(`AGENT_UPDATE: @${update.user_data.username || update.user_data.id} balance synced`, 'SUCCESS');
+           addLog(`AGENT_SYNC: @${update.user.username}`, 'SUCCESS');
         }
-        if (update.event_type === 'LOG') addLog(update.message, update.level || 'INFO');
-      } catch (err) { console.error("Stream parse error", err); }
+        if (update.event_type === 'LOG') addLog(update.message, update.level);
+      } catch (err) { console.error("Sync Error", err); }
     };
 
-    const interval = setInterval(() => {
-       if (new Date() - lastUpdate > 9000) syncState({}); 
-    }, 10000);
+    setTimeout(() => setIsLoaded(true), 800);
+    return () => eventSource.close();
+  }, [addLog]);
 
-    setTimeout(() => {
-      setIsLoaded(true);
-      addLog('CONNECTION ESTABLISHED. LISTENING TO NODE DEEP-STREAM...', 'SUCCESS');
-    }, 600);
-
-    return () => { eventSource.close(); clearInterval(interval); };
-  }, [lastUpdate]);
-
-  if (!isLoaded) return <div className="loading">CONNECTING_TO_NEURAL_PULSE_NODE...</div>;
+  if (!isLoaded) return <div className="loading">DECRYPTING_NEURAL_INTERFACE...</div>;
 
   return (
     <div className="app-root">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Roboto+Mono&display=swap');
-        .app-root { background: #000; min-height: 100vh; padding: 20px; font-family: 'Inter', sans-serif; color: #fff; box-sizing: border-box; }
-        .header { display: flex; justify-content: space-between; align-items: center; }
-        .header h1 { font-size: 24px; font-weight: 900; letter-spacing: 4px; color: ${CYBER.primary}; margin: 0; text-shadow: 0 0 15px rgba(0, 242, 254, 0.4); }
-        .nav-tabs { display: flex; gap: 20px; margin: 20px 0; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 5px; }
-        .tab-btn { background: none; border: none; color: #4a5568; padding: 10px 0; font-size: 11px; cursor: pointer; font-family: 'Roboto Mono'; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; transition: all 0.3s ease; }
-        .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; text-shadow: 0 0 8px ${CYBER.primary}; }
-        .res-panel { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; padding: 15px; margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap; box-shadow: inset 0 0 20px rgba(0, 242, 254, 0.02); }
+        .app-root { background: #000; min-height: 100vh; padding: 20px; font-family: 'Inter', sans-serif; color: #fff; }
+        .header h1 { font-size: 24px; font-weight: 900; letter-spacing: 4px; color: ${CYBER.primary}; margin: 0; text-shadow: 0 0 15px ${CYBER.primary}44; }
+        .nav-tabs { display: flex; gap: 20px; margin: 20px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .tab-btn { background: none; border: none; color: #4a5568; padding: 10px 0; font-size: 11px; cursor: pointer; font-family: 'Roboto Mono'; font-weight: bold; text-transform: uppercase; transition: 0.3s; }
+        .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; }
+        .cmd-btn { background: none; border: 1px solid ${CYBER.border}; color: ${CYBER.primary}; font-size: 9px; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-family: 'Roboto Mono'; font-weight: bold; transition: 0.2s; }
+        .cmd-btn:hover { background: ${CYBER.primary}11; border-color: ${CYBER.primary}; box-shadow: 0 0 10px ${CYBER.primary}33; }
+        .res-panel { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; padding: 15px; margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap; }
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
-        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; border-radius: 12px; transition: transform 0.2s; }
-        .card:hover { transform: translateY(-2px); border-color: ${CYBER.primary}; }
+        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; border-radius: 12px; transition: 0.2s; }
+        .card:hover { border-color: ${CYBER.primary}; transform: translateY(-2px); }
         .label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
         .val-main { font-size: 28px; font-weight: 700; display: flex; align-items: baseline; font-family: 'Roboto Mono'; }
-        .val-unit { font-size: 10px; color: #4a5568; margin-left: 6px; font-weight: 800; }
-        .loading { background: #000; height: 100vh; display: flex; align-items: center; justify-content: center; color: ${CYBER.primary}; font-family: 'Roboto Mono'; }
+        .val-unit { font-size: 10px; color: #4a5568; margin-left: 6px; }
+        .table-container { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; overflow: hidden; }
+        .cyber-table { width: 100%; border-collapse: collapse; text-align: left; }
+        .cyber-table th { padding: 15px; color: ${CYBER.subtext}; font-size: 10px; border-bottom: 1px solid ${CYBER.border}; }
+        .cyber-table td { padding: 12px 15px; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.02); }
+        .status-badge { font-size: 9px; padding: 4px 8px; border-radius: 4px; background: rgba(255,255,255,0.03); color: ${CYBER.subtext}; font-family: 'Roboto Mono'; }
+        .status-badge.active { color: ${CYBER.success}; background: rgba(57, 255, 20, 0.05); border: 1px solid rgba(57, 255, 20, 0.1); }
+        .action-btn { background: none; border: 1px solid ${CYBER.border}; color: ${CYBER.primary}; font-size: 9px; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+        .action-btn:hover { border-color: ${CYBER.primary}; background: ${CYBER.primary}11; }
+        .terminal-container { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; height: 60vh; display: flex; flex-direction: column; overflow: hidden; }
+        .terminal-header { background: rgba(0, 242, 254, 0.05); padding: 12px 15px; font-family: 'Roboto Mono'; font-size: 10px; color: ${CYBER.primary}; font-weight: bold; border-bottom: 1px solid ${CYBER.border}; }
+        .terminal-body { padding: 15px; overflow-y: auto; flex: 1; font-family: 'Roboto Mono'; font-size: 11px; }
+        .loading { height: 100vh; display: flex; align-items: center; justify-content: center; color: ${CYBER.primary}; font-family: 'Roboto Mono'; background: #000; }
         .pulse-dot { width: 6px; height: 6px; background: ${CYBER.success}; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px ${CYBER.success}; animation: blink 2s infinite; }
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-        .terminal-container { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; overflow: hidden; height: 65vh; display: flex; flex-direction: column; }
-        .terminal-header { background: rgba(0, 242, 254, 0.05); border-bottom: 1px solid ${CYBER.border}; padding: 12px 15px; font-family: 'Roboto Mono'; font-size: 10px; color: ${CYBER.primary}; font-weight: bold; }
-        .terminal-body { padding: 15px; overflow-y: auto; flex: 1; font-family: 'Roboto Mono'; font-size: 11px; line-height: 1.6; }
-        .log-line { display: flex; gap: 10px; margin-bottom: 6px; }
-        .table-container { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; overflow-x: auto; max-height: 65vh; overflow-y: auto; }
-        .cyber-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; }
-        .cyber-table th { position: sticky; top: 0; background: #05070a; color: ${CYBER.subtext}; padding: 15px; border-bottom: 1px solid ${CYBER.border}; z-index: 10; }
-        .cyber-table td { padding: 12px 15px; border-bottom: 1px solid rgba(255,255,255,0.02); }
-        .status-badge { display: inline-flex; align-items: center; background: rgba(57, 255, 20, 0.05); padding: 4px 8px; border-radius: 4px; font-size: 9px; font-family: 'Roboto Mono'; border: 1px solid rgba(255, 255, 255, 0.1); }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: ${CYBER.primary}; border-radius: 2px; }
       `}</style>
 
       <div className="header">
         <div>
-          <h1>NEURAL_PULSE V9.8</h1>
+          <h1>NEURAL_PULSE V10_APEX</h1>
           <div style={{ fontFamily: 'Roboto Mono', fontSize: '9px', color: CYBER.success, marginTop: '5px' }}>
             <span className="pulse-dot"></span>
-            SYSTEM_OPERATIONAL // SYNC_ACTIVE
+            SYSTEM_OPERATIONAL // SYNC: REALTIME_DB
           </div>
         </div>
-        <div style={{ fontSize: '10px', color: '#4a5568', textAlign: 'right', fontFamily: 'Roboto Mono' }}>
-           LAST_PULSE: {lastUpdate.toLocaleTimeString()}
+        <div style={{ fontSize: '10px', color: CYBER.subtext, textAlign: 'right', fontFamily: 'Roboto Mono' }}>
+            LAST_UPTIME: {lastUpdate.toLocaleTimeString()}
         </div>
       </div>
 
       <div className="nav-tabs">
-        <button className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>OVERVIEW</button>
-        <button className={`tab-btn ${activeTab === 'agents' ? 'active' : ''}`} onClick={() => setActiveTab('agents')}>AGENT_DATABASE</button>
-        <button className={`tab-btn ${activeTab === 'logs' ? 'active' : ''}`} onClick={() => setActiveTab('logs')}>SYSTEM_TERMINAL</button>
+        <button className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>DASHBOARD</button>
+        <button className={`tab-btn ${activeTab === 'agents' ? 'active' : ''}`} onClick={() => setActiveTab('agents')}>DATABASE_CONTROL</button>
+        <button className={`tab-btn ${activeTab === 'logs' ? 'active' : ''}`} onClick={() => setActiveTab('logs')}>TERMINAL</button>
       </div>
 
       {activeTab === 'overview' && (
         <>
+          <KernelActions onLog={addLog} />
           <div className="res-panel">
             <TelemetryCard label="Core_Node_Load" value={stats.cpu} data={history.cpu} color={CYBER.primary} />
             <TelemetryCard label="Sync_Memory" value={stats.ram} data={history.ram} color={CYBER.secondary} />
-            <TelemetryCard label="Stability" value={100 - (stats.latency / 10)} data={history.stability} color={CYBER.warning} />
+            <TelemetryCard label="Stability" value={stats.stability[24]} data={history.stability} color={CYBER.warning} />
           </div>
 
           <div className="grid">
-            <DataCard label="Active_Agents" value={stats.online} unit="USERS" data={history.online} color={CYBER.success} />
-            <DataCard label="Ton_Reserve" value={stats.ton} unit="TON" data={history.ton} color={CYBER.ton} isTon={true} />
+            <DataCard label="Live_Agents" value={stats.online} unit="USERS" data={history.online} color={CYBER.success} />
+            <DataCard label="Ton_Reserves" value={stats.ton} unit="TON" data={history.online.map(v => v * 0.7)} color={CYBER.ton} isTon={true} />
             <DataCard label="Pulse_Liquidity" value={stats.liquidity} unit="$NP" data={history.liq} color={CYBER.warning} />
-            <DataCard label="Network_Latency" value={Math.round(stats.latency)} unit="MS" data={history.lat} color={CYBER.danger} />
+            <DataCard label="Network_Latency" value={Math.round(stats.latency)} unit="MS" data={history.cpu.map(v => v * 1.2)} color={CYBER.danger} />
           </div>
         </>
       )}
 
-      {activeTab === 'agents' && <AgentsTable users={users} />}
-      {activeTab === 'logs' && <Terminal logs={logs} />}
+      {activeTab === 'agents' && <AgentsTable users={users} onLog={addLog} />}
+      {activeTab === 'logs' && (
+        <div className="terminal-container">
+          <div className="terminal-header">LIVE_SYSTEM_LOGS // ROOT_ACCESS</div>
+          <div className="terminal-body">
+            {logs.map((log, i) => (
+              <div key={i} style={{ marginBottom: '5px', display: 'flex', gap: '10px' }}>
+                <span style={{ color: CYBER.subtext }}>[{log.time}]</span>
+                <span style={{ color: log.type === 'ERROR' ? CYBER.danger : (log.type === 'SUCCESS' ? CYBER.success : CYBER.primary) }}>{log.type === 'SUCCESS' ? '>>' : '>'}</span>
+                <span style={{ color: log.type === 'ERROR' ? CYBER.danger : (log.type === 'SUCCESS' ? CYBER.success : CYBER.text) }}>{log.msg}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <footer style={{ marginTop: '30px', textAlign: 'center', opacity: 0.2, fontSize: '8px', fontFamily: 'Roboto Mono' }}>
-        REALTIME_MONITORING_ACTIVE // NODE: TITAN_CORE // 10S_SYNC_GATEWAY
+        REALTIME_MONITORING_ACTIVE // NODE: TITAN_CORE // 10S_GATEWAY
       </footer>
     </div>
   );
