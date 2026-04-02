@@ -1,6 +1,6 @@
 {
   "name": "neural-pulse",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "type": "module",
   "main": "server.js",
   "engines": {
@@ -58,7 +58,7 @@
     "babel-plugin-minify-dead-code-elimination": "^0.5.2",
     "babel-plugin-transform-inline-consecutive-adds": "^0.5.2",
     "babel-plugin-minify-constant-folding": "^0.5.0",
-    "babel-plugin-minify-guarded-expressions": "^0.5.0",
+    "babel-plugin-minify-guarded-expressions": "^0.4.3",
     "babel-plugin-transform-member-expression-literals": "^6.9.4",
     "babel-plugin-transform-property-literals": "^6.9.4",
     "babel-plugin-transform-merge-sibling-variables": "^6.9.4",
