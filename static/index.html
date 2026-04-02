@@ -344,7 +344,11 @@
                     } else {
                         await fetch('/api/save', {
                             method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
+                            headers: {
+                                'Content-Type': 'application/json',
+                                // ВАЖНО: передаем initData для проверки хеша на сервере
+                                'X-Telegram-Init-Data': tg.initData 
+                            },
                             body: JSON.stringify(payload),
                             keepalive: true 
                         });
@@ -497,7 +501,14 @@
                 const res = document.getElementById('ai-res');
                 res.innerText = "> Initializing scan...";
                 try {
-                    const r = await fetch('/api/ai-advice', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(game.data) });
+                    const r = await fetch('/api/ai-advice', { 
+                        method: 'POST', 
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Telegram-Init-Data': tg.initData
+                        }, 
+                        body: JSON.stringify(game.data) 
+                    });
                     const j = await r.json();
                     res.innerText = j.text || "Pulse stable. Continue, Agent.";
                 } catch(e) { res.innerText = "Error: Connection lost."; }
