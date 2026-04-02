@@ -1,30 +1,29 @@
 # === STAGE 1: BUILDER (Сборка) ===
 FROM node:20-slim AS builder
 
-# Установка системных зависимостей для сборки модулей
+# Установка системных зависимостей для сборки бинарных модулей
 RUN apt-get update && apt-get install -y \
     python3 make g++ git curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Даем 1.5 ГБ для стабильной сборки AdminJS
+# Настройки памяти для тяжелой сборки AdminJS
 ENV NODE_ENV=development
 ENV NODE_OPTIONS="--max-old-space-size=1536"
 
-# Установка зависимостей через ci для стабильности версий
+# Установка зависимостей
 COPY package*.json ./
 RUN npm ci
 
-# Копируем проект (учитывая твой .dockerignore)
+# Копируем все исходники (включая папку static с твоим дизайном)
 COPY . .
 
-# Предсборка AdminJS (статический бандл)
+# Предсборка AdminJS с логированием времени в реальном времени
 RUN echo "import AdminJS, { ComponentLoader } from 'adminjs'; \
-import path from 'path'; \
-import fs from 'fs'; \
 async function build() { \
-  console.log('--- ⚡ NEURAL PULSE: BUNDLING DASHBOARD ---'); \
+  const now = () => new Date().toLocaleTimeString(); \
+  console.log(\`--- ⚡ [\${now()}] NEURAL PULSE: START BUNDLING ---\`); \
   const componentLoader = new ComponentLoader(); \
   const admin = new AdminJS({ \
     rootPath: '/admin', \
@@ -33,51 +32,53 @@ async function build() { \
     bundler: { minify: true, force: true } \
   }); \
   await admin.initialize(); \
-  console.log('--- ✅ ADMINJS BUNDLE READY ---'); \
+  console.log(\`--- ✅ [\${now()}] ADMINJS BUNDLE READY ---\`); \
   process.exit(0); \
 } \
 build().catch(err => { console.error(err); process.exit(1); });" > build-admin.js && \
 node build-admin.js
 
-# Удаляем лишнее для уменьшения размера образа
+# Удаляем dev-зависимости перед финальной стадией
 RUN npm prune --production
+
 
 # === STAGE 2: RUNNER (Работа) ===
 FROM node:20-slim
 
-# dumb-init для корректной работы с сигналами Linux
-RUN apt-get update && apt-get install -y dumb-init && rm -rf /var/lib/apt/lists/*
+# dumb-init для управления процессами и curl для healthcheck
+RUN apt-get update && apt-get install -y dumb-init curl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Настройки для сервера 2GB RAM
+# Настройки для сервера с лимитом 2GB RAM
 ENV NODE_ENV=production
-# Выделяем 1.5 ГБ под Node.js, оставляя запас для системы
+# Резервируем 1.5GB под Node.js, остальное — системе и Docker
 ENV NODE_OPTIONS="--max-old-space-size=1536 --expose-gc"
 
-# Копируем только необходимые для запуска файлы
+# Переносим только собранные и нужные файлы
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/.adminjs ./.adminjs
-
-# Копируем статику (твой дизайн, лого и манифест)
 COPY --from=builder /app/static ./static
-
-# Копируем JS скрипты сервера и ВСЕ JSON конфиги (включая манифест TON)
 COPY --from=builder /app/*.js ./
 COPY --from=builder /app/*.json ./
 
-# Настройка прав: разрешаем запись в папки данных и картинок
-# Это критично для сохранения сессий и твоего дизайна
+# Гарантируем права доступа для сохранения картинок и сессий
+# Права 777 для папок, где бот сохраняет данные (дизайн и логи)
 RUN mkdir -p data static/images && \
     chmod -R 777 .adminjs data static/images static/ && \
     chown -R node:node /app
 
-# Работаем от безопасного пользователя
+# Работа от безопасного пользователя
 USER node
+
+# Мониторинг "живости" сервиса в реальном времени
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/ || exit 1
 
 EXPOSE 3000
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
-# Запуск сервера с принудительным сборщиком мусора
+
+# Запуск с принудительным сборщиком мусора для экономии памяти
 CMD ["node", "--expose-gc", "server.js"]
