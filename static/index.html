@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v5.6.0 | Extreme Sync</title>
+    <title>Neural Pulse v5.6.1 | Extreme Sync</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
@@ -120,6 +120,14 @@
         /* Sync Status Light */
         #sync-status { width: 6px; height: 6px; border-radius: 50%; background: #555; display: inline-block; margin-right: 5px; transition: 0.3s; }
         #sync-status.saving { background: var(--neon); box-shadow: 0 0 8px var(--neon); }
+
+        /* Wallet Button Styles */
+        .wallet-connect-btn {
+            width: 100%; height: 60px; background: #111; border: 1px solid var(--neon);
+            color: var(--neon); border-radius: 15px; font-size: 14px; font-weight: 900;
+            margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+        .wallet-connect-btn.connected { border-color: #ff3333; color: #ff3333; }
     </style>
 </head>
 <body>
@@ -183,7 +191,7 @@
         <div class="modal-box">
             <div class="handle"></div>
             <div id="m-body"></div>
-            <button class="m-close" onclick="ui.closeM()">TERMINATE SESSION</button>
+            <button class="m-close" onclick="ui.closeM()">TERMINATE VIEW</button>
         </div>
     </div>
 
@@ -210,16 +218,22 @@
                 const u = tg.initDataUnsafe.user || { id: 0, first_name: 'Local', username: 'user' };
                 this.data.id = String(u.id);
 
-                // --- TON Connect ---
+                // --- TON Connect Initialization ---
                 try {
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                        manifestUrl: window.location.origin + '/tonconnect-manifest.json',
+                        manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json', // Твой манифест
                         buttonRootId: null
                     });
+                    
                     tonConnectUI.onStatusChange(w => {
                         this.data.wallet = w ? w.account.address : null;
                         document.getElementById('wallet-btn-label').innerText = w ? "✅" : "👛";
                         this.save(true);
+                        // Если модалка открыта, перерендерим её для кошелька
+                        const modal = document.getElementById('modal');
+                        if(modal.classList.contains('active') && this.currentModal === 'wallet') {
+                            ui.openM('wallet');
+                        }
                     });
                 } catch(e) { console.error("TON Error:", e); }
 
@@ -228,7 +242,6 @@
                     const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`);
                     if (r.ok) {
                         const db = await r.json();
-                        // Синхронизируем только если данные с сервера новее или локальные еще не инициализированы
                         if (!this.data.version || db.version >= this.data.version) {
                             this.data = { ...this.data, ...db };
                         }
@@ -249,11 +262,9 @@
                     this.handleTap(e);
                 }, {passive: false});
 
-                // ЖЕЛЕЗНАЯ СИНХРОНИЗАЦИЯ ПРИ ВЫХОДЕ
                 const finalSync = () => this.save(true);
                 window.addEventListener('visibilitychange', () => { if (document.hidden) finalSync(); });
                 window.addEventListener('pagehide', finalSync);
-                tg.onEvent('viewportChanged', (isChanged) => { if(isChanged) finalSync(); });
             },
 
             getCost(type) {
@@ -271,7 +282,6 @@
                     }
                     return;
                 }
-
                 const touches = e.changedTouches;
                 for(let i=0; i<touches.length; i++) {
                     if(this.data.energy >= 1) {
@@ -292,7 +302,6 @@
                     if(type === 'tap') { this.data.tap_lvl++; this.data.tap += 1; }
                     if(type === 'energy') { this.data.energy_lvl++; this.data.max_energy += 500; this.data.energy = this.data.max_energy; }
                     if(type === 'mine') { this.data.mine_lvl++; this.data.profit += 250; }
-                    
                     ui.render();
                     tg.HapticFeedback.notificationOccurred('success');
                     await this.save(true); 
@@ -302,37 +311,23 @@
                 }
             },
 
-            // --- УЛЬТРА СИНХРОНИЗАЦИЯ ---
             async save(force = false) {
                 if (!this.isLoaded || (this.isSaving && !force)) return;
                 if (!this.hasUnsavedChanges && !force) return;
-
                 this.isSaving = true;
                 this.hasUnsavedChanges = false;
-                this.data.version = Date.now(); // Метка времени для сервера
-
+                this.data.version = Date.now();
                 const statusLight = document.getElementById('sync-status');
                 if(statusLight) statusLight.classList.add('saving');
-
                 const payload = JSON.stringify(this.data);
-
                 try {
-                    // Используем Beacon API для экстренного завершения, если доступно
-                    if (force && navigator.sendBeacon) {
-                        const blob = new Blob([payload], {type: 'application/json'});
-                        navigator.sendBeacon('/api/save', blob);
-                    } else {
-                        // Обычный fetch с keepalive для надежности
-                        await fetch('/api/save', {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: payload,
-                            keepalive: true 
-                        });
-                    }
-                    console.log("System Synced.");
+                    await fetch('/api/save', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: payload,
+                        keepalive: true 
+                    });
                 } catch(e) {
-                    console.error("Sync Failed:", e);
                     this.hasUnsavedChanges = true; 
                 } finally {
                     this.isSaving = false;
@@ -341,7 +336,6 @@
             },
 
             startLoops() {
-                // Регенерация и доход (раз в сек)
                 setInterval(() => {
                     let changed = false;
                     if(this.data.energy < this.data.max_energy) {
@@ -355,13 +349,13 @@
                     }
                     if(changed) ui.render();
                 }, 1000);
-                
-                // Авто-сохранение каждые 5 секунд при наличии изменений
                 setInterval(() => this.save(), 5000);
             }
         };
 
         const ui = {
+            currentModal: null,
+
             startLoader() {
                 let p = 0;
                 const i = setInterval(() => {
@@ -389,7 +383,6 @@
                 document.getElementById('e-fill').style.width = (d.energy / d.max_energy * 100) + '%';
                 document.getElementById('ui-tap').innerText = `+${d.tap}`;
                 document.getElementById('ui-profit').innerText = Math.floor(d.profit).toLocaleString();
-                
                 let rank = "RECRUIT";
                 if(d.balance > 50000) rank = "TECHNO ACADEMY";
                 if(d.balance > 250000) rank = "CYBER MANTIS";
@@ -415,6 +408,7 @@
             },
 
             async openM(type) {
+                this.currentModal = type;
                 const b = document.getElementById('m-body');
                 const m = document.getElementById('modal');
                 m.classList.add('active');
@@ -434,16 +428,32 @@
                         const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
                         b.innerHTML = `<h2>🤝 REFERRALS</h2><p style="font-size:12px; color:#888;">Invite friends and get 10% of their earnings.</p><div class="ref-box">${link}</div><button class="task-btn" style="width:100%" onclick="ui.copyRef('${link}')">COPY LINK</button>`;
                     } else if(type === 'wallet') {
-                        b.innerHTML = `<h2>👛 TON WALLET</h2><p style="text-align:center; font-size:12px; color:#888; margin-bottom:15px;">Connect your wallet for future airdrops</p><div id="ton-btn" style="display:flex; justify-content:center;"></div>`;
-                        setTimeout(() => tonConnectUI.renderButton({ container: document.getElementById('ton-btn'), width: '100%' }), 50);
+                        const isConnected = !!game.data.wallet;
+                        const shortAddr = isConnected ? game.data.wallet.slice(0,6) + '...' + game.data.wallet.slice(-4) : '';
+                        
+                        b.innerHTML = `
+                            <h2>👛 TON WALLET</h2>
+                            <p style="text-align:center; font-size:12px; color:#888; margin-bottom:15px;">
+                                ${isConnected ? 'CONNECTED: ' + shortAddr : 'Connect your wallet for future airdrops'}
+                            </p>
+                            <button id="custom-ton-btn" class="wallet-connect-btn ${isConnected ? 'connected' : ''}">
+                                ${isConnected ? 'DISCONNECT WALLET' : 'CONNECT TON WALLET'}
+                            </button>
+                        `;
+
+                        document.getElementById('custom-ton-btn').onclick = async () => {
+                            if(tonConnectUI.connected) {
+                                await tonConnectUI.disconnect();
+                            } else {
+                                await tonConnectUI.openModal();
+                            }
+                        };
                     } else if(type === 'tasks') {
                         const t1 = game.data.completed_tasks.includes('tg') ? 'DONE' : '+10,000';
                         const t2 = game.data.completed_tasks.includes('x') ? 'DONE' : '+5,000';
                         b.innerHTML = `<h2>📋 MISSIONS</h2><br>
                         <div class="task-item"><span>Join Community</span><button class="task-btn" onclick="ui.doTask('tg', 'https://t.me/neural_pulse', 10000)" ${t1==='DONE'?'disabled':''}>${t1}</button></div>
                         <div class="task-item"><span>Follow X</span><button class="task-btn" onclick="ui.doTask('x', 'https://x.com/', 5000)" ${t2==='DONE'?'disabled':''}>${t2}</button></div>`;
-                    } else if(type === 'top') {
-                        b.innerHTML = `<h2>🏆 GLOBAL TOP</h2><br><p style="color:#555; text-align:center; font-family:monospace;">RANKING DATABASE OFFLINE...<br>COMING SOON</p>`;
                     } else if(type === 'bonus') {
                         const canClaim = Date.now() - (game.data.last_bonus || 0) > 24*60*60*1000;
                         b.innerHTML = `<h2>🎁 DAILY REWARD</h2><br><p style="text-align:center; margin-bottom:15px;">Claim your daily maintenance bonus</p>
@@ -496,7 +506,10 @@
                 game.save(true);
             },
 
-            closeM() { document.getElementById('modal').classList.remove('active'); }
+            closeM() { 
+                document.getElementById('modal').classList.remove('active'); 
+                this.currentModal = null;
+            }
         };
 
         window.onload = () => game.init();
