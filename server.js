@@ -197,24 +197,60 @@ async function setupSupremeInterface(app) {
         });
     });
 
-    app.post('/api/save', (req, res) => {
+    // --- 💾 ОБНОВЛЕННЫЙ API SAVE С ПРОВЕРКОЙ ПО БАЗЕ ---
+    app.post('/api/save', async (req, res) => {
         const { id, balance, hash, initData } = req.body;
         if (!id || balance === undefined) return res.status(400).send("DATA_MISSING");
 
-        const check = crypto.createHmac('sha256', SECRET_SALT).update(`${id}:${balance}`).digest('hex');
-        
-        if (hash !== check) {
-            if (initData && !verifyTelegramWebAppData(initData)) {
-                neuralLog(`SECURITY ALERT: Deep validation failed for user ${id}`, 'WARN');
-                return res.status(403).send("SIGN_ERR");
+        try {
+            // Ищем пользователя в БД, чтобы взять его текущий "nonce" (время последнего обновления)
+            const user = await User.findByPk(id.toString());
+            if (!user) return res.status(404).send("USER_NOT_FOUND");
+
+            // Генерируем проверочный хеш: Баланс + Соль + Время последнего сохранения в БД
+            const nonce = new Date(user.updatedAt).getTime();
+            const check = crypto.createHmac('sha256', SECRET_SALT)
+                .update(`${id}:${balance}:${nonce}`)
+                .digest('hex');
+            
+            if (hash !== check) {
+                // Если хеш не совпал, пробуем глубокую валидацию через Telegram (на случай первого входа)
+                if (initData && verifyTelegramWebAppData(initData)) {
+                     updateBuffer.set(id.toString(), { balance });
+                     return res.json({ s: 1, next_nonce: Date.now() });
+                }
+
+                neuralLog(`INVALID HASH | User: ${id} | Expected Nonce: ${nonce}`, 'WARN');
+                return res.status(403).json({ 
+                    error: "SIGN_ERR", 
+                    required_nonce: nonce 
+                });
             }
             
-            neuralLog(`INVALID HASH | User: ${id} | Rec: ${hash ? hash.slice(0,8) : 'undefined'}... | Exp: ${check.slice(0,8)}...`, 'WARN');
-            return res.status(403).send("SIGN_ERR");
+            // Если все ок, записываем в буфер
+            updateBuffer.set(id.toString(), { balance });
+            
+            // Возвращаем s:1 и новый nonce для следующего запроса фронтенда
+            res.json({ s: 1, next_nonce: Date.now() });
+            
+        } catch (err) {
+            neuralLog(`Save Error: ${err.message}`, 'ERROR');
+            res.status(500).send("INTERNAL_ERROR");
         }
-        
-        updateBuffer.set(id.toString(), { balance });
-        res.json({ s: 1 });
+    });
+
+    // API для получения текущих данных (и nonce) при старте приложения
+    app.get('/api/user/:id', async (req, res) => {
+        try {
+            const user = await User.findByPk(req.params.id);
+            if (!user) return res.status(404).send("NOT_FOUND");
+            res.json({
+                balance: user.balance,
+                nonce: new Date(user.updatedAt).getTime()
+            });
+        } catch (err) {
+            res.status(500).send("ERR");
+        }
     });
 }
 
