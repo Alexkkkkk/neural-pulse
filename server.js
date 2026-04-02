@@ -48,7 +48,7 @@ class GodCore extends EventEmitter {
                 timestamp: new Date().toISOString()
             };
         } catch (err) {
-            logger.error('Pulse generation failed');
+            logger.error({ err }, 'Pulse generation failed');
             return null;
         }
     }
@@ -129,14 +129,14 @@ async function setupSupremeInterface(app) {
     app.use(adminJs.options.rootPath, adminRouter);
     await adminJs.initialize();
 
-    // --- SSE STREAM: Real-time Uplink ---
+    // --- SSE STREAM: Реальное время без задержек ---
     app.get('/api/admin/stream', (req, res) => {
         res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no'); // Отключает кэширование на Bothost/Nginx
         res.flushHeaders();
 
-        // Пишем пустой комментарий каждые 15 сек для поддержания соединения
         const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 15000);
 
         const sendData = (data) => {
@@ -172,7 +172,7 @@ function setupBot(botInstance) {
         if (created) await GlobalStats.increment('total_users', { where: { id: 1 } });
 
         ctx.replyWithHTML(
-            `<b>── [ NEURAL OS : OMNI ] ──</b>\n\nAgent: <code>${user.username}</code>\nSystem: <b>V12.5</b>\nStatus: <b>READY</b>`,
+            `<b>── [ NEURAL OS : OMNI ] ──</b>\n\nAgent: <code>${user.username}</code>\nSystem: <b>V12.7</b>\nStatus: <b>ONLINE</b>`,
             Markup.inlineKeyboard([[Markup.button.webApp("⚡ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)]])
         );
     });
@@ -183,7 +183,10 @@ async function startSupreme() {
     neuralLog('🔮 BOOTING NEURAL PULSE...', 'CORE');
     const app = express();
 
-    app.use(helmet({ contentSecurityPolicy: false }));
+    app.use(helmet({ 
+        contentSecurityPolicy: false,
+        crossOriginEmbedderPolicy: false 
+    }));
     app.use(compression());
     app.use(cors());
     app.use(express.json());
@@ -191,18 +194,23 @@ async function startSupreme() {
 
     try {
         await initDB();
-        await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
+        
+        // Гарантированная инициализация глобальной статистики
+        const [gsRecord] = await GlobalStats.findOrCreate({ 
+            where: { id: 1 }, 
+            defaults: { total_users: 0, total_balance: 0 } 
+        });
         
         await setupSupremeInterface(app);
         setupBot(bot);
 
-        // Реальный цикл пульсации
+        // Запуск пульсации ядра (каждые 3 сек)
         setInterval(async () => {
             const pulse = await core.generatePulse();
             if (pulse) core.emit('broadcast', pulse);
         }, 3000);
 
-        // Webhook configuration
+        // Webhook для Telegram
         app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => bot.handleUpdate(req.body, res));
         await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`);
 
@@ -210,7 +218,6 @@ async function startSupreme() {
             neuralLog(`👑 SYSTEM ONLINE | PORT: ${PORT}`, 'SUCCESS');
         });
 
-        // Защита при выключении
         process.on('SIGTERM', () => {
             server.close(() => neuralLog('Server terminated.', 'WARN'));
         });
