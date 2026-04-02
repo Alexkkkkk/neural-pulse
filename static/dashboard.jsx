@@ -1,236 +1,272 @@
-import express from 'express';
-import { Telegraf, Markup } from 'telegraf';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import cors from 'cors';
-import helmet from 'helmet';
-import compression from 'compression';
-import EventEmitter from 'events'; 
-import os from 'os';
-import crypto from 'crypto';
-import pino from 'pino';
+import React, { useState, useEffect, memo, useMemo, useRef } from 'react';
 
-// --- 🏛️ ADMINJS & CORE IMPORTS ---
-import AdminJS from 'adminjs';
-import AdminJSExpress from '@adminjs/express';
-import * as AdminJSSequelize from '@adminjs/sequelize';
-import { ComponentLoader } from 'adminjs';
-
-// Ядро данных (модели и инициализация)
-import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB } from './db.js';
-
-const logger = pino({ transport: { target: 'pino-pretty' } });
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-AdminJS.registerAdapter(AdminJSSequelize);
-const componentLoader = new ComponentLoader();
-
-// --- 💠 GOD_CORE: EVENT HUB ---
-class GodCore extends EventEmitter {
-    constructor() {
-        super();
-        this.setMaxListeners(0);
-    }
-    
-    // Генерация живых метрик для графиков
-    async generatePulse() {
-        try {
-            const memory = process.memoryUsage();
-            // Получаем статистику из БД (или создаем временную, если БД еще занята)
-            const gs = await GlobalStats.findByPk(1) || { total_users: 0, total_balance: 0 };
-            
-            return {
-                event_type: 'SYSTEM',
-                core_load: parseFloat((os.loadavg()[0] * 10).toFixed(1)), // Нагрузка CPU
-                sync_memory: parseFloat(((memory.rss / os.totalmem()) * 100).toFixed(1)), // RAM %
-                active_agents: gs.total_users,
-                network_latency: Math.floor(Math.random() * 15 + 5),
-                pulse_liquidity: gs.total_balance,
-                timestamp: new Date().toISOString()
-            };
-        } catch (err) {
-            logger.error('Pulse generation failed: ' + err.message);
-            return null;
-        }
-    }
-}
-const core = new GodCore();
-
-const neuralLog = (msg, type = 'INFO') => {
-    const icons = { INFO: '💎', WARN: '⚠️', ERROR: '☢️', SUCCESS: '🔋', CORE: '🔮' };
-    logger.info(`${icons[type] || '▪️'} ${msg}`);
+// --- 🌌 ЦВЕТОВАЯ ПАЛИТРА NEURAL_PULSE V9.8 ---
+const CYBER = {
+  bg: '#000000',
+  card: '#0a0d14',
+  primary: '#00f2fe',
+  ton: '#0088CC',
+  success: '#39ff14',
+  danger: '#ff003c',
+  warning: '#ffea00',
+  secondary: '#7000ff',
+  text: '#e2e8f0',
+  subtext: '#4a5568',
+  border: 'rgba(0, 242, 254, 0.15)',
 };
 
-// --- ⚙️ CONFIGURATION ---
-const BOT_TOKEN = process.env.BOT_TOKEN || "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
-const DOMAIN = "https://np.bothost.tech";
-const PORT = process.env.PORT || 3000;
-const SECRET_SALT = process.env.SECRET_SALT || "ULTRA_SECRET_PULSE_2026_VOID";
-const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
+// --- 📈 КОМПОНЕНТ НЕОНОВОГО ГРАФИКА ---
+const SparkGraph = memo(({ data, color, height = 45 }) => {
+  if (!data || data.length < 2) return <div style={{ height }} />;
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+  const points = data.map((val, i) => ({
+    x: (i / (data.length - 1)) * 100,
+    y: height - ((val - min) / range) * (height * 0.7) - 5,
+  }));
 
-const bot = new Telegraf(BOT_TOKEN);
+  const linePath = `M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`;
+  const areaPath = `${linePath} L 100,${height} L 0,${height} Z`;
+  const gradId = `grad-${color.replace('#', '')}`;
 
-// --- 🧬 DELTA-SYNC ENGINE ---
-const updateBuffer = new Map();
-let isSyncing = false;
+  return (
+    <svg width="100%" height={height} style={{ marginTop: '10px', overflow: 'visible', display: 'block' }}>
+      <defs>
+        <linearGradient id={gradId} x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={areaPath} fill={`url(#${gradId})`} />
+      <path d={linePath} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" 
+            style={{ filter: `drop-shadow(0 0 5px ${color})` }} />
+      <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r="2" fill={color} />
+    </svg>
+  );
+});
 
-// Пакетное обновление балансов раз в 5 секунд для экономии ресурсов БД
-const executeMassiveCommit = async () => {
-    if (updateBuffer.size === 0 || isSyncing) return;
-    isSyncing = true;
-    const snapshot = Array.from(updateBuffer.values());
-    updateBuffer.clear();
-    
-    try {
-        await sequelize.transaction(async (t) => {
-            for (const u of snapshot) {
-                await User.update({ balance: u.balance }, { where: { id: u.id }, transaction: t });
-            }
-        });
-        neuralLog(`Delta-Sync: ${snapshot.length} users updated.`, 'SUCCESS');
-    } catch (e) {
-        neuralLog(`🚨 SYNC ERROR: ${e.message}`, 'ERROR');
-    }
-    isSyncing = false;
-};
-setInterval(executeMassiveCommit, 5000);
+// --- 📊 ИНДИКАТОР РЕСУРСА ---
+const TelemetryCard = ({ label, value, data, color }) => (
+  <div style={{ flex: 1, minWidth: '140px', background: 'rgba(255,255,255,0.02)', padding: '15px', borderRadius: '10px', border: `1px solid ${CYBER.border}` }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+      <span style={{ color: '#4a5568', fontSize: '9px', fontWeight: '800', textTransform: 'uppercase' }}>{label}</span>
+      <span style={{ color, fontSize: '11px', fontWeight: 'bold', fontFamily: 'Roboto Mono' }}>{Math.round(value)}%</span>
+    </div>
+    <SparkGraph data={data} color={color} height={30} />
+  </div>
+);
 
-// --- 🌐 INTERFACE & REAL-TIME STREAM ---
-async function setupSupremeInterface(app) {
-    const adminJs = new AdminJS({
-        resources: [
-            { resource: User, options: { navigation: { name: 'DATABASE', icon: 'User' } } },
-            { resource: Task, options: { navigation: { name: 'CONTENT', icon: 'List' } } },
-            { resource: Stats, options: { navigation: { name: 'ANALYTICS', icon: 'Activity' } } },
-            { resource: GlobalStats, options: { navigation: { name: 'SYSTEM', icon: 'Settings' } } }
-        ],
-        rootPath: '/admin',
-        componentLoader,
-        dashboard: { 
-            component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
-            handler: async () => {
-                const [gs, top] = await Promise.all([
-                    GlobalStats.findByPk(1),
-                    User.findAll({ limit: 10, order: [['balance', 'DESC']] })
-                ]);
-                return { usersList: top, global: gs };
-            }
-        },
-        branding: {
-            companyName: 'NEURAL PULSE',
-            logo: `${DOMAIN}/static/images/logo.png`,
-            theme: { colors: { primary100: '#00f2fe', bg: '#0b0e11' } }
-        }
-    });
+// --- 🗳️ КАРТОЧКА ДАННЫХ ---
+const DataCard = ({ label, value, unit, data, color, isTon }) => (
+  <div className="card">
+    <div className="label" style={{ color }}>{label}</div>
+    <div className="val-main">
+      {value}
+      <span className="val-unit">{isTon ? '💎 ' : ''}{unit}</span>
+    </div>
+    <SparkGraph data={data} color={color} />
+  </div>
+);
 
-    const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
-        authenticate: async (email, password) => (email === '1' && password === '1' ? { email } : null),
-        cookiePassword: 'np-ultra-secure-key-2026',
-    }, null, { resave: false, saveUninitialized: false, secret: 'pulse_secret', store: sessionStore });
+// --- ⚙️ ОСНОВНОЙ КОМПОНЕНТ ---
+const Dashboard = (props) => {
+  const { data: initialData } = props;
+  const [activeTab, setActiveTab] = useState('overview');
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [searchTerm, setSearchTerm] = useState('');
+  const tonUiRef = useRef(null);
 
-    app.use(adminJs.options.rootPath, adminRouter);
-    await adminJs.initialize();
+  const [wallet, setWallet] = useState({ connected: false, address: null, balance: 0, shortAddress: 'OFFLINE' });
+  const [users] = useState(initialData?.usersList || []);
+  
+  // Состояния для метрик
+  const [stats, setStats] = useState({ cpu: 0, ram: 0, online: 0, latency: 0, liquidity: 0 });
+  const [history, setHistory] = useState({
+    cpu: Array(15).fill(0), ram: Array(15).fill(0), stability: Array(15).fill(100),
+    online: Array(15).fill(0), ton: Array(15).fill(0), lat: Array(15).fill(0), liq: Array(15).fill(0)
+  });
 
-    // --- SSE STREAM: Реальное время для графиков ---
-    app.get('/api/admin/stream', (req, res) => {
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache, no-transform');
-        res.setHeader('Connection', 'keep-alive');
-        res.setHeader('X-Accel-Buffering', 'no'); // Важно для Bothost/Nginx
-        res.flushHeaders();
+  const filteredUsers = useMemo(() => {
+    return users.filter(u => 
+      String(u.id).includes(searchTerm) || 
+      String(u.username || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [users, searchTerm]);
 
-        const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 15000);
+  const updateHistoryArray = (arr, newVal) => [...arr.slice(1), newVal];
 
-        const sendData = (data) => {
-            res.write(`data: ${JSON.stringify(data)}\n\n`);
-        };
-
-        core.on('broadcast', sendData);
-
-        req.on('close', () => {
-            clearInterval(keepAlive);
-            core.removeListener('broadcast', sendData);
-            res.end();
-        });
-    });
-
-    // API для сохранения игрового баланса из Mini App
-    app.post('/api/save', (req, res) => {
-        const { id, balance, hash } = req.body;
-        const check = crypto.createHmac('sha256', SECRET_SALT).update(`${id}:${balance}`).digest('hex');
-        if (hash !== check) return res.status(403).send("SIGN_ERR");
-        
-        updateBuffer.set(id, { id, balance });
-        res.json({ s: 1 });
-    });
-}
-
-// --- 🤖 BOT LOGIC ---
-function setupBot(botInstance) {
-    botInstance.start(async (ctx) => {
-        const [user, created] = await User.findOrCreate({
-            where: { id: ctx.from.id },
-            defaults: { username: ctx.from.username || `AGENT_${ctx.from.id}`, balance: 0 }
-        });
-        if (created) await GlobalStats.increment('total_users', { where: { id: 1 } });
-
-        ctx.replyWithHTML(
-            `<b>── [ NEURAL OS : OMNI ] ──</b>\n\nAgent: <code>${user.username}</code>\nSystem: <b>V12.8 Live</b>\nStatus: <b>OPERATIONAL</b>`,
-            Markup.inlineKeyboard([[Markup.button.webApp("⚡ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)]])
-        );
-    });
-}
-
-// --- 🚀 STARTUP ---
-async function startSupreme() {
-    neuralLog('🔮 BOOTING NEURAL PULSE SYSTEM...', 'CORE');
-    const app = express();
-
-    app.use(helmet({ 
-        contentSecurityPolicy: false,
-        crossOriginEmbedderPolicy: false 
+  const processStreamUpdate = (newData) => {
+    setStats(prev => ({
+      ...prev,
+      cpu: newData.core_load ?? prev.cpu,
+      ram: newData.sync_memory ?? prev.ram,
+      online: newData.active_agents ?? prev.online,
+      latency: newData.network_latency ?? prev.latency,
+      liquidity: newData.pulse_liquidity ?? prev.liquidity
     }));
-    app.use(compression());
-    app.use(cors());
-    app.use(express.json());
-    
-    app.use('/static', express.static(path.join(__dirname, 'static')));
 
-    try {
-        // Инициализация базы данных
-        await initDB();
-        await GlobalStats.findOrCreate({ 
-            where: { id: 1 }, 
-            defaults: { total_users: 0, total_balance: 0 } 
-        });
-        
-        await setupSupremeInterface(app);
-        setupBot(bot);
+    setHistory(p => ({
+      cpu: updateHistoryArray(p.cpu, newData.core_load ?? p.cpu[p.cpu.length-1]),
+      ram: updateHistoryArray(p.ram, newData.sync_memory ?? p.ram[p.ram.length-1]),
+      stability: updateHistoryArray(p.stability, Math.max(0, 100 - ((newData.network_latency || 20) / 5))),
+      online: updateHistoryArray(p.online, newData.active_agents ?? p.online[p.online.length-1]),
+      ton: updateHistoryArray(p.ton, wallet.balance),
+      lat: updateHistoryArray(p.lat, newData.network_latency ?? p.lat[p.lat.length-1]),
+      liq: updateHistoryArray(p.liq, newData.pulse_liquidity ?? p.liq[p.liq.length-1])
+    }));
+    setLastUpdate(new Date());
+  };
 
-        // Интервал генерации "Пульса" данных
-        setInterval(async () => {
-            const pulse = await core.generatePulse();
-            if (pulse) core.emit('broadcast', pulse);
-        }, 3000);
+  useEffect(() => {
+    let unsubscribe = () => {};
 
-        // Webhook для связи с Telegram
-        app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => bot.handleUpdate(req.body, res));
-        await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`);
+    const initTon = () => {
+      if (window.TON_CONNECT_UI && !tonUiRef.current) {
+        try {
+          tonUiRef.current = new window.TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: 'https://np.bothost.tech/tonconnect-manifest.json',
+            buttonRootId: 'ton-btn'
+          });
+          unsubscribe = tonUiRef.current.onStatusChange(w => {
+            if (w) {
+              setWallet({
+                connected: true,
+                address: w.account.address,
+                balance: 0,
+                shortAddress: `${w.account.address.slice(0,4)}...${w.account.address.slice(-4)}`
+              });
+            } else {
+              setWallet({ connected: false, address: null, balance: 0, shortAddress: 'OFFLINE' });
+            }
+          });
+          return true;
+        } catch (err) { console.error("TON Init Error:", err); }
+      }
+      return false;
+    };
 
-        const server = app.listen(PORT, '0.0.0.0', () => {
-            neuralLog(`👑 SYSTEM ONLINE | NODE: ${os.hostname()} | PORT: ${PORT}`, 'SUCCESS');
-        });
-
-        // Безопасное завершение
-        process.on('SIGTERM', () => {
-            server.close(() => neuralLog('Pulse sequence stopped.', 'WARN'));
-        });
-
-    } catch (err) {
-        neuralLog(`🚨 BOOT FAIL: ${err.message}`, 'ERROR');
-        process.exit(1);
+    if (!initTon()) {
+      const timer = setInterval(() => { if (initTon()) clearInterval(timer); }, 500);
+      setTimeout(() => clearInterval(timer), 10000);
     }
-}
 
-startSupreme();
+    const eventSource = new EventSource('/api/admin/stream');
+    eventSource.onmessage = (e) => {
+      try {
+        const update = JSON.parse(e.data);
+        processStreamUpdate(update);
+      } catch (err) { console.error("Stream sync error", err); }
+    };
+
+    setTimeout(() => setIsLoaded(true), 800);
+
+    return () => {
+      eventSource.close();
+      unsubscribe();
+    };
+  }, []);
+
+  if (!isLoaded) return <div className="loading">CONNECTING_TO_NEURAL_PULSE_NODE...</div>;
+
+  return (
+    <div className="app-root">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Roboto+Mono&display=swap');
+        .app-root { background: #000; min-height: 100vh; padding: 20px; font-family: 'Inter', sans-serif; color: #fff; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .header h1 { font-size: 24px; font-weight: 900; letter-spacing: 4px; color: ${CYBER.primary}; margin: 0; }
+        .nav-tabs { display: flex; gap: 20px; margin: 20px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .tab-btn { background: none; border: none; color: #4a5568; padding: 10px 0; font-size: 11px; cursor: pointer; font-family: 'Roboto Mono'; font-weight: bold; transition: 0.3s; }
+        .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; }
+        .res-panel { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; padding: 15px; margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 20px; border-radius: 12px; position: relative; overflow: hidden; }
+        .label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; opacity: 0.7; }
+        .val-main { font-size: 32px; font-weight: 700; display: flex; align-items: baseline; }
+        .val-unit { font-size: 10px; color: #4a5568; margin-left: 6px; font-weight: 800; }
+        .pulse-dot { width: 6px; height: 6px; background: ${CYBER.success}; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px ${CYBER.success}; animation: blink 2s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .cyber-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .cyber-table th { text-align: left; padding: 12px; color: ${CYBER.primary}; border-bottom: 1px solid ${CYBER.border}; font-size: 9px; text-transform: uppercase; }
+        .cyber-table td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.03); font-family: 'Roboto Mono'; }
+        .search-input { width: 100%; background: #0c1017; border: 1px solid ${CYBER.border}; color: #fff; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-family: 'Roboto Mono'; outline: none; transition: 0.3s; }
+        .search-input:focus { border-color: ${CYBER.primary}; box-shadow: 0 0 10px rgba(0, 242, 254, 0.1); }
+        .loading { background: #000; height: 100vh; display: flex; align-items: center; justify-content: center; color: ${CYBER.primary}; font-family: 'Roboto Mono'; letter-spacing: 2px; }
+      `}</style>
+
+      <div className="header">
+        <div>
+          <h1>NEURAL_PULSE V9.8</h1>
+          <div style={{ fontFamily: 'Roboto Mono', fontSize: '9px', color: wallet.connected ? CYBER.ton : CYBER.success, marginTop: '5px' }}>
+            <span className="pulse-dot"></span>
+            {wallet.connected ? `UPLINK_STABLE // ${wallet.shortAddress}` : 'SYSTEM_OPERATIONAL // REALTIME_SYNC'}
+          </div>
+        </div>
+        <div id="ton-btn" style={{ transform: 'scale(0.9)', transformOrigin: 'right' }}></div>
+      </div>
+
+      <div className="nav-tabs">
+        <button className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>OVERVIEW</button>
+        <button className={`tab-btn ${activeTab === 'agents' ? 'active' : ''}`} onClick={() => setActiveTab('agents')}>AGENT_DATABASE</button>
+      </div>
+
+      {activeTab === 'overview' && (
+        <>
+          <div className="res-panel">
+            <TelemetryCard label="Core_Node_Load" value={stats.cpu} data={history.cpu} color={CYBER.primary} />
+            <TelemetryCard label="Sync_Memory" value={stats.ram} data={history.ram} color={CYBER.secondary} />
+            <TelemetryCard label="Stability" value={Math.max(0, 100 - (stats.latency / 5))} data={history.stability} color={CYBER.warning} />
+          </div>
+
+          <div className="grid">
+            <DataCard label="Active_Agents" value={stats.online} unit="USERS" data={history.online} color={CYBER.success} />
+            <DataCard label="Live_Wallet_TON" value={wallet.connected ? wallet.balance.toFixed(2) : "0.00"} unit="TON" data={history.ton} color={CYBER.ton} isTon={true} />
+            <DataCard label="Pulse_Liquidity" value={stats.liquidity.toLocaleString()} unit="$NP" data={history.liq} color={CYBER.warning} />
+            <DataCard label="Network_Latency" value={Math.round(stats.latency)} unit="MS" data={history.lat} color={CYBER.danger} />
+          </div>
+        </>
+      )}
+
+      {activeTab === 'agents' && (
+        <div className="card">
+          <div className="label">Identity_Database_Search</div>
+          <input 
+            className="search-input" 
+            placeholder="ENTER UID OR ALIAS..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <div style={{ overflowX: 'auto' }}>
+            <table className="cyber-table">
+              <thead>
+                <tr><th>Identity_UID</th><th>Pulse_Balance</th><th>Access_Status</th></tr>
+              </thead>
+              <tbody>
+                {filteredUsers.length > 0 ? filteredUsers.map((u, i) => (
+                  <tr key={i}>
+                    <td style={{ color: CYBER.primary }}>{u.username || u.id}</td>
+                    <td>{Number(u.balance || 0).toLocaleString()} <span style={{fontSize:'8px', opacity:0.3}}>$NP</span></td>
+                    <td style={{ color: CYBER.success }}>AUTHORIZED</td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan="3" style={{ textAlign: 'center', opacity: 0.3, padding: '20px' }}>NO_DATA_FOUND</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <footer style={{ marginTop: '30px', display: 'flex', justifyContent: 'space-between', opacity: 0.2, fontSize: '8px', fontFamily: 'Roboto Mono' }}>
+        <div>NODE_HYBRID_ACTIVE // RENDER_V9.8</div>
+        <div>LAST_PULSE: {lastUpdate.toLocaleTimeString()}</div>
+      </footer>
+    </div>
+  );
+};
+
+export default Dashboard;
