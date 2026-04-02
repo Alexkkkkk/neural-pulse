@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v5.6.1 | Extreme Sync</title>
+    <title>Neural Pulse v5.6.2 | Extreme Sync Fixed</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
@@ -220,6 +220,14 @@
             isSaving: false,
             hasUnsavedChanges: false,
 
+            // Стандартизированный метод для заголовков
+            getAuthHeaders() {
+                return {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'tma ' + tg.initData
+                };
+            },
+
             async init() {
                 ui.startLoader();
                 const u = tg.initDataUnsafe.user || { id: 12345, first_name: 'Local', username: 'user' };
@@ -228,7 +236,7 @@
                 // --- TON CONNECT ---
                 try {
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                        manifestUrl: 'https://np.bothost.tech/static/tonconnect-manifest.json',
+                        manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
                         buttonRootId: null
                     });
                     
@@ -241,10 +249,10 @@
                     });
                 } catch(e) { console.error("TON Error:", e); }
 
-                // --- LOAD DATA (With Auth Header) ---
+                // --- LOAD DATA ---
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`, {
-                        headers: { 'X-Telegram-Init-Data': tg.initData }
+                        headers: this.getAuthHeaders()
                     });
                     if (r.ok) {
                         const db = await r.json();
@@ -340,19 +348,13 @@
                 this.hasUnsavedChanges = false;
                 
                 try {
-                    if (force && document.hidden) {
-                        navigator.sendBeacon('/api/save', JSON.stringify(payload));
-                    } else {
-                        await fetch('/api/save', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-Telegram-Init-Data': tg.initData 
-                            },
-                            body: JSON.stringify(payload),
-                            keepalive: true 
-                        });
-                    }
+                    // Используем fetch с keepalive: true для надежного сохранения при закрытии
+                    await fetch('/api/save', {
+                        method: 'POST',
+                        headers: this.getAuthHeaders(),
+                        body: JSON.stringify(payload),
+                        keepalive: true 
+                    });
                 } catch(e) { 
                     this.hasUnsavedChanges = true; 
                     console.error("Save failed:", e);
@@ -459,7 +461,7 @@
                 } else if(type === 'top') {
                     b.innerHTML = `<h2>🏆 TOP AGENTS</h2><br><div id="top-list-container">Loading...</div>`;
                     try {
-                        const r = await fetch('/api/top', { headers: { 'X-Telegram-Init-Data': tg.initData } });
+                        const r = await fetch('/api/top', { headers: game.getAuthHeaders() });
                         const top = await r.json();
                         let html = '<ul class="top-list">';
                         top.forEach((u, i) => {
@@ -503,10 +505,7 @@
                 try {
                     const r = await fetch('/api/ai-advice', { 
                         method: 'POST', 
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Telegram-Init-Data': tg.initData
-                        }, 
+                        headers: game.getAuthHeaders(), 
                         body: JSON.stringify(game.data) 
                     });
                     const j = await r.json();
