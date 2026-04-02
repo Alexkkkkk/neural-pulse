@@ -105,7 +105,6 @@ const Dashboard = (props) => {
     const latVal = Number(newData.network_latency || 0);
     const liqVal = Number(newData.pulse_liquidity || 0);
     
-    // Расчет стабильности (100% при 0ms, падает до 0% при 500ms+)
     const stabilityVal = Math.max(0, Math.min(100, 100 - (latVal / 5)));
 
     setStats(prev => ({
