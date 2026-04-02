@@ -16,7 +16,7 @@ import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
 import { ComponentLoader } from 'adminjs';
 
-// Ядро данных (убедись, что db.js экспортирует эти модели)
+// Ядро данных
 import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB } from './db.js';
 
 const logger = pino({ transport: { target: 'pino-pretty' } });
@@ -36,16 +36,16 @@ class GodCore extends EventEmitter {
     async generatePulse() {
         try {
             const memory = process.memoryUsage();
-            // Получаем статистику, если записи нет — берем заглушку
-            const gs = await GlobalStats.findByPk(1) || { total_users: 0, total_balance: 0 };
+            // Безопасное получение статы через опциональную цепочку
+            const gs = await GlobalStats.findByPk(1);
             
             return {
                 event_type: 'SYSTEM',
                 core_load: parseFloat((os.loadavg()[0] * 10).toFixed(1)),
                 sync_memory: parseFloat(((memory.rss / os.totalmem()) * 100).toFixed(1)),
-                active_agents: gs.total_users,
+                active_agents: gs?.total_users || 0,
                 network_latency: Math.floor(Math.random() * 20 + 10),
-                pulse_liquidity: gs.total_balance,
+                pulse_liquidity: gs?.total_balance || 0,
                 timestamp: new Date().toISOString()
             };
         } catch (err) {
@@ -77,20 +77,28 @@ let isSyncing = false;
 const executeMassiveCommit = async () => {
     if (updateBuffer.size === 0 || isSyncing) return;
     isSyncing = true;
-    const snapshot = Array.from(updateBuffer.values());
+    
+    // Копируем буфер и очищаем оригинал сразу, чтобы не потерять входящие данные
+    const snapshot = Array.from(updateBuffer.entries());
     updateBuffer.clear();
     
     try {
         await sequelize.transaction(async (t) => {
-            for (const u of snapshot) {
-                await User.update({ balance: u.balance }, { where: { id: u.id }, transaction: t });
+            for (const [id, data] of snapshot) {
+                // Используем прямое обновление баланса, чтобы избежать конфликтов
+                await User.update(
+                    { balance: data.balance }, 
+                    { where: { id }, transaction: t }
+                );
             }
         });
         neuralLog(`Delta-Sync: ${snapshot.length} units committed.`, 'SUCCESS');
     } catch (e) {
         neuralLog(`🚨 SYNC ERROR: ${e.message}`, 'ERROR');
+        // В случае ошибки можно вернуть данные в буфер (опционально)
+    } finally {
+        isSyncing = false;
     }
-    isSyncing = false;
 };
 setInterval(executeMassiveCommit, 5000);
 
@@ -125,12 +133,17 @@ async function setupSupremeInterface(app) {
     const adminRouter = AdminJSExpress.buildAuthenticatedRouter(adminJs, {
         authenticate: async (email, password) => (email === '1' && password === '1' ? { email } : null),
         cookiePassword: 'np-ultra-secure-key-2026',
-    }, null, { resave: false, saveUninitialized: false, secret: 'pulse_secret', store: sessionStore });
+    }, null, { 
+        resave: false, 
+        saveUninitialized: false, 
+        secret: 'pulse_secret', 
+        store: sessionStore 
+    });
 
     app.use(adminJs.options.rootPath, adminRouter);
     await adminJs.initialize();
 
-    // --- SSE STREAM: Реальное время без задержек ---
+    // SSE STREAM
     app.get('/api/admin/stream', (req, res) => {
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -138,13 +151,10 @@ async function setupSupremeInterface(app) {
         res.setHeader('X-Accel-Buffering', 'no'); 
         res.flushHeaders();
 
-        const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 15000);
-
-        const sendData = (data) => {
-            res.write(`data: ${JSON.stringify(data)}\n\n`);
-        };
-
+        const sendData = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
         core.on('broadcast', sendData);
+
+        const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 15000);
 
         req.on('close', () => {
             clearInterval(keepAlive);
@@ -158,7 +168,7 @@ async function setupSupremeInterface(app) {
         const check = crypto.createHmac('sha256', SECRET_SALT).update(`${id}:${balance}`).digest('hex');
         if (hash !== check) return res.status(403).send("SIGN_ERR");
         
-        updateBuffer.set(id, { id, balance });
+        updateBuffer.set(id, { balance });
         res.json({ s: 1 });
     });
 }
@@ -166,16 +176,23 @@ async function setupSupremeInterface(app) {
 // --- 🤖 BOT LOGIC ---
 function setupBot(botInstance) {
     botInstance.start(async (ctx) => {
-        const [user, created] = await User.findOrCreate({
-            where: { id: ctx.from.id },
-            defaults: { username: ctx.from.username || `AGENT_${ctx.from.id}`, balance: 0 }
-        });
-        if (created) await GlobalStats.increment('total_users', { where: { id: 1 } });
+        try {
+            const [user, created] = await User.findOrCreate({
+                where: { id: ctx.from.id.toString() }, // ID в БД часто строка
+                defaults: { username: ctx.from.username || `AGENT_${ctx.from.id}`, balance: 0 }
+            });
+            
+            if (created) {
+                await GlobalStats.increment('total_users', { where: { id: 1 } });
+            }
 
-        ctx.replyWithHTML(
-            `<b>── [ NEURAL OS : OMNI ] ──</b>\n\nAgent: <code>${user.username}</code>\nSystem: <b>V12.7 Stable</b>\nStatus: <b>ONLINE</b>`,
-            Markup.inlineKeyboard([[Markup.button.webApp("⚡ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)]])
-        );
+            ctx.replyWithHTML(
+                `<b>── [ NEURAL OS : OMNI ] ──</b>\n\nAgent: <code>${user.username}</code>\nSystem: <b>V12.7 Stable</b>\nStatus: <b>ONLINE</b>`,
+                Markup.inlineKeyboard([[Markup.button.webApp("⚡ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)]])
+            );
+        } catch (e) {
+            neuralLog(`Bot Start Error: ${e.message}`, 'ERROR');
+        }
     });
 }
 
@@ -184,10 +201,7 @@ async function startSupreme() {
     neuralLog('🔮 BOOTING NEURAL PULSE...', 'CORE');
     const app = express();
 
-    app.use(helmet({ 
-        contentSecurityPolicy: false,
-        crossOriginEmbedderPolicy: false 
-    }));
+    app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
     app.use(compression());
     app.use(cors());
     app.use(express.json());
@@ -195,32 +209,24 @@ async function startSupreme() {
 
     try {
         await initDB();
-        
-        // Гарантированная инициализация глобальной статистики
-        await GlobalStats.findOrCreate({ 
-            where: { id: 1 }, 
-            defaults: { total_users: 0, total_balance: 0 } 
-        });
+        await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
         
         await setupSupremeInterface(app);
         setupBot(bot);
 
-        // Запуск пульсации ядра (каждые 3 сек)
+        // Пульсация
         setInterval(async () => {
             const pulse = await core.generatePulse();
             if (pulse) core.emit('broadcast', pulse);
         }, 3000);
 
-        // Webhook для Telegram
-        app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => bot.handleUpdate(req.body, res));
-        await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`);
+        // Webhook
+        const webhookPath = `/telegraf/${BOT_TOKEN}`;
+        app.post(webhookPath, (req, res) => bot.handleUpdate(req.body, res));
+        await bot.telegram.setWebhook(`${DOMAIN}${webhookPath}`);
 
-        const server = app.listen(PORT, '0.0.0.0', () => {
-            neuralLog(`👑 SYSTEM ONLINE | NODE: ${os.hostname()} | PORT: ${PORT}`, 'SUCCESS');
-        });
-
-        process.on('SIGTERM', () => {
-            server.close(() => neuralLog('Server terminated.', 'WARN'));
+        app.listen(PORT, '0.0.0.0', () => {
+            neuralLog(`👑 SYSTEM ONLINE | PORT: ${PORT}`, 'SUCCESS');
         });
 
     } catch (err) {
