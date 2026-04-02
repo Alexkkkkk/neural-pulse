@@ -16,7 +16,7 @@ import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
 import { ComponentLoader } from 'adminjs';
 
-// Ядро данных (убедись, что db.js экспортирует эти модели)
+// Ядро данных (модели и инициализация)
 import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB } from './db.js';
 
 const logger = pino({ transport: { target: 'pino-pretty' } });
@@ -33,22 +33,24 @@ class GodCore extends EventEmitter {
         this.setMaxListeners(0);
     }
     
+    // Генерация живых метрик для графиков
     async generatePulse() {
         try {
             const memory = process.memoryUsage();
-            const gs = await GlobalStats.findByPk(1);
+            // Получаем статистику из БД (или создаем временную, если БД еще занята)
+            const gs = await GlobalStats.findByPk(1) || { total_users: 0, total_balance: 0 };
             
             return {
                 event_type: 'SYSTEM',
-                core_load: parseFloat((os.loadavg()[0] * 10).toFixed(1)),
-                sync_memory: parseFloat(((memory.rss / os.totalmem()) * 100).toFixed(1)),
-                active_agents: gs?.total_users || 0,
-                network_latency: Math.floor(Math.random() * 20 + 10),
-                pulse_liquidity: gs?.total_balance || 0,
+                core_load: parseFloat((os.loadavg()[0] * 10).toFixed(1)), // Нагрузка CPU
+                sync_memory: parseFloat(((memory.rss / os.totalmem()) * 100).toFixed(1)), // RAM %
+                active_agents: gs.total_users,
+                network_latency: Math.floor(Math.random() * 15 + 5),
+                pulse_liquidity: gs.total_balance,
                 timestamp: new Date().toISOString()
             };
         } catch (err) {
-            logger.error('Pulse generation failed');
+            logger.error('Pulse generation failed: ' + err.message);
             return null;
         }
     }
@@ -73,6 +75,7 @@ const bot = new Telegraf(BOT_TOKEN);
 const updateBuffer = new Map();
 let isSyncing = false;
 
+// Пакетное обновление балансов раз в 5 секунд для экономии ресурсов БД
 const executeMassiveCommit = async () => {
     if (updateBuffer.size === 0 || isSyncing) return;
     isSyncing = true;
@@ -85,7 +88,7 @@ const executeMassiveCommit = async () => {
                 await User.update({ balance: u.balance }, { where: { id: u.id }, transaction: t });
             }
         });
-        neuralLog(`Delta-Sync: ${snapshot.length} units committed.`, 'SUCCESS');
+        neuralLog(`Delta-Sync: ${snapshot.length} users updated.`, 'SUCCESS');
     } catch (e) {
         neuralLog(`🚨 SYNC ERROR: ${e.message}`, 'ERROR');
     }
@@ -129,12 +132,12 @@ async function setupSupremeInterface(app) {
     app.use(adminJs.options.rootPath, adminRouter);
     await adminJs.initialize();
 
-    // --- SSE STREAM: Реальное время для твоего Dashboard.jsx ---
+    // --- SSE STREAM: Реальное время для графиков ---
     app.get('/api/admin/stream', (req, res) => {
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('Connection', 'keep-alive');
-        res.setHeader('X-Accel-Buffering', 'no'); // Отключает задержки на Bothost
+        res.setHeader('X-Accel-Buffering', 'no'); // Важно для Bothost/Nginx
         res.flushHeaders();
 
         const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 15000);
@@ -152,6 +155,7 @@ async function setupSupremeInterface(app) {
         });
     });
 
+    // API для сохранения игрового баланса из Mini App
     app.post('/api/save', (req, res) => {
         const { id, balance, hash } = req.body;
         const check = crypto.createHmac('sha256', SECRET_SALT).update(`${id}:${balance}`).digest('hex');
@@ -172,7 +176,7 @@ function setupBot(botInstance) {
         if (created) await GlobalStats.increment('total_users', { where: { id: 1 } });
 
         ctx.replyWithHTML(
-            `<b>── [ NEURAL OS : OMNI ] ──</b>\n\nAgent: <code>${user.username}</code>\nSystem: <b>V9.8 Live</b>\nStatus: <b>READY</b>`,
+            `<b>── [ NEURAL OS : OMNI ] ──</b>\n\nAgent: <code>${user.username}</code>\nSystem: <b>V12.8 Live</b>\nStatus: <b>OPERATIONAL</b>`,
             Markup.inlineKeyboard([[Markup.button.webApp("⚡ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)]])
         );
     });
@@ -180,10 +184,9 @@ function setupBot(botInstance) {
 
 // --- 🚀 STARTUP ---
 async function startSupreme() {
-    neuralLog('🔮 BOOTING NEURAL PULSE...', 'CORE');
+    neuralLog('🔮 BOOTING NEURAL PULSE SYSTEM...', 'CORE');
     const app = express();
 
-    // Настройки безопасности для корректной работы React-админки
     app.use(helmet({ 
         contentSecurityPolicy: false,
         crossOriginEmbedderPolicy: false 
@@ -192,13 +195,11 @@ async function startSupreme() {
     app.use(cors());
     app.use(express.json());
     
-    // Папка для твоего index.html и dashboard.jsx
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
     try {
+        // Инициализация базы данных
         await initDB();
-        
-        // Гарантируем наличие записи статистики (чтобы не было нулей)
         await GlobalStats.findOrCreate({ 
             where: { id: 1 }, 
             defaults: { total_users: 0, total_balance: 0 } 
@@ -207,26 +208,28 @@ async function startSupreme() {
         await setupSupremeInterface(app);
         setupBot(bot);
 
-        // Цикл "Пульса" - обновляет графики на фронтенде каждые 3 сек
+        // Интервал генерации "Пульса" данных
         setInterval(async () => {
             const pulse = await core.generatePulse();
             if (pulse) core.emit('broadcast', pulse);
         }, 3000);
 
-        // Webhook
+        // Webhook для связи с Telegram
         app.post(`/telegraf/${BOT_TOKEN}`, (req, res) => bot.handleUpdate(req.body, res));
         await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`);
 
         const server = app.listen(PORT, '0.0.0.0', () => {
-            neuralLog(`👑 SYSTEM ONLINE | PORT: ${PORT}`, 'SUCCESS');
+            neuralLog(`👑 SYSTEM ONLINE | NODE: ${os.hostname()} | PORT: ${PORT}`, 'SUCCESS');
         });
 
+        // Безопасное завершение
         process.on('SIGTERM', () => {
-            server.close(() => neuralLog('Server terminated.', 'WARN'));
+            server.close(() => neuralLog('Pulse sequence stopped.', 'WARN'));
         });
 
     } catch (err) {
         neuralLog(`🚨 BOOT FAIL: ${err.message}`, 'ERROR');
+        process.exit(1);
     }
 }
 
