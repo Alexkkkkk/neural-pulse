@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v5.6.2 | Extreme Sync Fixed</title>
+    <title>Neural Pulse v5.6.5 | Secured Sync</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    
     <style>
         :root {
             --neon: #00ffff;
@@ -214,8 +216,9 @@
                 id: "0", balance: 0, energy: 1000, max_energy: 1000, 
                 tap: 1, profit: 0, tap_lvl: 1, mine_lvl: 1, 
                 energy_lvl: 1, last_bonus: 0, wallet: null, completed_tasks: [],
-                version: Date.now()
+                nonce: null // СЮДА СОХРАНЯЕМ NONCE ИЗ БД
             },
+            SALT: "ULTRA_SECRET_PULSE_2026_VOID", // ДОЛЖНО СОВПАДАТЬ С СЕРВЕРОМ!
             isLoaded: false,
             isSaving: false,
             hasUnsavedChanges: false,
@@ -255,7 +258,10 @@
                     });
                     if (r.ok) {
                         const db = await r.json();
+                        // Важно: сервер должен вернуть nonce (last_sync_token)
                         this.data = { ...this.data, ...db };
+                        // Если в ответе пришел nonce, сохраняем его
+                        if(db.nonce) this.data.nonce = db.nonce;
                     }
                 } catch(e) { console.warn("Offline Mode"); }
 
@@ -274,7 +280,6 @@
                     this.handleTap(e);
                 }, {passive: false});
 
-                // --- EXIT SYNC ---
                 window.addEventListener('visibilitychange', () => { if (document.hidden) this.save(true); });
             },
 
@@ -324,6 +329,12 @@
                 }
             },
 
+            // --- НОВАЯ ГЕНЕРАЦИЯ ХЕША ---
+            generateHash(id, balance, nonce) {
+                const message = `${id}:${balance}:${nonce}`;
+                return CryptoJS.HmacSHA256(message, this.SALT).toString();
+            },
+
             async save(force = false) {
                 if (!this.isLoaded || (this.isSaving && !force)) return;
                 if (!this.hasUnsavedChanges && !force) return;
@@ -332,27 +343,42 @@
                 const statusLight = document.getElementById('sync-status');
                 if(statusLight) statusLight.classList.add('saving');
                 
+                // Подготовка данных
+                const currentBalance = Math.floor(this.data.balance);
+                const currentHash = this.generateHash(this.data.id, currentBalance, this.data.nonce);
+
                 const payload = {
                     id: this.data.id,
-                    balance: Math.floor(this.data.balance),
+                    balance: currentBalance,
                     energy: Math.floor(this.data.energy),
                     tap_lvl: this.data.tap_lvl,
                     mine_lvl: this.data.mine_lvl,
                     energy_lvl: this.data.energy_lvl,
                     wallet: this.data.wallet,
                     completed_tasks: this.data.completed_tasks,
-                    last_bonus: this.data.last_bonus
+                    last_bonus: this.data.last_bonus,
+                    hash: currentHash, // ОТПРАВЛЯЕМ ХЕШ
+                    initData: tg.initData // ДЛЯ ВАЛИДАЦИИ ПЕРВОГО ВХОДА
                 };
 
                 this.hasUnsavedChanges = false;
                 
                 try {
-                    await fetch('/api/save', {
+                    const r = await fetch('/api/save', {
                         method: 'POST',
                         headers: this.getAuthHeaders(),
                         body: JSON.stringify(payload),
                         keepalive: true 
                     });
+                    
+                    const res = await r.json();
+                    if(res.s === 1 && res.next_nonce) {
+                        // ОБЯЗАТЕЛЬНО обновляем nonce для следующей итерации
+                        this.data.nonce = res.next_nonce;
+                    } else if (res.required_nonce) {
+                        // Если рассинхрон — подтягиваем нужный nonce
+                        this.data.nonce = res.required_nonce;
+                    }
                 } catch(e) { 
                     this.hasUnsavedChanges = true; 
                     console.error("Save failed:", e);
