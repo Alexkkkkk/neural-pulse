@@ -250,6 +250,7 @@
                     }
                 } catch(e) { console.warn("Offline Mode"); }
 
+                // --- UI SETUP ---
                 document.getElementById('my-name').innerText = (u.username || u.first_name).toUpperCase();
                 if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
 
@@ -265,8 +266,7 @@
                 }, {passive: false});
 
                 // --- EXIT SYNC ---
-                const finalSync = () => this.save(true);
-                window.addEventListener('visibilitychange', () => { if (document.hidden) finalSync(); });
+                window.addEventListener('visibilitychange', () => { if (document.hidden) this.save(true); });
             },
 
             getCost(type) {
@@ -323,31 +323,35 @@
                 const statusLight = document.getElementById('sync-status');
                 if(statusLight) statusLight.classList.add('saving');
                 
-                // --- СЕКРЕТНАЯ ЧАСТЬ: СОЗДАНИЕ ПОДПИСИ ---
-                const SALT = "ULTRA_SECRET_PULSE_2026_VOID"; // Должно совпадать с сервером
-                const balanceToSend = Math.floor(this.data.balance);
-                
-                // В браузере мы не можем легко сделать HMAC, поэтому серверу нужен hash. 
-                // В реальном проекте лучше передавать initData для валидации.
-                // Для простоты сейчас отправляем баланс:
                 const payload = {
                     id: this.data.id,
-                    balance: balanceToSend,
-                    // Здесь в идеале должен быть хеш, но для теста шлем без него, 
-                    // если сервер его не проверяет жестко или мы убрали проверку.
+                    balance: Math.floor(this.data.balance),
+                    energy: Math.floor(this.data.energy),
+                    tap_lvl: this.data.tap_lvl,
+                    mine_lvl: this.data.mine_lvl,
+                    energy_lvl: this.data.energy_lvl,
+                    wallet: this.data.wallet,
+                    completed_tasks: this.data.completed_tasks,
+                    last_bonus: this.data.last_bonus
                 };
 
                 this.hasUnsavedChanges = false;
                 
                 try {
-                    await fetch('/api/save', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify(payload),
-                        keepalive: true 
-                    });
+                    // Используем Beacon для закрытия приложения, fetch для обычных сохранений
+                    if (force && document.hidden) {
+                        navigator.sendBeacon('/api/save', JSON.stringify(payload));
+                    } else {
+                        await fetch('/api/save', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify(payload),
+                            keepalive: true 
+                        });
+                    }
                 } catch(e) { 
                     this.hasUnsavedChanges = true; 
+                    console.error("Save failed:", e);
                 } finally {
                     this.isSaving = false;
                     setTimeout(() => { if(statusLight) statusLight.classList.remove('saving'); }, 500);
@@ -357,12 +361,10 @@
             startLoops() {
                 setInterval(() => {
                     let changed = false;
-                    // Регенерация энергии
                     if(this.data.energy < this.data.max_energy) {
                         this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1.2);
                         changed = true;
                     }
-                    // Пассивный доход (Profit per hour -> Profit per second)
                     if(this.data.profit > 0) {
                         this.data.balance += (this.data.profit / 3600);
                         this.hasUnsavedChanges = true;
@@ -371,7 +373,6 @@
                     if(changed) ui.render();
                 }, 1000);
                 
-                // Авто-сохранение каждые 7 секунд
                 setInterval(() => {
                     if(this.hasUnsavedChanges) this.save();
                 }, 7000);
@@ -458,7 +459,7 @@
                         const top = await r.json();
                         let html = '<ul class="top-list">';
                         top.forEach((u, i) => {
-                            html += `<li class="top-item"><span class="top-rank">#${i+1}</span><span class="top-name">${u.username}</span><span class="top-val">${this.num(u.balance)}</span></li>`;
+                            html += `<li class="top-item"><span class="top-rank">#${i+1}</span><span class="top-name">${u.username || 'Agent'}</span><span class="top-val">${this.num(u.balance)}</span></li>`;
                         });
                         b.querySelector('#top-list-container').innerHTML = html + '</ul>';
                     } catch(e) { b.querySelector('#top-list-container').innerText = "Data unavailable."; }
