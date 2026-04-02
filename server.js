@@ -16,7 +16,7 @@ import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
 import { ComponentLoader } from 'adminjs';
 
-// Ядро данных
+// Ядро данных (убедись, что db.js экспортирует эти модели)
 import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB } from './db.js';
 
 const logger = pino({ transport: { target: 'pino-pretty' } });
@@ -36,15 +36,16 @@ class GodCore extends EventEmitter {
     async generatePulse() {
         try {
             const memory = process.memoryUsage();
-            const gs = await GlobalStats.findByPk(1);
+            // Получаем статистику, если записи нет — берем заглушку
+            const gs = await GlobalStats.findByPk(1) || { total_users: 0, total_balance: 0 };
             
             return {
                 event_type: 'SYSTEM',
                 core_load: parseFloat((os.loadavg()[0] * 10).toFixed(1)),
                 sync_memory: parseFloat(((memory.rss / os.totalmem()) * 100).toFixed(1)),
-                active_agents: gs?.total_users || 0,
+                active_agents: gs.total_users,
                 network_latency: Math.floor(Math.random() * 20 + 10),
-                pulse_liquidity: gs?.total_balance || 0,
+                pulse_liquidity: gs.total_balance,
                 timestamp: new Date().toISOString()
             };
         } catch (err) {
@@ -134,7 +135,7 @@ async function setupSupremeInterface(app) {
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('Connection', 'keep-alive');
-        res.setHeader('X-Accel-Buffering', 'no'); // Отключает кэширование на Bothost/Nginx
+        res.setHeader('X-Accel-Buffering', 'no'); 
         res.flushHeaders();
 
         const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 15000);
@@ -172,7 +173,7 @@ function setupBot(botInstance) {
         if (created) await GlobalStats.increment('total_users', { where: { id: 1 } });
 
         ctx.replyWithHTML(
-            `<b>── [ NEURAL OS : OMNI ] ──</b>\n\nAgent: <code>${user.username}</code>\nSystem: <b>V12.7</b>\nStatus: <b>ONLINE</b>`,
+            `<b>── [ NEURAL OS : OMNI ] ──</b>\n\nAgent: <code>${user.username}</code>\nSystem: <b>V12.7 Stable</b>\nStatus: <b>ONLINE</b>`,
             Markup.inlineKeyboard([[Markup.button.webApp("⚡ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)]])
         );
     });
@@ -196,7 +197,7 @@ async function startSupreme() {
         await initDB();
         
         // Гарантированная инициализация глобальной статистики
-        const [gsRecord] = await GlobalStats.findOrCreate({ 
+        await GlobalStats.findOrCreate({ 
             where: { id: 1 }, 
             defaults: { total_users: 0, total_balance: 0 } 
         });
@@ -215,7 +216,7 @@ async function startSupreme() {
         await bot.telegram.setWebhook(`${DOMAIN}/telegraf/${BOT_TOKEN}`);
 
         const server = app.listen(PORT, '0.0.0.0', () => {
-            neuralLog(`👑 SYSTEM ONLINE | PORT: ${PORT}`, 'SUCCESS');
+            neuralLog(`👑 SYSTEM ONLINE | NODE: ${os.hostname()} | PORT: ${PORT}`, 'SUCCESS');
         });
 
         process.on('SIGTERM', () => {
