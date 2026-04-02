@@ -16,7 +16,7 @@ import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
 import { ComponentLoader } from 'adminjs';
 
-// Ядро данных (убедись, что db.js экспортирует эти сущности)
+// Ядро данных (убедись, что db.js на месте)
 import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB } from './db.js';
 
 const logger = pino({ transport: { target: 'pino-pretty' } });
@@ -38,7 +38,7 @@ class GodCore extends EventEmitter {
         try {
             const memory = process.memoryUsage();
             
-            // Кеширование глобальной статистики на 5 секунд для снижения нагрузки на БД
+            // Кеширование статистики на 5 сек для разгрузки БД
             if (!this.cache.gs || Date.now() - this.cache.lastUpdate > 5000) {
                 this.cache.gs = await GlobalStats.findByPk(1);
                 this.cache.lastUpdate = Date.now();
@@ -98,7 +98,7 @@ const executeMassiveCommit = async () => {
         neuralLog(`Delta-Sync: ${snapshot.length} units committed.`, 'SUCCESS');
     } catch (e) {
         neuralLog(`🚨 SYNC ERROR: ${e.message}`, 'ERROR');
-        // Возврат данных в буфер, если они не были обновлены за время попытки
+        // Возврат данных в буфер при ошибке
         snapshot.forEach(([id, data]) => {
             if (!updateBuffer.has(id)) updateBuffer.set(id, data);
         });
@@ -149,7 +149,7 @@ async function setupSupremeInterface(app) {
     app.use(adminJs.options.rootPath, adminRouter);
     await adminJs.initialize();
 
-    // SSE STREAM
+    // SSE STREAM для админки
     app.get('/api/admin/stream', (req, res) => {
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -173,7 +173,7 @@ async function setupSupremeInterface(app) {
         });
     });
 
-    // API для сохранения из WebApp
+    // API для сохранения баланса из Mini App
     app.post('/api/save', (req, res) => {
         const { id, balance, hash } = req.body;
         if (!id || balance === undefined) return res.status(400).send("DATA_MISSING");
@@ -222,13 +222,12 @@ async function startSupreme() {
     neuralLog('🔮 BOOTING NEURAL PULSE...', 'CORE');
     const app = express();
 
-    // Middlewares
     app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
     app.use(compression());
     app.use(cors());
     app.use(express.json());
     
-    // Статика (index.html должен быть в /static)
+    // Статика
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
     try {
@@ -241,22 +240,37 @@ async function startSupreme() {
         await setupSupremeInterface(app);
         setupBot(bot);
 
-        // Цикл пульсации системы
+        // Пульс системы (SSE)
         setInterval(async () => {
             const pulse = await core.generatePulse();
             if (pulse) core.emit('broadcast', pulse);
         }, 3000);
 
-        // Webhook configuration
+        // Webhook
         const webhookPath = `/telegraf/${BOT_TOKEN}`;
         app.post(webhookPath, (req, res) => bot.handleUpdate(req.body, res));
         
+        // Доп. маршрут для проверки в браузере (Cannot GET fix)
+        app.get(webhookPath, (req, res) => res.send('System Pulse Active.'));
+        
         await bot.telegram.setWebhook(`${DOMAIN}${webhookPath}`);
 
-        app.listen(PORT, '0.0.0.0', () => {
+        const server = app.listen(PORT, '0.0.0.0', () => {
             neuralLog(`👑 SYSTEM ONLINE | PORT: ${PORT}`, 'SUCCESS');
-            neuralLog(`🔗 WEBHOOK: ${DOMAIN}${webhookPath}`, 'INFO');
         });
+
+        // Graceful Shutdown
+        const shutdown = async () => {
+            neuralLog('☢️ SHUTTING DOWN...', 'WARN');
+            await executeMassiveCommit(); // Скидываем остатки буфера перед выходом
+            server.close(async () => {
+                await sequelize.close();
+                process.exit(0);
+            });
+        };
+
+        process.on('SIGTERM', shutdown);
+        process.on('SIGINT', shutdown);
 
     } catch (err) {
         neuralLog(`🚨 BOOT FAIL: ${err.message}`, 'ERROR');
@@ -264,9 +278,8 @@ async function startSupreme() {
     }
 }
 
-// Обработка необработанных исключений
-process.on('unhandledRejection', (reason, promise) => {
-    logger.error({ reason }, 'Unhandled Rejection at Promise');
+process.on('unhandledRejection', (reason) => {
+    logger.error({ reason }, 'Unhandled Rejection');
 });
 
 startSupreme();
