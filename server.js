@@ -183,7 +183,6 @@ async function setupSupremeInterface(app) {
     app.use(adminJs.options.rootPath, adminRouter);
     await adminJs.initialize();
 
-    // SSE Stream for Dashboard
     app.get('/api/admin/stream', (req, res) => {
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
@@ -262,25 +261,16 @@ async function startSupreme() {
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
     try {
-        // Инициализация БД
         await initDB();
-        
-        // Гарантируем наличие записи статистики
-        await GlobalStats.findOrCreate({ 
-            where: { id: 1 }, 
-            defaults: { total_users: 0, total_balance: 0 } 
-        });
-
+        await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
         await setupSupremeInterface(app);
         setupBot(bot);
 
-        // Запуск генерации пульса системы
         setInterval(async () => {
             const pulse = await core.generatePulse();
             if (pulse) core.emit('broadcast', pulse);
         }, 3000);
 
-        // Webhook для Telegram
         const webhookPath = `/telegraf/${BOT_TOKEN}`;
         app.post(webhookPath, (req, res) => bot.handleUpdate(req.body, res));
         await bot.telegram.setWebhook(`${DOMAIN}${webhookPath}`);
@@ -289,7 +279,6 @@ async function startSupreme() {
             neuralLog(`👑 SYSTEM ONLINE | PORT: ${PORT}`, 'SUCCESS');
         });
 
-        // Graceful Shutdown
         const shutdown = async () => {
             neuralLog('☢️ EMERGENCY SHUTDOWN...', 'WARN');
             await executeMassiveCommit();
@@ -303,7 +292,6 @@ async function startSupreme() {
         process.on('SIGINT', shutdown);
 
     } catch (err) {
-        // Этот блок перехватит ошибку SSL, если она возникнет при старте
         neuralLog(`🚨 BOOT FAIL: ${err.message}`, 'ERROR');
         process.exit(1);
     }
