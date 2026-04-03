@@ -209,7 +209,11 @@
         tg.expand();
         tg.enableClosingConfirmation();
 
-        let tonConnectUI = null;
+        // --- Глобальная инициализация TON SDK ---
+        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
+            buttonRootId: null
+        });
 
         const game = {
             data: { 
@@ -235,24 +239,17 @@
                 const u = tg.initDataUnsafe.user || { id: 12345, first_name: 'Local', username: 'user' };
                 this.data.id = String(u.id);
 
-                // --- TON CONNECT INITIALIZATION ---
-                try {
-                    tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-                        manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
-                        buttonRootId: null
-                    });
-                    
-                    tonConnectUI.onStatusChange(w => {
-                        this.data.wallet = w ? w.account.address : null;
-                        const btnLabel = document.getElementById('wallet-btn-label');
-                        if(btnLabel) btnLabel.innerText = w ? "✅" : "👛";
-                        this.hasUnsavedChanges = true;
-                        this.save(true);
-                        if(ui.currentModal === 'wallet') ui.openM('wallet');
-                    });
-                } catch(e) { console.error("TON Error:", e); }
+                // Слушаем изменения статуса кошелька
+                tonConnectUI.onStatusChange(w => {
+                    this.data.wallet = w ? w.account.address : null;
+                    const btnLabel = document.getElementById('wallet-btn-label');
+                    if(btnLabel) btnLabel.innerText = w ? "✅" : "👛";
+                    this.hasUnsavedChanges = true;
+                    this.save(true);
+                    if(ui.currentModal === 'wallet') ui.openM('wallet');
+                });
 
-                // --- LOAD DATA ---
+                // Загружаем данные с сервера
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`, {
                         headers: this.getAuthHeaders()
@@ -263,7 +260,6 @@
                     }
                 } catch(e) { console.warn("Offline Mode"); }
 
-                // --- UI SETUP ---
                 document.getElementById('my-name').innerText = (u.username || u.first_name).toUpperCase();
                 if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
 
@@ -271,7 +267,6 @@
                 this.startLoops();
                 ui.render();
 
-                // --- INPUTS ---
                 const target = document.getElementById('main-target');
                 target.addEventListener('touchstart', (e) => {
                     e.preventDefault();
@@ -493,9 +488,20 @@
                     const shortAddr = isConnected ? addr.slice(0,6) + '...' + addr.slice(-4) : '';
                     b.innerHTML = `<h2>👛 TON WALLET</h2><p style="text-align:center; font-size:12px; color:#888; margin-bottom:15px;">${isConnected ? 'CONNECTED: ' + shortAddr : 'Connect for airdrops.'}</p>
                         <button id="custom-ton-btn" class="wallet-connect-btn ${isConnected ? 'connected' : ''}">${isConnected ? 'DISCONNECT' : 'CONNECT TON'}</button>`;
+                    
                     document.getElementById('custom-ton-btn').onclick = async () => {
-                        if(tonConnectUI.connected) await tonConnectUI.disconnect();
-                        else await tonConnectUI.openModal();
+                        try {
+                            // Всегда ждем восстановления сессии перед действием
+                            await tonConnectUI.connectionRestored; 
+                            if(tonConnectUI.connected) {
+                                await tonConnectUI.disconnect();
+                            } else {
+                                await tonConnectUI.openModal();
+                            }
+                        } catch(e) {
+                            console.error("Wallet Action Error:", e);
+                            tg.showAlert("Wallet SDK is busy. Try again.");
+                        }
                     };
                 } else if(type === 'tasks') {
                     const t1 = game.data.completed_tasks.includes('tg') ? 'DONE' : '+10K';
@@ -532,7 +538,6 @@
                     });
                     const j = await r.json();
                     
-                    // Эффект печатающегося текста для ИИ
                     const fullText = j.text || "Pulse stable. Continue, Agent.";
                     res.innerText = "> SCAN COMPLETE:\n\n";
                     let i = 0;
