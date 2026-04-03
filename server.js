@@ -47,7 +47,6 @@ class GodCore extends EventEmitter {
             const cpuCount = cpus.length || 1;
             const loadRaw = os.loadavg()?.[0] || 0;
 
-            // РЕАЛЬНЫЕ МБ ДЛЯ DASHBOARD (RSS - Resident Set Size)
             const rssMb = parseFloat((memory.rss / 1024 / 1024).toFixed(1));
 
             return {
@@ -158,13 +157,42 @@ async function setupSupremeInterface(app) {
                     GlobalStats.findByPk(1),
                     User.findAll({ limit: 10, order: [['balance', 'DESC']] })
                 ]);
-                return { usersList: top, global: gs };
+                return { usersList: JSON.parse(JSON.stringify(top)), global: gs };
             }
         },
         branding: {
             companyName: 'NEURAL PULSE',
             logo: `${DOMAIN}/static/images/logo.png`,
             theme: { colors: { primary100: '#00f2fe', bg: '#0b0e11' } }
+        }
+    });
+
+    // 🔴 НОВЫЙ БЛОК: ОБРАБОТКА КОМАНД ИЗ ДАШБОРДА
+    app.post('/api/admin/system', express.json(), async (req, res) => {
+        const { cmd, id, amount, msg } = req.body;
+        try {
+            if (cmd === 'SET_BALANCE') {
+                await User.update({ balance: amount }, { where: { id: id.toString() } });
+                neuralLog(`[DASHBOARD] Manual balance set for ${id}: ${amount}`, 'WARN');
+                return res.json({ success: true });
+            }
+            if (cmd === 'RESTART') {
+                neuralLog('[DASHBOARD] System reboot requested', 'ERROR');
+                res.json({ success: true });
+                setTimeout(() => process.exit(0), 1000);
+                return;
+            }
+            if (cmd === 'BROADCAST') {
+                const users = await User.findAll();
+                neuralLog(`[DASHBOARD] Sending broadcast to ${users.length} agents`, 'CORE');
+                for (const user of users) {
+                    bot.telegram.sendMessage(user.id, `📡 <b>SYSTEM NOTIFICATION</b>\n\n${msg}`, { parse_mode: 'HTML' }).catch(() => {});
+                }
+                return res.json({ success: true });
+            }
+            res.status(400).json({ error: 'INVALID_COMMAND' });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
         }
     });
 
@@ -191,9 +219,7 @@ async function setupSupremeInterface(app) {
         });
 
         const sendData = (data) => {
-            if (!res.writableEnded) {
-                res.write(`data: ${JSON.stringify(data)}\n\n`);
-            }
+            if (!res.writableEnded) res.write(`data: ${JSON.stringify(data)}\n\n`);
         };
 
         core.on('broadcast', sendData);
@@ -208,6 +234,7 @@ async function setupSupremeInterface(app) {
         });
     });
 
+    // API для Mini App (сохранение баланса)
     app.post('/api/save', async (req, res) => {
         const { id, balance, hash, initData } = req.body;
         if (!id || balance === undefined) return res.status(400).send("DATA_MISSING");
@@ -231,7 +258,6 @@ async function setupSupremeInterface(app) {
             
             updateBuffer.set(id.toString(), { balance });
             res.json({ s: 1, next_nonce: Date.now() });
-            
         } catch (err) {
             res.status(500).send("INTERNAL_ERROR");
         }
@@ -294,7 +320,7 @@ async function startSupreme() {
         await setupSupremeInterface(app);
         setupBot(bot);
 
-        // Генерация пульса данных каждые 3 секунды
+        // Генерация пульса данных
         setInterval(async () => {
             const pulse = await core.generatePulse();
             if (pulse) core.emit('broadcast', pulse);
@@ -302,7 +328,6 @@ async function startSupreme() {
 
         const webhookPath = `/telegraf/${BOT_TOKEN}`;
         
-        // ОБРАБОТКА WEBHOOK
         app.post(webhookPath, (req, res) => {
             bot.handleUpdate(req.body, res)
                 .then(() => { if (!res.writableEnded) res.status(200).send('OK'); })
