@@ -12,7 +12,7 @@ export const sequelize = new Sequelize(PG_URI, {
     dialect: 'postgres', 
     logging: false,
     dialectOptions: { 
-        // ОТКЛЮЧЕНО SSL, так как сервер его не поддерживает
+        // ОТКЛЮЧЕНО SSL, так как сервер pghost.ru часто не поддерживает его на стандартных портах
         ssl: false,
         connectTimeout: 60000 
     },
@@ -62,6 +62,7 @@ export const User = sequelize.define('users', {
     completed_tasks: { type: DataTypes.JSONB, defaultValue: [] },
     wallet: { type: DataTypes.STRING, allowNull: true },
     
+    // Поля защиты и активности
     last_sync_token: { type: DataTypes.STRING, allowNull: true }, 
     last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 }, 
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
@@ -169,6 +170,7 @@ export const logSystemStats = async () => {
             db_latency: parseFloat(dbLatency)
         });
         
+        // Очистка старых данных (храним логи за последние 48 часов)
         await Stats.destroy({
             where: {
                 created_at: { [Op.lt]: new Date(Date.now() - 48 * 60 * 60 * 1000) }
@@ -188,14 +190,17 @@ export const initDB = async () => {
         const isPrimary = cluster.isPrimary || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
+            // Синхронизация структуры БД
             await sequelize.sync({ alter: true });
             await sessionStore.sync();
             
+            // Инициализация глобальной статистики (если записи еще нет)
             await GlobalStats.findOrCreate({ 
                 where: { id: 1 }, 
                 defaults: { id: 1, total_balance: 0, total_users: 0 } 
             });
 
+            // Загрузка дефолтных задач, если таблица пуста
             if (await Task.count() === 0) {
                 await Task.bulkCreate([
                     { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
@@ -205,6 +210,7 @@ export const initDB = async () => {
                 console.log('▪️ [DB] DEFAULT_TASKS_LOADED');
             }
 
+            // Запуск циклической телеметрии
             setInterval(logSystemStats, 30000); 
             await logSystemStats(); 
         }
