@@ -5,13 +5,17 @@ import os from 'os';
 import cluster from 'cluster'; 
 
 // --- 🌐 CONFIG ---
+// Используем SSL с параметром rejectUnauthorized: false для стабильного подключения к внешним БД
 const PG_URI = "postgresql://bothost_db_db1789af0108:hl3yLh4DQmySkEYDPYwS8fn9xkLPHYNMhmCbU8WCYXs@node1.pghost.ru:32865/bothost_db_db1789af0108";
 
 export const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
     logging: false,
     dialectOptions: { 
-        ssl: false, 
+        ssl: {
+            require: true,
+            rejectUnauthorized: false // Важно для многих облачных провайдеров
+        }, 
         connectTimeout: 60000 
     },
     pool: { 
@@ -44,7 +48,11 @@ export const User = sequelize.define('users', {
         defaultValue: 0,
         get() { return parseFloat(this.getDataValue('profit') || 0); }
     },  
-    energy: { type: DataTypes.DOUBLE, defaultValue: 1000 },
+    energy: { 
+        type: DataTypes.DOUBLE, 
+        defaultValue: 1000,
+        validate: { min: 0 } // Защита от отрицательной энергии
+    },
     max_energy: { type: DataTypes.INTEGER, defaultValue: 1000 },
     tap: { type: DataTypes.INTEGER, defaultValue: 1 },
     level: { type: DataTypes.INTEGER, defaultValue: 1 },
@@ -57,7 +65,7 @@ export const User = sequelize.define('users', {
     wallet: { type: DataTypes.STRING, allowNull: true },
     
     // --- 🛡️ ПОЛЯ ЗАЩИТЫ ---
-    last_sync_token: { type: DataTypes.STRING, allowNull: true }, // Токен для проверки последовательности сохранений
+    last_sync_token: { type: DataTypes.STRING, allowNull: true }, 
     
     last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 }, 
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
@@ -66,7 +74,7 @@ export const User = sequelize.define('users', {
     underscored: true, 
     tableName: 'users',
     createdAt: 'created_at',
-    updatedAt: 'updated_at',
+    updated_at: 'updated_at',
     indexes: [
         { fields: ['username'] },
         { fields: ['wallet'] },
@@ -87,7 +95,7 @@ export const Task = sequelize.define('tasks', {
     underscored: true 
 });
 
-// --- 📊 МОДЕЛЬ: STATS ---
+// --- 📊 МОДЕЛЬ: STATS (Логи нагрузки) ---
 export const Stats = sequelize.define('stats', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     user_count: { type: DataTypes.INTEGER, defaultValue: 0 },
@@ -104,7 +112,7 @@ export const Stats = sequelize.define('stats', {
     updatedAt: 'updated_at'
 });
 
-// --- 📈 МОДЕЛЬ: GLOBAL_STATS ---
+// --- 📈 МОДЕЛЬ: GLOBAL_STATS (Агрегатор) ---
 export const GlobalStats = sequelize.define('global_stats', {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: false },
     total_balance: { 
@@ -119,8 +127,14 @@ export const GlobalStats = sequelize.define('global_stats', {
     underscored: true 
 });
 
+// --- СВЯЗИ ---
 User.hasMany(User, { as: 'ReferralList', foreignKey: 'referred_by' });
 User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
+
+// --- ХУКИ: Авто-обновление статистики ---
+User.afterCreate(async () => {
+    await GlobalStats.increment('total_users', { where: { id: 1 }, by: 1 });
+});
 
 // --- 📊 ТЕЛЕМЕТРИЯ ---
 export const logSystemStats = async () => {
@@ -141,8 +155,6 @@ export const logSystemStats = async () => {
         const totalUsers = gStats?.total_users ?? 0;
         
         const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(2);
-        
-        // ПРАВКА: Более надежный расчет CPU
         const cpus = os.cpus() || [];
         const cpuCount = cpus.length || 1;
         const loadRaw = os.loadavg()?.[0] || 0;
@@ -157,7 +169,7 @@ export const logSystemStats = async () => {
             db_latency: parseFloat(dbLatency)
         });
         
-        // Очистка старых данных (храним 48 часов)
+        // Очистка старых данных (48 часов)
         await Stats.destroy({
             where: {
                 created_at: { [Op.lt]: new Date(Date.now() - 48 * 60 * 60 * 1000) }
@@ -185,6 +197,7 @@ export const initDB = async () => {
                 defaults: { id: 1, total_balance: 0, total_users: 0 } 
             });
 
+            // Проверка и загрузка дефолтных задач
             if (await Task.count() === 0) {
                 await Task.bulkCreate([
                     { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
