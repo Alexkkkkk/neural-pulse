@@ -1,4 +1,4 @@
-import React, { useState, useEffect, memo, useCallback } from 'react';
+import React, { useState, useEffect, memo, useCallback, useRef } from 'react';
 
 // --- 🌌 ЦВЕТОВАЯ ПАЛИТРА (CYBER V11) ---
 const CYBER = {
@@ -82,7 +82,7 @@ const KernelControls = ({ onLog }) => {
 const AgentsTable = ({ users, onLog }) => {
   const updateBalance = async (user) => {
     const amount = prompt(`EDIT NP_BALANCE FOR @${user.username}:`, user.balance);
-    if (amount !== null) {
+    if (amount !== null && !isNaN(amount)) {
       onLog(`POSTGRES_WRITE: @${user.username}`, 'INFO');
       const res = await sendCommand('SET_BALANCE', { id: user.id, amount: Number(amount) });
       if(res.success) onLog(`SYNC_COMPLETE: @${user.username}`, 'SUCCESS');
@@ -118,48 +118,80 @@ const Dashboard = (props) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
 
+  // Конфиг через Ref, чтобы не перезапускать SSE при ререндере
+  const cfg = useRef(window.PULSE_CONFIG || { 
+    MATH: { HEALTH_BASE: 100, CPU_WEIGHT: 0.4, LATENCY_WEIGHT: 0.15, PRECISION: 1 }, 
+    SHOP: { PACKS: [] } 
+  }).current;
+
   const [users] = useState(initialData?.usersList || []);
   const [logs, setLogs] = useState([{ time: new Date().toLocaleTimeString(), msg: 'NEURAL_PULSE_OS_BOOT_OK', type: 'SUCCESS' }]);
   
-  const [stats, setStats] = useState({ cpu: 0, ram: 106, online: initialData?.totalUsers || 0, ton: 0, latency: 0, liquidity: initialData?.totalBalance || 0, health: 100 });
-  const [history, setHistory] = useState({
-    cpu: Array(25).fill(0), ram: Array(25).fill(106), online: Array(25).fill(0), liq: Array(25).fill(0), health: Array(25).fill(100)
+  const [stats, setStats] = useState({ 
+    cpu: 0, 
+    ram: 0, 
+    online: initialData?.totalUsers || 0, 
+    ton: 0, 
+    latency: 0, 
+    liquidity: initialData?.totalBalance || 0, 
+    health: 100 
   });
 
-  // Получаем конфигурацию (математика + магазин)
-  const cfg = window.PULSE_CONFIG || { MATH: { HEALTH_BASE: 100, CPU_WEIGHT: 0.4, LATENCY_WEIGHT: 0.15, PRECISION: 1 }, SHOP: { PACKS: [] } };
+  const [history, setHistory] = useState({
+    cpu: Array(25).fill(0), 
+    ram: Array(25).fill(0), 
+    online: Array(25).fill(0), 
+    liq: Array(25).fill(0), 
+    health: Array(25).fill(100)
+  });
 
   const addLog = useCallback((msg, type = 'INFO') => {
-    setLogs(prev => [...prev.slice(-40), { time: new Date().toLocaleTimeString(), msg, type }]);
+    setLogs(prev => [...prev.slice(-39), { time: new Date().toLocaleTimeString(), msg, type }]);
   }, []);
 
   useEffect(() => {
     const eventSource = new EventSource('/api/admin/stream');
+    
     eventSource.onmessage = (e) => {
       try {
         const update = JSON.parse(e.data);
+        
         const cpu = Number(update.core_load || 0);
         const lat = Number(update.network_latency || 0);
         const ram = Number(update.sync_memory || 0);
+        const online = Number(update.active_agents || 0);
+        const liq = Number(update.pulse_liquidity || 0);
         
-        // Математика из конфига
+        // Динамический расчет здоровья системы
         const h = Math.max(0, cfg.MATH.HEALTH_BASE - (cpu * cfg.MATH.CPU_WEIGHT) - (lat * cfg.MATH.LATENCY_WEIGHT)).toFixed(cfg.MATH.PRECISION);
 
-        setStats(p => ({ ...p, cpu, ram, health: h, latency: lat }));
-        setHistory(h_prev => ({
-          cpu: [...h_prev.cpu.slice(1), cpu],
-          ram: [...h_prev.ram.slice(1), ram],
-          online: [...h_prev.online.slice(1), update.active_agents || 0],
-          liq: [...h_prev.liq.slice(1), update.pulse_liquidity || 0],
-          health: [...h_prev.health.slice(1), Number(h)]
+        setStats({ cpu, ram, health: h, latency: lat, online, liquidity: liq });
+        
+        setHistory(prev => ({
+          cpu: [...prev.cpu.slice(1), cpu],
+          ram: [...prev.ram.slice(1), ram],
+          online: [...prev.online.slice(1), online],
+          liq: [...prev.liq.slice(1), liq],
+          health: [...prev.health.slice(1), Number(h)]
         }));
         
         setLastUpdate(new Date());
-      } catch (err) {}
+      } catch (err) {
+        console.error("SSE_PARSE_ERROR", err);
+      }
     };
-    setTimeout(() => setIsLoaded(true), 800);
-    return () => eventSource.close();
-  }, [cfg, addLog]);
+
+    eventSource.onerror = () => {
+      addLog("NODE_CONNECTION_LOST. RETRYING...", "ERROR");
+    };
+
+    const loader = setTimeout(() => setIsLoaded(true), 800);
+    
+    return () => {
+      eventSource.close();
+      clearTimeout(loader);
+    };
+  }, [addLog, cfg]);
 
   if (!isLoaded) return <div className="loading">CONNECTING_TO_NL4_NODE...</div>;
 
@@ -173,6 +205,7 @@ const Dashboard = (props) => {
         .tab-btn { background: none; border: none; color: #4a5568; padding: 10px 0; font-size: 11px; cursor: pointer; font-family: 'Roboto Mono'; font-weight: bold; text-transform: uppercase; transition: 0.3s; }
         .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; text-shadow: 0 0 10px ${CYBER.primary}88; }
         .cmd-btn { background: rgba(0,242,254,0.05); border: 1px solid ${CYBER.border}; color: ${CYBER.primary}; font-size: 9px; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-family: 'Roboto Mono'; font-weight: bold; }
+        .action-btn { background: transparent; border: 1px solid ${CYBER.primary}; color: ${CYBER.primary}; font-size: 9px; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-family: 'Roboto Mono'; }
         .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; border-radius: 12px; position: relative; }
         .label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; color: ${CYBER.subtext}; }
         .val-main { font-size: 28px; font-weight: 700; display: flex; align-items: baseline; font-family: 'Roboto Mono'; }
@@ -241,7 +274,7 @@ const Dashboard = (props) => {
             </div>
             <div className="card">
                 <div className="label">Liquidity</div>
-                <div className="val-main">{stats.liquidity}<span className="val-unit">$NP</span></div>
+                <div className="val-main">{Number(stats.liquidity).toLocaleString()}<span className="val-unit">$NP</span></div>
                 <SparkGraph data={history.liq} color={CYBER.warning} />
             </div>
           </div>
