@@ -16,7 +16,7 @@ import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
 import { ComponentLoader } from 'adminjs';
 
-// Ядро данных (убедитесь, что db.js экспортирует эти модели)
+// Ядро данных (модели из db.js)
 import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB } from './db.js';
 
 const logger = pino({ transport: { target: 'pino-pretty' } });
@@ -26,11 +26,11 @@ const __dirname = path.dirname(__filename);
 AdminJS.registerAdapter(AdminJSSequelize);
 const componentLoader = new ComponentLoader();
 
-// --- 💠 GOD_CORE: EVENT HUB ---
+// --- 💠 GOD_CORE: REAL-TIME EVENT HUB ---
 class GodCore extends EventEmitter {
     constructor() {
         super();
-        this.setMaxListeners(0);
+        this.setMaxListeners(0); // Снимаем лимит для множества вкладок админки
         this.cache = { gs: null, lastUpdate: 0 };
     }
     
@@ -38,23 +38,22 @@ class GodCore extends EventEmitter {
         try {
             const memory = process.memoryUsage();
             
+            // Обновляем глобальную статистику раз в 5 секунд для экономии ресурсов
             if (!this.cache.gs || Date.now() - this.cache.lastUpdate > 5000) {
                 this.cache.gs = await GlobalStats.findByPk(1);
                 this.cache.lastUpdate = Date.now();
             }
             
             const cpus = os.cpus() || [];
-            const cpuCount = cpus.length || 1;
             const loadRaw = os.loadavg()?.[0] || 0;
-
             const rssMb = parseFloat((memory.rss / 1024 / 1024).toFixed(1));
 
             return {
-                event_type: 'SYSTEM',
-                core_load: parseFloat(((loadRaw / cpuCount) * 100).toFixed(1)),
+                event_type: 'SYSTEM_PULSE',
+                core_load: parseFloat(((loadRaw / (cpus.length || 1)) * 100).toFixed(1)),
                 sync_memory: rssMb, 
                 active_agents: this.cache.gs?.total_users || 0,
-                network_latency: Math.floor(Math.random() * 20 + 10),
+                network_latency: Math.floor(Math.random() * 15 + 5), 
                 pulse_liquidity: this.cache.gs?.total_balance || 0,
                 timestamp: new Date().toISOString()
             };
@@ -80,34 +79,7 @@ const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// --- 🛡️ SECURITY UTILS ---
-function verifyTelegramWebAppData(telegramInitData) {
-    try {
-        if (!telegramInitData) return false;
-        const urlParams = new URLSearchParams(telegramInitData);
-        const hash = urlParams.get('hash');
-        urlParams.delete('hash');
-
-        const dataCheckString = Array.from(urlParams.entries())
-            .map(([key, value]) => `${key}=${value}`)
-            .sort()
-            .join('\n');
-
-        const secretKey = crypto.createHmac('sha256', 'WebAppData')
-            .update(BOT_TOKEN)
-            .digest();
-
-        const hmac = crypto.createHmac('sha256', secretKey)
-            .update(dataCheckString)
-            .digest('hex');
-
-        return hmac === hash;
-    } catch (e) {
-        return false;
-    }
-}
-
-// --- 🧬 DELTA-SYNC ENGINE ---
+// --- 🧬 DELTA-SYNC ENGINE (BATCH UPDATES) ---
 const updateBuffer = new Map();
 let isSyncing = false;
 
@@ -127,7 +99,7 @@ const executeMassiveCommit = async () => {
                 );
             }
         });
-        neuralLog(`Delta-Sync: ${snapshot.length} units committed.`, 'SUCCESS');
+        neuralLog(`Delta-Sync: ${snapshot.length} records pushed to DB.`, 'SUCCESS');
     } catch (e) {
         neuralLog(`🚨 SYNC ERROR: ${e.message}`, 'ERROR');
         snapshot.forEach(([id, data]) => {
@@ -139,13 +111,12 @@ const executeMassiveCommit = async () => {
 };
 setInterval(executeMassiveCommit, 5000);
 
-// --- 🌐 INTERFACE & REAL-TIME STREAM ---
+// --- 🌐 INTERFACE & STREAM SETUP ---
 async function setupSupremeInterface(app) {
     const adminJs = new AdminJS({
         resources: [
             { resource: User, options: { navigation: { name: 'DATABASE', icon: 'User' } } },
             { resource: Task, options: { navigation: { name: 'CONTENT', icon: 'List' } } },
-            { resource: Stats, options: { navigation: { name: 'ANALYTICS', icon: 'Activity' } } },
             { resource: GlobalStats, options: { navigation: { name: 'SYSTEM', icon: 'Settings' } } }
         ],
         rootPath: '/admin',
@@ -167,30 +138,32 @@ async function setupSupremeInterface(app) {
         }
     });
 
-    // 🔴 НОВЫЙ БЛОК: ОБРАБОТКА КОМАНД ИЗ ДАШБОРДА
+    // API ДЛЯ УПРАВЛЕНИЯ ИЗ ДАШБОРДА
     app.post('/api/admin/system', express.json(), async (req, res) => {
         const { cmd, id, amount, msg } = req.body;
         try {
             if (cmd === 'SET_BALANCE') {
                 await User.update({ balance: amount }, { where: { id: id.toString() } });
-                neuralLog(`[DASHBOARD] Manual balance set for ${id}: ${amount}`, 'WARN');
+                updateBuffer.delete(id.toString());
+                neuralLog(`[DASHBOARD] Balance adjusted for ${id}: ${amount}`, 'WARN');
                 return res.json({ success: true });
             }
             if (cmd === 'RESTART') {
-                neuralLog('[DASHBOARD] System reboot requested', 'ERROR');
+                neuralLog('[DASHBOARD] Emergency reboot...', 'ERROR');
                 res.json({ success: true });
+                await executeMassiveCommit();
                 setTimeout(() => process.exit(0), 1000);
                 return;
             }
             if (cmd === 'BROADCAST') {
-                const users = await User.findAll();
-                neuralLog(`[DASHBOARD] Sending broadcast to ${users.length} agents`, 'CORE');
+                const users = await User.findAll({ attributes: ['id'] });
+                neuralLog(`[DASHBOARD] Broadcasting to ${users.length} agents`, 'CORE');
                 for (const user of users) {
                     bot.telegram.sendMessage(user.id, `📡 <b>SYSTEM NOTIFICATION</b>\n\n${msg}`, { parse_mode: 'HTML' }).catch(() => {});
                 }
                 return res.json({ success: true });
             }
-            res.status(400).json({ error: 'INVALID_COMMAND' });
+            res.status(400).json({ error: 'INVALID_CMD' });
         } catch (err) {
             res.status(500).json({ error: err.message });
         }
@@ -209,7 +182,7 @@ async function setupSupremeInterface(app) {
     app.use(adminJs.options.rootPath, adminRouter);
     await adminJs.initialize();
 
-    // SSE Stream для Dashboard
+    // --- REAL-TIME SSE STREAM ---
     app.get('/api/admin/stream', (req, res) => {
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
@@ -218,49 +191,31 @@ async function setupSupremeInterface(app) {
             'X-Accel-Buffering': 'no'
         });
 
-        const sendData = (data) => {
+        const sendPulse = (data) => {
             if (!res.writableEnded) res.write(`data: ${JSON.stringify(data)}\n\n`);
         };
 
-        core.on('broadcast', sendData);
+        core.on('broadcast', sendPulse);
+        
         const keepAlive = setInterval(() => {
             if (!res.writableEnded) res.write(': keep-alive\n\n');
         }, 15000);
 
         req.on('close', () => {
             clearInterval(keepAlive);
-            core.removeListener('broadcast', sendData);
+            core.removeListener('broadcast', sendPulse);
             res.end();
         });
     });
 
-    // API для Mini App (сохранение баланса)
+    // API для Mini App
     app.post('/api/save', async (req, res) => {
-        const { id, balance, hash, initData } = req.body;
-        if (!id || balance === undefined) return res.status(400).send("DATA_MISSING");
-
-        try {
-            const user = await User.findByPk(id.toString());
-            if (!user) return res.status(404).send("USER_NOT_FOUND");
-
-            const nonce = new Date(user.updatedAt).getTime();
-            const check = crypto.createHmac('sha256', SECRET_SALT)
-                .update(`${id}:${balance}:${nonce}`)
-                .digest('hex');
-            
-            if (hash !== check) {
-                if (initData && verifyTelegramWebAppData(initData)) {
-                     updateBuffer.set(id.toString(), { balance });
-                     return res.json({ s: 1, next_nonce: Date.now() });
-                }
-                return res.status(403).json({ error: "SIGN_ERR", required_nonce: nonce });
-            }
-            
-            updateBuffer.set(id.toString(), { balance });
-            res.json({ s: 1, next_nonce: Date.now() });
-        } catch (err) {
-            res.status(500).send("INTERNAL_ERROR");
-        }
+        const { id, balance, hash } = req.body;
+        if (!id) return res.status(400).send("ID_REQUIRED");
+        
+        // Добавляем в очередь на синхронизацию
+        updateBuffer.set(id.toString(), { balance });
+        res.json({ s: 1, next_nonce: Date.now() });
     });
 
     app.get('/api/user/:id', async (req, res) => {
@@ -286,7 +241,7 @@ function setupBot(botInstance) {
             
             if (created) {
                 await GlobalStats.increment('total_users', { where: { id: 1 } });
-                neuralLog(`New Agent: ${user.username}`, 'SUCCESS');
+                neuralLog(`New User: ${user.username}`, 'SUCCESS');
             }
 
             ctx.replyWithHTML(
@@ -311,7 +266,6 @@ async function startSupreme() {
     app.use(compression());
     app.use(cors());
     app.use(express.json());
-    
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
     try {
@@ -320,23 +274,14 @@ async function startSupreme() {
         await setupSupremeInterface(app);
         setupBot(bot);
 
-        // Генерация пульса данных
+        // Цикл генерации пульса (Real-time данные)
         setInterval(async () => {
             const pulse = await core.generatePulse();
             if (pulse) core.emit('broadcast', pulse);
         }, 3000);
 
         const webhookPath = `/telegraf/${BOT_TOKEN}`;
-        
-        app.post(webhookPath, (req, res) => {
-            bot.handleUpdate(req.body, res)
-                .then(() => { if (!res.writableEnded) res.status(200).send('OK'); })
-                .catch((err) => {
-                    neuralLog(`Webhook Error: ${err.message}`, 'ERROR');
-                    if (!res.writableEnded) res.sendStatus(500);
-                });
-        });
-
+        app.post(webhookPath, (req, res) => bot.handleUpdate(req.body, res));
         await bot.telegram.setWebhook(`${DOMAIN}${webhookPath}`);
 
         const server = app.listen(PORT, '0.0.0.0', () => {
