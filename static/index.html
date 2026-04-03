@@ -115,7 +115,7 @@
         .task-btn { background: var(--neon); color: black; border: none; padding: 12px 20px; border-radius: 12px; font-weight: 900; cursor: pointer; text-transform: uppercase; font-size: 12px; }
         .task-btn:disabled { background: #1a2222; color: #444; }
 
-        .ai-terminal { background: #000; border: 1px solid var(--neon); padding: 15px; border-radius: 10px; font-family: monospace; color: var(--neon); margin: 15px 0; min-height: 120px; white-space: pre-wrap; font-size: 13px; line-height: 1.4; box-shadow: inset 0 0 10px var(--neon); }
+        .ai-terminal { background: #000; border: 1px solid var(--neon); padding: 15px; border-radius: 10px; font-family: monospace; color: var(--neon); margin: 15px 0; min-height: 120px; white-space: pre-wrap; font-size: 13px; line-height: 1.4; box-shadow: inset 0 0 10px var(--neon); overflow-y: auto; }
         .pop { position: absolute; color: var(--neon); font-weight: 900; font-size: 32px; pointer-events: none; animation: moveUp 0.7s ease-out forwards; z-index: 999; text-shadow: 0 0 15px var(--neon); font-family: monospace; }
         .ref-box { background: #000; border: 1px dashed var(--neon); padding: 15px; border-radius: 12px; margin: 15px 0; word-break: break-all; font-family: monospace; font-size: 12px; color: var(--neon); text-align: center; }
         
@@ -216,9 +216,9 @@
                 id: "0", balance: 0, energy: 1000, max_energy: 1000, 
                 tap: 1, profit: 0, tap_lvl: 1, mine_lvl: 1, 
                 energy_lvl: 1, last_bonus: 0, wallet: null, completed_tasks: [],
-                nonce: null // Храним nonce для подписи
+                nonce: null 
             },
-            SALT: "ULTRA_SECRET_PULSE_2026_VOID", // Должно совпадать с сервером
+            SALT: "ULTRA_SECRET_PULSE_2026_VOID",
             isLoaded: false,
             isSaving: false,
             hasUnsavedChanges: false,
@@ -235,7 +235,7 @@
                 const u = tg.initDataUnsafe.user || { id: 12345, first_name: 'Local', username: 'user' };
                 this.data.id = String(u.id);
 
-                // --- TON CONNECT ---
+                // --- TON CONNECT INITIALIZATION ---
                 try {
                     tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
                         manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
@@ -244,7 +244,8 @@
                     
                     tonConnectUI.onStatusChange(w => {
                         this.data.wallet = w ? w.account.address : null;
-                        document.getElementById('wallet-btn-label').innerText = w ? "✅" : "👛";
+                        const btnLabel = document.getElementById('wallet-btn-label');
+                        if(btnLabel) btnLabel.innerText = w ? "✅" : "👛";
                         this.hasUnsavedChanges = true;
                         this.save(true);
                         if(ui.currentModal === 'wallet') ui.openM('wallet');
@@ -258,7 +259,6 @@
                     });
                     if (r.ok) {
                         const db = await r.json();
-                        // Важно: сервер возвращает текущий balance и nonce
                         this.data = { ...this.data, ...db };
                     }
                 } catch(e) { console.warn("Offline Mode"); }
@@ -327,7 +327,6 @@
                 }
             },
 
-            // Генерация HMAC хеша для защиты данных
             generateHash(id, balance, nonce) {
                 const message = `${id}:${balance}:${nonce}`;
                 return CryptoJS.HmacSHA256(message, this.SALT).toString();
@@ -354,7 +353,7 @@
                     wallet: this.data.wallet,
                     completed_tasks: this.data.completed_tasks,
                     last_bonus: this.data.last_bonus,
-                    hash: currentHash, // Хеш для проверки на сервере
+                    hash: currentHash,
                     initData: tg.initData
                 };
 
@@ -370,10 +369,8 @@
                     
                     const res = await r.json();
                     if(res.s === 1 && res.next_nonce) {
-                        // Обновляем nonce для следующего сохранения
                         this.data.nonce = res.next_nonce;
                     } else if (res.required_nonce) {
-                        // В случае рассинхрона исправляем nonce
                         this.data.nonce = res.required_nonce;
                     }
                 } catch(e) { 
@@ -475,7 +472,7 @@
                     b.innerHTML = `<h2>⛏️ MINING</h2><br>
                     <div class="task-item" onclick="game.upgrade('mine')"><div><b>Neural Node</b><br><small>Level ${game.data.mine_lvl}</small><br><small style="color:cyan">+250 NP/hr</small></div><b>${this.num(game.getCost('mine'))}</b></div>`;
                 } else if(type === 'ai') {
-                    b.innerHTML = `<h2>🤖 AI ADVISOR</h2><div class="ai-terminal" id="ai-res">System Standby...</div><button class="task-btn" style="width:100%" onclick="ui.askAI()">RUN NEURAL SCAN</button>`;
+                    b.innerHTML = `<h2>🤖 AI ADVISOR</h2><div class="ai-terminal" id="ai-res">> System Standby...</div><button class="task-btn" style="width:100%" onclick="ui.askAI()">RUN NEURAL SCAN</button>`;
                 } else if(type === 'friends') {
                     const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
                     b.innerHTML = `<h2>🤝 REFERRALS</h2><p style="text-align:center; font-size:12px; color:#888; margin-bottom:10px;">Get 10% from friends.</p><div class="ref-box">${link}</div><button class="task-btn" style="width:100%" onclick="ui.copyRef('${link}')">COPY LINK</button>`;
@@ -522,16 +519,33 @@
             },
             async askAI() {
                 const res = document.getElementById('ai-res');
-                res.innerText = "> Initializing scan...";
+                res.innerText = "> Initializing scan...\n> Accessing Gemini Core...\n> Processing metadata...";
+                
                 try {
                     const r = await fetch('/api/ai-advice', { 
                         method: 'POST', 
                         headers: game.getAuthHeaders(), 
-                        body: JSON.stringify(game.data) 
+                        body: JSON.stringify({
+                            ...game.data,
+                            initData: tg.initData
+                        }) 
                     });
                     const j = await r.json();
-                    res.innerText = j.text || "Pulse stable. Continue, Agent.";
-                } catch(e) { res.innerText = "Error: Connection lost."; }
+                    
+                    // Эффект печатающегося текста для ИИ
+                    const fullText = j.text || "Pulse stable. Continue, Agent.";
+                    res.innerText = "> SCAN COMPLETE:\n\n";
+                    let i = 0;
+                    const typer = setInterval(() => {
+                        res.innerText += fullText[i];
+                        i++;
+                        if(i >= fullText.length) clearInterval(typer);
+                        res.scrollTop = res.scrollHeight;
+                    }, 20);
+                    
+                } catch(e) { 
+                    res.innerText = "> Error: Connection to Gemini lost.\n> Check your neural uplink."; 
+                }
             },
             copyRef(url) { 
                 navigator.clipboard.writeText(url).then(() => {
