@@ -1,579 +1,426 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Neural Pulse v5.6.5 | Secured Sync</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+import React, { useState, useEffect, memo, useCallback, useRef } from 'react';
+
+// --- 🌌 ЦВЕТОВАЯ ПАЛИТРА (CYBER V11.6) ---
+const CYBER = {
+  bg: '#000000',
+  card: '#0a0d14',
+  primary: '#00f2fe',
+  ton: '#0088CC',
+  success: '#39ff14',
+  danger: '#ff003c',
+  warning: '#ffea00',
+  secondary: '#7000ff',
+  text: '#e2e8f0',
+  subtext: '#4a5568',
+  border: 'rgba(0, 242, 254, 0.15)',
+};
+
+// ВАШ АДРЕС ДЛЯ МОНИТОРИНГА (ОБНОВЛЕНО)
+const ADMIN_WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"; 
+
+// --- 🛠️ APEX CONTROL BRIDGE ---
+const sendCommand = async (cmd, data = {}) => {
+  try {
+    const res = await fetch('/api/admin/system', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cmd, ...data })
+    });
+    return await res.json();
+  } catch (e) { return { success: false }; }
+};
+
+// --- 📈 НЕОНОВЫЙ ГРАФИК ---
+const SparkGraph = memo(({ data, color, height = 45 }) => {
+  if (!data || data.length < 2) return <div style={{ height }} />;
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+  const points = data.map((val, i) => ({
+    x: (i / (data.length - 1)) * 100,
+    y: height - ((val - min) / range) * (height * 0.7) - 5,
+  }));
+
+  const linePath = `M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`;
+  const areaPath = `${linePath} L 100,${height} L 0,${height} Z`;
+  const gradId = `grad-${Math.random().toString(36).substr(2, 9)}`;
+
+  return (
+    <svg width="100%" height={height} style={{ marginTop: '10px', overflow: 'visible', display: 'block' }}>
+      <defs>
+        <linearGradient id={gradId} x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor={color} stopOpacity="0.4" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={areaPath} fill={`url(#${gradId})`} />
+      <path d={linePath} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" 
+            style={{ filter: `drop-shadow(0 0 8px ${color})` }} />
+    </svg>
+  );
+});
+
+// --- 🕹️ ПАНЕЛЬ УПРАВЛЕНИЯ ЯДРОМ ---
+const KernelControls = ({ onLog }) => {
+  const execute = async (cmd, label) => {
+    onLog(`INITIATING_${label}...`, 'INFO');
+    const res = await sendCommand(cmd);
+    if(res.success) onLog(`${label}_OK`, 'SUCCESS');
+    else onLog(`${label}_FAILED`, 'ERROR');
+  };
+
+  return (
+    <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+      <button className="cmd-btn" onClick={() => execute('RESTART', 'NODE_REBOOT')}>🔄 RESTART</button>
+      <button className="cmd-btn" onClick={() => execute('CLEAR_CACHE', 'MEM_CLEAN')}>🧹 PURGE_CACHE</button>
+      <button className="cmd-btn" onClick={() => {
+        const msg = prompt("SEND GLOBAL BROADCAST:");
+        if(msg) sendCommand('BROADCAST', { msg }).then(() => onLog('BROADCAST_SENT', 'SUCCESS'));
+      }}>📡 BROADCAST</button>
+    </div>
+  );
+};
+
+// --- 🗄️ ТАБЛИЦА АГЕНТОВ ---
+const AgentsTable = ({ users, onLog }) => {
+  const updateBalance = async (user) => {
+    const amount = prompt(`EDIT NP_BALANCE FOR @${user.username}:`, user.balance);
+    if (amount !== null && !isNaN(amount)) {
+      onLog(`POSTGRES_WRITE: @${user.username}`, 'INFO');
+      const res = await sendCommand('SET_BALANCE', { id: user.id, amount: Number(amount) });
+      if(res.success) onLog(`SYNC_COMPLETE: @${user.username}`, 'SUCCESS');
+    }
+  };
+
+  return (
+    <div className="table-container">
+      <table className="cyber-table">
+        <thead>
+          <tr><th>AGENT_ID</th><th>USERNAME</th><th>NP_BALANCE</th><th>WALLET_STATUS</th><th>ACTIONS</th></tr>
+        </thead>
+        <tbody>
+          {users.map((u, i) => (
+            <tr key={u.id || i}>
+              <td style={{ fontFamily: 'Roboto Mono', color: CYBER.subtext, fontSize: '10px' }}>{u.id}</td>
+              <td style={{ color: CYBER.primary, fontWeight: 'bold' }}>@{u.username || 'UNKNOWN'}</td>
+              <td style={{ fontFamily: 'Roboto Mono', color: CYBER.warning }}>{Number(u.balance || 0).toLocaleString()} NP</td>
+              <td>
+                {u.wallet ? (
+                  <span className="status-badge" style={{ color: CYBER.ton, borderColor: CYBER.ton, background: 'rgba(0,136,204,0.1)' }}>
+                    {u.wallet.slice(0, 4)}...{u.wallet.slice(-4)}
+                  </span>
+                ) : (
+                  <span className="status-badge" style={{ opacity: 0.3 }}>NOT_CONNECTED</span>
+                )}
+              </td>
+              <td><button className="action-btn" onClick={() => updateBalance(u)}>MANAGE</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+// --- 🚀 ГЛАВНЫЙ ДАШБОРД (APEX V11.6 FIX) ---
+const Dashboard = (props) => {
+  const { data: initialData } = props;
+  const [activeTab, setActiveTab] = useState('overview');
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [adminBalance, setAdminBalance] = useState(0);
+  const [userWallet, setUserWallet] = useState(null);
+
+  const tonConnectUI = useRef(null);
+
+  const cfg = useRef(window.PULSE_CONFIG || { 
+    MATH: { HEALTH_BASE: 100, CPU_WEIGHT: 0.4, LATENCY_WEIGHT: 0.15, PRECISION: 1 }, 
+    SHOP: { PACKS: [] } 
+  }).current;
+
+  const [users] = useState(initialData?.usersList || []);
+  const [logs, setLogs] = useState([{ time: new Date().toLocaleTimeString(), msg: 'NEURAL_PULSE_OS_BOOT_OK', type: 'SUCCESS' }]);
+  
+  const [stats, setStats] = useState({ 
+    cpu: 0, ram: 0, online: initialData?.totalUsers || 0, 
+    ton: 0, latency: 0, liquidity: initialData?.totalBalance || 0, health: 100 
+  });
+
+  const [history, setHistory] = useState({
+    cpu: Array(25).fill(0), ram: Array(25).fill(0), online: Array(25).fill(0), 
+    liq: Array(25).fill(0), health: Array(25).fill(100), ton: Array(25).fill(0), 
+    latency: Array(25).fill(0)
+  });
+
+  const addLog = useCallback((msg, type = 'INFO') => {
+    setLogs(prev => [...prev.slice(-39), { time: new Date().toLocaleTimeString(), msg, type }]);
+  }, []);
+
+  // --- ИНИЦИАЛИЗАЦИЯ TON CONNECT (ИСПРАВЛЕНО: Добавлен интервал проверки SDK) ---
+  useEffect(() => {
+    const initTimer = setInterval(() => {
+      if (window.TonConnectUI && !tonConnectUI.current) {
+        try {
+          tonConnectUI.current = new window.TonConnectUI.TonConnectUI({
+            manifestUrl: `https://${window.location.host}/tonconnect-manifest.json`,
+            buttonRootId: 'ton-connect-btn'
+          });
+
+          tonConnectUI.current.onStatusChange(wallet => {
+            if (wallet) {
+              setUserWallet(wallet.account.address);
+              addLog('WALLET_LINKED: ' + wallet.account.address.slice(0, 8) + '...', 'SUCCESS');
+            } else {
+              setUserWallet(null);
+              addLog('WALLET_DISCONNECTED', 'INFO');
+            }
+          });
+          
+          clearInterval(initTimer); // SDK Инициализирован успешно
+        } catch (err) {
+          console.error("SDK_INIT_ERROR", err);
+        }
+      }
+    }, 500);
+
+    return () => clearInterval(initTimer);
+  }, [addLog]);
+
+  const handleConnect = async () => {
+    try {
+        if (tonConnectUI.current) {
+            await tonConnectUI.current.openModal();
+        } else {
+            addLog('TON_SDK_NOT_READY - RELOAD PAGE', 'ERROR');
+        }
+    } catch (err) {
+        addLog('CONNECT_ABORTED', 'WARNING');
+    }
+  };
+
+  // --- ПОЛУЧЕНИЕ БАЛАНСА (ИСПРАВЛЕНО: Используется tonapi.io для точности) ---
+  const fetchTreasury = useCallback(async () => {
+    try {
+        const res = await fetch(`https://tonapi.io/v2/accounts/${ADMIN_WALLET}`);
+        const json = await res.json();
+        if(json && json.balance !== undefined) {
+            const bal = (json.balance / 1e9).toFixed(4);
+            setAdminBalance(bal);
+            setHistory(prev => ({ ...prev, ton: [...prev.ton.slice(1), Number(bal)] }));
+        }
+    } catch(e) { 
+        console.error("TON_SYNC_ERROR"); 
+        addLog("TREASURY_SYNC_FAILED", "ERROR");
+    }
+  }, [addLog]);
+
+  useEffect(() => {
+    const eventSource = new EventSource('/api/admin/stream');
     
-    <style>
-        :root {
-            --neon: #00ffff;
-            --bg: #050a0a;
-            --panel: rgba(0, 255, 255, 0.05);
-            --border: rgba(0, 255, 255, 0.2);
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
-        body {
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background: var(--bg);
-            color: white;
-            overflow: hidden;
-            height: 100vh;
-            user-select: none;
-            touch-action: manipulation;
-        }
-
-        /* Scrollbar Style */
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
-
-        /* --- Animations --- */
-        @keyframes pulse { 0% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } 100% { opacity: 0.5; transform: scale(1); } }
-        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
-        @keyframes moveUp { 0% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: translateY(-120px) scale(1.5); opacity: 0; } }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        /* --- Loader --- */
-        #loader {
-            position: fixed; inset: 0; background: var(--bg); z-index: 10000;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            transition: opacity 0.5s ease;
-        }
-        .ring { width: 80px; height: 80px; border: 3px solid transparent; border-top-color: var(--neon); border-radius: 50%; animation: spin 1s linear infinite; }
-        .l-logo { position: absolute; width: 45px; }
-        .l-status { margin-top: 20px; font-family: monospace; color: var(--neon); font-size: 10px; letter-spacing: 2px; }
-        .l-bar { width: 200px; height: 2px; background: #111; margin-top: 10px; position: relative; }
-        #bar { height: 100%; width: 0%; background: var(--neon); box-shadow: 0 0 10px var(--neon); transition: 0.1s; }
-        .l-pct { margin-top: 5px; font-family: monospace; font-size: 12px; color: var(--neon); }
-
-        /* --- Header --- */
-        header { padding: 15px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
-        .u-avatar img { width: 42px; height: 42px; border-radius: 10px; border: 1px solid var(--neon); object-fit: cover; }
-        .u-info b { font-size: 14px; color: var(--neon); text-transform: uppercase; }
-        .u-info small { font-size: 10px; color: #888; display: flex; align-items: center; }
-        .u-lvl { margin-left: auto; background: var(--neon); color: black; padding: 4px 10px; border-radius: 6px; font-weight: 900; font-size: 12px; }
-
-        /* --- Stats --- */
-        .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 15px; }
-        .s-box { background: var(--panel); border: 1px solid var(--border); padding: 10px; border-radius: 12px; text-align: center; }
-        .s-box small { font-size: 9px; color: #888; display: block; margin-bottom: 4px; text-transform: uppercase; }
-        .s-box b { font-size: 14px; color: var(--neon); font-family: monospace; }
-
-        /* --- Balance --- */
-        .balance-area { text-align: center; padding: 15px 0; }
-        #ui-balance { font-size: 48px; font-weight: 900; letter-spacing: -1px; text-shadow: 0 0 20px rgba(0,255,255,0.4); font-family: monospace; }
-
-        /* --- Main Target --- */
-        .game-core { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; }
-        .brain-target {
-            width: 260px; height: 260px; position: relative; z-index: 5;
-            transition: transform 0.05s cubic-bezier(0, 0, 0.2, 1);
-            display: flex; align-items: center; justify-content: center;
-        }
-        .brain-target img { width: 100%; filter: drop-shadow(0 0 20px var(--neon)); pointer-events: none; }
-        .brain-target:active { transform: scale(0.92); }
-        .glow { position: absolute; width: 300px; height: 300px; background: radial-gradient(circle, rgba(0,255,255,0.15) 0%, transparent 70%); pointer-events: none; }
-
-        /* --- Side Menu --- */
-        .side-menu { position: absolute; right: 15px; display: flex; flex-direction: column; gap: 12px; z-index: 10; }
-        .side-menu button { 
-            background: rgba(0,0,0,0.7); border: 1px solid var(--border); color: white; 
-            width: 50px; height: 50px; border-radius: 12px; font-size: 18px; backdrop-filter: blur(8px);
-            display: flex; align-items: center; justify-content: center; transition: 0.2s;
-        }
-        .side-menu button:active { transform: scale(0.9); border-color: var(--neon); box-shadow: 0 0 10px var(--neon); }
-
-        /* --- Energy & Tabs --- */
-        .energy-section { padding: 15px; background: rgba(0,0,0,0.5); border-top: 1px solid var(--border); }
-        .e-labels { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 8px; font-weight: bold; color: var(--neon); }
-        .e-track { height: 10px; background: #0a1111; border-radius: 5px; overflow: hidden; border: 1px solid #1a2222; }
-        #e-fill { height: 100%; background: linear-gradient(90deg, #004444, var(--neon)); width: 100%; transition: 0.2s; }
-        .energy-error { animation: shake 0.2s ease-in-out 2; border-color: #ff3333 !important; }
-
-        .bottom-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 15px; }
-        .bottom-tabs button { 
-            background: var(--panel); border: 1px solid var(--border); color: white; 
-            padding: 12px 5px; border-radius: 14px; font-size: 10px; font-weight: bold;
-            display: flex; flex-direction: column; align-items: center; gap: 4px; transition: 0.2s;
-        }
-        .bottom-tabs button:active { background: var(--border); transform: translateY(-2px); }
-
-        /* --- Modals --- */
-        .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: none; align-items: flex-end; z-index: 1000; backdrop-filter: blur(15px); }
-        .modal-bg.active { display: flex; }
-        .modal-box { 
-            width: 100%; background: #070c0c; border-top: 3px solid var(--neon); 
-            border-radius: 30px 30px 0 0; padding: 25px; max-height: 85vh; overflow-y: auto;
-            box-shadow: 0 -10px 30px rgba(0,255,255,0.1);
-        }
-        .handle { width: 40px; height: 4px; background: #222; border-radius: 2px; margin: -10px auto 20px; }
-        .m-close { width: 100%; margin-top: 20px; padding: 15px; background: #111; border: 1px solid #222; color: #666; border-radius: 12px; font-family: monospace; font-size: 12px; font-weight: bold; }
+    eventSource.onmessage = (e) => {
+      try {
+        const update = JSON.parse(e.data);
+        const cpu = Number(update.core_load || 0);
+        const lat = Number(update.network_latency || 0);
+        const ram = Number(update.sync_memory || 0);
+        const online = Number(update.active_agents || 0);
+        const liq = Number(update.pulse_liquidity || 0);
         
-        .task-item { background: var(--panel); border: 1px solid var(--border); border-radius: 15px; padding: 18px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
-        .task-item b { color: var(--neon); font-size: 16px; }
-        .task-btn { background: var(--neon); color: black; border: none; padding: 12px 20px; border-radius: 12px; font-weight: 900; cursor: pointer; text-transform: uppercase; font-size: 12px; }
-        .task-btn:disabled { background: #1a2222; color: #444; }
+        const h = Math.max(0, cfg.MATH.HEALTH_BASE - (cpu * cfg.MATH.CPU_WEIGHT) - (lat * cfg.MATH.LATENCY_WEIGHT)).toFixed(cfg.MATH.PRECISION);
 
-        .ai-terminal { background: #000; border: 1px solid var(--neon); padding: 15px; border-radius: 10px; font-family: monospace; color: var(--neon); margin: 15px 0; min-height: 120px; white-space: pre-wrap; font-size: 13px; line-height: 1.4; box-shadow: inset 0 0 10px var(--neon); overflow-y: auto; }
-        .pop { position: absolute; color: var(--neon); font-weight: 900; font-size: 32px; pointer-events: none; animation: moveUp 0.7s ease-out forwards; z-index: 999; text-shadow: 0 0 15px var(--neon); font-family: monospace; }
-        .ref-box { background: #000; border: 1px dashed var(--neon); padding: 15px; border-radius: 12px; margin: 15px 0; word-break: break-all; font-family: monospace; font-size: 12px; color: var(--neon); text-align: center; }
+        setStats(prev => ({ ...prev, cpu, ram, health: h, latency: lat, online, liquidity: liq }));
         
-        #sync-status { width: 6px; height: 6px; border-radius: 50%; background: #333; display: inline-block; margin-right: 5px; transition: 0.3s; }
-        #sync-status.saving { background: var(--neon); box-shadow: 0 0 8px var(--neon); }
-
-        .wallet-connect-btn {
-            width: 100%; height: 60px; background: #111; border: 2px solid var(--neon);
-            color: var(--neon); border-radius: 15px; font-size: 14px; font-weight: 900;
-            margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 10px;
-            text-transform: uppercase; letter-spacing: 1px;
-        }
-        .wallet-connect-btn.connected { border-color: #ff3333; color: #ff3333; box-shadow: 0 0 10px rgba(255, 51, 51, 0.2); }
-
-        .top-list { list-style: none; }
-        .top-item { display: flex; align-items: center; padding: 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; }
-        .top-rank { font-weight: 900; color: var(--neon); width: 30px; }
-        .top-name { flex: 1; font-size: 14px; font-weight: bold; }
-        .top-val { font-family: monospace; color: var(--neon); }
+        setHistory(prev => ({
+          ...prev,
+          cpu: [...prev.cpu.slice(1), cpu],
+          ram: [...prev.ram.slice(1), ram],
+          online: [...prev.online.slice(1), online],
+          liq: [...prev.liq.slice(1), liq],
+          health: [...prev.health.slice(1), Number(h)],
+          latency: [...prev.latency.slice(1), lat]
+        }));
         
-        h2 { text-transform: uppercase; letter-spacing: 2px; color: var(--neon); font-size: 18px; text-align: center; margin-bottom: 15px; }
-    </style>
-</head>
-<body>
+        setLastUpdate(new Date());
+      } catch (err) { console.error("SSE_ERROR", err); }
+    };
 
-    <div id="loader">
-        <div class="ring"></div>
-        <img src="images/logo.png" class="l-logo" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'">
-        <div class="l-status">INITIALIZING NEURAL LINK...</div>
-        <div class="l-pct" id="pct">0%</div>
-        <div class="l-bar"><div id="bar"></div></div>
-    </div>
+    const treasuryInterval = setInterval(fetchTreasury, 30000);
+    fetchTreasury();
 
-    <div id="app" style="display: none; flex-direction: column; height: 100vh;">
-        <header>
-            <div class="u-avatar"><img id="my-avatar" src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'"></div>
-            <div class="u-info">
-                <b id="my-name">AGENT</b>
-                <small><span id="sync-status"></span><span id="ui-rank">SCANNING...</span></small>
-            </div>
-            <div class="u-lvl" id="my-lvl">LVL 1</div>
-        </header>
+    const loader = setTimeout(() => setIsLoaded(true), 800);
+    
+    return () => {
+      eventSource.close();
+      clearInterval(treasuryInterval);
+      clearTimeout(loader);
+    };
+  }, [addLog, cfg, fetchTreasury]);
 
-        <div class="stats-row">
-            <div class="s-box"><small>Tap Power</small><b id="ui-tap">+1</b></div>
-            <div class="s-box"><small>Profit / Hour</small><b id="ui-profit">0</b></div>
+  if (!isLoaded) return <div className="loading">CONNECTING_TO_NL4_NODE...</div>;
+
+  return (
+    <div className="app-root">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Roboto+Mono&display=swap');
+        .app-root { background: #000; min-height: 100vh; padding: 20px; font-family: 'Inter', sans-serif; color: #fff; max-width: 800px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; }
+        .nav-tabs { display: flex; gap: 20px; margin: 20px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .tab-btn { background: none; border: none; color: #4a5568; padding: 10px 0; font-size: 11px; cursor: pointer; font-family: 'Roboto Mono'; font-weight: bold; text-transform: uppercase; transition: 0.3s; }
+        .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; text-shadow: 0 0 10px ${CYBER.primary}88; }
+        .cmd-btn { background: rgba(0,242,254,0.05); border: 1px solid ${CYBER.border}; color: ${CYBER.primary}; font-size: 9px; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-family: 'Roboto Mono'; font-weight: bold; }
+        .action-btn { background: transparent; border: 1px solid ${CYBER.primary}; color: ${CYBER.primary}; font-size: 9px; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-family: 'Roboto Mono'; }
+        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; border-radius: 12px; position: relative; overflow: hidden; }
+        .label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; color: ${CYBER.subtext}; }
+        .val-main { font-size: 28px; font-weight: 700; display: flex; align-items: baseline; font-family: 'Roboto Mono'; }
+        .val-unit { font-size: 10px; color: #4a5568; margin-left: 6px; }
+        .table-container { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; overflow: hidden; }
+        .cyber-table { width: 100%; border-collapse: collapse; text-align: left; }
+        .cyber-table th { padding: 15px; color: ${CYBER.subtext}; font-size: 10px; border-bottom: 1px solid ${CYBER.border}; }
+        .cyber-table td { padding: 12px 15px; border-bottom: 1px solid rgba(255,255,255,0.02); font-size: 12px; }
+        .status-badge { font-size: 9px; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); }
+        .terminal-container { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; height: 60vh; display: flex; flex-direction: column; overflow: hidden; }
+        .terminal-body { padding: 15px; overflow-y: auto; flex: 1; font-family: 'Roboto Mono'; font-size: 11px; }
+        .loading { height: 100vh; display: flex; align-items: center; justify-content: center; color: ${CYBER.primary}; font-family: 'Roboto Mono'; background: #000; }
+        .shop-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+        .shop-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; padding: 15px; text-align: center; transition: 0.3s; cursor: pointer; }
+        .shop-card:hover { border-color: ${CYBER.primary}; background: rgba(0,242,254,0.05); transform: translateY(-3px); }
+        .treasury-box { background: rgba(0, 136, 204, 0.05); border: 1px solid ${CYBER.ton}; padding: 8px 12px; border-radius: 8px; text-align: right; min-width: 140px; }
+        .ton-connect-btn-styled { background: ${CYBER.ton}; border: none; color: #fff; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 11px; transition: 0.3s; border: 1px solid transparent; width: 100%; }
+        .ton-connect-btn-styled:hover { filter: brightness(1.2); border-color: ${CYBER.primary}; }
+        
+        /* Модальное окно TonConnect поверх всего */
+        tc-root { z-index: 10000 !important; }
+      `}</style>
+
+      <div className="header">
+        <div>
+          <h1 style={{ fontSize: '24px', fontWeight: 900, letterSpacing: '4px', color: CYBER.primary }}>NEURAL_PULSE V11</h1>
+          <div style={{ fontFamily: 'Roboto Mono', fontSize: '9px', color: CYBER.success, marginTop: '5px' }}>
+            NODE_NL4: ACTIVE // PRO_PLAN
+          </div>
         </div>
-
-        <div class="balance-area">
-            <h1 id="ui-balance">0</h1>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
+            <div className="treasury-box">
+                {userWallet ? (
+                  <>
+                    <div style={{ fontSize: '8px', color: CYBER.ton, fontWeight: 'bold' }}>AGENT_WALLET_ACTIVE</div>
+                    <div style={{ fontSize: '11px', fontWeight: 'bold', color: CYBER.primary, fontFamily: 'Roboto Mono' }}>
+                      {userWallet.slice(0, 6)}...{userWallet.slice(-4)}
+                    </div>
+                  </>
+                ) : (
+                  <button className="ton-connect-btn-styled" onClick={handleConnect}>CONNECT_WALLET</button>
+                )}
+            </div>
+            <div style={{ fontSize: '9px', color: CYBER.subtext, fontFamily: 'Roboto Mono' }}>SYNC: {lastUpdate.toLocaleTimeString()}</div>
         </div>
+      </div>
 
-        <main class="game-core">
-            <div class="glow"></div>
-            <div class="brain-target" id="main-target">
-                <img src="images/logo.png" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2103/2103633.png'">
-            </div>
-            <div class="side-menu">
-                <button onclick="ui.openM('ai')">🤖</button>
-                <button id="wallet-btn-label" onclick="ui.openM('wallet')">👛</button>
-                <button onclick="ui.openM('friends')">🤝</button>
-                <button onclick="ui.openM('bonus')">🎁</button>
-            </div>
-        </main>
+      <div className="nav-tabs">
+        <button className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>MONITOR</button>
+        <button className={`tab-btn ${activeTab === 'agents' ? 'active' : ''}`} onClick={() => setActiveTab('agents')}>AGENTS_DB</button>
+        <button className={`tab-btn ${activeTab === 'shop' ? 'active' : ''}`} onClick={() => setActiveTab('shop')}>PURCHASE</button>
+        <button className={`tab-btn ${activeTab === 'logs' ? 'active' : ''}`} onClick={() => setActiveTab('logs')}>TERMINAL</button>
+      </div>
 
-        <footer class="energy-section">
-            <div class="e-labels">
-                <span>STABILITY</span>
-                <span id="ui-energy">1000/1000</span>
+      {activeTab === 'overview' && (
+        <>
+          <KernelControls onLog={addLog} />
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '15px' }}>
+            
+            {/* ГЛАВНЫЙ ГРАФИК ЗДОРОВЬЯ */}
+            <div className="card" style={{ gridColumn: 'span 2', textAlign: 'center' }}>
+                <div className="label" style={{ color: CYBER.primary }}>System_Health</div>
+                <div className="val-main" style={{ justifyContent: 'center', fontSize: '42px', color: stats.health > 70 ? CYBER.success : CYBER.danger }}>
+                    {stats.health}<span className="val-unit" style={{ fontSize: '16px' }}>%</span>
+                </div>
+                <SparkGraph data={history.health} color={CYBER.primary} height={35} />
             </div>
-            <div class="e-track"><div id="e-fill"></div></div>
-            <nav class="bottom-tabs">
-                <button onclick="ui.openM('boost')">🚀<span>BOOST</span></button>
-                <button onclick="ui.openM('mine')">⛏️<span>MINE</span></button>
-                <button onclick="ui.openM('tasks')">📋<span>TASKS</span></button>
-                <button onclick="ui.openM('top')">🏆<span>TOP</span></button>
-            </nav>
-        </footer>
-    </div>
 
-    <div id="modal" class="modal-bg" onclick="if(event.target===this) ui.closeM()">
-        <div class="modal-box">
-            <div class="handle"></div>
-            <div id="m-body"></div>
-            <button class="m-close" onclick="ui.closeM()">TERMINATE VIEW</button>
+            <div className="card">
+                <div className="label">Core_Usage</div>
+                <div className="val-main">{stats.cpu}<span className="val-unit">%</span></div>
+                <SparkGraph data={history.cpu} color={CYBER.primary} />
+            </div>
+
+            <div className="card">
+                <div className="label">Ram_Memory</div>
+                <div className="val-main">{stats.ram}<span className="val-unit">MB</span></div>
+                <SparkGraph data={history.ram} color={CYBER.secondary} />
+            </div>
+
+            <div className="card">
+                <div className="label">Net_Latency</div>
+                <div className="val-main" style={{ color: stats.latency > 150 ? CYBER.danger : CYBER.text }}>
+                  {stats.latency}<span className="val-unit">ms</span>
+                </div>
+                <SparkGraph data={history.latency} color={CYBER.danger} />
+            </div>
+
+            <div className="card" style={{ borderColor: CYBER.ton }}>
+                <div className="label" style={{ color: CYBER.ton }}>TON_Revenue</div>
+                <div className="val-main">{adminBalance}<span className="val-unit">TON</span></div>
+                <SparkGraph data={history.ton} color={CYBER.ton} />
+            </div>
+
+            <div className="card">
+                <div className="label">Neural_Links</div>
+                <div className="val-main">{stats.online}<span className="val-unit">ID</span></div>
+                <SparkGraph data={history.online} color={CYBER.success} />
+            </div>
+
+            <div className="card">
+                <div className="label">Liquidity</div>
+                <div className="val-main">{Number(stats.liquidity).toLocaleString()}<span className="val-unit">$NP</span></div>
+                <SparkGraph data={history.liq} color={CYBER.warning} />
+            </div>
+
+          </div>
+        </>
+      )}
+
+      {activeTab === 'agents' && <AgentsTable users={users} onLog={addLog} />}
+
+      {activeTab === 'shop' && (
+        <div className="card">
+          <div className="label" style={{ marginBottom: '20px' }}>Neural_Pulse_Marketplace</div>
+          <div className="shop-grid">
+            {(cfg.SHOP?.PACKS || []).map(pack => (
+              <div key={pack.id} className="shop-card">
+                <div style={{ color: pack.color, fontWeight: '900', fontSize: '12px', marginBottom: '10px' }}>{pack.name}</div>
+                <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{pack.credits}</div>
+                <div style={{ fontSize: '9px', opacity: 0.5, marginBottom: '15px' }}>$NP_CREDITS</div>
+                <div style={{ background: CYBER.ton, color: '#fff', fontSize: '10px', padding: '6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                    {pack.price} TON
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
+      )}
+      
+      {activeTab === 'logs' && (
+        <div className="terminal-container">
+          <div className="terminal-body">
+            {logs.map((log, i) => (
+              <div key={i} style={{ marginBottom: '4px', display: 'flex', gap: '10px' }}>
+                <span style={{ color: CYBER.subtext }}>[{log.time}]</span>
+                <span style={{ color: log.type === 'ERROR' ? CYBER.danger : (log.type === 'SUCCESS' ? CYBER.success : CYBER.primary) }}>{log.type === 'SUCCESS' ? '>>' : '>'}</span>
+                <span style={{ color: log.type === 'ERROR' ? CYBER.danger : (log.type === 'SUCCESS' ? CYBER.success : CYBER.text) }}>{log.msg}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div id="ton-connect-btn" style={{ display: 'none' }}></div>
+
+      <footer style={{ marginTop: '30px', textAlign: 'center', opacity: 0.2, fontSize: '8px', fontFamily: 'Roboto Mono' }}>
+        APEX_MONITOR_NL4 // BUILD_2026_04 // ROOT_ID: 1774594734
+      </footer>
     </div>
+  );
+};
 
-    <script>
-        const tg = window.Telegram.WebApp;
-        tg.expand();
-        tg.enableClosingConfirmation();
-
-        // --- Глобальная инициализация TON SDK ---
-        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
-            buttonRootId: null
-        });
-
-        const game = {
-            data: { 
-                id: "0", balance: 0, energy: 1000, max_energy: 1000, 
-                tap: 1, profit: 0, tap_lvl: 1, mine_lvl: 1, 
-                energy_lvl: 1, last_bonus: 0, wallet: null, completed_tasks: [],
-                nonce: null 
-            },
-            SALT: "ULTRA_SECRET_PULSE_2026_VOID",
-            isLoaded: false,
-            isSaving: false,
-            hasUnsavedChanges: false,
-
-            getAuthHeaders() {
-                return {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'tma ' + tg.initData
-                };
-            },
-
-            async init() {
-                ui.startLoader();
-                const u = tg.initDataUnsafe.user || { id: 12345, first_name: 'Local', username: 'user' };
-                this.data.id = String(u.id);
-
-                tonConnectUI.onStatusChange(w => {
-                    this.data.wallet = w ? w.account.address : null;
-                    const btnLabel = document.getElementById('wallet-btn-label');
-                    if(btnLabel) btnLabel.innerText = w ? "✅" : "👛";
-                    this.hasUnsavedChanges = true;
-                    this.save(true);
-                    if(ui.currentModal === 'wallet') ui.openM('wallet');
-                });
-
-                try {
-                    const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`, {
-                        headers: this.getAuthHeaders()
-                    });
-                    if (r.ok) {
-                        const db = await r.json();
-                        this.data = { ...this.data, ...db };
-                    }
-                } catch(e) { console.warn("Offline Mode"); }
-
-                document.getElementById('my-name').innerText = (u.username || u.first_name).toUpperCase();
-                if(u.photo_url) document.getElementById('my-avatar').src = u.photo_url;
-
-                this.isLoaded = true;
-                this.startLoops();
-                ui.render();
-
-                const target = document.getElementById('main-target');
-                target.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    this.handleTap(e);
-                }, {passive: false});
-
-                window.addEventListener('visibilitychange', () => { if (document.hidden) this.save(true); });
-            },
-
-            getCost(type) {
-                const lvl = this.data[type + '_lvl'] || 1;
-                const base = { tap: 500, energy: 400, mine: 1200 };
-                const mult = { tap: 1.85, energy: 1.6, mine: 1.75 };
-                return Math.floor(base[type] * Math.pow(mult[type], lvl-1));
-            },
-
-            handleTap(e) {
-                if(!this.isLoaded || this.data.energy < 1) {
-                    if(this.data.energy < 1) {
-                        tg.HapticFeedback.notificationOccurred('error');
-                        ui.triggerEnergyError();
-                    }
-                    return;
-                }
-                const touches = e.changedTouches;
-                for(let i=0; i<touches.length; i++) {
-                    if(this.data.energy >= 1) {
-                        this.data.balance += this.data.tap;
-                        this.data.energy = Math.max(0, this.data.energy - 1);
-                        this.hasUnsavedChanges = true;
-                        ui.pop(touches[i], this.data.tap);
-                    }
-                }
-                tg.HapticFeedback.impactOccurred('medium');
-                ui.render();
-            },
-
-            async upgrade(type) {
-                const cost = this.getCost(type);
-                if(this.data.balance >= cost) {
-                    this.data.balance -= cost;
-                    if(type === 'tap') { this.data.tap_lvl++; this.data.tap += 1; }
-                    if(type === 'energy') { this.data.energy_lvl++; this.data.max_energy += 500; this.data.energy = this.data.max_energy; }
-                    if(type === 'mine') { this.data.mine_lvl++; this.data.profit += 250; }
-                    
-                    this.hasUnsavedChanges = true;
-                    ui.render();
-                    tg.HapticFeedback.notificationOccurred('success');
-                    await this.save(true); 
-                    ui.openM(type === 'mine' ? 'mine' : 'boost');
-                } else {
-                    tg.showAlert("INSUFFICIENT NP ENERGY");
-                }
-            },
-
-            generateHash(id, balance, nonce) {
-                const message = `${id}:${balance}:${nonce}`;
-                return CryptoJS.HmacSHA256(message, this.SALT).toString();
-            },
-
-            async save(force = false) {
-                if (!this.isLoaded || (this.isSaving && !force)) return;
-                if (!this.hasUnsavedChanges && !force) return;
-
-                this.isSaving = true;
-                const statusLight = document.getElementById('sync-status');
-                if(statusLight) statusLight.classList.add('saving');
-                
-                const currentBalance = Math.floor(this.data.balance);
-                const currentHash = this.generateHash(this.data.id, currentBalance, this.data.nonce);
-
-                const payload = {
-                    id: this.data.id,
-                    balance: currentBalance,
-                    energy: Math.floor(this.data.energy),
-                    tap_lvl: this.data.tap_lvl,
-                    mine_lvl: this.data.mine_lvl,
-                    energy_lvl: this.data.energy_lvl,
-                    wallet: this.data.wallet,
-                    completed_tasks: this.data.completed_tasks,
-                    last_bonus: this.data.last_bonus,
-                    hash: currentHash,
-                    initData: tg.initData
-                };
-
-                this.hasUnsavedChanges = false;
-                
-                try {
-                    const r = await fetch('/api/save', {
-                        method: 'POST',
-                        headers: this.getAuthHeaders(),
-                        body: JSON.stringify(payload),
-                        keepalive: true 
-                    });
-                    
-                    const res = await r.json();
-                    if(res.s === 1 && res.next_nonce) {
-                        this.data.nonce = res.next_nonce;
-                    } else if (res.required_nonce) {
-                        this.data.nonce = res.required_nonce;
-                    }
-                } catch(e) { 
-                    this.hasUnsavedChanges = true; 
-                    console.error("Save failed:", e);
-                } finally {
-                    this.isSaving = false;
-                    setTimeout(() => { if(statusLight) statusLight.classList.remove('saving'); }, 500);
-                }
-            },
-
-            startLoops() {
-                setInterval(() => {
-                    let changed = false;
-                    if(this.data.energy < this.data.max_energy) {
-                        this.data.energy = Math.min(this.data.max_energy, this.data.energy + 1.2);
-                        changed = true;
-                    }
-                    if(this.data.profit > 0) {
-                        this.data.balance += (this.data.profit / 3600);
-                        this.hasUnsavedChanges = true;
-                        changed = true;
-                    }
-                    if(changed) ui.render();
-                }, 1000);
-                
-                setInterval(() => {
-                    if(this.hasUnsavedChanges) this.save();
-                }, 7000);
-            }
-        };
-
-        const ui = {
-            currentModal: null,
-            num(n) {
-                if (n >= 1e6) return (n/1e6).toFixed(2) + 'M';
-                if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
-                return Math.floor(n).toLocaleString();
-            },
-            startLoader() {
-                let p = 0;
-                const i = setInterval(() => {
-                    p += Math.floor(Math.random() * 8) + 2;
-                    if(p > 100) p = 100;
-                    document.getElementById('pct').innerText = p + '%';
-                    document.getElementById('bar').style.width = p + '%';
-                    if(p >= 100) { 
-                        clearInterval(i); 
-                        setTimeout(() => {
-                            document.getElementById('loader').style.opacity = '0';
-                            setTimeout(() => {
-                                document.getElementById('loader').style.display = 'none';
-                                document.getElementById('app').style.display = 'flex';
-                            }, 500);
-                        }, 300);
-                    }
-                }, 80);
-            },
-            render() {
-                const d = game.data;
-                document.getElementById('ui-balance').innerText = Math.floor(d.balance).toLocaleString();
-                document.getElementById('ui-energy').innerText = `${Math.floor(d.energy)} / ${d.max_energy}`;
-                document.getElementById('e-fill').style.width = (d.energy / d.max_energy * 100) + '%';
-                document.getElementById('ui-tap').innerText = `+${d.tap}`;
-                document.getElementById('ui-profit').innerText = Math.floor(d.profit).toLocaleString();
-                
-                let rank = "RECRUIT";
-                if(d.balance > 50000) rank = "ACADEMY";
-                if(d.balance > 500000) rank = "MANTIS";
-                if(d.balance > 2000000) rank = "OVERLORD";
-                document.getElementById('ui-rank').innerText = rank;
-                document.getElementById('my-lvl').innerText = `LVL ${Math.floor(Math.sqrt(d.balance / 10000)) + 1}`;
-            },
-            triggerEnergyError() {
-                const track = document.querySelector('.e-track');
-                track.classList.add('energy-error');
-                setTimeout(() => track.classList.remove('energy-error'), 400);
-            },
-            pop(t, p) {
-                const div = document.createElement('div');
-                div.className = 'pop';
-                div.innerText = `+${p}`;
-                div.style.left = (t.clientX - 20) + 'px';
-                div.style.top = (t.clientY - 40) + 'px';
-                document.body.appendChild(div);
-                setTimeout(() => div.remove(), 650);
-            },
-            async openM(type) {
-                this.currentModal = type;
-                const b = document.getElementById('m-body');
-                const m = document.getElementById('modal');
-                m.classList.add('active');
-                
-                if(type === 'boost') {
-                    b.innerHTML = `<h2>🚀 UPGRADES</h2><br>
-                    <div class="task-item" onclick="game.upgrade('tap')"><div><b>Multitap</b><br><small>Level ${game.data.tap_lvl}</small></div><b>${this.num(game.getCost('tap'))}</b></div>
-                    <div class="task-item" onclick="game.upgrade('energy')"><div><b>Energy Cap</b><br><small>Level ${game.data.energy_lvl}</small></div><b>${this.num(game.getCost('energy'))}</b></div>`;
-                } else if(type === 'mine') {
-                    b.innerHTML = `<h2>⛏️ MINING</h2><br>
-                    <div class="task-item" onclick="game.upgrade('mine')"><div><b>Neural Node</b><br><small>Level ${game.data.mine_lvl}</small><br><small style="color:cyan">+250 NP/hr</small></div><b>${this.num(game.getCost('mine'))}</b></div>`;
-                } else if(type === 'ai') {
-                    b.innerHTML = `<h2>🤖 AI ADVISOR</h2><div class="ai-terminal" id="ai-res">> System Standby...</div><button class="task-btn" style="width:100%" onclick="ui.askAI()">RUN NEURAL SCAN</button>`;
-                } else if(type === 'friends') {
-                    const link = `https://t.me/neural_pulse_bot?start=${game.data.id}`;
-                    b.innerHTML = `<h2>🤝 REFERRALS</h2><p style="text-align:center; font-size:12px; color:#888; margin-bottom:10px;">Get 10% from friends.</p><div class="ref-box">${link}</div><button class="task-btn" style="width:100%" onclick="ui.copyRef('${link}')">COPY LINK</button>`;
-                } else if(type === 'top') {
-                    b.innerHTML = `<h2>🏆 TOP AGENTS</h2><br><div id="top-list-container">Loading...</div>`;
-                    try {
-                        const r = await fetch('/api/top', { headers: game.getAuthHeaders() });
-                        const top = await r.json();
-                        let html = '<ul class="top-list">';
-                        top.forEach((u, i) => {
-                            html += `<li class="top-item"><span class="top-rank">#${i+1}</span><span class="top-name">${u.username || 'Agent'}</span><span class="top-val">${this.num(u.balance)}</span></li>`;
-                        });
-                        b.querySelector('#top-list-container').innerHTML = html + '</ul>';
-                    } catch(e) { b.querySelector('#top-list-container').innerText = "Data unavailable."; }
-                } else if(type === 'wallet') {
-                    const isConnected = !!game.data.wallet;
-                    const addr = game.data.wallet;
-                    const shortAddr = isConnected ? addr.slice(0,6) + '...' + addr.slice(-4) : '';
-                    b.innerHTML = `<h2>👛 TON WALLET</h2><p style="text-align:center; font-size:12px; color:#888; margin-bottom:15px;">${isConnected ? 'CONNECTED: ' + shortAddr : 'Connect for airdrops.'}</p>
-                        <button id="custom-ton-btn" class="wallet-connect-btn ${isConnected ? 'connected' : ''}">${isConnected ? 'DISCONNECT' : 'CONNECT TON'}</button>`;
-                    
-                    document.getElementById('custom-ton-btn').onclick = async () => {
-                        try {
-                            await tonConnectUI.connectionRestored; 
-                            if(tonConnectUI.connected) {
-                                await tonConnectUI.disconnect();
-                            } else {
-                                await tonConnectUI.openModal();
-                            }
-                        } catch(e) {
-                            console.error("Wallet Action Error:", e);
-                            tg.showAlert("Wallet SDK is busy. Try again.");
-                        }
-                    };
-                } else if(type === 'tasks') {
-                    const t1 = game.data.completed_tasks.includes('tg') ? 'DONE' : '+10K';
-                    b.innerHTML = `<h2>📋 MISSIONS</h2><br><div class="task-item"><span>Join Telegram</span><button class="task-btn" onclick="ui.doTask('tg', 'https://t.me/neural_pulse', 10000)" ${t1==='DONE'?'disabled':''}>${t1}</button></div>`;
-                } else if(type === 'bonus') {
-                    const canClaim = Date.now() - (game.data.last_bonus || 0) > 24*60*60*1000;
-                    b.innerHTML = `<h2>🎁 DAILY BONUS</h2><br><button class="task-btn" style="width:100%; height:60px;" onclick="ui.claimDaily()" ${!canClaim?'disabled':''}>${canClaim ? 'CLAIM 5,000 NP' : 'WAIT 24H'}</button>`;
-                }
-            },
-            doTask(id, url, reward) {
-                if(id === 'tg') tg.openTelegramLink(url); else tg.openLink(url);
-                setTimeout(() => {
-                    if(!game.data.completed_tasks.includes(id)) {
-                        game.data.balance += reward;
-                        game.data.completed_tasks.push(id);
-                        ui.render();
-                        ui.openM('tasks');
-                        game.save(true);
-                    }
-                }, 5000);
-            },
-            async askAI() {
-                const res = document.getElementById('ai-res');
-                res.innerText = "> Initializing scan...\n> Accessing Gemini Core...\n> Processing metadata...";
-                
-                try {
-                    const r = await fetch('/api/ai-advice', { 
-                        method: 'POST', 
-                        headers: game.getAuthHeaders(), 
-                        body: JSON.stringify({
-                            ...game.data,
-                            initData: tg.initData
-                        }) 
-                    });
-                    const j = await r.json();
-                    
-                    const fullText = j.text || "Pulse stable. Continue, Agent.";
-                    res.innerText = "> SCAN COMPLETE:\n\n";
-                    let i = 0;
-                    const typer = setInterval(() => {
-                        res.innerText += fullText[i];
-                        i++;
-                        if(i >= fullText.length) clearInterval(typer);
-                        res.scrollTop = res.scrollHeight;
-                    }, 20);
-                    
-                } catch(e) { 
-                    res.innerText = "> Error: Connection to Gemini lost.\n> Check your neural uplink."; 
-                }
-            },
-            copyRef(url) { 
-                navigator.clipboard.writeText(url).then(() => {
-                    tg.showAlert('Link copied!');
-                    tg.HapticFeedback.notificationOccurred('success');
-                }); 
-            },
-            claimDaily() {
-                game.data.balance += 5000;
-                game.data.last_bonus = Date.now();
-                game.hasUnsavedChanges = true;
-                ui.render(); ui.closeM();
-                tg.showAlert("5,000 NP credited!");
-                game.save(true);
-            },
-            closeM() { 
-                document.getElementById('modal').classList.remove('active'); 
-                this.currentModal = null;
-            }
-        };
-        window.onload = () => game.init();
-    </script>
-</body>
-</html>
+export default Dashboard;
