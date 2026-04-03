@@ -1,6 +1,6 @@
 import React, { useState, useEffect, memo, useCallback, useRef } from 'react';
 
-// --- 🌌 ЦВЕТОВАЯ ПАЛИТРА (CYBER V11) ---
+// --- 🌌 ЦВЕТОВАЯ ПАЛИТРА (CYBER V11.6) ---
 const CYBER = {
   bg: '#000000',
   card: '#0a0d14',
@@ -70,7 +70,7 @@ const KernelControls = ({ onLog }) => {
   };
 
   return (
-    <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+    <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
       <button className="cmd-btn" onClick={() => execute('RESTART', 'NODE_REBOOT')}>🔄 RESTART</button>
       <button className="cmd-btn" onClick={() => execute('CLEAR_CACHE', 'MEM_CLEAN')}>🧹 PURGE_CACHE</button>
       <button className="cmd-btn" onClick={() => {
@@ -122,7 +122,7 @@ const AgentsTable = ({ users, onLog }) => {
   );
 };
 
-// --- 🚀 ГЛАВНЫЙ ДАШБОРД (APEX V11) ---
+// --- 🚀 ГЛАВНЫЙ ДАШБОРД (APEX V11.6) ---
 const Dashboard = (props) => {
   const { data: initialData } = props;
   const [activeTab, setActiveTab] = useState('overview');
@@ -145,14 +145,14 @@ const Dashboard = (props) => {
 
   const [history, setHistory] = useState({
     cpu: Array(25).fill(0), ram: Array(25).fill(0), online: Array(25).fill(0), 
-    liq: Array(25).fill(0), health: Array(25).fill(100), ton: Array(25).fill(0)
+    liq: Array(25).fill(0), health: Array(25).fill(100), ton: Array(25).fill(0), 
+    latency: Array(25).fill(0)
   });
 
   const addLog = useCallback((msg, type = 'INFO') => {
     setLogs(prev => [...prev.slice(-39), { time: new Date().toLocaleTimeString(), msg, type }]);
   }, []);
 
-  // Мониторинг вашего кошелька TON
   const fetchTreasury = useCallback(async () => {
     try {
         const res = await fetch(`https://toncenter.com/api/v2/getAddressInformation?address=${ADMIN_WALLET}`);
@@ -187,7 +187,8 @@ const Dashboard = (props) => {
           ram: [...prev.ram.slice(1), ram],
           online: [...prev.online.slice(1), online],
           liq: [...prev.liq.slice(1), liq],
-          health: [...prev.health.slice(1), Number(h)]
+          health: [...prev.health.slice(1), Number(h)],
+          latency: [...prev.latency.slice(1), lat]
         }));
         
         setLastUpdate(new Date());
@@ -219,7 +220,7 @@ const Dashboard = (props) => {
         .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; text-shadow: 0 0 10px ${CYBER.primary}88; }
         .cmd-btn { background: rgba(0,242,254,0.05); border: 1px solid ${CYBER.border}; color: ${CYBER.primary}; font-size: 9px; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-family: 'Roboto Mono'; font-weight: bold; }
         .action-btn { background: transparent; border: 1px solid ${CYBER.primary}; color: ${CYBER.primary}; font-size: 9px; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-family: 'Roboto Mono'; }
-        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; border-radius: 12px; position: relative; }
+        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; border-radius: 12px; position: relative; overflow: hidden; }
         .label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; color: ${CYBER.subtext}; }
         .val-main { font-size: 28px; font-weight: 700; display: flex; align-items: baseline; font-family: 'Roboto Mono'; }
         .val-unit { font-size: 10px; color: #4a5568; margin-left: 6px; }
@@ -263,34 +264,62 @@ const Dashboard = (props) => {
       {activeTab === 'overview' && (
         <>
           <KernelControls onLog={addLog} />
+          
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '15px' }}>
+            
+            {/* ГЛАВНЫЙ ГРАФИК ЗДОРОВЬЯ */}
             <div className="card" style={{ gridColumn: 'span 2', textAlign: 'center' }}>
                 <div className="label" style={{ color: CYBER.primary }}>System_Health</div>
                 <div className="val-main" style={{ justifyContent: 'center', fontSize: '42px', color: stats.health > 70 ? CYBER.success : CYBER.danger }}>
                     {stats.health}<span className="val-unit" style={{ fontSize: '16px' }}>%</span>
                 </div>
-                <SparkGraph data={history.health} color={CYBER.primary} height={30} />
+                <SparkGraph data={history.health} color={CYBER.primary} height={35} />
             </div>
+
+            {/* ПРОЦЕССОР */}
             <div className="card">
                 <div className="label">Core_Usage</div>
                 <div className="val-main">{stats.cpu}<span className="val-unit">%</span></div>
                 <SparkGraph data={history.cpu} color={CYBER.primary} />
             </div>
+
+            {/* ПАМЯТЬ (НОВОЕ) */}
+            <div className="card">
+                <div className="label">Ram_Memory</div>
+                <div className="val-main">{stats.ram}<span className="val-unit">MB</span></div>
+                <SparkGraph data={history.ram} color={CYBER.secondary} />
+            </div>
+
+            {/* ЗАДЕРЖКА (НОВОЕ) */}
+            <div className="card">
+                <div className="label">Net_Latency</div>
+                <div className="val-main" style={{ color: stats.latency > 150 ? CYBER.danger : CYBER.text }}>
+                  {stats.latency}<span className="val-unit">ms</span>
+                </div>
+                <SparkGraph data={history.latency} color={CYBER.danger} />
+            </div>
+
+            {/* ПРИБЫЛЬ */}
             <div className="card" style={{ borderColor: CYBER.ton }}>
                 <div className="label" style={{ color: CYBER.ton }}>TON_Revenue</div>
                 <div className="val-main">{adminBalance}<span className="val-unit">TON</span></div>
                 <SparkGraph data={history.ton} color={CYBER.ton} />
             </div>
+
+            {/* ОНЛАЙН */}
             <div className="card">
                 <div className="label">Neural_Links</div>
                 <div className="val-main">{stats.online}<span className="val-unit">ID</span></div>
                 <SparkGraph data={history.online} color={CYBER.success} />
             </div>
+
+            {/* ЛИКВИДНОСТЬ */}
             <div className="card">
                 <div className="label">Liquidity</div>
                 <div className="val-main">{Number(stats.liquidity).toLocaleString()}<span className="val-unit">$NP</span></div>
                 <SparkGraph data={history.liq} color={CYBER.warning} />
             </div>
+
           </div>
         </>
       )}
