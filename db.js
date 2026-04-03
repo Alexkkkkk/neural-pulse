@@ -5,17 +5,15 @@ import os from 'os';
 import cluster from 'cluster'; 
 
 // --- 🌐 CONFIG ---
-// Используем предоставленную строку подключения с поддержкой SSL
+// Используем предоставленную строку подключения
 const PG_URI = "postgresql://bothost_db_db1789af0108:hl3yLh4DQmySkEYDPYwS8fn9xkLPHYNMhmCbU8WCYXs@node1.pghost.ru:32865/bothost_db_db1789af0108";
 
 export const sequelize = new Sequelize(PG_URI, { 
     dialect: 'postgres', 
     logging: false,
     dialectOptions: { 
-        ssl: {
-            require: true,
-            rejectUnauthorized: false // Позволяет подключаться к облачным БД с самоподписанными сертификатами
-        }, 
+        // ОТКЛЮЧЕНО SSL, так как сервер его не поддерживает
+        ssl: false,
         connectTimeout: 60000 
     },
     pool: { 
@@ -64,9 +62,7 @@ export const User = sequelize.define('users', {
     completed_tasks: { type: DataTypes.JSONB, defaultValue: [] },
     wallet: { type: DataTypes.STRING, allowNull: true },
     
-    // --- 🛡️ ПОЛЯ ЗАЩИТЫ ---
     last_sync_token: { type: DataTypes.STRING, allowNull: true }, 
-    
     last_bonus: { type: DataTypes.BIGINT, defaultValue: 0 }, 
     last_seen: { type: DataTypes.DATE, defaultValue: Sequelize.NOW }
 }, { 
@@ -131,7 +127,7 @@ export const GlobalStats = sequelize.define('global_stats', {
 User.hasMany(User, { as: 'ReferralList', foreignKey: 'referred_by' });
 User.belongsTo(User, { as: 'Inviter', foreignKey: 'referred_by' });
 
-// --- ХУКИ: Авто-обновление статистики ---
+// --- ХУКИ ---
 User.afterCreate(async () => {
     try {
         await GlobalStats.increment('total_users', { where: { id: 1 }, by: 1 });
@@ -142,7 +138,6 @@ User.afterCreate(async () => {
 
 // --- 📊 ТЕЛЕМЕТРИЯ ---
 export const logSystemStats = async () => {
-    // Выполняем только на основном процессе (primary)
     const isPrimary = cluster.isPrimary || (cluster.isWorker && cluster.worker.id === 1);
     if (!isPrimary) return;
 
@@ -174,7 +169,6 @@ export const logSystemStats = async () => {
             db_latency: parseFloat(dbLatency)
         });
         
-        // Очистка старых данных (храним за последние 48 часов)
         await Stats.destroy({
             where: {
                 created_at: { [Op.lt]: new Date(Date.now() - 48 * 60 * 60 * 1000) }
@@ -194,17 +188,14 @@ export const initDB = async () => {
         const isPrimary = cluster.isPrimary || (cluster.isWorker && cluster.worker.id === 1);
 
         if (isPrimary) {
-            // Синхронизация таблиц
             await sequelize.sync({ alter: true });
             await sessionStore.sync();
             
-            // Инициализация глобального счетчика
             await GlobalStats.findOrCreate({ 
                 where: { id: 1 }, 
                 defaults: { id: 1, total_balance: 0, total_users: 0 } 
             });
 
-            // Загрузка дефолтных задач, если таблица пуста
             if (await Task.count() === 0) {
                 await Task.bulkCreate([
                     { title: 'Подписаться на Neural Pulse', reward: 5000, url: 'https://t.me/neural_pulse', icon: 'Telegram' },
@@ -214,7 +205,6 @@ export const initDB = async () => {
                 console.log('▪️ [DB] DEFAULT_TASKS_LOADED');
             }
 
-            // Запуск интервала телеметрии каждые 30 секунд
             setInterval(logSystemStats, 30000); 
             await logSystemStats(); 
         }
