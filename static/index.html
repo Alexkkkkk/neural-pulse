@@ -216,9 +216,9 @@
                 id: "0", balance: 0, energy: 1000, max_energy: 1000, 
                 tap: 1, profit: 0, tap_lvl: 1, mine_lvl: 1, 
                 energy_lvl: 1, last_bonus: 0, wallet: null, completed_tasks: [],
-                nonce: null // СЮДА СОХРАНЯЕМ NONCE ИЗ БД
+                nonce: null // Храним nonce для подписи
             },
-            SALT: "ULTRA_SECRET_PULSE_2026_VOID", // ДОЛЖНО СОВПАДАТЬ С СЕРВЕРОМ!
+            SALT: "ULTRA_SECRET_PULSE_2026_VOID", // Должно совпадать с сервером
             isLoaded: false,
             isSaving: false,
             hasUnsavedChanges: false,
@@ -258,10 +258,8 @@
                     });
                     if (r.ok) {
                         const db = await r.json();
-                        // Важно: сервер должен вернуть nonce (last_sync_token)
+                        // Важно: сервер возвращает текущий balance и nonce
                         this.data = { ...this.data, ...db };
-                        // Если в ответе пришел nonce, сохраняем его
-                        if(db.nonce) this.data.nonce = db.nonce;
                     }
                 } catch(e) { console.warn("Offline Mode"); }
 
@@ -329,7 +327,7 @@
                 }
             },
 
-            // --- НОВАЯ ГЕНЕРАЦИЯ ХЕША ---
+            // Генерация HMAC хеша для защиты данных
             generateHash(id, balance, nonce) {
                 const message = `${id}:${balance}:${nonce}`;
                 return CryptoJS.HmacSHA256(message, this.SALT).toString();
@@ -343,7 +341,6 @@
                 const statusLight = document.getElementById('sync-status');
                 if(statusLight) statusLight.classList.add('saving');
                 
-                // Подготовка данных
                 const currentBalance = Math.floor(this.data.balance);
                 const currentHash = this.generateHash(this.data.id, currentBalance, this.data.nonce);
 
@@ -357,8 +354,8 @@
                     wallet: this.data.wallet,
                     completed_tasks: this.data.completed_tasks,
                     last_bonus: this.data.last_bonus,
-                    hash: currentHash, // ОТПРАВЛЯЕМ ХЕШ
-                    initData: tg.initData // ДЛЯ ВАЛИДАЦИИ ПЕРВОГО ВХОДА
+                    hash: currentHash, // Хеш для проверки на сервере
+                    initData: tg.initData
                 };
 
                 this.hasUnsavedChanges = false;
@@ -373,10 +370,10 @@
                     
                     const res = await r.json();
                     if(res.s === 1 && res.next_nonce) {
-                        // ОБЯЗАТЕЛЬНО обновляем nonce для следующей итерации
+                        // Обновляем nonce для следующего сохранения
                         this.data.nonce = res.next_nonce;
                     } else if (res.required_nonce) {
-                        // Если рассинхрон — подтягиваем нужный nonce
+                        // В случае рассинхрона исправляем nonce
                         this.data.nonce = res.required_nonce;
                     }
                 } catch(e) { 
