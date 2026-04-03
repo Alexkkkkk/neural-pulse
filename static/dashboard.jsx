@@ -15,8 +15,8 @@ const CYBER = {
   border: 'rgba(0, 242, 254, 0.15)',
 };
 
-// ВАШ АДРЕС ДЛЯ МОНИТОРИНГА
-const ADMIN_WALLET = "EQD__________________________________________"; 
+// ВАШ АДРЕС ДЛЯ МОНИТОРИНГА (ОБНОВЛЕНО)
+const ADMIN_WALLET = "UQBo0iou1BlB_8Xg0Hn_rUeIcrpyyhoboIauvnii889OFRoI"; 
 
 // --- 🛠️ APEX CONTROL BRIDGE ---
 const sendCommand = async (cmd, data = {}) => {
@@ -81,7 +81,7 @@ const KernelControls = ({ onLog }) => {
   );
 };
 
-// --- 🗄️ ТАБЛИЦА С ПОЛНЫМ УПРАВЛЕНИЕМ ---
+// --- 🗄️ ТАБЛИЦА АГЕНТОВ ---
 const AgentsTable = ({ users, onLog }) => {
   const updateBalance = async (user) => {
     const amount = prompt(`EDIT NP_BALANCE FOR @${user.username}:`, user.balance);
@@ -122,7 +122,7 @@ const AgentsTable = ({ users, onLog }) => {
   );
 };
 
-// --- 🚀 ГЛАВНЫЙ ДАШБОРД (APEX V11.6) ---
+// --- 🚀 ГЛАВНЫЙ ДАШБОРД (APEX V11.6 FIX) ---
 const Dashboard = (props) => {
   const { data: initialData } = props;
   const [activeTab, setActiveTab] = useState('overview');
@@ -156,24 +156,34 @@ const Dashboard = (props) => {
     setLogs(prev => [...prev.slice(-39), { time: new Date().toLocaleTimeString(), msg, type }]);
   }, []);
 
-  // --- ИНИЦИАЛИЗАЦИЯ TON CONNECT ---
+  // --- ИНИЦИАЛИЗАЦИЯ TON CONNECT (ИСПРАВЛЕНО: Добавлен интервал проверки SDK) ---
   useEffect(() => {
-    if (window.TonConnectUI && !tonConnectUI.current) {
-      tonConnectUI.current = new window.TonConnectUI.TonConnectUI({
-        manifestUrl: `https://${window.location.host}/tonconnect-manifest.json`,
-        buttonRootId: 'ton-connect-btn'
-      });
+    const initTimer = setInterval(() => {
+      if (window.TonConnectUI && !tonConnectUI.current) {
+        try {
+          tonConnectUI.current = new window.TonConnectUI.TonConnectUI({
+            manifestUrl: `https://${window.location.host}/tonconnect-manifest.json`,
+            buttonRootId: 'ton-connect-btn'
+          });
 
-      tonConnectUI.current.onStatusChange(wallet => {
-        if (wallet) {
-          setUserWallet(wallet.account.address);
-          addLog('WALLET_LINKED: ' + wallet.account.address.slice(0, 8) + '...', 'SUCCESS');
-        } else {
-          setUserWallet(null);
-          addLog('WALLET_DISCONNECTED', 'INFO');
+          tonConnectUI.current.onStatusChange(wallet => {
+            if (wallet) {
+              setUserWallet(wallet.account.address);
+              addLog('WALLET_LINKED: ' + wallet.account.address.slice(0, 8) + '...', 'SUCCESS');
+            } else {
+              setUserWallet(null);
+              addLog('WALLET_DISCONNECTED', 'INFO');
+            }
+          });
+          
+          clearInterval(initTimer); // SDK Инициализирован успешно
+        } catch (err) {
+          console.error("SDK_INIT_ERROR", err);
         }
-      });
-    }
+      }
+    }, 500);
+
+    return () => clearInterval(initTimer);
   }, [addLog]);
 
   const handleConnect = async () => {
@@ -181,24 +191,28 @@ const Dashboard = (props) => {
         if (tonConnectUI.current) {
             await tonConnectUI.current.openModal();
         } else {
-            addLog('TON_SDK_NOT_READY', 'ERROR');
+            addLog('TON_SDK_NOT_READY - RELOAD PAGE', 'ERROR');
         }
     } catch (err) {
         addLog('CONNECT_ABORTED', 'WARNING');
     }
   };
 
+  // --- ПОЛУЧЕНИЕ БАЛАНСА (ИСПРАВЛЕНО: Используется tonapi.io для точности) ---
   const fetchTreasury = useCallback(async () => {
     try {
-        const res = await fetch(`https://toncenter.com/api/v2/getAddressInformation?address=${ADMIN_WALLET}`);
+        const res = await fetch(`https://tonapi.io/v2/accounts/${ADMIN_WALLET}`);
         const json = await res.json();
-        if(json.ok) {
-            const bal = (parseInt(json.result.balance) / 1e9).toFixed(2);
+        if(json && json.balance !== undefined) {
+            const bal = (json.balance / 1e9).toFixed(4);
             setAdminBalance(bal);
             setHistory(prev => ({ ...prev, ton: [...prev.ton.slice(1), Number(bal)] }));
         }
-    } catch(e) { console.error("TON_SYNC_ERROR"); }
-  }, []);
+    } catch(e) { 
+        console.error("TON_SYNC_ERROR"); 
+        addLog("TREASURY_SYNC_FAILED", "ERROR");
+    }
+  }, [addLog]);
 
   useEffect(() => {
     const eventSource = new EventSource('/api/admin/stream');
@@ -230,7 +244,7 @@ const Dashboard = (props) => {
       } catch (err) { console.error("SSE_ERROR", err); }
     };
 
-    const treasuryInterval = setInterval(fetchTreasury, 60000);
+    const treasuryInterval = setInterval(fetchTreasury, 30000);
     fetchTreasury();
 
     const loader = setTimeout(() => setIsLoaded(true), 800);
@@ -273,6 +287,9 @@ const Dashboard = (props) => {
         .treasury-box { background: rgba(0, 136, 204, 0.05); border: 1px solid ${CYBER.ton}; padding: 8px 12px; border-radius: 8px; text-align: right; min-width: 140px; }
         .ton-connect-btn-styled { background: ${CYBER.ton}; border: none; color: #fff; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 11px; transition: 0.3s; border: 1px solid transparent; width: 100%; }
         .ton-connect-btn-styled:hover { filter: brightness(1.2); border-color: ${CYBER.primary}; }
+        
+        /* Модальное окно TonConnect поверх всего */
+        tc-root { z-index: 10000 !important; }
       `}</style>
 
       <div className="header">
