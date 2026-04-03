@@ -7,7 +7,8 @@
     "node": ">=18.16.0"
   },
   "scripts": {
-    "start": "node --max-old-space-size=1024 --optimize-for-size --turbo-fast-api-calls server.js",
+    "start": "node server.js",
+    "build": "echo 'No build step needed'",
     "dev": "node --watch server.js",
     "install-all": "npm install",
     "clean": "rm -rf node_modules package-lock.json && npm install",
@@ -17,7 +18,7 @@
   "dependencies": {
     "adminjs": "^7.8.1",
     "@adminjs/express": "^6.1.0",
-    "@adminjs/sequelize": "^4.0.0",
+    "@adminjs/sequelize": "^5.0.0",
     "@adminjs/design-system": "^4.1.0",
     "express": "^4.18.2",
     "telegraf": "^4.16.3",
