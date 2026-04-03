@@ -1,5 +1,0 @@
-sequelize
-pg
-pg-hstore
-express-session
-connect-session-sequelize
