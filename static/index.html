@@ -28,6 +28,11 @@
             touch-action: manipulation;
         }
 
+        /* Scrollbar Style */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+
         /* --- Animations --- */
         @keyframes pulse { 0% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } 100% { opacity: 0.5; transform: scale(1); } }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
@@ -239,7 +244,6 @@
                 const u = tg.initDataUnsafe.user || { id: 12345, first_name: 'Local', username: 'user' };
                 this.data.id = String(u.id);
 
-                // Слушаем изменения статуса кошелька
                 tonConnectUI.onStatusChange(w => {
                     this.data.wallet = w ? w.account.address : null;
                     const btnLabel = document.getElementById('wallet-btn-label');
@@ -249,7 +253,6 @@
                     if(ui.currentModal === 'wallet') ui.openM('wallet');
                 });
 
-                // Загружаем данные с сервера
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`, {
                         headers: this.getAuthHeaders()
@@ -491,7 +494,6 @@
                     
                     document.getElementById('custom-ton-btn').onclick = async () => {
                         try {
-                            // Всегда ждем восстановления сессии перед действием
                             await tonConnectUI.connectionRestored; 
                             if(tonConnectUI.connected) {
                                 await tonConnectUI.disconnect();
