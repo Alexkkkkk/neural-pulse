@@ -16,7 +16,7 @@ import * as AdminJSSequelize from '@adminjs/sequelize';
 import { ComponentLoader } from 'adminjs';
 
 // Ядро данных (модели из db.js)
-import { sequelize, User, Task, GlobalStats, sessionStore, initDB } from './db.js';
+import { sequelize, User, Task, GlobalStats, sessionStore, initDB, Op } from './db.js';
 
 const logger = pino({ transport: { target: 'pino-pretty' } });
 const __filename = fileURLToPath(import.meta.url);
@@ -89,16 +89,21 @@ const executeMassiveCommit = async () => {
     
     try {
         await sequelize.transaction(async (t) => {
-            for (const [id, data] of snapshot) {
-                await User.update(
-                    { balance: data.balance, wallet: data.wallet }, 
-                    { where: { id: id.toString() }, transaction: t }
-                );
-            }
+            // Оптимизация: выполняем обновления параллельно внутри одной транзакции
+            await Promise.all(snapshot.map(([id, data]) => 
+                User.update(
+                    { balance: data.balance, wallet: data.wallet, last_seen: new Date() }, 
+                    { where: { id: id }, transaction: t }
+                )
+            ));
         });
         neuralLog(`Delta-Sync: ${snapshot.length} records committed.`, 'SUCCESS');
     } catch (e) {
         neuralLog(`🚨 SYNC ERROR: ${e.message}`, 'ERROR');
+        // Возвращаем данные в буфер, если запись не удалась
+        snapshot.forEach(([id, data]) => {
+            if (!updateBuffer.has(id)) updateBuffer.set(id, data);
+        });
     } finally {
         isSyncing = false;
     }
@@ -132,12 +137,11 @@ async function setupSupremeInterface(app) {
         }
     });
 
-    // API ДЛЯ УПРАВЛЕНИЯ ИЗ DASHBOARD V11.5
     app.post('/api/admin/system', express.json(), async (req, res) => {
         const { cmd, id, amount, msg } = req.body;
         try {
             if (cmd === 'SET_BALANCE') {
-                await User.update({ balance: amount }, { where: { id: id.toString() } });
+                await User.update({ balance: amount }, { where: { id: id } });
                 updateBuffer.delete(id.toString());
                 neuralLog(`[DASHBOARD] Manual balance sync for ${id}: ${amount}`, 'WARN');
                 return res.json({ success: true });
@@ -181,7 +185,7 @@ async function setupSupremeInterface(app) {
     app.use(adminJs.options.rootPath, adminRouter);
     await adminJs.initialize();
 
-    // --- REAL-TIME SSE STREAM (ДЛЯ ГРАФИКОВ) ---
+    // --- REAL-TIME SSE STREAM ---
     app.get('/api/admin/stream', (req, res) => {
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
@@ -207,7 +211,6 @@ async function setupSupremeInterface(app) {
         });
     });
 
-    // API для Mini App (Обновление баланса и кошелька)
     app.post('/api/save', async (req, res) => {
         const { id, balance, wallet } = req.body;
         if (!id) return res.status(400).send("ID_REQUIRED");
@@ -224,6 +227,7 @@ async function setupSupremeInterface(app) {
 function setupBot(botInstance) {
     botInstance.start(async (ctx) => {
         try {
+            // ПРИМЕЧАНИЕ: GlobalStats теперь обновляется хуком User.afterCreate в db.js
             const [user, created] = await User.findOrCreate({
                 where: { id: ctx.from.id.toString() },
                 defaults: { 
@@ -233,7 +237,6 @@ function setupBot(botInstance) {
             });
             
             if (created) {
-                await GlobalStats.increment('total_users', { where: { id: 1 } });
                 neuralLog(`New Agent Protocol: ${user.username}`, 'SUCCESS');
             }
 
@@ -267,7 +270,6 @@ async function startSupreme() {
         await setupSupremeInterface(app);
         setupBot(bot);
 
-        // Цикл пульсации (Real-time метрики каждые 3 сек)
         setInterval(async () => {
             const pulse = await core.generatePulse();
             if (pulse) core.emit('broadcast', pulse);
