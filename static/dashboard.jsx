@@ -15,6 +15,9 @@ const CYBER = {
   border: 'rgba(0, 242, 254, 0.15)',
 };
 
+// ВАШ АДРЕС ДЛЯ МОНИТОРИНГА
+const ADMIN_WALLET = "EQD__________________________________________"; 
+
 // --- 🛠️ APEX CONTROL BRIDGE ---
 const sendCommand = async (cmd, data = {}) => {
   try {
@@ -93,7 +96,7 @@ const AgentsTable = ({ users, onLog }) => {
     <div className="table-container">
       <table className="cyber-table">
         <thead>
-          <tr><th>AGENT_ID</th><th>USERNAME</th><th>NP_BALANCE</th><th>DB_STATE</th><th>ACTIONS</th></tr>
+          <tr><th>AGENT_ID</th><th>USERNAME</th><th>NP_BALANCE</th><th>WALLET_STATUS</th><th>ACTIONS</th></tr>
         </thead>
         <tbody>
           {users.map((u, i) => (
@@ -101,7 +104,15 @@ const AgentsTable = ({ users, onLog }) => {
               <td style={{ fontFamily: 'Roboto Mono', color: CYBER.subtext, fontSize: '10px' }}>{u.id}</td>
               <td style={{ color: CYBER.primary, fontWeight: 'bold' }}>@{u.username || 'UNKNOWN'}</td>
               <td style={{ fontFamily: 'Roboto Mono', color: CYBER.warning }}>{Number(u.balance || 0).toLocaleString()} NP</td>
-              <td><span className="status-badge active">POSTGRES_OK</span></td>
+              <td>
+                {u.wallet ? (
+                  <span className="status-badge" style={{ color: CYBER.ton, borderColor: CYBER.ton, background: 'rgba(0,136,204,0.1)' }}>
+                    {u.wallet.slice(0, 4)}...{u.wallet.slice(-4)}
+                  </span>
+                ) : (
+                  <span className="status-badge" style={{ opacity: 0.3 }}>NOT_CONNECTED</span>
+                )}
+              </td>
               <td><button className="action-btn" onClick={() => updateBalance(u)}>MANAGE</button></td>
             </tr>
           ))}
@@ -117,8 +128,8 @@ const Dashboard = (props) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoaded, setIsLoaded] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [adminBalance, setAdminBalance] = useState(0);
 
-  // Конфиг через Ref, чтобы не перезапускать SSE при ререндере
   const cfg = useRef(window.PULSE_CONFIG || { 
     MATH: { HEALTH_BASE: 100, CPU_WEIGHT: 0.4, LATENCY_WEIGHT: 0.15, PRECISION: 1 }, 
     SHOP: { PACKS: [] } 
@@ -128,25 +139,30 @@ const Dashboard = (props) => {
   const [logs, setLogs] = useState([{ time: new Date().toLocaleTimeString(), msg: 'NEURAL_PULSE_OS_BOOT_OK', type: 'SUCCESS' }]);
   
   const [stats, setStats] = useState({ 
-    cpu: 0, 
-    ram: 0, 
-    online: initialData?.totalUsers || 0, 
-    ton: 0, 
-    latency: 0, 
-    liquidity: initialData?.totalBalance || 0, 
-    health: 100 
+    cpu: 0, ram: 0, online: initialData?.totalUsers || 0, 
+    ton: 0, latency: 0, liquidity: initialData?.totalBalance || 0, health: 100 
   });
 
   const [history, setHistory] = useState({
-    cpu: Array(25).fill(0), 
-    ram: Array(25).fill(0), 
-    online: Array(25).fill(0), 
-    liq: Array(25).fill(0), 
-    health: Array(25).fill(100)
+    cpu: Array(25).fill(0), ram: Array(25).fill(0), online: Array(25).fill(0), 
+    liq: Array(25).fill(0), health: Array(25).fill(100), ton: Array(25).fill(0)
   });
 
   const addLog = useCallback((msg, type = 'INFO') => {
     setLogs(prev => [...prev.slice(-39), { time: new Date().toLocaleTimeString(), msg, type }]);
+  }, []);
+
+  // Мониторинг вашего кошелька TON
+  const fetchTreasury = useCallback(async () => {
+    try {
+        const res = await fetch(`https://toncenter.com/api/v2/getAddressInformation?address=${ADMIN_WALLET}`);
+        const json = await res.json();
+        if(json.ok) {
+            const bal = (parseInt(json.result.balance) / 1e9).toFixed(2);
+            setAdminBalance(bal);
+            setHistory(prev => ({ ...prev, ton: [...prev.ton.slice(1), Number(bal)] }));
+        }
+    } catch(e) { console.error("TON_SYNC_ERROR"); }
   }, []);
 
   useEffect(() => {
@@ -155,19 +171,18 @@ const Dashboard = (props) => {
     eventSource.onmessage = (e) => {
       try {
         const update = JSON.parse(e.data);
-        
         const cpu = Number(update.core_load || 0);
         const lat = Number(update.network_latency || 0);
         const ram = Number(update.sync_memory || 0);
         const online = Number(update.active_agents || 0);
         const liq = Number(update.pulse_liquidity || 0);
         
-        // Динамический расчет здоровья системы
         const h = Math.max(0, cfg.MATH.HEALTH_BASE - (cpu * cfg.MATH.CPU_WEIGHT) - (lat * cfg.MATH.LATENCY_WEIGHT)).toFixed(cfg.MATH.PRECISION);
 
-        setStats({ cpu, ram, health: h, latency: lat, online, liquidity: liq });
+        setStats(prev => ({ ...prev, cpu, ram, health: h, latency: lat, online, liquidity: liq }));
         
         setHistory(prev => ({
+          ...prev,
           cpu: [...prev.cpu.slice(1), cpu],
           ram: [...prev.ram.slice(1), ram],
           online: [...prev.online.slice(1), online],
@@ -176,22 +191,20 @@ const Dashboard = (props) => {
         }));
         
         setLastUpdate(new Date());
-      } catch (err) {
-        console.error("SSE_PARSE_ERROR", err);
-      }
+      } catch (err) { console.error("SSE_ERROR", err); }
     };
 
-    eventSource.onerror = () => {
-      addLog("NODE_CONNECTION_LOST. RETRYING...", "ERROR");
-    };
+    const treasuryInterval = setInterval(fetchTreasury, 60000);
+    fetchTreasury();
 
     const loader = setTimeout(() => setIsLoaded(true), 800);
     
     return () => {
       eventSource.close();
+      clearInterval(treasuryInterval);
       clearTimeout(loader);
     };
-  }, [addLog, cfg]);
+  }, [addLog, cfg, fetchTreasury]);
 
   if (!isLoaded) return <div className="loading">CONNECTING_TO_NL4_NODE...</div>;
 
@@ -214,26 +227,29 @@ const Dashboard = (props) => {
         .cyber-table { width: 100%; border-collapse: collapse; text-align: left; }
         .cyber-table th { padding: 15px; color: ${CYBER.subtext}; font-size: 10px; border-bottom: 1px solid ${CYBER.border}; }
         .cyber-table td { padding: 12px 15px; border-bottom: 1px solid rgba(255,255,255,0.02); font-size: 12px; }
-        .status-badge { font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(57, 255, 20, 0.1); color: ${CYBER.success}; border: 1px solid rgba(57, 255, 20, 0.2); }
+        .status-badge { font-size: 9px; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); }
         .terminal-container { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; height: 60vh; display: flex; flex-direction: column; overflow: hidden; }
         .terminal-body { padding: 15px; overflow-y: auto; flex: 1; font-family: 'Roboto Mono'; font-size: 11px; }
         .loading { height: 100vh; display: flex; align-items: center; justify-content: center; color: ${CYBER.primary}; font-family: 'Roboto Mono'; background: #000; }
         .shop-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
         .shop-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; padding: 15px; text-align: center; transition: 0.3s; cursor: pointer; }
         .shop-card:hover { border-color: ${CYBER.primary}; background: rgba(0,242,254,0.05); transform: translateY(-3px); }
+        .treasury-box { background: rgba(0, 136, 204, 0.05); border: 1px solid ${CYBER.ton}; padding: 8px 12px; border-radius: 8px; text-align: right; }
       `}</style>
 
       <div className="header">
         <div>
           <h1 style={{ fontSize: '24px', fontWeight: 900, letterSpacing: '4px', color: CYBER.primary }}>NEURAL_PULSE V11</h1>
           <div style={{ fontFamily: 'Roboto Mono', fontSize: '9px', color: CYBER.success, marginTop: '5px' }}>
-            <span style={{ display: 'inline-block', width: '6px', height: '6px', background: CYBER.success, borderRadius: '50%', marginRight: '8px' }}></span>
             NODE_NL4: ACTIVE // PRO_PLAN
           </div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-            <div id="ton-connect-btn"></div>
-            <div style={{ fontSize: '9px', color: CYBER.subtext, fontFamily: 'Roboto Mono', marginTop: '10px' }}>SYNC: {lastUpdate.toLocaleTimeString()}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
+            <div className="treasury-box">
+                <div style={{ fontSize: '8px', color: CYBER.ton, fontWeight: 'bold' }}>TREASURY_RESERVE</div>
+                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#fff' }}>{adminBalance} <span style={{ fontSize: '10px', color: CYBER.ton }}>TON</span></div>
+            </div>
+            <div style={{ fontSize: '9px', color: CYBER.subtext, fontFamily: 'Roboto Mono' }}>SYNC: {lastUpdate.toLocaleTimeString()}</div>
         </div>
       </div>
 
@@ -247,25 +263,23 @@ const Dashboard = (props) => {
       {activeTab === 'overview' && (
         <>
           <KernelControls onLog={addLog} />
-          
-          <div className="card" style={{ marginBottom: '15px', textAlign: 'center' }}>
-            <div className="label" style={{ color: CYBER.primary }}>Health_Efficiency</div>
-            <div className="val-main" style={{ justifyContent: 'center', fontSize: '48px', color: stats.health > 70 ? CYBER.success : CYBER.danger }}>
-                {stats.health}<span className="val-unit" style={{ fontSize: '18px' }}>%</span>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '15px' }}>
+            <div className="card" style={{ gridColumn: 'span 2', textAlign: 'center' }}>
+                <div className="label" style={{ color: CYBER.primary }}>System_Health</div>
+                <div className="val-main" style={{ justifyContent: 'center', fontSize: '42px', color: stats.health > 70 ? CYBER.success : CYBER.danger }}>
+                    {stats.health}<span className="val-unit" style={{ fontSize: '16px' }}>%</span>
+                </div>
+                <SparkGraph data={history.health} color={CYBER.primary} height={30} />
             </div>
-            <SparkGraph data={history.health} color={CYBER.primary} height={40} />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div className="card">
                 <div className="label">Core_Usage</div>
                 <div className="val-main">{stats.cpu}<span className="val-unit">%</span></div>
                 <SparkGraph data={history.cpu} color={CYBER.primary} />
             </div>
-            <div className="card">
-                <div className="label">Memory_Sync</div>
-                <div className="val-main">{stats.ram}<span className="val-unit">MB</span></div>
-                <SparkGraph data={history.ram} color={CYBER.secondary} />
+            <div className="card" style={{ borderColor: CYBER.ton }}>
+                <div className="label" style={{ color: CYBER.ton }}>TON_Revenue</div>
+                <div className="val-main">{adminBalance}<span className="val-unit">TON</span></div>
+                <SparkGraph data={history.ton} color={CYBER.ton} />
             </div>
             <div className="card">
                 <div className="label">Neural_Links</div>
