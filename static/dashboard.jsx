@@ -158,7 +158,7 @@ const Dashboard = (props) => {
 
   // --- ИНИЦИАЛИЗАЦИЯ TON CONNECT ---
   useEffect(() => {
-    if (window.TonConnectUI) {
+    if (window.TonConnectUI && !tonConnectUI.current) {
       tonConnectUI.current = new window.TonConnectUI.TonConnectUI({
         manifestUrl: `https://${window.location.host}/tonconnect-manifest.json`,
         buttonRootId: 'ton-connect-btn'
@@ -177,10 +177,14 @@ const Dashboard = (props) => {
   }, [addLog]);
 
   const handleConnect = async () => {
-    if (tonConnectUI.current) {
-      await tonConnectUI.current.openModal();
-    } else {
-      addLog('TON_SDK_NOT_READY', 'ERROR');
+    try {
+        if (tonConnectUI.current) {
+            await tonConnectUI.current.openModal();
+        } else {
+            addLog('TON_SDK_NOT_READY', 'ERROR');
+        }
+    } catch (err) {
+        addLog('CONNECT_ABORTED', 'WARNING');
     }
   };
 
@@ -266,8 +270,8 @@ const Dashboard = (props) => {
         .shop-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
         .shop-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; padding: 15px; text-align: center; transition: 0.3s; cursor: pointer; }
         .shop-card:hover { border-color: ${CYBER.primary}; background: rgba(0,242,254,0.05); transform: translateY(-3px); }
-        .treasury-box { background: rgba(0, 136, 204, 0.05); border: 1px solid ${CYBER.ton}; padding: 8px 12px; border-radius: 8px; text-align: right; }
-        .ton-connect-btn-styled { background: ${CYBER.ton}; border: none; color: #fff; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 11px; transition: 0.3s; border: 1px solid transparent; }
+        .treasury-box { background: rgba(0, 136, 204, 0.05); border: 1px solid ${CYBER.ton}; padding: 8px 12px; border-radius: 8px; text-align: right; min-width: 140px; }
+        .ton-connect-btn-styled { background: ${CYBER.ton}; border: none; color: #fff; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 11px; transition: 0.3s; border: 1px solid transparent; width: 100%; }
         .ton-connect-btn-styled:hover { filter: brightness(1.2); border-color: ${CYBER.primary}; }
       `}</style>
 
@@ -283,7 +287,7 @@ const Dashboard = (props) => {
                 {userWallet ? (
                   <>
                     <div style={{ fontSize: '8px', color: CYBER.ton, fontWeight: 'bold' }}>AGENT_WALLET_ACTIVE</div>
-                    <div style={{ fontSize: '12px', fontWeight: 'bold', color: CYBER.primary, fontFamily: 'Roboto Mono' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 'bold', color: CYBER.primary, fontFamily: 'Roboto Mono' }}>
                       {userWallet.slice(0, 6)}...{userWallet.slice(-4)}
                     </div>
                   </>
@@ -317,21 +321,18 @@ const Dashboard = (props) => {
                 <SparkGraph data={history.health} color={CYBER.primary} height={35} />
             </div>
 
-            {/* ПРОЦЕССОР */}
             <div className="card">
                 <div className="label">Core_Usage</div>
                 <div className="val-main">{stats.cpu}<span className="val-unit">%</span></div>
                 <SparkGraph data={history.cpu} color={CYBER.primary} />
             </div>
 
-            {/* ПАМЯТЬ */}
             <div className="card">
                 <div className="label">Ram_Memory</div>
                 <div className="val-main">{stats.ram}<span className="val-unit">MB</span></div>
                 <SparkGraph data={history.ram} color={CYBER.secondary} />
             </div>
 
-            {/* ЗАДЕРЖКА */}
             <div className="card">
                 <div className="label">Net_Latency</div>
                 <div className="val-main" style={{ color: stats.latency > 150 ? CYBER.danger : CYBER.text }}>
@@ -340,21 +341,18 @@ const Dashboard = (props) => {
                 <SparkGraph data={history.latency} color={CYBER.danger} />
             </div>
 
-            {/* ПРИБЫЛЬ (Отображаем баланс админа) */}
             <div className="card" style={{ borderColor: CYBER.ton }}>
                 <div className="label" style={{ color: CYBER.ton }}>TON_Revenue</div>
                 <div className="val-main">{adminBalance}<span className="val-unit">TON</span></div>
                 <SparkGraph data={history.ton} color={CYBER.ton} />
             </div>
 
-            {/* ОНЛАЙН */}
             <div className="card">
                 <div className="label">Neural_Links</div>
                 <div className="val-main">{stats.online}<span className="val-unit">ID</span></div>
                 <SparkGraph data={history.online} color={CYBER.success} />
             </div>
 
-            {/* ЛИКВИДНОСТЬ */}
             <div className="card">
                 <div className="label">Liquidity</div>
                 <div className="val-main">{Number(stats.liquidity).toLocaleString()}<span className="val-unit">$NP</span></div>
@@ -399,7 +397,6 @@ const Dashboard = (props) => {
         </div>
       )}
 
-      {/* Скрытый узел для стандартной кнопки UI (нужен для работы SDK) */}
       <div id="ton-connect-btn" style={{ display: 'none' }}></div>
 
       <footer style={{ marginTop: '30px', textAlign: 'center', opacity: 0.2, fontSize: '8px', fontFamily: 'Roboto Mono' }}>
