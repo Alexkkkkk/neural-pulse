@@ -215,10 +215,13 @@
         tg.enableClosingConfirmation();
 
         // --- TON SDK Initialization ---
-        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
-            buttonRootId: null
-        });
+        let tonConnectUI;
+        try {
+            tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+                manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
+                buttonRootId: null
+            });
+        } catch(e) { console.error("TON Connect init error", e); }
 
         const game = {
             data: { 
@@ -244,14 +247,16 @@
                 const u = tg.initDataUnsafe.user || { id: 12345, first_name: 'Local', username: 'user' };
                 this.data.id = String(u.id);
 
-                tonConnectUI.onStatusChange(w => {
-                    this.data.wallet = w ? w.account.address : null;
-                    const btnLabel = document.getElementById('wallet-btn-label');
-                    if(btnLabel) btnLabel.innerText = w ? "✅" : "👛";
-                    this.hasUnsavedChanges = true;
-                    this.save(true);
-                    if(ui.currentModal === 'wallet') ui.openM('wallet');
-                });
+                if(tonConnectUI) {
+                    tonConnectUI.onStatusChange(w => {
+                        this.data.wallet = w ? w.account.address : null;
+                        const btnLabel = document.getElementById('wallet-btn-label');
+                        if(btnLabel) btnLabel.innerText = w ? "✅" : "👛";
+                        this.hasUnsavedChanges = true;
+                        this.save(true);
+                        if(ui.currentModal === 'wallet') ui.openM('wallet');
+                    });
+                }
 
                 try {
                     const r = await fetch(`/api/user/${this.data.id}?username=${encodeURIComponent(u.username || u.first_name)}`, {
@@ -493,8 +498,8 @@
                         <button id="custom-ton-btn" class="wallet-connect-btn ${isConnected ? 'connected' : ''}">${isConnected ? 'DISCONNECT' : 'CONNECT TON'}</button>`;
                     
                     document.getElementById('custom-ton-btn').onclick = async () => {
+                        if(!tonConnectUI) return tg.showAlert("TON SDK not ready.");
                         try {
-                            await tonConnectUI.connectionRestored; 
                             if(tonConnectUI.connected) {
                                 await tonConnectUI.disconnect();
                             } else {
@@ -502,7 +507,7 @@
                             }
                         } catch(e) {
                             console.error("Wallet Action Error:", e);
-                            tg.showAlert("Wallet SDK is busy. Try again.");
+                            tg.showAlert("Wallet action failed.");
                         }
                     };
                 } else if(type === 'tasks') {
