@@ -1,6 +1,6 @@
 import React, { useState, useEffect, memo, useCallback, useRef } from 'react';
 
-// --- 🌌 ЦВЕТОВАЯ ПАЛИТРА (CYBER V11.6) ---
+// --- 🌌 ЦВЕТОВАЯ ПАЛИТРА (CYBER V11.7) ---
 const CYBER = {
   bg: '#000000',
   card: '#0a0d14',
@@ -15,10 +15,8 @@ const CYBER = {
   border: 'rgba(0, 242, 254, 0.15)',
 };
 
-// ВАШ АДРЕС ДЛЯ МОНИТОРИНГА
 const ADMIN_WALLET = "EQD__________________________________________"; 
 
-// --- 🛠️ APEX CONTROL BRIDGE ---
 const sendCommand = async (cmd, data = {}) => {
   try {
     const res = await fetch('/api/admin/system', {
@@ -30,7 +28,6 @@ const sendCommand = async (cmd, data = {}) => {
   } catch (e) { return { success: false }; }
 };
 
-// --- 📈 НЕОНОВЫЙ ГРАФИК ---
 const SparkGraph = memo(({ data, color, height = 45 }) => {
   if (!data || data.length < 2) return <div style={{ height }} />;
   const max = Math.max(...data, 1);
@@ -60,7 +57,6 @@ const SparkGraph = memo(({ data, color, height = 45 }) => {
   );
 });
 
-// --- 🕹️ ПАНЕЛЬ УПРАВЛЕНИЯ ЯДРОМ ---
 const KernelControls = ({ onLog }) => {
   const execute = async (cmd, label) => {
     onLog(`INITIATING_${label}...`, 'INFO');
@@ -70,9 +66,9 @@ const KernelControls = ({ onLog }) => {
   };
 
   return (
-    <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+    <div className="controls-container">
       <button className="cmd-btn" onClick={() => execute('RESTART', 'NODE_REBOOT')}>🔄 RESTART</button>
-      <button className="cmd-btn" onClick={() => execute('CLEAR_CACHE', 'MEM_CLEAN')}>🧹 PURGE_CACHE</button>
+      <button className="cmd-btn" onClick={() => execute('CLEAR_CACHE', 'MEM_CLEAN')}>🧹 PURGE</button>
       <button className="cmd-btn" onClick={() => {
         const msg = prompt("SEND GLOBAL BROADCAST:");
         if(msg) sendCommand('BROADCAST', { msg }).then(() => onLog('BROADCAST_SENT', 'SUCCESS'));
@@ -81,7 +77,6 @@ const KernelControls = ({ onLog }) => {
   );
 };
 
-// --- 🗄️ ТАБЛИЦА С ПОЛНЫМ УПРАВЛЕНИЕМ ---
 const AgentsTable = ({ users, onLog }) => {
   const updateBalance = async (user) => {
     const amount = prompt(`EDIT NP_BALANCE FOR @${user.username}:`, user.balance);
@@ -93,27 +88,25 @@ const AgentsTable = ({ users, onLog }) => {
   };
 
   return (
-    <div className="table-container">
+    <div className="table-responsive">
       <table className="cyber-table">
         <thead>
-          <tr><th>AGENT_ID</th><th>USERNAME</th><th>NP_BALANCE</th><th>WALLET_STATUS</th><th>ACTIONS</th></tr>
+          <tr><th>AGENT</th><th>BALANCE</th><th>WALLET</th><th>ACTION</th></tr>
         </thead>
         <tbody>
           {users.map((u, i) => (
             <tr key={u.id || i}>
-              <td style={{ fontFamily: 'Roboto Mono', color: CYBER.subtext, fontSize: '10px' }}>{u.id}</td>
-              <td style={{ color: CYBER.primary, fontWeight: 'bold' }}>@{u.username || 'UNKNOWN'}</td>
-              <td style={{ fontFamily: 'Roboto Mono', color: CYBER.warning }}>{Number(u.balance || 0).toLocaleString()} NP</td>
+              <td>
+                <div style={{ color: CYBER.primary, fontWeight: 'bold' }}>@{u.username || '???'}</div>
+                <div style={{ fontSize: '8px', color: CYBER.subtext }}>ID:{u.id}</div>
+              </td>
+              <td style={{ fontFamily: 'Roboto Mono', color: CYBER.warning }}>{Number(u.balance || 0).toLocaleString()}</td>
               <td>
                 {u.wallet ? (
-                  <span className="status-badge" style={{ color: CYBER.ton, borderColor: CYBER.ton, background: 'rgba(0,136,204,0.1)' }}>
-                    {u.wallet.slice(0, 4)}...{u.wallet.slice(-4)}
-                  </span>
-                ) : (
-                  <span className="status-badge" style={{ opacity: 0.3 }}>NOT_CONNECTED</span>
-                )}
+                  <span className="status-badge" style={{ color: CYBER.ton }}>{u.wallet.slice(0, 4)}...</span>
+                ) : <span style={{ opacity: 0.3 }}>-</span>}
               </td>
-              <td><button className="action-btn" onClick={() => updateBalance(u)}>MANAGE</button></td>
+              <td><button className="action-btn" onClick={() => updateBalance(u)}>SET</button></td>
             </tr>
           ))}
         </tbody>
@@ -122,7 +115,6 @@ const AgentsTable = ({ users, onLog }) => {
   );
 };
 
-// --- 🚀 ГЛАВНЫЙ ДАШБОРД (APEX V11.6) ---
 const Dashboard = (props) => {
   const { data: initialData } = props;
   const [activeTab, setActiveTab] = useState('overview');
@@ -136,7 +128,7 @@ const Dashboard = (props) => {
   }).current;
 
   const [users] = useState(initialData?.usersList || []);
-  const [logs, setLogs] = useState([{ time: new Date().toLocaleTimeString(), msg: 'NEURAL_PULSE_OS_BOOT_OK', type: 'SUCCESS' }]);
+  const [logs, setLogs] = useState([{ time: new Date().toLocaleTimeString(), msg: 'SYSTEM_BOOT_COMPLETE', type: 'SUCCESS' }]);
   
   const [stats, setStats] = useState({ 
     cpu: 0, ram: 0, online: initialData?.totalUsers || 0, 
@@ -144,13 +136,13 @@ const Dashboard = (props) => {
   });
 
   const [history, setHistory] = useState({
-    cpu: Array(25).fill(0), ram: Array(25).fill(0), online: Array(25).fill(0), 
-    liq: Array(25).fill(0), health: Array(25).fill(100), ton: Array(25).fill(0), 
-    latency: Array(25).fill(0)
+    cpu: Array(20).fill(0), ram: Array(20).fill(0), online: Array(20).fill(0), 
+    liq: Array(20).fill(0), health: Array(20).fill(100), ton: Array(20).fill(0), 
+    latency: Array(20).fill(0)
   });
 
   const addLog = useCallback((msg, type = 'INFO') => {
-    setLogs(prev => [...prev.slice(-39), { time: new Date().toLocaleTimeString(), msg, type }]);
+    setLogs(prev => [...prev.slice(-25), { time: new Date().toLocaleTimeString(), msg, type }]);
   }, []);
 
   const fetchTreasury = useCallback(async () => {
@@ -162,12 +154,11 @@ const Dashboard = (props) => {
             setAdminBalance(bal);
             setHistory(prev => ({ ...prev, ton: [...prev.ton.slice(1), Number(bal)] }));
         }
-    } catch(e) { console.error("TON_SYNC_ERROR"); }
+    } catch(e) { console.error("TON_SYNC_ERR"); }
   }, []);
 
   useEffect(() => {
     const eventSource = new EventSource('/api/admin/stream');
-    
     eventSource.onmessage = (e) => {
       try {
         const update = JSON.parse(e.data);
@@ -176,150 +167,139 @@ const Dashboard = (props) => {
         const ram = Number(update.sync_memory || 0);
         const online = Number(update.active_agents || 0);
         const liq = Number(update.pulse_liquidity || 0);
-        
         const h = Math.max(0, cfg.MATH.HEALTH_BASE - (cpu * cfg.MATH.CPU_WEIGHT) - (lat * cfg.MATH.LATENCY_WEIGHT)).toFixed(cfg.MATH.PRECISION);
 
-        setStats(prev => ({ ...prev, cpu, ram, health: h, latency: lat, online, liquidity: liq }));
-        
+        setStats({ cpu, ram, health: h, latency: lat, online, liquidity: liq });
         setHistory(prev => ({
-          ...prev,
           cpu: [...prev.cpu.slice(1), cpu],
           ram: [...prev.ram.slice(1), ram],
           online: [...prev.online.slice(1), online],
           liq: [...prev.liq.slice(1), liq],
           health: [...prev.health.slice(1), Number(h)],
-          latency: [...prev.latency.slice(1), lat]
+          latency: [...prev.latency.slice(1), lat],
+          ton: prev.ton
         }));
-        
         setLastUpdate(new Date());
-      } catch (err) { console.error("SSE_ERROR", err); }
+      } catch (err) {}
     };
 
     const treasuryInterval = setInterval(fetchTreasury, 60000);
     fetchTreasury();
+    setTimeout(() => setIsLoaded(true), 600);
+    return () => { eventSource.close(); clearInterval(treasuryInterval); };
+  }, [fetchTreasury, cfg]);
 
-    const loader = setTimeout(() => setIsLoaded(true), 800);
-    
-    return () => {
-      eventSource.close();
-      clearInterval(treasuryInterval);
-      clearTimeout(loader);
-    };
-  }, [addLog, cfg, fetchTreasury]);
-
-  if (!isLoaded) return <div className="loading">CONNECTING_TO_NL4_NODE...</div>;
+  if (!isLoaded) return <div className="loading">SYNCING_NL4...</div>;
 
   return (
     <div className="app-root">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Roboto+Mono&display=swap');
-        .app-root { background: #000; min-height: 100vh; padding: 20px; font-family: 'Inter', sans-serif; color: #fff; max-width: 800px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: flex-start; }
-        .nav-tabs { display: flex; gap: 20px; margin: 20px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .tab-btn { background: none; border: none; color: #4a5568; padding: 10px 0; font-size: 11px; cursor: pointer; font-family: 'Roboto Mono'; font-weight: bold; text-transform: uppercase; transition: 0.3s; }
-        .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; text-shadow: 0 0 10px ${CYBER.primary}88; }
-        .cmd-btn { background: rgba(0,242,254,0.05); border: 1px solid ${CYBER.border}; color: ${CYBER.primary}; font-size: 9px; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-family: 'Roboto Mono'; font-weight: bold; }
-        .action-btn { background: transparent; border: 1px solid ${CYBER.primary}; color: ${CYBER.primary}; font-size: 9px; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-family: 'Roboto Mono'; }
-        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; border-radius: 12px; position: relative; overflow: hidden; }
-        .label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; color: ${CYBER.subtext}; }
-        .val-main { font-size: 28px; font-weight: 700; display: flex; align-items: baseline; font-family: 'Roboto Mono'; }
-        .val-unit { font-size: 10px; color: #4a5568; margin-left: 6px; }
-        .table-container { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; overflow: hidden; }
-        .cyber-table { width: 100%; border-collapse: collapse; text-align: left; }
-        .cyber-table th { padding: 15px; color: ${CYBER.subtext}; font-size: 10px; border-bottom: 1px solid ${CYBER.border}; }
-        .cyber-table td { padding: 12px 15px; border-bottom: 1px solid rgba(255,255,255,0.02); font-size: 12px; }
-        .status-badge { font-size: 9px; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); }
-        .terminal-container { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; height: 60vh; display: flex; flex-direction: column; overflow: hidden; }
-        .terminal-body { padding: 15px; overflow-y: auto; flex: 1; font-family: 'Roboto Mono'; font-size: 11px; }
-        .loading { height: 100vh; display: flex; align-items: center; justify-content: center; color: ${CYBER.primary}; font-family: 'Roboto Mono'; background: #000; }
-        .shop-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
-        .shop-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; padding: 15px; text-align: center; transition: 0.3s; cursor: pointer; }
-        .shop-card:hover { border-color: ${CYBER.primary}; background: rgba(0,242,254,0.05); transform: translateY(-3px); }
-        .treasury-box { background: rgba(0, 136, 204, 0.05); border: 1px solid ${CYBER.ton}; padding: 8px 12px; border-radius: 8px; text-align: right; }
+        
+        * { box-sizing: border-box; }
+        .app-root { background: #000; min-height: 100vh; padding: 15px; font-family: 'Inter', sans-serif; color: #fff; max-width: 900px; margin: 0 auto; }
+        
+        /* HEADER RESPONSIVE */
+        .header { display: flex; flex-direction: row; justify-content: space-between; align-items: flex-start; gap: 15px; margin-bottom: 25px; }
+        @media (max-width: 600px) {
+          .header { flex-direction: column; align-items: center; text-align: center; }
+          .treasury-box { width: 100%; text-align: center !important; }
+        }
+
+        .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.05); overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 5px; }
+        .tab-btn { background: none; border: none; color: #4a5568; padding: 10px 12px; font-size: 10px; cursor: pointer; font-family: 'Roboto Mono'; font-weight: bold; text-transform: uppercase; white-space: nowrap; }
+        .tab-btn.active { color: ${CYBER.primary}; border-bottom: 2px solid ${CYBER.primary}; }
+
+        /* GRID SYSTEM (Responsive) */
+        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        @media (min-width: 768px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 480px) { .stats-grid { grid-template-columns: 1fr; } }
+
+        .card { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; padding: 15px; border-radius: 12px; position: relative; }
+        .card-wide { grid-column: 1 / -1; }
+
+        .controls-container { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+        
+        .cmd-btn { background: rgba(0,242,254,0.05); border: 1px solid ${CYBER.border}; color: ${CYBER.primary}; font-size: 10px; padding: 12px; border-radius: 8px; cursor: pointer; font-family: 'Roboto Mono'; flex: 1; min-width: 100px; }
+        .action-btn { background: transparent; border: 1px solid ${CYBER.primary}; color: ${CYBER.primary}; font-size: 10px; padding: 6px 10px; border-radius: 4px; cursor: pointer; }
+        
+        .label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.2px; color: ${CYBER.subtext}; margin-bottom: 6px; }
+        .val-main { font-size: 26px; font-weight: 700; font-family: 'Roboto Mono'; line-height: 1; }
+        .val-unit { font-size: 11px; color: #4a5568; margin-left: 4px; }
+
+        .table-responsive { width: 100%; overflow-x: auto; background: ${CYBER.card}; border-radius: 12px; border: 1px solid ${CYBER.border}; }
+        .cyber-table { width: 100%; border-collapse: collapse; min-width: 500px; }
+        .cyber-table th { padding: 15px; color: ${CYBER.subtext}; font-size: 10px; text-align: left; border-bottom: 1px solid ${CYBER.border}; }
+        .cyber-table td { padding: 15px; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.02); }
+
+        .terminal-box { background: ${CYBER.card}; border: 1px solid ${CYBER.border}; border-radius: 12px; height: 55vh; overflow-y: auto; padding: 15px; font-family: 'Roboto Mono'; font-size: 11px; line-height: 1.5; }
+        .loading { height: 100vh; display: flex; align-items: center; justify-content: center; color: ${CYBER.primary}; background: #000; font-family: 'Roboto Mono'; font-size: 14px; }
+        
+        .treasury-box { background: rgba(0, 136, 204, 0.05); border: 1px solid ${CYBER.ton}; padding: 10px 15px; border-radius: 10px; text-align: right; }
       `}</style>
 
-      <div className="header">
+      <header className="header">
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 900, letterSpacing: '4px', color: CYBER.primary }}>NEURAL_PULSE V11</h1>
-          <div style={{ fontFamily: 'Roboto Mono', fontSize: '9px', color: CYBER.success, marginTop: '5px' }}>
-            NODE_NL4: ACTIVE // PRO_PLAN
+          <h1 style={{ fontSize: '22px', fontWeight: 900, letterSpacing: '3px', color: CYBER.primary, margin: 0 }}>NEURAL_PULSE V11</h1>
+          <div style={{ fontFamily: 'Roboto Mono', fontSize: '10px', color: CYBER.success, marginTop: '4px' }}>
+            NODE_NL4 // STATUS: ACTIVE
           </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
-            <div className="treasury-box">
-                <div style={{ fontSize: '8px', color: CYBER.ton, fontWeight: 'bold' }}>TREASURY_RESERVE</div>
-                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#fff' }}>{adminBalance} <span style={{ fontSize: '10px', color: CYBER.ton }}>TON</span></div>
-            </div>
-            <div style={{ fontSize: '9px', color: CYBER.subtext, fontFamily: 'Roboto Mono' }}>SYNC: {lastUpdate.toLocaleTimeString()}</div>
+        <div className="treasury-box">
+          <div style={{ fontSize: '9px', color: CYBER.ton, fontWeight: 'bold' }}>TREASURY_RESERVE</div>
+          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#fff' }}>{adminBalance} <span style={{ fontSize: '12px', color: CYBER.ton }}>TON</span></div>
         </div>
-      </div>
+      </header>
 
-      <div className="nav-tabs">
-        <button className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>MONITOR</button>
-        <button className={`tab-btn ${activeTab === 'agents' ? 'active' : ''}`} onClick={() => setActiveTab('agents')}>AGENTS_DB</button>
-        <button className={`tab-btn ${activeTab === 'shop' ? 'active' : ''}`} onClick={() => setActiveTab('shop')}>PURCHASE</button>
-        <button className={`tab-btn ${activeTab === 'logs' ? 'active' : ''}`} onClick={() => setActiveTab('logs')}>TERMINAL</button>
-      </div>
+      <nav className="nav-tabs">
+        {['overview', 'agents', 'shop', 'logs'].map(tab => (
+          <button key={tab} className={`tab-btn ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>
+            {tab === 'overview' ? 'Monitor' : tab === 'agents' ? 'Database' : tab.toUpperCase()}
+          </button>
+        ))}
+      </nav>
 
       {activeTab === 'overview' && (
         <>
           <KernelControls onLog={addLog} />
-          
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '15px' }}>
-            
-            {/* ГЛАВНЫЙ ГРАФИК ЗДОРОВЬЯ */}
-            <div className="card" style={{ gridColumn: 'span 2', textAlign: 'center' }}>
-                <div className="label" style={{ color: CYBER.primary }}>System_Health</div>
-                <div className="val-main" style={{ justifyContent: 'center', fontSize: '42px', color: stats.health > 70 ? CYBER.success : CYBER.danger }}>
-                    {stats.health}<span className="val-unit" style={{ fontSize: '16px' }}>%</span>
-                </div>
-                <SparkGraph data={history.health} color={CYBER.primary} height={35} />
+          <div className="stats-grid">
+            <div className="card card-wide" style={{ textAlign: 'center' }}>
+              <div className="label" style={{ color: CYBER.primary }}>System_Integrity</div>
+              <div className="val-main" style={{ color: stats.health > 75 ? CYBER.success : CYBER.danger, fontSize: '40px' }}>{stats.health}%</div>
+              <SparkGraph data={history.health} color={CYBER.primary} height={35} />
             </div>
 
-            {/* ПРОЦЕССОР */}
             <div className="card">
-                <div className="label">Core_Usage</div>
-                <div className="val-main">{stats.cpu}<span className="val-unit">%</span></div>
-                <SparkGraph data={history.cpu} color={CYBER.primary} />
+              <div className="label">Core_Usage</div>
+              <div className="val-main">{stats.cpu}<span className="val-unit">%</span></div>
+              <SparkGraph data={history.cpu} color={CYBER.primary} />
             </div>
 
-            {/* ПАМЯТЬ (НОВОЕ) */}
             <div className="card">
-                <div className="label">Ram_Memory</div>
-                <div className="val-main">{stats.ram}<span className="val-unit">MB</span></div>
-                <SparkGraph data={history.ram} color={CYBER.secondary} />
+              <div className="label">Memory</div>
+              <div className="val-main">{stats.ram}<span className="val-unit">MB</span></div>
+              <SparkGraph data={history.ram} color={CYBER.secondary} />
             </div>
 
-            {/* ЗАДЕРЖКА (НОВОЕ) */}
             <div className="card">
-                <div className="label">Net_Latency</div>
-                <div className="val-main" style={{ color: stats.latency > 150 ? CYBER.danger : CYBER.text }}>
-                  {stats.latency}<span className="val-unit">ms</span>
-                </div>
-                <SparkGraph data={history.latency} color={CYBER.danger} />
+              <div className="label">Net_Delay</div>
+              <div className="val-main" style={{ color: stats.latency > 150 ? CYBER.danger : CYBER.text }}>
+                {stats.latency}<span className="val-unit">ms</span>
+              </div>
+              <SparkGraph data={history.latency} color={CYBER.danger} />
             </div>
 
-            {/* ПРИБЫЛЬ */}
-            <div className="card" style={{ borderColor: CYBER.ton }}>
-                <div className="label" style={{ color: CYBER.ton }}>TON_Revenue</div>
-                <div className="val-main">{adminBalance}<span className="val-unit">TON</span></div>
-                <SparkGraph data={history.ton} color={CYBER.ton} />
-            </div>
-
-            {/* ОНЛАЙН */}
             <div className="card">
-                <div className="label">Neural_Links</div>
-                <div className="val-main">{stats.online}<span className="val-unit">ID</span></div>
-                <SparkGraph data={history.online} color={CYBER.success} />
+              <div className="label">Active_Links</div>
+              <div className="val-main">{stats.online}</div>
+              <SparkGraph data={history.online} color={CYBER.success} />
             </div>
 
-            {/* ЛИКВИДНОСТЬ */}
             <div className="card">
-                <div className="label">Liquidity</div>
-                <div className="val-main">{Number(stats.liquidity).toLocaleString()}<span className="val-unit">$NP</span></div>
-                <SparkGraph data={history.liq} color={CYBER.warning} />
+              <div className="label">NP_Liquidity</div>
+              <div className="val-main">{Math.floor(stats.liquidity/1000)}k</div>
+              <SparkGraph data={history.liq} color={CYBER.warning} />
             </div>
-
           </div>
         </>
       )}
@@ -328,38 +308,35 @@ const Dashboard = (props) => {
 
       {activeTab === 'shop' && (
         <div className="card">
-          <div className="label" style={{ marginBottom: '20px' }}>Neural_Pulse_Marketplace</div>
-          <div className="shop-grid">
+          <div className="label" style={{ marginBottom: '20px' }}>Market_Matrix</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
             {(cfg.SHOP?.PACKS || []).map(pack => (
-              <div key={pack.id} className="shop-card">
-                <div style={{ color: pack.color, fontWeight: '900', fontSize: '12px', marginBottom: '10px' }}>{pack.name}</div>
-                <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{pack.credits}</div>
-                <div style={{ fontSize: '9px', opacity: 0.5, marginBottom: '15px' }}>$NP_CREDITS</div>
-                <div style={{ background: CYBER.ton, color: '#fff', fontSize: '10px', padding: '6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                    {pack.price} TON
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      
-      {activeTab === 'logs' && (
-        <div className="terminal-container">
-          <div className="terminal-body">
-            {logs.map((log, i) => (
-              <div key={i} style={{ marginBottom: '4px', display: 'flex', gap: '10px' }}>
-                <span style={{ color: CYBER.subtext }}>[{log.time}]</span>
-                <span style={{ color: log.type === 'ERROR' ? CYBER.danger : (log.type === 'SUCCESS' ? CYBER.success : CYBER.primary) }}>{log.type === 'SUCCESS' ? '>>' : '>'}</span>
-                <span style={{ color: log.type === 'ERROR' ? CYBER.danger : (log.type === 'SUCCESS' ? CYBER.success : CYBER.text) }}>{log.msg}</span>
+              <div key={pack.id} style={{ background: 'rgba(255,255,255,0.03)', padding: '15px', borderRadius: '10px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ color: pack.color, fontWeight: '900', fontSize: '12px' }}>{pack.name}</div>
+                <div style={{ fontSize: '22px', fontWeight: 'bold', margin: '10px 0' }}>{pack.credits}</div>
+                <div style={{ background: CYBER.ton, color: '#fff', fontSize: '10px', padding: '6px', borderRadius: '5px', fontWeight: 'bold' }}>{pack.price} TON</div>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      <footer style={{ marginTop: '30px', textAlign: 'center', opacity: 0.2, fontSize: '8px', fontFamily: 'Roboto Mono' }}>
-        APEX_MONITOR_NL4 // BUILD_2026_04 // ROOT_ID: 1774594734
+      {activeTab === 'logs' && (
+        <div className="terminal-box">
+          {logs.map((log, i) => (
+            <div key={i} style={{ marginBottom: '6px', display: 'flex', gap: '8px' }}>
+              <span style={{ color: CYBER.subtext }}>[{log.time}]</span>
+              <span style={{ color: log.type === 'ERROR' ? CYBER.danger : log.type === 'SUCCESS' ? CYBER.success : CYBER.primary }}>
+                {log.type === 'SUCCESS' ? '>>' : '>'}
+              </span>
+              <span style={{ color: log.type === 'ERROR' ? CYBER.danger : CYBER.text }}>{log.msg}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <footer style={{ marginTop: '25px', textAlign: 'center', opacity: 0.3, fontSize: '9px', fontFamily: 'Roboto Mono' }}>
+        PULSE_MONITOR_NL4 // BUILD_2026_04 // SYNC: {lastUpdate.toLocaleTimeString()}
       </footer>
     </div>
   );
