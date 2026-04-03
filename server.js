@@ -7,7 +7,6 @@ import helmet from 'helmet';
 import compression from 'compression';
 import EventEmitter from 'events'; 
 import os from 'os';
-import crypto from 'crypto';
 import pino from 'pino';
 
 // --- 🏛️ ADMINJS & CORE IMPORTS ---
@@ -17,7 +16,7 @@ import * as AdminJSSequelize from '@adminjs/sequelize';
 import { ComponentLoader } from 'adminjs';
 
 // Ядро данных (модели из db.js)
-import { sequelize, User, Task, Stats, GlobalStats, sessionStore, initDB } from './db.js';
+import { sequelize, User, Task, GlobalStats, sessionStore, initDB } from './db.js';
 
 const logger = pino({ transport: { target: 'pino-pretty' } });
 const __filename = fileURLToPath(import.meta.url);
@@ -30,7 +29,7 @@ const componentLoader = new ComponentLoader();
 class GodCore extends EventEmitter {
     constructor() {
         super();
-        this.setMaxListeners(0); // Снимаем лимит для множества вкладок админки
+        this.setMaxListeners(0); 
         this.cache = { gs: null, lastUpdate: 0 };
     }
     
@@ -38,7 +37,6 @@ class GodCore extends EventEmitter {
         try {
             const memory = process.memoryUsage();
             
-            // Обновляем глобальную статистику раз в 5 секунд для экономии ресурсов
             if (!this.cache.gs || Date.now() - this.cache.lastUpdate > 5000) {
                 this.cache.gs = await GlobalStats.findByPk(1);
                 this.cache.lastUpdate = Date.now();
@@ -74,7 +72,6 @@ const neuralLog = (msg, type = 'INFO') => {
 const BOT_TOKEN = process.env.BOT_TOKEN || "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
 const DOMAIN = "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
-const SECRET_SALT = process.env.SECRET_SALT || "ULTRA_SECRET_PULSE_2026_VOID";
 const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
 
 const bot = new Telegraf(BOT_TOKEN);
@@ -94,17 +91,14 @@ const executeMassiveCommit = async () => {
         await sequelize.transaction(async (t) => {
             for (const [id, data] of snapshot) {
                 await User.update(
-                    { balance: data.balance }, 
+                    { balance: data.balance, wallet: data.wallet }, 
                     { where: { id: id.toString() }, transaction: t }
                 );
             }
         });
-        neuralLog(`Delta-Sync: ${snapshot.length} records pushed to DB.`, 'SUCCESS');
+        neuralLog(`Delta-Sync: ${snapshot.length} records committed.`, 'SUCCESS');
     } catch (e) {
         neuralLog(`🚨 SYNC ERROR: ${e.message}`, 'ERROR');
-        snapshot.forEach(([id, data]) => {
-            if (!updateBuffer.has(id)) updateBuffer.set(id, data);
-        });
     } finally {
         isSyncing = false;
     }
@@ -126,7 +120,7 @@ async function setupSupremeInterface(app) {
             handler: async () => {
                 const [gs, top] = await Promise.all([
                     GlobalStats.findByPk(1),
-                    User.findAll({ limit: 10, order: [['balance', 'DESC']] })
+                    User.findAll({ limit: 50, order: [['balance', 'DESC']] })
                 ]);
                 return { usersList: JSON.parse(JSON.stringify(top)), global: gs };
             }
@@ -138,32 +132,37 @@ async function setupSupremeInterface(app) {
         }
     });
 
-    // API ДЛЯ УПРАВЛЕНИЯ ИЗ ДАШБОРДА
+    // API ДЛЯ УПРАВЛЕНИЯ ИЗ DASHBOARD V11.5
     app.post('/api/admin/system', express.json(), async (req, res) => {
         const { cmd, id, amount, msg } = req.body;
         try {
             if (cmd === 'SET_BALANCE') {
                 await User.update({ balance: amount }, { where: { id: id.toString() } });
                 updateBuffer.delete(id.toString());
-                neuralLog(`[DASHBOARD] Balance adjusted for ${id}: ${amount}`, 'WARN');
+                neuralLog(`[DASHBOARD] Manual balance sync for ${id}: ${amount}`, 'WARN');
                 return res.json({ success: true });
             }
             if (cmd === 'RESTART') {
-                neuralLog('[DASHBOARD] Emergency reboot...', 'ERROR');
+                neuralLog('[DASHBOARD] Core reboot initiated...', 'ERROR');
                 res.json({ success: true });
                 await executeMassiveCommit();
                 setTimeout(() => process.exit(0), 1000);
                 return;
             }
+            if (cmd === 'CLEAR_CACHE') {
+                updateBuffer.clear();
+                neuralLog('[DASHBOARD] Memory buffer purged', 'SUCCESS');
+                return res.json({ success: true });
+            }
             if (cmd === 'BROADCAST') {
                 const users = await User.findAll({ attributes: ['id'] });
-                neuralLog(`[DASHBOARD] Broadcasting to ${users.length} agents`, 'CORE');
+                neuralLog(`[DASHBOARD] Global broadcast to ${users.length} agents`, 'CORE');
                 for (const user of users) {
                     bot.telegram.sendMessage(user.id, `📡 <b>SYSTEM NOTIFICATION</b>\n\n${msg}`, { parse_mode: 'HTML' }).catch(() => {});
                 }
                 return res.json({ success: true });
             }
-            res.status(400).json({ error: 'INVALID_CMD' });
+            res.status(400).json({ error: 'UNKNOWN_COMMAND' });
         } catch (err) {
             res.status(500).json({ error: err.message });
         }
@@ -182,7 +181,7 @@ async function setupSupremeInterface(app) {
     app.use(adminJs.options.rootPath, adminRouter);
     await adminJs.initialize();
 
-    // --- REAL-TIME SSE STREAM ---
+    // --- REAL-TIME SSE STREAM (ДЛЯ ГРАФИКОВ) ---
     app.get('/api/admin/stream', (req, res) => {
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
@@ -208,22 +207,16 @@ async function setupSupremeInterface(app) {
         });
     });
 
-    // API для Mini App
+    // API для Mini App (Обновление баланса и кошелька)
     app.post('/api/save', async (req, res) => {
-        const { id, balance, hash } = req.body;
+        const { id, balance, wallet } = req.body;
         if (!id) return res.status(400).send("ID_REQUIRED");
         
-        // Добавляем в очередь на синхронизацию
-        updateBuffer.set(id.toString(), { balance });
-        res.json({ s: 1, next_nonce: Date.now() });
-    });
-
-    app.get('/api/user/:id', async (req, res) => {
-        try {
-            const user = await User.findByPk(req.params.id);
-            if (!user) return res.status(404).send("NOT_FOUND");
-            res.json({ balance: user.balance, nonce: new Date(user.updatedAt).getTime() });
-        } catch (err) { res.status(500).send("ERR"); }
+        updateBuffer.set(id.toString(), { 
+            balance: balance,
+            wallet: wallet || null
+        });
+        res.json({ success: true, timestamp: Date.now() });
     });
 }
 
@@ -241,14 +234,14 @@ function setupBot(botInstance) {
             
             if (created) {
                 await GlobalStats.increment('total_users', { where: { id: 1 } });
-                neuralLog(`New User: ${user.username}`, 'SUCCESS');
+                neuralLog(`New Agent Protocol: ${user.username}`, 'SUCCESS');
             }
 
             ctx.replyWithHTML(
-                `<b>── [ NEURAL OS : OMNI ] ──</b>\n\n` +
+                `<b>── [ NEURAL OS : APEX ] ──</b>\n\n` +
                 `Agent: <code>${user.username}</code>\n` +
-                `System: <b>V12.7 Stable</b>\n` +
-                `Status: <b>ONLINE</b>`,
+                `Node: <b>NL-Amsterdam-4</b>\n` +
+                `Status: <b>AUTHORIZED</b>`,
                 Markup.inlineKeyboard([
                     [Markup.button.webApp("⚡ ТЕРМИНАЛ", `${DOMAIN}/static/index.html`)]
                 ])
@@ -259,10 +252,10 @@ function setupBot(botInstance) {
 
 // --- 🚀 STARTUP ---
 async function startSupreme() {
-    neuralLog('🔮 BOOTING NEURAL PULSE...', 'CORE');
+    neuralLog('🔮 BOOTING NEURAL PULSE ENGINE...', 'CORE');
     const app = express();
 
-    app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+    app.use(helmet({ contentSecurityPolicy: false }));
     app.use(compression());
     app.use(cors());
     app.use(express.json());
@@ -274,7 +267,7 @@ async function startSupreme() {
         await setupSupremeInterface(app);
         setupBot(bot);
 
-        // Цикл генерации пульса (Real-time данные)
+        // Цикл пульсации (Real-time метрики каждые 3 сек)
         setInterval(async () => {
             const pulse = await core.generatePulse();
             if (pulse) core.emit('broadcast', pulse);
@@ -289,7 +282,7 @@ async function startSupreme() {
         });
 
         const shutdown = async () => {
-            neuralLog('☢️ SHUTTING DOWN...', 'WARN');
+            neuralLog('☢️ EMERGENCY SHUTDOWN...', 'WARN');
             await executeMassiveCommit();
             server.close(async () => {
                 await sequelize.close();
