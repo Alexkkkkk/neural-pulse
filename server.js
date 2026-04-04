@@ -16,7 +16,7 @@ import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
 import { ComponentLoader } from 'adminjs';
 
-// Ядро данных (из твоего db.js)
+// Ядро данных (модели и связь с БД)
 import { sequelize, User, Task, GlobalStats, sessionStore, initDB, Op } from './db.js';
 
 const logger = pino({ transport: { target: 'pino-pretty' } });
@@ -86,22 +86,21 @@ const executeMassiveCommit = async () => {
     isSyncing = true;
     
     const snapshot = Array.from(updateBuffer.entries());
-    updateBuffer.clear();
+    updateBuffer.clear(); // Очищаем сразу, чтобы принимать новые данные
     
     try {
         await sequelize.transaction(async (t) => {
-            // Используем классический цикл для стабильности транзакции в Postgres
             for (const [id, data] of snapshot) {
                 await User.update(
                     { balance: data.balance, wallet: data.wallet, last_seen: new Date() }, 
-                    { where: { id: id }, transaction: t }
+                    { where: { id: String(id) }, transaction: t }
                 );
             }
         });
         neuralLog(`Delta-Sync: ${snapshot.length} records committed.`, 'SUCCESS');
     } catch (e) {
         neuralLog(`🚨 SYNC ERROR: ${e.message}`, 'ERROR');
-        // Возврат данных в буфер при сбое
+        // Возвращаем данные обратно, если база "отвалилась"
         snapshot.forEach(([id, data]) => {
             if (!updateBuffer.has(id)) updateBuffer.set(id, data);
         });
@@ -139,12 +138,12 @@ async function setupSupremeInterface(app) {
     });
 
     // API управления через админку
-    app.post('/api/admin/system', express.json(), async (req, res) => {
+    app.post('/api/admin/system', async (req, res) => {
         const { cmd, id, amount, msg } = req.body;
         try {
             if (cmd === 'SET_BALANCE') {
-                await User.update({ balance: amount }, { where: { id: id } });
-                updateBuffer.delete(id.toString());
+                await User.update({ balance: amount }, { where: { id: String(id) } });
+                updateBuffer.delete(String(id));
                 return res.json({ success: true });
             }
             if (cmd === 'RESTART') {
@@ -192,10 +191,12 @@ async function setupSupremeInterface(app) {
     });
 
     // API для сохранения кликов из Mini App
-    app.post('/api/save', express.json(), async (req, res) => {
+    app.post('/api/save', async (req, res) => {
         const { id, balance, wallet } = req.body;
         if (!id) return res.status(400).send("ID_REQUIRED");
-        updateBuffer.set(id.toString(), { balance, wallet: wallet || null });
+        
+        // Приводим ID к строке и сохраняем в буфер
+        updateBuffer.set(String(id), { balance, wallet: wallet || null });
         res.json({ success: true });
     });
 }
@@ -232,23 +233,27 @@ async function startSupreme() {
     neuralLog('🔮 BOOTING NEURAL PULSE ENGINE...', 'CORE');
     const app = express();
 
+    // ВАЖНО: Эти настройки должны быть ПЕРЕД роутами
     app.use(helmet({ contentSecurityPolicy: false }));
     app.use(compression());
     app.use(cors());
+    app.use(express.json()); // Глобальный парсер JSON
+    
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
     try {
-        await initDB();
-        await setupSupremeInterface(app);
-        setupBot(bot);
+        await initDB(); // Инициализация базы данных
+        
+        await setupSupremeInterface(app); // Интерфейс и API
+        setupBot(bot); // Телеграм бот
 
-        // Пульс системы каждые 3 секунды
+        // Пульс системы
         setInterval(async () => {
             const pulse = await core.generatePulse();
             if (pulse) core.emit('broadcast', pulse);
         }, 3000);
 
-        // Официальный Webhook Middleware
+        // Webhook
         const webhookPath = `/telegraf/${bot.token}`;
         app.use(bot.webhookCallback(webhookPath));
         await bot.telegram.setWebhook(`${DOMAIN}${webhookPath}`);
@@ -257,13 +262,12 @@ async function startSupreme() {
             neuralLog(`👑 SYSTEM ONLINE | PORT: ${PORT}`, 'SUCCESS');
         });
 
-        // Завершение работы
+        // Безопасное завершение
         const shutdown = async () => {
             neuralLog('☢️ EMERGENCY SHUTDOWN...', 'WARN');
             await executeMassiveCommit();
             server.close(async () => {
                 await sequelize.close();
-                if (global.gc) global.gc();
                 process.exit(0);
             });
         };
