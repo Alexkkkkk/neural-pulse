@@ -16,7 +16,7 @@ import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
 import { ComponentLoader } from 'adminjs';
 
-// Ядро данных (модели и связь с БД)
+// Ядро данных (модели и связь с БД из твоего db.js)
 import { sequelize, User, Task, GlobalStats, sessionStore, initDB, Op } from './db.js';
 
 const logger = pino({ transport: { target: 'pino-pretty' } });
@@ -86,11 +86,12 @@ const executeMassiveCommit = async () => {
     isSyncing = true;
     
     const snapshot = Array.from(updateBuffer.entries());
-    updateBuffer.clear(); // Очищаем сразу, чтобы принимать новые данные
+    updateBuffer.clear(); // Очищаем сразу, чтобы принимать новые клики во время записи
     
     try {
         await sequelize.transaction(async (t) => {
             for (const [id, data] of snapshot) {
+                // Приводим ID к строке String(id), чтобы база точно нашла пользователя
                 await User.update(
                     { balance: data.balance, wallet: data.wallet, last_seen: new Date() }, 
                     { where: { id: String(id) }, transaction: t }
@@ -100,7 +101,7 @@ const executeMassiveCommit = async () => {
         neuralLog(`Delta-Sync: ${snapshot.length} records committed.`, 'SUCCESS');
     } catch (e) {
         neuralLog(`🚨 SYNC ERROR: ${e.message}`, 'ERROR');
-        // Возвращаем данные обратно, если база "отвалилась"
+        // Возвращаем данные обратно в буфер при сбое
         snapshot.forEach(([id, data]) => {
             if (!updateBuffer.has(id)) updateBuffer.set(id, data);
         });
@@ -190,12 +191,12 @@ async function setupSupremeInterface(app) {
         req.on('close', () => core.removeListener('broadcast', sendPulse));
     });
 
-    // API для сохранения кликов из Mini App
+    // --- 🚀 API ДЛЯ СОХРАНЕНИЯ ТАР (КЛИКОВ) ---
     app.post('/api/save', async (req, res) => {
         const { id, balance, wallet } = req.body;
         if (!id) return res.status(400).send("ID_REQUIRED");
         
-        // Приводим ID к строке и сохраняем в буфер
+        // Помещаем данные в буфер
         updateBuffer.set(String(id), { balance, wallet: wallet || null });
         res.json({ success: true });
     });
@@ -233,27 +234,27 @@ async function startSupreme() {
     neuralLog('🔮 BOOTING NEURAL PULSE ENGINE...', 'CORE');
     const app = express();
 
-    // ВАЖНО: Эти настройки должны быть ПЕРЕД роутами
+    // ВАЖНО: Глобальные настройки должны быть СТРОГО перед вызовом интерфейсов
     app.use(helmet({ contentSecurityPolicy: false }));
     app.use(compression());
     app.use(cors());
-    app.use(express.json()); // Глобальный парсер JSON
+    app.use(express.json()); // Чтение JSON-данных от Mini App
     
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
     try {
-        await initDB(); // Инициализация базы данных
+        await initDB(); // Запуск базы данных
         
-        await setupSupremeInterface(app); // Интерфейс и API
-        setupBot(bot); // Телеграм бот
+        await setupSupremeInterface(app); // Запуск API и Админки
+        setupBot(bot); // Запуск Телеграм логики
 
-        // Пульс системы
+        // Фоновый пульс системы каждые 3 секунды
         setInterval(async () => {
             const pulse = await core.generatePulse();
             if (pulse) core.emit('broadcast', pulse);
         }, 3000);
 
-        // Webhook
+        // Настройка Webhook (Bothost использует webhook)
         const webhookPath = `/telegraf/${bot.token}`;
         app.use(bot.webhookCallback(webhookPath));
         await bot.telegram.setWebhook(`${DOMAIN}${webhookPath}`);
@@ -262,10 +263,10 @@ async function startSupreme() {
             neuralLog(`👑 SYSTEM ONLINE | PORT: ${PORT}`, 'SUCCESS');
         });
 
-        // Безопасное завершение
+        // Корректное завершение при остановке сервера
         const shutdown = async () => {
             neuralLog('☢️ EMERGENCY SHUTDOWN...', 'WARN');
-            await executeMassiveCommit();
+            await executeMassiveCommit(); // Сброс буфера перед выходом
             server.close(async () => {
                 await sequelize.close();
                 process.exit(0);
