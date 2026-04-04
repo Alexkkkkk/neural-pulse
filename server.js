@@ -8,7 +8,7 @@ import compression from 'compression';
 import EventEmitter from 'events'; 
 import os from 'os';
 import pino from 'pino';
-import crypto from 'crypto'; // Для валидации данных
+import crypto from 'crypto';
 import 'dotenv/config';
 
 // --- 🏛️ ADMINJS & CORE IMPORTS ---
@@ -17,7 +17,7 @@ import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
 import { ComponentLoader } from 'adminjs';
 
-// Ядро данных
+// Ядро данных (модели и связь с БД)
 import { sequelize, User, Task, GlobalStats, sessionStore, initDB, Op } from './db.js';
 
 const logger = pino({ transport: { target: 'pino-pretty' } });
@@ -111,7 +111,6 @@ const executeMassiveCommit = async () => {
     updateBuffer.clear();
     
     try {
-        // Преобразуем данные для массовой вставки/обновления (Upsert)
         const records = snapshot.map(([id, data]) => ({
             id: String(id),
             balance: data.balance,
@@ -119,6 +118,7 @@ const executeMassiveCommit = async () => {
             last_seen: new Date()
         }));
 
+        // Используем bulkCreate с обновлением дубликатов для максимальной производительности
         await User.bulkCreate(records, {
             updateOnDuplicate: ['balance', 'wallet', 'last_seen']
         });
@@ -180,13 +180,12 @@ async function setupSupremeInterface(app) {
                 const users = await User.findAll({ attributes: ['id'] });
                 res.json({ success: true, count: users.length });
                 
-                // Безопасная рассылка с интервалом
                 let i = 0;
                 const interval = setInterval(() => {
                     if (i >= users.length) return clearInterval(interval);
                     bot.telegram.sendMessage(users[i].id, `📡 <b>SYSTEM NOTIFICATION</b>\n\n${msg}`, { parse_mode: 'HTML' }).catch(() => {});
                     i++;
-                }, 40); // ~25 сообщений в сек, чтобы не получить бан от TG
+                }, 40); 
                 return;
             }
             res.status(400).json({ error: 'UNKNOWN_COMMAND' });
@@ -223,7 +222,6 @@ async function setupSupremeInterface(app) {
     app.post('/api/save', async (req, res) => {
         const { id, balance, wallet, _auth } = req.body;
         
-        // Проверка подлинности запроса от Telegram
         if (!validateInitData(_auth)) {
             return res.status(403).json({ error: "UNAUTHORIZED_PROTOCOL" });
         }
