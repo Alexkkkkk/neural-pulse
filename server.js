@@ -8,6 +8,7 @@ import compression from 'compression';
 import EventEmitter from 'events'; 
 import os from 'os';
 import pino from 'pino';
+import crypto from 'crypto'; // Для валидации данных
 import 'dotenv/config';
 
 // --- 🏛️ ADMINJS & CORE IMPORTS ---
@@ -16,7 +17,7 @@ import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
 import { ComponentLoader } from 'adminjs';
 
-// Ядро данных (модели и связь с БД из твоего db.js)
+// Ядро данных
 import { sequelize, User, Task, GlobalStats, sessionStore, initDB, Op } from './db.js';
 
 const logger = pino({ transport: { target: 'pino-pretty' } });
@@ -37,7 +38,6 @@ class GodCore extends EventEmitter {
     async generatePulse() {
         try {
             const memory = process.memoryUsage();
-            
             if (!this.cache.gs || Date.now() - this.cache.lastUpdate > 5000) {
                 this.cache.gs = await GlobalStats.findByPk(1);
                 this.cache.lastUpdate = Date.now();
@@ -70,14 +70,36 @@ const neuralLog = (msg, type = 'INFO') => {
 };
 
 // --- ⚙️ CONFIGURATION ---
-const BOT_TOKEN = process.env.BOT_TOKEN || "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
+const BOT_TOKEN = process.env.BOT_TOKEN;
 const DOMAIN = process.env.DOMAIN || "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
 const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// --- 🧬 DELTA-SYNC ENGINE (BATCH UPDATES) ---
+// --- 🛡️ SECURITY: TELEGRAM VALIDATOR ---
+const validateInitData = (rawInitData) => {
+    if (!rawInitData) return false;
+    try {
+        const urlParams = new URLSearchParams(rawInitData);
+        const hash = urlParams.get('hash');
+        urlParams.delete('hash');
+        urlParams.sort();
+
+        let dataCheckString = '';
+        for (const [key, value] of urlParams.entries()) {
+            dataCheckString += `${key}=${value}\n`;
+        }
+        dataCheckString = dataCheckString.slice(0, -1);
+
+        const secretKey = crypto.createHmac('sha256', 'WebAppData').update(BOT_TOKEN).digest();
+        const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+
+        return calculatedHash === hash;
+    } catch (e) { return false; }
+};
+
+// --- 🧬 DELTA-SYNC ENGINE (ULTRA OPTIMIZED) ---
 const updateBuffer = new Map();
 let isSyncing = false;
 
@@ -86,22 +108,24 @@ const executeMassiveCommit = async () => {
     isSyncing = true;
     
     const snapshot = Array.from(updateBuffer.entries());
-    updateBuffer.clear(); // Очищаем сразу, чтобы принимать новые клики во время записи
+    updateBuffer.clear();
     
     try {
-        await sequelize.transaction(async (t) => {
-            for (const [id, data] of snapshot) {
-                // Приводим ID к строке String(id), чтобы база точно нашла пользователя
-                await User.update(
-                    { balance: data.balance, wallet: data.wallet, last_seen: new Date() }, 
-                    { where: { id: String(id) }, transaction: t }
-                );
-            }
+        // Преобразуем данные для массовой вставки/обновления (Upsert)
+        const records = snapshot.map(([id, data]) => ({
+            id: String(id),
+            balance: data.balance,
+            wallet: data.wallet,
+            last_seen: new Date()
+        }));
+
+        await User.bulkCreate(records, {
+            updateOnDuplicate: ['balance', 'wallet', 'last_seen']
         });
-        neuralLog(`Delta-Sync: ${snapshot.length} records committed.`, 'SUCCESS');
+
+        neuralLog(`Delta-Sync: ${snapshot.length} records committed via Bulk Upsert.`, 'SUCCESS');
     } catch (e) {
         neuralLog(`🚨 SYNC ERROR: ${e.message}`, 'ERROR');
-        // Возвращаем данные обратно в буфер при сбое
         snapshot.forEach(([id, data]) => {
             if (!updateBuffer.has(id)) updateBuffer.set(id, data);
         });
@@ -138,7 +162,6 @@ async function setupSupremeInterface(app) {
         }
     });
 
-    // API управления через админку
     app.post('/api/admin/system', async (req, res) => {
         const { cmd, id, amount, msg } = req.body;
         try {
@@ -155,10 +178,16 @@ async function setupSupremeInterface(app) {
             }
             if (cmd === 'BROADCAST') {
                 const users = await User.findAll({ attributes: ['id'] });
-                for (const user of users) {
-                    bot.telegram.sendMessage(user.id, `📡 <b>SYSTEM NOTIFICATION</b>\n\n${msg}`, { parse_mode: 'HTML' }).catch(() => {});
-                }
-                return res.json({ success: true });
+                res.json({ success: true, count: users.length });
+                
+                // Безопасная рассылка с интервалом
+                let i = 0;
+                const interval = setInterval(() => {
+                    if (i >= users.length) return clearInterval(interval);
+                    bot.telegram.sendMessage(users[i].id, `📡 <b>SYSTEM NOTIFICATION</b>\n\n${msg}`, { parse_mode: 'HTML' }).catch(() => {});
+                    i++;
+                }, 40); // ~25 сообщений в сек, чтобы не получить бан от TG
+                return;
             }
             res.status(400).json({ error: 'UNKNOWN_COMMAND' });
         } catch (err) {
@@ -179,7 +208,6 @@ async function setupSupremeInterface(app) {
     app.use(adminJs.options.rootPath, adminRouter);
     await adminJs.initialize();
 
-    // Event Stream для дашборда
     app.get('/api/admin/stream', (req, res) => {
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
@@ -191,12 +219,16 @@ async function setupSupremeInterface(app) {
         req.on('close', () => core.removeListener('broadcast', sendPulse));
     });
 
-    // --- 🚀 API ДЛЯ СОХРАНЕНИЯ ТАР (КЛИКОВ) ---
+    // --- 🚀 PROTECTED API ---
     app.post('/api/save', async (req, res) => {
-        const { id, balance, wallet } = req.body;
-        if (!id) return res.status(400).send("ID_REQUIRED");
+        const { id, balance, wallet, _auth } = req.body;
         
-        // Помещаем данные в буфер
+        // Проверка подлинности запроса от Telegram
+        if (!validateInitData(_auth)) {
+            return res.status(403).json({ error: "UNAUTHORIZED_PROTOCOL" });
+        }
+
+        if (!id) return res.status(400).send("ID_REQUIRED");
         updateBuffer.set(String(id), { balance, wallet: wallet || null });
         res.json({ success: true });
     });
@@ -234,27 +266,23 @@ async function startSupreme() {
     neuralLog('🔮 BOOTING NEURAL PULSE ENGINE...', 'CORE');
     const app = express();
 
-    // ВАЖНО: Глобальные настройки должны быть СТРОГО перед вызовом интерфейсов
     app.use(helmet({ contentSecurityPolicy: false }));
     app.use(compression());
     app.use(cors());
-    app.use(express.json()); // Чтение JSON-данных от Mini App
+    app.use(express.json()); 
     
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
     try {
-        await initDB(); // Запуск базы данных
-        
-        await setupSupremeInterface(app); // Запуск API и Админки
-        setupBot(bot); // Запуск Телеграм логики
+        await initDB(); 
+        await setupSupremeInterface(app); 
+        setupBot(bot); 
 
-        // Фоновый пульс системы каждые 3 секунды
         setInterval(async () => {
             const pulse = await core.generatePulse();
             if (pulse) core.emit('broadcast', pulse);
         }, 3000);
 
-        // Настройка Webhook (Bothost использует webhook)
         const webhookPath = `/telegraf/${bot.token}`;
         app.use(bot.webhookCallback(webhookPath));
         await bot.telegram.setWebhook(`${DOMAIN}${webhookPath}`);
@@ -263,10 +291,9 @@ async function startSupreme() {
             neuralLog(`👑 SYSTEM ONLINE | PORT: ${PORT}`, 'SUCCESS');
         });
 
-        // Корректное завершение при остановке сервера
         const shutdown = async () => {
             neuralLog('☢️ EMERGENCY SHUTDOWN...', 'WARN');
-            await executeMassiveCommit(); // Сброс буфера перед выходом
+            await executeMassiveCommit(); 
             server.close(async () => {
                 await sequelize.close();
                 process.exit(0);
