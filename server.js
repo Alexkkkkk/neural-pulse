@@ -8,6 +8,7 @@ import compression from 'compression';
 import EventEmitter from 'events'; 
 import os from 'os';
 import pino from 'pino';
+import 'dotenv/config';
 
 // --- 🏛️ ADMINJS & CORE IMPORTS ---
 import AdminJS from 'adminjs';
@@ -15,7 +16,7 @@ import AdminJSExpress from '@adminjs/express';
 import * as AdminJSSequelize from '@adminjs/sequelize';
 import { ComponentLoader } from 'adminjs';
 
-// Ядро данных (модели из db.js)
+// Ядро данных (из твоего db.js)
 import { sequelize, User, Task, GlobalStats, sessionStore, initDB, Op } from './db.js';
 
 const logger = pino({ transport: { target: 'pino-pretty' } });
@@ -56,7 +57,7 @@ class GodCore extends EventEmitter {
                 timestamp: new Date().toISOString()
             };
         } catch (err) {
-            logger.error({ err }, 'Pulse generation failed');
+            logger.error('Pulse generation failed');
             return null;
         }
     }
@@ -70,9 +71,9 @@ const neuralLog = (msg, type = 'INFO') => {
 
 // --- ⚙️ CONFIGURATION ---
 const BOT_TOKEN = process.env.BOT_TOKEN || "8745333905:AAFYxazvS95oEMuPeVxlWvnwmTsDOEiKZEI";
-const DOMAIN = "https://np.bothost.tech";
+const DOMAIN = process.env.DOMAIN || "https://np.bothost.tech";
 const PORT = process.env.PORT || 3000;
-const DASHBOARD_COMPONENT = path.join(__dirname, 'static', 'dashboard.jsx');
+const DASHBOARD_COMPONENT = componentLoader.add('Dashboard', path.join(__dirname, 'static', 'dashboard.jsx'));
 
 const bot = new Telegraf(BOT_TOKEN);
 
@@ -89,16 +90,18 @@ const executeMassiveCommit = async () => {
     
     try {
         await sequelize.transaction(async (t) => {
-            await Promise.all(snapshot.map(([id, data]) => 
-                User.update(
+            // Используем классический цикл для стабильности транзакции в Postgres
+            for (const [id, data] of snapshot) {
+                await User.update(
                     { balance: data.balance, wallet: data.wallet, last_seen: new Date() }, 
                     { where: { id: id }, transaction: t }
-                )
-            ));
+                );
+            }
         });
         neuralLog(`Delta-Sync: ${snapshot.length} records committed.`, 'SUCCESS');
     } catch (e) {
         neuralLog(`🚨 SYNC ERROR: ${e.message}`, 'ERROR');
+        // Возврат данных в буфер при сбое
         snapshot.forEach(([id, data]) => {
             if (!updateBuffer.has(id)) updateBuffer.set(id, data);
         });
@@ -119,7 +122,7 @@ async function setupSupremeInterface(app) {
         rootPath: '/admin',
         componentLoader,
         dashboard: { 
-            component: componentLoader.add('Dashboard', DASHBOARD_COMPONENT),
+            component: DASHBOARD_COMPONENT,
             handler: async () => {
                 const [gs, top] = await Promise.all([
                     GlobalStats.findByPk(1),
@@ -135,30 +138,23 @@ async function setupSupremeInterface(app) {
         }
     });
 
+    // API управления через админку
     app.post('/api/admin/system', express.json(), async (req, res) => {
         const { cmd, id, amount, msg } = req.body;
         try {
             if (cmd === 'SET_BALANCE') {
                 await User.update({ balance: amount }, { where: { id: id } });
                 updateBuffer.delete(id.toString());
-                neuralLog(`[DASHBOARD] Manual balance sync for ${id}: ${amount}`, 'WARN');
                 return res.json({ success: true });
             }
             if (cmd === 'RESTART') {
-                neuralLog('[DASHBOARD] Core reboot initiated...', 'ERROR');
                 res.json({ success: true });
                 await executeMassiveCommit();
                 setTimeout(() => process.exit(0), 1000);
                 return;
             }
-            if (cmd === 'CLEAR_CACHE') {
-                updateBuffer.clear();
-                neuralLog('[DASHBOARD] Memory buffer purged', 'SUCCESS');
-                return res.json({ success: true });
-            }
             if (cmd === 'BROADCAST') {
                 const users = await User.findAll({ attributes: ['id'] });
-                neuralLog(`[DASHBOARD] Global broadcast to ${users.length} agents`, 'CORE');
                 for (const user of users) {
                     bot.telegram.sendMessage(user.id, `📡 <b>SYSTEM NOTIFICATION</b>\n\n${msg}`, { parse_mode: 'HTML' }).catch(() => {});
                 }
@@ -183,40 +179,24 @@ async function setupSupremeInterface(app) {
     app.use(adminJs.options.rootPath, adminRouter);
     await adminJs.initialize();
 
+    // Event Stream для дашборда
     app.get('/api/admin/stream', (req, res) => {
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache, no-transform',
-            'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no'
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive'
         });
-
-        const sendPulse = (data) => {
-            if (!res.writableEnded) res.write(`data: ${JSON.stringify(data)}\n\n`);
-        };
-
+        const sendPulse = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
         core.on('broadcast', sendPulse);
-        
-        const keepAlive = setInterval(() => {
-            if (!res.writableEnded) res.write(': keep-alive\n\n');
-        }, 15000);
-
-        req.on('close', () => {
-            clearInterval(keepAlive);
-            core.removeListener('broadcast', sendPulse);
-            res.end();
-        });
+        req.on('close', () => core.removeListener('broadcast', sendPulse));
     });
 
-    app.post('/api/save', async (req, res) => {
+    // API для сохранения кликов из Mini App
+    app.post('/api/save', express.json(), async (req, res) => {
         const { id, balance, wallet } = req.body;
         if (!id) return res.status(400).send("ID_REQUIRED");
-        
-        updateBuffer.set(id.toString(), { 
-            balance: balance,
-            wallet: wallet || null
-        });
-        res.json({ success: true, timestamp: Date.now() });
+        updateBuffer.set(id.toString(), { balance, wallet: wallet || null });
+        res.json({ success: true });
     });
 }
 
@@ -232,9 +212,7 @@ function setupBot(botInstance) {
                 }
             });
             
-            if (created) {
-                neuralLog(`New Agent Protocol: ${user.username}`, 'SUCCESS');
-            }
+            if (created) neuralLog(`New Agent Protocol: ${user.username}`, 'SUCCESS');
 
             ctx.replyWithHTML(
                 `<b>── [ NEURAL OS : APEX ] ──</b>\n\n` +
@@ -257,33 +235,35 @@ async function startSupreme() {
     app.use(helmet({ contentSecurityPolicy: false }));
     app.use(compression());
     app.use(cors());
-    app.use(express.json());
     app.use('/static', express.static(path.join(__dirname, 'static')));
 
     try {
         await initDB();
-        await GlobalStats.findOrCreate({ where: { id: 1 }, defaults: { total_users: 0, total_balance: 0 } });
         await setupSupremeInterface(app);
         setupBot(bot);
 
+        // Пульс системы каждые 3 секунды
         setInterval(async () => {
             const pulse = await core.generatePulse();
             if (pulse) core.emit('broadcast', pulse);
         }, 3000);
 
-        const webhookPath = `/telegraf/${BOT_TOKEN}`;
-        app.post(webhookPath, (req, res) => bot.handleUpdate(req.body, res));
+        // Официальный Webhook Middleware
+        const webhookPath = `/telegraf/${bot.token}`;
+        app.use(bot.webhookCallback(webhookPath));
         await bot.telegram.setWebhook(`${DOMAIN}${webhookPath}`);
 
         const server = app.listen(PORT, '0.0.0.0', () => {
             neuralLog(`👑 SYSTEM ONLINE | PORT: ${PORT}`, 'SUCCESS');
         });
 
+        // Завершение работы
         const shutdown = async () => {
             neuralLog('☢️ EMERGENCY SHUTDOWN...', 'WARN');
             await executeMassiveCommit();
             server.close(async () => {
                 await sequelize.close();
+                if (global.gc) global.gc();
                 process.exit(0);
             });
         };
