@@ -18,7 +18,7 @@
   "dependencies": {
     "adminjs": "^7.8.1",
     "@adminjs/express": "^6.1.0",
-    "@adminjs/sequelize": "^5.0.0",
+    "@adminjs/sequelize": "^4.0.0",
     "@adminjs/design-system": "^4.1.0",
     "express": "^4.18.2",
     "telegraf": "^4.16.3",
